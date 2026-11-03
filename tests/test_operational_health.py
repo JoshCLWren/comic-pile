@@ -227,6 +227,8 @@ def _make_mock_request(invocation: int = 1) -> MagicMock:
         invocation=invocation,
         cold=invocation == 1,
         process_age_ms=100.0,
+        process_to_startup_ms=100.0,
+        startup_cpu_ms=25.0,
         startup_complete=True,
         startup_duration_ms=50.0,
         application_import_ms=10.0,
@@ -234,6 +236,7 @@ def _make_mock_request(invocation: int = 1) -> MagicMock:
         lifespan_ms=20.0,
         heavy_initialized=False,
         heavy_init_duration_ms=None,
+        heavy_init_process_age_ms=None,
         deployment_id="test-deployment",
         process_started_at_ns=1_000_000_000,
     )

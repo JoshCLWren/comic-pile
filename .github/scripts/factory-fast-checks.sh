@@ -33,6 +33,9 @@
 # because worker runners have no PostgreSQL service (CI still runs it).
 # FACTORY_FAST_CHECKS=off disables the gate for an incident.
 
+# Enable globstar for recursive glob patterns in case statements
+shopt -s globstar
+
 FACTORY_FAST_CHECK_TIMEOUT="${FACTORY_FAST_CHECK_TIMEOUT:-600}"
 FACTORY_FAST_CHECK_DB_ERROR_RE='(ConnectionRefusedError|could not connect to server|Connect call failed|connection to server at .* failed|OSError: \[Errno 111\]|asyncpg\.exceptions\.(CannotConnectNowError|InvalidPasswordError|ConnectionDoesNotExistError))'
 
@@ -57,6 +60,12 @@ factory_fast_check_plan() {
     case "$path" in
       frontend/*.ts|frontend/*.tsx|frontend/*.mjs) printf 'frontend\t%s\n' "$path" ;;
     esac
+    # A manifest-only change must not bypass pnpm's frozen-lockfile gate.
+    case "$path" in
+      package.json|pnpm-lock.yaml|pnpm-workspace.yaml|frontend/package.json|frontend/pnpm-lock.yaml)
+        printf 'dependencies\t%s\n' "$path"
+        ;;
+    esac
     case "$path" in
       *.rs|Cargo.toml|*/Cargo.toml|Cargo.lock|*/Cargo.lock|rust-toolchain.toml|*/rust-toolchain.toml|.cargo/config.toml|*/.cargo/config.toml)
         printf 'rust\t%s\n' "$path"
@@ -65,6 +74,13 @@ factory_fast_check_plan() {
     case "$path" in
       vercel.json|api/*.rs|native/roll-service/src/*.rs)
         printf 'ingress\t%s\n' "$path"
+        ;;
+    esac
+    # Check the real FastAPI-generated contract before a worker pushes.
+    # Deletions are included because an imported module might be removed.
+    case "$path" in
+      app/**/*.py|app/*.py|api/**/*.py|api/*.py|scripts/export_openapi_schema.py|scripts/generate_openapi_types.py|frontend/src/generated/openapi.json|frontend/src/generated/openapi.ts)
+        printf 'openapi\t%s\n' "$path"
         ;;
     esac
     case "$path" in
@@ -143,7 +159,7 @@ factory_run_fast_checks() {
     0|off|false|no) printf 'fast checks disabled by FACTORY_FAST_CHECKS\n' >> "$log"; return 0 ;;
   esac
   plan="$(factory_fast_check_paths "$base_ref" | factory_fast_check_plan)"
-  local fe_project=0 rust_project=0 rust_ingress=0
+  local fe_project=0 rust_project=0 rust_ingress=0 openapi_check=0 deps_project=0
   while IFS=$'\t' read -r kind file; do
     [[ -n "$file" ]] || continue
     case "$kind" in
@@ -156,6 +172,8 @@ factory_run_fast_checks() {
         ;;
       rust) rust_project=1 ;;
       ingress) rust_ingress=1 ;;
+      openapi) openapi_check=1 ;;
+      dependencies) deps_project=1 ;;
     esac
   done <<< "$plan"
   printf 'fast-check plan:\n%s\n' "${plan:-(no checked file types touched)}" >> "$log"
@@ -194,7 +212,22 @@ factory_run_fast_checks() {
     fi
   fi
 
-  if (( fe_project )); then
+  # App changes can break the frontend API contract without changing a single
+  # frontend file. Check generated schema freshness before GitHub CI sees it.
+  # Python diffs have already synced dependencies above; JSON-only diffs have not.
+  if (( openapi_check )); then
+    if ! _factory_fast_check_ensure_uv; then
+      failures+=('OpenAPI check toolchain (uv)')
+    elif (( ${#py_files[@]} == 0 )) && ! _factory_fast_check_run "$log" 'OpenAPI dependency sync' \
+      uv sync --frozen --all-extras --quiet; then
+      failures+=('OpenAPI check dependencies')
+    elif ! _factory_fast_check_run "$log" 'OpenAPI schema freshness' \
+      uv run --frozen python scripts/export_openapi_schema.py --check; then
+      failures+=('OpenAPI schema freshness')
+    fi
+  fi
+
+  if (( fe_project || deps_project )); then
     if ! _factory_fast_check_ensure_pnpm; then
       failures+=('frontend toolchain setup (pnpm)')
     elif ! _factory_fast_check_run "$log" 'pnpm install' pnpm install --frozen-lockfile --silent; then

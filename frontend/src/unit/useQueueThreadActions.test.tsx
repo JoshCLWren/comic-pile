@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import type { SessionRefetch } from '../hooks/useSession'
 
 const navigateSpy = vi.fn()
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
@@ -14,10 +13,7 @@ import type { RollResponse, Thread } from '../types'
 import { cast } from '../utils/cast'
 
 const toastSpy = vi.fn()
-  // SAFETY: We do not use the return value of the mocked refetchSession in this test.
 const setPending = vi.fn()
-// SAFETY: We do not use the return value of the mocked refetchSession in this test.
-const refetchSession: SessionRefetch = vi.fn().mockResolvedValue({} as never)
 
 function mutationStubs() {
   return {
@@ -101,7 +97,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -129,7 +124,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -154,7 +148,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -198,7 +191,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigate,
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -233,7 +225,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigate,
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -259,7 +250,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigate,
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps(),
@@ -278,8 +268,6 @@ describe('useQueueThreadActions', () => {
 
   it('delegates snooze vs unsnooze based on the current snoozed state', async () => {
     const snooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false, retryRefresh: vi.fn().mockResolvedValue(true), refreshError: null, hasRefreshError: false }
-    // SAFETY: We do not use the return value of the mocked refetchSession in this test.
-    const refetchSession = vi.fn().mockResolvedValue({} as never)
     const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
     const navigateToRoll = vi.fn()
     const { result } = renderHook(
@@ -287,7 +275,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll,
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ snoozeHook: () => snooze, unsnoozeHook: () => unsnooze }),
@@ -297,10 +284,36 @@ describe('useQueueThreadActions', () => {
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
     expect(snooze.mutate).toHaveBeenCalledWith(4)
-    expect(refetchSession).toHaveBeenCalled()
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
     expect(unsnooze.mutate).toHaveBeenCalledWith(4)
+  })
+
+  it('refreshes queue read models but leaves the session refresh to the owning snooze mutation', async () => {
+    // The queue-row snooze passes the real cache effects, so the seed proves
+    // which key the row-action pass touches: the queue pages reset (still the
+    // row-action pass's job) while `session.current` stays un-invalidated —
+    // the real `useSnooze`/`useUnsnooze` mutation refreshed it inside its own
+    // success path, and a second invalidation re-ran that settled fetch.
+    sharedQueryClient.setQueryData(queryKeys.session.current(), {
+      id: 1,
+      snoozed_threads: [],
+    })
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          {
+            navigateToRoll: vi.fn(),
+            restoreSeriesActionsFocus: vi.fn(),
+          },
+          buildDeps(),
+        ),
+      { wrapper },
+    )
+
+    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
+
+    expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(false)
   })
 
   it('exposes a shuffle failure for the open confirmation instead of a hidden toast', async () => {
@@ -309,7 +322,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({
@@ -334,7 +346,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({
@@ -364,7 +375,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: navigateToRoll,
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ shuffleHook: () => shuffle }),
@@ -393,7 +403,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ moveToPositionHook: () => movePosition }),
@@ -414,7 +423,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
@@ -438,7 +446,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),
@@ -466,7 +473,6 @@ describe('useQueueThreadActions', () => {
         useQueueThreadActions(
           {
             navigateToRoll: vi.fn(),
-            refetchSession,
             restoreSeriesActionsFocus: vi.fn(),
           },
           buildDeps({ deleteHook: () => remove }),

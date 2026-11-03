@@ -245,9 +245,24 @@ export async function resetRollBootstrapAfterManualSelection(
   ])
 }
 
+export interface QueueMovementInvalidationOptions {
+  /**
+   * Skip the `session.current` refresh for a mutation whose own hook already
+   * refreshed it (queue-row snooze/unsnooze routes through `useSnooze` /
+   * `useUnsnooze`, which invalidate `session.current` inside the mutation).
+   * Without this opt-out a second invalidation of the same key re-runs the
+   * in-flight session fetch, so one snooze from the Queue sent the current
+   * session endpoint two extra identical GETs.
+   */
+  skipSessionCurrent?: boolean
+}
+
 export async function invalidateAfterQueueMovement(
   client: QueryClient,
+  options: QueueMovementInvalidationOptions = {},
 ): Promise<void> {
+  // The queue list reset, active-count, session, bootstrap, and excluded-view
+  // refreshes are issued together so callers can await one settled pass.
   await Promise.all([
     // Reset (not invalidate) the paginated Queue loader: re-fetching already
     // loaded pages through their pre-mutation cursors can duplicate or skip
@@ -258,10 +273,9 @@ export async function invalidateAfterQueueMovement(
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     }),
-    client.invalidateQueries({
-      queryKey: queryKeys.session.current(),
-      exact: true,
-    }),
+    ...(options.skipSessionCurrent
+      ? []
+      : [client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true })]),
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -282,13 +296,15 @@ export async function invalidateAfterQueueMovement(
  *
  * A create or delete also changes which existing editions the Add Series and
  * Edit/Rename forms should warn about (#3612), so the advisory duplicate
- * answers are refreshed in the same pass.
+ * answers are refreshed in the same pass. `options` passes through to
+ * `invalidateAfterQueueMovement` (see `QueueMovementInvalidationOptions`).
  */
 export async function invalidateAfterQueueMutation(
   client: QueryClient,
+  options: QueueMovementInvalidationOptions = {},
 ): Promise<void> {
   await Promise.all([
-    invalidateAfterQueueMovement(client),
+    invalidateAfterQueueMovement(client, options),
     invalidatePotentialDuplicates(client),
   ])
 }

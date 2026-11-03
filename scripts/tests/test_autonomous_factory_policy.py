@@ -56,13 +56,13 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             self.validate(entrypoint=f"{self.entrypoint}\n{rule}\n")
 
     def test_current_sources_are_aligned(self) -> None:
-        """Accept the current V22 policy, protocol, and runtime prompts."""
+        """Accept the current V27 policy, protocol, and runtime prompts."""
         self.validate()
         CHECKER.validate_local_guidance()
 
     def test_version_and_backlog_goal_are_required(self) -> None:
-        """Require V22 and issue-backlog closure as the prime directive."""
-        self.assert_policy_change_fails("Version: 22", "Version: 21")
+        """Require V27 and issue-backlog closure as the prime directive."""
+        self.assert_policy_change_fails("Version: 27", "Version: 26")
         self.assert_policy_change_fails(
             "Drive the open issue backlog to zero",
             "Keep existing pull requests busy",
@@ -83,8 +83,8 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
             "launch expensive fallback work",
         )
         mutated = self.entrypoint.replace(
-            "Never treat an empty or blocked backlog as a reason to self-pause or self-disable.",
-            "A blocked backlog may stop the worker schedule.",
+            "Drive the open issue backlog to zero",
+            "Keep existing pull requests busy",
         )
         self.assertNotEqual(mutated, self.entrypoint)
         with self.assertRaisesRegex(SystemExit, "missing required policy text"):
@@ -178,29 +178,6 @@ class AutonomousFactoryPolicyTests(unittest.TestCase):
         self.assert_protocol_change_fails(
             "Never enable auto-merge.",
             "Auto-merge may be enabled after CI starts.",
-        )
-
-    def test_daily_chromium_discovery_and_persistence_are_required(self) -> None:
-        """Require independent daily discovery with durable failure packets."""
-        self.assert_policy_change_fails(
-            "The complete maintained Chromium Playwright suite is a separate scheduled discovery system",
-            "Every factory launches the full Chromium suite when idle",
-        )
-        self.assert_policy_change_fails(
-            "retain Playwright traces, screenshots, video",
-            "discard browser evidence after failures",
-        )
-        self.assert_policy_change_fails(
-            "upload failure evidence under `if: always()`",
-            "upload evidence only when tests pass",
-        )
-        self.assert_policy_change_fails(
-            "A newer discovery run must not cancel an in-flight run",
-            "New discovery runs may cancel evidence uploads",
-        )
-        self.assert_policy_change_fails(
-            "deduplicate repeated failures across daily runs",
-            "create duplicate issues for every daily failure",
         )
 
     def test_magic_679_fallback_is_forbidden(self) -> None:

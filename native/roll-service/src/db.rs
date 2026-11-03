@@ -51,22 +51,92 @@ pub(crate) async fn query_one_optional(
     }
 }
 
-pub(crate) fn query_error(error: tokio_postgres::Error) -> ApiError {
-    if error.is_closed()
-        || error.as_db_error().is_some_and(|e| {
-            let code = e.code().code();
-            code.starts_with("08")
-                || code.starts_with("53")
-                || matches!(code, "57P01" | "57P02" | "57P03")
-        })
-    {
-        unavailable()
-    } else {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_string(),
-        )
+/// True when a statement never reached the server because the connection failed.
+///
+/// `is_closed` covers a cleanly detached connection; transport failures keep the
+/// OS or TLS error as their cause, which is what a half-open socket after an
+/// idle freeze surfaces on the first write. Value and row-shape errors
+/// (`ToSql`, `FromSql`, wrong column/parameter counts) carry no transport cause
+/// and stay internal: they are defects, not transport state.
+pub(crate) fn is_transport_failure(error: &tokio_postgres::Error) -> bool {
+    if error.is_closed() {
+        return true;
     }
+    if error.as_db_error().is_some() {
+        return false;
+    }
+    match std::error::Error::source(error) {
+        Some(source) => {
+            source.downcast_ref::<std::io::Error>().is_some()
+                || source.downcast_ref::<native_tls::Error>().is_some()
+        }
+        None => false,
+    }
+}
+
+fn is_availability_code(code: &str) -> bool {
+    code.starts_with("08") || code.starts_with("53") || matches!(code, "57P01" | "57P02" | "57P03")
+}
+
+/// Classify a database-layer failure into the public status contract.
+///
+/// A statement the server never saw (`transport`) or rejected for availability
+/// reasons takes the retryable "database unavailable" contract [`checkout`]
+/// already returns: the reader cannot fix a connection that died between
+/// requests, and a 5xx is a hard failure for the client. Reporting transport
+/// state as an internal error is wrong (#4535).
+///
+/// A statement the server did reject stays a 500: only a data or schema defect
+/// produces that, and the diagnostic log records the operation label and
+/// SQLSTATE so it stays attributable.
+pub(crate) fn failure_status(sqlstate: Option<&str>, transport: bool) -> StatusCode {
+    if transport {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+    match sqlstate {
+        Some(code) if is_availability_code(code) => StatusCode::SERVICE_UNAVAILABLE,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// Map a database-layer failure using only an operation label and SQLSTATE.
+///
+/// Never log SQL text, bind parameters, user identity, credentials or the
+/// server's message: the label plus the SQLSTATE is enough to attribute a
+/// failure without exposing reader data. The public body keeps its generic
+/// redacted contract.
+pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Error) -> ApiError {
+    let sqlstate = error.as_db_error().map(|e| e.code().code());
+    let transport = is_transport_failure(&error);
+    match failure_status(sqlstate, transport) {
+        StatusCode::SERVICE_UNAVAILABLE => {
+            // Transport failures have no SQLSTATE; the cause is an OS/TLS
+            // condition, never reader data.
+            tracing::warn!(
+                operation,
+                sqlstate = sqlstate.unwrap_or("none"),
+                transport,
+                closed = error.is_closed(),
+                "database connection unavailable"
+            );
+            unavailable()
+        }
+        _ => {
+            tracing::error!(
+                operation,
+                sqlstate = sqlstate.unwrap_or("none"),
+                "database statement failed"
+            );
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal Server Error".to_string(),
+            )
+        }
+    }
+}
+
+pub(crate) fn query_error(error: tokio_postgres::Error) -> ApiError {
+    query_error_for("database.statement", error)
 }
 
 /// Foreign/missing threads are indistinguishable; no unscoped identifier lookup.
@@ -116,6 +186,34 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use std::time::Duration;
+
+    /// #4535: a statement that never reached the server is transport state, not
+    /// an internal error. A server-rejected statement and a value/shape defect
+    /// stay 500.
+    #[test]
+    fn transport_failures_are_retryable_but_server_rejections_are_internal() {
+        // No answer from the server: the connection could not carry it.
+        assert_eq!(failure_status(None, true), StatusCode::SERVICE_UNAVAILABLE);
+        for code in ["08000", "08006", "53300", "57P01", "57P02", "57P03"] {
+            assert_eq!(
+                failure_status(Some(code), false),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "{code} is an availability failure"
+            );
+        }
+        // Value and row-shape defects keep the existing internal contract.
+        assert_eq!(
+            failure_status(None, false),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        for code in ["23503", "23514", "25006", "42703", "25P02", "57014"] {
+            assert_eq!(
+                failure_status(Some(code), false),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "{code} is a server-rejected statement"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn canceled_queries_discard_connections_and_query_bugs_remain_500() {

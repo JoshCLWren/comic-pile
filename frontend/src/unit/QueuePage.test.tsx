@@ -382,7 +382,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
-  it('refetches session but not the full thread list after snooze action', async () => {
+  it('does not run a second session fetch after the snooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
     mockedUseSession.mockReturnValue({
@@ -411,12 +411,15 @@ describe('Visible action Snooze/Unsnooze', () => {
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
+      expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
     })
+    // The snooze mutation owns the `session.current` refresh itself, so the
+    // row-action pass must not issue a second session fetch (#4276).
+    expect(mockRefetchSession).not.toHaveBeenCalled()
     expect(mockRefetch).not.toHaveBeenCalled()
   })
 
-  it('refetches session but not the full thread list after unsnooze action', async () => {
+  it('does not run a second session fetch after the unsnooze action', async () => {
     const mockRefetchSession = vi.fn()
     const mockRefetch = vi.fn()
     mockedUseSession.mockReturnValue({
@@ -449,8 +452,11 @@ describe('Visible action Snooze/Unsnooze', () => {
     await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
 
     await waitFor(() => {
-      expect(mockRefetchSession).toHaveBeenCalled()
+      expect(mockUnsnoozeMutation.mutate).toHaveBeenCalledWith(1)
     })
+    // The unsnooze mutation owns the `session.current` refresh itself, so the
+    // row-action pass must not issue a second session fetch (#4276).
+    expect(mockRefetchSession).not.toHaveBeenCalled()
     expect(mockRefetch).not.toHaveBeenCalled()
   })
 })

@@ -80,8 +80,9 @@ uv run --frozen pytest -q -x --no-cov \
 ```
 
 The first command checks both native Rust compilation surfaces using the same
-toolchain choices as `.github/workflows/rust-roll.yml` (service: pinned
-1.85.0) and `.github/workflows/native-vercel-rust.yml` (root: stable).
+toolchain choices as `.github/workflows/rust-roll.yml` (service: floating
+stable via `native/roll-service/rust-toolchain.toml`) and
+`.github/workflows/native-vercel-rust.yml` (root: stable).
 The trusted factory wrapper runs these checks automatically for Rust or native
 ingress changes. Targeted service tests requiring `RUST_ROLL_TEST_DATABASE_URL`
 must use **disposable** PostgreSQL, never the production database. Full suite,

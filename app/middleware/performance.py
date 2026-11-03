@@ -51,7 +51,10 @@ async def compute_startup_duration() -> None:
     Should be called once during the startup event after initialization completes.
     """
     global _startup_duration
-    _startup_duration = time.perf_counter() - _startup_monotonic
+    from app.startup_diagnostics import startup_event_snapshot
+
+    measured_ms = startup_event_snapshot().startup_duration_ms
+    _startup_duration = measured_ms / 1000 if measured_ms is not None else None
 
 
 def get_startup_time() -> float:

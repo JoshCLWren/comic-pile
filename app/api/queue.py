@@ -75,8 +75,7 @@ async def move_thread_position(
         HTTPException: If thread not found or position invalid.
     """
     logger.info(
-        "API move_thread_position: thread_id=%d, user_id=%d, "
-        "new_position=%d, request_url=%s",
+        "API move_thread_position: thread_id=%d, user_id=%d, new_position=%d, request_url=%s",
         thread_id,
         current_user.id,
         position_request.new_position,
@@ -87,35 +86,6 @@ async def move_thread_position(
         return await service.move_to_position(
             current_user.id, thread_id, position_request.new_position
         )
-    except ServiceError as exc:
-        raise _map_service_error(exc) from exc
-
-
-@router.put("/threads/{thread_id}/front/", response_model=ThreadResponse)
-@limiter.limit("30/minute")
-async def move_thread_front(
-    request: Request,
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ThreadResponse:
-    """Move thread to the front.
-
-    Args:
-        request: FastAPI request object for rate limiting.
-        thread_id: The ID of the thread to move.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        ThreadResponse with the updated thread information.
-
-    Raises:
-        HTTPException: If thread not found.
-    """
-    try:
-        service = QueueService(db)
-        return await service.move_to_front(current_user.id, thread_id)
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 

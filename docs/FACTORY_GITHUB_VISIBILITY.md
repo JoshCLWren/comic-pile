@@ -50,8 +50,17 @@ It is observability, not workflow state:
 - the status dashboard counts it in the PR pipeline "Conflict" tile while keeping
   it out of its stage list.
 
-There is no `factory:approved` label; controller-authored exact-head markers remain
-the only readiness authority.
+`factory:approved` is a **review-disposition label**, not a lifecycle stage:
+it means a trusted reviewer has posted a PASS marker for the current PR head.
+It may coexist with `factory:review` while independent controller acceptance is
+still outstanding, or with `factory:ci` / `factory:ready` as the same work advances.
+A stale-head PASS, generic GitHub `COMMENTED` review, self-authored prose, or green
+CI alone does not mint it. Any new head or trusted actionable changes-required
+feedback removes it. The existing **`factory:changes-requested`** (spelled exactly
+that way) is the blocking repair stage; **`factory:ready`** means all exact-head
+merge gates pass. `factory:approved` is visibility only: it cannot approve a
+self-authored GitHub PR, satisfy controller issue acceptance, authorize merging,
+or prove deployment. `factory:merge-conflict` remains independent observability.
 
 The labels are synchronized automatically from existing factory claim, progress, review, ready, release, and needs-human markers. Pull requests on `factory/*` branches are also recognized automatically. A linked issue claim supplies the initial pull-request owner when the branch name starts with `factory/<issue-number>-...`.
 

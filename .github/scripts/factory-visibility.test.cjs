@@ -107,9 +107,11 @@ test('fixed-model worker tokens map from the roster, not a numeric ceiling', () 
   assert.equal(ownerFor('opencode-free-model-factory-51'), 'factory:51');
   assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:74');
   assert.equal(ownerFor('opencode-free-model-factory-75'), 'factory:75');
-  assert.equal(ownerFor('opencode-free-model-factory-95'), 'factory:95');
+  assert.equal(ownerFor('opencode-free-model-factory-95'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:unowned');
-  assert.equal(ownerFor('opencode-omniroute-factory-95'), 'factory:95');
+  assert.equal(ownerFor('opencode-free-model-factory-56'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-free-model-factory-78'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-omniroute-factory-95'), 'factory:unowned');
   assert.equal(ownerFor('opencode-nvidia-factory-11'), 'factory:11');
   // Off-roster / retired ids stay unowned even when historically in 6..71.
   assert.equal(ownerFor('opencode-nvidia-factory-6'), 'factory:unowned');
@@ -126,7 +128,7 @@ test('head-contributor markers resolve roster workers above the old ceiling', ()
   const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-77:epoch-2 -->';
   assert.equal(workerFrom(body), '77');
   assert.equal(ownerFor(workerFrom(body)), 'factory:unowned');
-  assert.equal(ownerFor('worker-95'), 'factory:95');
+  assert.equal(ownerFor('worker-93'), 'factory:93');
   assert.equal(ownerFor('72'), 'factory:unowned');
 });
 
@@ -309,6 +311,123 @@ test('429 Retry-After is honored for a bounded retry', async () => {
   }, { sleep: async ms => { sleeps.push(ms); } });
   assert.equal(result, 'ok');
   assert.deepEqual(sleeps, [2000]);
+});
+
+test('trusted exact-head factory PASS is labeled approved but never merge-ready', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: `<!-- comic-pile-factory-review-v2:${'a'.repeat(40)}:pass -->`,
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:ci'));
+  assert.ok(!calls[0].labels.includes('factory:ready'));
+});
+
+test('issue comments cannot stamp a review approval onto a non-PR issue', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:building', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 4567 },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: `<!-- comic-pile-factory-review-v2:${'a'.repeat(40)}:pass -->`,
+      },
+    }),
+  });
+  assert.deepEqual(calls, []);
+});
+
+test('stale-head and untrusted PASS comments cannot mint factory:approved', async () => {
+  for (const [head, association] of [
+    ['b'.repeat(40), 'OWNER'],
+    ['a'.repeat(40), 'NONE'],
+  ]) {
+    const calls = [];
+    const github = githubFor({
+      labels: ['factory', 'factory:review', 'factory:unowned'],
+      setLabels: input => calls.push(input),
+    });
+    await reconcile({
+      github,
+      context: contextFor('issue_comment', {
+        issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+        comment: {
+          author_association: association,
+          user: { login: 'not-a-trusted-reviewer' },
+          body: `<!-- comic-pile-factory-review-v2:${head}:pass -->`,
+        },
+      }),
+    });
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('actionable feedback clears approval; later CI/ready transitions preserve it', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:approved', 'factory:ci', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 44, {
+    owner: 'factory:unowned', stage: 'factory:ready',
+  });
+  assert.ok(calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:ready'));
+  await reconcileLabels(github, contextFor('workflow_dispatch', {}), 44, {
+    owner: 'factory:unowned', stage: 'factory:changes-requested',
+  });
+  assert.ok(!calls[1].labels.includes('factory:approved'));
+  assert.ok(calls[1].labels.includes('factory:changes-requested'));
+});
+
+test('a new PR head invalidates old factory:approved even if an old PASS survives', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:approved', 'factory:ci', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('pull_request_target', {
+      action: 'synchronize',
+      repository: { full_name: 'JoshCLWren/comic-pile' },
+      pull_request: {
+        body: 'Closes #4567',
+        head: { ref: 'factory/99-4567-test', sha: 'b'.repeat(40), repo: { full_name: 'JoshCLWren/comic-pile' } },
+        labels: [{ name: 'factory' }],
+        number: 4568,
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(!calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:review'));
+});
+
+test('approved label is not a stage, owner, or merge gate', () => {
+  assert.ok(!STAGE_LABELS.includes('factory:approved'));
+  assert.ok(!DERIVED_LABELS.has('factory:approved'));
+  assert.ok(!reconcile._test.BLOCKED_LABELS.has('factory:approved'));
+  assert.equal(reconcile._test.isOwnerLabel('factory:approved'), false);
 });
 
 test('PR progress comments preserve an advanced review stage and local owner', async () => {

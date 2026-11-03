@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { NavigateFunction } from 'react-router-dom'
 import { threadsApi } from '../../services/api-threads'
+import { queryClient } from '../../query/queryClient'
+import { queryKeys } from '../../query/queryKeys'
 import {
   canSnoozeSeries,
   SNOOZE_REQUIRES_PENDING_SERIES_REASON,
@@ -67,6 +69,22 @@ interface UseRollActionsParams {
  * recovery path. Mutations are passed in from the page so this module never
  * creates a second server-state layer.
  */
+/**
+ * True when the mutation-owned bootstrap refresh (issued by the move/shuffle
+ * hook's queue-movement invalidation) settled into an error. Reading the
+ * already-run refresh's state costs no network request, so the single-refresh
+ * contract keeps its feedback: a committed move/shuffle whose pool refresh
+ * failed is reported the same way the snooze hook reports an exhausted
+ * refresh (#4276), instead of the retired duplicate `refetchBootstrap()` whose
+ * rejection used to surface through the action catch.
+ */
+function bootstrapRefreshSettledErrored(): boolean {
+  const state = queryClient.getQueryState(queryKeys.roll.bootstrap())
+  return (state?.error ?? null) != null
+}
+
+const POOL_REFRESH_FAILED_REASON = 'the Roll pool did not refresh. Refresh the page to see the new order.'
+
 export function useRollActions({
   state,
   bootstrap,
@@ -162,12 +180,23 @@ export function useRollActions({
           break
         }
         case 'move-front':
+          // The useMoveToFront hook already invalidates the retained roll
+          // bootstrap, and the bootstrap query is active here, so the mutation
+          // settles with one authoritative refresh. An explicit `refetch()`
+          // after the invalidation sent the bootstrap endpoint a second,
+          // identical refresh (re-ran the in-flight session POST too).
           await moveToFrontMutation.mutate(selectedThread!.id)
-          await refetchBootstrap()
+          if (bootstrapRefreshSettledErrored()) {
+            setErrorMessage(`Moved ${selectedThread!.title}, but ${POOL_REFRESH_FAILED_REASON}`)
+          }
           break
         case 'move-back':
+          // Same single-refresh ownership as `move-front` above: the move hook
+          // owns the queue-movement invalidation pass; no caller refresh.
           await moveToBackMutation.mutate(selectedThread!.id)
-          await refetchBootstrap()
+          if (bootstrapRefreshSettledErrored()) {
+            setErrorMessage(`Moved ${selectedThread!.title}, but ${POOL_REFRESH_FAILED_REASON}`)
+          }
           break
         case 'snooze': {
           if (isSnoozed) {
@@ -283,8 +312,16 @@ export function useRollActions({
    */
   async function performShuffle() {
     try {
+      // `useShuffleQueue` invalidates the retained roll bootstrap and the
+      // query is active here, so the mutation settles with one authoritative
+      // refresh; this handler must not issue a second one. A pool refresh
+      // that failed inside that pass is reported here (no extra request) the
+      // same way the snooze hook reports an exhausted refresh (#4276).
       await shuffleQueueMutation.mutate()
-      await refetchBootstrap()
+      if (bootstrapRefreshSettledErrored()) {
+        setShuffleError(`Shuffled, but ${POOL_REFRESH_FAILED_REASON}`)
+        return
+      }
       setShuffleError('')
       setIsShuffleOpen(false)
     } catch (error) {

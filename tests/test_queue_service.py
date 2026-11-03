@@ -168,35 +168,6 @@ async def test_move_to_position_invalid_target_raises_invalid_request(
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_delegates_to_front_mutation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Move-to-front uses the front mutation and records a reorder event."""
-    thread = _make_thread(queue_position=3)
-    find_owned = AsyncMock(return_value=thread)
-    monkeypatch.setattr(queue_service.thread_repository, "find_owned", find_owned)
-    monkeypatch.setattr(
-        queue_service.queue_repository,
-        "active_queue_positions",
-        AsyncMock(side_effect=[{10: 1, 7: 3, 11: 2}, {7: 1, 10: 3, 11: 2}]),
-    )
-    add_reorder_event = AsyncMock()
-    monkeypatch.setattr(queue_service.queue_repository, "add_reorder_event", add_reorder_event)
-    front_mutation = AsyncMock(return_value={})
-    monkeypatch.setattr(queue_service, "_move_to_front", front_mutation)
-    monkeypatch.setattr(
-        queue_service, "thread_to_response", AsyncMock(return_value={"id": 7})
-    )
-
-    db = _fake_db()
-    service = queue_service.QueueService(db)
-    await service.move_to_front(1, 7)
-
-    front_mutation.assert_awaited_once_with(7, 1, db, manual=True)
-    add_reorder_event.assert_awaited_once_with(db, 7)
-
-
-@pytest.mark.asyncio
 async def test_move_to_back_uses_back_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -226,30 +197,30 @@ async def test_move_to_back_uses_back_mutation(
 
 
 @pytest.mark.asyncio
-async def test_move_to_front_noop_still_commits_manual_claim(
+async def test_move_to_back_noop_still_commits_manual_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Moving the front series to the front still commits the manual claim."""
-    thread = _make_thread(queue_position=1)
+    """Moving the back series to the back still commits the manual claim."""
+    thread = _make_thread(queue_position=2)
     _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
         monkeypatch,
         thread=thread,
-        before={7: 1, 10: 2},
-        after={7: 1, 10: 2},
+        before={10: 1, 7: 2},
+        after={10: 1, 7: 2},
     )
 
     async def _mark_manual(*_args, **_kwargs):
         thread.queue_position_is_manual = True
         return {}
 
-    front_mutation = AsyncMock(side_effect=_mark_manual)
-    monkeypatch.setattr(queue_service, "_move_to_front", front_mutation)
+    back_mutation = AsyncMock(side_effect=_mark_manual)
+    monkeypatch.setattr(queue_service, "_move_to_back", back_mutation)
 
     db = _fake_db()
     service = queue_service.QueueService(db)
-    await service.move_to_front(1, 7)
+    await service.move_to_back(1, 7)
 
-    front_mutation.assert_awaited_once_with(7, 1, db, manual=True)
+    back_mutation.assert_awaited_once_with(7, 1, db, manual=True)
     add_reorder_event.assert_not_awaited()
     db.commit.assert_awaited_once()
     assert thread.queue_position_is_manual is True

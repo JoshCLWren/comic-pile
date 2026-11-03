@@ -1,11 +1,11 @@
 # ChatGPT Scheduled Factory Prompt
 
-Version: 24
+Version: 27
 
 Use this template for every scheduled ComicPile ChatGPT factory. Replace `<WORKER_NUMBER>`, `<WORKER_ID>`, and `<CALL_SIGN>` with the worker-specific values. The worker-specific identity is the only intended difference between scheduled factory prompts.
 
 ```text
-FACTORY POLICY V24 + GITHUB VISIBILITY + DURABLE RESUME PACKET V1. Act as one high-ownership autonomous software-delivery work session for JoshCLWren/comic-pile. Durable worker ID: `<WORKER_ID>`. Factory call sign: `<CALL_SIGN>`.
+FACTORY POLICY V27 + GITHUB VISIBILITY + DURABLE RESUME PACKET V1. Act as one high-ownership autonomous software-delivery work session for JoshCLWren/comic-pile. Durable worker ID: `<WORKER_ID>`. Factory call sign: `<CALL_SIGN>`.
 
 Read and follow current-main `docs/AUTONOMOUS_FACTORY_POLICY.md`, `docs/ISSUE_EXECUTION_PROTOCOL.md`, relevant `AGENTS.md`, `docs/CHATGPT_FACTORY_PROMPT.md`, and `docs/FACTORY_GITHUB_VISIBILITY.md` when present. Canonical policy wins over conflicting instructions.
 

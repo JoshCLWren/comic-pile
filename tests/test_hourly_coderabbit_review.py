@@ -293,3 +293,126 @@ def test_shortlist_favors_priority_then_green_ci() -> None:
     rows[1]["statusCheckRollup"] = [{"name": "CI Summary", "conclusion": "FAILURE"}]
     selected = review.choices(rows, {101: [], 102: [], 103: []}, NOW)
     assert [item.number for item in selected] == [103, 101, 102]
+
+
+def test_jev_review_uses_existing_dispatcher_driven_merge_drain() -> None:
+    """No independent cron or failure coupling; existing hourly quota survives."""
+    workflows = SCRIPTS.parent / "workflows"
+    drain = (workflows / "factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+    dispatcher = (workflows / "fixed-model-factory-dispatch.yml").read_text(
+        encoding="utf-8"
+    )
+    assert not (workflows / "hourly-jev-coderabbit-review.yml").exists()
+    assert "gh workflow run factory-ready-merge-drain.yml" in dispatcher
+    step_name = "      - name: Ask Jev for CodeRabbit review on the existing drain cadence"
+    assert drain.count(step_name) == 1
+    step = drain.split(step_name, 1)[1].split("\n      - name:", 1)[0]
+    assert "continue-on-error: true" in step
+    assert "GH_TOKEN: ${{ github.token }}" in step
+    assert "OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}" in step
+    assert "PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}" in step
+    assert "gh pr list " not in step
+    assert "--prs " not in step
+    assert "--repo" in step
+    assert "hourly_coderabbit_review.py" in step
+    # Preserve the existing redundant merge drain fallback, not another timer.
+    assert "cron: '2-57/15 * * * *'" in drain
+    assert drain.count("    - cron:") == 1
+
+
+def test_rest_snapshot_reads_open_and_recent_closed_with_check_runs() -> None:
+    """Load REST data with accurate CI and the shared recent-closure window."""
+    now = NOW
+    calls: list[str] = []
+    open_row = {
+        "number": 101, "state": "open", "draft": False,
+        "head": {"sha": "a" * 40}, "title": "review me",
+        "created_at": "2026-11-01T17:00:00Z",
+        "updated_at": "2026-11-02T18:25:00Z", "closed_at": None,
+        "labels": [{"name": "priority:P1"}],
+    }
+    closed_row = {
+        **open_row, "number": 102, "state": "closed",
+        "head": {"sha": "b" * 40},
+        "closed_at": "2026-11-02T18:20:00Z",
+    }
+    old_row = {
+        **closed_row, "number": 103, "head": {"sha": "c" * 40},
+        "updated_at": "2026-11-02T14:00:00Z",
+        "closed_at": "2026-11-02T14:00:00Z",
+    }
+
+    def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
+        """Emulate GitHub's REST PR listing and check-run response."""
+        calls.append(path)
+        if "pulls?state=open" in path:
+            return [open_row]
+        if "pulls?state=closed" in path:
+            return [closed_row, old_row]
+        if "/check-runs?" in path:
+            return {"total_count": 1, "check_runs": [
+                {"name": "CI Summary", "conclusion": "success", "status": "completed"}
+            ]}
+        raise AssertionError(f"unexpected REST call: {path}")
+
+    snapshots = review.rest_pr_snapshots(REPO, now, rest)
+    assert [row["number"] for row in snapshots] == [101, 102]
+    assert snapshots[0]["state"] == "OPEN"
+    assert snapshots[0]["headRefOid"] == "a" * 40
+    assert review.ci_state(snapshots[0]) == "passing"
+    assert snapshots[1]["state"] == "CLOSED"
+    assert snapshots[1]["closedAt"] == "2026-11-02T18:20:00Z"
+    assert len([path for path in calls if "/check-runs?" in path]) == 1
+    assert all("graphql" not in path.lower() for path in calls)
+
+
+def test_rest_snapshot_rejects_incomplete_checks() -> None:
+    """Incomplete check history must not quietly influence a review decision."""
+    row = {
+        "number": 101, "state": "open", "draft": False,
+        "head": {"sha": "a" * 40}, "title": "review me",
+        "created_at": "2026-11-01T17:00:00Z",
+        "updated_at": "2026-11-02T18:25:00Z",
+        "labels": [], "closed_at": None,
+    }
+
+    def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
+        """Return a truncated REST check response."""
+        if "pulls?state=open" in path:
+            return [row]
+        if "/check-runs?" in path:
+            return {"total_count": 101, "check_runs": []}
+        raise AssertionError(f"unexpected REST call: {path}")
+
+    with pytest.raises(ValueError, match="incomplete REST PR check history"):
+        review.rest_pr_snapshots(REPO, NOW, rest)
+
+
+def test_rest_snapshot_paginates_open_prs() -> None:
+    """Avoid silently dropping older but still open PRs from candidate selection."""
+    def make_row(number: int) -> dict[str, Any]:
+        """Construct a REST open PR response."""
+        return {
+            "number": number, "state": "open", "draft": False,
+            "head": {"sha": f"{number:040x}"}, "title": f"PR {number}",
+            "created_at": "2026-11-01T17:00:00Z",
+            "updated_at": "2026-11-02T18:25:00Z",
+            "labels": [], "closed_at": None,
+        }
+
+    def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
+        """Return 100 open PRs and one additional older open PR."""
+        if "pulls?state=open" in path and path.endswith("&page=1"):
+            return [make_row(i) for i in range(1, 101)]
+        if "pulls?state=open" in path and path.endswith("&page=2"):
+            return [make_row(101)]
+        if "pulls?state=closed" in path:
+            return []
+        if "/check-runs?" in path:
+            return {"total_count": 0, "check_runs": []}
+        raise AssertionError(f"unexpected REST call: {path}")
+
+    snapshots = review.rest_pr_snapshots(REPO, NOW, rest)
+    assert len(snapshots) == 101
+    assert snapshots[-1]["number"] == 101
+

@@ -123,8 +123,7 @@ async def test_below_threshold_rating_keeps_manual_front_placement(
     threads = await _add_active_threads(async_db, user, count=12)
     target = threads[4]  # position 5 before the explicit move
 
-    move_response = await auth_client.put(f"/api/v1/queue/threads/{target.id}/front/")
-    assert move_response.status_code == 200
+    await move_to_front(target.id, user.id, async_db, manual=True)
 
     await async_db.refresh(target)
     assert target.queue_position == 1
