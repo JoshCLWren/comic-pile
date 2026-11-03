@@ -974,5 +974,4 @@ mod tests {
         );
         tx.rollback().await.expect("discard pending-test fixtures");
     }
-
 }
