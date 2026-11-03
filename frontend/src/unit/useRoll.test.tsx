@@ -13,9 +13,9 @@ import {
 import { rollApi } from '../services/api-roll'
 import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
-import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
+import { invalidateAfterRollDieModeUpdate, applyClearedManualDie } from '../query/cacheEffects'
 
-vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined), applyClearedManualDie: vi.fn() }))
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -63,8 +63,8 @@ beforeEach(() => {
   mockedRollApi.dismissPending.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.dismissPending>>>(undefined))
   // SAFETY: setDie resolves void; undefined matches the mocked resolution.
   mockedRollApi.setDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.setDie>>>(undefined))
-  // SAFETY: clearManualDie resolves void; undefined preserves the contract.
-  mockedRollApi.clearManualDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.clearManualDie>>>(undefined))
+  // SAFETY: clearManualDie resolves null; null preserves the contract.
+  mockedRollApi.clearManualDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.clearManualDie>>>(null))
   // SAFETY: reroll mock returns an empty roll success shape that the test does not inspect.
   mockedRollApi.reroll.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.reroll>>>({}))
 })
