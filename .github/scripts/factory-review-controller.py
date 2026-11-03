@@ -865,7 +865,7 @@ def post_review_comment(
         # A GITHUB_TOKEN comment will not cause an issue_comment workflow run.
         # Keep review approval visibility in the same trusted controller run.
         match = re.fullmatch(
-            r"<!-- comic-pile-factory-acceptance-v1:issue-\\d+:"
+            r"<!-- comic-pile-factory-acceptance-v1:issue-\d+:"
             r"head-([0-9a-f]{40}):digest-[0-9a-f]{64} -->",
             acceptance_marker,
         )
