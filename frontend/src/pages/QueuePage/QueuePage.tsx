@@ -100,7 +100,6 @@ export default function QueuePage() {
   )
   const actions = useQueueThreadActions({
     navigateToRoll,
-    refetchSession,
   })
 
   const submitCreate = useCallback(

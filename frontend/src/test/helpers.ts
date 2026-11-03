@@ -25,6 +25,56 @@ export async function waitForQueueReady(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'Add Series' }).first()).toBeVisible()
 }
 
+export interface RequestLedger {
+  /**
+   * Number of observed HTTP requests whose method equals `method` and whose
+   * URL pathname equals `pathPrefix` or lives under it with one more segment.
+   *
+   * This is a real-network ledger from browser request events — no request
+   * interception or mocking — so it counts exactly what the authenticated page
+   * sends against the real (or lane-provisioned) backend.
+   */
+  count(method: string, pathPrefix: string): number
+}
+
+/**
+ * Observe the page's real HTTP requests at the browser boundary and expose
+ * total counts by `METHOD /path` (or `METHOD /path/{id}` for per-row routes).
+ *
+ * Differential use (`countBefore` vs `countAfter` around one user action)
+ * keeps setup traffic out of a mutation's budget (#4276).
+ */
+export function startRequestLedger(page: Page): RequestLedger {
+  const counts = new Map<string, number>()
+
+  page.on('request', (request) => {
+    try {
+      // SAFETY: Chromium request URLs are absolute http(s) URLs; opaque
+      // schemes cannot raise here and are excluded by the guard below.
+      const url = new URL(request.url())
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return
+      const key = `${request.method()} ${url.pathname}`
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    } catch {
+      // Malformed/opaque URLs are not budget candidates.
+    }
+  })
+
+  return {
+    count(method: string, pathPrefix: string): number {
+      const exact = `${method} ${pathPrefix}`
+      const child = `${exact}/`
+      let total = 0
+      for (const [key, value] of counts) {
+        if (key === exact || key.startsWith(child)) {
+          total += value
+        }
+      }
+      return total
+    },
+  }
+}
+
 /**
  * The queue shows a "Ready to roll?" nudge modal after the first series is
  * created (localStorage-persisted). Its backdrop blocks later interactions,
