@@ -402,9 +402,9 @@ def test_rest_snapshot_paginates_open_prs() -> None:
 
     def rest(path: str, *, token: str | None = None, body: str | None = None) -> object:
         """Return 100 open PRs and one additional older open PR."""
-        if "pulls?state=open" in path and "page=1" in path:
+        if "pulls?state=open" in path and path.endswith("&page=1"):
             return [make_row(i) for i in range(1, 101)]
-        if "pulls?state=open" in path and "page=2" in path:
+        if "pulls?state=open" in path and path.endswith("&page=2"):
             return [make_row(101)]
         if "pulls?state=closed" in path:
             return []
