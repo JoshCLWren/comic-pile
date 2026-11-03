@@ -175,13 +175,13 @@ pub(crate) async fn safe_position_rank(
     let row = tx
         .query_one(
             "WITH active AS ( \
-                 SELECT id, row_number() OVER (ORDER BY queue_position, id) AS seq \
+                 SELECT id, row_number() OVER (ORDER BY queue_position, id)::int AS seq \
                  FROM threads \
                  WHERE user_id = $1::int AND status = 'active' AND queue_position >= 1 \
              ), \
              rollable AS ( \
                  SELECT a.id, a.seq, \
-                        row_number() OVER (ORDER BY a.seq) AS rollable_rank \
+                        row_number() OVER (ORDER BY a.seq)::int AS rollable_rank \
                  FROM active a \
                  WHERE a.id <> ALL($4::int[]) AND a.id = ANY($5::int[]) \
              ) \

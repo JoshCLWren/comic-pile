@@ -73,8 +73,7 @@
       "status": "target",
       "owning_issue": 4443,
       "consumers": [
-        "frontend/src/services/nativeRollMutationApi.ts",
-        "frontend/src/services/protectedRollMutationApi.ts"
+        "frontend/src/services/nativeRollMutationApi.ts"
       ]
     },
     {

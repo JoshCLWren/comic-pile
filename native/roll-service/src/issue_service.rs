@@ -912,6 +912,164 @@ mod tests {
         }
     }
 
+    /// One Roll-offer rating: finish the offered issue at `rating` under `key`.
+    fn roll_offer(rating: Option<f64>, key: &str) -> IssueReadRateRequest {
+        IssueReadRateRequest {
+            status: Some("read".into()),
+            rating,
+            idempotency_key: key.into(),
+            source: Some(ROLL_OFFER_SOURCE.into()),
+        }
+    }
+
+    /// Fresh disposable schema for one Roll-offer rating scenario.
+    ///
+    /// Two readable series and a third control series sit in one queue, one
+    /// series is blocked, one belongs to another reader, and the die is at d8
+    /// from a prior rating event. The active session holds a pending offer on
+    /// thread 10 issue 101, recorded by one roll event that offered that exact
+    /// issue.
+    async fn roll_offer_schema(admin: &tokio_postgres::Client, schema: &str) {
+        admin
+            .batch_execute(&format!(
+                "CREATE SCHEMA {schema};
+                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
+                 CREATE TABLE {schema}.threads (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     title text NOT NULL, status text NOT NULL,
+                     issues_remaining integer NOT NULL,
+                     next_unread_issue_id integer, reading_progress text,
+                     last_rating double precision, queue_position integer NOT NULL,
+                     queue_position_is_manual boolean NOT NULL,
+                     last_activity_at timestamptz,
+                     is_blocked boolean NOT NULL DEFAULT false,
+                     catalog_series_id bigint, total_issues integer
+                 );
+                 CREATE TABLE {schema}.issues (
+                     id integer PRIMARY KEY, thread_id integer NOT NULL,
+                     issue_number text NOT NULL, status text NOT NULL,
+                     position integer NOT NULL, read_at timestamptz,
+                     catalog_issue_id bigint
+                 );
+                 CREATE TABLE {schema}.dependencies (
+                     id integer PRIMARY KEY, source_issue_id integer NOT NULL,
+                     target_issue_id integer NOT NULL, origin text,
+                     classification text, provenance text, note text
+                 );
+                 CREATE TABLE {schema}.events (
+                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                     user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
+                     thread_id integer, issue_id integer, issue_number text,
+                     session_id integer, selected_thread_id integer,
+                     die integer, die_after integer, result integer,
+                     rating double precision, issues_read integer, context json
+                 );
+                 CREATE TABLE {schema}.sessions (
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     pending_thread_id integer, pending_issue_id integer,
+                     pending_thread_updated_at timestamptz,
+                     manual_die integer, ended_at timestamptz,
+                     started_at timestamptz NOT NULL DEFAULT NOW(),
+                     snoozed_thread_ids integer[], skipped_thread_ids integer[]
+                 );
+                 CREATE TABLE {schema}.custom_cbl_lists (
+                     id integer PRIMARY KEY, user_id integer NOT NULL, mode text NOT NULL
+                 );
+                 CREATE TABLE {schema}.custom_cbl_entries (
+                     id integer PRIMARY KEY, list_id integer NOT NULL,
+                     issue_id integer NOT NULL, gate text NOT NULL,
+                     skipped boolean NOT NULL DEFAULT false,
+                     position integer NOT NULL DEFAULT 1
+                 );
+                 CREATE TABLE {schema}.custom_cbl_overlap_decisions (
+                     id integer PRIMARY KEY, list_id integer, user_id integer,
+                     continuing_external_identity_id bigint,
+                     waiting_external_identity_id bigint
+                 );
+                 CREATE TABLE {schema}.collection_exclusions (
+                     id integer PRIMARY KEY, user_id integer, issue_id integer,
+                     thread_id integer, provider text, external_volume_id text
+                 );
+                 CREATE TABLE {schema}.external_identities (
+                     id bigint PRIMARY KEY, provider text NOT NULL,
+                     external_id text NOT NULL, entity_type text NOT NULL,
+                     metadata_json json
+                 );
+                 CREATE TABLE {schema}.catalog_series (
+                     id bigint PRIMARY KEY, canonical_external_identity_id bigint
+                 );
+                 CREATE TABLE {schema}.catalog_issues (
+                     id bigint PRIMARY KEY, catalog_series_id bigint,
+                     canonical_external_identity_id bigint
+                 );
+                 CREATE TABLE {schema}.thread_external_series_mappings (
+                     thread_id integer, external_identity_id bigint, status text
+                 );
+                 INSERT INTO {schema}.users VALUES (1), (2);
+                 INSERT INTO {schema}.sessions
+                     (id,user_id,pending_thread_id,pending_issue_id,started_at)
+                     VALUES (1,1,10,101,'2026-10-01T00:00:00Z');
+                 INSERT INTO {schema}.threads VALUES
+                     (10,1,'Offered run','active',2,101,'in_progress',NULL,1,false,NULL,false,NULL,2),
+                     (20,1,'Second run','active',1,201,'in_progress',NULL,2,false,NULL,false,NULL,1),
+                     (30,1,'Control run','active',1,301,'in_progress',NULL,3,false,NULL,false,NULL,1),
+                     (40,1,'Blocked run','active',1,401,'in_progress',NULL,4,false,NULL,true,NULL,1),
+                     (60,2,'Foreign run','active',1,601,'in_progress',NULL,1,false,NULL,false,NULL,1);
+                 INSERT INTO {schema}.issues VALUES
+                     (101,10,'1','unread',1,NULL,NULL),
+                     (102,10,'2','unread',2,NULL,NULL),
+                     (201,20,'1','unread',1,NULL,NULL),
+                     (301,30,'1','unread',1,NULL,NULL),
+                     (401,40,'1','unread',1,NULL,NULL),
+                     (601,60,'1','unread',1,NULL,NULL);
+                 -- Thread 40 waits on a real unread prerequisite, so it is not
+                 -- in the rollable set the next roll can draw from.
+                 INSERT INTO {schema}.dependencies
+                     (id,source_issue_id,target_issue_id,origin)
+                     VALUES (1,102,401,'reader');
+                 -- The die is at d8 from the most recent rating outcome.
+                 INSERT INTO {schema}.events (user_id,type,rating,die_after)
+                     VALUES (1,'rate',4.5,8);
+                 -- The offer this rating finishes: one roll event naming the
+                 -- exact issue the pending session holds.
+                 INSERT INTO {schema}.events
+                     (user_id,type,session_id,selected_thread_id,die,result,
+                      issue_id,issue_number,context)
+                     VALUES (1,'roll',1,10,6,1,101,'1','{{}}'::json);"
+            ))
+            .await
+            .unwrap();
+    }
+
+    /// Queue positions of one reader's owned threads in id order.
+    async fn queue_positions(client: &tokio_postgres::Client, ids: &[i32]) -> Vec<i32> {
+        let rows = client
+            .query(
+                "SELECT id,queue_position FROM threads
+                 WHERE id = ANY($1::int[]) ORDER BY id",
+                &[&ids],
+            )
+            .await
+            .unwrap();
+        rows.iter().map(|row| row.get(1)).collect()
+    }
+
+    /// The die the latest stored outcome projects to.
+    async fn current_die(client: &tokio_postgres::Client, user_id: i32) -> i32 {
+        client
+            .query_one(
+                "SELECT COALESCE(
+                    (SELECT die_after FROM events
+                     WHERE user_id=$1
+                       AND die_after IN (2,4,6,8,10,12,20,30,50,100)
+                     ORDER BY timestamp DESC, id DESC LIMIT 1), 6)",
+                &[&user_id],
+            )
+            .await
+            .unwrap()
+            .get(0)
+    }
+
     #[test]
     fn validates_status_rating_and_idempotency_without_truncating() {
         for rating in [0.5, 3.5, 5.0] {
@@ -1051,6 +1209,9 @@ mod tests {
         tx.commit().await.unwrap();
         assert!(read.read_event_created);
         assert!(read.rating_event_created);
+        // A direct read never touches the Roll die ladder: that state belongs
+        // to the Roll flow (issue #3581).
+        assert_eq!(read.die_after, None);
         assert_eq!(read.issue.issue_number, "10");
         assert_eq!(read.issue.status, "read");
         assert_eq!(read.issue.rating, Some(4.5));
@@ -1312,6 +1473,614 @@ mod tests {
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_rating_steps_the_die_down_and_moves_the_series_forward() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_high_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.5), "roll-offer-high-001"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        // A rating at or above the threshold steps the die down from d8 to d6.
+        assert!(rated.read_event_created);
+        assert!(rated.rating_event_created);
+        assert_eq!(rated.die_after, Some(6));
+        assert_eq!(rated.final_rating, Some(4.5));
+        assert_eq!(rated.thread.issues_remaining, 1);
+        assert_eq!(rated.thread.next_unread_issue_id, Some(102));
+        assert_eq!(current_die(&client, 1).await, 6);
+        // The series moves to the front and every other row shifts back.
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 3, 4]
+        );
+        // The rating links back to the roll event that offered this exact issue.
+        let offering_roll: i32 = client
+            .query_one(
+                "SELECT id FROM events WHERE type='roll' AND issue_id=101",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let linked = client
+            .query_one(
+                "SELECT context->>'source', context->>'source_roll_event_id' FROM events
+                 WHERE context->>'issue_command_key'='roll-offer-high-001'",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(linked.get::<_, String>(0), "roll_offer");
+        assert_eq!(
+            linked.get::<_, Option<String>>(1),
+            Some(offering_roll.to_string())
+        );
+        // The pending offer for the exact rated issue is retired, so the next
+        // roll is a fresh offer rather than a snooze of the finished series.
+        let pending = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending.get::<_, Option<i32>>(0), None);
+        assert_eq!(pending.get::<_, Option<i32>>(1), None);
+
+        // An identical retry replays the original receipt and never steps the
+        // ladder or the queue twice.
+        let tx = client.transaction().await.unwrap();
+        let replay = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.5), "roll-offer-high-001"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert!(replay.replayed);
+        assert_eq!(replay.die_after, Some(6));
+        assert_eq!(replay.issue, rated.issue);
+        assert_eq!(current_die(&client, 1).await, 6);
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 3, 4]
+        );
+        // Four events: the seeded die outcome and offer, the dice command that
+        // steps the ladder, and the issue event that records the read.
+        assert_eq!(
+            client
+                .query_one("SELECT COUNT(*) FROM events WHERE user_id=1", &[])
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            4
+        );
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_low_rating_steps_the_die_up_and_seats_the_series_last() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_low_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(
+            &tx,
+            user,
+            201,
+            &roll_offer(Some(3.0), "roll-offer-low-0001"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        // A below-threshold rating steps the die up, never down.
+        assert_eq!(rated.die_after, Some(10));
+        assert_eq!(current_die(&client, 1).await, 10);
+        // This was the series' only unread issue, so it is completed and seats
+        // behind every other queued series; the low rating never promotes it.
+        assert_eq!(rated.thread.issues_remaining, 0);
+        assert_eq!(rated.thread.status, "completed");
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 4, 2, 3]
+        );
+        assert_eq!(
+            client
+                .query_one("SELECT status FROM threads WHERE id=20", &[])
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+            "completed"
+        );
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_completion_moves_the_series_to_the_back() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_done_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        // The last unread issue of the front series, rated above threshold:
+        // completion wins over the front move, exactly as the legacy writer
+        // ordered it.
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.5), "roll-offer-done-001"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(rated.thread.issues_remaining, 1);
+        assert_eq!(rated.die_after, Some(6));
+        let tx = client.transaction().await.unwrap();
+        let finished = persist(
+            &tx,
+            user,
+            102,
+            &roll_offer(Some(4.5), "roll-offer-done-002"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        assert_eq!(finished.thread.issues_remaining, 0);
+        assert_eq!(finished.thread.status, "completed");
+        assert_eq!(
+            finished.thread.reading_progress.as_deref(),
+            Some("completed")
+        );
+        assert_eq!(finished.die_after, Some(4));
+        assert_eq!(current_die(&client, 1).await, 4);
+        // The finished series sits behind every other queued series, and the
+        // remaining positions stay dense.
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![4, 1, 2, 3]
+        );
+        // Completing a series clears its reader placement (#3638).
+        assert!(!client
+            .query_one(
+                "SELECT queue_position_is_manual FROM threads WHERE id=10",
+                &[]
+            )
+            .await
+            .unwrap()
+            .get::<_, bool>(0));
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_rating_of_a_manually_placed_series_keeps_its_position() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_manual_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        // A second unread issue keeps the series in play after the first
+        // rating, and the reader has placed it by hand.
+        admin
+            .batch_execute(&format!(
+                "INSERT INTO {schema}.issues
+                     (id,thread_id,issue_number,status,position)
+                 VALUES (302,30,'2','unread',2);
+                 UPDATE {schema}.threads
+                 SET issues_remaining=2, queue_position_is_manual=true WHERE id=30"
+            ))
+            .await
+            .unwrap();
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        // The reader placed this series by hand, so a below-threshold rating
+        // must not demote it (#3638).
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(
+            &tx,
+            user,
+            301,
+            &roll_offer(Some(2.5), "roll-offer-manual-01"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(rated.die_after, Some(10));
+        assert_eq!(rated.thread.issues_remaining, 1);
+        assert_eq!(rated.thread.status, "active");
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 3, 4],
+            "a manual placement survives a below-threshold Roll rating"
+        );
+        assert!(
+            client
+                .query_one(
+                    "SELECT queue_position_is_manual FROM threads WHERE id=30",
+                    &[]
+                )
+                .await
+                .unwrap()
+                .get::<_, bool>(0),
+            "the same rating keeps the reader's manual placement recorded"
+        );
+
+        // Finishing the series is a different transition: completion seats the
+        // series behind the queue and clears the manual placement (#3638).
+        let tx = client.transaction().await.unwrap();
+        let finished = persist(
+            &tx,
+            user,
+            302,
+            &roll_offer(Some(4.5), "roll-offer-manual-02"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(finished.die_after, Some(8));
+        assert_eq!(finished.thread.issues_remaining, 0);
+        assert_eq!(finished.thread.status, "completed");
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 4, 3]
+        );
+        assert!(
+            !client
+                .query_one(
+                    "SELECT queue_position_is_manual FROM threads WHERE id=30",
+                    &[]
+                )
+                .await
+                .unwrap()
+                .get::<_, bool>(0),
+            "completing a series clears its reader placement"
+        );
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_low_rating_never_repositions_a_blocked_series() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_blocked_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        // A second unread issue keeps the blocked series in play, and that
+        // remaining issue carries its own unread prerequisite so the series
+        // stays outside the rollable set after the first issue is read. The
+        // series is also moved to the front of the queue, so a completion move
+        // to the back is observable.
+        admin
+            .batch_execute(&format!(
+                "INSERT INTO {schema}.issues
+                     (id,thread_id,issue_number,status,position)
+                 VALUES (402,40,'2','unread',2);
+                 INSERT INTO {schema}.dependencies
+                     (id,source_issue_id,target_issue_id,origin)
+                 VALUES (2,102,402,'reader');
+                 UPDATE {schema}.threads SET issues_remaining=2 WHERE id=40;
+                 UPDATE {schema}.threads SET queue_position=1 WHERE id=40;
+                 UPDATE {schema}.threads SET queue_position=2 WHERE id=10;
+                 UPDATE {schema}.threads SET queue_position=3 WHERE id=20;
+                 UPDATE {schema}.threads SET queue_position=4 WHERE id=30;"
+            ))
+            .await
+            .unwrap();
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        // A blocked series is outside the rollable set, so the below-threshold
+        // "seat it beyond the die pool" placement is not computed for it.
+        let tx = client.transaction().await.unwrap();
+        let low = persist(
+            &tx,
+            user,
+            401,
+            &roll_offer(Some(3.5), "roll-offer-block-001"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(low.die_after, Some(10));
+        assert_eq!(low.thread.issues_remaining, 1);
+        assert_eq!(low.thread.status, "active");
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![2, 3, 4, 1],
+            "a below-threshold rating leaves a blocked series where it is"
+        );
+
+        // Completing it is a different transition: the finished series leaves
+        // the pool behind the rest of the queue.
+        let tx = client.transaction().await.unwrap();
+        let finished = persist(
+            &tx,
+            user,
+            402,
+            &roll_offer(Some(4.5), "roll-offer-block-002"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert_eq!(finished.die_after, Some(8));
+        assert_eq!(finished.thread.issues_remaining, 0);
+        assert_eq!(finished.thread.status, "completed");
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 2, 3, 4]
+        );
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_rating_is_not_gated_by_a_changed_frontier_or_queue() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_frontier_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        // #4453: eligibility decides what Roll offers; it never revokes
+        // permission to finish the comic that was offered. Reorder the queue,
+        // push this series to the back, block it, snooze it, and drop the
+        // pending session offer, then rate the exact offered issue.
+        client
+            .batch_execute(&format!(
+                "UPDATE {schema}.threads SET queue_position=4 WHERE id=10;
+                 UPDATE {schema}.threads SET queue_position=1 WHERE id=30;
+                 UPDATE {schema}.threads SET queue_position=2 WHERE id=20;
+                 UPDATE {schema}.threads SET queue_position=3 WHERE id=40;
+                 UPDATE {schema}.threads SET is_blocked=true WHERE id=10;
+                 UPDATE {schema}.sessions SET pending_thread_id=NULL,pending_issue_id=NULL
+                     WHERE id=1;
+                 INSERT INTO {schema}.events
+                     (user_id,type,rating,die_after,thread_id)
+                     VALUES (1,'rate',4.0,12,10);"
+            ))
+            .await
+            .unwrap();
+
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.0), "roll-offer-front-001"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        assert!(rated.read_event_created);
+        assert_eq!(rated.issue.status, "read");
+        // The die was seeded at d12, so a 4.0 rating steps it down to d10.
+        assert_eq!(rated.die_after, Some(10));
+        assert_eq!(rated.thread.issues_remaining, 1);
+        // Reordering other series must not gate this rating: the exact offered
+        // issue still rates, and its own high rating still promotes it to the
+        // front of the queue the reader built.
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![1, 3, 2, 4]
+        );
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn roll_offer_rating_correction_creates_no_new_read() {
+        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("roll_offer_correct_{}_{}", std::process::id(), nanos);
+        roll_offer_schema(&admin, &schema).await;
+        let mut client = scoped_client(&url, &schema).await;
+        let user = AuthenticatedUser::for_test(1);
+
+        let tx = client.transaction().await.unwrap();
+        let first = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(4.5), "roll-offer-correct-01"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert!(first.read_event_created);
+
+        // Correcting the rating of an already-read issue creates correction
+        // history, not a second read, and it still carries the Roll completion
+        // effects the original rating carried.
+        let tx = client.transaction().await.unwrap();
+        let corrected = persist(
+            &tx,
+            user,
+            101,
+            &roll_offer(Some(2.0), "roll-offer-correct-02"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+
+        assert!(!corrected.read_event_created);
+        assert!(corrected.rating_event_created);
+        assert_eq!(corrected.final_rating, Some(2.0));
+        assert_eq!(corrected.issue.rating, Some(2.0));
+        assert_eq!(corrected.issue.status, "read");
+        // The ladder stepped up from the corrected low rating (d6 to d8).
+        assert_eq!(corrected.die_after, Some(8));
+        assert_eq!(current_die(&client, 1).await, 8);
+        // The already-read issue was never re-read, so the frontier did not
+        // advance again and the series keeps its single remaining issue.
+        assert_eq!(corrected.thread.issues_remaining, 1);
+        assert_eq!(corrected.thread.next_unread_issue_id, Some(102));
+        // The correction is a low rating on a series with unread issues, so it
+        // seats the series beyond the die-sized roll pool instead of promoting
+        // it: d8 leaves only three rollable series, so the series goes last.
+        assert_eq!(
+            queue_positions(&client, &[10, 20, 30, 40]).await,
+            vec![4, 1, 2, 3]
+        );
+        // One dice event and one issue event per rating, and no repeated
+        // read event for the same issue.
+        let counts = client
+            .query_one(
+                "SELECT
+                     (SELECT COUNT(*) FROM events WHERE user_id=1 AND type='rate'),
+                     (SELECT COUNT(*) FROM events WHERE user_id=1
+                        AND issue_id=101 AND context->>'issue_command_key'
+                            LIKE 'roll-offer-correct-%')",
+                &[],
+            )
+            .await
+            .unwrap();
+        // The seeded die outcome, then two dice events and two issue events.
+        assert_eq!(counts.get::<_, i64>(0), 5);
+        assert_eq!(counts.get::<_, i64>(1), 2);
+
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
+    }
+
+    #[test]
+    fn validates_source_and_roll_offer_rating_requirement() {
+        assert!(validate(&roll_offer(Some(4.0), "roll-offer-valid-01")).is_ok());
+        let no_rating = roll_offer(None, "roll-offer-norating1");
+        assert!(validate(&no_rating).is_err());
+        let mut bad = roll_offer(Some(4.0), "roll-offer-unknown-01");
+        bad.source = Some("scheduled".into());
+        assert!(validate(&bad).is_err());
+        let mut direct = request(Some("read"), Some(4.0));
+        direct.source = Some(DIRECT_SOURCE.into());
+        assert!(validate(&direct).is_ok());
     }
 
     #[test]
