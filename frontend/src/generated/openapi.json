@@ -154,61 +154,48 @@
         "type": "object"
       },
       "AnalyticsMetricsResponse": {
-        "description": "Reading metrics and analytics for the current user.\n\n``completion_rate`` and ``average_session_hours`` keep the legacy\n``int | float`` shape because the aggregation returns either an exact\ninteger fallback (0) or a rounded float.",
+        "description": "Reading metrics and analytics for the authenticated user.",
         "properties": {
           "active_threads": {
-            "title": "Active Threads",
+            "format": "int32",
             "type": "integer"
           },
           "average_session_hours": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
-            ],
-            "title": "Average Session Hours"
+            "format": "double",
+            "type": "number"
           },
           "completed_threads": {
-            "title": "Completed Threads",
+            "format": "int32",
             "type": "integer"
           },
           "completion_rate": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
-            ],
-            "title": "Completion Rate"
+            "format": "double",
+            "type": "number"
           },
           "event_stats": {
             "additionalProperties": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Event Stats",
+            "propertyNames": {
+              "type": "string"
+            },
             "type": "object"
           },
           "recent_sessions": {
             "items": {
               "$ref": "#/components/schemas/RecentSession"
             },
-            "title": "Recent Sessions",
             "type": "array"
           },
           "top_rated_threads": {
             "items": {
               "$ref": "#/components/schemas/TopRatedThread"
             },
-            "title": "Top Rated Threads",
             "type": "array"
           },
           "total_threads": {
-            "title": "Total Threads",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -222,7 +209,6 @@
           "event_stats",
           "top_rated_threads"
         ],
-        "title": "AnalyticsMetricsResponse",
         "type": "object"
       },
       "Bandwidth": {
@@ -17283,36 +17269,28 @@
         "description": "Summary of one recent reading session.",
         "properties": {
           "ended_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "start_die": {
-            "title": "Start Die",
+            "format": "int32",
             "type": "integer"
           },
           "started_at": {
-            "title": "Started At",
             "type": "string"
           }
         },
         "required": [
           "id",
           "started_at",
-          "ended_at",
           "start_die"
         ],
-        "title": "RecentSession",
         "type": "object"
       },
       "RecommendationDiagnosticsResponse": {
@@ -22093,19 +22071,17 @@
         "description": "Summary of one highly rated thread.",
         "properties": {
           "format": {
-            "title": "Format",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "rating": {
-            "title": "Rating",
+            "format": "double",
             "type": "number"
           },
           "title": {
-            "title": "Title",
             "type": "string"
           }
         },
@@ -22115,7 +22091,6 @@
           "rating",
           "format"
         ],
-        "title": "TopRatedThread",
         "type": "object"
       },
       "TrafficMetricsSnapshot": {
@@ -22626,34 +22601,6 @@
         "tags": [
           "admin",
           "admin"
-        ]
-      }
-    },
-    "/api/v1/analytics/metrics": {
-      "get": {
-        "description": "Get reading metrics and analytics for the current user.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: The database session for querying data.\n\nReturns:\n    Typed analytics payload covering thread counts, completion rate,\n    average session length, recent sessions, event distribution, and\n    top-rated threads.",
-        "operationId": "get_metrics_api_v1_analytics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyticsMetricsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Metrics",
-        "tags": [
-          "analytics",
-          "analytics"
         ]
       }
     },
@@ -35714,6 +35661,35 @@
         "tags": [
           "taste-signals",
           "taste-signals"
+        ]
+      }
+    },
+    "/api/v2/analytics/metrics": {
+      "get": {
+        "operationId": "metrics_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsMetricsResponse"
+                }
+              }
+            },
+            "description": "Owner-scoped bounded reading metrics"
+          },
+          "401": {
+            "description": "Not authenticated, revoked token, or stale credential epoch"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation used by the canonical Rust OpenAPI generator.",
+        "tags": [
+          "analytics"
         ]
       }
     },

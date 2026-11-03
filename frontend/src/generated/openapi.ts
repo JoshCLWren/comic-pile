@@ -207,35 +207,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/analytics/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Metrics
-         * @description Get reading metrics and analytics for the current user.
-         *
-         *     Args:
-         *         current_user: The authenticated user making the request.
-         *         db: The database session for querying data.
-         *
-         *     Returns:
-         *         Typed analytics payload covering thread counts, completion rate,
-         *         average session length, recent sessions, event distribution, and
-         *         top-rated threads.
-         */
-        get: operations["get_metrics_api_v1_analytics_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -6337,6 +6308,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/analytics/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation used by the canonical Rust OpenAPI generator. */
+        get: operations["metrics_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/auth/csrf": {
         parameters: {
             query?: never;
@@ -6917,32 +6905,22 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-        /**
-         * AnalyticsMetricsResponse
-         * @description Reading metrics and analytics for the current user.
-         *
-         *     ``completion_rate`` and ``average_session_hours`` keep the legacy
-         *     ``int | float`` shape because the aggregation returns either an exact
-         *     integer fallback (0) or a rounded float.
-         */
+        /** @description Reading metrics and analytics for the authenticated user. */
         AnalyticsMetricsResponse: {
-            /** Active Threads */
+            /** Format: int32 */
             active_threads: number;
-            /** Average Session Hours */
+            /** Format: double */
             average_session_hours: number;
-            /** Completed Threads */
+            /** Format: int32 */
             completed_threads: number;
-            /** Completion Rate */
+            /** Format: double */
             completion_rate: number;
-            /** Event Stats */
             event_stats: {
                 [key: string]: number;
             };
-            /** Recent Sessions */
             recent_sessions: components["schemas"]["RecentSession"][];
-            /** Top Rated Threads */
             top_rated_threads: components["schemas"]["TopRatedThread"][];
-            /** Total Threads */
+            /** Format: int32 */
             total_threads: number;
         };
         /**
@@ -14783,18 +14761,13 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
-        /**
-         * RecentSession
-         * @description Summary of one recent reading session.
-         */
+        /** @description Summary of one recent reading session. */
         RecentSession: {
-            /** Ended At */
-            ended_at: string | null;
-            /** Id */
+            ended_at?: string | null;
+            /** Format: int32 */
             id: number;
-            /** Start Die */
+            /** Format: int32 */
             start_die: number;
-            /** Started At */
             started_at: string;
         };
         /**
@@ -16893,18 +16866,13 @@ export interface components {
              */
             token_type: string;
         };
-        /**
-         * TopRatedThread
-         * @description Summary of one highly rated thread.
-         */
+        /** @description Summary of one highly rated thread. */
         TopRatedThread: {
-            /** Format */
             format: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Rating */
+            /** Format: double */
             rating: number;
-            /** Title */
             title: string;
         };
         /**
@@ -17217,26 +17185,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_metrics_api_v1_analytics_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
                 };
             };
         };
@@ -24918,6 +24866,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    metrics_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped bounded reading metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
+                };
+            };
+            /** @description Not authenticated, revoked token, or stale credential epoch */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

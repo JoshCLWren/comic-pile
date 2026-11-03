@@ -4,7 +4,7 @@ ComicPile generates `frontend/src/generated/openapi.ts` from FastAPI's OpenAPI s
 
 ## Use generated transport types when the shapes are exact
 
-The public `frontend/src/types.ts` barrel aliases generated schemas when the frontend contract is structurally identical to the API contract. Current generated aliases cover authentication responses, compatible thread mutations, dependency responses, issue-dependency responses, and bug-report responses.
+The public `frontend/src/types.ts` barrel aliases generated schemas when the frontend contract is structurally identical to the API contract. Current generated aliases cover authentication responses, compatible thread mutations, dependency responses, issue-dependency responses, bug-report responses, and the native analytics metrics/read models.
 
 The post-#921 audit found three remaining exact public duplicates and moved them to generated aliases:
 
@@ -25,7 +25,6 @@ The following public types remain handwritten because they are projections, ergo
 - `RatePayload`: contains frontend mutation context beyond the backend `RateRequest` body.
 - `UndoPayload`: combines URL/session context with snapshot selection.
 - `SessionThread`, `SessionCurrent`, `SessionSummary`, `SessionEvent`, `SessionSnapshot`, `SessionSnapshotsResponse`, and `SessionDetails`: screen/session projections do not exactly match the generated session schemas.
-- `AnalyticsSession`, `TopRatedThread`, and `AnalyticsMetrics`: frontend analytics models without exact generated schema equivalents.
 - `BlockingInfoResponse`: a focused projection of blocking reasons rather than the complete generated blocking explanation.
 - `DependencyCreatePayload`: uses frontend-friendly camel-case discriminator/id fields and is translated at the API boundary.
 - `ConnectedThreadInfo` and `ConnectedDependenciesResponse`: the frontend narrows connection type semantics beyond the generated string contract.

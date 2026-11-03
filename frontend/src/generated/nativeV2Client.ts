@@ -101,6 +101,8 @@ export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['NativeUserResponse']
 
+export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
+
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']
 }
@@ -160,6 +162,7 @@ export interface NativeV2Client {
   logout(): Promise<LogoutResponse>
   manualDie(args: ManualDieRequest): Promise<ManualDieResponse>
   me(): Promise<MeResponse>
+  metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
@@ -238,6 +241,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     me() {
       return client.get<MeResponse>("/v2/auth/me")
+    },
+    metrics() {
+      return client.get<MetricsResponse>("/v2/analytics/metrics")
     },
     offer(args: OfferRequest) {
       return client.post<OfferResponse, OfferRequest['body']>(

@@ -135,9 +135,9 @@ def test_threads_collection_client_uses_the_native_v2_resource() -> None:
 def test_analytics_client_uses_the_bounded_native_v2_resource() -> None:
     """Analytics metrics is one bounded v2 resource, not a retained v1 handler."""
     source = _service("api-tasks.ts")
-    assert "client.get<AnalyticsMetrics>('/v2/analytics/metrics')" in source
+    assert "createNativeV2Client" in source
+    assert "nativeV2.metrics()" in source
     assert "/v1/analytics/metrics" not in source
-    assert "/api/v1/analytics/metrics" not in source
 
 
 def test_current_runtime_routing_is_explicit_and_independent_of_version() -> None:
