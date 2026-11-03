@@ -318,54 +318,58 @@ reader_release_sources AS (
     JOIN external_identities e ON e.id = rs.external_identity_id
 ),
 plan_threads AS (
-    SELECT DISTINCT i.thread_id, t.title AS thread_title
+    SELECT i.thread_id, t.title AS thread_title,
+           min(rpi.display_position) AS first_position
     FROM reading_plan_issues rpi
     JOIN reader_plan p ON p.id = rpi.plan_id
     JOIN issues i ON i.id = rpi.issue_id
     JOIN threads t ON t.id = i.thread_id
     JOIN owner o ON o.id = t.user_id
+    GROUP BY i.thread_id, t.title
 ),
-confirmed_mappings AS (
-    SELECT DISTINCT ON (m.thread_id)
-           m.thread_id, e.id AS external_identity_id,
-           e.external_id AS provider_volume_id, e.metadata_json
+-- Preserve Python's per-volume candidate cardinality: an already-followed
+-- volume must not hide another confirmed mapping for the same thread.
+series_mappings AS (
+    SELECT m.id AS mapping_id, m.thread_id, m.status,
+           e.id AS external_identity_id, e.external_id AS provider_volume_id,
+           e.metadata_json
     FROM thread_external_series_mappings m
     JOIN external_identities e ON e.id = m.external_identity_id
     JOIN plan_threads pt ON pt.thread_id = m.thread_id
-    WHERE m.status = 'confirmed' AND e.provider = 'comicvine'
-    ORDER BY m.thread_id, m.id
+    WHERE m.status <> 'rejected'
+      AND e.provider = 'comicvine'
+      AND e.entity_type = 'series'
 ),
-ambiguous_mappings AS (
-    SELECT m.thread_id, count(*) AS mapping_count
-    FROM thread_external_series_mappings m
-    JOIN plan_threads pt ON pt.thread_id = m.thread_id
-    WHERE m.status = 'ambiguous'
-    GROUP BY m.thread_id
+confirmed_threads AS (
+    SELECT DISTINCT thread_id
+    FROM series_mappings
+    WHERE status = 'confirmed'
 ),
-followed_threads AS (
-    SELECT DISTINCT rs.thread_id
+followed_volumes AS (
+    SELECT DISTINCT rs.thread_id, rs.external_identity_id
     FROM reading_plan_release_sources rs
     JOIN reader_plan p ON p.id = rs.plan_id
 ),
 release_candidate_rows AS (
-    SELECT pt.thread_id, pt.thread_title,
+    SELECT pt.thread_id, pt.thread_title, pt.first_position, m.mapping_id,
            CASE
-               WHEN cm.external_identity_id IS NOT NULL THEN 'confirmed'
-               WHEN COALESCE(am.mapping_count, 0) > 0 THEN 'ambiguous'
-               ELSE 'unmapped'
+               WHEN m.mapping_id IS NULL THEN 'unmapped'
+               WHEN ct.thread_id IS NOT NULL THEN 'confirmed'
+               ELSE 'ambiguous'
            END AS mapping_state,
-           cm.external_identity_id, cm.provider_volume_id, cm.metadata_json,
-           CASE
-               WHEN cm.external_identity_id IS NOT NULL THEN 'confirmed'
-               WHEN COALESCE(am.mapping_count, 0) > 0 THEN 'ambiguous'
-               ELSE 'unmapped'
-           END AS mapping_status,
-           (cm.external_identity_id IS NOT NULL AND ft.thread_id IS NULL) AS enableable,
-           (ft.thread_id IS NOT NULL) AS followed
+           m.external_identity_id, m.provider_volume_id, m.metadata_json,
+           m.status AS mapping_status,
+           COALESCE(m.status = 'confirmed' AND fv.thread_id IS NULL, FALSE) AS enableable,
+           FALSE AS followed
     FROM plan_threads pt
-    LEFT JOIN confirmed_mappings cm ON cm.thread_id = pt.thread_id
-    LEFT JOIN ambiguous_mappings am ON am.thread_id = pt.thread_id
-    LEFT JOIN followed_threads ft ON ft.thread_id = pt.thread_id
+    LEFT JOIN series_mappings m ON m.thread_id = pt.thread_id
+    LEFT JOIN confirmed_threads ct ON ct.thread_id = pt.thread_id
+    LEFT JOIN followed_volumes fv
+      ON fv.thread_id = m.thread_id
+     AND fv.external_identity_id = m.external_identity_id
+    WHERE m.mapping_id IS NULL
+       OR ct.thread_id IS NULL
+       OR (m.status = 'confirmed' AND fv.thread_id IS NULL)
 )
 SELECT jsonb_build_object(
     'auth', (SELECT to_jsonb(a) FROM reader_auth a),
@@ -379,7 +383,7 @@ SELECT jsonb_build_object(
                          FROM reader_sources s), '[]'::jsonb),
     'release_sources', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id)
                                  FROM reader_release_sources s), '[]'::jsonb),
-    'release_candidates', COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.thread_id)
+    'release_candidates', COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.first_position, c.thread_title, c.mapping_id)
                                     FROM release_candidate_rows c), '[]'::jsonb),
     'option_e', CASE WHEN EXISTS (SELECT 1 FROM reader_plan)
                      THEN {option_e_json}
@@ -424,56 +428,58 @@ async fn load_reader_snapshot(
     })
 }
 
-fn release_candidate_metadata(
-    row: &ReleaseCandidateRow,
+/// Match Python's reader-safe provider metadata aliases and number coercion.
+fn provider_display_metadata(
+    metadata: Option<&serde_json::Value>,
 ) -> (Option<String>, Option<String>, Option<i32>, Option<i32>) {
-    let metadata = row.metadata_json.as_ref();
     let string = |key: &str| {
         metadata
-            .as_ref()
             .and_then(|value| value.get(key))
             .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
             .map(str::to_owned)
     };
     let integer = |key: &str| {
-        metadata
-            .as_ref()
-            .and_then(|value| value.get(key))
-            .and_then(serde_json::Value::as_i64)
-            .map(|value| value as i32)
+        metadata.and_then(|value| value.get(key)).and_then(|value| {
+            value
+                .as_i64()
+                .and_then(|value| i32::try_from(value).ok())
+                .or_else(|| {
+                    value
+                        .as_str()
+                        .and_then(|value| value.trim().parse::<i32>().ok())
+                })
+        })
     };
+    let title = string("name").or_else(|| string("title"));
+    let publisher = string("publisher").or_else(|| {
+        metadata
+            .and_then(|value| value.get("publisher"))
+            .and_then(|value| value.get("name"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+    });
     (
-        string("name"),
-        string("publisher"),
+        title,
+        publisher,
         integer("start_year"),
-        integer("issue_count"),
+        integer("count_of_issues").or_else(|| integer("issue_count")),
     )
+}
+
+fn release_candidate_metadata(
+    row: &ReleaseCandidateRow,
+) -> (Option<String>, Option<String>, Option<i32>, Option<i32>) {
+    provider_display_metadata(row.metadata_json.as_ref())
 }
 
 fn release_source_metadata(
     row: &ReleaseSourceRow,
 ) -> (Option<String>, Option<String>, Option<i32>, Option<i32>) {
-    let metadata = row.metadata_json.as_ref();
-    let string = |key: &str| {
-        metadata
-            .as_ref()
-            .and_then(|value| value.get(key))
-            .and_then(serde_json::Value::as_str)
-            .map(str::to_owned)
-    };
-    let integer = |key: &str| {
-        metadata
-            .as_ref()
-            .and_then(|value| value.get(key))
-            .and_then(serde_json::Value::as_i64)
-            .map(|value| value as i32)
-    };
-    (
-        string("title"),
-        string("publisher"),
-        integer("start_year"),
-        integer("issue_count"),
-    )
+    provider_display_metadata(row.metadata_json.as_ref())
 }
 
 fn project_reader_blockers(
@@ -1098,7 +1104,78 @@ mod tests {
             response.release_candidates[0].provider_title.as_deref(),
             Some("Fixture Series")
         );
-        assert!(response.release_candidates[0].followed);
+        // Following another volume in this thread must not hide this one.
+        assert!(!response.release_candidates[0].followed);
+        assert!(response.release_candidates[0].enableable);
+
+        let connection = state.pool.get().await.unwrap();
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                VALUES (62, 'comicvine', 'series', '44',
+                        '{"title":"Second Volume","publisher":{"name":"Nested Publisher"},"start_year":"2025","count_of_issues":"17"}'::json,
+                        now(), now());
+                INSERT INTO thread_external_series_mappings
+                    (id, thread_id, external_identity_id, status, created_at, updated_at)
+                VALUES (71, 10, 62, 'confirmed', now(), now());
+                "#,
+            )
+            .await
+            .unwrap();
+        drop(connection);
+
+        // Two confirmed volumes on one thread yield two independently followable candidates.
+        let snapshot = load_reader_snapshot(&state, &claims, 20).await.unwrap();
+        assert_eq!(
+            snapshot
+                .release_candidates
+                .iter()
+                .map(|candidate| candidate.external_identity_id)
+                .collect::<Vec<_>>(),
+            vec![Some(60), Some(62)]
+        );
+        assert!(snapshot
+            .release_candidates
+            .iter()
+            .all(|candidate| candidate.enableable && !candidate.followed));
+        assert_eq!(
+            release_candidate_metadata(&snapshot.release_candidates[1]),
+            (
+                Some("Second Volume".to_string()),
+                Some("Nested Publisher".to_string()),
+                Some(2025),
+                Some(17)
+            )
+        );
+
+        let connection = state.pool.get().await.unwrap();
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO reading_plan_release_sources
+                    (id, plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
+                VALUES (81, 20, 10, 60, true, now(), now());
+                "#,
+            )
+            .await
+            .unwrap();
+        drop(connection);
+        let snapshot = load_reader_snapshot(&state, &claims, 20).await.unwrap();
+        assert_eq!(snapshot.release_candidates.len(), 1);
+        assert_eq!(snapshot.release_candidates[0].external_identity_id, Some(62));
+        assert!(snapshot.release_candidates[0].enableable);
+        // The source metadata may use "name" rather than "title".
+        let followed_source = snapshot
+            .release_sources
+            .iter()
+            .find(|source| source.external_identity_id == 60)
+            .unwrap();
+        assert_eq!(
+            release_source_metadata(followed_source).0.as_deref(),
+            Some("Fixture Series")
+        );
 
         let connection = state.pool.get().await.unwrap();
         connection
