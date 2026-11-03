@@ -20,7 +20,6 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rateApi: { rate: vi.fn() },
   rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   tasksApi: { getMetrics: vi.fn() },
@@ -36,7 +35,6 @@ vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
 vi.mock('../services/api-roll', () => ({ rollApi: api.rollApi }))
-vi.mock('../services/api-rate', () => ({ rateApi: api.rateApi }))
 vi.mock('../services/api-queue', () => ({ queueApi: api.queueApi }))
 vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
@@ -81,7 +79,7 @@ describe('mutation hook success and failure paths', () => {
     const shuffle = renderHook(() => useShuffleQueue(), { wrapper: createWrapper() }); await act(async () => await shuffle.result.current.mutate())
     expect(front.result.current.isError).toBe(false)
     const rate = renderHook(() => useRate(), { wrapper: createWrapper() })
-    await act(async () => await rate.result.current.mutate({ thread_id: 1, rating: 4 }))
+    await act(async () => await rate.result.current.mutate({ thread_id: 1, rating: 4, issue_id: 1, source: 'roll_offer' }))
     expect(protectedApi.rate).toHaveBeenCalled()
   })
 
@@ -105,7 +103,7 @@ describe('mutation hook success and failure paths', () => {
     await act(async () => expect(shuffle.result.current.mutate()).rejects.toThrow('shuffle failed'))
     protectedApi.rate.mockRejectedValueOnce(new Error('rate failed'))
     const rate = renderHook(() => useRate(), { wrapper: createWrapper() })
-    await act(async () => expect(rate.result.current.mutate({ thread_id: 1, rating: 1 })).rejects.toThrow('rate failed'))
+    await act(async () => expect(rate.result.current.mutate({ thread_id: 1, rating: 1, issue_id: 1, source: 'roll_offer' })).rejects.toThrow('rate failed'))
   })
 
   it('runs all roll mutations', async () => {

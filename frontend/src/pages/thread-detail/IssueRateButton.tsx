@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { createNativeRollMutationApi } from '../../services/nativeRollMutationApi'
-import { defaultHttpClient } from '../../services/httpClient'
+import { nativeRollMutationApi } from '../../services/nativeRollMutationApi'
 import type { Issue } from '../../types'
 import { queryClient } from '../../query/queryClient'
 import { applyRatedThreadCache } from '../../query/cacheEffects'
@@ -43,17 +42,12 @@ export function IssueRateButton({
   const latestSnapshot = useRef(snapshot)
   latestSnapshot.current = snapshot
 
-  const nativeRollMutationApi = createNativeRollMutationApi(defaultHttpClient())
-
   const mutation = useMutation({
     mutationFn: (rating: number) =>
-      nativeRollMutationApi.rateDirect({
+      nativeRollMutationApi.rate({
         thread_id: issue.thread_id,
         rating,
-        direct: true,
-        issue_number: issue.issue_number,
         issue_id: issue.id,
-        idempotency_key: `direct-rate-${issue.id}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
         source: 'direct',
       }),
     onMutate: () => {

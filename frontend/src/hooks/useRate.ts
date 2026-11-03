@@ -4,8 +4,6 @@ import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
-import { createNativeRollMutationApi } from '../services/nativeRollMutationApi'
-import { defaultHttpClient } from '../services/httpClient'
 import type { RatePayload, RateResponsePayload } from '../types'
 import {
   fetchAndPublishRollBootstrap,
@@ -34,17 +32,11 @@ export interface RateDeps {
   bootstrapApi?: RollBootstrapApi
   cacheEffects?: CacheEffectsApi
   queryClientInstance?: typeof queryClient
-  nativeRollApi?: ReturnType<typeof createNativeRollMutationApi>
-}
-
-function isRollOfferRating(data: RatePayload): boolean {
-  return data.source === 'roll_offer' || data.issue_id !== undefined
 }
 
 export function useRate(deps: RateDeps = {}) {
-  const { protectedApi, bootstrapApi, cacheEffects, queryClientInstance, nativeRollApi } = deps
+  const { protectedApi, bootstrapApi, cacheEffects, queryClientInstance } = deps
   const protectedRollApi = protectedApi ?? protectedRollMutationApi
-  const nativeRollMutationApi = nativeRollApi ?? createNativeRollMutationApi(defaultHttpClient())
   const rollBootstrap = bootstrapApi
   const applyCache = cacheEffects?.applyRatedThreadCache ?? applyRatedThreadCache
   const client = queryClientInstance ?? queryClient
@@ -55,23 +47,12 @@ export function useRate(deps: RateDeps = {}) {
   const mutate = async (data: RatePayload): Promise<RateMutationOutcome> => {
     if (inFlightRequest.current) return inFlightRequest.current
 
-    const isRollOffer = isRollOfferRating(data)
     setIsPending(true)
     setIsError(false)
 
     const request: Promise<RateMutationOutcome> = (async () => {
       try {
-        let result: RateResponsePayload
-        if (isRollOffer) {
-          // Use native PATCH /api/v2/issues/{issue_id} for Roll offer ratings
-          if (!data.issue_id || !data.idempotency_key) {
-            throw new Error('Roll offer rating requires issue_id and idempotency_key')
-          }
-          result = await nativeRollMutationApi.rateRollOffer(data as RatePayload & { issue_id: number; idempotency_key: string })
-        } else {
-          // Use native PATCH /api/v2/issues/{issue_id} for direct reads (source="direct")
-          result = await protectedRollApi.rate(data)
-        }
+        const result = await protectedRollApi.rate(data)
         await applyCache(client, result)
 
         let bootstrap: RollBootstrapResponse | null = null
@@ -90,9 +71,7 @@ export function useRate(deps: RateDeps = {}) {
           try {
             const recovery = await recoverProtectedRollMutation(
               data.thread_id,
-              () => (isRollOffer
-                ? nativeRollMutationApi.rateRollOffer(data as RatePayload & { issue_id: number; idempotency_key: string })
-                : protectedRollApi.rate(data)),
+              () => protectedRollApi.rate(data),
               undefined,
               protectedRollApi,
             )

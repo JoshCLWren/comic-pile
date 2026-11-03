@@ -2,8 +2,7 @@ import type { RatePayload, RateResponsePayload, RollResponse, SnoozeSessionRespo
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollV2BootstrapResponse } from '../types/rollV2'
 import { adaptRollV2Bootstrap } from './adaptRollV2Bootstrap'
-import { adaptNativeV2Rate } from './adaptNativeV2Rate'
-import { createNativeV2Client } from '../generated/nativeV2Client'
+import { createNativeRollMutationApi } from './nativeRollMutationApi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 const RECOVERY_CONFIG = { skipAuthRedirect: true }
@@ -11,28 +10,18 @@ const RECOVERY_CONFIG = { skipAuthRedirect: true }
 /**
  * Build the protected roll-mutation service bound to an HTTP client.
  *
+ * The rating is delegated to the issue-rating writer rather than re-implemented
+ * here, so one code path serves Roll completions and direct Thread-row ratings
+ * and every caller gets the same retry-safe key handling.
+ *
  * @param client - HTTP transport used for every request.
  * @returns The protected roll-mutation service bound to `client`.
  */
 export function createProtectedRollMutationApi(client: HttpClient) {
-  const nativeClient = createNativeV2Client(client)
+  const { rate } = createNativeRollMutationApi(client)
 
   return {
-    rate: (data: RatePayload): Promise<RateResponsePayload> => {
-      const { issue_id, idempotency_key, source = 'roll_offer', ...rest } = data
-      if (!issue_id) {
-        return Promise.reject(new Error('issue_id is required for native V2 rate endpoint'))
-      }
-      return nativeClient.issueReadRate({
-        path: { issue_id },
-        body: {
-          status: 'read',
-          rating: rest.rating,
-          idempotency_key: idempotency_key ?? `rate-${issue_id}-${Date.now()}`,
-          source,
-        },
-      }).then(adaptNativeV2Rate)
-    },
+    rate,
     snooze: (): Promise<SnoozeSessionResponse> =>
       client.post<SnoozeSessionResponse>('/v1/snooze/', undefined, RECOVERY_CONFIG),
     skip: (): Promise<RollResponse> =>

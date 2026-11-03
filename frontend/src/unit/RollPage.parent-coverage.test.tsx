@@ -14,7 +14,7 @@ const spies = vi.hoisted(() => ({
   unsnooze: vi.fn().mockResolvedValue({}), moveFront: vi.fn().mockResolvedValue({}),
   moveBack: vi.fn().mockResolvedValue({}), shuffle: vi.fn().mockResolvedValue({}),
   rate: vi.fn().mockResolvedValue({}),
-  setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 }),
+  setPending: vi.fn().mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 }),
 }))
 
 interface HoistedMockValue {
@@ -181,7 +181,7 @@ describe('RollPage parent handlers', () => {
       rate: { thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 },
       bootstrap: { ...bootstrapData },
     }))
-    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
   })
 
   it('executes pool actions, roll recovery, and modal callbacks', async () => {
@@ -312,7 +312,7 @@ describe('RollPage parent handlers', () => {
     fireEvent.submit(screen.getByRole('button', { name: /Pick this series/ }).closest('form')!)
     await user.click(screen.getByRole('button', { name: 'close modal' }))
 
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'skip migration' })).toBeInTheDocument())
@@ -427,7 +427,7 @@ describe('RollPage parent handlers', () => {
     if (!snooze) throw new Error('Snooze action not found')
     await user.click(snooze)
 
-    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, result: 3 })
+    spies.setPending.mockResolvedValue({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 10, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
@@ -460,7 +460,7 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: /Pick this series/ }))
     await waitFor(() => expect(screen.getByText('failed')).toBeInTheDocument())
 
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
@@ -637,14 +637,14 @@ describe('RollPage parent handlers', () => {
         current_die: 6,
         pending_thread_id: 1,
         last_rolled_result: null,
-        active_thread: { id: 2, title: 'Other', format: 'Comic', issues_remaining: 1, queue_position: 2, total_issues: 2 },
+        active_thread: { id: 2, title: 'Other', format: 'Comic', issues_remaining: 1, queue_position: 2, total_issues: 2, issue_id: 21, next_issue_id: 22 },
         snoozed_threads: [],
       },
       refetch: spies.refetch,
     }
     bootstrapData.pending_thread_id = 1
     bootstrapData.last_rolled_result = null
-    bootstrapData.active_thread = { id: 2, title: 'Other', format: 'Comic', issues_remaining: 1, queue_position: 2, total_issues: 2, last_rolled_result: null }
+    bootstrapData.active_thread = { id: 2, title: 'Other', format: 'Comic', issues_remaining: 1, queue_position: 2, total_issues: 2, last_rolled_result: null, issue_id: 21, next_issue_id: 22 }
     bootstrapData.roll_pool = [{ id: 1, title: 'Saga', format: 'Comic' }]
     render(<RollPage />)
     await waitFor(() => expect(screen.getByTestId('rating-thread-metadata')).toHaveTextContent('Saga'))
@@ -678,7 +678,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.current_die = 0
     bootstrapData.pending_thread_id = 1
     bootstrapData.last_rolled_result = null
-    bootstrapData.active_thread = { id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 8, last_rolled_result: null }
+    bootstrapData.active_thread = { id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 8, last_rolled_result: null, issue_id: 11, next_issue_id: 12 }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
   })
@@ -708,7 +708,7 @@ describe('RollPage parent handlers', () => {
 
   it('completes simple migration of a pool thread without a page-level refetch', async () => {
     const user = userEvent.setup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
@@ -773,7 +773,7 @@ describe('RollPage parent handlers', () => {
         current_die: 8,
         pending_thread_id: 1,
         last_rolled_result: 4,
-        active_thread: { id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 8, last_rolled_result: 4 },
+        active_thread: { id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 8, last_rolled_result: 4, issue_id: 11, next_issue_id: 12 },
         snoozed_threads: [],
       },
       refetch: spies.refetch,
@@ -781,7 +781,7 @@ describe('RollPage parent handlers', () => {
     bootstrapData.current_die = 8
     bootstrapData.pending_thread_id = 1
     bootstrapData.last_rolled_result = 4
-    bootstrapData.active_thread = { id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 8, last_rolled_result: 4 }
+    bootstrapData.active_thread = { id: 1, title: 'Pending Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: 8, last_rolled_result: 4, issue_id: 11, next_issue_id: 12 }
     render(<RollPage />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'save rating' })).toBeInTheDocument())
     await userEvent.setup().click(screen.getByRole('button', { name: 'save rating' }))
@@ -896,7 +896,7 @@ describe('RollPage parent handlers', () => {
 
   it('keeps simple migration open when saving the selected issue fails', async () => {
     const user = userEvent.setup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     spies.rate.mockRejectedValueOnce(new Error('simple migration save failed'))
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
@@ -911,7 +911,7 @@ describe('RollPage parent handlers', () => {
 
   it('completes migration and simple migration flows', async () => {
     const user = userEvent.setup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
@@ -922,7 +922,7 @@ describe('RollPage parent handlers', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Roll the dice' })).toBeInTheDocument())
 
     cleanup()
-    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, result: 3 })
+    spies.setPending.mockResolvedValueOnce({ thread_id: 1, title: 'Saga', format: 'Comic', issues_remaining: 2, queue_position: 1, total_issues: null, issue_id: 11, issue_number: '2', next_issue_id: 12, next_issue_number: '3', result: 3 })
     render(<RollPage />)
     await user.click(screen.getByRole('button', { name: 'thread' }))
     await user.click(screen.getByRole('button', { name: /Read Now/ }))
