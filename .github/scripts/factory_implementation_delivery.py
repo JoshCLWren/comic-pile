@@ -402,31 +402,31 @@ def _previous_source(current: str, patch: str) -> str:
 
 
 def _base_source(
-    repo: str, path: str, base_sha: str,
+    repo: str, path: str, source_sha: str,
     run: Callable[[list[str]], str],
 ) -> str:
-    """Fetch a file's complete content at the PR's base commit.
+    """Fetch complete file content from a verified PR merge-base commit.
 
     GitHub omits the `patch` field for changes too large to inline (a generated
     OpenAPI artifact is the common case). The base commit still holds the whole
-    pre-change file, so the same complete source evidence the patch-reversal
-    path reconstructs can be read directly instead of being inferred.
+    pre-change file. Use the PR merge base, not the moving base-branch tip, so
+    changes on main cannot be misattributed to the pull request.
 
     Args:
         repo: Repository owner/name.
         path: Repository-relative file path.
-        base_sha: Commit the pull request is based on.
+        source_sha: Verified merge-base commit for this pull request.
         run: GitHub CLI reader that raises RuntimeError on failure.
 
     Returns:
-        The complete file content at the base commit.
+        The complete file content at the merge-base commit.
 
     Raises:
         RuntimeError: If the base content cannot be read.
     """
     return run([
         "api", "-H", "Accept: application/vnd.github.raw+json",
-        f"repos/{repo}/contents/{quote(path, safe='/')}?ref={base_sha}",
+        f"repos/{repo}/contents/{quote(path, safe='/')}?ref={source_sha}",
     ])
 
 
@@ -473,6 +473,7 @@ def complete_pr_diff(
     if info["head"]["sha"] != expected_head:
         raise RuntimeError("PR head changed during implementation inspection")
     base_sha = info.get("base", {}).get("sha")
+    merge_base_sha: str | None = None
     files = json.loads(run([
         "api", "--paginate", "--slurp", f"repos/{repo}/pulls/{pr_number}/files",
     ]))
@@ -495,9 +496,8 @@ def complete_pr_diff(
             # main, which can already contain the merged head during closure.
             old = _previous_source(new, patch)
         else:
-            # GitHub omits the patch for changes too large to inline. Read the
-            # whole pre-change file at the pull request's base commit instead of
-            # failing closed on an artifact the review still has to see.
+            # GitHub omits patches for oversized changes. Only a verified merge
+            # base identifies the pre-change file: base.sha moves as main advances.
             if not isinstance(base_sha, str) or not base_sha:
                 raise RuntimeError(f"source patch unavailable for {path}")
             base_path = record.get("previous_filename") or path
@@ -505,8 +505,19 @@ def complete_pr_diff(
                 old = ""
             else:
                 try:
-                    old = _base_source(repo, base_path, base_sha, run)
-                except RuntimeError as exc:
+                    if merge_base_sha is None:
+                        comparison = json.loads(run([
+                            "api",
+                            f"repos/{repo}/compare/{base_sha}...{expected_head}",
+                        ]))
+                        ancestor = comparison.get("merge_base_commit", {}).get("sha")
+                        if not isinstance(ancestor, str) or not ancestor:
+                            raise RuntimeError("missing PR merge base")
+                        if ancestor == expected_head:
+                            raise RuntimeError("PR head is already in base branch")
+                        merge_base_sha = ancestor
+                    old = _base_source(repo, base_path, merge_base_sha, run)
+                except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
                     raise RuntimeError(f"source patch unavailable for {path}") from exc
         patches.append(_unified_file_diff(path, old, new))
     return paths, "\n".join(patches)
