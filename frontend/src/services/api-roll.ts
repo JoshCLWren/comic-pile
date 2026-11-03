@@ -183,7 +183,9 @@ function clearPendingManualDie(key: string): void {
 const DIE_LABEL_PATTERN = /^d(\d+)$/
 
 function parseDieLabel(label: string): number | null {
-  const match = DIE_LABEL_PATTERN.exec(label.trim())
+  const trimmed = label?.trim?.()
+  if (!trimmed) return null
+  const match = DIE_LABEL_PATTERN.exec(trimmed)
   return match ? Number(match[1]) : null
 }
 

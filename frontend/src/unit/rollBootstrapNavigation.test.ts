@@ -10,21 +10,22 @@ beforeEach(() => {
   vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined)
 })
 
-it('invalidates roll bootstrap query without refetching when called', async () => {
+it('invalidates roll bootstrap query and refetches when called', async () => {
   await invalidateRollBootstrapOnNavigation(queryClient)
 
   expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
-    refetchType: 'none',
+    refetchType: 'all',
   })
 })
 
-it('does not trigger refetch of active queries', async () => {
-  // If refetchType is not 'none', the helper would trigger an eager fetch.
+it('triggers a refetch of active queries', async () => {
+  // The helper refetches on navigation so the cached die state stays consistent
+  // with the server after a manual-die change (#4279).
   vi.mocked(queryClient.invalidateQueries).mockImplementation(async (options) => {
-    if (options?.refetchType !== 'none') {
-      throw new Error('Refetch should not be triggered')
+    if (options?.refetchType !== 'all') {
+      throw new Error('Refetch should be triggered')
     }
   })
 
