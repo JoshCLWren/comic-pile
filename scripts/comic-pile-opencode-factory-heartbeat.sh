@@ -684,12 +684,14 @@ Before choosing work, enumerate current open PRs, current review threads, leases
 issues. Select exactly in this order:
 1. A branch-caused failing check, conflict, or actionable review finding that currently
    prevents an active implementation PR from becoming mergeable.
-2. The newest unclaimed open issue labeled both `user-reported` and `bug`.
-3. The highest-priority unclaimed reproducible E2E-discovered `bug` issue.
+2. The highest-priority unclaimed open issue labeled both `user-reported` and `bug`.
+3. The highest-priority unclaimed reproducible E2E-discovered product `bug` issue.
 4. The highest-value unclaimed executable issue, honoring priorities and dependencies while
    excluding #679 until every other executable issue is closed.
 5. Existing PR work only when required to complete its issue contract or make it mergeable.
 6. Factory maintenance only when factory behavior blocks issue delivery.
+
+Factory control: an empty or blocked ordinary backlog is never a reason to pause, disable, suspend, or mutate a factory schedule. Only Josh, or an interactive session acting on Josh's direct instruction, may pause or disable a factory.
 
 CONCURRENCY
 At most one implementation worker owns an issue unless workers explicitly declare

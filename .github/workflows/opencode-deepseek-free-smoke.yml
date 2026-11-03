@@ -16,11 +16,27 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Pull-request checkout is a merge commit; HEAD^1 is the base.
+          fetch-depth: 2
       - name: Check whether promotional free pin remains active
         id: pin
         shell: bash
         run: |
           set -Eeuo pipefail
+          # Avoid spending live free quota on unrelated roster retirements.
+          # A changed worker 74 pin or a manual run still exercises the real
+          # provider. Workflow-only edits get deterministic checks in CI; live
+          # invocation remains available through workflow_dispatch.
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_pin="$(git show HEAD^1:.github/free-model-factories.tsv | awk -F '\t' '$1 == 74 { print; exit }')"
+            current_pin="$(awk -F '\t' '$1 == 74 { print; exit }' .github/free-model-factories.tsv)"
+            if [[ "$base_pin" == "$current_pin" ]]; then
+              echo 'active=false' >> "$GITHUB_OUTPUT"
+              echo 'Worker 74 unchanged; skipping unrelated PR live-provider calls.'
+              exit 0
+            fi
+          fi
           if awk -F '\t' '$1 == 74 && $2 == "opencode-free" && $3 == "deepseek-v4.1-flash-free" {found=1} END {exit !found}' .github/free-model-factories.tsv; then
             echo 'active=true' >> "$GITHUB_OUTPUT"
           else

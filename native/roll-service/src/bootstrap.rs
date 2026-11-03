@@ -11,16 +11,199 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
 pub struct BootstrapQuery {
     pub timezone: Option<String>,
+}
+
+/// One tag visible to the reader on a Roll thread row.
+///
+/// The stable stored tag columns are typed; `extra` preserves any additional
+/// stored columns so future tag metadata is never silently dropped.
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct BootstrapTag {
+    pub id: i32,
+    pub name: String,
+    pub normalized_name: String,
+    pub scope: String,
+    pub owner_user_id: Option<i32>,
+    pub color: String,
+    pub created_at: String,
+    pub updated_at: String,
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
+}
+
+/// Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows.
+#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapThreadSummary {
+    pub id: i32,
+    pub title: String,
+    pub format: String,
+    pub last_activity_at: Option<String>,
+    pub tags: Vec<BootstrapTag>,
+}
+
+/// Candidate issue identity displayed on a Roll face.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapIssueSummary {
+    pub id: i32,
+    pub number: String,
+    pub canonical_series_title: Option<String>,
+    pub cover_url: Option<String>,
+}
+
+/// Mapping state for a rollable candidate.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapIdentitySummary {
+    pub source: String,
+    pub canonical_series_id: Option<String>,
+    pub state: String,
+    pub series_mapping_state: String,
+}
+
+/// Reader statistics for one rollable face or canonical series run.
+#[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapReaderStats {
+    pub latest_rating: Option<f64>,
+    pub average_rating: Option<f64>,
+    pub rating_count: i64,
+    pub read_count: i64,
+    pub issue_count: Option<i64>,
+    pub progress_scope: String,
+}
+
+/// One Roll route label attached to a rollable face.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapRoute {
+    pub kind: String,
+    pub name: String,
+}
+
+/// One eligible Roll face.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapRollableItem {
+    pub thread: BootstrapThreadSummary,
+    pub issue: BootstrapIssueSummary,
+    pub identity: BootstrapIdentitySummary,
+    pub reader: BootstrapReaderStats,
+    pub routes: Vec<BootstrapRoute>,
+    pub overflow_routes_count: i64,
+}
+
+/// Legacy session-mode bridge retained on the live bootstrap contract.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapSessionMode {
+    pub active_bandwidth: Option<String>,
+    pub predicted_bandwidth: Option<String>,
+    pub bandwidth_confidence: Option<f64>,
+    pub bandwidth_source: Option<String>,
+    pub bandwidth_version: Option<String>,
+    pub active_intent: Option<String>,
+    pub predicted_intent: Option<String>,
+    pub intent_confidence: Option<f64>,
+    pub intent_source: Option<String>,
+    pub intent_version: Option<String>,
+    /// Extension boundary: stored guidance JSON is passed through verbatim.
+    pub session_mode_correction_guidance: Option<Value>,
+}
+
+/// Compact bandwidth block retained for existing Roll consumers.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapBandwidth {
+    pub predicted_bandwidth: Option<String>,
+    pub active_bandwidth: Option<String>,
+    pub confidence: Option<f64>,
+    pub source: Option<String>,
+    pub mode_version: Option<String>,
+}
+
+/// Currently pending thread shown by the Roll surface.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapActiveThread {
+    pub id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub last_rolled_result: Option<i32>,
+    pub total_issues: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub issues_read: i32,
+    pub last_rating: Option<f64>,
+    /// Stored tag records; unknown stored columns are preserved via flatten.
+    pub tags: Vec<BootstrapTag>,
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub next_issue_id: Option<i32>,
+    pub next_issue_number: Option<String>,
+}
+
+/// Most recent rated issue for the active session.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapLastRead {
+    pub issue_id: Option<i32>,
+    pub issue_number: Option<String>,
+    pub thread_id: Option<i32>,
+    pub thread_title: Option<String>,
+    pub read_at: Option<String>,
+    pub cover_url: Option<String>,
+}
+
+/// Bounded recovery diagnostic shown when the pending issue is blocked.
+///
+/// The stable envelope is typed; each nested blocker/chain/diagnostic entry is
+/// the existing bounded JSON node shape and remains extensible so no current
+/// recovery detail is dropped from the live contract.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapRollRecovery {
+    pub original_thread_id: i32,
+    pub original_thread_title: String,
+    pub direct_blockers: Vec<Value>,
+    pub readable_prerequisites: Vec<Value>,
+    pub chains: Vec<Vec<Value>>,
+    pub diagnostics: Vec<Value>,
+}
+
+/// Full live `GET /api/v2/roll/bootstrap` payload.
+///
+/// This is the actual handler response type, so the generated contract and the
+/// runtime share one authority. It is retained only until the bootstrap
+/// retirement work removes the route; it is not a new feature surface.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct BootstrapResponseV2 {
+    pub session_id: i32,
+    pub user_id: i32,
+    pub current_die: i32,
+    pub manual_die: Option<i32>,
+    pub pending_thread_id: Option<i32>,
+    pub last_rolled_result: Option<i64>,
+    pub session_mode: BootstrapSessionMode,
+    pub active_thread: Option<BootstrapActiveThread>,
+    pub roll_recovery: Option<BootstrapRollRecovery>,
+    pub bandwidth: BootstrapBandwidth,
+    pub rollable: Vec<BootstrapRollableItem>,
+    pub pool_reason: crate::reading_constraints::PoolReason,
+    pub last_read: Option<BootstrapLastRead>,
+    pub snoozed_threads: Vec<BootstrapThreadSummary>,
+    pub snoozed_count: i64,
+    pub skipped_thread_ids: Vec<i32>,
+    pub skipped_threads: Vec<BootstrapThreadSummary>,
+    pub timezone: Option<String>,
+}
+
+/// Result of the explicit v2 reading-session initialization write.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ReadingSessionCreatedResponse {
+    pub session_id: i32,
+    pub created: bool,
 }
 
 fn unavailable() -> ApiError {
@@ -30,18 +213,18 @@ fn unavailable() -> ApiError {
     )
 }
 
-fn thread_value(row: &tokio_postgres::Row) -> Result<Value, ApiError> {
+fn thread_value(row: &tokio_postgres::Row) -> Result<BootstrapThreadSummary, ApiError> {
     let id: i32 = row.try_get(0).map_err(db::query_error)?;
     let title: String = row.try_get(1).map_err(db::query_error)?;
     let format: String = row.try_get(2).map_err(db::query_error)?;
     let last_activity_at: Option<String> = row.try_get(3).map_err(db::query_error)?;
-    Ok(json!({
-        "id": id,
-        "title": title,
-        "format": format,
-        "last_activity_at": last_activity_at,
-        "tags": []
-    }))
+    Ok(BootstrapThreadSummary {
+        id,
+        title,
+        format,
+        last_activity_at,
+        tags: Vec::new(),
+    })
 }
 
 fn normalized_source(value: &Option<String>) -> Option<&str> {
@@ -87,7 +270,7 @@ fn extract_cover_source(metadata: &Value) -> Option<&str> {
         })
 }
 
-fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
+fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, BootstrapRollableItem), ApiError> {
     let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
     let issue_id: i32 = row.try_get(4).map_err(db::query_error)?;
     let issue_number: String = row.try_get(5).map_err(db::query_error)?;
@@ -132,32 +315,45 @@ fn candidate_item(row: &tokio_postgres::Row) -> Result<(i32, Value), ApiError> {
     let issue_state = identity_state(issue_confirmed, issue_candidates);
     let series_state = identity_state(series_confirmed, series_candidates);
     let overflow = routes.len().saturating_sub(3);
-    let item = json!({
-        "thread": thread_value(row)?,
-        "issue": {
-            "id": issue_id,
-            "number": issue_number,
-            "canonical_series_title": canonical_title,
-            "cover_url": cover
+    Ok((
+        thread_id,
+        BootstrapRollableItem {
+            thread: thread_value(row)?,
+            issue: BootstrapIssueSummary {
+                id: issue_id,
+                number: issue_number,
+                canonical_series_title: canonical_title.map(str::to_owned),
+                cover_url: cover.map(str::to_owned),
+            },
+            identity: BootstrapIdentitySummary {
+                source: source.to_string(),
+                canonical_series_id: if source == "comicvine" {
+                    canonical_id
+                } else {
+                    None
+                },
+                state: issue_state.to_string(),
+                series_mapping_state: series_state.to_string(),
+            },
+            reader: BootstrapReaderStats {
+                latest_rating,
+                average_rating,
+                rating_count,
+                read_count,
+                issue_count: Some(issue_count),
+                progress_scope: "thread".to_string(),
+            },
+            routes: routes
+                .iter()
+                .take(3)
+                .map(|name| BootstrapRoute {
+                    kind: "group".to_string(),
+                    name: name.clone(),
+                })
+                .collect(),
+            overflow_routes_count: overflow as i64,
         },
-        "identity": {
-            "source": source,
-            "canonical_series_id": if source == "comicvine" {canonical_id} else {None},
-            "state": issue_state,
-            "series_mapping_state": series_state
-        },
-        "reader": {
-            "latest_rating": latest_rating,
-            "average_rating": average_rating,
-            "rating_count": rating_count,
-            "read_count": read_count,
-            "issue_count": issue_count,
-            "progress_scope": "thread"
-        },
-        "routes": routes.iter().take(3).map(|name| json!({"kind":"group","name":name})).collect::<Vec<_>>(),
-        "overflow_routes_count": overflow
-    });
-    Ok((thread_id, item))
+    ))
 }
 
 const CANDIDATES: &str = r#"
@@ -212,7 +408,7 @@ async fn latest_session_read(
     connection: &deadpool_postgres::Object,
     user: AuthenticatedUser,
     session_id: i32,
-) -> Result<Option<Value>, ApiError> {
+) -> Result<Option<BootstrapLastRead>, ApiError> {
     let row = connection.query_opt(
         "SELECT e.issue_id,coalesce(i.issue_number,e.issue_number),t.id,t.title,e.timestamp::text,
                 cover_identity.metadata_json::text
@@ -245,10 +441,14 @@ async fn latest_session_read(
         let cover_url = extract_cover_source(&metadata)
             .filter(|source| source.starts_with("https://") || source.starts_with("http://"))
             .filter(|source| !source.split('/').nth(2).unwrap_or("").contains('@'));
-        Ok(
-            json!({"issue_id":issue_id,"issue_number":issue_number,"thread_id":thread_id,
-            "thread_title":thread_title,"read_at":read_at,"cover_url":cover_url}),
-        )
+        Ok(BootstrapLastRead {
+            issue_id,
+            issue_number,
+            thread_id,
+            thread_title,
+            read_at,
+            cover_url: cover_url.map(str::to_owned),
+        })
     })
     .transpose()
 }
@@ -258,7 +458,7 @@ async fn current_active_thread(
     user: AuthenticatedUser,
     session_id: i32,
     pending_thread_id: Option<i32>,
-) -> Result<Option<Value>, ApiError> {
+) -> Result<Option<BootstrapActiveThread>, ApiError> {
     let Some(thread_id) = pending_thread_id else {
         return Ok(None);
     };
@@ -300,30 +500,30 @@ async fn current_active_thread(
         )
         .await
         .map_err(db::query_error)?;
-    let tags: Vec<Value> = tag_rows
+    let tags: Vec<BootstrapTag> = tag_rows
         .into_iter()
         .map(|row| {
             let value: String = row.try_get(0).map_err(db::query_error)?;
             serde_json::from_str(&value).map_err(|_| unavailable())
         })
         .collect::<Result<_, ApiError>>()?;
-    Ok(Some(json!({
-        "id": id,
-        "title": title,
-        "format": format,
-        "issues_remaining": issues_remaining,
-        "queue_position": queue_position,
-        "last_rolled_result": last_rolled_result,
-        "total_issues": total_issues,
-        "reading_progress": reading_progress,
-        "issues_read": issues_read,
-        "last_rating": last_rating,
-        "tags": tags,
-        "issue_id": next_issue_id,
-        "issue_number": next_issue_number,
-        "next_issue_id": next_issue_id,
-        "next_issue_number": next_issue_number
-    })))
+    Ok(Some(BootstrapActiveThread {
+        id,
+        title,
+        format,
+        issues_remaining,
+        queue_position,
+        last_rolled_result,
+        total_issues,
+        reading_progress,
+        issues_read,
+        last_rating,
+        tags,
+        issue_id: next_issue_id,
+        issue_number: next_issue_number.clone(),
+        next_issue_id,
+        next_issue_number,
+    }))
 }
 
 /// Reconstruct the Python Fibonacci snooze backoff from saved events and
@@ -405,7 +605,7 @@ async fn canonical_series_stats(
     conn: &deadpool_postgres::Object,
     user: AuthenticatedUser,
     volumes: &[String],
-) -> Result<HashMap<String, Value>, ApiError> {
+) -> Result<HashMap<String, BootstrapReaderStats>, ApiError> {
     let mut stats = HashMap::new();
     if volumes.is_empty() {
         return Ok(stats);
@@ -449,14 +649,14 @@ async fn canonical_series_stats(
         let latest: Option<f64> = row.try_get(4).map_err(db::query_error)?;
         stats.insert(
             id,
-            json!({
-                "latest_rating": latest,
-                "average_rating": average,
-                "rating_count": rating_count,
-                "read_count": read_count,
-                "issue_count": Value::Null,
-                "progress_scope": "canonical_series_run"
-            }),
+            BootstrapReaderStats {
+                latest_rating: latest,
+                average_rating: average,
+                rating_count,
+                read_count,
+                issue_count: None,
+                progress_scope: "canonical_series_run".to_string(),
+            },
         );
     }
     let catalog = conn
@@ -477,18 +677,16 @@ async fn canonical_series_stats(
                 .as_u64()
                 .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()))
         });
-        let entry = stats.entry(id).or_insert_with(|| {
-            json!({
-                "latest_rating": Value::Null,
-                "average_rating": Value::Null,
-                "rating_count": 0,
-                "read_count": 0,
-                "issue_count": Value::Null,
-                "progress_scope": "canonical_series_run"
-            })
+        let entry = stats.entry(id).or_insert_with(|| BootstrapReaderStats {
+            latest_rating: None,
+            average_rating: None,
+            rating_count: 0,
+            read_count: 0,
+            issue_count: None,
+            progress_scope: "canonical_series_run".to_string(),
         });
         if let Some(count) = count {
-            entry["issue_count"] = json!(count);
+            entry.issue_count = i64::try_from(count).ok();
         }
     }
     Ok(stats)
@@ -591,7 +789,7 @@ fn pending_roll_recovery(
     pending_thread_id: Option<i32>,
     excluded: &HashSet<i32>,
     candidates: &[crate::reading_constraints::EligibleFrontier],
-) -> Result<Option<Value>, ApiError> {
+) -> Result<Option<BootstrapRollRecovery>, ApiError> {
     let Some(thread_id) = pending_thread_id else {
         return Ok(None);
     };
@@ -685,14 +883,14 @@ fn pending_roll_recovery(
         .find(|thread| thread.id == thread_id)
         .map(|thread| thread.title.as_str())
         .unwrap_or("Selected series");
-    Ok(Some(json!({
-        "original_thread_id": thread_id,
-        "original_thread_title": title,
-        "direct_blockers": blockers,
-        "readable_prerequisites": recommended,
-        "chains": chains,
-        "diagnostics": diagnostics
-    })))
+    Ok(Some(BootstrapRollRecovery {
+        original_thread_id: thread_id,
+        original_thread_title: title.to_string(),
+        direct_blockers: blockers,
+        readable_prerequisites: recommended,
+        chains,
+        diagnostics,
+    }))
 }
 
 /** One owner-scoped bulk tag read for every visible Roll row. */
@@ -700,7 +898,7 @@ async fn visible_thread_tags(
     conn: &deadpool_postgres::Object,
     user: AuthenticatedUser,
     ids: &[i32],
-) -> Result<HashMap<i32, Vec<Value>>, ApiError> {
+) -> Result<HashMap<i32, Vec<BootstrapTag>>, ApiError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -718,11 +916,11 @@ async fn visible_thread_tags(
         )
         .await
         .map_err(db::query_error)?;
-    let mut by_id: HashMap<i32, Vec<Value>> = HashMap::new();
+    let mut by_id: HashMap<i32, Vec<BootstrapTag>> = HashMap::new();
     for row in rows {
         let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
         let raw: String = row.try_get(1).map_err(db::query_error)?;
-        let tag = serde_json::from_str(&raw).map_err(|_| unavailable())?;
+        let tag: BootstrapTag = serde_json::from_str(&raw).map_err(|_| unavailable())?;
         by_id.entry(thread_id).or_default().push(tag);
     }
     Ok(by_id)
@@ -730,7 +928,7 @@ async fn visible_thread_tags(
 
 /// Temporary explicit write boundary for legacy reading-session consumers.
 /// GET /api/v2/roll/bootstrap never creates or mutates a session.
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InitializeSessionRequest {
     pub timezone: Option<String>,
@@ -740,7 +938,7 @@ pub async fn initialize_session(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(request): Json<InitializeSessionRequest>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<ReadingSessionCreatedResponse>, ApiError> {
     let initialized = reading_session::initialize(
         &state,
         user,
@@ -748,10 +946,10 @@ pub async fn initialize_session(
         SessionPolicy::default(),
     )
     .await?;
-    Ok(Json(json!({
-        "session_id": initialized.session.id,
-        "created": initialized.created,
-    })))
+    Ok(Json(ReadingSessionCreatedResponse {
+        session_id: initialized.session.id,
+        created: initialized.created,
+    }))
 }
 
 pub async fn bootstrap_v2(
@@ -759,7 +957,7 @@ pub async fn bootstrap_v2(
     user: AuthenticatedUser,
     Query(query): Query<BootstrapQuery>,
     headers: HeaderMap,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<BootstrapResponseV2>, ApiError> {
     let active = reading_session::bootstrap(
         &state,
         user,
@@ -779,9 +977,9 @@ pub async fn bootstrap_v2(
     let native_die = crate::dice_state::bootstrap_die_after_native_command(&conn, user).await?;
     let current_die = native_die.unwrap_or(active.current_die);
     let manual_die = if native_die.is_some() {
-        Value::Null
+        None
     } else {
-        json!(session.manual_die)
+        session.manual_die
     };
     // Match the offer's browser-owned exclusions before the die limit.
     // GET remains read-only; legacy durable backoff is display-only below.
@@ -803,44 +1001,39 @@ pub async fn bootstrap_v2(
         .query(CANDIDATES, &[&user.id(), &ids])
         .await
         .map_err(db::query_error)?;
-    let mut by_thread: HashMap<i32, Value> = HashMap::new();
+    let mut by_thread: HashMap<i32, BootstrapRollableItem> = HashMap::new();
     for row in &rows {
         let (thread_id, item) = candidate_item(row)?;
         by_thread.insert(thread_id, item);
     }
     let volumes: Vec<String> = by_thread
         .values()
-        .filter_map(|item| {
-            item.pointer("/identity/canonical_series_id")
-                .and_then(Value::as_str)
-        })
-        .map(str::to_owned)
+        .filter_map(|item| item.identity.canonical_series_id.clone())
         .collect();
     let canonical_stats = canonical_series_stats(&conn, user, &volumes).await?;
     let mut rollable = vec![];
     for item in eligible {
         let mut projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
-        if let Some(volume) = projected
-            .pointer("/identity/canonical_series_id")
-            .and_then(Value::as_str)
-        {
+        if let Some(volume) = projected.identity.canonical_series_id.as_deref() {
             let volume = volume.to_owned();
-            projected["reader"] = canonical_stats.get(&volume).cloned().unwrap_or_else(|| {
-                json!({
-                    "latest_rating": Value::Null,
-                    "average_rating": Value::Null,
-                    "rating_count": 0,
-                    "read_count": 0,
-                    "issue_count": Value::Null,
-                    "progress_scope": "canonical_series_run"
-                })
-            });
+            projected.reader =
+                canonical_stats
+                    .get(&volume)
+                    .cloned()
+                    .unwrap_or_else(|| BootstrapReaderStats {
+                        latest_rating: None,
+                        average_rating: None,
+                        rating_count: 0,
+                        read_count: 0,
+                        issue_count: None,
+                        progress_scope: "canonical_series_run".to_string(),
+                    });
         } else {
-            projected["reader"]["latest_rating"] = Value::Null;
-            projected["reader"]["average_rating"] = Value::Null;
-            projected["reader"]["rating_count"] = json!(0);
-            if projected["reader"]["issue_count"] == json!(0) {
-                projected["reader"]["issue_count"] = Value::Null;
+            projected.reader.latest_rating = None;
+            projected.reader.average_rating = None;
+            projected.reader.rating_count = 0;
+            if projected.reader.issue_count == Some(0) {
+                projected.reader.issue_count = None;
             }
         }
         rollable.push(projected);
@@ -862,19 +1055,19 @@ pub async fn bootstrap_v2(
         .await
         .map_err(db::query_error)?
     };
-    let mut known: HashMap<i32, Value> = HashMap::new();
+    let mut known: HashMap<i32, BootstrapThreadSummary> = HashMap::new();
     for row in &summary_rows {
         let id: i32 = row.try_get(0).map_err(db::query_error)?;
         known.insert(id, thread_value(row)?);
     }
-    let summary = |ids: &[i32]| {
+    let summary = |ids: &[i32]| -> Vec<BootstrapThreadSummary> {
         ids.iter()
             .filter_map(|id| known.get(id).cloned())
             .take(20)
-            .collect::<Vec<_>>()
+            .collect()
     };
     let mut snoozed_threads = summary(&snoozed);
-    let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count();
+    let snoozed_count = snoozed.iter().filter(|id| known.contains_key(id)).count() as i64;
     let mut skipped_threads = summary(&skipped);
 
     let roll_recovery = pending_roll_recovery(
@@ -887,80 +1080,109 @@ pub async fn bootstrap_v2(
         current_active_thread(&conn, user, session.id, session.pending_thread_id).await?;
     let last_roll_result = active_thread
         .as_ref()
-        .and_then(|thread| thread.get("last_rolled_result"))
-        .and_then(Value::as_i64);
+        .and_then(|thread| thread.last_rolled_result)
+        .map(i64::from);
     let mode_source = normalized_source(&session.bandwidth_source);
     let intent_source = normalized_source(&session.intent_source);
-    let mut tag_ids: Vec<i32> = rollable
-        .iter()
-        .filter_map(|item| item.pointer("/thread/id").and_then(Value::as_i64))
-        .map(|id| id as i32)
-        .collect();
+    let mut tag_ids: Vec<i32> = rollable.iter().map(|item| item.thread.id).collect();
     for row in snoozed_threads.iter().chain(skipped_threads.iter()) {
-        if let Some(id) = row["id"].as_i64() {
-            tag_ids.push(id as i32);
-        }
+        tag_ids.push(row.id);
     }
     tag_ids.sort_unstable();
     tag_ids.dedup();
     let tags_by_thread = visible_thread_tags(&conn, user, &tag_ids).await?;
-    let attach_tags = |thread: &mut Value| {
-        if let Some(id) = thread["id"].as_i64() {
-            thread["tags"] = json!(tags_by_thread
-                .get(&(id as i32))
-                .cloned()
-                .unwrap_or_default());
-        }
-    };
     for item in &mut rollable {
-        attach_tags(&mut item["thread"]);
+        item.thread.tags = tags_by_thread
+            .get(&item.thread.id)
+            .cloned()
+            .unwrap_or_default();
     }
     for row in &mut snoozed_threads {
-        attach_tags(row);
+        row.tags = tags_by_thread.get(&row.id).cloned().unwrap_or_default();
     }
     for row in &mut skipped_threads {
-        attach_tags(row);
+        row.tags = tags_by_thread.get(&row.id).cloned().unwrap_or_default();
     }
-    let response = json!({
-        "session_id": session.id,
-        "user_id": user.id(),
-        "current_die": current_die,
-        "manual_die": manual_die,
-        "pending_thread_id": session.pending_thread_id,
-        "last_rolled_result": last_roll_result,
-        "session_mode": {
-            "active_bandwidth": session.active_bandwidth,
-            "predicted_bandwidth": session.predicted_bandwidth,
-            "bandwidth_confidence": session.bandwidth_confidence,
-            "bandwidth_source": mode_source,
-            "bandwidth_version": session.bandwidth_version,
-            "active_intent": session.active_intent,
-            "predicted_intent": session.predicted_intent,
-            "intent_confidence": session.intent_confidence,
-            "intent_source": intent_source,
-            "intent_version": session.intent_version,
-            "session_mode_correction_guidance": session.session_mode_correction_guidance
+    let response = BootstrapResponseV2 {
+        session_id: session.id,
+        user_id: user.id(),
+        current_die,
+        manual_die,
+        pending_thread_id: session.pending_thread_id,
+        last_rolled_result: last_roll_result,
+        session_mode: BootstrapSessionMode {
+            active_bandwidth: session.active_bandwidth.clone(),
+            predicted_bandwidth: session.predicted_bandwidth.clone(),
+            bandwidth_confidence: session.bandwidth_confidence,
+            bandwidth_source: mode_source.map(str::to_owned),
+            bandwidth_version: session.bandwidth_version.clone(),
+            active_intent: session.active_intent.clone(),
+            predicted_intent: session.predicted_intent.clone(),
+            intent_confidence: session.intent_confidence,
+            intent_source: intent_source.map(str::to_owned),
+            intent_version: session.intent_version.clone(),
+            session_mode_correction_guidance: session.session_mode_correction_guidance.clone(),
         },
-        "active_thread": active_thread,
-        "roll_recovery": roll_recovery,
-        "bandwidth": {
-            "predicted_bandwidth": session.predicted_bandwidth,
-            "active_bandwidth": session.active_bandwidth,
-            "confidence": session.bandwidth_confidence,
-            "source": mode_source,
-            "mode_version": session.bandwidth_version
+        active_thread,
+        roll_recovery,
+        bandwidth: BootstrapBandwidth {
+            predicted_bandwidth: session.predicted_bandwidth.clone(),
+            active_bandwidth: session.active_bandwidth.clone(),
+            confidence: session.bandwidth_confidence,
+            source: mode_source.map(str::to_owned),
+            mode_version: session.bandwidth_version.clone(),
         },
-        "rollable": rollable,
-        "pool_reason": pool_reason,
-        "last_read": last_read,
-        "snoozed_threads": snoozed_threads,
-        "snoozed_count": snoozed_count,
-        "skipped_thread_ids": skipped,
-        "skipped_threads": skipped_threads,
-        "timezone": session.timezone
-    });
+        rollable,
+        pool_reason,
+        last_read,
+        snoozed_threads,
+        snoozed_count,
+        skipped_thread_ids: skipped,
+        skipped_threads,
+        timezone: session.timezone.clone(),
+    };
     Ok(Json(response))
 }
+
+/// Documentation-only operation for the mounted v2 Roll bootstrap read.
+///
+/// The published response is the actual handler DTO, so known session, die,
+/// pending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and
+/// timezone fields stay in the live contract. Stored tag records, recovery
+/// nodes and mode-guidance JSON remain explicitly extensible.
+#[utoipa::path(
+    get,
+    path = "/api/v2/roll/bootstrap",
+    tag = "roll",
+    params(
+        ("timezone" = Option<String>, Query, description = "IANA timezone override for the active session")
+    ),
+    responses(
+        (status = 200, description = "Projected Roll bootstrap payload", body = BootstrapResponseV2),
+        (status = 401, description = "Not authenticated"),
+        (status = 500, description = "Invalid native Roll projection"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn bootstrap_documentation() {}
+
+/// Documentation-only operation for the mounted v2 reading-session initializer.
+#[utoipa::path(
+    post,
+    path = "/api/v2/reading-sessions",
+    tag = "reading-sessions",
+    request_body = InitializeSessionRequest,
+    responses(
+        (status = 200, description = "Created or resumed reading-session identity", body = ReadingSessionCreatedResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn initialize_session_documentation() {}
 
 #[cfg(test)]
 mod recovery_diagnostic_tests {
@@ -1414,8 +1636,8 @@ mod initialize_session_db_tests {
         )
         .await
         .expect("existing session initialization must succeed");
-        assert_eq!(first["session_id"], 7);
-        assert_eq!(first["created"], false);
+        assert_eq!(first.session_id, 7);
+        assert!(!first.created);
         let timezone = admin
             .query_one(
                 &format!("SELECT timezone FROM {schema}.sessions WHERE id=7"),
@@ -1437,8 +1659,8 @@ mod initialize_session_db_tests {
         )
         .await
         .expect("repeated initialization must reuse the existing session");
-        assert_eq!(second["session_id"], 7);
-        assert_eq!(second["created"], false);
+        assert_eq!(second.session_id, 7);
+        assert!(!second.created);
         let row = admin
             .query_one(
                 &format!("SELECT count(*), max(timezone) FROM {schema}.sessions"),

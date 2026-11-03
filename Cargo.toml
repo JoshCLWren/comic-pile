@@ -12,7 +12,11 @@ comicpile-roll-service = { path = "native/roll-service" }
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tower = "0.5"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
 vercel_runtime = { version = "2.4", features = ["axum"] }
+
+[dev-dependencies]
+tokio-postgres = "0.7.18"
 
 [[bin]]
 name = "native_roll"

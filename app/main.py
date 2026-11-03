@@ -245,6 +245,14 @@ class _DiagnosticFieldsFilter(logging.Filter):
         "deployment_id",
         "event",
         "startup_duration_ms",
+        "process_to_startup_ms",
+        "startup_cpu_ms",
+        "process_started_at_ns",
+        "application_import_ms",
+        "application_creation_ms",
+        "lifespan_ms",
+        "heavy_init_duration_ms",
+        "heavy_init_process_age_ms",
     )
 
     def filter(self, record: logging.LogRecord) -> bool:
@@ -584,8 +592,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
     # lazy registration without issuing HTTP requests.
     app.state.register_routers_for_path = register_routers_for_path
 
-    # Error-only request logging (body redaction + environment-aware sanitization).
-    add_request_logging_middleware(app, app_settings.environment)
+    # Preserve the established request middleware order. Append only the
+    # startup-completion event after readiness work has been registered.
+    add_request_logging_middleware(app, app_settings.environment, defer_startup_event=True)
 
     # Global, HTTP, and validation exception handlers (environment-aware logging).
     register_exception_handlers(app, app_settings)
@@ -836,6 +845,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
             try:
                 # Initialize database under its own separately budgeted deadline.
+                from app.startup_diagnostics import mark_heavy_init_started
+
+                mark_heavy_init_started()
                 await run_bounded(
                     operation="startup.database_initialization",
                     coroutine=init_database(app_settings.environment),
@@ -849,11 +861,12 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
 
                 from app.startup_diagnostics import mark_heavy_init_complete
 
-                # mark_heavy_init_complete is synchronous (records a timestamp
-                # and returns elapsed ms); it is not an awaitable and must not
-                # be wrapped in run_bounded.
+                # This is the database initialization span, not elapsed worker
+                # age since module import. It is synchronous and not awaitable.
                 heavy_ms = mark_heavy_init_complete()
+                from app.startup_diagnostics import startup_event_snapshot
 
+                heavy_snapshot = startup_event_snapshot()
                 logger.warning(
                     "Heavy application initialization completed in %.2f ms",
                     heavy_ms,
@@ -861,6 +874,9 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                         "event": "heavy_application_startup",
                         "heavy_initialized": True,
                         "heavy_init_duration_ms": round(heavy_ms, 2),
+                        "heavy_init_process_age_ms": heavy_snapshot.heavy_init_process_age_ms,
+                        "process_started_at_ns": heavy_snapshot.process_started_at_ns,
+                        "deployment_id": heavy_snapshot.deployment_id,
                     },
                 )
                 _heavy_state["initialized"] = True
@@ -909,11 +925,15 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
         2.5 s hard budget.
         """
         try:
-            await compute_startup_duration()
-            from app.startup_diagnostics import is_heavy_initialized, startup_event_snapshot
+            from app.startup_diagnostics import (
+                is_heavy_initialized,
+                mark_lifespan_started,
+                mark_startup_complete,
+                startup_event_snapshot,
+            )
 
+            mark_lifespan_started()
             snapshot = startup_event_snapshot()
-            startup_duration = snapshot.startup_duration_ms or 0.0
 
             # Start Neon egress monitor when credentials are configured. The
             # monitor is optional monitoring infrastructure, so a budget breach
@@ -932,8 +952,10 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                 except Exception:
                     logger.warning("Neon monitor startup skipped", exc_info=True)
 
+            mark_startup_complete()
+            await compute_startup_duration()
             ready_snapshot = startup_event_snapshot()
-            readiness_ms = max(startup_duration, ready_snapshot.process_age_ms)
+            readiness_ms = ready_snapshot.startup_duration_ms or 0.0
             try:
                 enforce_startup_budget(
                     readiness_ms,
@@ -943,6 +965,8 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                         "deployment_id": ready_snapshot.deployment_id,
                         "heavy_initialized": is_heavy_initialized(),
                         "invocation": ready_snapshot.invocation,
+                        "process_to_startup_ms": ready_snapshot.process_to_startup_ms,
+                        "startup_cpu_ms": ready_snapshot.startup_cpu_ms,
                     },
                 )
             finally:
@@ -960,6 +984,11 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
                     "event": "lightweight_application_startup",
                     "heavy_initialized": is_heavy_initialized(),
                     "startup_duration_ms": round(readiness_ms, 2),
+                    "process_to_startup_ms": ready_snapshot.process_to_startup_ms,
+                    "startup_cpu_ms": ready_snapshot.startup_cpu_ms,
+                    "application_import_ms": ready_snapshot.application_import_ms,
+                    "application_creation_ms": ready_snapshot.application_creation_ms,
+                    "lifespan_ms": ready_snapshot.lifespan_ms,
                     "deployment_id": ready_snapshot.deployment_id,
                 },
             )
@@ -1036,6 +1065,10 @@ def create_app(*, serve_frontend: bool = True, defer_router_imports: bool = Fals
             await close_shared_http_client()
         except Exception:
             logger.warning("ComicVine shared HTTP client shutdown skipped", exc_info=True)
+
+    # The request logging middleware was registered in its original position,
+    # but this completion callback must run after the actual startup handler.
+    app.router.add_event_handler("startup", app.state.record_startup_completion)
 
     return app
 

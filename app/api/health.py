@@ -154,6 +154,8 @@ async def warm_endpoint(
             invocation=0,
             cold=True,
             process_age_ms=0.0,
+            process_to_startup_ms=None,
+            startup_cpu_ms=None,
             startup_complete=False,
             startup_duration_ms=0.0,
             application_import_ms=0.0,
@@ -161,6 +163,7 @@ async def warm_endpoint(
             lifespan_ms=0.0,
             heavy_initialized=False,
             heavy_init_duration_ms=None,
+            heavy_init_process_age_ms=None,
             deployment_id="unknown",
             process_started_at_ns=0,
         )

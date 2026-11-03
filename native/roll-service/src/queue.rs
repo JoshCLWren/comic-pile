@@ -198,7 +198,7 @@ where
             &[&user_id],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(|error| db::query_error_for("queue.row_load", error))?;
     Ok(rows
         .iter()
         .map(|row| OrderedEntry {
@@ -287,6 +287,36 @@ pub async fn get_queue_entry(
     }))
 }
 
+/// One reposition attempt's failure.
+///
+/// `retryable` is true only while the attempt has written nothing. The movement
+/// statement is the first write, so a failure before it can be replayed on a
+/// fresh connection without duplicating a commit or a reorder event; anything at
+/// or after it keeps its single-attempt outcome.
+struct Step {
+    error: ApiError,
+    retryable: bool,
+}
+
+impl Step {
+    /// Failure at or after the movement statement: commit outcome is ambiguous.
+    fn written(error: ApiError) -> Self {
+        Self {
+            error,
+            retryable: false,
+        }
+    }
+}
+
+impl From<ApiError> for Step {
+    fn from(error: ApiError) -> Self {
+        Self {
+            error,
+            retryable: true,
+        }
+    }
+}
+
 /// Move one owned queue entry to the requested reader-visible ordinal.
 pub async fn update_queue_entry(
     State(state): State<Arc<AppState>>,
@@ -300,22 +330,53 @@ pub async fn update_queue_entry(
             patch.position
         )));
     }
+    match reposition(&state, user, thread_id, patch.position).await {
+        Ok(response) => Ok(Json(response)),
+        // A pooled connection the platform or the server dropped between two
+        // requests can fail its first statement without being flagged closed.
+        // One retry on a fresh connection, while nothing has been written,
+        // keeps a reader's move from being lost to transport state. The bound is
+        // exactly one retry, and only for the retryable availability contract.
+        Err(Step {
+            error,
+            retryable: true,
+        }) if error.0 == StatusCode::SERVICE_UNAVAILABLE => {
+            tracing::warn!(
+                operation = "queue.reposition.retry",
+                "retrying reposition after a transient database connection failure"
+            );
+            reposition(&state, user, thread_id, patch.position)
+                .await
+                .map(Json)
+                .map_err(|step| step.error)
+        }
+        Err(step) => Err(step.error),
+    }
+}
+
+/// Execute one reposition attempt against the owner-scoped queue.
+async fn reposition(
+    state: &Arc<AppState>,
+    user: AuthenticatedUser,
+    thread_id: i32,
+    requested_position: i32,
+) -> Result<QueueEntryResponse, Step> {
     let user_id = user.id();
-    let mut pending = Pending(Some(db::checkout(&state).await?));
+    let mut pending = Pending(Some(db::checkout(state).await?));
     let transaction = pending
         .0
         .as_mut()
         .expect("checked-out PostgreSQL client")
         .transaction()
         .await
-        .map_err(db::query_error)?;
+        .map_err(|error| db::query_error_for("queue.reposition.begin", error))?;
     transaction
         .execute(
             "SELECT pg_advisory_xact_lock($1, $2)",
             &[&QUEUE_LOCK_NAMESPACE, &user_id],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(|error| db::query_error_for("queue.reposition.lock", error))?;
 
     let rows = load_queue_rows(&*transaction, user_id).await?;
     // Evaluate Option E grouping on the already-locked write transaction. This
@@ -328,11 +389,12 @@ pub async fn update_queue_entry(
     } else {
         None
     };
+
     let entries = order_display_rows(rows, eligible.as_ref());
     let current = ordinal_of(&entries, thread_id).ok_or_else(|| not_found(thread_id))?;
     let total = entries.len();
     // A rank beyond the end expresses "back" without a custom action method.
-    let requested = usize::try_from(patch.position)
+    let requested = usize::try_from(requested_position)
         .unwrap_or(usize::MAX)
         .min(total);
     // Blocked rows always display after every readable row, so clamp a target
@@ -396,7 +458,7 @@ pub async fn update_queue_entry(
             &[&user_id, &thread_id, &raw_target],
         )
         .await
-        .map_err(db::query_error)?;
+        .map_err(|error| Step::written(db::query_error_for("queue.reposition.mover", error)))?;
 
     let changed = rows
         .iter()
@@ -434,16 +496,21 @@ pub async fn update_queue_entry(
                 &[&user_id, &thread_id],
             )
             .await
-            .map_err(db::query_error)?;
+            .map_err(|error| {
+                Step::written(db::query_error_for("queue.reposition.event_insert", error))
+            })?;
     }
-    transaction.commit().await.map_err(db::query_error)?;
+    transaction
+        .commit()
+        .await
+        .map_err(|error| Step::written(db::query_error_for("queue.reposition.commit", error)))?;
     pending.release();
 
-    Ok(Json(QueueEntryResponse {
+    Ok(QueueEntryResponse {
         thread_id,
         position: i32::try_from(position).unwrap_or(i32::MAX),
         ordering_version,
-    }))
+    })
 }
 
 fn validate_idempotency_key(key: &str) -> Result<(), ApiError> {
@@ -662,12 +729,13 @@ fn create_queue_order_documentation() {}
 /// A dedicated PostgreSQL schema keyed off `RUST_ROLL_TEST_DATABASE_URL`
 /// keeps these focused tables out of the canonical schema the Python parity
 /// suite creates in the same database.
+/// Disposable schema selector used by the queue fixtures.
 #[cfg(test)]
-fn test_database_url() -> String {
+fn test_database_url_for(schema: &str) -> String {
     let base =
         std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL required");
     let separator = if base.contains('?') { '&' } else { '?' };
-    format!("{base}{separator}options=-csearch_path%3Dqueue_unit_test%2Cpublic")
+    format!("{base}{separator}options=-csearch_path%3D{schema}%2Cpublic")
 }
 
 #[cfg(test)]
@@ -688,7 +756,12 @@ mod tests {
     /// A single-slot pool makes an accidental second concurrent connection
     /// checkout fail deterministically instead of merely slowing down.
     async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
-        let url = test_database_url();
+        state_for_schema("queue_unit_test", pool_size).await
+    }
+
+    /// Build a test state bound to one disposable schema.
+    async fn state_for_schema(schema: &str, pool_size: usize) -> Arc<AppState> {
+        let url = test_database_url_for(schema);
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
@@ -1938,5 +2011,375 @@ mod tests {
         ranks.sort_unstable();
         assert_eq!(ranks, vec![1, 2, 3], "queue stays dense after both moves");
         assert_eq!(event_count(&state, "reorder").await, 2);
+    }
+
+    /// A pooled connection can die between two requests without being flagged
+    /// closed first (platform freeze, idle reset, half-open socket). #4535: that
+    /// transport state must never lose a reader's move or turn into an opaque
+    /// internal error for a request that has written nothing yet.
+    #[tokio::test]
+    async fn reposition_recovers_when_the_pooled_connection_died_between_requests() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state_with_pool_size(1).await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+
+        // Warm the single pool slot and learn its backend, exactly the
+        // connection the next reposition would be handed.
+        let connection = db::checkout(&state).await.expect("warm connection");
+        let pid: i32 = connection
+            .query_one("SELECT pg_backend_pid()", &[])
+            .await
+            .expect("backend pid")
+            .get(0);
+        drop(connection);
+
+        // Kill it the way a platform freeze or an idle timeout does: the client
+        // socket is already gone when the next request checks it out.
+        let admin = state_with_pool_size(1).await;
+        let killer = db::checkout(&admin).await.expect("admin connection");
+        let terminated: bool = killer
+            .query_one("SELECT pg_terminate_backend($1)", &[&pid])
+            .await
+            .expect("terminate the pooled backend")
+            .get(0);
+        assert!(terminated, "the pooled backend must be terminated");
+
+        let moved = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 3 }),
+        )
+        .await
+        .expect("a reposition must survive a dead pooled connection")
+        .0;
+        assert_eq!(moved.position, 3);
+        assert_eq!(positions(&state, 7).await, vec![(2, 1), (3, 2), (1, 3)]);
+        assert_eq!(
+            event_count(&state, "reorder").await,
+            1,
+            "the repaired attempt records exactly one reorder event"
+        );
+    }
+
+    /// Canonical-schema coverage for the reposition path (#4535).
+    ///
+    /// The shared `queue_unit_test` fixture is hand-rolled, so it cannot catch a
+    /// production shape difference. The real `threads` row is NOT NULL across ten
+    /// columns and defaults the rest, `events` carries the owner-assignment
+    /// trigger, and `threads(id, next_unread_issue_id)` is a deferred foreign key
+    /// to `issues(thread_id, id)`. This fixture mirrors those constraints and
+    /// seeds a production-sized queue (330 entries, 247 blocked) so the move runs
+    /// against the shape production actually serves.
+    #[tokio::test]
+    async fn reposition_persists_against_the_production_schema_shape() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state_for_schema(PRODUCTION_SHAPE_SCHEMA, 2).await;
+        reset_production_shape(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed_production_shape(&state, 7, 330, 247).await;
+
+        // Stored-authority phase: the blocked tail keeps its grouping authority.
+        let moved = update_queue_entry(
+            State(state.clone()),
+            user,
+            Path(3),
+            Json(QueueEntryPatch { position: 4 }),
+        )
+        .await
+        .expect("reposition against the production-shaped schema")
+        .0;
+        assert_eq!(moved.thread_id, 3);
+        assert_eq!(moved.position, 4);
+        assert_eq!(
+            dense_ranks(&state, 7).await,
+            (1..=330).collect::<Vec<i32>>(),
+            "the rewrite stays dense across every entry"
+        );
+        assert_eq!(
+            manual_thread_ids(&state, 7).await,
+            vec![3],
+            "only the moved entry becomes a remembered manual placement"
+        );
+        assert_eq!(blocked_rows_after_the_readable_group(&state, 7).await, 247);
+        assert_eq!(
+            reorder_events(&state).await,
+            vec![(3, Some(7))],
+            "the trigger-accepted reorder event carries the owner"
+        );
+
+        // Option E phase: eligibility evaluated inside the locked transaction,
+        // still against the canonical NOT NULL/trigger/deferred-key shape.
+        {
+            let _option_e = OptionEEnv::enable();
+            let clamped = update_queue_entry(
+                State(state.clone()),
+                user,
+                Path(4),
+                Json(QueueEntryPatch { position: 2 }),
+            )
+            .await
+            .expect("Option E reposition against the production-shaped schema")
+            .0;
+            assert_eq!(clamped.position, 2);
+            assert_eq!(
+                dense_ranks(&state, 7).await,
+                (1..=330).collect::<Vec<i32>>()
+            );
+            assert_eq!(reorder_events(&state).await.len(), 2);
+        }
+    }
+
+    const PRODUCTION_SHAPE_SCHEMA: &str = "queue_prod_shape_test";
+
+    /// Recreate the canonical constraints this handler writes through.
+    async fn reset_production_shape(state: &AppState) {
+        let connection = db::checkout(state).await.expect("test connection");
+        connection
+            .batch_execute(&format!(
+                "CREATE SCHEMA IF NOT EXISTS {schema}; \
+                 CREATE TABLE IF NOT EXISTS {schema}.users (id integer PRIMARY KEY); \
+                 CREATE TABLE IF NOT EXISTS {schema}.threads ( \
+                     id integer PRIMARY KEY, \
+                     title varchar NOT NULL, \
+                     format varchar NOT NULL, \
+                     issues_remaining integer NOT NULL, \
+                     queue_position integer NOT NULL, \
+                     status varchar NOT NULL, \
+                     last_rating double precision, \
+                     last_activity_at timestamptz, \
+                     created_at timestamptz NOT NULL, \
+                     user_id integer NOT NULL, \
+                     notes text, \
+                     is_test boolean NOT NULL DEFAULT false, \
+                     is_blocked boolean NOT NULL DEFAULT false, \
+                     total_issues integer, \
+                     next_unread_issue_id integer, \
+                     reading_progress varchar, \
+                     blocked_by_thread_ids json, \
+                     blocked_by_issue_ids json, \
+                     manual_creator_credits json NOT NULL DEFAULT '[]'::json, \
+                     catalog_series_id bigint, \
+                     queue_order_key bigint, \
+                     queue_position_is_manual boolean NOT NULL DEFAULT false, \
+                     FOREIGN KEY (user_id) REFERENCES {schema}.users(id) \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.issues ( \
+                     id integer PRIMARY KEY, \
+                     thread_id integer NOT NULL REFERENCES {schema}.threads(id), \
+                     position integer NOT NULL, \
+                     status varchar NOT NULL, \
+                     issue_number varchar NOT NULL, \
+                     catalog_issue_id bigint, \
+                     UNIQUE (thread_id, id) \
+                 ); \
+                 ALTER TABLE {schema}.threads \
+                     DROP CONSTRAINT IF EXISTS fk_threads_frontier_same_thread; \
+                 ALTER TABLE {schema}.threads \
+                     ADD CONSTRAINT fk_threads_frontier_same_thread \
+                     FOREIGN KEY (id, next_unread_issue_id) \
+                     REFERENCES {schema}.issues(thread_id, id) \
+                     DEFERRABLE INITIALLY DEFERRED; \
+                 CREATE TABLE IF NOT EXISTS {schema}.events ( \
+                     id serial PRIMARY KEY, \
+                     type varchar NOT NULL, \
+                     timestamp timestamptz NOT NULL, \
+                     user_id integer, \
+                     thread_id integer, \
+                     context json \
+                 ); \
+                 CREATE OR REPLACE FUNCTION {schema}.assign_event_owner() \
+                 RETURNS trigger LANGUAGE plpgsql AS $$ \
+                 DECLARE inferred_owner integer; \
+                 BEGIN \
+                     IF TG_OP = 'INSERT' THEN \
+                         IF NEW.thread_id IS NOT NULL THEN \
+                             SELECT user_id INTO inferred_owner \
+                             FROM {schema}.threads WHERE id = NEW.thread_id; \
+                         END IF; \
+                         IF inferred_owner IS NOT NULL AND NEW.user_id IS NOT NULL \
+                            AND NEW.user_id <> inferred_owner THEN \
+                             RAISE EXCEPTION 'event owner conflicts with owning reference' \
+                                 USING ERRCODE = '23514'; \
+                         END IF; \
+                         NEW.user_id := COALESCE(NEW.user_id, inferred_owner); \
+                         IF NEW.user_id IS NULL THEN \
+                             RAISE EXCEPTION 'event requires an owner or an owned reference' \
+                                 USING ERRCODE = '23502'; \
+                         END IF; \
+                     END IF; \
+                     RETURN NEW; \
+                 END; $$; \
+                 DROP TRIGGER IF EXISTS trg_assign_event_owner ON {schema}.events; \
+                 CREATE TRIGGER trg_assign_event_owner \
+                     BEFORE INSERT ON {schema}.events \
+                     FOR EACH ROW EXECUTE FUNCTION {schema}.assign_event_owner(); \
+                 CREATE TABLE IF NOT EXISTS {schema}.dependencies ( \
+                     id integer PRIMARY KEY, \
+                     source_issue_id integer NOT NULL, \
+                     target_issue_id integer NOT NULL, \
+                     origin text, \
+                     classification text, \
+                     provenance text \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_lists ( \
+                     id integer PRIMARY KEY, user_id integer NOT NULL, mode text NOT NULL \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_entries ( \
+                     id integer PRIMARY KEY, list_id integer NOT NULL, \
+                     issue_id integer NOT NULL, gate text NOT NULL, \
+                     skipped boolean NOT NULL DEFAULT false, \
+                     position integer NOT NULL DEFAULT 1 \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_overlap_decisions ( \
+                     id integer PRIMARY KEY, list_id integer, user_id integer, \
+                     continuing_external_identity_id bigint, \
+                     waiting_external_identity_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.collection_exclusions ( \
+                     id integer PRIMARY KEY, user_id integer, issue_id integer, \
+                     thread_id integer, provider text, external_volume_id text \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.external_identities ( \
+                     id bigint PRIMARY KEY, provider text NOT NULL, \
+                     external_id text NOT NULL, entity_type text NOT NULL \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.catalog_series ( \
+                     id bigint PRIMARY KEY, canonical_external_identity_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.catalog_issues ( \
+                     id bigint PRIMARY KEY, catalog_series_id bigint, \
+                     canonical_external_identity_id bigint \
+                 ); \
+                 CREATE TABLE IF NOT EXISTS {schema}.thread_external_series_mappings ( \
+                     thread_id integer, external_identity_id bigint, status text \
+                 ); \
+                 TRUNCATE {schema}.threads, {schema}.events, {schema}.issues, \
+                     {schema}.users, {schema}.dependencies, \
+                     {schema}.custom_cbl_lists, {schema}.custom_cbl_entries, \
+                     {schema}.custom_cbl_overlap_decisions, \
+                     {schema}.collection_exclusions, \
+                     {schema}.external_identities, {schema}.catalog_series, \
+                     {schema}.catalog_issues, \
+                     {schema}.thread_external_series_mappings RESTART IDENTITY CASCADE;",
+                schema = PRODUCTION_SHAPE_SCHEMA
+            ))
+            .await
+            .expect("production-shape schema");
+        drop(Object::take(connection));
+    }
+
+    /// Seed a production-sized queue: `blocked` entries hold the stored tail.
+    async fn seed_production_shape(state: &AppState, user_id: i32, total: i32, blocked: i32) {
+        let schema = PRODUCTION_SHAPE_SCHEMA;
+        let connection = db::checkout(state)
+            .await
+            .expect("production-shape seed connection");
+        connection
+            .execute(
+                &format!("INSERT INTO {schema}.users (id) VALUES ($1)"),
+                &[&user_id],
+            )
+            .await
+            .expect("seed owner");
+        // The deferred frontier foreign key lets the thread rows land before
+        // their issues exist, exactly like the canonical schema.
+        connection
+            .batch_execute("BEGIN")
+            .await
+            .expect("seed transaction");
+        connection
+            .execute(
+                &format!(
+                    "INSERT INTO {schema}.threads (id, title, format, issues_remaining, \
+                     queue_position, status, created_at, user_id, is_blocked) \
+                     SELECT g, 'Series ' || g, 'series', 5, g, 'active', now(), $1, g > $2 \
+                     FROM generate_series(1, $3) g"
+                ),
+                &[&user_id, &(total - blocked), &total],
+            )
+            .await
+            .expect("seed production-shaped threads");
+        connection
+            .execute(
+                &format!(
+                    "INSERT INTO {schema}.issues (id, thread_id, position, status, issue_number) \
+                     SELECT 100000 + g, g, 1, 'unread', '1' FROM generate_series(1, $1) g"
+                ),
+                &[&total],
+            )
+            .await
+            .expect("seed issue frontiers");
+        connection
+            .execute(
+                &format!(
+                    "UPDATE {schema}.threads SET next_unread_issue_id = 100000 + id \
+                     WHERE user_id = $1"
+                ),
+                &[&user_id],
+            )
+            .await
+            .expect("link issue frontiers");
+        connection
+            .batch_execute("COMMIT")
+            .await
+            .expect("seed commit");
+        drop(Object::take(connection));
+    }
+
+    async fn dense_ranks(state: &AppState, user_id: i32) -> Vec<i32> {
+        positions(state, user_id)
+            .await
+            .into_iter()
+            .map(|(_, position)| position)
+            .collect()
+    }
+
+    async fn manual_thread_ids(state: &AppState, user_id: i32) -> Vec<i32> {
+        let connection = db::checkout(state).await.expect("manual flag connection");
+        let rows = connection
+            .query(
+                "SELECT id FROM threads WHERE user_id = $1 AND queue_position_is_manual \
+                 ORDER BY id",
+                &[&user_id],
+            )
+            .await
+            .expect("manual flags");
+        drop(Object::take(connection));
+        rows.iter().map(|row| row.get(0)).collect()
+    }
+
+    /// Blocked rows that still sort after every readable row.
+    async fn blocked_rows_after_the_readable_group(state: &AppState, user_id: i32) -> i64 {
+        let connection = db::checkout(state).await.expect("blocked tail connection");
+        let row = connection
+            .query_one(
+                "SELECT count(*) FROM threads t WHERE t.user_id = $1 AND t.status = 'active' \
+                 AND t.is_blocked AND t.queue_position > ( \
+                     SELECT coalesce(max(r.queue_position), 0) FROM threads r \
+                     WHERE r.user_id = $1 AND r.status = 'active' AND NOT r.is_blocked)",
+                &[&user_id],
+            )
+            .await
+            .expect("blocked tail");
+        drop(Object::take(connection));
+        row.get(0)
+    }
+
+    /// Trigger-assigned owner of every reorder event, in thread order.
+    async fn reorder_events(state: &AppState) -> Vec<(i32, Option<i32>)> {
+        let connection = db::checkout(state).await.expect("event connection");
+        let rows = connection
+            .query(
+                "SELECT thread_id, user_id FROM events WHERE type = 'reorder' \
+                 ORDER BY thread_id",
+                &[],
+            )
+            .await
+            .expect("reorder events");
+        drop(Object::take(connection));
+        rows.iter().map(|row| (row.get(0), row.get(1))).collect()
     }
 }
