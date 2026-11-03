@@ -414,7 +414,7 @@ mod tests {
             .and_then(|path| path.get.as_ref())
             .expect("analytics metrics operation");
         assert_eq!(operation.tags, Some(vec!["analytics".to_string()]));
-        let schemas = openapi
+        let schemas = &openapi
             .components
             .as_ref()
             .expect("component schemas")
