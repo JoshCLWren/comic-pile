@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import type { DragEvent } from 'react'
 import type { ThreadListItem } from '../../types'
-import type { SessionRefetch } from '../../hooks/useSession'
 import { threadsApi } from '../../services/api-threads'
 import { focusSeriesActionsTrigger } from '../../components/seriesActionsTrigger'
 import {
@@ -11,10 +10,13 @@ import {
   useShuffleQueue,
 } from '../../hooks/useQueue'
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
-import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import {
+  useSnooze,
+  useUnsnooze,
+} from '../../hooks/useSnooze'
 import { useToast } from '../../contexts/useToast'
 import {
-  invalidateAfterQueueMutation,
+  invalidateAfterQueueMovement,
   resetRollBootstrapAfterManualSelection,
 } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
@@ -22,12 +24,6 @@ import { getApiErrorDetail } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: ThreadListItem, response: unknown) => void
-  /**
-   * Refreshes the current session after a row action. The caller only needs to
-   * settle, so any promise-producing refetch fits — `useSession`'s `refetch`
-   * resolves with a query result rather than `void` (issue #3147).
-   */
-  refetchSession: SessionRefetch
   /**
    * Returns focus to a row's "Series actions" trigger once the queue cache has
    * settled. The reset that follows a queue mutation remounts every row, so
@@ -114,7 +110,6 @@ export function useQueueThreadActions(
 ): QueueThreadActionResult {
   const {
     navigateToRoll,
-    refetchSession,
     restoreSeriesActionsFocus = restoreSeriesActionsFocusByThreadId,
   } = params
   const {
@@ -351,8 +346,13 @@ export function useQueueThreadActions(
           // that owns the pending thread must pass its own id (#3260).
           await snoozeMutation.mutate(thread.id)
         }
-        await refetchSession()
-        await invalidateAfterQueueMutation(queryClient)
+        // Both mutation hooks already refresh `session.current` inside their
+        // own success path (`invalidateCurrentSessionAfterSnooze`), so the
+        // row-action pass refreshes only the queue-side read models and skips
+        // the session key — invalidating it a second time re-ran the session
+        // fetch the mutation just settled, sending the endpoint two identical
+        // extra GETs per toggle.
+        await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: true })
         // Snooze resets the paginated queue cache, so the row remounts; the
         // id-based restore lands on the refetched trigger (#3147).
         restoreSeriesActionsFocus(thread.id)
@@ -364,7 +364,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [snoozeMutation, unsnoozeMutation, refetchSession, restoreSeriesActionsFocus, showToast],
+    [snoozeMutation, unsnoozeMutation, restoreSeriesActionsFocus, showToast],
   )
 
   return {

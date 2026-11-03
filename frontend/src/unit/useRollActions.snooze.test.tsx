@@ -7,13 +7,15 @@
  * saw the click "succeed" and nothing was recorded.
  */
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NavigateFunction } from 'react-router-dom'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import type { SnoozeSessionResponse } from '../types'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
+import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 
 function bootstrapWith(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {
   // SAFETY: the literal supplies every required bootstrap field; the spread only narrows them
@@ -200,5 +202,56 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
     expect(errorSpy).toHaveBeenCalledWith('Action failed:', expect.any(Error))
     expect(result.current.state.errorMessage).toBe('snooze unavailable')
     errorSpy.mockRestore()
+  })
+})
+
+describe('Roll move/shuffle single-refresh feedback (#4276)', () => {
+  /**
+   * The move/shuffle hooks own the single authoritative refresh through their
+   * queue-movement invalidation. The handler inspects that already-run
+   * refresh's settled state (no extra request) and reports a failed pool
+   * refresh the same way the snooze hook reports an exhausted refresh.
+   */
+  afterEach(() => {
+    // The seeded refresh error lives on the shared client; it must not leak
+    // into any other scheduling in this worker.
+    queryClient.clear()
+  })
+
+  async function seedBootstrapRefreshError(): Promise<void> {
+    try {
+      await queryClient.fetchQuery<string>({
+        queryKey: queryKeys.roll.bootstrap(),
+        queryFn: async () => {
+          throw new Error('bootstrap refresh failed')
+        },
+        retry: false,
+      })
+    } catch {
+      // The rejection IS the seeded settled error state the hook reads.
+    }
+  }
+
+  it('reports a committed move whose authoritative refresh failed, without a second request', async () => {
+    const { result } = renderActionSheet()
+    selectThread(result, 8)
+    await seedBootstrapRefreshError()
+
+    await act(async () => {
+      await result.current.actions.handleAction('move-front')
+    })
+
+    expect(result.current.state.errorMessage).toContain('did not refresh')
+  })
+
+  it('does not report feedback when the authoritative refresh settled cleanly', async () => {
+    const { result } = renderActionSheet()
+    selectThread(result, 8)
+
+    await act(async () => {
+      await result.current.actions.handleAction('move-front')
+    })
+
+    expect(result.current.state.errorMessage).toBe('')
   })
 })

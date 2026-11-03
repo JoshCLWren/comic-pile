@@ -10,12 +10,12 @@
  * that service module still uses the default Axios instance; the other shell
  * read (preferences) goes through the service transport seam.
  */
-import { StrictMode, type ReactNode } from 'react'
+import { StrictMode, useEffect, type ReactNode } from 'react'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import type { InternalAxiosRequestConfig } from 'axios'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { BugReportRestoreProvider } from '../contexts/BugReportRestoreContext'
 import { setDefaultHttpClient } from '../services/httpClient'
@@ -24,7 +24,9 @@ import { sessionApi } from '../services/api-sessions'
 import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { dependenciesApi } from '../services/api-dependencies'
-import { createAppQueryClient } from '../query/queryClient'
+import { createAppQueryClient, queryClient as sharedQueryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
+import { adaptRollV2Bootstrap } from '../services/adaptRollV2Bootstrap'
 import api from '../services/api'
 import { AuthContext } from '../contexts/AuthContext'
 import { NavCollapseProvider } from '../contexts/NavCollapseContext'
@@ -33,13 +35,19 @@ import Navigation from '../components/Navigation'
 import { PreferencesSync } from '../hooks/usePreferences'
 import { QueueControls } from '../pages/QueuePage/QueueControls'
 import { useQueueCrossovers } from '../pages/QueuePage/useQueueCrossovers'
-import { useExcludedThreads, useQueueThreads } from '../hooks/useQueue'
+import { useExcludedThreads, useMoveToFront, useQueueThreads } from '../hooks/useQueue'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSession } from '../hooks/useSession'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
+import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
+import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollPageState } from '../pages/RollPage/useRollPageState'
+import { useRollActions } from '../pages/RollPage/useRollActions'
 import RollPage from '../pages/RollPage'
 import HistoryPage from '../pages/HistoryPage'
 import SessionPage from '../pages/SessionPage'
+import type { RollBootstrapThread } from '../types/rollBootstrap'
+import type { ThreadListItem } from '../types'
 import {
   createRequestRecorder,
   requestCounts,
@@ -97,6 +105,8 @@ const queueThreads = [1, 2].map((id) => ({
   comicvine_mapping: null,
   notes: null,
   blocking_reasons: [],
+  created_at: '2026-01-01T00:00:00Z',
+  last_activity_at: null,
 }))
 
 /**
@@ -121,6 +131,110 @@ function QueueBudgetProbe() {
           boundaries.data?.threads[id].state === 'unavailable',
       ))
   useQueueBlockingInfo(boundariesUnavailable ? threadIds : [])
+  return null
+}
+
+/** HTTP count by method + exact URL path, ignoring query params. */
+function countRequests(calls: RecordedCall[], method: string, url: string): number {
+  return calls.filter((call) => call.method === method && call.url === url).length
+}
+
+const budgetNavigate = vi.fn()
+const budgetEnterRatingView = vi.fn()
+
+// The queue/roll mutation hooks invalidate the module-level query client, so
+// the probe trees below run with that shared client as their provider, exactly
+// as the composed production screen does (cleared per test above).
+function renderSharedProbe(element: ReactNode): ReactNode {
+  return (
+    <QueryClientProvider client={sharedQueryClient}>
+      <MemoryRouter initialEntries={['/']}>
+        <Providers>{element}</Providers>
+      </MemoryRouter>
+    </QueryClientProvider>
+  )
+}
+
+let rollMoveHandle: {
+  pick: (thread: RollBootstrapThread) => void
+  act: (action: string) => Promise<void>
+} | null = null
+
+/**
+ * Roll move-action composition: the real bootstrap query, the real move-to-front
+ * mutation, and the real action-sheet handler — the exact request path a
+ * move-front click produces from the Roll page, with only the HTTP transport
+ * recorded and the untouched sibling mutations stubbed.
+ */
+function RollMoveBudgetProbe() {
+  const state = useRollPageState()
+  const { data: bootstrapState, refetch: refetchBootstrap } = useRollBootstrap()
+  const moveToFrontMutation = useMoveToFront()
+  const actions = useRollActions({
+    state,
+    bootstrap: bootstrapState ?? undefined,
+    rollPool: bootstrapState?.roll_pool ?? [],
+    navigate: budgetNavigate,
+    mutations: {
+      setDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
+      clearManualDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
+      rollMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      snoozeMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      unsnoozeMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      skipMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      unskipMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      moveToFrontMutation: {
+        mutate: moveToFrontMutation.mutate,
+        isPending: moveToFrontMutation.isPending,
+      },
+      moveToBackMutation: { mutate: () => Promise.resolve(undefined as never), isPending: false },
+      shuffleQueueMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
+    },
+    refetchBootstrap,
+    enterRatingView: budgetEnterRatingView,
+    threadsApi,
+  })
+
+  useEffect(() => {
+    rollMoveHandle = {
+      pick: (thread) => actions.handleThreadClick(thread),
+      act: (action) => actions.handleAction(action),
+    }
+  })
+
+  return null
+}
+
+let queueSnoozeHandle: {
+  toggle: (thread: ThreadListItem, snoozed: boolean) => Promise<void>
+} | null = null
+
+/**
+ * Queue row-action composition: the real queue loader, session read, excluded
+ * view, and the real snooze/unsnooze hooks inside `useQueueThreadActions` —
+ * the exact request path a snooze toggle produces from the Queue page.
+ */
+function QueueSnoozeBudgetProbe() {
+  useQueueThreads()
+  useSession()
+  useExcludedThreads(true)
+  const actions = useQueueThreadActions({
+    navigateToRoll: budgetNavigate,
+    // The default restore depends on requestAnimationFrame; this budget only
+    // counts HTTP work, so the focus restore is a no-op here.
+    restoreSeriesActionsFocus: () => undefined,
+  })
+
+  useEffect(() => {
+    queueSnoozeHandle = {
+      toggle: async (thread, snoozed) => {
+        // SAFETY: the real hook's toggle is `Promise<void> | void`; wrapping in
+        // one promise keeps this module handle's contract a plain await.
+        await actions.handleSnoozeToggle(thread, snoozed)
+      },
+    }
+  })
+
   return null
 }
 
@@ -151,6 +265,57 @@ const bootstrap = {
   skipped_thread_ids: [],
   skipped_threads: [],
   last_read: null,
+}
+
+// One rollable pooled series for the Roll move-action budget probe (#4276).
+// Deliberately untyped JSON literals so the request recorder can return them
+// directly through the `JsonValue` Responder contract. The enum literals use
+// the frozen v2 vocabulary so `adaptRollV2Bootstrap` accepts the fixture as a
+// faithful payload.
+const pooledV2Item = {
+  thread: { id: 44, title: 'Pooled Saga', format: 'Comic', tags: [] },
+  issue: { id: 401, number: '1' },
+  identity: {
+    source: 'unavailable' as const,
+    canonical_series_id: null,
+    state: 'unresolved' as const,
+    series_mapping_state: 'unresolved' as const,
+  },
+  reader: {
+    latest_rating: null,
+    average_rating: null,
+    rating_count: null,
+    read_count: null,
+    issue_count: null,
+    progress_scope: 'thread' as const,
+  },
+  routes: [{ kind: 'group' as const, name: 'Read next' }],
+  overflow_routes_count: 0,
+}
+
+/**
+ * Faithful native Rust v2 rollback payload: the real shape
+ * `adaptRollV2Bootstrap` turns into the retained Roll projection, so a
+ * bootstrap refresh in a budget probe exists (and settles) exactly as it
+ * would against the lane's real backend.
+ */
+const rollV2Bootstrap = {
+  ...bootstrap,
+  bandwidth: {
+    predicted_bandwidth: null,
+    active_bandwidth: null,
+    confidence: null,
+    source: null,
+    mode_version: null,
+  },
+  rollable: [pooledV2Item],
+  pool_reason: 'ready' as const,
+}
+
+/** Pool-less v2 sibling for probes with no mounted Roll page. */
+const rollV2BootstrapIdle = {
+  ...rollV2Bootstrap,
+  rollable: [],
 }
 
 const authState: AuthState = {
@@ -220,8 +385,11 @@ function renderShell(): ReactNode {
 
 beforeEach(() => {
   adapterCalls = []
+  rollMoveHandle = null
+  queueSnoozeHandle = null
   // A per-test client keeps these budgets independent of the process-wide
   // singleton that other unit files populate.
+  sharedQueryClient.clear()
   routeQueryClient = createAppQueryClient()
   const defaults = routeQueryClient.getDefaultOptions()
   routeQueryClient.setDefaultOptions({
@@ -233,6 +401,8 @@ beforeEach(() => {
 afterEach(() => {
   api.defaults.adapter = originalAdapter
   vi.restoreAllMocks()
+  // Budget probes on the shared client must not leak seeds into other tests.
+  sharedQueryClient.clear()
 })
 
 describe('core route request budgets', () => {
@@ -411,5 +581,95 @@ describe('core route request budgets', () => {
       'GET /v1/sessions/7/details': 1,
       'GET /v1/sessions/7/snapshots': 1,
     })
+  })
+
+  it('Roll move-front refreshes the bootstrap exactly once (#4276)', async () => {
+    // SAFETY: the move mutation only observes the PATCH status; the empty body
+    // satisfies the v2 queue-entry patch contract for this probe.
+    const { calls, client } = createRequestRecorder((call) => {
+      if (call.url === '/v2/roll/bootstrap') return rollV2Bootstrap
+      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
+      return {}
+    })
+    setDefaultHttpClient(client)
+
+    // SAFETY: the fixture is a faithful native-v2 payload; the adapter turns
+    // it into the retained projection the Roll page holds (pool row id 44).
+    const poolThread = adaptRollV2Bootstrap(rollV2Bootstrap).roll_pool[0]
+    if (!poolThread) throw new Error('fixture adapter produced no pool row')
+
+    // Seed the shared client as a roll:active page would hold it, so this
+    // budget counts only the refresh the move action owns.
+    sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), adaptRollV2Bootstrap(rollV2Bootstrap))
+
+    render(renderSharedProbe(<RollMoveBudgetProbe />))
+    await waitFor(() => expect(rollMoveHandle).not.toBeNull())
+
+    await act(async () => {
+      rollMoveHandle!.pick(poolThread)
+    })
+    await act(async () => {
+      await rollMoveHandle!.act('move-front')
+    })
+
+    // The move mutation's queue-movement invalidation refetches the active
+    // bootstrap once. The retired explicit `refetchBootstrap()` in
+    // `handleAction` used to append one more POST /v2/reading-sessions and
+    // GET /v2/roll/bootstrap per move action.
+    await waitFor(() =>
+      expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1),
+    )
+    await waitFor(() => expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1))
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
+    expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(1)
+  })
+
+  it('Queue row snooze refreshes the current session exactly once (#4276)', async () => {
+    const { calls, client } = createRequestRecorder((call) => {
+      if (call.url === '/v2/threads') {
+        return { threads: queueThreads, next_page_token: null, active_count: 2 }
+      }
+      if (call.url === '/v1/threads/excluded/threads') {
+        return { threads: [], next_page_token: null, active_count: 0 }
+      }
+      if (call.url === '/v1/sessions/current/') return session
+      if (call.url === '/v1/snooze/') return {}
+      if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
+      if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
+      return {}
+    })
+    setDefaultHttpClient(client)
+
+    render(renderSharedProbe(<QueueSnoozeBudgetProbe />))
+    await waitFor(() => expect(queueSnoozeHandle).not.toBeNull())
+    await waitFor(() =>
+      expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(1),
+    )
+    const coldLoads = calls.length
+
+    await act(async () => {
+      // SAFETY: the snooze hook only reads the thread id as the expected
+      // pending id; a list-item fixture with the queue fields is a faithful double.
+      await queueSnoozeHandle!.toggle(queueThreads[0] as ThreadListItem, false)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    // One snooze POST; the owning mutation refreshes session.current exactly
+    // once, and the row-action pass refreshes only the queue-side read models.
+    // The retired handler-layer `refetchSession()` plus the second
+    // `invalidateAfterQueueMutation` used to send two extra identical
+    // current-session GETs per toggle.
+    expect(countRequests(calls, 'POST', '/v1/snooze/')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(2)
+    expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(1)
+    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
+    // One bounded queue-page refresh after the reset (cold + reconciled first page).
+    expect(countRequests(calls, 'GET', '/v2/threads')).toBe(2)
+    expect(countRequests(calls, 'GET', '/v1/threads/excluded/threads')).toBe(2)
+    // No other request classes entered the budget beyond the probed surface.
+    expect(calls.length).toBeGreaterThan(coldLoads)
   })
 })

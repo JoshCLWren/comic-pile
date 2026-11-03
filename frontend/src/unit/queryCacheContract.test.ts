@@ -382,6 +382,34 @@ describe('targeted cache effects', () => {
     })
   })
 
+  it('skips only the session refresh when the owning mutation already refreshed it (#4276)', async () => {
+    // The queue-row snooze/unsnooze mutation hooks refresh `session.current`
+    // inside their own success path, so the row-action pass must not
+    // re-invalidate that key: a second invalidation re-ran the session fetch
+    // the mutation just settled. Every other movement surface still refreshes.
+    const { client, invalidateQueries, resetQueries } = createSpiedClient()
+
+    await invalidateAfterQueueMovement(client, { skipSessionCurrent: true })
+
+    expect(resetQueries).toHaveBeenCalledTimes(2)
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
+    expect(invalidateQueries).toHaveBeenCalledTimes(2)
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    // Roll state still goes stale so the next bootstrap mount refetches.
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.bootstrap(),
+      exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.queue.activeCount(),
+      exact: true,
+    })
+  })
+
   it('refreshes the undo surfaces while leaving session detail to its caller', async () => {
     const { client, invalidateQueries, resetQueries, setQueryData } = createSpiedClient()
 
