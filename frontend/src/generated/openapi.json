@@ -12823,6 +12823,64 @@
         "title": "MinimalReleaseResponse",
         "type": "object"
       },
+      "NativeAnalyticsMetricsResponse": {
+        "description": "Reading metrics and analytics for the authenticated user.",
+        "properties": {
+          "active_threads": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "average_session_hours": {
+            "format": "double",
+            "type": "number"
+          },
+          "completed_threads": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "completion_rate": {
+            "format": "double",
+            "type": "number"
+          },
+          "event_stats": {
+            "additionalProperties": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "recent_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/NativeRecentSession"
+            },
+            "type": "array"
+          },
+          "top_rated_threads": {
+            "items": {
+              "$ref": "#/components/schemas/NativeTopRatedThread"
+            },
+            "type": "array"
+          },
+          "total_threads": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_threads",
+          "active_threads",
+          "completed_threads",
+          "completion_rate",
+          "average_session_hours",
+          "recent_sessions",
+          "event_stats",
+          "top_rated_threads"
+        ],
+        "type": "object"
+      },
       "NativeBoundaryEditorTarget": {
         "properties": {
           "issue_id": {
@@ -13141,6 +13199,34 @@
         ],
         "type": "object"
       },
+      "NativeRecentSession": {
+        "description": "Summary of one recent reading session.",
+        "properties": {
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "start_die"
+        ],
+        "type": "object"
+      },
       "NativeRefreshTokenRequest": {
         "description": "Optional request body for token refresh; the refresh cookie is also accepted.",
         "properties": {
@@ -13186,6 +13272,32 @@
           "access_token",
           "refresh_token",
           "token_type"
+        ],
+        "type": "object"
+      },
+      "NativeTopRatedThread": {
+        "description": "Summary of one highly rated thread.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "rating",
+          "format"
         ],
         "type": "object"
       },
@@ -35714,6 +35826,35 @@
         "tags": [
           "taste-signals",
           "taste-signals"
+        ]
+      }
+    },
+    "/api/v2/analytics/metrics": {
+      "get": {
+        "operationId": "metrics_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAnalyticsMetricsResponse"
+                }
+              }
+            },
+            "description": "Owner-scoped bounded reading metrics"
+          },
+          "401": {
+            "description": "Not authenticated, revoked token, or stale credential epoch"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation used by the canonical Rust OpenAPI generator.",
+        "tags": [
+          "analytics"
         ]
       }
     },

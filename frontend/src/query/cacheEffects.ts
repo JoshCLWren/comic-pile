@@ -826,6 +826,21 @@ export async function invalidateAfterRollDieModeUpdate(
  * A session-mode change and a die-mode change project the same retained
  * resources, so both share one invalidation implementation.
  */
+export function applyClearedManualDie(
+  client: QueryClient,
+  automaticDie: number,
+): void {
+  const current = client.getQueryData<RollBootstrapResponse | null>(
+    queryKeys.roll.bootstrap(),
+  )
+  if (!current) return
+  client.setQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap(), {
+    ...current,
+    current_die: automaticDie,
+    manual_die: null,
+  })
+}
+
 export async function invalidateAfterSessionModeUpdate(
   client: QueryClient,
 ): Promise<void> {
@@ -845,7 +860,7 @@ export async function invalidateRollBootstrapOnNavigation(
   await client.invalidateQueries({
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
-    refetchType: 'none',
+    refetchType: 'all',
   })
 }
 

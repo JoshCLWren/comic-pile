@@ -6337,6 +6337,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/analytics/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation used by the canonical Rust OpenAPI generator. */
+        get: operations["metrics_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/auth/csrf": {
         parameters: {
             query?: never;
@@ -12933,6 +12950,24 @@ export interface components {
              */
             visibility: "public" | "internal";
         };
+        /** @description Reading metrics and analytics for the authenticated user. */
+        NativeAnalyticsMetricsResponse: {
+            /** Format: int32 */
+            active_threads: number;
+            /** Format: double */
+            average_session_hours: number;
+            /** Format: int32 */
+            completed_threads: number;
+            /** Format: double */
+            completion_rate: number;
+            event_stats: {
+                [key: string]: number;
+            };
+            recent_sessions: components["schemas"]["NativeRecentSession"][];
+            top_rated_threads: components["schemas"]["NativeTopRatedThread"][];
+            /** Format: int32 */
+            total_threads: number;
+        };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
@@ -13018,6 +13053,15 @@ export interface components {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
+        /** @description Summary of one recent reading session. */
+        NativeRecentSession: {
+            ended_at?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+        };
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         NativeRefreshTokenRequest: {
             refresh_token: string;
@@ -13032,6 +13076,15 @@ export interface components {
             access_token: string;
             refresh_token: string;
             token_type: string;
+        };
+        /** @description Summary of one highly rated thread. */
+        NativeTopRatedThread: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: double */
+            rating: number;
+            title: string;
         };
         /** @description Response body for the current-user endpoint. */
         NativeUserResponse: {
@@ -24918,6 +24971,33 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    metrics_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped bounded reading metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeAnalyticsMetricsResponse"];
+                };
+            };
+            /** @description Not authenticated, revoked token, or stale credential epoch */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -47,10 +47,12 @@ from factory_roster import (
     opencode_model_is_free,
     openrouter_model_is_free,
     rebalance_schedule_minutes,
+    roster_snapshot_path_for,
     roster_worker_ids,
     surplus_big_pickle_rows,
     sync_roster_lock,
     write_roster_rows,
+    write_roster_snapshot,
 )
 
 
@@ -682,13 +684,21 @@ def _build_parser() -> argparse.ArgumentParser:
             "unused free OpenCode models to the TSV."
         ),
     )
-    parser.add_argument("command", choices=("plan", "apply", "discover"))
+    parser.add_argument("command", choices=("plan", "apply", "discover", "snapshot"))
     parser.add_argument("--catalog-json", type=Path)
     parser.add_argument("--opencode-text", type=Path)
     parser.add_argument("--nvidia-text", type=Path)
     parser.add_argument("--openrouter-text", type=Path)
     parser.add_argument("--roster", type=Path)
     parser.add_argument("--lock", type=Path)
+    parser.add_argument(
+        "--snapshot",
+        type=Path,
+        help=(
+            "Generated roster expectation snapshot. Defaults next to the "
+            "roster as factory-roster-snapshot.json."
+        ),
+    )
     parser.add_argument("--report", type=Path)
     parser.add_argument("--github-output", type=Path)
     parser.add_argument(
@@ -756,6 +766,13 @@ def run(argv: Sequence[str] | None = None) -> int:
     lock_path = args.lock or default_lock_path()
     rows = load_roster_rows(roster_path)
     lock = load_roster_lock(lock_path if lock_path.is_file() else None)
+    snapshot_path = args.snapshot or roster_snapshot_path_for(roster_path)
+    if args.command == "snapshot":
+        # Catalog-independent: refresh the automation-owned expectation
+        # snapshot (#3802) from the committed roster + lock.
+        write_roster_snapshot(snapshot_path, rows, lock)
+        print(f"Wrote roster snapshot for {len(rows)} pin(s) to {snapshot_path}")
+        return 0
     require_cli = bool(args.require_cli) or (
         args.catalog_json is None and not _text_paths(args)
     )
@@ -812,7 +829,7 @@ def run(argv: Sequence[str] | None = None) -> int:
             for item in plan.additions
             if item.action == "convert"
         }
-        sync_roster_lock(
+        written_lock = sync_roster_lock(
             remaining,
             lock_path=lock_path,
             extra_retired_workers=(
@@ -822,6 +839,9 @@ def run(argv: Sequence[str] | None = None) -> int:
             ),
             extra_retired_models=(item.model for item in plan.retirements),
         )
+        # Keep the automation-owned expectation snapshot in lock-step with the
+        # TSV + lock so guard tests never need a hand-written pin edit (#3802).
+        write_roster_snapshot(snapshot_path, remaining, written_lock)
         converted = sum(1 for item in plan.additions if item.action == "convert")
         grown = sum(1 for item in plan.additions if item.action == "add")
         print(
