@@ -216,12 +216,17 @@ def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> Non
     assert "remaining_core < 450" in batch
     assert "budget_deferred=true" in batch
     assert 'echo "budget_deferred=${budget_deferred}" >> "$GITHUB_OUTPUT"' in batch
+    assert "budget_unreadable=true" in batch
+    assert 'echo "budget_unreadable=${budget_unreadable}" >> "$GITHUB_OUTPUT"' in batch
+    assert "if ! [[ \"$remaining_core\" =~ ^[0-9]+$ ]]" in batch
+    assert "if (( remaining_core < 450 )); then" in batch
     chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
     assert "steps.api_budget.outputs.allow == 'true'" in chain
     assert "steps.api_budget.outputs.quota_deferred == 'true'" in chain
     assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" not in chain
     assert "API_RESET_EPOCH:" in chain
     assert "BUDGET_DEFERRED:" in chain
+    assert "BUDGET_UNREADABLE:" in chain
 
 def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> None:
     """New manually authored PRs must not wait for hourly dispatcher recovery."""
@@ -337,6 +342,23 @@ gh() { printf 'gh:%s\\n' "$*"; }
     assert blocked.returncode != 0
     assert "gh:workflow run" not in blocked.stdout
     assert "sleep:" not in blocked.stdout
+
+    # A failed or nonnumeric mid-batch quota observation is not proof that
+    # quota was exhausted. Even after productive dispatch, it must not chain.
+    unreadable = {
+        **base,
+        "QUOTA_DEFERRED": "",
+        "BUDGET_DEFERRED": "",
+        "BUDGET_UNREADABLE": "true",
+        "DISPATCHED_COUNT": "2",
+    }
+    stopped = subprocess.run(
+        ["bash", "-c", stub + script], env=unreadable, text=True,
+        capture_output=True, check=False,
+    )
+    assert stopped.returncode == 0, stopped.stderr
+    assert "gh:workflow run" not in stopped.stdout
+    assert "sleep:" not in stopped.stdout
 
 
 def test_non_quota_roster_keeps_normal_cadence_and_stops_on_no_work() -> None:
