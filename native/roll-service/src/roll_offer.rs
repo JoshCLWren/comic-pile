@@ -26,7 +26,7 @@ const MAX_COOKIE_SNOOZES: usize = 200;
 /// Leave room for the derived snooze key inside the writer's 128-byte limit.
 const MAX_OFFER_KEY: usize = 100;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RollOfferRequest {
     /// Browser timezone used only by the retained session bridge.
@@ -39,7 +39,7 @@ pub struct RollOfferRequest {
     pub idempotency_key: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct RollOfferResponse {
     pub thread_id: i32,
     pub title: String,
@@ -447,6 +447,26 @@ pub async fn offer(
         snoozed_thread_id,
     )))
 }
+
+/// Documentation-only operation for the mounted v2 Roll offer command.
+#[utoipa::path(
+    post,
+    path = "/api/v2/roll/offer",
+    tag = "roll",
+    request_body = RollOfferRequest,
+    responses(
+        (status = 200, description = "Recorded Roll offer for the active session", body = RollOfferResponse),
+        (status = 400, description = "No eligible thread remains for this roll"),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "Reading session changed during the offer"),
+        (status = 422, description = "Invalid idempotency key or too many temporary snoozes"),
+        (status = 500, description = "Roll offer projection unavailable"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn offer_documentation() {}
 
 #[cfg(test)]
 mod tests {

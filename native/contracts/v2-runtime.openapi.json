@@ -1,0 +1,2729 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ComicPile native Roll v2 API",
+    "description": "Generated contract for operations served by the native Rust router.",
+    "license": {
+      "name": ""
+    },
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/v2/auth/csrf": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 CSRF handler.",
+        "operationId": "csrf_documentation",
+        "responses": {
+          "200": {
+            "description": "Double-submit CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CsrfResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/auth/forgot-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 forgot-password handler.",
+        "operationId": "forgot_password_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Enumeration-safe acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request payload failed validation"
+          },
+          "429": {
+            "description": "Password-recovery rate limit exceeded"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 login handler.",
+        "operationId": "login_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Credentials accepted and bearer tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Username field contained an email address"
+          },
+          "401": {
+            "description": "Incorrect username or password"
+          },
+          "422": {
+            "description": "Request payload failed validation"
+          },
+          "429": {
+            "description": "Login rate limit exceeded"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 logout handler.",
+        "operationId": "logout_documentation",
+        "responses": {
+          "200": {
+            "description": "Bearer token revoked and refresh cookie cleared",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 current-user handler.",
+        "operationId": "me_documentation",
+        "responses": {
+          "200": {
+            "description": "Authenticated account profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated or token invalid"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 refresh handler.",
+        "description": "The refresh cookie is an alternative to the optional JSON body token.",
+        "operationId": "refresh_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RefreshTokenRequest"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Refreshed bearer tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, revoked or stale refresh token"
+          },
+          "429": {
+            "description": "Refresh rate limit exceeded"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 registration handler.",
+        "operationId": "register_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Account created and bearer tokens issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Username or email is already registered"
+          },
+          "422": {
+            "description": "Request payload failed validation"
+          },
+          "429": {
+            "description": "Registration rate limit exceeded"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/auth/reset-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 reset-password handler.",
+        "operationId": "reset_password_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Password reset completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired reset request"
+          },
+          "422": {
+            "description": "Request payload failed validation"
+          },
+          "429": {
+            "description": "Password-recovery rate limit exceeded"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        }
+      }
+    },
+    "/api/v2/issues/cards": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation used to emit the generated batch card contract.",
+        "operationId": "issue_cards_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueCardsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Owner-scoped cards in request order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueCardsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid or unbounded issue id list"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}": {
+      "patch": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation used to emit the generated PATCH contract.",
+        "operationId": "issue_read_rate_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Exact owned issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueReadRateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reconciled issue and thread state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueReadRateResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Issue not found for this reader"
+          },
+          "409": {
+            "description": "Idempotency key reused for a different action"
+          },
+          "422": {
+            "description": "Invalid status, rating or idempotency key"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/queue-entries/{thread_id}": {
+      "get": {
+        "tags": [
+          "queue-entries"
+        ],
+        "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
+        "operationId": "get_queue_entry_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Queue entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueEntryResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Queue entry not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "queue-entries"
+        ],
+        "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
+        "operationId": "update_queue_entry_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueEntryPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated queue entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueEntryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid target position"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Queue entry not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/queue-orders": {
+      "post": {
+        "tags": [
+          "queue-orders"
+        ],
+        "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
+        "operationId": "create_queue_order_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueueOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent replay of the recorded revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOrderResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Queue-order revision created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueOrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid idempotency key"
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-boundaries": {
+      "post": {
+        "tags": [
+          "reading-boundaries"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 reading-boundaries batch.",
+        "operationId": "reading_boundary_batch_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingBoundaryBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Explanation projection for the requested owned threads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponseV2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "A requested thread is not owned by the reader"
+          },
+          "422": {
+            "description": "Batch must contain between 1 and 200 thread ids"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-sessions": {
+      "post": {
+        "tags": [
+          "reading-sessions"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 reading-session initializer.",
+        "operationId": "initialize_session_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitializeSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Created or resumed reading-session identity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingSessionCreatedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/roll/bootstrap": {
+      "get": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll bootstrap read.",
+        "description": "The published response is the actual handler DTO, so known session, die,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
+        "operationId": "bootstrap_documentation",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA timezone override for the active session",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Projected Roll bootstrap payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResponseV2"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/roll/dice-command": {
+      "post": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 manual-die command.",
+        "operationId": "manual_die_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualDieRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Manual die command receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiceCommandReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid die or idempotency key"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/roll/offer": {
+      "post": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll offer command.",
+        "operationId": "offer_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollOfferRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded Roll offer for the active session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollOfferResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No eligible thread remains for this roll"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Reading session changed during the offer"
+          },
+          "422": {
+            "description": "Invalid idempotency key or too many temporary snoozes"
+          },
+          "500": {
+            "description": "Roll offer projection unavailable"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/roll/reset": {
+      "post": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll reset command.",
+        "operationId": "reset_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetDiceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Reset die command receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetDiceResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Reading session changed during the reset"
+          },
+          "422": {
+            "description": "Invalid idempotency key"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads": {
+      "get": {
+        "tags": [
+          "threads"
+        ],
+        "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
+        "operationId": "list_threads_documentation",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive title search",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "position, title, or created",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "1-200 rows per page (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Opaque continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped active threads page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid sort or page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid bounds or retired collection_id"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BootstrapActiveThread": {
+        "type": "object",
+        "description": "Currently pending thread shown by the Roll surface.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "issues_read",
+          "tags"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_read": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapTag"
+            },
+            "description": "Stored tag records; unknown stored columns are preserved via flatten."
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "BootstrapBandwidth": {
+        "type": "object",
+        "description": "Compact bandwidth block retained for existing Roll consumers.",
+        "properties": {
+          "active_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "mode_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "predicted_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BootstrapIdentitySummary": {
+        "type": "object",
+        "description": "Mapping state for a rollable candidate.",
+        "required": [
+          "source",
+          "state",
+          "series_mapping_state"
+        ],
+        "properties": {
+          "canonical_series_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_mapping_state": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        }
+      },
+      "BootstrapIssueSummary": {
+        "type": "object",
+        "description": "Candidate issue identity displayed on a Roll face.",
+        "required": [
+          "id",
+          "number"
+        ],
+        "properties": {
+          "canonical_series_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "number": {
+            "type": "string"
+          }
+        }
+      },
+      "BootstrapLastRead": {
+        "type": "object",
+        "description": "Most recent rated issue for the active session.",
+        "properties": {
+          "cover_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BootstrapReaderStats": {
+        "type": "object",
+        "description": "Reader statistics for one rollable face or canonical series run.",
+        "required": [
+          "rating_count",
+          "read_count",
+          "progress_scope"
+        ],
+        "properties": {
+          "average_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "latest_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "progress_scope": {
+            "type": "string"
+          },
+          "rating_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "read_count": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "BootstrapResponseV2": {
+        "type": "object",
+        "description": "Full live `GET /api/v2/roll/bootstrap` payload.\n\nThis is the actual handler response type, so the generated contract and the\nruntime share one authority. It is retained only until the bootstrap\nretirement work removes the route; it is not a new feature surface.",
+        "required": [
+          "session_id",
+          "user_id",
+          "current_die",
+          "session_mode",
+          "bandwidth",
+          "rollable",
+          "pool_reason",
+          "snoozed_threads",
+          "snoozed_count",
+          "skipped_thread_ids",
+          "skipped_threads"
+        ],
+        "properties": {
+          "active_thread": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BootstrapActiveThread"
+              }
+            ]
+          },
+          "bandwidth": {
+            "$ref": "#/components/schemas/BootstrapBandwidth"
+          },
+          "current_die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_read": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BootstrapLastRead"
+              }
+            ]
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "manual_die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pending_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "pool_reason": {
+            "$ref": "#/components/schemas/PoolReason"
+          },
+          "roll_recovery": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BootstrapRollRecovery"
+              }
+            ]
+          },
+          "rollable": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapRollableItem"
+            }
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "session_mode": {
+            "$ref": "#/components/schemas/BootstrapSessionMode"
+          },
+          "skipped_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "skipped_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapThreadSummary"
+            }
+          },
+          "snoozed_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "snoozed_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapThreadSummary"
+            }
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "BootstrapRollRecovery": {
+        "type": "object",
+        "description": "Bounded recovery diagnostic shown when the pending issue is blocked.\n\nThe stable envelope is typed; each nested blocker/chain/diagnostic entry is\nthe existing bounded JSON node shape and remains extensible so no current\nrecovery detail is dropped from the live contract.",
+        "required": [
+          "original_thread_id",
+          "original_thread_title",
+          "direct_blockers",
+          "readable_prerequisites",
+          "chains",
+          "diagnostics"
+        ],
+        "properties": {
+          "chains": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {}
+            }
+          },
+          "diagnostics": {
+            "type": "array",
+            "items": {}
+          },
+          "direct_blockers": {
+            "type": "array",
+            "items": {}
+          },
+          "original_thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "original_thread_title": {
+            "type": "string"
+          },
+          "readable_prerequisites": {
+            "type": "array",
+            "items": {}
+          }
+        }
+      },
+      "BootstrapRollableItem": {
+        "type": "object",
+        "description": "One eligible Roll face.",
+        "required": [
+          "thread",
+          "issue",
+          "identity",
+          "reader",
+          "routes",
+          "overflow_routes_count"
+        ],
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/BootstrapIdentitySummary"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/BootstrapIssueSummary"
+          },
+          "overflow_routes_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "reader": {
+            "$ref": "#/components/schemas/BootstrapReaderStats"
+          },
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapRoute"
+            }
+          },
+          "thread": {
+            "$ref": "#/components/schemas/BootstrapThreadSummary"
+          }
+        }
+      },
+      "BootstrapRoute": {
+        "type": "object",
+        "description": "One Roll route label attached to a rollable face.",
+        "required": [
+          "kind",
+          "name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "BootstrapSessionMode": {
+        "type": "object",
+        "description": "Legacy session-mode bridge retained on the live bootstrap contract.",
+        "properties": {
+          "active_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "active_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bandwidth_confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "bandwidth_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bandwidth_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intent_confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "intent_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intent_version": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "predicted_bandwidth": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "predicted_intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session_mode_correction_guidance": {
+            "description": "Extension boundary: stored guidance JSON is passed through verbatim."
+          }
+        }
+      },
+      "BootstrapTag": {
+        "type": "object",
+        "description": "One tag visible to the reader on a Roll thread row.\n\nThe stable stored tag columns are typed; `extra` preserves any additional\nstored columns so future tag metadata is never silently dropped.",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "scope",
+          "color",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalized_name": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": {}
+      },
+      "BootstrapThreadSummary": {
+        "type": "object",
+        "description": "Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "tags"
+        ],
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BootstrapTag"
+            }
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "BoundaryEditorTarget": {
+        "type": "object",
+        "required": [
+          "kind",
+          "label"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "prerequisite_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "BoundaryIssue": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "label",
+          "reading_lists"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "reading_lists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoundaryReadingList"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "volume_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BoundaryReadingList": {
+        "type": "object",
+        "required": [
+          "list_id",
+          "name",
+          "mode"
+        ],
+        "properties": {
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ComicVineMappingHealth": {
+        "type": "object",
+        "description": "Compact confirmed ComicVine mapping health for one queue row.",
+        "required": [
+          "status",
+          "tracked_issue_count",
+          "confirmed_issue_count",
+          "needs_mapping_count",
+          "needs_review_count",
+          "metadata_missing_count"
+        ],
+        "properties": {
+          "confirmed_issue_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "metadata_missing_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "needs_mapping_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "needs_review_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "tracked_issue_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "CsrfResponse": {
+        "type": "object",
+        "description": "Response body carrying a double-submit CSRF token.",
+        "required": [
+          "csrf_token"
+        ],
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          }
+        }
+      },
+      "DiceCommandReceipt": {
+        "type": "object",
+        "required": [
+          "event_id",
+          "die_before",
+          "die_after",
+          "replayed"
+        ],
+        "properties": {
+          "die_after": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "die_before": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "event_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ForgotPasswordRequest": {
+        "type": "object",
+        "description": "Request body for an enumeration-safe password-recovery email.",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          }
+        }
+      },
+      "InitializeSessionRequest": {
+        "type": "object",
+        "description": "Temporary explicit write boundary for legacy reading-session consumers.\nGET /api/v2/roll/bootstrap never creates or mutates a session.",
+        "properties": {
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "IssueCard": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "has_confirmed_identity",
+          "mapping_state"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Confirmed provider issue identifier, never a provisional candidate."
+          },
+          "cover_image_url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Exact provider-supplied CDN URL. Null when unmapped; never image bytes."
+          },
+          "has_confirmed_identity": {
+            "type": "boolean",
+            "description": "Whether a confirmed ComicVine issue mapping exists."
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Owned issue identifier."
+          },
+          "issue_number": {
+            "type": "string",
+            "description": "Exact issue number within the run."
+          },
+          "mapping_state": {
+            "type": "string",
+            "description": "Stored mapping state (``confirmed``, ``candidate``, ...)."
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Effective per-issue saved rating."
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "UTC read timestamp, when read."
+          },
+          "status": {
+            "type": "string",
+            "description": "Stored read state (``read`` or ``unread``)."
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Owning thread identifier."
+          },
+          "thread_title": {
+            "type": "string",
+            "description": "Display series/run title."
+          }
+        }
+      },
+      "IssueCardsRequest": {
+        "type": "object",
+        "required": [
+          "issue_ids"
+        ],
+        "properties": {
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Visible issue identifiers requested for one bounded batch."
+          }
+        },
+        "additionalProperties": false
+      },
+      "IssueCardsResponse": {
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueCard"
+            },
+            "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueReadRateRequest": {
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "description": "Client-generated retry key. Same key/payload replays the same receipt."
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double",
+            "description": "Effective issue rating in 0.5-point steps. Omit to keep the stored rating."
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Explicit new status. Omit to leave read state unchanged."
+          }
+        },
+        "additionalProperties": false
+      },
+      "IssueReadRateResponse": {
+        "type": "object",
+        "required": [
+          "issue",
+          "thread",
+          "read_event_created",
+          "rating_event_created",
+          "replayed"
+        ],
+        "properties": {
+          "final_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue": {
+            "$ref": "#/components/schemas/IssueCard"
+          },
+          "rating_event_created": {
+            "type": "boolean"
+          },
+          "read_event_created": {
+            "type": "boolean"
+          },
+          "replayed": {
+            "type": "boolean"
+          },
+          "thread": {
+            "$ref": "#/components/schemas/ThreadProgress"
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "description": "Request body for username/password login.\n\nLogin deliberately does not impose the registration minimum length: accounts\ncreated before the current policy must still be able to sign in. An empty\npassword is rejected by bcrypt verification with the same non-enumerating\n401 as any other incorrect credential, matching Python.",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "ManualDieRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "die",
+              "idempotency_key",
+              "kind"
+            ],
+            "properties": {
+              "die": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "idempotency_key": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "manual_select"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "PasswordResetResponse": {
+        "type": "object",
+        "description": "Safe acknowledgement returned whether or not an account exists.",
+        "required": [
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "PoolReason": {
+        "type": "string",
+        "description": "Why the Roll pool has no in-play faces.\n\nDerived from the already-loaded Option E inputs and the eligible frontier\nset. This is a single reason, never a list or a whole-library report, and it\nadds no database work: it exists so a genuinely non-empty library does not\nrender the false \"reading queue is empty\" state (#4441).",
+        "enum": [
+          "ready",
+          "no_series",
+          "all_blocked",
+          "all_completed",
+          "all_out_of_pool"
+        ]
+      },
+      "QueueEntryPatch": {
+        "type": "object",
+        "description": "Resource patch for one queue entry.",
+        "required": [
+          "position"
+        ],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Target reader-visible ordinal. Ranks beyond the end place the entry last."
+          }
+        },
+        "additionalProperties": false
+      },
+      "QueueEntryResponse": {
+        "type": "object",
+        "description": "Queue entry resource returned by GET and PATCH.",
+        "required": [
+          "thread_id",
+          "position",
+          "ordering_version"
+        ],
+        "properties": {
+          "ordering_version": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Content revision of the reader's current queue order.\n\nDerived from the durable ordering state on every read, so it changes\nwhenever any writer changes the order and stays equal while the order is\nunchanged. It is a change-detection token, not a persisted per-entry\ncounter and not the #3227 sparse order key."
+          },
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "One-based dense reader-visible Queue ordinal."
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Canonical queue-entry identity: the owned Thread id."
+          }
+        }
+      },
+      "QueueOrderRequest": {
+        "type": "object",
+        "description": "Queue-order (shuffle) creation request.",
+        "properties": {
+          "idempotency_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Client retry key. Replaying a committed key returns the same revision."
+          }
+        },
+        "additionalProperties": false
+      },
+      "QueueOrderResponse": {
+        "type": "object",
+        "description": "Durable queue-order revision.",
+        "required": [
+          "event_id",
+          "replayed",
+          "shuffled"
+        ],
+        "properties": {
+          "event_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Persisted `events.id` of this queue-order revision."
+          },
+          "replayed": {
+            "type": "boolean",
+            "description": "True when an identical `idempotency_key` was already committed."
+          },
+          "shuffled": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of entries whose position this revision wrote."
+          }
+        }
+      },
+      "QueueSeriesMetadata": {
+        "type": "object",
+        "description": "Confirmed provider series metadata for one queue row.",
+        "properties": {
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "volume": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingBoundaryBatchRequest": {
+        "type": "object",
+        "required": [
+          "thread_ids"
+        ],
+        "properties": {
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "ReadingBoundaryBatchResponseV2": {
+        "type": "object",
+        "required": [
+          "threads"
+        ],
+        "properties": {
+          "threads": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
+            },
+            "propertyNames": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        }
+      },
+      "ReadingBoundaryBlocker": {
+        "type": "object",
+        "required": [
+          "kind",
+          "origin",
+          "reason",
+          "waiting_on"
+        ],
+        "properties": {
+          "editor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
+              }
+            ]
+          },
+          "kind": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "waiting_on": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BoundaryIssue"
+            }
+          }
+        }
+      },
+      "ReadingBoundaryExplanationV2": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "state",
+          "summary",
+          "blockers"
+        ],
+        "properties": {
+          "blockers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
+            }
+          },
+          "next": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReadingBoundaryNext"
+              }
+            ]
+          },
+          "state": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingBoundaryNext": {
+        "type": "object",
+        "required": [
+          "issue"
+        ],
+        "properties": {
+          "editor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BoundaryEditorTarget"
+              }
+            ]
+          },
+          "issue": {
+            "$ref": "#/components/schemas/BoundaryIssue"
+          }
+        }
+      },
+      "ReadingSessionCreatedResponse": {
+        "type": "object",
+        "description": "Result of the explicit v2 reading-session initialization write.",
+        "required": [
+          "session_id",
+          "created"
+        ],
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "session_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "description": "Optional request body for token refresh; the refresh cookie is also accepted.",
+        "required": [
+          "refresh_token"
+        ],
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "description": "Request body for account registration.",
+        "required": [
+          "username",
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "ResetDiceRequest": {
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "properties": {
+          "idempotency_key": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ResetDiceResponse": {
+        "type": "object",
+        "required": [
+          "die",
+          "replayed"
+        ],
+        "properties": {
+          "die": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "replayed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ResetPasswordRequest": {
+        "type": "object",
+        "description": "Request body for completing a password reset with a single-use token.",
+        "required": [
+          "token",
+          "new_password"
+        ],
+        "properties": {
+          "new_password": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        }
+      },
+      "RollOfferRequest": {
+        "type": "object",
+        "required": [
+          "idempotency_key"
+        ],
+        "properties": {
+          "idempotency_key": {
+            "type": "string",
+            "description": "Stable client key; retries return the original offer without re-rolling."
+          },
+          "snoozed_thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "Threads this browser has temporarily snoozed (cookie authority only)."
+          },
+          "timezone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Browser timezone used only by the retained session bridge."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RollOfferResponse": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "properties": {
+          "die_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_rolled_result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Thread snoozed by this request so the browser can extend its cookie."
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadListItem": {
+        "type": "object",
+        "description": "One reader threads collection item.",
+        "required": [
+          "id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "status",
+          "is_blocked",
+          "blocking_reasons",
+          "created_at",
+          "manual_creator_credits",
+          "tags"
+        ],
+        "properties": {
+          "blocking_reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "comicvine_mapping": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComicVineMappingHealth"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_activity_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "manual_creator_credits": {},
+          "next_unread_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "series_metadata": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/QueueSeriesMetadata"
+              }
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadTag"
+            }
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadListResponse": {
+        "type": "object",
+        "description": "Paginated reader threads collection.",
+        "required": [
+          "threads",
+          "active_count"
+        ],
+        "properties": {
+          "active_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThreadListItem"
+            }
+          }
+        }
+      },
+      "ThreadProgress": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "status",
+          "issues_remaining"
+        ],
+        "properties": {
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "next_unread_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadTag": {
+        "type": "object",
+        "description": "One tag visible to the reader.",
+        "required": [
+          "id",
+          "name",
+          "normalized_name",
+          "scope",
+          "color",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "color": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "normalized_name": {
+            "type": "string"
+          },
+          "owner_user_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "description": "Response body for token endpoints, matching the Python wire contract.",
+        "required": [
+          "access_token",
+          "refresh_token",
+          "token_type"
+        ],
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string"
+          }
+        }
+      },
+      "UserResponse": {
+        "type": "object",
+        "description": "Response body for the current-user endpoint.",
+        "required": [
+          "id",
+          "username",
+          "is_admin"
+        ],
+        "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "is_admin": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

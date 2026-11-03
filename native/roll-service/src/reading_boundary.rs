@@ -17,7 +17,7 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBatchRequest {
     pub thread_ids: Vec<i32>,
 }
@@ -36,14 +36,14 @@ pub fn validate_thread_ids(thread_ids: &[i32]) -> Result<(), ApiError> {
     Ok(())
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct BoundaryReadingList {
     pub list_id: i32,
     pub name: String,
     pub mode: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct BoundaryIssue {
     pub issue_id: i32,
     pub thread_id: i32,
@@ -54,7 +54,7 @@ pub struct BoundaryIssue {
     pub reading_lists: Vec<BoundaryReadingList>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBlocker {
     pub kind: String,
     pub origin: String,
@@ -63,7 +63,7 @@ pub struct ReadingBoundaryBlocker {
     pub editor: Option<BoundaryEditorTarget>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct BoundaryEditorTarget {
     pub kind: String,
     pub label: String,
@@ -73,13 +73,13 @@ pub struct BoundaryEditorTarget {
     pub prerequisite_id: Option<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryNext {
     pub issue: BoundaryIssue,
     pub editor: Option<BoundaryEditorTarget>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryExplanationV2 {
     pub thread_id: i32,
     pub state: String,
@@ -88,7 +88,7 @@ pub struct ReadingBoundaryExplanationV2 {
     pub blockers: Vec<ReadingBoundaryBlocker>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBatchResponseV2 {
     pub threads: HashMap<i32, ReadingBoundaryExplanationV2>,
 }
@@ -785,6 +785,24 @@ pub async fn reading_boundary_batch_v2(
         .await
         .map(Json)
 }
+
+/// Documentation-only operation for the mounted v2 reading-boundaries batch.
+#[utoipa::path(
+    post,
+    path = "/api/v2/reading-boundaries",
+    tag = "reading-boundaries",
+    request_body = ReadingBoundaryBatchRequest,
+    responses(
+        (status = 200, description = "Explanation projection for the requested owned threads", body = ReadingBoundaryBatchResponseV2),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "A requested thread is not owned by the reader"),
+        (status = 422, description = "Batch must contain between 1 and 200 thread ids"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn reading_boundary_batch_documentation() {}
 
 #[cfg(test)]
 mod tests {

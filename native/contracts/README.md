@@ -21,6 +21,53 @@ file drifts from `IssueApi::openapi()`. This is the canonical Rust contract, not
 a FastAPI-generated operation; the coordinated frontend client and caller
 cutover remain #4444/#4337 work.
 
+Every `*-v2.openapi.json` file here is also validated by
+`tests/test_native_v2_contract_artifacts.py`: the document must be OpenAPI 3.1
+with component schemas, every path must live under `/api/v2/`, no path may use a
+colon-method or verb-shaped action segment, and every operation must declare a
+generated `operationId`, bearer security and a 2xx response. New Rust v2
+target-resource contracts are picked up by that guard automatically.
+
+`v2-runtime.openapi.json` is the aggregate contract for **every deployed native
+`/api/v2` operation** (#4457): the eight auth endpoints, Roll bootstrap and
+reading-session initialization, the dice/offer/reset commands, the
+reading-boundaries batch, and the queue, thread and issue resources already
+published by `QueueApi`, `ThreadsApi` and `IssueApi`. It is generated only from
+Rust declarations (`comicpile_roll_service::openapi::canonical_openapi`), which
+merges the per-domain `utoipa::OpenApi` documents instead of duplicating a spec.
+Regenerate it with:
+
+```sh
+cd native/roll-service
+cargo run --example v2_openapi > ../contracts/v2-runtime.openapi.json
+```
+
+Its checked-in drift test is
+`openapi::tests::checked_in_runtime_contract_is_current`, and
+`openapi::tests::covers_every_deployed_native_v2_operation` pins the exact
+method/path surface. The aggregate intentionally includes public auth entry
+points, so the artifact guard checks explicit security declarations rather than
+requiring bearer auth on every operation.
+
+`scripts/export_openapi_schema.py` merges this contract into the single
+client-facing document (`frontend/src/generated/openapi.json`) and then
+`scripts/generate_openapi_types.py` regenerates `openapi.ts` plus the thin
+`nativeV2Client.ts` request client. A native operation replaces the same
+`(path, method)` FastAPI operation because ingress sends that request to Rust.
+A component-name collision is renamed `Native<Name>` with every reference
+inside the native subtree rewritten; an identical schema is reused.
+`nativeV2Client.ts` is generated from the native operation set and the merged
+operation types, and every method delegates to the caller-provided
+`HttpClient`; it is not a second transport and does not reimplement auth, CSRF,
+retries or error handling. Its `--check` drift runs in the same canonical
+generator boundary and never rewrites repository artifacts from custom-schema
+runs.
+`docs/api/v2-route-inventory.json` records the observed runtime and declared
+consumers for each live v2 operation, and
+`tests/test_api_v2_contract_inventory.py` fails when the inventory, the native
+contract, the generated schema, `vercel.json` or a frontend service caller
+drifts.
+
 `threads-v2.openapi.json` is the generated native contract for
 `GET /api/v2/threads` (#4342). Regenerate it with:
 

@@ -396,38 +396,45 @@ export interface DependencyCreatePayload {
 }
 
 /**
- * Represents a single issue within a thread
+ * A single issue within a thread, derived from the generated `IssueResponse`.
+ *
+ * The server contract is the authority for every transport field; this alias
+ * only applies the two presentation normalizations the UI depends on:
+ *
+ * - `status` is narrowed to the two states the reader UI can act on. The
+ *   generated schema types it as a plain string, so a widened contract cannot
+ *   silently introduce an unhandled status branch.
+ * - `position` is optional because queue- and selector-shaped payloads omit the
+ *   reading-order position even though the canonical list response includes it.
+ *
+ * Do not replace this with a standalone interface: the duplicate-authority
+ * guard (`tests/test_frontend_server_contract_types.py`) fails when a
+ * handwritten object shape reuses a generated schema name.
  */
-export interface Issue {
-  /** Unique identifier for the issue */
-  id: number;
-  /** ID of the thread this issue belongs to */
-  thread_id: number;
-  /** Issue number (e.g., '1', '2', 'Annual 1') */
-  issue_number: string;
-  /** Canonical one-based reading-order position when supplied by the API */
-  position?: number;
+export type Issue = Omit<components['schemas']['IssueResponse'], 'status' | 'position'> & {
   /** Current reading status */
   status: 'unread' | 'read';
-  /** ISO 8601 timestamp when the issue was marked as read (null if unread) */
-  read_at: string | null;
-  /** ISO 8601 timestamp when the issue was created */
-  created_at: string;
-}
+  /** Canonical one-based reading-order position when supplied by the API */
+  position?: number;
+};
 
 /**
- * Response from issue list endpoint with pagination
+ * Paginated issue list, derived from the generated `IssueListResponse`.
+ *
+ * `issues` is retyped to the narrowed {@link Issue} view model. `next_page_token`
+ * is normalized back to a required `string | null` because the pagination
+ * consumers read it unconditionally and the Python handler always serializes it
+ * (the generated schema marks it optional only because it declares a default).
  */
-export interface IssueListResponse {
+export type IssueListResponse = Omit<
+  components['schemas']['IssueListResponse'],
+  'issues' | 'next_page_token'
+> & {
   /** Array of issues for the current page */
   issues: Issue[];
-  /** Total number of issues for the thread */
-  total_count: number;
-  /** Number of issues per page */
-  page_size: number;
   /** Token for fetching next page (null if no more pages) */
   next_page_token: string | null;
-}
+};
 
 export type Dependency = components['schemas']['DependencyResponse']
 
