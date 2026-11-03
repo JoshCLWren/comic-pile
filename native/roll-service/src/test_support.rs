@@ -18,6 +18,15 @@ use crate::{db, AppState};
 /// ones production serves.
 pub const ALEMBIC_SCHEMA: &str = include_str!("../tests/fixtures/schema/public_schema.sql");
 
+/// Serializes every unit test that writes committed rows to the shared `public`
+/// schema.
+///
+/// Queue tests truncate with `RESTART IDENTITY` and seed explicit primary keys,
+/// which leaves each identity sequence behind the rows they commit. Any other
+/// module's test that inserts through those sequences must hold this lock and
+/// [`reset`] first, or its generated IDs collide with the committed seed rows.
+pub static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Advisory-lock key that serializes the one-time schema load.
 const SCHEMA_LOAD_LOCK: i64 = 4_535_000_001;
 

@@ -887,7 +887,11 @@ mod tests {
         })
         .expect("reading-session test config");
         let state = crate::AppState::new(config).expect("reading-session test state");
-        crate::test_support::ensure_schema(&state).await;
+        // Queue tests commit seed rows with explicit IDs into the same schema,
+        // leaving the identity sequences behind those rows. Serialize with them
+        // and start from an empty canonical schema so generated IDs are free.
+        let _guard = crate::test_support::DB_LOCK.lock().await;
+        crate::test_support::reset(&state).await;
 
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
@@ -895,9 +899,8 @@ mod tests {
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        // All seed rows stay inside this test's transaction. Other native
-        // tests may use the same database concurrently; no global TRUNCATE,
-        // schema DDL, committed rows or manually assigned IDs are needed.
+        // All seed rows stay inside this test's transaction and roll back, so
+        // no committed rows, schema DDL or manually assigned IDs are needed.
         let tx = client.transaction().await.expect("test transaction");
         let owner_id: i32 = tx
             .query_one(
