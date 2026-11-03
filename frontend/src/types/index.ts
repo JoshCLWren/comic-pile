@@ -350,30 +350,11 @@ export interface SessionDetails {
   events: SessionEvent[];
 }
 
-export interface AnalyticsSession {
-  id: number;
-  start_die: number;
-  started_at: string;
-  ended_at: string | null;
-}
+export type AnalyticsSession = components['schemas']['NativeRecentSession']
 
-export interface TopRatedThread {
-  id: number;
-  title: string;
-  rating: number;
-  format: string;
-}
+export type TopRatedThread = components['schemas']['NativeTopRatedThread']
 
-export interface AnalyticsMetrics {
-  total_threads: number;
-  active_threads: number;
-  completed_threads: number;
-  completion_rate: number;
-  average_session_hours: number;
-  recent_sessions: AnalyticsSession[];
-  event_stats: Record<string, number>;
-  top_rated_threads: TopRatedThread[];
-}
+export type AnalyticsMetrics = components['schemas']['NativeAnalyticsMetricsResponse']
 
 export type ThreadListResponse = components['schemas']['QueueThreadListResponse']
 
