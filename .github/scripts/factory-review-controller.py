@@ -241,6 +241,7 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
                 label
                 for label in current
                 if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and label != "factory"
+                and not (label == "factory:approved" and stage in {"factory:building", "factory:changes-requested"})
             }
             labels.update({"factory", owner, stage})
             run_gh(
@@ -861,6 +862,47 @@ def post_review_comment(
         # Controller-generated metadata is a separate whole-body comment. Never
         # accept matching strings in review prose, quoted output, or PR bodies.
         run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", acceptance_marker])
+        # A GITHUB_TOKEN comment will not cause an issue_comment workflow run.
+        # Keep review approval visibility in the same trusted controller run.
+        match = re.fullmatch(
+            r"<!-- comic-pile-factory-acceptance-v1:issue-\\d+:"
+            r"head-([0-9a-f]{40}):digest-[0-9a-f]{64} -->",
+            acceptance_marker,
+        )
+        if match:
+            try:
+                set_review_approval_visibility(pr_number, match.group(1))
+            except RuntimeError as exc:
+                # Visibility cannot change merge authorization or strand an
+                # already accepted independent review on a label API failure.
+                print(f"PR #{pr_number}: approved label sync unavailable: {exc}",
+                      file=sys.stderr)
+
+
+def set_review_approval_visibility(pr_number: int, head: str) -> None:
+    """Project a validated semantic approval without relying on bot comment events.
+
+    GitHub does not dispatch issue_comment workflows for comments written using
+    its GITHUB_TOKEN. This is called only by the controller after it has verified
+    independent review and the exact linked-issue acceptance report. The label
+    is informational; all normal merge/CI/provenance gates remain authoritative.
+    """
+    live = pr_json(pr_number)
+    if live.get("state") != "OPEN" or live.get("headRefOid") != head:
+        return
+    target = target_json(pr_number)
+    if eligibility.is_manual_only(str(target.get("body") or "")):
+        return
+    labels = labels_of(target)
+    if ("factory:building" in labels or
+            "factory:changes-requested" in labels or
+            "factory:approved" in labels):
+        return
+    run_gh(
+        ["api", "--method", "PUT", f"repos/{REPO}/issues/{pr_number}/labels",
+         "--input", "-"],
+        input_json={"labels": sorted(labels | {"factory:approved"})},
+    )
 
 
 def interpret_required_checks(
