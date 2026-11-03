@@ -86,6 +86,99 @@ def api(path: str, *, token: str | None = None, body: str | None = None) -> Any:
     return json.loads(result.stdout)
 
 
+
+def rest_pr_snapshots(
+    repo: str, now: datetime, getter: Any = api
+) -> list[dict[str, Any]]:
+    """Read complete open and recently closed PRs using REST, never GraphQL.
+
+    Closed PRs are sorted by last update. Once updates fall outside the
+    cooldown window, no later page can contain a newly closed PR.
+    """
+    cutoff = now - COOLDOWN
+    snapshots: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for state in ("open", "closed"):
+        for page in range(1, 21):
+            rows = getter(
+                f"repos/{repo}/pulls?state={state}&sort=updated"
+                f"&direction=desc&per_page=100&page={page}"
+            )
+            if not isinstance(rows, list) or len(rows) > 100:
+                raise ValueError("invalid REST PR listing")
+            past_window = False
+            for row in rows:
+                if not isinstance(row, dict):
+                    raise ValueError("invalid REST PR item")
+                updated = parse_time(row.get("updated_at"))
+                if updated is None:
+                    raise ValueError("missing REST PR update time")
+                if state == "closed" and updated < cutoff:
+                    past_window = True
+                    break
+                closed = parse_time(row.get("closed_at"))
+                if state == "closed" and (closed is None or closed < cutoff):
+                    continue
+                number = row.get("number")
+                head = (row.get("head") or {}).get("sha")
+                created = row.get("created_at")
+                if (
+                    type(number) is not int
+                    or number in seen
+                    or not isinstance(head, str)
+                    or not SHA_RE.fullmatch(head)
+                    or parse_time(created) is None
+                    or row.get("state") != state
+                ):
+                    raise ValueError("invalid REST PR identity or timestamp")
+                seen.add(number)
+
+                checks: list[dict[str, Any]] = []
+                if state == "open":
+                    result = getter(
+                        f"repos/{repo}/commits/{head}/check-runs?per_page=100"
+                    )
+                    if (
+                        not isinstance(result, dict)
+                        or type(result.get("total_count")) is not int
+                        or not isinstance(result.get("check_runs"), list)
+                        or result["total_count"] > 100
+                        or len(result["check_runs"]) != result["total_count"]
+                    ):
+                        raise ValueError("incomplete REST PR check history")
+                    checks = [
+                        {
+                            "name": run.get("name"),
+                            "conclusion": run.get("conclusion"),
+                            "state": run.get("status"),
+                        }
+                        for run in result["check_runs"]
+                        if isinstance(run, dict)
+                    ]
+                    if len(checks) != len(result["check_runs"]):
+                        raise ValueError("invalid REST PR check run")
+                snapshots.append({
+                    "number": number,
+                    "state": state.upper(),
+                    "title": row.get("title") or "",
+                    "headRefOid": head,
+                    "isDraft": row.get("draft"),
+                    # List PRs does not promise computed mergeability.
+                    "mergeStateStatus": (
+                        "DIRTY" if row.get("mergeable_state") == "dirty"
+                        else "UNKNOWN"
+                    ),
+                    "createdAt": created,
+                    "closedAt": row.get("closed_at"),
+                    "labels": row.get("labels") or [],
+                    "statusCheckRollup": checks,
+                })
+            if past_window or len(rows) < 100:
+                break
+        else:
+            raise ValueError("REST PR history exceeds safe pagination bound")
+    return snapshots
+
 def is_coderabbit_review(review: dict[str, Any]) -> bool:
     """Count actual review submissions, not CodeRabbit's skipped-review banner."""
     return str((review.get("user") or {}).get("login") or "").lower() in CODERABBIT
@@ -348,16 +441,25 @@ def perform(
 def main() -> int:
     """Run in the trusted hourly GitHub Action, not on a PR checkout."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--prs", type=Path, required=True)
     parser.add_argument("--repo", required=True)
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):
         raise ValueError("invalid repository name")
-    snapshots = json.loads(args.prs.read_text(encoding="utf-8"))
-    if not isinstance(snapshots, list):
-        raise ValueError("invalid PR snapshot")
+    now = datetime.now(timezone.utc)
+    try:
+        snapshots = rest_pr_snapshots(args.repo, now)
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as exc:
+        # The caller may allow noncritical review errors without blocking merges.
+        # Keep the failure visible in the run and step summary, never call it a skip.
+        result = f"Failed: REST PR snapshot unavailable ({type(exc).__name__})"
+        print(f"::error::{result}")
+        summary = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary:
+            with Path(summary).open("a", encoding="utf-8") as file:
+                file.write(f"### Hourly Jev → CodeRabbit\n\n{result}\n")
+        return 1
     result = perform(
-        args.repo, snapshots, datetime.now(timezone.utc),
+        args.repo, snapshots, now,
         os.environ.get("OPENROUTER_JEV_API_KEY", ""),
         os.environ.get("PR_REBASE_TOKEN", ""),
     )
