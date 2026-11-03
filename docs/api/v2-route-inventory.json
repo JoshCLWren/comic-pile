@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
+  "updated_by_issue": 4457,
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v2/auth/csrf",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/auth/me",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-boundaries/{thread_id}",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/bootstrap",
+      "runtime": "native-rust",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts",
+        "frontend/src/services/protectedRollMutationApi.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/threads",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4342,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/issues/{issue_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4443,
+      "consumers": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-queue.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/forgot-password",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/login",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/logout",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/refresh",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/register",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/reset-password",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issues/cards",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4443,
+      "consumers": []
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-orders",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-queue.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-boundaries",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-reading-boundaries.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-sessions",
+      "runtime": "native-rust",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/dice-command",
+      "runtime": "native-rust",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/offer",
+      "runtime": "native-rust",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/reset",
+      "runtime": "native-rust",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-roll.ts"
+      ]
+    }
+  ]
+}

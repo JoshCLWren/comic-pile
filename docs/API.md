@@ -34,6 +34,42 @@ The exact canonical families and the allowed legacy aliases are maintained in
 [`docs/API_V1_CANONICAL.md`](API_V1_CANONICAL.md) and enforced by
 `tests/test_api_v1_canonical_contract.py`.
 
+### API version is not implementation language
+
+The version segment identifies the HTTP contract, not the runtime. Native Rust
+currently serves every deployed `/api/v2` operation listed in
+[`docs/api/v2-route-inventory.json`](api/v2-route-inventory.json), while
+`GET /api/v2/reading-boundaries/{thread_id}` remains a Python/FastAPI operation
+behind the same v2 contract version. Never infer "v1 means Python" or "v2 means
+Rust" from a path.
+
+### Generated authoritative contract
+
+The checked-in client contract
+(`frontend/src/generated/openapi.json` and `openapi.ts`) is assembled from two
+generated sources:
+
+- `app.openapi()` for the Python/FastAPI routes, and
+- `native/contracts/v2-runtime.openapi.json` for the deployed native Rust v2
+  operations, generated from the Rust DTOs by `cargo run --example v2_openapi`.
+
+`scripts/export_openapi_schema.py` merges them: a native operation replaces the
+same `(path, method)` because ingress routes that request to Rust, and a native
+component schema that differs from a same-named Python schema is published as
+`Native<Name>` with its internal references rewritten. The same canonical
+generator emits `frontend/src/generated/nativeV2Client.ts`, a thin typed request
+client whose methods delegate to the existing frontend `HttpClient`; it does not
+replace the authentication, CSRF, retry or error pipeline. The two live
+transitional native responses, `GET /api/v2/roll/bootstrap` and
+`POST /api/v2/reading-sessions`, are typed from their actual Rust handler DTOs,
+so their known session/mode/bandwidth/rollable/recovery/read/snooze/skip fields
+remain in the generated client contract until their owning retirements; stored
+tag rows are typed for their stable columns with an explicit additional-property
+boundary, while recovery nodes and mode-guidance JSON remain explicit extension
+boundaries. The inventory, the native contract, the generated schema,
+`vercel.json` ingress and the declared frontend service callers are kept in sync
+by `tests/test_api_v2_contract_inventory.py`.
+
 ---
 
 ## Threads

@@ -16,13 +16,13 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_postgres::IsolationLevel;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ResetDiceRequest {
     pub idempotency_key: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ResetDiceResponse {
     pub die: i32,
     pub replayed: bool,
@@ -102,6 +102,24 @@ pub async fn reset(
         replayed: mutation.replayed,
     }))
 }
+
+/// Documentation-only operation for the mounted v2 Roll reset command.
+#[utoipa::path(
+    post,
+    path = "/api/v2/roll/reset",
+    tag = "roll",
+    request_body = ResetDiceRequest,
+    responses(
+        (status = 200, description = "Reset die command receipt", body = ResetDiceResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 409, description = "Reading session changed during the reset"),
+        (status = 422, description = "Invalid idempotency key"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn reset_documentation() {}
 
 #[cfg(test)]
 mod tests {

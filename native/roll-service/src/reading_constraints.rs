@@ -561,7 +561,7 @@ pub struct EligibleFrontier {
 /// set. This is a single reason, never a list or a whole-library report, and it
 /// adds no database work: it exists so a genuinely non-empty library does not
 /// render the false "reading queue is empty" state (#4441).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PoolReason {
     /// At least one next-unread frontier is eligible for the dice pool.
