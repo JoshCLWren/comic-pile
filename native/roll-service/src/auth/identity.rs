@@ -56,6 +56,15 @@ struct AccessClaims {
 pub struct VerifiedAccessClaims(AccessClaims);
 
 impl VerifiedAccessClaims {
+    #[cfg(test)]
+    pub(crate) fn for_test(username: &str, jti: &str, password_epoch: i64) -> Self {
+        Self(AccessClaims {
+            username: username.into(),
+            jti: jti.into(),
+            password_epoch: serde_json::json!(password_epoch),
+        })
+    }
+
     /// Token subject used to resolve the one owned user row.
     pub fn username(&self) -> &str {
         &self.0.username
@@ -75,6 +84,23 @@ impl VerifiedAccessClaims {
             StatusCode::INTERNAL_SERVER_ERROR,
             "Internal Server Error".to_string(),
         ))
+    }
+
+    /// Mint an authenticated owner only after the SQL statement validates the
+    /// revocation and password epoch alongside the endpoint's owner-scoped data.
+    pub fn authenticate_statement_result(
+        &self,
+        user_id: i32,
+        current_epoch: i64,
+        revoked: bool,
+    ) -> Result<AuthenticatedUser, ApiError> {
+        if revoked {
+            return Err(unauthorized("Token has been revoked"));
+        }
+        if self.expected_epoch()? < current_epoch {
+            return Err(unauthorized("Password changed; please sign in again."));
+        }
+        Ok(AuthenticatedUser { id: user_id })
     }
 }
 
@@ -213,5 +239,37 @@ mod tests {
         let hs384 = encode(&Header::new(Algorithm::HS384), &payload, &key).unwrap();
         assert!(claims(&hs384, b"synthetic-test-key").is_err());
         assert!(claims("eyJhbGciOiJub25lIn0.e30.", b"synthetic-test-key").is_err());
+    }
+
+    #[test]
+    fn statement_authentication_checks_revocation_and_password_epoch() {
+        let claims = VerifiedAccessClaims(AccessClaims {
+            username: "reader".into(),
+            jti: "test-jti".into(),
+            password_epoch: serde_json::json!(5),
+        });
+        assert_eq!(
+            claims
+                .authenticate_statement_result(7, 5, false)
+                .unwrap()
+                .id(),
+            7
+        );
+        assert_eq!(
+            claims
+                .authenticate_statement_result(7, 6, false)
+                .err()
+                .unwrap()
+                .1,
+            "Password changed; please sign in again."
+        );
+        assert_eq!(
+            claims
+                .authenticate_statement_result(7, 5, true)
+                .err()
+                .unwrap()
+                .1,
+            "Token has been revoked"
+        );
     }
 }

@@ -117,12 +117,11 @@ fn volume_key(provider: &str, external_id: &str) -> Option<String> {
 //
 // TODO: Consider defensive pagination or payload limiting if memory usage becomes problematic
 // in production. Monitor payload sizes and consider adding a LIMIT clause for large datasets.
-const SNAPSHOT_SQL: &str = r#"
-WITH
+pub(crate) const SNAPSHOT_CTES: &str = r#"
 owned_threads AS MATERIALIZED (
     SELECT id, status, title, next_unread_issue_id, is_blocked,
            queue_position, catalog_series_id
-    FROM threads WHERE user_id = $1
+    FROM threads WHERE user_id = (SELECT id FROM owner)
 ),
 owned_issues AS MATERIALIZED (
     SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
@@ -130,7 +129,7 @@ owned_issues AS MATERIALIZED (
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
 ),
 owned_lists AS (
-    SELECT id, mode FROM custom_cbl_lists WHERE user_id = $1
+    SELECT id, mode FROM custom_cbl_lists WHERE user_id = (SELECT id FROM owner)
 ),
 owned_entries AS (
     SELECT e.id, e.list_id, e.issue_id, e.gate, e.skipped, e.position
@@ -165,11 +164,11 @@ overlap_rows AS (
     JOIN external_identities c ON c.id = d.continuing_external_identity_id
     JOIN external_identities w ON w.id = d.waiting_external_identity_id
     JOIN owned_lists l ON l.id = d.list_id
-    WHERE d.user_id = $1
+    WHERE d.user_id = (SELECT id FROM owner)
 ),
 exclusion_rows AS (
     SELECT issue_id, thread_id, provider, external_volume_id
-    FROM collection_exclusions WHERE user_id = $1
+    FROM collection_exclusions WHERE user_id = (SELECT id FROM owner)
 ),
 issue_volume_rows AS (
     SELECT i.id AS issue_id, e.provider, e.external_id
@@ -178,7 +177,9 @@ issue_volume_rows AS (
     JOIN catalog_series s ON s.id = ci.catalog_series_id
     JOIN external_identities e ON e.id = s.canonical_external_identity_id
 )
-SELECT jsonb_build_object(
+"#;
+
+pub(crate) const SNAPSHOT_JSON: &str = r#"jsonb_build_object(
     'threads', COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id)
                          FROM owned_threads t), '[]'::jsonb),
     'issues', COALESCE((SELECT jsonb_agg(to_jsonb(i)
@@ -199,11 +200,10 @@ SELECT jsonb_build_object(
                            FROM exclusion_rows x), '[]'::jsonb),
     'issue_volumes', COALESCE((SELECT jsonb_agg(to_jsonb(v))
                               FROM issue_volume_rows v), '[]'::jsonb)
-)::text
-"#;
+)"#;
 
 #[derive(Deserialize)]
-struct SnapshotRows {
+pub(crate) struct SnapshotRows {
     threads: Vec<ThreadRow>,
     issues: Vec<IssueRow>,
     lists: Vec<ListRow>,
@@ -285,8 +285,11 @@ async fn load_transaction(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
 ) -> Result<OptionInputs, ApiError> {
+    let snapshot_sql = format!(
+        "WITH owner AS (SELECT id FROM users WHERE id = $1), {SNAPSHOT_CTES} SELECT ({SNAPSHOT_JSON})::text"
+    );
     let row = tx
-        .query_one(SNAPSHOT_SQL, &[&user.id()])
+        .query_one(&snapshot_sql, &[&user.id()])
         .await
         .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
@@ -300,7 +303,7 @@ async fn load_transaction(
     assemble_snapshot(snapshot)
 }
 
-fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
+pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
     let core = CoreReadingInputs {
         threads: snapshot
             .threads
@@ -457,6 +460,19 @@ fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
         excluded_issue_ids,
         unresolved,
     })
+}
+
+pub(crate) fn decode_validated_snapshot(
+    encoded: &str,
+) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
+    let snapshot: SnapshotRows = serde_json::from_str(encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid Option E snapshot response");
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading snapshot".to_string(),
+        )
+    })?;
+    validated(assemble_snapshot(snapshot)?)
 }
 struct Pending(Option<Object>);
 impl Drop for Pending {

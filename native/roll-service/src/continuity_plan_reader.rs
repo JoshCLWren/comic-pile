@@ -6,7 +6,7 @@
 //! or ambiguous associations, matching Python's behavior.
 
 use crate::{
-    auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
+    auth::VerifiedAccessClaims, db, option_inputs, reading_constraints::ValidatedReadingInputs,
     reading_eligibility::evaluate, ApiError, AppState,
 };
 use axum::{
@@ -14,11 +14,10 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 use utoipa::ToSchema;
 
@@ -27,7 +26,7 @@ pub struct ContinuityPlanReaderPath {
     pub plan_id: i32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReaderExecutionMode {
     OptionE,
@@ -51,7 +50,7 @@ pub enum ReaderAvailability {
     Inactive,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReleaseMappingState {
     Confirmed,
@@ -162,34 +161,29 @@ pub struct ReadingPlanReleaseCandidate {
 }
 
 /// Database row for a continuity plan.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 struct ContinuityPlanRow {
     id: i32,
     name: String,
-    #[allow(dead_code)]
-    ordering_mode: String,
-    #[allow(dead_code)]
-    lanes_json: String,
 }
 
 /// Database row for a reading plan source.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 struct ReadingPlanSourceRow {
     id: i32,
     raw_source_path: String,
+    display_name: Option<String>,
     repository: Option<String>,
     source_path: Option<String>,
     revision_sha: Option<String>,
     content_hash: Option<String>,
-    custom_cbl_list_id: Option<i32>,
     adopted_at: Option<String>,
     recorded_at: String,
 }
 
 /// Database row for a custom CBL list entry.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Deserialize)]
 struct CustomCBLEntryRow {
-    id: i32,
     position: i32,
     issue_id: i32,
     thread_id: i32,
@@ -206,349 +200,276 @@ struct CustomCBLEntryRow {
 }
 
 /// Database row for a release source.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 struct ReleaseSourceRow {
     id: i32,
     thread_id: i32,
     external_identity_id: i32,
     provider_volume_id: String,
-    provider_title: Option<String>,
-    provider_publisher: Option<String>,
-    provider_start_year: Option<i32>,
-    provider_issue_count: Option<i32>,
+    metadata_json: Option<serde_json::Value>,
     enabled: bool,
     last_synced_at: Option<String>,
 }
 
 /// Database row for a release candidate.
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 struct ReleaseCandidateRow {
     thread_id: i32,
     thread_title: String,
     mapping_state: ReleaseMappingState,
+    metadata_json: Option<serde_json::Value>,
     external_identity_id: Option<i32>,
     provider_volume_id: Option<String>,
-    provider_title: Option<String>,
-    provider_publisher: Option<String>,
-    provider_start_year: Option<i32>,
-    provider_issue_count: Option<i32>,
     mapping_status: Option<String>,
     enableable: bool,
     followed: bool,
 }
 
-/// Load the continuity plan and verify ownership.
-async fn load_plan(
-    db: &Object,
-    user_id: i32,
+#[derive(Deserialize)]
+struct ReaderAuthRow {
+    id: i32,
+    password_epoch: i64,
+    revoked: bool,
+}
+
+#[derive(Deserialize)]
+struct ReaderSqlSnapshot {
+    auth: Option<ReaderAuthRow>,
+    plan: Option<ContinuityPlanRow>,
+    linked_list_count: i64,
+    linked_list_id: Option<i32>,
+    list_mode: Option<String>,
+    entries: Vec<CustomCBLEntryRow>,
+    sources: Vec<ReadingPlanSourceRow>,
+    release_sources: Vec<ReleaseSourceRow>,
+    release_candidates: Vec<ReleaseCandidateRow>,
+    option_e: Option<serde_json::Value>,
+}
+
+const READER_SNAPSHOT_SQL: &str = r#"
+WITH
+reader_auth AS MATERIALIZED (
+    SELECT u.id,
+           COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0)
+               AS password_epoch,
+           EXISTS (SELECT 1 FROM revoked_tokens r WHERE r.jti = $2) AS revoked
+    FROM users u
+    WHERE u.username = $1
+),
+owner AS MATERIALIZED (
+    SELECT id FROM reader_auth
+    WHERE NOT revoked AND $3 >= password_epoch
+),
+{option_e_ctes},
+reader_plan AS MATERIALIZED (
+    SELECT p.id, p.name
+    FROM continuity_plans p
+    JOIN owner o ON o.id = p.user_id
+    WHERE p.id = $4
+),
+linked_lists AS (
+    SELECT DISTINCT s.custom_cbl_list_id AS id
+    FROM reading_plan_sources s
+    JOIN reader_plan p ON p.id = s.plan_id
+    WHERE s.custom_cbl_list_id IS NOT NULL
+),
+selected_list AS (
+    SELECT l.id, l.mode
+    FROM custom_cbl_lists l
+    JOIN linked_lists x ON x.id = l.id
+    JOIN owner o ON o.id = l.user_id
+    WHERE (SELECT count(*) FROM linked_lists) = 1
+),
+reader_entries AS (
+    SELECT e.position, e.issue_id, e.gate, e.skipped, e.is_checkpoint,
+           e.checkpoint_target_issue_ids,
+           i.thread_id, i.issue_number, i.status, t.title AS thread_title
+    FROM selected_list l
+    JOIN custom_cbl_entries e ON e.list_id = l.id
+    JOIN issues i ON i.id = e.issue_id
+    JOIN threads t ON t.id = i.thread_id
+    JOIN owner o ON o.id = t.user_id
+),
+reader_sources AS (
+    SELECT s.id, s.raw_source_path, source_list.name AS display_name,
+           s.repository, s.source_path,
+           s.revision_sha, s.content_hash, s.adopted_at, s.recorded_at
+    FROM reading_plan_sources s
+    JOIN reader_plan p ON p.id = s.plan_id
+    LEFT JOIN custom_cbl_lists source_list
+      ON source_list.user_id = (SELECT id FROM owner)
+     AND source_list.id::numeric = CASE
+         WHEN btrim(s.raw_source_path) ~ '^custom-cbl:[0-9]{1,10}$'
+          AND substring(btrim(s.raw_source_path) FROM 12)::numeric BETWEEN 1 AND 2147483647
+         THEN substring(btrim(s.raw_source_path) FROM 12)::numeric
+         ELSE NULL
+     END
+),
+reader_release_sources AS (
+    SELECT rs.id, rs.thread_id, rs.external_identity_id,
+           e.external_id AS provider_volume_id, e.metadata_json,
+           rs.enabled, rs.last_synced_at
+    FROM reading_plan_release_sources rs
+    JOIN reader_plan p ON p.id = rs.plan_id
+    JOIN external_identities e ON e.id = rs.external_identity_id
+),
+plan_threads AS (
+    SELECT DISTINCT i.thread_id, t.title AS thread_title
+    FROM reading_plan_issues rpi
+    JOIN reader_plan p ON p.id = rpi.plan_id
+    JOIN issues i ON i.id = rpi.issue_id
+    JOIN threads t ON t.id = i.thread_id
+    JOIN owner o ON o.id = t.user_id
+),
+confirmed_mappings AS (
+    SELECT DISTINCT ON (m.thread_id)
+           m.thread_id, e.id AS external_identity_id,
+           e.external_id AS provider_volume_id, e.metadata_json
+    FROM thread_external_series_mappings m
+    JOIN external_identities e ON e.id = m.external_identity_id
+    JOIN plan_threads pt ON pt.thread_id = m.thread_id
+    WHERE m.status = 'confirmed' AND e.provider = 'comicvine'
+    ORDER BY m.thread_id, m.id
+),
+ambiguous_mappings AS (
+    SELECT m.thread_id, count(*) AS mapping_count
+    FROM thread_external_series_mappings m
+    JOIN plan_threads pt ON pt.thread_id = m.thread_id
+    WHERE m.status = 'ambiguous'
+    GROUP BY m.thread_id
+),
+followed_threads AS (
+    SELECT DISTINCT rs.thread_id
+    FROM reading_plan_release_sources rs
+    JOIN reader_plan p ON p.id = rs.plan_id
+),
+release_candidate_rows AS (
+    SELECT pt.thread_id, pt.thread_title,
+           CASE
+               WHEN cm.external_identity_id IS NOT NULL THEN 'confirmed'
+               WHEN COALESCE(am.mapping_count, 0) > 0 THEN 'ambiguous'
+               ELSE 'unmapped'
+           END AS mapping_state,
+           cm.external_identity_id, cm.provider_volume_id, cm.metadata_json,
+           CASE
+               WHEN cm.external_identity_id IS NOT NULL THEN 'confirmed'
+               WHEN COALESCE(am.mapping_count, 0) > 0 THEN 'ambiguous'
+               ELSE 'unmapped'
+           END AS mapping_status,
+           (cm.external_identity_id IS NOT NULL AND ft.thread_id IS NULL) AS enableable,
+           (ft.thread_id IS NOT NULL) AS followed
+    FROM plan_threads pt
+    LEFT JOIN confirmed_mappings cm ON cm.thread_id = pt.thread_id
+    LEFT JOIN ambiguous_mappings am ON am.thread_id = pt.thread_id
+    LEFT JOIN followed_threads ft ON ft.thread_id = pt.thread_id
+)
+SELECT jsonb_build_object(
+    'auth', (SELECT to_jsonb(a) FROM reader_auth a),
+    'plan', (SELECT to_jsonb(p) FROM reader_plan p),
+    'linked_list_count', (SELECT count(*) FROM linked_lists),
+    'linked_list_id', (SELECT id FROM selected_list),
+    'list_mode', (SELECT mode FROM selected_list),
+    'entries', COALESCE((SELECT jsonb_agg(to_jsonb(e) ORDER BY e.position, e.issue_id)
+                         FROM reader_entries e), '[]'::jsonb),
+    'sources', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id)
+                         FROM reader_sources s), '[]'::jsonb),
+    'release_sources', COALESCE((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id)
+                                 FROM reader_release_sources s), '[]'::jsonb),
+    'release_candidates', COALESCE((SELECT jsonb_agg(to_jsonb(c) ORDER BY c.thread_id)
+                                    FROM release_candidate_rows c), '[]'::jsonb),
+    'option_e', CASE WHEN EXISTS (SELECT 1 FROM reader_plan)
+                     THEN {option_e_json}
+                     ELSE NULL END
+)::text
+"#;
+
+fn reader_snapshot_sql() -> &'static str {
+    static SQL: OnceLock<String> = OnceLock::new();
+    SQL.get_or_init(|| {
+        READER_SNAPSHOT_SQL
+            .replace("{option_e_ctes}", option_inputs::SNAPSHOT_CTES)
+            .replace("{option_e_json}", option_inputs::SNAPSHOT_JSON)
+    })
+}
+
+async fn load_reader_snapshot(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
     plan_id: i32,
-) -> Result<Option<ContinuityPlanRow>, ApiError> {
-    let rows = db
-        .query(
-            "SELECT id, name, ordering_mode, lanes_json FROM continuity_plans WHERE id = $1 AND user_id = $2",
-            &[&plan_id, &user_id],
+) -> Result<ReaderSqlSnapshot, ApiError> {
+    let expected_epoch = claims.expected_epoch()?;
+    let connection = db::checkout(state).await?;
+    let row = db::query_one_optional(
+        state,
+        connection,
+        reader_snapshot_sql(),
+        &[&claims.username(), &claims.jti(), &expected_epoch, &plan_id],
+    )
+    .await?
+    .ok_or(ApiError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Invalid reading snapshot".to_string(),
+    ))?;
+    let encoded: String = row.try_get(0).map_err(db::query_error)?;
+    serde_json::from_str(&encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid continuity reader snapshot response");
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reading snapshot".to_string(),
         )
-        .await
-        .map_err(db::query_error)?;
-
-    if rows.is_empty() {
-        return Ok(None);
-    }
-
-    let row = &rows[0];
-    Ok(Some(ContinuityPlanRow {
-        id: row.get(0),
-        name: row.get(1),
-        ordering_mode: row.get(2),
-        lanes_json: row.get(3),
-    }))
+    })
 }
 
-/// Load reading plan sources and extract the linked custom CBL list ID.
-async fn load_linked_list_id(db: &Object, plan_id: i32) -> Result<Option<i32>, ApiError> {
-    let rows = db
-        .query(
-            "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id = $1 AND custom_cbl_list_id IS NOT NULL",
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    let list_ids: Vec<i32> = rows.iter().filter_map(|r| r.get(0)).collect();
-    Ok(list_ids.first().copied())
+fn release_candidate_metadata(
+    row: &ReleaseCandidateRow,
+) -> (Option<String>, Option<String>, Option<i32>, Option<i32>) {
+    let metadata = row.metadata_json.as_ref();
+    let string = |key: &str| {
+        metadata
+            .as_ref()
+            .and_then(|value| value.get(key))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    let integer = |key: &str| {
+        metadata
+            .as_ref()
+            .and_then(|value| value.get(key))
+            .and_then(serde_json::Value::as_i64)
+            .map(|value| value as i32)
+    };
+    (
+        string("name"),
+        string("publisher"),
+        integer("start_year"),
+        integer("issue_count"),
+    )
 }
 
-/// Load custom CBL list entries for a given list.
-async fn load_list_entries(db: &Object, list_id: i32) -> Result<Vec<CustomCBLEntryRow>, ApiError> {
-    let rows = db
-        .query(
-            r#"
-            SELECT
-                e.id, e.position, e.issue_id, e.gate, e.skipped, e.is_checkpoint,
-                e.checkpoint_target_issue_ids,
-                i.thread_id, i.issue_number, i.status,
-                t.title as thread_title
-            FROM custom_cbl_entries e
-            JOIN issues i ON i.id = e.issue_id
-            JOIN threads t ON t.id = i.thread_id
-            WHERE e.list_id = $1
-            ORDER BY e.position, e.id
-            "#,
-            &[&list_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    let mut entries = Vec::with_capacity(rows.len());
-    for row in rows {
-        entries.push(CustomCBLEntryRow {
-            id: row.get(0),
-            position: row.get(1),
-            issue_id: row.get(2),
-            gate: row.get(3),
-            skipped: row.get(4),
-            is_checkpoint: row.get(5),
-            checkpoint_target_issue_ids: row.get(6),
-            thread_id: row.get(7),
-            issue_number: row.get(8),
-            status: row.get(9),
-            thread_title: row.get(10),
-        });
-    }
-    Ok(entries)
-}
-
-/// Load reading plan sources for the response.
-async fn load_sources(db: &Object, plan_id: i32) -> Result<Vec<ReadingPlanSourceRow>, ApiError> {
-    let rows = db
-        .query(
-            r#"
-            SELECT
-                id, raw_source_path, repository, source_path,
-                revision_sha, content_hash, custom_cbl_list_id,
-                adopted_at, recorded_at
-            FROM reading_plan_sources
-            WHERE plan_id = $1
-            ORDER BY id
-            "#,
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    let mut sources = Vec::with_capacity(rows.len());
-    for row in rows {
-        sources.push(ReadingPlanSourceRow {
-            id: row.get(0),
-            raw_source_path: row.get(1),
-            repository: row.get(2),
-            source_path: row.get(3),
-            revision_sha: row.get(4),
-            content_hash: row.get(5),
-            custom_cbl_list_id: row.get(6),
-            adopted_at: row.get(7),
-            recorded_at: row.get(8),
-        });
-    }
-    Ok(sources)
-}
-
-/// Load release sources for the response.
-async fn load_release_sources(
-    db: &Object,
-    plan_id: i32,
-) -> Result<Vec<ReleaseSourceRow>, ApiError> {
-    let rows = db
-        .query(
-            r#"
-            SELECT
-                rs.id, rs.thread_id, rs.external_identity_id,
-                rs.provider_volume_id, rs.provider_title, rs.provider_publisher,
-                rs.provider_start_year, rs.provider_issue_count,
-                rs.enabled, rs.last_synced_at
-            FROM reading_plan_release_sources rs
-            WHERE rs.plan_id = $1
-            ORDER BY rs.id
-            "#,
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    let mut sources = Vec::with_capacity(rows.len());
-    for row in rows {
-        sources.push(ReleaseSourceRow {
-            id: row.get(0),
-            thread_id: row.get(1),
-            external_identity_id: row.get(2),
-            provider_volume_id: row.get(3),
-            provider_title: row.get(4),
-            provider_publisher: row.get(5),
-            provider_start_year: row.get(6),
-            provider_issue_count: row.get(7),
-            enabled: row.get(8),
-            last_synced_at: row.get(9),
-        });
-    }
-    Ok(sources)
-}
-
-/// Load release candidates for the response.
-async fn load_release_candidates(
-    db: &Object,
-    plan_id: i32,
-) -> Result<Vec<ReleaseCandidateRow>, ApiError> {
-    // Get threads in this plan
-    let plan_threads = db
-        .query(
-            r#"
-            SELECT DISTINCT i.thread_id, t.title
-            FROM reading_plan_issues rpi
-            JOIN issues i ON i.id = rpi.issue_id
-            JOIN threads t ON t.id = i.thread_id
-            WHERE rpi.plan_id = $1
-            "#,
-            &[&plan_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-
-    let mut candidates = Vec::new();
-    for row in plan_threads {
-        let thread_id: i32 = row.get(0);
-        let thread_title: String = row.get(1);
-
-        // Check for confirmed series mapping
-        let mapping_row = db
-            .query_opt(
-                r#"
-                SELECT e.id, e.external_id, e.metadata_json
-                FROM thread_external_series_mappings m
-                JOIN external_identities e ON e.id = m.external_identity_id
-                WHERE m.thread_id = $1 AND m.status = 'confirmed' AND e.provider = 'comicvine'
-                "#,
-                &[&thread_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-
-        let (
-            mapping_state,
-            external_identity_id,
-            provider_volume_id,
-            provider_title,
-            provider_publisher,
-            provider_start_year,
-            provider_issue_count,
-            mapping_status,
-            enableable,
-            followed,
-        ) = if let Some(mapping) = mapping_row {
-            // Check if already followed as a release source
-            let followed_row = db
-                    .query_opt(
-                        "SELECT 1 FROM reading_plan_release_sources WHERE plan_id = $1 AND thread_id = $2",
-                        &[&plan_id, &thread_id],
-                    )
-                    .await
-                    .map_err(db::query_error)?;
-            let followed = followed_row.is_some();
-
-            let metadata_str: Option<String> = mapping.get(2);
-            let metadata: Option<serde_json::Value> = metadata_str
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok());
-            let title = metadata
-                .as_ref()
-                .and_then(|m| m.get("name"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let publisher = metadata
-                .as_ref()
-                .and_then(|m| m.get("publisher"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let start_year = metadata
-                .as_ref()
-                .and_then(|m| m.get("start_year"))
-                .and_then(|v| v.as_i64())
-                .map(|i| i as i32);
-            let issue_count = metadata
-                .as_ref()
-                .and_then(|m| m.get("issue_count"))
-                .and_then(|v| v.as_i64())
-                .map(|i| i as i32);
-
-            (
-                ReleaseMappingState::Confirmed,
-                Some(mapping.get(0)),
-                Some(mapping.get(1)),
-                title,
-                publisher,
-                start_year,
-                issue_count,
-                Some("confirmed".to_string()),
-                !followed,
-                followed,
-            )
-        } else {
-            // Check for ambiguous mappings
-            let ambiguous_count = db
-                    .query_opt(
-                        "SELECT count(*) FROM thread_external_series_mappings WHERE thread_id = $1 AND status = 'ambiguous'",
-                        &[&thread_id],
-                    )
-                    .await
-                    .map_err(db::query_error)?
-                    .map(|r| r.get::<_, i64>(0))
-                    .unwrap_or(0);
-
-            if ambiguous_count > 0 {
-                (
-                    ReleaseMappingState::Ambiguous,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some("ambiguous".to_string()),
-                    false,
-                    false,
-                )
-            } else {
-                (
-                    ReleaseMappingState::Unmapped,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    Some("unmapped".to_string()),
-                    false,
-                    false,
-                )
-            }
-        };
-
-        candidates.push(ReleaseCandidateRow {
-            thread_id,
-            thread_title,
-            mapping_state,
-            external_identity_id,
-            provider_volume_id,
-            provider_title,
-            provider_publisher,
-            provider_start_year,
-            provider_issue_count,
-            mapping_status,
-            enableable,
-            followed,
-        });
-    }
-
-    Ok(candidates)
+fn release_source_metadata(
+    row: &ReleaseSourceRow,
+) -> (Option<String>, Option<String>, Option<i32>, Option<i32>) {
+    let metadata = row.metadata_json.as_ref();
+    let string = |key: &str| {
+        metadata
+            .as_ref()
+            .and_then(|value| value.get(key))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned)
+    };
+    let integer = |key: &str| {
+        metadata
+            .as_ref()
+            .and_then(|value| value.get(key))
+            .and_then(serde_json::Value::as_i64)
+            .map(|value| value as i32)
+    };
+    (
+        string("title"),
+        string("publisher"),
+        integer("start_year"),
+        integer("issue_count"),
+    )
 }
 
 /// Build the reader response from the evaluated eligibility and list entries.
@@ -592,13 +513,6 @@ fn build_response(
             .entry(thread.id)
             .or_insert_with(|| thread.title.clone());
     }
-
-    // Build source paths for each entry
-    let source_paths: HashMap<i32, Vec<String>> = sources
-        .iter()
-        .filter(|s| s.custom_cbl_list_id == Some(list_id))
-        .map(|s| (s.id, vec![s.raw_source_path.clone()]))
-        .collect();
 
     // Project each list entry to reader issue
     let mut reader_issues: Vec<ContinuityPlanReaderIssue> = Vec::with_capacity(list_entries.len());
@@ -668,7 +582,7 @@ fn build_response(
             status: entry.status.clone(),
             availability,
             blockers,
-            source_paths: source_paths.get(&entry.id).cloned().unwrap_or_default(),
+            source_paths: vec![format!("custom-cbl:{list_id}")],
         });
     }
 
@@ -702,7 +616,7 @@ fn build_response(
         .iter()
         .map(|s| ReadingPlanSourceSnapshot {
             id: s.id,
-            display_name: None, // Python loads this separately; we keep it simple
+            display_name: s.display_name.clone(),
             raw_source_path: s.raw_source_path.clone(),
             repository: s.repository.clone(),
             source_path: s.source_path.clone(),
@@ -716,36 +630,44 @@ fn build_response(
     // Build release sources
     let release_sources_resp: Vec<ReadingPlanReleaseSourceStatus> = release_sources
         .iter()
-        .map(|rs| ReadingPlanReleaseSourceStatus {
-            source_id: rs.id,
-            thread_id: rs.thread_id,
-            external_identity_id: rs.external_identity_id,
-            provider_volume_id: rs.provider_volume_id.clone(),
-            provider_title: rs.provider_title.clone(),
-            provider_publisher: rs.provider_publisher.clone(),
-            provider_start_year: rs.provider_start_year,
-            provider_issue_count: rs.provider_issue_count,
-            enabled: rs.enabled,
-            last_synced_at: rs.last_synced_at.clone(),
+        .map(|rs| {
+            let (provider_title, provider_publisher, provider_start_year, provider_issue_count) =
+                release_source_metadata(rs);
+            ReadingPlanReleaseSourceStatus {
+                source_id: rs.id,
+                thread_id: rs.thread_id,
+                external_identity_id: rs.external_identity_id,
+                provider_volume_id: rs.provider_volume_id.clone(),
+                provider_title,
+                provider_publisher,
+                provider_start_year,
+                provider_issue_count,
+                enabled: rs.enabled,
+                last_synced_at: rs.last_synced_at.clone(),
+            }
         })
         .collect();
 
     // Build release candidates
     let release_candidates_resp: Vec<ReadingPlanReleaseCandidate> = release_candidates
         .iter()
-        .map(|rc| ReadingPlanReleaseCandidate {
-            thread_id: rc.thread_id,
-            thread_title: rc.thread_title.clone(),
-            mapping_state: rc.mapping_state,
-            external_identity_id: rc.external_identity_id,
-            provider_volume_id: rc.provider_volume_id.clone(),
-            provider_title: rc.provider_title.clone(),
-            provider_publisher: rc.provider_publisher.clone(),
-            provider_start_year: rc.provider_start_year,
-            provider_issue_count: rc.provider_issue_count,
-            mapping_status: rc.mapping_status.clone(),
-            enableable: rc.enableable,
-            followed: rc.followed,
+        .map(|rc| {
+            let (provider_title, provider_publisher, provider_start_year, provider_issue_count) =
+                release_candidate_metadata(rc);
+            ReadingPlanReleaseCandidate {
+                thread_id: rc.thread_id,
+                thread_title: rc.thread_title.clone(),
+                mapping_state: rc.mapping_state,
+                external_identity_id: rc.external_identity_id,
+                provider_volume_id: rc.provider_volume_id.clone(),
+                provider_title,
+                provider_publisher,
+                provider_start_year,
+                provider_issue_count,
+                mapping_status: rc.mapping_status.clone(),
+                enableable: rc.enableable,
+                followed: rc.followed,
+            }
         })
         .collect();
 
@@ -774,70 +696,58 @@ fn build_response(
 /// GET /api/v2/continuity-plans/{plan_id}/reader
 pub async fn continuity_plan_reader_v2(
     State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    claims: VerifiedAccessClaims,
     Path(path): Path<ContinuityPlanReaderPath>,
 ) -> Result<Json<ContinuityPlanReaderResponse>, ApiError> {
-    let user_id = user.id();
     let plan_id = path.plan_id;
-
-    // Checkout connection
-    let connection = db::checkout(&state).await?;
-
-    // Load plan and verify ownership
-    let plan = load_plan(&connection, user_id, plan_id)
-        .await?
-        .ok_or_else(|| {
-            ApiError(
-                StatusCode::NOT_FOUND,
-                format!("Continuity plan {plan_id} not found"),
-            )
-        })?;
-
-    // Load linked custom CBL list ID
-    let linked_list_id = load_linked_list_id(&connection, plan_id)
-        .await?
-        .ok_or_else(|| {
-            ApiError(
-                StatusCode::CONFLICT,
-                "Reading Plan has no linked authoritative Reading List".to_string(),
-            )
-        })?;
-
-    // Load list entries
-    let list_entries = load_list_entries(&connection, linked_list_id).await?;
-    let list_mode = {
-        let row = connection
-            .query_opt(
-                "SELECT mode FROM custom_cbl_lists WHERE id = $1",
-                &[&linked_list_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-        row.map(|r| r.get(0)).unwrap_or_else(|| "loose".to_string())
-    };
-
-    // Load sources
-    let sources = load_sources(&connection, plan_id).await?;
-
-    // Load release sources
-    let release_sources = load_release_sources(&connection, plan_id).await?;
-
-    // Load release candidates
-    let release_candidates = load_release_candidates(&connection, plan_id).await?;
-
-    // Load Option E inputs (single SQL statement in repeatable-read transaction)
-    let validated = option_inputs::load_option_inputs(&state, user).await?;
+    let mut snapshot = load_reader_snapshot(&state, &claims, plan_id).await?;
+    let auth = snapshot.auth.take().ok_or(ApiError(
+        StatusCode::UNAUTHORIZED,
+        "User not found".to_string(),
+    ))?;
+    let _user = claims.authenticate_statement_result(auth.id, auth.password_epoch, auth.revoked)?;
+    let plan = snapshot.plan.ok_or_else(|| {
+        ApiError(
+            StatusCode::NOT_FOUND,
+            format!("Continuity plan {plan_id} not found"),
+        )
+    })?;
+    if snapshot.linked_list_count == 0 {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading Plan has no linked authoritative Reading List".to_string(),
+        ));
+    }
+    if snapshot.linked_list_count != 1 {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Ambiguous Reading List association".to_string(),
+        ));
+    }
+    let linked_list_id = snapshot.linked_list_id.ok_or(ApiError(
+        StatusCode::CONFLICT,
+        "Reading Plan has no linked authoritative Reading List".to_string(),
+    ))?;
+    let list_mode = snapshot.list_mode.ok_or(ApiError(
+        StatusCode::CONFLICT,
+        "Reading Plan has no linked authoritative Reading List".to_string(),
+    ))?;
+    let option_e = snapshot.option_e.take().ok_or(ApiError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Invalid reading snapshot".to_string(),
+    ))?;
+    let validated = option_inputs::decode_validated_snapshot(&option_e.to_string())?;
 
     // Build response
     let response = build_response(
         &plan,
         linked_list_id,
         &list_mode,
-        &list_entries,
+        &snapshot.entries,
         &validated,
-        &sources,
-        &release_sources,
-        &release_candidates,
+        &snapshot.sources,
+        &snapshot.release_sources,
+        &snapshot.release_candidates,
     )?;
 
     Ok(Json(response))
@@ -864,6 +774,8 @@ fn continuity_plan_reader_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn ordering_mode_mapping() {
@@ -907,5 +819,257 @@ mod tests {
             serde_json::to_string(&ReleaseMappingState::Confirmed).unwrap(),
             "\"confirmed\""
         );
+    }
+
+    #[test]
+    fn reader_snapshot_is_one_authenticated_option_e_statement() {
+        let sql = reader_snapshot_sql();
+        let normalized = sql.to_ascii_lowercase();
+        assert_eq!(sql.matches(';').count(), 0);
+        for required in [
+            "reader_auth as materialized",
+            "from revoked_tokens",
+            "password_epoch",
+            "reader_plan as materialized",
+            "reader_entries as",
+            "reader_sources as",
+            "release_candidate_rows as",
+            "'option_e'",
+            "from dependencies",
+        ] {
+            assert!(normalized.contains(required), "missing {required}");
+        }
+        assert!(!normalized.contains("load_release_candidates"));
+    }
+
+    #[test]
+    fn release_candidate_metadata_matches_provider_fields() {
+        let row = ReleaseCandidateRow {
+            thread_id: 7,
+            thread_title: "Reader Thread".into(),
+            mapping_state: ReleaseMappingState::Confirmed,
+            metadata_json: Some(serde_json::json!({
+                "name": "Series",
+                "publisher": "Publisher",
+                "start_year": 2024,
+                "issue_count": 12,
+            })),
+            external_identity_id: Some(9),
+            provider_volume_id: Some("42".into()),
+            mapping_status: Some("confirmed".into()),
+            enableable: true,
+            followed: false,
+        };
+        assert_eq!(
+            release_candidate_metadata(&row),
+            (
+                Some("Series".into()),
+                Some("Publisher".into()),
+                Some(2024),
+                Some(12)
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn one_statement_reader_uses_migrated_schema_and_returns_option_e_projection() {
+        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
+        let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
+            .expect("disposable RUST_ROLL_TEST_DATABASE_URL required; test never skips");
+        let (admin, connection) = tokio_postgres::connect(&base, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let schema = format!("continuity_reader_{}_{}", std::process::id(), nonce);
+        admin
+            .batch_execute(&format!("CREATE SCHEMA {schema};"))
+            .await
+            .unwrap();
+        // Clone the migrated test-schema definitions so the fixture adds no app columns.
+        let tables = [
+            "users",
+            "revoked_tokens",
+            "threads",
+            "issues",
+            "custom_cbl_lists",
+            "custom_cbl_entries",
+            "dependencies",
+            "thread_external_series_mappings",
+            "external_identities",
+            "collection_exclusions",
+            "catalog_issues",
+            "catalog_series",
+            "continuity_plans",
+            "reading_plan_issues",
+            "reading_plan_sources",
+            "reading_plan_release_sources",
+            "custom_cbl_overlap_decisions",
+        ];
+        let clone_tables = tables
+            .iter()
+            .map(|table| {
+                format!("CREATE TABLE {schema}.{table} (LIKE public.{table} INCLUDING ALL);")
+            })
+            .collect::<String>();
+        admin.batch_execute(&clone_tables).await.unwrap();
+
+        let scoped_url = format!("{base}?options=-c%20search_path%3D{schema}");
+        let config = Config::from_lookup(|key| match key {
+            "RUST_ROLL_DATABASE_URL" => Some(scoped_url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("continuity-reader-test-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let state = AppState::new(config).unwrap();
+        let connection = state.pool.get().await.unwrap();
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username, is_admin, created_at)
+                VALUES (7, 'reader-fixture', false, now());
+                INSERT INTO threads
+                    (id, title, format, issues_remaining, queue_position, status,
+                     manual_creator_credits, is_test, is_blocked,
+                     queue_position_is_manual, created_at, user_id, next_unread_issue_id)
+                VALUES
+                    (10, 'Fixture Thread', 'comic', 1, 1, 'active', '[]'::json,
+                     false, false, false, now(), 7, 100);
+                INSERT INTO issues (id, thread_id, issue_number, position, status, created_at)
+                VALUES (100, 10, '1', 1, 'unread', now());
+                INSERT INTO continuity_plans
+                    (id, user_id, name, ordering_mode, nodes_json, lanes_json,
+                     created_at, updated_at)
+                VALUES (20, 7, 'Fixture Plan', 'strict', '[]'::json, '[]'::json, now(), now());
+                INSERT INTO custom_cbl_lists
+                    (id, user_id, name, mode, created_at, updated_at)
+                VALUES (30, 7, 'Fixture List', 'strict', now(), now());
+                INSERT INTO custom_cbl_entries
+                    (id, list_id, issue_id, position, is_checkpoint, created_at)
+                VALUES (40, 30, 100, 1, false, now());
+                INSERT INTO reading_plan_issues
+                    (plan_id, occurrence_id, issue_id, lane_id, display_position, is_checkpoint)
+                VALUES (20, 'fixture-occurrence', 100, 'fixture-lane', 1, false);
+                INSERT INTO reading_plan_sources
+                    (id, plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+                VALUES (50, 20, 'custom-cbl:30', 30, now());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                VALUES (60, 'comicvine', 'series', '42',
+                        '{"name":"Fixture Series","publisher":"Fixture Publisher","start_year":2024,"issue_count":12}'::json,
+                        now(), now());
+                INSERT INTO thread_external_series_mappings
+                    (id, thread_id, external_identity_id, status, created_at, updated_at)
+                VALUES (70, 10, 60, 'confirmed', now(), now());
+                INSERT INTO external_identities
+                    (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                VALUES (61, 'comicvine', 'series', '43',
+                        '{"title":"Followed Series","publisher":"Fixture Publisher","start_year":2023,"issue_count":8}'::json,
+                        now(), now());
+                INSERT INTO reading_plan_release_sources
+                    (id, plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
+                VALUES (80, 20, 10, 61, true, now(), now());
+                "#,
+            )
+            .await
+            .unwrap();
+        drop(connection);
+
+        let claims = VerifiedAccessClaims::for_test("reader-fixture", "fixture-jti", 0);
+        let mut snapshot = load_reader_snapshot(&state, &claims, 20).await.unwrap();
+        let auth = snapshot.auth.take().unwrap();
+        assert_eq!(
+            claims
+                .authenticate_statement_result(auth.id, auth.password_epoch, auth.revoked)
+                .unwrap()
+                .id(),
+            7
+        );
+        let plan = snapshot.plan.take().unwrap();
+        assert_eq!(plan.name, "Fixture Plan");
+        assert_eq!(snapshot.linked_list_count, 1);
+        assert_eq!(snapshot.linked_list_id, Some(30));
+        let validated = option_inputs::decode_validated_snapshot(
+            &snapshot.option_e.take().unwrap().to_string(),
+        )
+        .unwrap();
+        let response = build_response(
+            &plan,
+            30,
+            snapshot.list_mode.as_deref().unwrap(),
+            &snapshot.entries,
+            &validated,
+            &snapshot.sources,
+            &snapshot.release_sources,
+            &snapshot.release_candidates,
+        )
+        .unwrap();
+        assert_eq!(response.progress.total_issues, 1);
+        assert_eq!(
+            response.sources[0].display_name.as_deref(),
+            Some("Fixture List")
+        );
+        assert_eq!(response.available_now.len(), 1);
+        assert_eq!(response.available_now[0].issue_id, 100);
+        assert_eq!(response.available_now[0].source_paths, ["custom-cbl:30"]);
+        assert_eq!(response.release_sources.len(), 1);
+        assert_eq!(response.release_sources[0].provider_volume_id, "43");
+        assert_eq!(
+            response.release_sources[0].provider_title.as_deref(),
+            Some("Followed Series")
+        );
+        assert_eq!(response.release_candidates.len(), 1);
+        assert_eq!(
+            response.release_candidates[0].mapping_state,
+            ReleaseMappingState::Confirmed
+        );
+        assert_eq!(
+            response.release_candidates[0].provider_title.as_deref(),
+            Some("Fixture Series")
+        );
+        assert!(response.release_candidates[0].followed);
+
+        let connection = state.pool.get().await.unwrap();
+        connection
+            .batch_execute(
+                r#"
+                INSERT INTO users (id, username, is_admin, created_at)
+                VALUES (8, 'other-fixture', false, now());
+                INSERT INTO custom_cbl_lists
+                    (id, user_id, name, mode, created_at, updated_at)
+                VALUES (31, 7, 'Second Fixture List', 'loose', now(), now());
+                INSERT INTO reading_plan_sources
+                    (id, plan_id, raw_source_path, custom_cbl_list_id, recorded_at)
+                VALUES (51, 20, 'fixture/second.cbl', 31, now());
+                INSERT INTO continuity_plans
+                    (id, user_id, name, ordering_mode, nodes_json, lanes_json,
+                     created_at, updated_at)
+                VALUES
+                    (21, 8, 'Foreign Plan', 'strict', '[]'::json, '[]'::json, now(), now()),
+                    (22, 7, 'Unlinked Plan', 'strict', '[]'::json, '[]'::json, now(), now());
+                "#,
+            )
+            .await
+            .unwrap();
+        drop(connection);
+        let ambiguous = load_reader_snapshot(&state, &claims, 20).await.unwrap();
+        assert_eq!(ambiguous.linked_list_count, 2);
+        assert!(ambiguous.linked_list_id.is_none());
+        let unlinked = load_reader_snapshot(&state, &claims, 22).await.unwrap();
+        assert_eq!(unlinked.linked_list_count, 0);
+        let foreign = load_reader_snapshot(&state, &claims, 21).await.unwrap();
+        assert!(foreign.plan.is_none());
+
+        state.pool.close();
+        drop(state);
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
     }
 }
