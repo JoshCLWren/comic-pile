@@ -37,11 +37,14 @@ When one of these contracts becomes exactly equivalent to a generated schema, mi
 ## Derived view models keep the generated authority
 
 Some UI contracts are deliberately narrower than the wire schema. They must be
-written as aliases derived from `components['schemas'][...]`, not as standalone
-`interface`/object-literal copies, so schema drift is still mechanically visible:
+written as aliases derived from the generated component-schema map, not as
+standalone `interface`/object-literal copies, so schema drift is still
+mechanically visible:
 
 ```ts
-export type Issue = Omit<components['schemas']['IssueResponse'], 'status' | 'position'> & {
+type GeneratedSchemas = components['schemas']
+
+export type Issue = Omit<GeneratedSchemas['IssueResponse'], 'status' | 'position'> & {
   status: 'unread' | 'read'
   position?: number
 }
