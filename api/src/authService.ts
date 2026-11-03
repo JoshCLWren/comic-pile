@@ -33,7 +33,7 @@ function verifyToken(token: string): {
       sub: payload.sub,
       jti: payload.jti,
       type: 'access',
-      exp: Number.isFinite(payload.exp) ? payload.exp : 0,
+      exp: payload.exp !== undefined && Number.isFinite(payload.exp) ? payload.exp : 0,
     };
     if (Number.isFinite(payload.pc)) {
       return { ...claims, pc: payload.pc };
