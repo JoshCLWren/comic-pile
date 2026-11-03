@@ -698,7 +698,7 @@ describe('core route request budgets', () => {
         return { threads: [], next_page_token: null, active_count: 0 }
       }
       if (call.url === '/v1/sessions/current/') return session
-      if (call.url === '/v2/roll/offer') return stubRollResponse
+      if (call.url === '/v2/roll/offer') return { ...stubRollResponse }
       if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
       return {}
