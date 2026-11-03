@@ -423,6 +423,28 @@ function renderShell(): ReactNode {
   )
 }
 
+/**
+ * Drain pending async work deterministically, without a wall-clock sleep.
+ *
+ * `act(async () => {})` flushes React's work queue together with the microtask
+ * backlog, so chained promise continuations settle before the assertion runs.
+ * Iterating drains continuations that themselves schedule further work. These
+ * probes disable query retry and the app disables focus refetching, so every
+ * continuation in scope is promise-based and draining is sufficient.
+ *
+ * This replaces a fixed `setTimeout(resolve, 100)` sleep, which was both flaky
+ * (a slow runner might not have settled in 100 ms) and too weak to prove the
+ * property under test (a duplicate request arriving after the sleep expired
+ * would have been counted as absent).
+ */
+async function drainSettledWork(rounds = 10): Promise<void> {
+  for (let round = 0; round < rounds; round += 1) {
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+}
+
 beforeEach(() => {
   adapterCalls = []
   rollMoveHandle = null
@@ -460,7 +482,7 @@ describe('core route request budgets', () => {
       expect(calls.some((call) => call.url === '/v1/users/me/preferences')).toBe(true),
     )
     await waitFor(() => expect(adapterCalls.length).toBeGreaterThan(0))
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
       'GET /v1/users/me/preferences': 1,
@@ -481,7 +503,7 @@ describe('core route request budgets', () => {
     render(renderAt('/', <RollPage />, true))
 
     await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
 
     expect(calls).toHaveLength(2)
     expect(calls.map(({ method, url }) => [method, url])).toEqual([
@@ -535,7 +557,7 @@ describe('core route request budgets', () => {
 
     view.unmount()
     render(renderAt('/queue', <QueueBudgetProbe />))
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
     expect(list).toHaveBeenCalledTimes(1)
     expect(listExcluded).toHaveBeenCalledTimes(1)
     expect(batchBoundaries).toHaveBeenCalledTimes(1)
@@ -579,7 +601,7 @@ describe('core route request budgets', () => {
     render(renderAt('/history', <HistoryPage />))
 
     await waitFor(() => expect(calls.some((call) => call.url === '/v1/sessions/')).toBe(true))
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({ 'GET /v1/sessions/': 1 })
   })
@@ -615,7 +637,7 @@ describe('core route request budgets', () => {
     await waitFor(() =>
       expect(calls.some((call) => call.url === '/v1/sessions/7/snapshots')).toBe(true),
     )
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
 
     expect(requestCounts(calls)).toEqual({
       'GET /v1/sessions/7/details': 1,
@@ -660,7 +682,7 @@ describe('core route request budgets', () => {
       expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1),
     )
     await waitFor(() => expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1))
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
 
     expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1)
     expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
@@ -695,7 +717,7 @@ describe('core route request budgets', () => {
       // pending id; a list-item fixture with the queue fields is a faithful double.
       await queueSnoozeHandle!.toggle(queueThreads[0] as ThreadListItem, false)
     })
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await drainSettledWork()
 
     // One snooze POST; the owning mutation refreshes session.current exactly
     // once, and the row-action pass refreshes only the queue-side read models.
