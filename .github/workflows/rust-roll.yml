@@ -64,6 +64,15 @@ jobs:
       - name: Install Python oracle dependencies
         working-directory: .
         run: uv sync --frozen --all-extras
+      - name: Build scalar parity runner
+        run: cargo build --locked --examples
+      # The parity fixtures install pg_trgm in their isolated search paths.
+      # Keep them ahead of the shared Alembic migration that installs it in public.
+      - name: Python versus Rust scalar parity
+        working-directory: .
+        env:
+          PYTHONPATH: .
+        run: uv run pytest native/roll-service/parity/ -q -s --no-cov
       - name: Prepare the migrated PostgreSQL schema for Rust integration tests
         working-directory: .
         env:
@@ -71,13 +80,6 @@ jobs:
         run: uv run alembic upgrade head
       - name: Unit and integration tests
         run: cargo test --locked --all-targets
-      - name: Build scalar parity runner
-        run: cargo build --locked --examples
-      - name: Python versus Rust scalar parity
-        working-directory: .
-        env:
-          PYTHONPATH: .
-        run: uv run pytest native/roll-service/parity/ -q -s --no-cov
       - name: Release binary
         run: cargo build --release --locked
       - uses: actions/upload-artifact@v7
