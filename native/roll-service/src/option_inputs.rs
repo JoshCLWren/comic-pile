@@ -509,12 +509,10 @@ pub async fn load_option_diagnostics(
         }
     }
 }
-/// Load execution inputs, failing closed on missing or foreign constraint endpoints.
-pub async fn load_option_inputs(
-    state: &AppState,
-    user: AuthenticatedUser,
+/// Validate loaded inputs, failing closed on missing or foreign constraint endpoints.
+fn validated(
+    inputs: OptionInputs,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
-    let inputs = load_option_diagnostics(state, user).await?;
     crate::reading_constraints::ValidatedReadingInputs::new(inputs, &BTreeMap::new()).map_err(
         |error| match error {
             crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
@@ -527,6 +525,28 @@ pub async fn load_option_inputs(
             ),
         },
     )
+}
+
+/// Load execution inputs, failing closed on missing or foreign constraint endpoints.
+pub async fn load_option_inputs(
+    state: &AppState,
+    user: AuthenticatedUser,
+) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
+    validated(load_option_diagnostics(state, user).await?)
+}
+
+/// Load and validate execution inputs on an already-borrowed transaction.
+///
+/// Same loader SQL, validation and error mapping as [`load_option_inputs`], but
+/// without a second pool checkout and without leaving the caller's transaction.
+/// The queue reposition path uses this after taking its queue advisory lock, so
+/// Option E grouping is evaluated inside the serialized write transaction rather
+/// than from a separate snapshot.
+pub(crate) async fn load_validated_in_transaction(
+    transaction: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
+    validated(load_transaction(transaction, user).await?)
 }
 
 #[cfg(test)]
