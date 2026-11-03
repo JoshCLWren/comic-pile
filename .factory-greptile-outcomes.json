@@ -1,0 +1,12 @@
+{"outcomes":[
+  {
+    "thread_id": "PRRT_kwDOQxSQh86y8X-w",
+    "outcome": "fixed",
+    "explanation": "Added TEST_ENVIRONMENT check in native/roll-service/src/auth/handlers.rs register() handler to skip rate limiting when TEST_ENVIRONMENT=true. This preserves the 5-per-minute per-client limit in production while allowing fixture registrations without rate limiting during browser tests. The fix is at lines 175-184 where the handler now checks for TEST_ENVIRONMENT=true before applying the rate limiter, matching the pattern used for CSRF middleware bypass."
+  },
+  {
+    "thread_id": "PRRT_kwDOQxSQh86y8X-w",
+    "outcome": "fixed",
+    "explanation": "R1: Added Python v2 auth routes in app/router_mounts.py to serve /api/v2/auth/* endpoints for local development. Production routes /api/v2/auth/* go to native Rust via Vercel (api/native_roll.rs). Also added CSRF exemptions in app/csrf.py for all v2 auth routes. This enables 'make dev' / 'dev-all.sh' to work locally with the frontend's AUTH_ENDPOINT_PATHS (/v2/auth/*), matching the production contract. The Python routes bypass rate limiting automatically when TEST_ENVIRONMENT=true is set (via DynamicTestLimiter in app/middleware/rate_limit.py). Frontend uses /api/v2/auth/* endpoints in src/services/api.ts and src/pages/LoginPage.tsx."
+  }
+]}

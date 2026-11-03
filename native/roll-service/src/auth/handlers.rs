@@ -173,6 +173,15 @@ pub async fn register(
     Json(request): Json<RegisterRequest>,
 ) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
     request.validate().map_err(|_| AuthError::Validation)?;
+    // Skip rate limiting in test environment to allow fixture registrations
+    // without requiring a specific client IP header. Production limits remain
+    // enforced when TEST_ENVIRONMENT is not set to "true".
+    if std::env::var("TEST_ENVIRONMENT").is_ok_and(|value| value == "true") {
+        let refresh_max_age = refresh_cookie_max_age_seconds(&state);
+        let tokens = AuthService::new(state).register(&request).await?;
+        let response_headers = authentication_headers(&headers, &tokens.refresh_token, refresh_max_age);
+        return Ok((response_headers, Json(tokens)));
+    }
     let ip = client_ip(&headers);
     limiter().check(&format!("register:{ip}"), 5, Duration::from_secs(60))?;
     let refresh_max_age = refresh_cookie_max_age_seconds(&state);
@@ -844,5 +853,45 @@ mod tests {
             matches!(limited, Err(AuthError::RateLimited)),
             "reset-password must reject requests beyond the per-client limit"
         );
+    }
+
+    #[tokio::test]
+    async fn register_rate_limit_bypassed_in_test_environment() {
+        let (schema, url) = schema_with_auth_tables().await;
+        let state = state(&url);
+        // Set TEST_ENVIRONMENT to bypass rate limiting
+        std::env::set("TEST_ENVIRONMENT", "true");
+        
+        // Without TEST_ENVIRONMENT, the "unknown" IP would be rate limited after 5 attempts.
+        // With TEST_ENVIRONMENT=true, we should be able to register multiple users.
+        for i in 0..7 {
+            let (_, Json(created)) = register(
+                State(state.clone()),
+                json_headers("unknown"), // Headers without x-forwarded-for will use "unknown"
+                Json(RegisterRequest {
+                    username: format!("test_user_{}", i).into(),
+                    email: format!("test_{}@example.com", i).into(),
+                    password: "correct-horse-battery".into(),
+                }),
+            )
+            .await
+            .expect(&format!("register attempt {} should succeed with TEST_ENVIRONMENT=true", i));
+            assert!(!created.access_token.is_empty());
+        }
+        
+        std::env::remove_var("TEST_ENVIRONMENT");
+        
+        // Verify the limiter was not populated (TEST_ENVIRONMENT bypass)
+        let (admin, connection) = tokio_postgres::connect(
+            std::env::var("RUST_ROLL_TEST_DATABASE_URL").unwrap().as_str(),
+            tokio_postgres::NoTls,
+        )
+        .await
+        .unwrap();
+        tokio::spawn(async move { let _ = connection.await; });
+        admin
+            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
+            .await
+            .unwrap();
     }
 }

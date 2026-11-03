@@ -149,6 +149,8 @@ def _register_auth(app: FastAPI) -> None:
 
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+    # v2 auth routes for local development (production routes to native Rust via Vercel)
+    app.include_router(auth.router, prefix="/api/v2/auth", tags=["auth"])
 
 
 def _register_threads(app: FastAPI) -> None:

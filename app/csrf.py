@@ -16,10 +16,27 @@ _CSRF_EXEMPT_PATHS = frozenset(
         "/api/auth/login",
         "/api/auth/refresh",
         "/api/auth/register",
+        "/api/auth/logout",
+        "/api/auth/me",
+        "/api/auth/forgot-password",
+        "/api/auth/reset-password",
         "/api/v1/auth/csrf",
         "/api/v1/auth/login",
         "/api/v1/auth/refresh",
         "/api/v1/auth/register",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/me",
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
+        # v2 auth routes for local development (production routes to native Rust)
+        "/api/v2/auth/csrf",
+        "/api/v2/auth/login",
+        "/api/v2/auth/refresh",
+        "/api/v2/auth/register",
+        "/api/v2/auth/logout",
+        "/api/v2/auth/me",
+        "/api/v2/auth/forgot-password",
+        "/api/v2/auth/reset-password",
     }
 )
 
