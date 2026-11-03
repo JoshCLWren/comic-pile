@@ -207,6 +207,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/analytics/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Metrics
+         * @description Get reading metrics and analytics for the current user.
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *         db: The database session for querying data.
+         *
+         *     Returns:
+         *         Typed analytics payload covering thread counts, completion rate,
+         *         average session length, recent sessions, event distribution, and
+         *         top-rated threads.
+         */
+        get: operations["get_metrics_api_v1_analytics_metrics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -6905,22 +6934,32 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-        /** @description Reading metrics and analytics for the authenticated user. */
+        /**
+         * AnalyticsMetricsResponse
+         * @description Reading metrics and analytics for the current user.
+         *
+         *     ``completion_rate`` and ``average_session_hours`` keep the legacy
+         *     ``int | float`` shape because the aggregation returns either an exact
+         *     integer fallback (0) or a rounded float.
+         */
         AnalyticsMetricsResponse: {
-            /** Format: int32 */
+            /** Active Threads */
             active_threads: number;
-            /** Format: double */
+            /** Average Session Hours */
             average_session_hours: number;
-            /** Format: int32 */
+            /** Completed Threads */
             completed_threads: number;
-            /** Format: double */
+            /** Completion Rate */
             completion_rate: number;
+            /** Event Stats */
             event_stats: {
                 [key: string]: number;
             };
+            /** Recent Sessions */
             recent_sessions: components["schemas"]["RecentSession"][];
+            /** Top Rated Threads */
             top_rated_threads: components["schemas"]["TopRatedThread"][];
-            /** Format: int32 */
+            /** Total Threads */
             total_threads: number;
         };
         /**
@@ -12911,6 +12950,24 @@ export interface components {
              */
             visibility: "public" | "internal";
         };
+        /** @description Reading metrics and analytics for the authenticated user. */
+        NativeAnalyticsMetricsResponse: {
+            /** Format: int32 */
+            active_threads: number;
+            /** Format: double */
+            average_session_hours: number;
+            /** Format: int32 */
+            completed_threads: number;
+            /** Format: double */
+            completion_rate: number;
+            event_stats: {
+                [key: string]: number;
+            };
+            recent_sessions: components["schemas"]["NativeRecentSession"][];
+            top_rated_threads: components["schemas"]["NativeTopRatedThread"][];
+            /** Format: int32 */
+            total_threads: number;
+        };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
@@ -12996,6 +13053,15 @@ export interface components {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
+        /** @description Summary of one recent reading session. */
+        NativeRecentSession: {
+            ended_at?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            start_die: number;
+            started_at: string;
+        };
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         NativeRefreshTokenRequest: {
             refresh_token: string;
@@ -13010,6 +13076,15 @@ export interface components {
             access_token: string;
             refresh_token: string;
             token_type: string;
+        };
+        /** @description Summary of one highly rated thread. */
+        NativeTopRatedThread: {
+            format: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: double */
+            rating: number;
+            title: string;
         };
         /** @description Response body for the current-user endpoint. */
         NativeUserResponse: {
@@ -14761,13 +14836,18 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
-        /** @description Summary of one recent reading session. */
+        /**
+         * RecentSession
+         * @description Summary of one recent reading session.
+         */
         RecentSession: {
-            ended_at?: string | null;
-            /** Format: int32 */
+            /** Ended At */
+            ended_at: string | null;
+            /** Id */
             id: number;
-            /** Format: int32 */
+            /** Start Die */
             start_die: number;
+            /** Started At */
             started_at: string;
         };
         /**
@@ -16866,13 +16946,18 @@ export interface components {
              */
             token_type: string;
         };
-        /** @description Summary of one highly rated thread. */
+        /**
+         * TopRatedThread
+         * @description Summary of one highly rated thread.
+         */
         TopRatedThread: {
+            /** Format */
             format: string;
-            /** Format: int32 */
+            /** Id */
             id: number;
-            /** Format: double */
+            /** Rating */
             rating: number;
+            /** Title */
             title: string;
         };
         /**
@@ -17185,6 +17270,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_metrics_api_v1_analytics_metrics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
                 };
             };
         };
@@ -24884,7 +24989,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
+                    "application/json": components["schemas"]["NativeAnalyticsMetricsResponse"];
                 };
             };
             /** @description Not authenticated, revoked token, or stale credential epoch */

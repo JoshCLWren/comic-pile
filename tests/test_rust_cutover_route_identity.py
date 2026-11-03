@@ -133,7 +133,7 @@ def test_threads_collection_client_uses_the_native_v2_resource() -> None:
 
 
 def test_analytics_client_uses_the_bounded_native_v2_resource() -> None:
-    """Analytics metrics is one bounded v2 resource, not a retained v1 handler."""
+    """The real client uses native v2 while the Python v1 fallback is retained."""
     source = _service("api-tasks.ts")
     assert "createNativeV2Client" in source
     assert "nativeV2.metrics()" in source
@@ -159,8 +159,8 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         # The retired Python v1 collection read now reaches the catch-all and
         # returns 404; creation stays on the same path (#4342).
         ("GET", "/api/v1/threads/"): "/api/index.py",
-        # Analytics metrics was retired from Python entirely; only the native
-        # v2 resource is a supported route.
+        # The Python analytics handler is retained until authenticated native
+        # v2 production proof exists; the new frontend caller already uses v2.
         ("GET", "/api/v1/analytics/metrics"): "/api/index.py",
         ("GET", "/api/analytics/metrics"): "/api/index.py",
     }

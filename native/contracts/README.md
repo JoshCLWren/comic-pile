@@ -93,8 +93,10 @@ cd native/roll-service
 cargo run --example analytics_openapi
 ```
 
-The unified Rust-derived contract and generated TS client remain owned by
-#4457; this repository does not hand-author a second analytics schema.
+The unified Rust-derived contract and generated TS client are owned by #4457; this
+repository does not hand-author a second analytics schema. The merged generated
+client schema temporarily retains the legacy Python v1/bare analytics operation
+until #4348's authenticated production proof permits the post-proof cleanup.
 
 To compare an independently generated Rust OpenAPI operation:
 

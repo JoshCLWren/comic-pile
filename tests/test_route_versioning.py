@@ -199,6 +199,9 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/admin/export/json/",
             "/api/admin/export/summary/",
             "/api/admin/import/csv/",
+            "/api/analytics/metrics",
+            "/api/analytics/summary",
+            "/api/analytics/reading-history",
             "/api/auth/csrf",
             "/api/auth/login",
             "/api/auth/logout",
@@ -296,10 +299,15 @@ def test_retired_move_to_front_routes_are_absent() -> None:
         assert f"{prefix}/threads/{{thread_id}}/front/" not in methods_by_path
 
 
-def test_analytics_metrics_is_only_the_native_v2_resource() -> None:
-    """Retiring the Python handler must not leave a dormant v1/bare endpoint."""
+def test_analytics_legacy_routes_remain_until_production_proof() -> None:
+    """Keep the Python v1/bare metrics handlers until the Rust cutover is proven.
+
+    #4348 requires deletion only after the native v2 resource is deployed and
+    authenticated production proof exists. The transition guard keeps the real
+    legacy handler visible rather than silently removing a supported API.
+    """
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    assert "/api/v1/analytics/metrics" not in methods_by_path
-    assert "/api/analytics/metrics" not in methods_by_path
+    assert "GET" in methods_by_path["/api/v1/analytics/metrics"]
+    assert "GET" in methods_by_path["/api/analytics/metrics"]

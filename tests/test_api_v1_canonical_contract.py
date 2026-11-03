@@ -49,6 +49,7 @@ LEGACY_ONLY_TOOLING = frozenset({"admin", "debug", "metrics", "ping"})
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
 REQUIRED_V1_FAMILIES = frozenset(
     {
+        "analytics",
         "auth",
         "bug-reports",
         "continuity-plans",

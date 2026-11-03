@@ -101,7 +101,7 @@ export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['NativeUserResponse']
 
-export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
+export type MetricsResponse = components['schemas']['NativeAnalyticsMetricsResponse']
 
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']

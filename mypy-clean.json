@@ -1,6 +1,7 @@
 [
   "app/api/__init__.py",
   "app/api/admin.py",
+  "app/api/analytics.py",
   "app/api/auth.py",
   "app/api/bug_report.py",
   "app/api/catalog.py",
@@ -54,6 +55,7 @@
   "app/api/traffic_metrics.py",
   "app/api/undo.py",
   "app/repositories/__init__.py",
+  "app/repositories/analytics_repository.py",
   "app/repositories/catalog_commit_repository.py",
   "app/repositories/catalog_repository.py",
   "app/repositories/cbl_adoption_receipt_repository.py",
@@ -111,6 +113,7 @@
   "app/repositories/undo_snapshot_repository.py",
   "app/repositories/user_repository.py",
   "app/schemas/__init__.py",
+  "app/schemas/analytics.py",
   "app/schemas/auth.py",
   "app/schemas/bug_report.py",
   "app/schemas/catalog.py",

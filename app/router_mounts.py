@@ -119,6 +119,14 @@ def _register_admin(app: FastAPI) -> None:
     app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
 
 
+def _register_analytics(app: FastAPI) -> None:
+    """Register analytics routers."""
+    from app.api import analytics
+
+    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
+    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
+
+
 def _register_health(app: FastAPI) -> None:
     """Register bounded health probes."""
     from app.api import health
@@ -395,6 +403,7 @@ def _register_test_helpers(app: FastAPI) -> None:
 _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("roll", frozenset({"roll"}), _register_roll),
     RouterMount("admin", frozenset({"admin"}), _register_admin),
+    RouterMount("analytics", frozenset({"analytics"}), _register_analytics),
     RouterMount("health", frozenset({"health"}), _register_health),
     RouterMount("bug-reports", frozenset({"bug-reports"}), _register_bug_reports),
     RouterMount("auth", frozenset({"auth"}), _register_auth),

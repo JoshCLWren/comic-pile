@@ -249,9 +249,11 @@ Reactivate a completed thread by adding more issues. Moves thread to position 1.
 
 ## Analytics
 
-The authenticated reader's bounded reading metrics. This is a native Rust v2
-resource; the legacy Python `GET /api/v1/analytics/metrics` and
-`GET /api/analytics/metrics` handlers are retired.
+The authenticated reader's bounded reading metrics. `GET /api/v2/analytics/metrics`
+is the new native Rust resource used by the real frontend service. The legacy
+Python `GET /api/v1/analytics/metrics` and `GET /api/analytics/metrics` handlers
+remain temporarily available until the replacement has authenticated production
+proof; they are removed in the post-proof cleanup (#4348).
 
 ### GET /api/v2/analytics/metrics
 

@@ -20,6 +20,9 @@ from typing import TYPE_CHECKING
 
 #: Public export name -> defining module.
 _EXPORT_MODULES: dict[str, str] = {
+    "AnalyticsMetricsResponse": "app.schemas.analytics",
+    "RecentSession": "app.schemas.analytics",
+    "TopRatedThread": "app.schemas.analytics",
     "UserRegisterRequest": "app.schemas.auth",
     "UserLoginRequest": "app.schemas.auth",
     "TokenResponse": "app.schemas.auth",
@@ -103,6 +106,7 @@ _EXPORT_MODULES: dict[str, str] = {
 
 __all__ = [
     "ActiveThreadInfo",
+    "AnalyticsMetricsResponse",
     "BlockingExplanation",
     "CheckPotentialDuplicatesRequest",
     "CheckPotentialDuplicatesResponse",
@@ -142,6 +146,7 @@ __all__ = [
     "QueueThreadListResponse",
     "RateRequest",
     "ReactivateRequest",
+    "RecentSession",
     "RecommendationContextCreate",
     "RecommendationContextResponse",
     "RecommendationDiagnosticsResponse",
@@ -176,6 +181,7 @@ __all__ = [
     "ThreadResponse",
     "ThreadUpdate",
     "TokenResponse",
+    "TopRatedThread",
     "UserLoginRequest",
     "UserPreferencesPatchRequest",
     "UserPreferencesResponse",
@@ -212,6 +218,7 @@ def __dir__() -> list[str]:
 
 
 if TYPE_CHECKING:
+    from app.schemas.analytics import AnalyticsMetricsResponse, RecentSession, TopRatedThread
     from app.schemas.auth import (
         RefreshTokenRequest,
         TokenResponse,
