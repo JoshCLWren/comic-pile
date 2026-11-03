@@ -334,6 +334,26 @@ test('trusted exact-head factory PASS is labeled approved but never merge-ready'
   assert.ok(!calls[0].labels.includes('factory:ready'));
 });
 
+test('issue comments cannot stamp a review approval onto a non-PR issue', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:building', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 4567 },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: `<!-- comic-pile-factory-review-v2:${'a'.repeat(40)}:pass -->`,
+      },
+    }),
+  });
+  assert.deepEqual(calls, []);
+});
+
 test('stale-head and untrusted PASS comments cannot mint factory:approved', async () => {
   for (const [head, association] of [
     ['b'.repeat(40), 'OWNER'],

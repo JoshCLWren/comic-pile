@@ -1094,9 +1094,10 @@ async function reconcile({ github, context }) {
     // The marker is trusted as *review visibility* only when it names the live
     // PR head. It is not an authorization to merge or a controller attestation.
     const verdict = body.match(/<!-- comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required) -->/);
-    if (verdict && context.payload.issue.pull_request) {
+    if (verdict) {
+      if (!context.payload.issue.pull_request) return;
       const live = await livePullRequest(github, context, number);
-      if (verdict[1] !== live.head?.sha) return;
+      if (!live || verdict[1] !== live.head?.sha) return;
     }
     const preserveAdvancedPrStage = Boolean(context.payload.issue.pull_request)
       && requestedStage === 'factory:building'
