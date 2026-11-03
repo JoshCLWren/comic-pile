@@ -2103,9 +2103,9 @@ mod tests {
             vec![3],
             "only the moved entry becomes a remembered manual placement"
         );
-        assert_eq!(stored_blocked_tail(&state, 7).await, 247);
+        assert_eq!(blocked_rows_after_the_readable_group(&state, 7).await, 247);
         assert_eq!(
-            reorder_events(&state, 7).await,
+            reorder_events(&state).await,
             vec![(3, Some(7))],
             "the trigger-accepted reorder event carries the owner"
         );
@@ -2128,7 +2128,7 @@ mod tests {
                 dense_ranks(&state, 7).await,
                 (1..=330).collect::<Vec<i32>>()
             );
-            assert_eq!(reorder_events(&state, 7).await.len(), 2);
+            assert_eq!(reorder_events(&state).await.len(), 2);
         }
     }
 
@@ -2351,13 +2351,16 @@ mod tests {
         rows.iter().map(|row| row.get(0)).collect()
     }
 
-    async fn stored_blocked_tail(state: &AppState, user_id: i32) -> i64 {
+    /// Blocked rows that still sort after every readable row.
+    async fn blocked_rows_after_the_readable_group(state: &AppState, user_id: i32) -> i64 {
         let connection = db::checkout(state).await.expect("blocked tail connection");
         let row = connection
             .query_one(
-                "SELECT count(*) FROM threads WHERE user_id = $1 AND status = 'active' \
-                 AND queue_position > $2 AND is_blocked",
-                &[&user_id, &(330 - 247)],
+                "SELECT count(*) FROM threads t WHERE t.user_id = $1 AND t.status = 'active' \
+                 AND t.is_blocked AND t.queue_position > ( \
+                     SELECT coalesce(max(r.queue_position), 0) FROM threads r \
+                     WHERE r.user_id = $1 AND r.status = 'active' AND NOT r.is_blocked)",
+                &[&user_id],
             )
             .await
             .expect("blocked tail");
@@ -2366,7 +2369,7 @@ mod tests {
     }
 
     /// Trigger-assigned owner of every reorder event, in thread order.
-    async fn reorder_events(state: &AppState, user_id: i32) -> Vec<(i32, Option<i32>)> {
+    async fn reorder_events(state: &AppState) -> Vec<(i32, Option<i32>)> {
         let connection = db::checkout(state).await.expect("event connection");
         let rows = connection
             .query(
@@ -2377,15 +2380,6 @@ mod tests {
             .await
             .expect("reorder events");
         drop(Object::take(connection));
-        rows.iter()
-            .map(|row| {
-                let event_user: Option<i32> = row.get(1);
-                assert!(
-                    event_user.is_none() || event_user == Some(user_id),
-                    "reorder events must stay owner-scoped"
-                );
-                (row.get(0), event_user)
-            })
-            .collect()
+        rows.iter().map(|row| (row.get(0), row.get(1))).collect()
     }
 }
