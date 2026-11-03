@@ -220,7 +220,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/queue/shuffle/",
             "/api/queue/threads/{thread_id}/back/",
             "/api/queue/threads/{thread_id}/position/",
-            "/api/rate/",
             "/api/roll/",
             "/api/roll/bootstrap",
             "/api/roll/clear-manual-die",

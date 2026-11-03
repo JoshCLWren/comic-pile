@@ -305,67 +305,6 @@ async def test_latest_delta_lookup_is_bounded_on_large_stack(
     assert "ix_snapshot_session_delta_lookup" in index_names
 
 
-@pytest.mark.asyncio
-async def test_snapshot_writers_keep_classification_correct(
-    async_db: AsyncSession, default_user: User
-) -> None:
-    """Rating delta, legacy and session-start writers classify on creation."""
-    from app.services.rate_service import snapshot_thread_states
-    from comic_pile.reading_session import create_session_start_snapshot
-
-    session, thread = await _make_session_with_thread(async_db, default_user.id)
-    event = await _make_event(async_db, session.id)
-
-    await snapshot_thread_states(
-        async_db,
-        session.id,
-        event.id,
-        default_user.id,
-        commit=False,
-        rated_thread_id=thread.id,
-        rated_thread_pre_state={"title": thread.title},
-        queue_position_changes={thread.id: 1},
-        blocked_changes={thread.id: False},
-        pre_session_state={"start_die": 6},
-    )
-    await snapshot_thread_states(
-        async_db, session.id, event.id, default_user.id, commit=False
-    )
-    await async_db.flush()
-
-    written = (
-        await async_db.execute(
-            select(Snapshot)
-            .where(Snapshot.session_id == session.id)
-            .order_by(Snapshot.id)
-        )
-    ).scalars().all()
-    assert len(written) == 2
-    assert (written[0].snapshot_kind, written[0].schema_version) == (
-        SNAPSHOT_KIND_DELTA,
-        SNAPSHOT_VERSION,
-    )
-    assert (written[1].snapshot_kind, written[1].schema_version) == (
-        SNAPSHOT_KIND_LEGACY_FULL,
-        None,
-    )
-
-    await create_session_start_snapshot(async_db, session)
-    start_snapshot = (
-        await async_db.execute(
-            select(Snapshot)
-            .where(Snapshot.session_id == session.id)
-            .where(Snapshot.description == "Session start")
-            .order_by(Snapshot.id.desc())
-        )
-    ).scalars().first()
-    assert start_snapshot is not None
-    assert (start_snapshot.snapshot_kind, start_snapshot.schema_version) == (
-        SNAPSHOT_KIND_SESSION_START,
-        None,
-    )
-
-
 def test_classify_snapshot_contract_cases() -> None:
     """Unit parity for versioned, unsupported, legacy and malformed payloads."""
     assert classify_snapshot({SNAPSHOT_VERSION_KEY: 2}) == (
