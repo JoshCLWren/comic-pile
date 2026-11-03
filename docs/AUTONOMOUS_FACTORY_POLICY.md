@@ -244,7 +244,7 @@ Josh directed on 2026-10-18 that Greptile (`greptile-apps[bot]`) findings be hel
 
 ### Pre-push fast checks
 
-A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, and the frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
+A worker diff is pushed only after the trusted pre-push fast checks pass for the files it touches: `node --check` for `.mjs`/`.cjs`, CI-parity ruff and ty plus targeted pytest for `.py`, and the frontend typecheck plus eslint for `frontend/**/*.ts|tsx|mjs`. Backend Python changes, OpenAPI generator changes, and generated OpenAPI artifact changes also invoke `uv run --frozen python scripts/export_openapi_schema.py --check`. A stale schema or broken app import blocks the factory commit/push before CI. Changes to root or frontend package manifests, pnpm lockfiles, or the pnpm workspace manifest trigger the existing frozen pnpm install and frontend typecheck even if no `.ts` or `.tsx` file changed. On failure the wrapper does not push. It resets the tree and leaves a `comic-pile-factory-fast-checks-failed-v1` comment for the next worker (see `docs/FACTORY_GITHUB_VISIBILITY.md`). Agents should run the same checks themselves before ending a run.
 
 Every push invalidates prior review, readiness, and merge eligibility. Re-fetch the exact SHA, current review threads, mergeability, and CI after every push.
 

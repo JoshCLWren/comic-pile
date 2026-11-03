@@ -169,6 +169,129 @@ def test_python_checks_run_ci_parity_lint_types_and_targeted_tests(tmp_path: Pat
     assert "pytest -q -p no:cacheprovider --no-cov -x tests/test_service.py" in calls
 
 
+def test_openapi_paths_select_schema_freshness_check(tmp_path: Path) -> None:
+    """Backend edits and generated artifacts must select the contract gate."""
+    repo = repo_with(
+        tmp_path,
+        {
+            "app/routers/comicvine.py": "x = 1\n",
+            "api/index.py": "x = 1\n",
+            "frontend/src/generated/openapi.json": "{}\n",
+            "frontend/src/generated/openapi.ts": "export {};\n",
+        },
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD | factory_fast_check_plan"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    plan = set(result.stdout.splitlines())
+    for path in (
+        "app/routers/comicvine.py",
+        "api/index.py",
+        "frontend/src/generated/openapi.json",
+        "frontend/src/generated/openapi.ts",
+    ):
+        assert f"openapi\t{path}" in plan
+
+
+def test_stale_openapi_blocks_factory_push(tmp_path: Path) -> None:
+    """A stale generated schema fails closed while the change is still local."""
+    repo = repo_with(tmp_path, {"app/routers/comicvine.py": "x = 1\n"})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "uv",
+        'echo "uv $*" >> ../uv.log\n'
+        'case "$*" in\n'
+        '  *export_openapi_schema.py*--check*) echo "Generated OpenAPI schema is stale"; exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "FAST CHECKS FAILED: OpenAPI schema freshness" in result.stdout
+    assert "Generated OpenAPI schema is stale" in result.stdout
+    calls = (tmp_path / "uv.log").read_text()
+    assert "sync --frozen --all-extras" in calls
+    assert "run --frozen python scripts/export_openapi_schema.py --check" in calls
+
+
+def test_generated_schema_only_change_still_checks_openapi(tmp_path: Path) -> None:
+    """JSON-only changes cannot skip the Python-based generated schema gate."""
+    repo = repo_with(tmp_path, {"frontend/src/generated/openapi.json": "{}\n"})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "uv",
+        'echo "uv $*" >> ../uv.log\n'
+        'case "$*" in\n'
+        '  *export_openapi_schema.py*--check*) exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1
+    assert "OpenAPI schema freshness" in result.stdout
+    assert "sync --frozen --all-extras" in (tmp_path / "uv.log").read_text()
+
+
+def test_missing_openapi_toolchain_blocks_generated_schema_change(tmp_path: Path) -> None:
+    """Missing tooling fails closed rather than silently pushing stale schema."""
+    repo = repo_with(tmp_path, {"frontend/src/generated/openapi.json": "{}\n"})
+    result = run_checks(repo, prelude="_factory_fast_check_ensure_uv() { return 1; }")
+    assert result.returncode == 1
+    assert "OpenAPI check toolchain (uv)" in result.stdout
+
+
+def test_manifest_only_change_checks_frozen_pnpm_lockfile(tmp_path: Path) -> None:
+    """A package-only change fails before push if its lockfile is stale."""
+    repo = repo_with(tmp_path, {"package.json": '{"devDependencies": {"x": "2"}}\n'})
+    bin_dir = tmp_path / "bin"
+    stub(
+        bin_dir,
+        "pnpm",
+        'echo "pnpm $*" >> ../pnpm.log\n'
+        'case "$*" in\n'
+        '  *install*--frozen-lockfile*) echo "ERR_PNPM_OUTDATED_LOCKFILE"; exit 1 ;;\n'
+        'esac\nexit 0',
+    )
+    result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "ERR_PNPM_OUTDATED_LOCKFILE" in result.stdout
+    assert "frontend toolchain setup (pnpm install)" in result.stdout
+    calls = (tmp_path / "pnpm.log").read_text()
+    assert "install --frozen-lockfile" in calls
+    assert "typecheck" not in calls
+
+
+def test_package_and_lockfile_changes_select_dependency_gate(tmp_path: Path) -> None:
+    """Root and frontend dependency files must select frozen installs."""
+    repo = repo_with(
+        tmp_path,
+        {
+            "package.json": "{}\n",
+            "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+            "frontend/package.json": "{}\n",
+            "pnpm-workspace.yaml": "packages: []\n",
+        },
+    )
+    result = subprocess.run(
+        ["bash", "-c", f"source {HELPER!s}; factory_fast_check_paths HEAD | factory_fast_check_plan"],
+        cwd=repo,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    for path in (
+        "package.json",
+        "pnpm-lock.yaml",
+        "frontend/package.json",
+        "pnpm-workspace.yaml",
+    ):
+        assert f"dependencies\t{path}" in result.stdout.splitlines()
+
+
 def test_ruff_failure_blocks_push(tmp_path: Path) -> None:
     repo = repo_with(tmp_path, {"app/service.py": "helper()\n"})
     bin_dir = tmp_path / "bin"
@@ -411,8 +534,8 @@ def test_rust_compile_error_blocks_push_and_runs_focused_ingress_guards(tmp_path
     assert result.returncode == 1, result.stdout + result.stderr
     assert "error[E0308]" in result.stdout
     assert "Rust format/Clippy/native build" in result.stdout
-    assert "cargo +1.85.0 fmt" in (tmp_path / "cargo.log").read_text()
-    assert "cargo +1.85.0 clippy" in (tmp_path / "cargo.log").read_text()
+    assert "cargo +stable fmt" in (tmp_path / "cargo.log").read_text()
+    assert "cargo +stable clippy" in (tmp_path / "cargo.log").read_text()
     assert "test_native_roll_live_ingress.py" in (tmp_path / "uv.log").read_text()
     assert "test_native_roll_write_test_guard.py" in (tmp_path / "uv.log").read_text()
     assert "test_vercel_deployment.py" in (tmp_path / "uv.log").read_text()
@@ -429,8 +552,8 @@ def test_valid_rust_checks_both_crates_and_deletion_still_checks(tmp_path: Path)
     result = run_checks(repo, env={"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"})
     assert result.returncode == 0, result.stdout + result.stderr
     cargo = (tmp_path / "cargo.log").read_text()
-    assert "cargo +1.85.0 fmt" in cargo
-    assert "cargo +1.85.0 clippy" in cargo
+    assert "cargo +stable fmt --manifest-path native/roll-service/Cargo.toml -- --check" in cargo
+    assert "cargo +stable clippy --locked --manifest-path native/roll-service/Cargo.toml --all-targets -- -D warnings" in cargo
     assert "cargo +stable fmt" in cargo
     assert "cargo +stable check" in cargo
 
