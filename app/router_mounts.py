@@ -3,8 +3,8 @@
 The Vercel function registers only the lightweight ping/metrics/keepalive routes
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
-``/api/v1/snooze`` tap pulled in catalog and delivery even though the
-snooze handler never touches them.
+``/api/v1/undo`` tap pulled in catalog and delivery even though the
+undo handler never touches them.
 
 This module names one :class:`RouterMount` per router registration unit. Each
 mount declares the resource segments it can answer, and
@@ -41,7 +41,7 @@ class RouterMount:
 
     Attributes:
         key: Stable identifier, also used to de-duplicate registration.
-        segments: Resource segments (``threads``, ``snooze``, ...) this mount can
+        segments: Resource segments (``threads``, ``undo``, ...) this mount can
             serve. A request whose segment is listed here registers the mount.
         register: Callable that imports and mounts the router(s).
     """
@@ -54,7 +54,7 @@ class RouterMount:
 def request_segment(path: str) -> str:
     """Return the resource segment a request path addresses.
 
-    ``/api/v1/snooze/`` and ``/api/snooze`` both resolve to ``snooze``;
+    ``/api/v1/undo/`` and ``/api/undo`` both resolve to ``undo``;
     colon-suffixed actions such as ``/api/v1/issues:bulkMarkRead`` resolve to
     their base resource (``issues``). Non-API paths return an empty string.
 

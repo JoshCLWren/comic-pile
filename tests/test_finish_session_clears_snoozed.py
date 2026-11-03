@@ -1,4 +1,4 @@
-"""Tests that finishing a session clears snoozed_thread_ids."""
+"""Tests that finishing a session clears legacy snoozed_thread_ids."""
 
 import pytest
 
@@ -58,14 +58,11 @@ async def test_finish_session_clears_snoozed_threads(
     session.pending_thread_id = thread1.id
     await async_db.commit()
 
-    # Snooze thread1 (die steps up to d8, thread1 added to snoozed list)
-    snooze_response = await auth_client.post("/api/v1/snooze/")
-    assert snooze_response.status_code == 200
-    snooze_data = snooze_response.json()
-    assert thread1.id in snooze_data["snoozed_thread_ids"]
-    # current_die reflects the stepped-up die, manual_die remains None
-    assert snooze_data["current_die"] == 8
-    assert snooze_data["manual_die"] is None
+    # Seed the durable session snooze list directly. The v1 snooze route that
+    # used to write it is retired (#4338); legacy sessions still carry the
+    # column, and finishing a session must keep clearing it.
+    session.snoozed_thread_ids = [thread1.id]
+    await async_db.commit()
 
     # Roll thread2
     event2 = Event(

@@ -806,7 +806,8 @@ mod tests {
                      pending_thread_updated_at timestamptz
                  );
                  CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
+                     id integer PRIMARY KEY, user_id integer NOT NULL,
+                     queue_position integer
                  );
                  CREATE TABLE {schema}.issues (
                      id integer PRIMARY KEY, thread_id integer NOT NULL
@@ -819,8 +820,8 @@ mod tests {
                      context json, timestamp timestamptz DEFAULT NOW()
                  );
                  INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES (1, 1, NULL, NULL, NULL);
-                 INSERT INTO {schema}.threads VALUES (10, 1);
+                 INSERT INTO {schema}.sessions VALUES (1, 1, 9, 900, NULL);
+                 INSERT INTO {schema}.threads VALUES (9, 1, 1), (10, 1, 2);
                  INSERT INTO {schema}.issues VALUES (100, 10);"
             ))
             .await
@@ -886,6 +887,29 @@ mod tests {
         assert_eq!(stored.die, 8);
         assert_eq!(stored.result, 2);
         assert_eq!(stored.snoozed_thread_id, Some(9));
+
+        // Ported regressions from the retired v1 snooze route tests:
+        // #283 - the offer writes exactly one roll event, for the replacement,
+        // never a phantom roll for the snoozed thread.
+        let rolls = client
+            .query_one(
+                "SELECT COUNT(*), COUNT(*) FILTER (WHERE selected_thread_id=9) FROM events",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(rolls.get::<_, i64>(0), 1);
+        assert_eq!(rolls.get::<_, i64>(1), 0);
+        // #1721 - snoozing never rewrites durable queue placement.
+        let positions = client
+            .query("SELECT id,queue_position FROM threads ORDER BY id", &[])
+            .await
+            .unwrap();
+        let positions: Vec<(i32, i32)> = positions
+            .iter()
+            .map(|row| (row.get(0), row.get(1)))
+            .collect();
+        assert_eq!(positions, vec![(9, 1), (10, 2)]);
 
         admin
             .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
