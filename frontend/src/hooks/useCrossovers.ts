@@ -86,6 +86,8 @@ export function useCrossoverGroupsList(deps: CrossoverApiDeps = {}) {
       }
     },
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
   })
 }
 
@@ -115,6 +117,8 @@ export function useAllThreads(
     },
     enabled,
     retry: false,
+    staleTime: 15 * 60 * 1000, // 15 minutes (thread data changes infrequently)
+    gcTime: 30 * 60 * 1000, // 30 minutes
   })
 }
 
@@ -131,6 +135,8 @@ export function useCrossoverIssuesForRange(threadId: number | null, deps: Crosso
     },
     enabled: threadId != null,
     retry: false,
+    staleTime: 10 * 60 * 1000, // 10 minutes (issue data changes infrequently)
+    gcTime: 20 * 60 * 1000, // 20 minutes
   })
 }
 

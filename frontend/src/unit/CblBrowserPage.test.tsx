@@ -311,13 +311,17 @@ describe('CblBrowserPage catalog', () => {
 
     await user.click(screen.getByRole('button', { name: 'All CBLs' }))
     await waitFor(() => {
-      expect(mockBrowse).toHaveBeenLastCalledWith({
-        folder: '',
-        query: '',
-        page: 1,
-        pageSize: 50,
-      })
+      expect(screen.getByTestId('location-search')).toBeEmptyDOMElement()
+      expect(screen.getByRole('button', { name: 'All CBLs' })).toHaveAttribute(
+        'aria-current',
+        'page',
+      )
+      expect(screen.getByRole('button', { name: /Marvel/ })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'unsorted' })).not.toBeInTheDocument()
     })
+    // The fresh root page is reused when navigating back through breadcrumbs.
+    expect(mockBrowse).toHaveBeenCalledTimes(3)
+    expect(mockBrowse.mock.calls.filter(([params]) => params.folder === '')).toHaveLength(1)
   })
 
   it('paginates beyond 100 sources with stable totals', async () => {
