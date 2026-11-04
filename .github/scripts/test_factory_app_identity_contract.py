@@ -227,10 +227,12 @@ class ExpectedWorkersContractTest(unittest.TestCase):
         for w in data["retired_workers"]:
             self.assertIsInstance(w, int)
 
-    def test_worker_48_is_in_expected_workers(self) -> None:
+    def test_retired_worker_48_keeps_identity_without_active_scheduling(self) -> None:
+        """App identity history is retained after the worker leaves the roster."""
         path = REPO / ".github" / "factory-expected-workers.json"
         data = json.loads(path.read_text())
-        self.assertIn(48, data["expected_workers"])
+        self.assertNotIn(48, data["expected_workers"])
+        self.assertIn(48, data["retired_workers"])
 
 
 if __name__ == "__main__":
