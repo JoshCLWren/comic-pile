@@ -260,8 +260,8 @@ async def test_override_roll_links_as_originating_selection(
         async_db.add(filler)
     await async_db.commit()
 
-    response = await auth_client.post(
-        "/api/v1/roll/override", json={"thread_id": override_thread.id}
+    response = await auth_client.patch(
+        f"/api/v2/issues/{override_thread.id}", json={"status": "read"}
     )
     assert response.status_code == 200
 

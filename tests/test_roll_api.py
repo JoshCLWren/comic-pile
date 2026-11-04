@@ -26,14 +26,14 @@ async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None
 
 @pytest.mark.asyncio
 async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> None:
-    """POST /roll/override sets specific thread."""
+    """PATCH /v2/issues/{issue_id} sets specific thread."""
     _ = sample_data
-    thread_id = 1
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
+    issue_id = 1
+    response = await auth_client.patch(f"/api/v2/issues/{issue_id}", json={"status": "read"})
     assert response.status_code == 200
 
     data = response.json()
-    assert data["thread_id"] == thread_id
+    assert data["thread_id"] == issue_id
     assert data["title"] == "Superman"
     assert data["die_size"] == 8
     assert data["result"] == 0
@@ -182,7 +182,7 @@ async def test_roll_pending_message_does_not_leak_other_user_thread_title(
 async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
     """Override returns 404 for non-existent thread."""
     _ = sample_data
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": 999})
+    response = await auth_client.patch("/api/v2/issues/999", json={"status": "read"})
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
 
@@ -210,7 +210,7 @@ async def test_override_roll_blocked_thread(
     await async_db.commit()
     await async_db.refresh(blocked_thread)
 
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": blocked_thread.id})
+    response = await auth_client.patch(f"/api/v2/issues/{blocked_thread.id}", json={"status": "read"})
     assert response.status_code == 422
     assert "blocked" in response.json()["detail"].lower()
 
@@ -238,7 +238,7 @@ async def test_override_roll_completed_thread(
     await async_db.commit()
     await async_db.refresh(completed_thread)
 
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": completed_thread.id})
+    response = await auth_client.patch(f"/api/v2/issues/{completed_thread.id}", json={"status": "read"})
     assert response.status_code == 422
     assert "completed" in response.json()["detail"].lower()
 
