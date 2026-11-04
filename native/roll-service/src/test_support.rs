@@ -140,16 +140,47 @@ fn admin_url() -> Option<String> {
 }
 
 /// Rewrite a DSN to connect as the DML-only role.
+///
+/// Fails closed: a keyword/value DSN cannot be rewritten safely here, and URI
+/// query parameters such as `?user=` override URI credentials in
+/// `tokio-postgres`, so they are stripped rather than forwarded. Anything this
+/// function cannot reason about is a panic, never a silent fall-back to admin.
 fn restricted_url(admin: &str) -> String {
-    match admin.split_once("://") {
-        Some((scheme, rest)) => match rest.rsplit_once('@') {
-            Some((_, host_and_db)) => {
-                format!("{scheme}://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@{host_and_db}")
-            }
-            None => format!("{scheme}://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@{rest}"),
-        },
-        None => admin.to_string(),
+    let Some((scheme, rest)) = admin.split_once("://") else {
+        panic!(
+            "RUST_ROLL_TEST_DATABASE_URL must be a postgresql:// URI so the suite can be \
+             restricted to the DML-only `{TEST_ROLE}` role; a keyword/value DSN cannot be \
+             rewritten safely, and silently keeping admin rights would defeat the guard"
+        );
+    };
+    let (before_query, query) = match rest.split_once('?') {
+        Some((head, tail)) => (head, Some(tail)),
+        None => (rest, None),
+    };
+    let (authority, path) = match before_query.split_once('/') {
+        Some((host, database)) => (host, format!("/{database}")),
+        None => (before_query, String::new()),
+    };
+    let host = authority
+        .rsplit_once('@')
+        .map(|(_, host)| host)
+        .unwrap_or(authority);
+
+    let mut url = format!("{scheme}://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@{host}{path}");
+    if let Some(query) = query {
+        let kept: Vec<&str> = query
+            .split('&')
+            .filter(|pair| {
+                let key = pair.split('=').next().unwrap_or_default();
+                !key.eq_ignore_ascii_case("user") && !key.eq_ignore_ascii_case("password")
+            })
+            .collect();
+        if !kept.is_empty() {
+            url.push('?');
+            url.push_str(&kept.join("&"));
+        }
     }
+    url
 }
 
 fn state_from_url(url: &str, pool_size: usize) -> AppState {
@@ -308,5 +339,34 @@ mod tests {
             .batch_execute("CREATE TEMP TABLE schema_guard_temp (id integer)")
             .await
             .expect("temporary tables remain available to tests");
+    }
+
+    #[test]
+    fn restricted_url_replaces_credentials_and_keeps_the_database() {
+        assert_eq!(
+            restricted_url("postgresql://postgres:secret@db.example:5432/native_test"),
+            format!("postgresql://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@db.example:5432/native_test")
+        );
+        assert_eq!(
+            restricted_url("postgresql://db.example/native_test"),
+            format!("postgresql://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@db.example/native_test")
+        );
+    }
+
+    #[test]
+    fn restricted_url_drops_query_credentials_that_would_override_the_role() {
+        let url = restricted_url(
+            "postgresql://postgres:secret@db/native_test?user=postgres&password=secret&sslmode=disable",
+        );
+        assert_eq!(
+            url,
+            format!("postgresql://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@db/native_test?sslmode=disable")
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "must be a postgresql:// URI")]
+    fn restricted_url_fails_closed_on_keyword_dsns() {
+        restricted_url("host=db user=postgres password=secret dbname=native_test");
     }
 }

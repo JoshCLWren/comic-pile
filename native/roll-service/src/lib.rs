@@ -26,8 +26,11 @@ mod session_bandwidth;
 pub mod skip;
 pub mod threads;
 
-#[cfg(test)]
-mod test_support;
+/// Test scaffolding shared by unit and integration tests.
+///
+/// Not `#[cfg(test)]` because integration tests link the library without that
+/// cfg. Nothing here runs unless a test calls it.
+pub mod test_support;
 
 use axum::{
     extract::{Request, State},
