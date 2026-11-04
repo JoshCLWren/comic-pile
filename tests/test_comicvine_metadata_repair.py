@@ -102,10 +102,13 @@ async def test_legacy_intelligence_reader_does_not_enqueue_metadata_repair(
         issue_id=issue.id, external_identity_id=identity.id,
         status="confirmed", confidence=1.0,
     ))
+    # Save stable IDs before commit expires ORM attributes; never lazy-load them
+    # synchronously after the transaction has ended.
+    issue_id, reader_id, identity_id = issue.id, reader.id, identity.id
     await async_db_committed.commit()
 
     first = await comicvine_intelligence.get_issue_intelligence(
-        async_db_committed, issue.id, reader.id,
+        async_db_committed, issue_id, reader_id,
     )
     assert first is not None
     assert first.metadata_status == "not_deep_fetched"
@@ -113,9 +116,9 @@ async def test_legacy_intelligence_reader_does_not_enqueue_metadata_repair(
     # Legacy Python v1 may display cached data, but never creates work.
     await async_db_committed.rollback()
     async with AsyncSession(db_engine, expire_on_commit=False) as worker_db:
-        assert await get_request(worker_db, identity.id) is None
+        assert await get_request(worker_db, identity_id) is None
     second = await comicvine_intelligence.get_issue_intelligence(
-        async_db_committed, issue.id, reader.id,
+        async_db_committed, issue_id, reader_id,
     )
     assert second is not None
     assert second.metadata_status == "not_deep_fetched"
