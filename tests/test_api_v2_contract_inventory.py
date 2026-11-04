@@ -180,11 +180,16 @@ def _service_callers(path: str, method_name: str | None) -> set[str]:
     ``nativeV2Client`` method by name (the generated SDK owns the URL).
     """
     prefix = _consumer_prefix(path)
+    # A parameterized path must terminate at its final segment. A call to
+    # /v2/issues/${id}/comicvine is not a call to /v2/issues/${id}.
+    parameterized = "{" in path
+    path_marker = re.compile(re.escape(prefix) + r"\$\{[^}]+\}(?![/\w])") if parameterized else None
     method_marker = f".{method_name}(" if method_name is not None else ""
     callers: set[str] = set()
     for service in sorted(FRONTEND_SERVICES.glob("*.ts")):
         source = service.read_text(encoding="utf-8")
-        if prefix in source or (method_marker and method_marker in source):
+        direct_call = bool(path_marker.search(source)) if path_marker else prefix in source
+        if direct_call or (method_marker and method_marker in source):
             callers.add(service.relative_to(ROOT).as_posix())
     return callers
 
