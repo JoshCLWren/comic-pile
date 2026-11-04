@@ -179,7 +179,7 @@ fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
         .route(
-            "/api/_native_roll/comicvine-metadata-repair",
+            "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
         )
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
@@ -193,6 +193,10 @@ fn app() -> Router {
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v2/analytics/metrics", get(native_dispatch))
+        .route(
+            "/api/v2/issues/{issue_id}/comicvine",
+            get(native_dispatch),
+        )
         .route("/api/_native_roll/bootstrap", get(native_bootstrap))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
