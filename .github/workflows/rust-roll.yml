@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'native/roll-service/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'api/native_roll.rs'
+      - '.vercelignore'
       # Python is the behavioral oracle; include its transitive application inputs.
       - 'app/**'
       - 'comic_pile/**'
@@ -18,6 +22,10 @@ on:
     branches: [main]
     paths:
       - 'native/roll-service/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'api/native_roll.rs'
+      - '.vercelignore'
       # Python is the behavioral oracle; include its transitive application inputs.
       - 'app/**'
       - 'comic_pile/**'
@@ -88,6 +96,26 @@ jobs:
         run: uv run pytest native/roll-service/parity/ -q -s --no-cov
       - name: Release binary
         run: cargo build --release --locked
+      - name: Vercel native Roll release build without excluded test fixtures
+        working-directory: .
+        run: |
+          set -euo pipefail
+          # Vercel uploads the release sources but excludes tests/ and *.sql.
+          # Compile in a fresh, runtime-only source tree so a test-only
+          # include_str! dependency cannot pass full-checkout CI again.
+          bundle="$(mktemp -d)"
+          trap 'rm -rf "$bundle"' EXIT
+          mkdir -p "$bundle/api" "$bundle/native/roll-service"
+          cp Cargo.toml Cargo.lock "$bundle/"
+          cp api/native_roll.rs api/native_issue.rs "$bundle/api/"
+          cp native/roll-service/Cargo.toml "$bundle/native/roll-service/"
+          cp -R native/roll-service/src "$bundle/native/roll-service/src"
+          test ! -e "$bundle/native/roll-service/tests"
+          (
+            cd "$bundle"
+            CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
+              cargo build --release --locked --bin native_roll
+          )
       - uses: actions/upload-artifact@v7
         with:
           name: comicpile-roll-service-linux-x86_64
