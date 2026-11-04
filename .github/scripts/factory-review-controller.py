@@ -241,6 +241,7 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
                 label
                 for label in current
                 if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and label != "factory"
+                and not (label == "factory:approved" and stage in {"factory:building", "factory:changes-requested"})
             }
             labels.update({"factory", owner, stage})
             run_gh(
@@ -861,6 +862,33 @@ def post_review_comment(
         # Controller-generated metadata is a separate whole-body comment. Never
         # accept matching strings in review prose, quoted output, or PR bodies.
         run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", acceptance_marker])
+
+
+def set_review_approval_visibility(pr_number: int, head: str) -> None:
+    """Project a validated semantic approval without relying on bot comment events.
+
+    GitHub does not dispatch issue_comment workflows for comments written using
+    its GITHUB_TOKEN. This is called only after the controller has verified
+    independent review, exact-head linked-issue acceptance, cross-model
+    provenance, and every mechanical readiness gate. The label never grants
+    merge authorization or replaces any of those checks.
+    """
+    live = pr_json(pr_number)
+    if live.get("state") != "OPEN" or live.get("headRefOid") != head:
+        return
+    target = target_json(pr_number)
+    if eligibility.is_manual_only(str(target.get("body") or "")):
+        return
+    labels = labels_of(target)
+    if ("factory:building" in labels or
+            "factory:changes-requested" in labels or
+            "factory:approved" in labels):
+        return
+    run_gh(
+        ["api", "--method", "PUT", f"repos/{REPO}/issues/{pr_number}/labels",
+         "--input", "-"],
+        input_json={"labels": sorted(labels | {"factory:approved"})},
+    )
 
 
 def interpret_required_checks(
@@ -2172,6 +2200,15 @@ def handle_review(
         worker=worker,
         pr_stage="factory:ready",
     )
+    # The controller has now validated independent exact-head acceptance,
+    # cross-model provenance, contributor independence, and mechanical gates.
+    # GitHub does not dispatch issue_comment workflows for GITHUB_TOKEN posts,
+    # so project informational approval in this same trusted controller run.
+    try:
+        set_review_approval_visibility(pr_number, reviewed_head)
+    except RuntimeError as exc:
+        print(f"PR #{pr_number}: approved label sync unavailable: {exc}",
+              file=sys.stderr)
     return {
         "status": "ready",
         "head": reviewed_head,

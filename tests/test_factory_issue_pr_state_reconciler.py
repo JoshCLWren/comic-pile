@@ -417,3 +417,21 @@ def test_reconcile_issue_has_no_separate_pre_write_lease_read() -> None:
     assert "lease_file" not in body
     assert body.count('replace_issue_state "$issue" "$stage"') == 1
     assert workflow.count("--lease-action-issue-file") == 1
+
+
+def test_trusted_review_comment_events_route_to_visibility_without_issue_sweep() -> None:
+    """Human review comments must reach the label handler without heavy sweeps."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "issue_comment:\n    types: [created]" in workflow
+    assert "github.event.issue.pull_request" in workflow
+    assert "contains(github.event.comment.body, 'comic-pile-factory-semantic-review-v1:')" in workflow
+    assert "context.eventName === 'issue_comment'" in workflow
+    assert '[[ "$EVENT_NAME" == ' in workflow
+    assert "== 'issue_comment' ||" in workflow
+    # Bot-authored comments cannot enqueue an Actions workflow via GITHUB_TOKEN.
+    # The same reviewed head is labeled directly in the trusted controller.
+    controller = (SCRIPTS / "factory-review-controller.py").read_text(encoding="utf-8")
+    assert "set_review_approval_visibility(pr_number, reviewed_head)" in controller
+    assert controller.index('pr_stage="factory:ready",') < controller.index(
+        "set_review_approval_visibility(pr_number, reviewed_head)"
+    )
