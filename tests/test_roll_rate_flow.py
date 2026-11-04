@@ -109,7 +109,7 @@ async def test_manual_die_keeps_history_truthful_and_resumes_auto(
 ) -> None:
     """Manual actions record d20 without advancing the suspended automatic ladder.
 
-    The v1 set-die/clear-manual-die routes are retired (#4352/#4353), so the
+    The v1 set-die/clear-manual-die routes have been retired (#4352/#4353), so the
     pinned legacy session state is seeded directly here. The behaviour under
     test — a pinned die keeps the visible history at d20 while the automatic
     ladder stays suspended, and clearing the pin resumes that ladder — is

@@ -223,7 +223,8 @@
       "path": "/api/v1/roll/set-die",
       "runtime": "python-fastapi",
       "retired_by_issue": 4352,
-      "replacement": "POST /api/v2/roll/dice-command"
+      "replacement": "POST /api/v2/roll/dice-command",
+      "status": "completed"
     },
     {
       "method": "POST",
