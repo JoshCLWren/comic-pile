@@ -136,6 +136,11 @@ def wire_controller(
         "post_review_comment",
         lambda **kwargs: posted.append(kwargs),
     )
+    # Ready-path review fixtures inspect controller decisions, not label I/O.
+    # Dedicated tests below exercise the informational approval projection.
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility", lambda _pr, _head: None,
+    )
 
     class Result:
         returncode = 0
