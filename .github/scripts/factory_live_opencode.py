@@ -19,7 +19,7 @@ from factory_candidate_health import (
 )
 from factory_completion_controller import parse_time
 from factory_model_catalog import parse_opencode_models_text
-from factory_roster import load_roster_rows, opencode_model_is_free
+from factory_roster import load_roster_lock, load_roster_rows, opencode_model_is_free
 
 COOLDOWN_SECONDS = 6 * 60 * 60
 MODEL_UNAVAILABLE_RE = re.compile(
@@ -32,10 +32,13 @@ RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 def free_models(raw_catalog: str) -> list[str]:
     """Cost metadata wins over names: never silently select a paid model."""
     catalog = parse_opencode_models_text(raw_catalog, "opencode")
+    retired = set(load_roster_lock()["retired_models"])
     return sorted(
         entry.model_id
         for entry in catalog.entries
-        if not entry.cost_is_paid and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
+        if entry.model_id not in retired
+        and not entry.cost_is_paid
+        and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
     )
 
 
