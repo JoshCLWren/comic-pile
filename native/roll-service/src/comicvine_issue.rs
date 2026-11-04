@@ -4,7 +4,7 @@
 use crate::{auth::VerifiedAccessClaims, db, ApiError, AppState};
 use axum::{extract::{Path, State}, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::sync::Arc;
 
 const READ_SQL: &str = r#"
@@ -168,7 +168,6 @@ struct Mapped {
     external_id: String,
     external_url: Option<String>,
     metadata: Value,
-    needs_repair: bool,
 }
 
 #[derive(Deserialize)]
@@ -478,6 +477,7 @@ fn issue_intelligence_docs() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
     #[test]
     fn creator_merging_preserves_provider_roles_and_anonymous_rows() {
         let metadata = json!({"creator_credits":[
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn render_the_existing_issue_intelligence_shape() {
         let mapped=Mapped {
-            external_id:"29319".into(), external_url:None, needs_repair:true,
+            external_id:"29319".into(), external_url:None,
             metadata:json!({"name":"Going For It","volume":{"id":1,"name":"Hellblazer"},
                 "creator_credits":[{"id":1,"name":"Jamie Delano"}],
                 "cover_date":"1988-03-01","store_date":"1988-03-24"}),
