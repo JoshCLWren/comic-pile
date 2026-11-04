@@ -5,6 +5,7 @@ use axum::{
     http::{request::Parts, StatusCode},
 };
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -76,6 +77,64 @@ impl VerifiedAccessClaims {
             "Internal Server Error".to_string(),
         ))
     }
+
+    /// Build verified claims for a disposable-database test.
+    #[cfg(test)]
+    pub(crate) fn for_test(username: &str, jti: &str, password_epoch: i64) -> Self {
+        Self(AccessClaims {
+            username: username.to_string(),
+            jti: jti.to_string(),
+            password_epoch: Value::from(password_epoch),
+        })
+    }
+}
+
+/// The folded-authentication CTEs for a one-statement owner-scoped resource.
+///
+/// The resource binds `$1` (token subject), `$2` (token id) and `$3` (the
+/// token's credential epoch). `me` resolves to the one owned user id only
+/// when the token is neither revoked nor older than the stored credential
+/// epoch, so a rejected credential produces no owned rows instead of a second
+/// statement. The caller validates the folded row with
+/// [`validate_folded_auth`].
+pub const FOLDED_AUTH_CTES: &str = r#"auth AS (
+    SELECT u.id AS user_id,
+           COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) AS password_epoch,
+           EXISTS(SELECT 1 FROM revoked_tokens r WHERE r.jti = $2) AS revoked
+    FROM users u
+    WHERE u.username = $1
+    LIMIT 1
+),
+me AS (
+    SELECT (SELECT user_id FROM auth WHERE NOT revoked AND password_epoch <= $3) AS user_id
+)"#;
+
+/// The authentication facts one folded statement must resolve.
+#[derive(Clone, Debug, Deserialize)]
+pub struct FoldedAuthRow {
+    /// The stored credential epoch, in whole seconds since the epoch.
+    pub password_epoch: i64,
+    /// Whether the presented token id has been revoked.
+    pub revoked: bool,
+}
+
+/// Apply the revocation and credential-epoch checks to a folded auth row.
+///
+/// This is the single-statement counterpart of [`authenticate_claims`]: the
+/// owner lookup already happened inside the resource's own statement, so only
+/// the facts that statement produced are checked here.
+pub fn validate_folded_auth(
+    claims: &VerifiedAccessClaims,
+    auth: Option<&FoldedAuthRow>,
+) -> Result<(), ApiError> {
+    let auth = auth.ok_or_else(|| unauthorized("User not found"))?;
+    if auth.revoked {
+        return Err(unauthorized("Token has been revoked"));
+    }
+    if claims.expected_epoch()? < auth.password_epoch {
+        return Err(unauthorized("Password changed; please sign in again."));
+    }
+    Ok(())
 }
 
 fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
@@ -213,5 +272,42 @@ mod tests {
         let hs384 = encode(&Header::new(Algorithm::HS384), &payload, &key).unwrap();
         assert!(claims(&hs384, b"synthetic-test-key").is_err());
         assert!(claims("eyJhbGciOiJub25lIn0.e30.", b"synthetic-test-key").is_err());
+    }
+
+    /// The single-statement counterpart of [`authenticate_claims`] must apply
+    /// the same revocation and credential-epoch rules to the folded row.
+    #[test]
+    fn folded_auth_rows_follow_the_same_rules_as_the_two_statement_path() {
+        let claims = VerifiedAccessClaims::for_test("reader", "test-jti", 100);
+        let live = FoldedAuthRow {
+            password_epoch: 100,
+            revoked: false,
+        };
+        assert!(validate_folded_auth(&claims, Some(&live)).is_ok());
+        assert!(validate_folded_auth(&claims, None).is_err());
+        assert_eq!(
+            validate_folded_auth(
+                &claims,
+                Some(&FoldedAuthRow {
+                    password_epoch: 100,
+                    revoked: true,
+                })
+            )
+            .unwrap_err()
+            .1,
+            "Token has been revoked"
+        );
+        assert_eq!(
+            validate_folded_auth(
+                &claims,
+                Some(&FoldedAuthRow {
+                    password_epoch: 101,
+                    revoked: false,
+                })
+            )
+            .unwrap_err()
+            .1,
+            "Password changed; please sign in again."
+        );
     }
 }

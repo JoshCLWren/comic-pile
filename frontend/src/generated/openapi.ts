@@ -6564,6 +6564,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/roll/die-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted v2 Roll die-state read.
+         * @description The published response is the actual handler DTO, so the current logical die, approved d2-d20 ladder, default die and last roll stay in the live contract.
+         */
+        get: operations["die_state_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/eligible-issue-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted v2 eligible-identifier read.
+         * @description The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.
+         */
+        get: operations["eligible_issue_ids_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/roll/offer": {
         parameters: {
             query?: never;
@@ -15048,6 +15088,34 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** @description The reader's current logical die and the approved ladder. */
+        RollDieStateResponse: {
+            /**
+             * Format: int32
+             * @description The die an explicit reset returns to.
+             */
+            default_die: number;
+            /**
+             * Format: int32
+             * @description The current logical die.
+             */
+            die: number;
+            /** @description The approved dice ladder, smallest to largest. */
+            ladder: number[];
+            last_roll?: null | components["schemas"]["RollLastRoll"];
+        };
+        /** @description The ordered eligible issue identifiers for the current die. */
+        RollEligibleIssueIdsResponse: {
+            /**
+             * Format: int32
+             * @description The logical die that bounded the list.
+             */
+            die: number;
+            /** @description The eligible issue identifiers, in queue order. */
+            issue_ids: number[];
+            /** @description The owning thread identifiers, parallel to `issue_ids`. */
+            thread_ids: number[];
+        };
         /**
          * RollLastRead
          * @description Session-scoped last read information.
@@ -15063,6 +15131,33 @@ export interface components {
             thread_id?: number | null;
             /** Thread Title */
             thread_title?: string | null;
+        };
+        /** @description The most recent Roll recorded for this reader. */
+        RollLastRoll: {
+            /**
+             * Format: int32
+             * @description The die that produced the roll.
+             */
+            die?: number | null;
+            /**
+             * Format: int32
+             * @description The rolled issue.
+             */
+            issue_id?: number | null;
+            /** @description The rolled issue number. */
+            issue_number?: string | null;
+            /**
+             * Format: int32
+             * @description The recorded roll result.
+             */
+            result?: number | null;
+            /** @description When the roll was recorded. */
+            rolled_at?: string | null;
+            /**
+             * Format: int32
+             * @description The rolled thread.
+             */
+            thread_id?: number | null;
         };
         RollOfferRequest: {
             /** @description Stable client key; retries return the original offer without re-rolling. */
@@ -25517,6 +25612,98 @@ export interface operations {
             };
             /** @description Invalid die or idempotency key */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    die_state_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current logical die, approved ladder and last roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollDieStateResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    eligible_issue_ids_documentation: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated browser-owned temporary snoozed thread identifiers */
+                snoozed?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered eligible issue identifiers for the current die */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollEligibleIssueIdsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid temporary snooze identifiers */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

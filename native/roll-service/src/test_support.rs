@@ -205,10 +205,14 @@ fn restricted_url(admin: &str) -> String {
     url
 }
 
+/// Signing secret every canonical test state uses, so tests can mint tokens
+/// that the mounted router accepts without restating the value.
+pub const TEST_JWT_SECRET: &str = "synthetic-native-test";
+
 fn state_from_url(url: &str, pool_size: usize) -> AppState {
     let config = crate::config::Config::from_lookup(|name| match name {
         "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
-        "RUST_ROLL_JWT_SECRET" => Some("synthetic-native-test".into()),
+        "RUST_ROLL_JWT_SECRET" => Some(TEST_JWT_SECRET.into()),
         "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
         _ => None,
     })
