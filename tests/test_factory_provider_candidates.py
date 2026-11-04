@@ -28,6 +28,8 @@ def load_module() -> ModuleType:
     return module
 
 
+# The adapter imports its sibling factory_roster module when loaded directly in tests.
+sys.path.insert(0, str(SCRIPT.parent))
 CANDIDATES = load_module()
 
 
