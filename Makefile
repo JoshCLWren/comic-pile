@@ -238,7 +238,7 @@ migrate:  ## Run database migrations (alembic upgrade head)
 	@echo "Running database migrations..."
 	@alembic upgrade head
 
-roll-test-schema:  ## Regenerate native/roll-service/tests/fixtures/schema/public_schema.sql from Alembic head
+roll-test-schema:  ## Regenerate native/roll-service/src/schema/public_schema.sql from Alembic head
 	@uv run python scripts/export_roll_test_schema.py --database-url "$(DATABASE_URL)"
 
 worktrees:  ## List all git worktrees

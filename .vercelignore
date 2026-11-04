@@ -54,5 +54,9 @@ prompts/
 # Database backups and exports
 *.dump
 *.sql
+# The one .sql exception: the native Rust build compiles the canonical Alembic
+# schema in at build time (`include_str!` in native/roll-service/src/test_support.rs),
+# so Vercel must upload it. `tests/test_vercel_upload_guard.py` pins this.
+!native/roll-service/src/schema/public_schema.sql
 *_backup_*.json
 prod_backup*

@@ -26,7 +26,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_PATH = REPO_ROOT / "native/roll-service/tests/fixtures/schema/public_schema.sql"
+FIXTURE_PATH = REPO_ROOT / "native/roll-service/src/schema/public_schema.sql"
 
 # pg_dump emits psql meta-commands and version banners that vary by client
 # version or per invocation. Dropping them keeps the fixture diffable and

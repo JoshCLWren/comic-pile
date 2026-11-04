@@ -104,8 +104,10 @@ envelope and `Retry-After: 30`. Credentials and dependency messages are never lo
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
 canonical Alembic schema in `public`, loaded from
-`tests/fixtures/schema/public_schema.sql` (a `pg_dump --schema-only` of a database
-at Alembic head — regenerate with `make roll-test-schema`). They truncate and
+`src/schema/public_schema.sql` (a `pg_dump --schema-only` of a database
+at Alembic head — regenerate with `make roll-test-schema`). It lives under
+`src/` because the schema is compiled into the deployed binary, and
+`.vercelignore` excludes `tests/`. They truncate and
 reseed the application tables between cases and never hand-write them:
 
 ```sh
