@@ -409,3 +409,30 @@ async def test_roll_snoozed_thread_excluded_from_pool(
     assert data["die_size"] == 4
     assert 1 <= data["result"] <= 4
     assert data["thread_id"] != snoozed_thread.id
+
+
+@pytest.mark.asyncio
+async def test_retired_set_die_endpoint_not_found(auth_client: AsyncClient) -> None:
+    """POST /api/v1/roll/set-die was retired (#4352). Returns 404."""
+    response = await auth_client.post("/api/v1/roll/set-die?die=20")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_retired_clear_manual_die_endpoint_not_found(auth_client: AsyncClient) -> None:
+    """POST /api/v1/roll/clear-manual-die was retired (#4353). Returns 404."""
+    response = await auth_client.post("/api/v1/roll/clear-manual-die")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_retired_session_mode_endpoint_not_found(auth_client: AsyncClient) -> None:
+    """PATCH /api/v1/roll/session-mode was retired (#4354). Returns 404."""
+    response = await auth_client.patch(
+        "/api/v1/roll/session-mode",
+        json={"bandwidth": "momentum"},
+    )
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
