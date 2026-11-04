@@ -92,6 +92,15 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
 
 
 
+def test_opencode_adapter_excludes_lock_retired_models() -> None:
+    """Cross-provider discovery cannot revive retired OpenCode model IDs."""
+    result = CANDIDATES.discover(
+        "opencode-free",
+        "opencode/deepseek-v4.1-flash-free\nopencode/current-free\n",
+    )
+    assert [candidate.model for candidate in result.candidates] == ["current-free"]
+
+
 def test_omniroute_exposes_native_free_intent_routes() -> None:
     """Factories choose work intent while OmniRoute chooses the backing model."""
     result = CANDIDATES.discover(
