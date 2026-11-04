@@ -395,6 +395,32 @@ test('semantic approval cannot be spoofed by wrong head, PR, actor, or prose ech
   }
 });
 
+test('trusted human OWNER semantic approval mints factory:approved for correct head and PR', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  const head = 'a'.repeat(40);
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-'
+          + head + ':reviewer-82:producer-unknown:verdict-approve -->\n\n'
+          + '### Factory semantic review, APPROVE',
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:review'));
+  assert.ok(!calls[0].labels.includes('factory:ci'), 'approval does not change review stage');
+});
+
 test('semantic review verdict is not an approval on issue-only conversations', async () => {
   const calls = [];
   const github = githubFor({
