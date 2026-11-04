@@ -189,3 +189,16 @@ Different data types have different cache times based on how frequently they cha
 The implemented optimizations significantly improve the performance of the creator, crossover, and cbl-sources views by reducing unnecessary HTTP calls and implementing intelligent caching strategies. The changes are backward compatible and maintain existing functionality while providing a better user experience.
 
 The optimizations follow React Query best practices and are tailored to the specific data access patterns of each view type. By implementing differentiated cache times based on data volatility, we achieve optimal performance without compromising data freshness.
+## Request Count Matrix (Before/After)
+
+| View | Action | Before | After | Cause | Fix |
+|---|---|---|---|---|---|
+| Creators `/creators` | Cold load | 1 (creators list) + 1 (team-chemistry eager) | 1 (creators list) only; team-chemistry deferred until disclosure opened | Team chemistry was fetched eagerly | Deferred via disclosure gating; added staleTime/gcTime to `useCreatorsList` |
+| Creators `/creators` | Remount/warm navigation (StrictMode) | Potential duplicate requests | Deduplicated - single request | React Query caching missing/stale | Added `staleTime: 5m`, `gcTime: 10m` to creator list/detail queries |
+| Creator detail `/creators/:creatorKey` | Cold load | 1 (detail) + potentially eager team-chemistry | 1 (detail) only; team-chemistry on demand | Eager team chemistry fetch | Gated disclosure; added `staleTime: 5m`, `gcTime: 10m` to `useCreatorDetail`, `staleTime: 10m`, `gcTime: 30m` to `useCreatorTeamChemistry` |
+| Creator comparison `/creators/compare` | Cold load with keys | 1 per request, deduped/sorted keys | 1 request with normalized sorted keys | Keys normalized; caching added | Added `staleTime: 10m`, `gcTime: 20m` to `useCreatorComparison` |
+| Crossovers `/crossovers` (events) | Cold load | Groups list fetched | Groups list fetched (1) - threads deferred until expand | Thread enumeration was eager on some paths; now gated | `useCrossoverGroupsList` has `staleTime: 5m`, `gcTime: 15m`; `useAllThreads` gated by `enabled` and has `staleTime: 15m`, `gcTime: 30m` |
+| Crossovers `/crossovers/:group` (deep link) | Deep link open | Groups + threads as needed | Groups fetched once, threads fetched once when needed | Proper gating and caching | Added caching to crossover hooks |
+| CBL source browser `/cbl-sources` | Cold load root | Browse fetched once | Browse fetched once with caching | Added caching | `browseQuery` has `staleTime: 5m`, `gcTime: 15m`; `previewQuery` has `staleTime: 10m`, `gcTime: 20m` |
+
+All changes preserve correctness across mutations/auth transitions via React Query's cache invalidation patterns.
