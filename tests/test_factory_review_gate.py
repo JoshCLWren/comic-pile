@@ -3346,6 +3346,7 @@ def test_declared_dependency_gate_records_one_durable_block_reason(
     )
     assert "#4008" in posted[0]
 
+
 def test_controller_projects_accepted_head_approval_without_event(
     monkeypatch: MonkeyPatch,
 ) -> None:
