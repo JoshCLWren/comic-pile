@@ -1,7 +1,7 @@
 export { useThread, useStaleThreads, useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from './useThread'
 export { useMoveToPosition, useMoveToFront, useMoveToBack, useQueueThreads } from './useQueue'
 export { useRate } from './useRate'
-export { useRoll, useOverrideRoll, useDismissPending, useSetDie, useClearManualDie, useResetDice, useReroll } from './useRoll'
+export { useRoll, useOverrideRoll, useDismissPending, useSetDie, useResetDice, useReroll } from './useRoll'
 export { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from './useSession'
 export { useUndo, useSnapshots } from './useUndo'
 export { useSnooze, useUnsnooze } from './useSnooze'
@@ -45,8 +45,6 @@ export { useRollBootstrap, resolveBrowserTimezone } from './useRollBootstrap'
 export { useRollPrerequisiteSwitch } from './useRollPrerequisiteSwitch'
 export { usePreferences, useUpdatePreferences, PreferencesSync } from './usePreferences'
 export { useQueueBlockingInfo } from './useQueueBlockingInfo'
-export { useSessionMode } from './useSessionMode'
-export { useCorrectionSheetExamples, type CorrectionExamples } from './useCorrectionSheetExamples'
 export { useReleases, releasesQueryOptions, RELEASES_PAGE_SIZE } from './useReleases'
 export {
   useTags,

@@ -1,21 +1,28 @@
 /**
- * Phase 5 acceptance: reading-mode UI regression (issue #1734).
+ * Reading-mode acceptance: the Roll header's reading-mode status (issue #1734).
  *
- * Proves the first user-visible reading-mode workflow is coherent,
- * accessible, and does not add unnecessary friction.
- *
- * Covers:
- * - Roll header shows canonical active bandwidth + intent
- * - Manual bandwidth/intent switching takes effect for subsequent rolls
- * - Random intent activates the legacy unweighted control path
- * - Normal Snooze does not auto-interrupt with a modal
- * - Repeated/meaningful mismatch shows the correction sheet
- * - Refresh/reload restores state from bootstrap
- * - Keyboard and mobile/desktop behavior
+ * The session-mode mutation was retired in #4354. The Rust v2 bootstrap
+ * remains the read authority, and the header presents its mode as a static
+ * status chip. The reading-mode quiz has separate coverage in
+ * `reading-mode-quiz.spec.ts`.
  */
-import { expect, type Page } from '@playwright/test'
-import { test } from './fixtures'
+import { expect, test, type Page } from '@playwright/test'
 import { gotoRollPage, waitForRollPageReady } from './helpers'
+
+type SessionMode = {
+  active_bandwidth: string | null
+  active_intent: string | null
+}
+
+const MODE_LABELS = {
+  balanced: 'Balanced',
+  deep: 'Deep',
+  explore: 'Explore',
+  familiar: 'Familiar',
+  light: 'Light',
+  momentum: 'Momentum',
+  random: 'Random',
+} as const satisfies Readonly<Record<string, string>>
 
 async function getAuthToken(page: Page): Promise<string> {
   return page.evaluate(() => {
@@ -25,315 +32,178 @@ async function getAuthToken(page: Page): Promise<string> {
   })
 }
 
-async function setSessionMode(
-  page: Page,
-  patch: { bandwidth?: string; intent?: string },
-): Promise<void> {
+async function getSessionMode(page: Page): Promise<SessionMode> {
   const token = await getAuthToken(page)
-  const response = await page.request.patch('/api/v1/roll/session-mode', {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    data: patch,
+  // Use the browser transport so this request sees the same deterministic Rust
+  // v2 contract response as the page's query.
+  const response = await page.evaluate(async (accessToken) => {
+    const result = await fetch('/api/v2/roll/bootstrap', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+    return { ok: result.ok, body: await result.json() }
   })
-  expect(response.ok()).toBeTruthy()
-}
-
-async function getSessionMode(page: Page): Promise<{
-  active_bandwidth: string | null
-  active_intent: string | null
-}> {
-  const token = await getAuthToken(page)
-  // The unversioned bootstrap was retired by #4397. Read the Rust v2 contract.
-  const response = await page.request.get('/api/v2/roll/bootstrap', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-  expect(response.ok()).toBeTruthy()
-  // SAFETY: the test reads only the session_mode fields it asserts
-  const body = (await response.json()) as {
-    session_mode: { active_bandwidth: string | null; active_intent: string | null }
-  }
+  expect(response.ok).toBeTruthy()
+  // SAFETY: the test reads only the two session-mode fields it asserts
+  const body = response.body as { session_mode: SessionMode }
   return body.session_mode
 }
 
-async function createThreadWithIssues(page: Page, title: string): Promise<void> {
-  const token = await getAuthToken(page)
-  const threadRes = await page.request.post('/api/threads/', {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    data: { title, format: 'issue', issues_remaining: 10, total_issues: 10 },
+async function mockRustRollReadApi(page: Page): Promise<void> {
+  const sessionMode: SessionMode = {
+    active_bandwidth: 'balanced',
+    active_intent: 'explore',
+  }
+
+  await page.addInitScript(() => localStorage.setItem('auth_token', 'test-access-token'))
+  await page.route('**/api/**', async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    const endpoint = path.split('/').at(-1)
+    if (endpoint === 'me') {
+      return route.fulfill({ json: {
+        id: 1,
+        username: 'reader',
+        email: 'reader@example.test',
+        preferences: { theme: 'classic' },
+      } })
+    }
+    if (endpoint === 'refresh') {
+      return route.fulfill({ json: { access_token: 'test-access-token' } })
+    }
+    if (endpoint === 'csrf') {
+      return route.fulfill({ json: { csrf_token: 'test-csrf' } })
+    }
+    if (path === '/api/v2/reading-sessions') {
+      return route.fulfill({ json: { session_id: 1, created: false } })
+    }
+    if (path === '/api/v2/roll/bootstrap') {
+      return route.fulfill({ json: {
+      session_id: 1,
+      user_id: 1,
+      current_die: 6,
+      manual_die: null,
+      pending_thread_id: null,
+      last_rolled_result: null,
+      session_mode: {
+        ...sessionMode,
+        predicted_bandwidth: null,
+        bandwidth_confidence: null,
+        bandwidth_source: null,
+        bandwidth_version: null,
+        predicted_intent: null,
+        intent_confidence: null,
+        intent_source: null,
+        intent_version: null,
+        session_mode_correction_guidance: null,
+      },
+      active_thread: null,
+      bandwidth: {
+        predicted_bandwidth: null,
+        active_bandwidth: sessionMode.active_bandwidth,
+        confidence: null,
+        source: null,
+        mode_version: null,
+      },
+      pool_reason: 'no_series',
+      rollable: [],
+      snoozed_threads: [],
+      snoozed_count: 0,
+      skipped_thread_ids: [],
+      skipped_threads: [],
+      last_read: null,
+      } })
+    }
+    if (path === '/api/v2/threads') {
+      return route.fulfill({ json: { threads: [], next_page_token: null, active_count: 0 } })
+    }
+    return route.fulfill({ json: [] })
   })
-  expect(threadRes.ok()).toBeTruthy()
-  // SAFETY: the API returns a created record, so its id is always present
-  const thread = (await threadRes.json()) as { id: number }
-  const issuesRes = await page.request.post(`/api/v1/threads/${thread.id}/issues`, {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    data: { issue_range: '1-10' },
-  })
-  expect(issuesRes.ok()).toBeTruthy()
+}
+
+function isModeLabel(value: string): value is keyof typeof MODE_LABELS {
+  return Object.hasOwn(MODE_LABELS, value)
+}
+
+function modeLabel(value: string | null): string {
+  if (!value) return ''
+  const normalized = value.trim().toLowerCase()
+  if (isModeLabel(normalized)) return MODE_LABELS[normalized]
+  return value.trim()
+}
+
+function expectedModeLabel(mode: SessionMode): string {
+  return [mode.active_bandwidth, mode.active_intent]
+    .flatMap((value) => {
+      const label = modeLabel(value)
+      return label ? [label] : []
+    })
+    .join(' · ')
+}
+
+async function expectModeChipMatchesBootstrap(page: Page, mode: SessionMode): Promise<void> {
+  const label = expectedModeLabel(mode)
+  const chip = page.getByTestId('reading-mode-control')
+
+  if (!label) {
+    await expect(chip).toHaveCount(0)
+    return
+  }
+
+  await expect(chip).toBeVisible()
+  await expect(chip).toHaveText(label)
+  await expect(chip).toHaveAttribute('title', `Reading mode: ${label}`)
 }
 
 test.describe('reading-mode acceptance (issue #1734)', () => {
-  test('roll header displays canonical bandwidth and intent from bootstrap', async ({
-    authenticatedPage,
+  test('roll header displays the canonical mode returned by Rust v2 bootstrap', async ({
+    page,
   }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'deep', intent: 'familiar' })
+    await mockRustRollReadApi(page)
     await gotoRollPage(page)
     await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toBeVisible()
-    await expect(control).toContainText('Deep · Familiar')
-  })
-
-  test('manual bandwidth switch via mode selector takes effect for subsequent rolls', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'balanced', intent: 'balanced' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toContainText('Balanced · Balanced')
-
-    await control.click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-
-    await page.getByRole('radio', { name: /Deep/ }).click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
 
     const mode = await getSessionMode(page)
-    expect(mode.active_bandwidth).toBe('deep')
-    expect(mode.active_intent).toBe('balanced')
+    await expectModeChipMatchesBootstrap(page, mode)
   })
 
-  test('manual intent switch via mode selector takes effect for subsequent rolls', async ({
-    authenticatedPage,
+  test('the mode status has no selector or retired session-mode write path', async ({
+    page,
   }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'light', intent: 'balanced' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toContainText('Light · Balanced')
-
-    await control.click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-
-    await page.getByRole('radio', { name: /Momentum/ }).click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
-
-    const mode = await getSessionMode(page)
-    expect(mode.active_bandwidth).toBe('light')
-    expect(mode.active_intent).toBe('momentum')
-  })
-
-  test('random intent activates the legacy unweighted control path', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'balanced', intent: 'random' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toContainText('Balanced · Random')
-
-    const mode = await getSessionMode(page)
-    expect(mode.active_intent).toBe('random')
-
-    await control.click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-    const randomOption = page.getByRole('radio', { name: /Random/ })
-    await expect(randomOption).toHaveAttribute('aria-checked', 'true')
-    expect(await randomOption.getAttribute('aria-label')).toContain('Unweighted legacy-style selection')
-  })
-
-  test('normal snooze does not auto-interrupt with the correction modal', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await createThreadWithIssues(page, 'Snooze test thread')
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    await expect(page.getByTestId('reading-mode-control')).toBeVisible()
-
-    await expect(page.getByTestId('correction-sheet')).toBeHidden()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
-  })
-
-  test('mode selector exposes random intent with unweighted description', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
+    await mockRustRollReadApi(page)
+    const retiredWrites: string[] = []
+    page.on('request', (request) => {
+      const url = new URL(request.url())
+      if (url.pathname === '/api/v1/roll/session-mode') retiredWrites.push(request.method())
+    })
 
     await gotoRollPage(page)
     await waitForRollPageReady(page)
 
-    const control = page.getByTestId('reading-mode-control')
-    await control.click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-
-    const randomOption = page.getByRole('radio', { name: /Random/ })
-    await expect(randomOption).toHaveAttribute(
-      'aria-label',
-      expect.stringContaining('Unweighted legacy-style selection'),
-    )
-    await page.keyboard.press('Escape')
+    const chip = page.getByTestId('reading-mode-control')
+    if (await chip.count()) {
+      await expect(chip).not.toHaveAttribute('aria-haspopup', 'dialog')
+      expect(
+        await chip.evaluate((element) => element.tagName.toLowerCase()),
+      ).toBe('span')
+    }
+    await expect(page.getByTestId('mode-selector-sheet')).toHaveCount(0)
+    expect(retiredWrites).toEqual([])
   })
 
-  test('refresh/reload restores mode state from bootstrap', async ({
-    authenticatedPage,
+  test('refresh restores the same read-only mode state from bootstrap', async ({
+    page,
   }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'deep', intent: 'explore' })
+    await mockRustRollReadApi(page)
     await gotoRollPage(page)
     await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toContainText('Deep · Explore')
+    const before = await getSessionMode(page)
+    await expectModeChipMatchesBootstrap(page, before)
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     await waitForRollPageReady(page)
 
-    await expect(page.getByTestId('reading-mode-control')).toContainText('Deep · Explore')
-  })
-
-  test('mode selector is accessible by keyboard', async ({ authenticatedPage }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'balanced', intent: 'balanced' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await control.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-
-    const deepOption = page.getByRole('radio', { name: /Deep/ })
-    await deepOption.focus()
-    await page.keyboard.press('Enter')
-    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
-
-    const mode = await getSessionMode(page)
-    expect(mode.active_bandwidth).toBe('deep')
-  })
-
-  test('arrow keys move and select within the mode selector radio groups', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'balanced', intent: 'momentum' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toContainText('Balanced · Momentum')
-    await control.click()
-
-    const sheet = page.getByTestId('mode-selector-sheet')
-    await expect(sheet).toBeVisible()
-
-    // ArrowRight moves to the next bandwidth option and selects it immediately,
-    // matching the sheet's click-to-commit behavior (issue #3682).
-    const bandwidthGroup = page.getByRole('radiogroup', { name: 'Bandwidth' })
-    await bandwidthGroup.getByRole('radio', { name: /Balanced/ }).focus()
-    await page.keyboard.press('ArrowRight')
-
-    await expect(sheet).toBeHidden()
-    await expect(control).toContainText('Deep · Momentum')
-    expect((await getSessionMode(page)).active_bandwidth).toBe('deep')
-
-    // ArrowLeft wraps backward from the first intent option to the last one.
-    await control.click()
-    await expect(sheet).toBeVisible()
-    const intentGroup = page.getByRole('radiogroup', { name: 'Intent' })
-    await intentGroup.getByRole('radio', { name: /Balanced/ }).focus()
-    await page.keyboard.press('ArrowLeft')
-
-    await expect(sheet).toBeHidden()
-    await expect(control).toContainText('Deep · Random')
-    expect((await getSessionMode(page)).active_intent).toBe('random')
-  })
-
-  test('mode selector closes on Escape without changing state', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'light', intent: 'momentum' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await control.click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-
-    await page.keyboard.press('Escape')
-    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
-
-    const mode = await getSessionMode(page)
-    expect(mode.active_bandwidth).toBe('light')
-    expect(mode.active_intent).toBe('momentum')
-  })
-
-  test('mobile viewport shows compact mode control and mode selector works', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await page.setViewportSize({ width: 375, height: 812 })
-    await setSessionMode(page, { bandwidth: 'light', intent: 'familiar' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    await expect(control).toBeVisible()
-    await expect(control).toContainText('Light · Familiar')
-
-    await control.click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeVisible()
-
-    await page.getByRole('radio', { name: /Deep/ }).click()
-    await expect(page.getByTestId('mode-selector-sheet')).toBeHidden()
-  })
-
-  test('mode control does not dominate the header visually', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-
-    await setSessionMode(page, { bandwidth: 'deep', intent: 'momentum' })
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-
-    const control = page.getByTestId('reading-mode-control')
-    const box = await control.boundingBox()
-    expect(box).not.toBeNull()
-    if (box) {
-      expect(box.width).toBeLessThan(200)
-    }
-
-    const header = page.locator('header')
-    const headerBox = await header.boundingBox()
-    expect(headerBox).not.toBeNull()
+    const after = await getSessionMode(page)
+    expect(after).toEqual(before)
+    await expectModeChipMatchesBootstrap(page, after)
   })
 })

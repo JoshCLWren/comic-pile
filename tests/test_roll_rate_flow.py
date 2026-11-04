@@ -107,7 +107,14 @@ async def test_manual_die_keeps_history_truthful_and_resumes_auto(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User,
     automatic_die: int, action: str,
 ) -> None:
-    """Manual actions record d20 without advancing the suspended automatic ladder."""
+    """Manual actions record d20 without advancing the suspended automatic ladder.
+
+    The v1 set-die/clear-manual-die routes are retired (#4352/#4353), so the
+    pinned legacy session state is seeded directly here. The behaviour under
+    test — a pinned die keeps the visible history at d20 while the automatic
+    ladder stays suspended, and clearing the pin resumes that ladder — is
+    still what the Python session projection must report.
+    """
     from app.models import Event, ReadingSession
 
     thread = Thread(title="Manual die regression", format="Comic", issues_remaining=5,
@@ -119,8 +126,9 @@ async def test_manual_die_keeps_history_truthful_and_resumes_auto(
     async_db.add(Event(type="rate", session_id=session_id, die=10, die_after=automatic_die))
     await async_db.commit()
 
-    selected = await auth_client.post("/api/v1/roll/set-die", params={"die": 20})
-    assert selected.status_code == 200
+    session.manual_die = 20
+    await async_db.commit()
+
     for _ in range(2 if action == "rate" else 1):
         rolled = await auth_client.post("/api/v1/roll/")
         assert rolled.status_code == 200, rolled.text
@@ -150,9 +158,8 @@ async def test_manual_die_keeps_history_truthful_and_resumes_auto(
         assert undone.status_code == 200, undone.text
         assert undone.json()["current_die"] == 20
         assert undone.json()["manual_die"] == 20
-    cleared = await auth_client.post("/api/v1/roll/clear-manual-die")
-    assert cleared.status_code == 200
-    assert cleared.text == f"d{automatic_die}"
+    session.manual_die = None
+    await async_db.commit()
     current = await auth_client.get("/api/v1/sessions/current/")
     assert current.json()["manual_die"] is None
     assert current.json()["current_die"] == automatic_die

@@ -18,7 +18,7 @@
  */
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
-import { createThread, getAuthToken } from './helpers'
+import { createThread } from './helpers'
 
 const PHONE_VIEWPORT = { width: 390, height: 844 }
 
@@ -28,7 +28,6 @@ async function headerControlSnapshot(page: Page): Promise<{
   solidLabel: string | null
   pickManually: { backgroundColor: string; hasDialog: boolean }
   dieControl: { label: string; hasDialog: boolean; backgroundColor: string }
-  autoPressed: string | null
 }> {
   return page.evaluate(() => {
     const probe = document.createElement('div')
@@ -53,10 +52,6 @@ async function headerControlSnapshot(page: Page): Promise<{
     const dieControl = Array.from(document.querySelectorAll('header button')).find(
       (button) => button.getAttribute('aria-label')?.startsWith('Current die d') ?? false,
     ) as HTMLButtonElement | null
-    // SAFETY: the role=tab selector matches only the tab buttons this component renders
-    const auto = Array.from(document.querySelectorAll('header button')).find(
-      (button) => button.textContent?.trim() === 'Auto',
-    ) as HTMLButtonElement | null
 
     return {
       primaryActionRgb,
@@ -71,7 +66,6 @@ async function headerControlSnapshot(page: Page): Promise<{
         hasDialog: dieControl?.getAttribute('aria-haspopup') === 'dialog',
         backgroundColor: dieControl ? getComputedStyle(dieControl).backgroundColor : '',
       },
-      autoPressed: auto?.getAttribute('aria-pressed') ?? null,
     }
   })
 }
@@ -93,14 +87,13 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
     // Exactly one visible header control uses the solid active fill.
     expect(snapshot.solidCount, `expected one solid active control, got ${snapshot.solidCount}`).toBe(1)
     // ... and it is the die control, not the manual-pick action.
-    expect(snapshot.dieControl.label).toMatch(/automatic mode/)
     expect(snapshot.dieControl.backgroundColor).toBe(snapshot.primaryActionRgb)
     expect(snapshot.pickManually.backgroundColor).not.toBe(snapshot.primaryActionRgb)
 
-    // The solid die control is a dialog trigger whose accessible name states
-    // the actual active mode.
+    // The solid die control is a dialog trigger named for the current die;
+    // there is no automatic/manual mode any more (#4353).
     expect(snapshot.dieControl.hasDialog).toBe(true)
-    expect(snapshot.dieControl.label).toMatch(/^Current die d\d+, automatic mode$/)
+    expect(snapshot.dieControl.label).toMatch(/^Current die d\d+$/)
   })
 
   test('Pick Manually opens the override dialog instead of being a selected mode', async ({
@@ -118,47 +111,5 @@ test.describe('Roll-mode control state grammar at phone width (#2304)', () => {
 
     await page.locator('[data-roll-primary-action="pick-manually"]').click()
     await expect(page.getByRole('dialog', { name: 'Pick manually' })).toBeVisible()
-  })
-
-  test('the ladder Auto segment and pinned die report the truthful pressed states', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-    await createThread(page, { title: 'Auto State Thread', format: 'Issue', issues_remaining: 2, total_issues: 2 })
-
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
-    const autoButton = page.getByRole('button', { name: 'Auto', exact: true })
-    await expect(autoButton).toBeVisible()
-    // Fresh session: automatic ladder mode is active.
-    await expect(autoButton).toHaveAttribute('aria-pressed', 'true')
-
-    // Pin die d8 on the server, mirroring the manual-pick dialog flow.
-    // SAFETY: the test reads only the csrf token from the response body
-    const csrf = (await (await page.request.get('/api/auth/csrf', {
-      headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
-    })).json()) as { csrf_token?: string }
-    const token = await getAuthToken(page)
-    const seeded = await page.request.post('/api/v1/roll/set-die?die=8', {
-      headers: { Authorization: `Bearer ${token}`, 'X-CSRF-Token': csrf.csrf_token! },
-    })
-    expect(seeded.ok(), `set-die failed: ${seeded.status()}`).toBeTruthy()
-
-    // Reload so bootstrap reflects the pinned manual die.
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(autoButton).toBeVisible()
-    await expect(autoButton).toHaveAttribute('aria-pressed', 'false')
-    await expect(page.getByRole('button', { name: 'd8', exact: true })).toHaveAttribute('aria-pressed', 'true')
-
-    // The mode control's accessible name is only rendered at phone width
-    // (the `md:hidden` die control); verify manual mode there and confirm the
-    // solid active fill stays on the die control, never on the manual-pick action.
-    await page.setViewportSize(PHONE_VIEWPORT)
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('button', { name: /^Current die d8, manual mode$/ })).toBeVisible()
-    const manualSnapshot = await headerControlSnapshot(page)
-    expect(manualSnapshot.solidCount, `expected one solid active control, got ${manualSnapshot.solidCount}`).toBe(1)
-    expect(manualSnapshot.dieControl.backgroundColor).toBe(manualSnapshot.primaryActionRgb)
-    expect(manualSnapshot.pickManually.backgroundColor).not.toBe(manualSnapshot.primaryActionRgb)
   })
 })

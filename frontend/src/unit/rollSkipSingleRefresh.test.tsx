@@ -110,7 +110,6 @@ function makeApis() {
     cacheEffects: {
       applyRatedThreadCache: vi.fn(),
       invalidateCurrentSessionAfterSnooze: vi.fn().mockResolvedValue(undefined),
-      invalidateAfterSessionModeUpdate: vi.fn(),
     },
   }
 }
@@ -184,7 +183,6 @@ function renderActionSheetFlow(apis: Apis) {
       navigate: vi.fn() as NavigateFunction,
       mutations: {
         setDieMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
-        clearManualDieMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation: { mutate: vi.fn().mockResolvedValue({ refreshed: true, refreshError: null }), isPending: false },
         unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },

@@ -207,7 +207,7 @@ def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unread
         assert "if: steps.api_budget.outputs.allow == 'true'" in section
 
 
-def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve() -> None:
+def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     batch = workflow.split("Dispatching workers through centralized assignment:", 1)[1].split(
         "Self-perpetuate roster cadence", 1
@@ -216,9 +216,17 @@ def test_dispatch_batch_checks_live_quota_and_stops_roster_chain_at_reserve() ->
     assert "remaining_core < 450" in batch
     assert "budget_deferred=true" in batch
     assert 'echo "budget_deferred=${budget_deferred}" >> "$GITHUB_OUTPUT"' in batch
+    assert "budget_unreadable=true" in batch
+    assert 'echo "budget_unreadable=${budget_unreadable}" >> "$GITHUB_OUTPUT"' in batch
+    assert "if ! [[ \"$remaining_core\" =~ ^[0-9]+$ ]]" in batch
+    assert "if (( remaining_core < 450 )); then" in batch
     chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
     assert "steps.api_budget.outputs.allow == 'true'" in chain
-    assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" in chain
+    assert "steps.api_budget.outputs.quota_deferred == 'true'" in chain
+    assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" not in chain
+    assert "API_RESET_EPOCH:" in chain
+    assert "BUDGET_DEFERRED:" in chain
+    assert "BUDGET_UNREADABLE:" in chain
 
 def test_trusted_pr_review_events_wake_canonical_roster_after_idle_tick() -> None:
     """New manually authored PRs must not wait for hourly dispatcher recovery."""
@@ -267,3 +275,129 @@ def test_event_wakeup_never_checks_out_untrusted_pr_code_or_assigns_workers() ->
     assert '.state == "open"' in wake
     assert '.base.repo.full_name == $repo' in wake
     assert '.head.repo.full_name != null' in wake
+
+
+def test_quota_deferred_roster_chains_once_after_verified_reset_without_polling() -> None:
+    """Budget deferral waits for reset; unknown quota never starts a retry loop."""
+    import os
+    import subprocess
+    import textwrap
+    import time
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    gate = workflow.split("Gate factory dispatch on Actions REST quota", 1)[1].split(
+        "Reconcile serialized migration finalization lane", 1
+    )[0]
+    assert 'echo "reset_epoch=${reset}" >> "$GITHUB_OUTPUT"' in gate
+    assert 'echo "quota_deferred=true" >> "$GITHUB_OUTPUT"' in gate
+    assert gate.index('echo "quota_deferred=true"') > gate.index("remaining < 1200")
+    assert "gh api rate_limit" in gate
+
+    chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1]
+    script = textwrap.dedent(chain.split("run: |", 1)[1])
+    assert "defer_until_reset" in script
+    assert '[[ "$reset_epoch" =~ ^[0-9]+$' in script
+    assert "delay_seconds > 3700" in script
+    assert 'sleep "$delay_seconds"' in script
+    assert "gh api rate_limit" not in script
+
+    # Stubs capture commands rather than sleeping or dispatching Actions.
+    stub = """
+sleep() { printf 'sleep:%s\\n' "$1"; }
+gh() { printf 'gh:%s\\n' "$*"; }
+"""
+    base = {
+        **os.environ,
+        "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
+        "API_RESET_EPOCH": str(int(time.time()) + 60),
+        "QUOTA_DEFERRED": "true",
+        "BUDGET_DEFERRED": "",
+        "DISPATCHED_COUNT": "",
+        "DISPATCH_FAILED": "",
+    }
+
+    result = subprocess.run(
+        ["bash", "-c", stub + script], env=base, text=True, capture_output=True, check=False
+    )
+    assert result.returncode == 0, result.stderr
+    commands = [line for line in result.stdout.splitlines() if line.startswith(("sleep:", "gh:"))]
+    assert len(commands) == 2
+    assert 60 <= int(commands[0].removeprefix("sleep:")) <= 75
+    assert commands[1] == (
+        "gh:workflow run fixed-model-factory-dispatch.yml "
+        "--repo JoshCLWren/comic-pile --ref main -f mode=roster"
+    )
+
+    batch = {**base, "QUOTA_DEFERRED": "", "BUDGET_DEFERRED": "true"}
+    rerun = subprocess.run(
+        ["bash", "-c", stub + script], env=batch, text=True, capture_output=True, check=False
+    )
+    assert rerun.returncode == 0, rerun.stderr
+    assert rerun.stdout.count("gh:workflow run fixed-model-factory-dispatch.yml") == 1
+
+    invalid = {**base, "API_RESET_EPOCH": "not-an-epoch"}
+    blocked = subprocess.run(
+        ["bash", "-c", stub + script], env=invalid, text=True, capture_output=True, check=False
+    )
+    assert blocked.returncode != 0
+    assert "gh:workflow run" not in blocked.stdout
+    assert "sleep:" not in blocked.stdout
+
+    # A failed or nonnumeric mid-batch quota observation is not proof that
+    # quota was exhausted. Even after productive dispatch, it must not chain.
+    unreadable = {
+        **base,
+        "QUOTA_DEFERRED": "",
+        "BUDGET_DEFERRED": "",
+        "BUDGET_UNREADABLE": "true",
+        "DISPATCHED_COUNT": "2",
+    }
+    stopped = subprocess.run(
+        ["bash", "-c", stub + script], env=unreadable, text=True,
+        capture_output=True, check=False,
+    )
+    assert stopped.returncode == 0, stopped.stderr
+    assert "gh:workflow run" not in stopped.stdout
+    assert "sleep:" not in stopped.stdout
+
+
+def test_non_quota_roster_keeps_normal_cadence_and_stops_on_no_work() -> None:
+    """Ordinary productive and idle ticks retain the preexisting behavior."""
+    import os
+    import subprocess
+    import textwrap
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    script = textwrap.dedent(
+        workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[1]
+    )
+    stub = """
+sleep() { printf 'sleep:%s\\n' "$1"; }
+gh() { printf 'gh:%s\\n' "$*"; }
+"""
+    env = {
+        **os.environ,
+        "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
+        "API_RESET_EPOCH": "",
+        "QUOTA_DEFERRED": "",
+        "BUDGET_DEFERRED": "",
+        "DISPATCHED_COUNT": "1",
+        "DISPATCH_FAILED": "false",
+    }
+    active = subprocess.run(
+        ["bash", "-c", stub + script], env=env, text=True, capture_output=True, check=False
+    )
+    assert active.returncode == 0, active.stderr
+    assert "sleep:240" in active.stdout
+    assert active.stdout.count("gh:workflow run fixed-model-factory-dispatch.yml") == 1
+
+    idle = subprocess.run(
+        ["bash", "-c", stub + script],
+        env={**env, "DISPATCHED_COUNT": "0"},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert idle.returncode == 0, idle.stderr
+    assert "gh:workflow run" not in idle.stdout
+    assert "sleep:" not in idle.stdout

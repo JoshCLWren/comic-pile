@@ -21,7 +21,7 @@ describe('defaultHttpClient', () => {
     await client.get('/v1/threads/', { params: { search: 'bat' } })
     await client.post('/v1/roll/skip')
     await client.put('/v1/queues/9/name', { name: 'Saga' })
-    await client.patch('/v1/roll/session-mode', { mode: 'auto' })
+    await client.patch('/v1/example-resource', { mode: 'auto' })
     await client.delete('/v1/queues/9')
 
     expect(registered.get).toHaveBeenCalledWith('/v1/threads/', {
@@ -34,7 +34,7 @@ describe('defaultHttpClient', () => {
       undefined,
     )
     expect(registered.patch).toHaveBeenCalledWith(
-      '/v1/roll/session-mode',
+      '/v1/example-resource',
       { mode: 'auto' },
       undefined,
     )

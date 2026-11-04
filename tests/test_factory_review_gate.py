@@ -136,6 +136,11 @@ def wire_controller(
         "post_review_comment",
         lambda **kwargs: posted.append(kwargs),
     )
+    # Ready-path review fixtures inspect controller decisions, not label I/O.
+    # Dedicated tests below exercise the informational approval projection.
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility", lambda _pr, _head: None,
+    )
 
     class Result:
         returncode = 0
@@ -1760,7 +1765,8 @@ def test_trusted_native_changes_requested_routes_to_repair_only() -> None:
     assert "types: [submitted, dismissed]" in workflow
     assert "await visibility({ github, context });" in workflow
     assert (
-        '[[ "$EVENT_NAME" == \'pull_request_review\' || '
+        '[[ "$EVENT_NAME" == \'issue_comment\' || '
+        '"$EVENT_NAME" == \'pull_request_review\' || '
         '"$EVENT_NAME" == \'pull_request_review_comment\' ]] && exit 0'
     ) in workflow
     # Review votes never feed ready or merge gates. Those remain controller-only.
@@ -3345,3 +3351,111 @@ def test_declared_dependency_gate_records_one_durable_block_reason(
         in posted[0]
     )
     assert "#4008" in posted[0]
+
+
+def test_controller_projects_approval_after_authorized_ready(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only a fully authorized exact-head review can project approval."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload, payload],
+        comments=producer_contribution(),
+        mechanical=True,
+        include_diff_inspection=True,
+    )
+    projections: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility",
+        lambda number, head: projections.append(
+            (number, head, str(transitions[-1]["pr_stage"]))
+        ),
+    )
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "ready"
+    assert projections == [(1390, REVIEWED_HEAD, "factory:ready")]
+    assert posted and posted[-1]["acceptance_marker"] is not None
+
+
+def test_controller_never_projects_unverified_approval(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A failed provenance gate cannot emit the informational approved label."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch, module, [payload],
+        comments=producer_contribution(),
+        mechanical=True,
+    )
+    projections: list[tuple[int, str]] = []
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility",
+        lambda number, head: projections.append((number, head)),
+    )
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: False)
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "cross-model-provenance-blocked"
+    assert transitions[-1]["pr_stage"] == "factory:blocked"
+    assert projections == []
+
+
+def test_controller_approval_visibility_rejects_stale_head_or_repair_stage(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only live accepted review heads can receive an informational label."""
+    module = load_review_controller()
+    writes: list[object] = []
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append((args, input_json)),
+    )
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": MOVED_HEAD},
+    )
+    module.set_review_approval_visibility(4613, REVIEWED_HEAD)
+    assert writes == []
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": REVIEWED_HEAD},
+    )
+    for stage in ("factory:building", "factory:changes-requested"):
+        monkeypatch.setattr(
+            module, "target_json",
+            lambda _pr, stage=stage: {"body": "", "labels": [stage]},
+        )
+        module.set_review_approval_visibility(4613, REVIEWED_HEAD)
+    assert writes == []
+
+
+def test_controller_repair_transition_clears_stale_approved_label(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A later actionable repair never retains an earlier approval label."""
+    module = load_review_controller()
+    writes: list[object] = []
+    monkeypatch.setattr(
+        module, "target_json",
+        lambda _pr: {"body": "", "labels": [
+            "factory", "factory:review", "factory:unowned",
+            "factory:approved", "bug",
+        ]},
+    )
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append(input_json),
+    )
+    module.replace_factory_labels(
+        4613, "factory:unowned", "factory:changes-requested"
+    )
+    assert writes
+    assert "factory:approved" not in writes[0]["labels"]
+    assert "bug" in writes[0]["labels"]

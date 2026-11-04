@@ -19,24 +19,15 @@ import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
 const DESKTOP_VIEWPORT = { width: 1280, height: 800 }
 
 async function pinDieFromHeader(page: Page, die: number): Promise<void> {
-  const autoSegment = page.getByRole('button', { name: 'Auto', exact: true })
-  await expect(autoSegment).toHaveAttribute('aria-pressed', 'true')
-
   await page.getByRole('button', { name: `d${die}`, exact: true }).click()
 
-  // The die-mode mutation refreshes the roll bootstrap, so the ladder segment
-  // stops reading as automatic without a full page reload.
-  await expect(autoSegment).toHaveAttribute('aria-pressed', 'false')
+  // The die-command mutation refreshes the roll bootstrap, so the chosen die
+  // reads as the selected ladder segment without a full page reload. There is
+  // no Auto/Manual segment any more (#4353): the die is event-derived.
   await expect(page.getByRole('button', { name: `d${die}`, exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
-}
-
-async function returnToAutomaticMode(page: Page): Promise<void> {
-  const autoSegment = page.getByRole('button', { name: 'Auto', exact: true })
-  await autoSegment.click()
-  await expect(autoSegment).toHaveAttribute('aria-pressed', 'true')
 }
 
 async function openRatingView(page: Page, title: string): Promise<void> {
@@ -64,6 +55,16 @@ test.describe('Decision card die readout with a pinned die (#3144)', () => {
     await waitForRollPageReady(page)
     await pinDieFromHeader(page, 20)
 
+    // #4279 regression: the manual choice is one die event, so it survives
+    // navigating away and back without any sticky session mode.
+    await page.goto('/queue', { waitUntil: 'domcontentloaded' })
+    await gotoRollPage(page)
+    await waitForRollPageReady(page)
+    await expect(page.getByRole('button', { name: 'd20', exact: true })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+
     await openRatingView(page, threadTitle)
 
     const card = page.getByTestId('decision-card')
@@ -90,33 +91,5 @@ test.describe('Decision card die readout with a pinned die (#3144)', () => {
     const card = page.getByTestId('decision-card')
     await expect(card).toContainText('d6 → d8')
     await expect(card).not.toContainText('Manual mode is active')
-  })
-
-  test('leaving manual mode restores the ladder move readout on the next roll', async ({
-    authenticatedPage,
-  }) => {
-    const page = authenticatedPage
-    const threadTitle = 'Die Mode Switch Thread'
-    await createThread(page, {
-      title: threadTitle,
-      format: 'Issue',
-      issues_remaining: 3,
-      total_issues: 3,
-    })
-
-    await page.setViewportSize(DESKTOP_VIEWPORT)
-    await gotoRollPage(page)
-    await waitForRollPageReady(page)
-    await pinDieFromHeader(page, 20)
-
-    await openRatingView(page, threadTitle)
-    await expect(page.getByTestId('decision-card')).toContainText('Manual mode is active at d20')
-
-    await page.getByTestId('cancel-roll').click()
-    await expect(page.locator('#main-die-3d')).toBeVisible({ timeout: 15000 })
-    await returnToAutomaticMode(page)
-
-    await openRatingView(page, threadTitle)
-    await expect(page.getByTestId('decision-card')).toContainText('d6 → d8')
   })
 })

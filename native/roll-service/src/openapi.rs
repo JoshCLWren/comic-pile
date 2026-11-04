@@ -5,8 +5,8 @@
 //! documentation-only operation is generated from the same Rust request and
 //! response types the mounted handlers use, and the aggregate merges the
 //! existing per-domain [`utoipa::OpenApi`] documents (`QueueApi`, `ThreadsApi`,
-//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset and
-//! reading-boundary declarations.
+//! `IssueApi`, `AnalyticsApi`) with the v2 auth, bootstrap, dice, offer, reset
+//! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
 //! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.py`
@@ -17,8 +17,8 @@ use utoipa::OpenApi;
 /// The fourteen `/api/v2` operations that are declared in the auth, bootstrap,
 /// dice, offer, reset and reading-boundary modules.
 ///
-/// `QueueApi`, `ThreadsApi` and `IssueApi` already publish the remaining six
-/// deployed operations and are merged in [`canonical_openapi`].
+/// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
+/// remaining seven deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
     info(
@@ -88,7 +88,8 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 20] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 21] = [
+    ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
@@ -121,6 +122,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
+        .merge_from(crate::analytics::AnalyticsApi::openapi())
 }
 
 #[cfg(test)]

@@ -247,6 +247,51 @@ Reactivate a completed thread by adding more issues. Moves thread to position 1.
 
 ---
 
+## Analytics
+
+The authenticated reader's bounded reading metrics. `GET /api/v2/analytics/metrics`
+is the new native Rust resource used by the real frontend service. The legacy
+Python `GET /api/v1/analytics/metrics` and `GET /api/analytics/metrics` handlers
+remain temporarily available until the replacement has authenticated production
+proof; they are removed in the post-proof cleanup (#4348).
+
+### GET /api/v2/analytics/metrics
+
+Return owner-scoped thread counts, completion rate, average ended-session
+duration, the five newest sessions from the last seven days, event-type counts,
+and the five highest-rated threads at or above 4.0. Authentication, ownership,
+token revocation and the credential epoch are validated in the same single
+database statement as the metrics.
+
+**Response**: `200 OK`
+
+```json
+{
+  "total_threads": 5,
+  "active_threads": 4,
+  "completed_threads": 1,
+  "completion_rate": 20.0,
+  "average_session_hours": 2.0,
+  "recent_sessions": [
+    {
+      "id": 12,
+      "started_at": "2025-12-30T10:30:00+00:00",
+      "ended_at": null,
+      "start_die": 6
+    }
+  ],
+  "event_stats": {"rate": 1, "roll": 4},
+  "top_rated_threads": [
+    {"id": 3, "title": "Saga", "rating": 4.5, "format": "Comic"}
+  ]
+}
+```
+
+`401 Unauthorized` is returned for a missing/invalid token, a revoked token, or
+a password change that predates the token's credential epoch.
+
+---
+
 ## Queue
 
 Queue management for thread positioning.
@@ -360,18 +405,28 @@ Manually select a thread instead of rolling.
 
 ---
 
-### Manual die mode
+### Manual die selection
 
-`POST /api/v1/roll/set-die?die=20` pins the visible die. Ratings and snoozes
-keep that die fixed; their timeline records carry the actual die in `die` and
-the unchanged visible die in `die_after`. New manual outcome events preserve
-the suspended automatic ladder in `context.automatic_die_after`.
+`POST /api/v2/roll/dice-command` is the only way to choose a die. The command
+body carries `kind: "manual_select"`, the requested `die`, and an
+`idempotency_key`:
 
-`POST /api/v1/roll/clear-manual-die` resumes that automatic value, rather than
-stepping from the manual die. Session details, History, and roll selection use
-the same automatic baseline. Undo of a new rating preserves both values.
-Events without this metadata retain their historical interpretation; this
-change does not rewrite previously recorded ladder steps.
+```json
+{
+  "kind": "manual_select",
+  "die": 20,
+  "idempotency_key": "roll-0123456789abcdef0123456789abcdef"
+}
+```
+
+The selection is one event, not a pinned mode: the die is projected from the
+owner's newest die-changing event, so it survives navigation and applies to
+every later roll. `POST /api/v2/roll/reset` returns the die to d6 and clears
+the browser's temporary snoozes and the pending roll.
+
+The v1 `POST /api/v1/roll/set-die` and `POST /api/v1/roll/clear-manual-die`
+routes were retired (#4352, #4353): nothing pins a manual die any more, so
+there is no automatic ladder to resume.
 
 ## Rate
 

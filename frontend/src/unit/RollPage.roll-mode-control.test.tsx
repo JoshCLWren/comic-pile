@@ -67,9 +67,7 @@ const headerBaseProps = {
   pool: [],
   isRatingView: false,
   setDiePending: false,
-  clearManualDiePending: false,
   onSetDie: vi.fn(),
-  onClearManualDie: vi.fn(),
   onOpenOverride: vi.fn(),
   onOpenDieModal: vi.fn(),
 }
@@ -86,7 +84,7 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
   it('marks exactly one roll-mode control with the solid active treatment on the mobile row', () => {
     renderHeader(makeBootstrap({ current_die: 4, session_mode: balancedSessionMode() }), 4)
 
-    const dieControl = screen.getByRole('button', { name: /current die d4, automatic mode/i })
+    const dieControl = screen.getByRole('button', { name: /^current die d4$/i })
     expect(dieControl.className).toContain(ACTIVE_FILL)
     expect(dieControl.className).toContain('text-stone-900')
 
@@ -120,7 +118,7 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
   it('shares the compact control-family shape between the die control and the chip', () => {
     renderHeader(makeBootstrap({ session_mode: balancedSessionMode() }))
 
-    const dieControl = screen.getByRole('button', { name: /current die d6, automatic mode/i })
+    const dieControl = screen.getByRole('button', { name: /^current die d6$/i })
     const chip = screen.getByTestId('reading-mode-control')
     expect(dieControl.className).toContain('min-h-11')
     expect(dieControl.className).toContain('rounded-xl')
@@ -130,30 +128,26 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
 })
 
 describe('roll-mode control group (issue #2304): accessible active-mode state', () => {
-  it('reports pressed on the ladder Auto segment only while automatic mode is active', () => {
+  it('presses only the current die segment and renders no Auto segment (#4353)', () => {
     renderHeader(makeBootstrap({ current_die: 4 }), 4)
 
-    const auto = screen.getByRole('button', { name: 'Auto' })
-    expect(auto).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.queryByRole('button', { name: 'Auto' })).toBeNull()
     const activeDie = screen.getByRole('button', { name: 'd4' })
     expect(activeDie).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('flips the ladder to the pinned die and unpresses Auto in manual mode', () => {
+  it('presses the event-derived die after a manual choice, with no sticky mode (#4279)', () => {
     render(
       <MemoryRouter>
         <RollHeader
-          bootstrap={makeBootstrap({ current_die: 4, manual_die: 8 })}
+          bootstrap={makeBootstrap({ current_die: 8, manual_die: 8 })}
           {...headerBaseProps}
           currentDie={8}
         />
       </MemoryRouter>,
     )
 
-    const auto = screen.getByRole('button', { name: 'Auto' })
-    expect(auto).toHaveAttribute('aria-pressed', 'false')
-    expect(auto).toHaveAttribute('title', 'Exit manual mode (currently d8)')
-
+    expect(screen.queryByRole('button', { name: 'Auto' })).toBeNull()
     const pinned = screen.getByRole('button', { name: 'd8' })
     expect(pinned).toHaveAttribute('aria-pressed', 'true')
 
@@ -163,8 +157,8 @@ describe('roll-mode control group (issue #2304): accessible active-mode state', 
     }
   })
 
-  it('reports the actual die mode in the mobile control accessible name', () => {
+  it('names the mobile die control for the current die without a mode suffix', () => {
     renderHeader(makeBootstrap({ current_die: 4 }), 4)
-    expect(screen.getByRole('button', { name: 'Current die d4, automatic mode' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Current die d4' })).toBeInTheDocument()
   })
 })
