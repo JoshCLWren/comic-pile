@@ -1,12 +1,10 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
 import { ReadingModeControl } from '../pages/RollPage/components/ReadingModeControl'
 import type { RollBootstrapResponse, SessionMode, SessionModeState } from '../types/rollBootstrap'
-import type { SessionModeResponse } from '../types'
 import { formatSessionMode, readingModeLabel } from '../types/rollBootstrap'
 
 function toSessionMode(state: SessionModeState | null | undefined): SessionMode {
@@ -67,19 +65,17 @@ const headerBaseProps = {
   pool: [],
   isRatingView: false,
   setDiePending: false,
-  clearManualDiePending: false,
   onSetDie: vi.fn(),
-  onClearManualDie: vi.fn(),
   onOpenOverride: vi.fn(),
   onOpenDieModal: vi.fn(),
 }
 
 describe('reading mode label helpers', () => {
   it('keeps the Roll bootstrap and API-client session mode shapes aligned on one canonical type', () => {
-    // Type-level regression for #2632: the bootstrap payload and the session-mode
-    // API client must both stay on the same canonical SessionMode shape, so the
-    // values here flow through both surfaces without a separate duplicate type.
-    const apiMode: SessionModeResponse = toSessionMode({ bandwidth: 'light', intent: 'momentum' })
+    // Type-level regression for #2632: the bootstrap payload and the API client
+    // must both stay on the same canonical SessionMode shape, so the values
+    // here flow through both surfaces without a separate duplicate type.
+    const apiMode: SessionMode = toSessionMode({ bandwidth: 'light', intent: 'momentum' })
     const bootstrapMode: SessionMode = apiMode
     expect(bootstrapMode.active_bandwidth).toBe('light')
     expect(apiMode.active_intent).toBe('momentum')
@@ -137,31 +133,24 @@ describe('ReadingModeControl', () => {
     expect(noLabels.container).toBeEmptyDOMElement()
   })
 
-  it('opens the selector surface on tap, click, and keyboard activation', async () => {
-    const user = userEvent.setup()
-    const onOpenSelector = vi.fn()
+  it('renders a read-only status chip with no mode selector trigger', () => {
+    // Regression for #4354: the session-mode write route is retired, so the
+    // Roll header must not offer a toggle that no longer has a server to
+    // write to. The mode stays visible as status only.
     render(
       <ReadingModeControl
         mode={{ bandwidth: 'light', intent: 'momentum', source: 'inferred', confidence: 0.4 }}
-        onOpenSelector={onOpenSelector}
       />,
     )
 
-    const control = screen.getByRole('button', { name: 'Reading mode: Light · Momentum. Change reading mode' })
-    expect(control).toHaveAttribute('aria-haspopup', 'dialog')
-    expect(control).toHaveAccessibleName(/Light · Momentum/)
-
-    await user.click(control)
-    expect(onOpenSelector).toHaveBeenCalledTimes(1)
-
-    await user.keyboard('{Enter}')
-    expect(onOpenSelector).toHaveBeenCalledTimes(2)
-
-    await user.keyboard(' ')
-    expect(onOpenSelector).toHaveBeenCalledTimes(3)
+    const control = screen.getByTestId('reading-mode-control')
+    expect(control.tagName).toBe('SPAN')
+    expect(control).toHaveTextContent('Light · Momentum')
+    expect(control.getAttribute('title')).toBe('Reading mode: Light · Momentum')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('degrades to a static status chip when no selector surface is wired yet', () => {
+  it('degrades to a static status chip when the session has no mode state', () => {
     render(<ReadingModeControl mode={{ bandwidth: 'deep', intent: 'familiar' }} />)
 
     expect(screen.getByTestId('reading-mode-control')).toHaveTextContent('Deep · Familiar')
@@ -175,11 +164,10 @@ describe('ReadingModeControl', () => {
           bandwidth: 'extraordinarily-specific-inferred-light-bandwidth',
           intent: 'exploratory-momentum-adjacent',
         }}
-        onOpenSelector={() => undefined}
       />,
     )
 
-    const control = screen.getByRole('button')
+    const control = screen.getByTestId('reading-mode-control')
     expect(control.className).toContain('max-w-[11rem]')
     expect(control.querySelector('span')?.className).toContain('truncate')
     expect(control.getAttribute('title')).toBe(

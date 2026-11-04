@@ -1096,112 +1096,76 @@ mod tests {
         .is_err());
         assert!(validate_cards(&IssueCardsRequest { issue_ids: vec![0] }).is_err());
     }
-    async fn scoped_client(url: &str, schema: &str) -> tokio_postgres::Client {
-        let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        client
-            .batch_execute(&format!("SET search_path TO {schema},public"))
-            .await
-            .unwrap();
-        client
-    }
 
     #[tokio::test]
     async fn direct_read_is_owner_scoped_and_does_not_touch_roll_or_queue() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+        let url = crate::test_support::database_url().await;
+        let _state = crate::test_support::test_state(2)
             .await
-            .unwrap();
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&_state).await;
+        let (mut first, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("direct_issue_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     title text NOT NULL,
-                     status text NOT NULL, issues_remaining integer NOT NULL,
-                     next_unread_issue_id integer, reading_progress text,
-                     last_rating double precision, queue_position integer NOT NULL,
-                     queue_position_is_manual boolean NOT NULL,
-                     last_activity_at timestamptz,
-                     is_blocked boolean NOT NULL DEFAULT false
-                 );
-                 CREATE TABLE {schema}.dependencies (
-                     id integer PRIMARY KEY,
-                     source_issue_id integer NOT NULL,
-                     target_issue_id integer NOT NULL,
-                     note text
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL,
-                     issue_number text NOT NULL, status text NOT NULL,
-                     position integer NOT NULL, read_at timestamptz
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
-                     thread_id integer, issue_id integer, issue_number text,
-                     rating double precision, issues_read integer, die_after integer,
-                     context json
-                 );
-                 CREATE TABLE {schema}.external_identities (
-                     id integer PRIMARY KEY, provider text, entity_type text,
-                     external_id text, metadata_json json
-                 );
-                 CREATE TABLE {schema}.issue_external_identity_mappings (
-                     id integer PRIMARY KEY, issue_id integer,
-                     external_identity_id integer, status text,
-                     confidence double precision,
-                     updated_at timestamptz DEFAULT NOW()
-                 );
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz,
-                     manual_die integer, ended_at timestamptz
-                 );
-                 INSERT INTO {schema}.threads VALUES
-                     (10,1,'Excluded run','excluded',3,101,'in_progress',4.0,0,true,NULL,false),
-                     (20,2,'Private run','active',1,201,'in_progress',NULL,1,false,NULL,false),
-                     (30,1,'Dependent run','active',1,301,'in_progress',NULL,2,false,NULL,true),
-                     (40,1,'Cbl control run','active',1,401,'in_progress',NULL,3,false,NULL,false),
-                     (50,1,'Finished run','completed',0,NULL,'completed',NULL,0,false,NULL,false);
-                 INSERT INTO {schema}.issues VALUES
-                     (101,10,'1','unread',1,NULL),
-                     (102,10,'2','unread',2,NULL),
-                     (110,10,'10','unread',10,NULL),
-                     (201,20,'1','unread',1,NULL),
-                     (301,30,'1','unread',1,NULL),
-                     (401,40,'1','unread',1,NULL),
-                     (501,50,'1','read',1,NOW());
-                 INSERT INTO {schema}.dependencies VALUES
-                     (1,102,301,NULL),
-                     (2,101,401,'cbl-order:legacy-materialization');
-                 INSERT INTO {schema}.sessions VALUES (1,1,10,101,NULL,12,NULL);
-                 INSERT INTO {schema}.external_identities VALUES
-                     (50,'comicvine','issue','4000-42',
-                      '{{\"image\":{{\"medium_url\":\"https://comicvine.example/covers/issue10.jpg\"}}}}'::json);
-                 INSERT INTO {schema}.issue_external_identity_mappings
-                     (id,issue_id,external_identity_id,status)
-                     VALUES (500,110,50,'confirmed');"
-            ))
+        first
+            .batch_execute(r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
+                 INSERT INTO threads
+                     (id, user_id, title, format, status, issues_remaining,
+                      next_unread_issue_id, reading_progress, last_rating,
+                      queue_position, queue_position_is_manual,
+                      last_activity_at, is_blocked)
+                 VALUES
+                     (10, 1, 'Excluded run', 'Comic', 'excluded', 3, NULL,
+                      'in_progress', 4.0, 0, true, NULL, false),
+                     (20, 2, 'Private run', 'Comic', 'active', 1, NULL,
+                      'in_progress', NULL, 1, false, NULL, false),
+                     (30, 1, 'Dependent run', 'Comic', 'active', 1, NULL,
+                      'in_progress', NULL, 2, false, NULL, true),
+                     (40, 1, 'Cbl control run', 'Comic', 'active', 1, NULL,
+                      'in_progress', NULL, 3, false, NULL, false),
+                     (50, 1, 'Finished run', 'Comic', 'completed', 0, NULL,
+                      'completed', NULL, 0, false, NULL, false);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, position, read_at, created_at)
+                 VALUES
+                     (101, 10, '1', 'unread', 1, NULL, now()),
+                     (102, 10, '2', 'unread', 2, NULL, now()),
+                     (110, 10, '10', 'unread', 10, NULL, now()),
+                     (201, 20, '1', 'unread', 1, NULL, now()),
+                     (301, 30, '1', 'unread', 1, NULL, now()),
+                     (401, 40, '1', 'unread', 1, NULL, now()),
+                     (501, 50, '1', 'read', 1, NOW(), now());
+                 UPDATE threads SET next_unread_issue_id = 101 WHERE id = 10;
+                 UPDATE threads SET next_unread_issue_id = 201 WHERE id = 20;
+                 UPDATE threads SET next_unread_issue_id = 301 WHERE id = 30;
+                 UPDATE threads SET next_unread_issue_id = 401 WHERE id = 40;
+                 INSERT INTO dependencies
+                     (id, created_at, source_issue_id, target_issue_id, note)
+                 VALUES
+                     (1, now(), 102, 301, NULL),
+                     (2, now(), 101, 401, 'cbl-order:legacy-materialization');
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      pending_issue_id, pending_thread_updated_at, manual_die, ended_at)
+                 VALUES (1, 1, now(), 6, 10, 101, NULL, 12, NULL);
+                 INSERT INTO external_identities
+                     (id, provider, entity_type, external_id, metadata_json,
+                      created_at, updated_at)
+                 VALUES (50, 'comicvine', 'issue', '4000-42',
+                         '{"image":{"medium_url":"https://comicvine.example/covers/issue10.jpg"}}'::json,
+                         now(), now());
+                 INSERT INTO issue_external_identity_mappings
+                     (id, issue_id, external_identity_id, status, evidence_json,
+                      created_at, updated_at)
+                 VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now());"#)
             .await
-            .unwrap();
-
-        let mut first = scoped_client(&url, &schema).await;
+            .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
         let mut command = request(Some("read"), Some(4.5));
         let tx = first.transaction().await.unwrap();
@@ -1468,11 +1432,6 @@ mod tests {
         );
         assert_eq!(bounded.items[1].mapping_state, "unmapped");
         assert_eq!(bounded.items[1].cover_image_url, None);
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]

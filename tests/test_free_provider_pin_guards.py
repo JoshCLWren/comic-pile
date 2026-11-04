@@ -124,18 +124,16 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     for row in z_ai:
         assert validate.z_ai_model_is_free(row['model']), row
     ollama = [row for row in rows if row['source'] == 'ollama-cloud']
-    assert ollama
-    for row in ollama:
-        assert validate.ollama_cloud_model_is_free(row['model']), row
+    assert not ollama  # Worker 55 retired after quota exhaustion.
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
     assert vercel == []
     assert all(row['worker'] != '72' for row in rows)
     assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
-    assert len(mistral) == 1
-    assert mistral[0]['worker'] == '48'
-    assert mistral[0]['model'] == 'codestral-latest'
-    assert validate.mistral_model_is_pinned(mistral[0]['model'])
+    assert not mistral  # Worker 48 retired after quota exhaustion.
+    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
+    assert {48, 55}.issubset(set(lock['retired_workers']))
+    assert {'codestral-latest', 'nemotron-3-nano:30b'}.issubset(set(lock['retired_models']))
 
 
 def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
@@ -288,10 +286,8 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["source"] == "mistral"
-    assert by_worker["48"]["model"] == "codestral-latest"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
+    assert {"48", "55"}.isdisjoint(by_worker)
+    assert {48, 55}.issubset(set(lock["retired_workers"]))
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
     assert "83" not in by_worker

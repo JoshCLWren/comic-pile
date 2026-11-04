@@ -20,27 +20,22 @@ interface RollHeaderProps {
   pool: RollBootstrapThread[]
   isRatingView: boolean
   setDiePending: boolean
-  clearManualDiePending: boolean
   onSetDie: (die: number) => Promise<boolean> | boolean
-  onClearManualDie: () => void
   onOpenOverride: () => void
   onOpenDieModal: () => void
-  onOpenModeSelector?: () => void
   onBackToQueue?: () => void
 }
 
 /**
- * Active-session header: die ladder controls, the automatic/manual die label,
- * and the manual-override entry point. Purely presentational; all mutation
- * and data ownership stays in the page feature modules.
+ * Active-session header: die ladder controls, the die readout, and the
+ * manual-override entry point. Purely presentational; all mutation and data
+ * ownership stays in the page feature modules.
  *
  * Visual hierarchy (issue #2087 deslop + #2197 action clarity + #2304 mode-state grammar):
  *   1. Begin        - the Roll CTA under the die is the single dominant primary
  *                      action for the default happy path (#2197)
  *   2. die-size selection  - one segmented-control group; items have no border
- *   3. automatic / mode    - "Auto" lives inside the segmented group; the
- *                            ladder readout collapses to plain text; the
- *                            ReadingModeControl remains a quiet status chip
+ *   3. reading mode - the ReadingModeControl remains a quiet status chip
  *   4. manual pick   - demoted to a secondary control in the header row (#2197)
  *
  * Rating chrome (issue #2712): the rating workspace is the visual contract, so
@@ -49,10 +44,9 @@ interface RollHeaderProps {
  * Comic region and stop at the division instead of running beneath the queue
  * action, and what keeps the header edges aligned with the composition.
  *
- * Active-mode convention: the roll-mode control in effect gets a solid
- * `--theme-primary-action` fill; inactive/status controls stay neutral dark
- * outlines with muted text; the manual-pick action is an outlined, non-solid
- * control so only the real active mode ever reads as selected (#2304).
+ * Die-state convention: the die is one event-derived value, not a pinned mode,
+ * so the ladder shows the current die as the single selected segment and there
+ * is no Auto/Manual segment to select (#4353).
  */
 export function RollHeader({
   bootstrap,
@@ -63,12 +57,9 @@ export function RollHeader({
   pool,
   isRatingView,
   setDiePending,
-  clearManualDiePending,
   onSetDie,
-  onClearManualDie,
   onOpenOverride,
   onOpenDieModal,
-  onOpenModeSelector,
   onBackToQueue,
 }: RollHeaderProps) {
   const rawMode = bootstrap.session_mode
@@ -81,7 +72,6 @@ export function RollHeader({
         version: rawMode.bandwidth_version,
       }
     : null
-  const manualDie = bootstrap.manual_die
 
   // The page title, its supporting copy, and the die-context notices share one
   // block so the die view keeps its existing header copy and the rating view can
@@ -173,8 +163,7 @@ export function RollHeader({
                 aria-label="Die sizes"
               >
                 {DICE_LADDER.map((die) => {
-                  const activeDie = manualDie === null ? currentDie : manualDie
-                  const selected = die === activeDie
+                  const selected = die === currentDie
                   return (
                     <button
                       key={die}
@@ -190,39 +179,16 @@ export function RollHeader({
                     </button>
                   )
                 })}
-                <span
-                  aria-hidden="true"
-                  className="mx-0.5 h-5 w-px bg-[var(--theme-border)]"
-                />
-                <button
-                  type="button"
-                  onClick={onClearManualDie}
-                  disabled={clearManualDiePending}
-                  aria-pressed={manualDie === null}
-                  title={
-                    manualDie
-                      ? `Exit manual mode (currently d${manualDie})`
-                      : 'Automatic die mode is active'
-                  }
-                  className={`min-h-11 min-w-11 rounded-lg px-2 text-[10px] font-black uppercase tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] ${manualDie === null
-                    ? 'bg-[var(--theme-primary-action)]/15 text-[var(--theme-comic-accent)]'
-                    : 'text-stone-400 hover:bg-white/5 hover:text-stone-200'}`}
-                >
-                  Auto
-                </button>
               </div>
               <div className="md:hidden">
                 <button
                   type="button"
                   onClick={onOpenDieModal}
                   aria-haspopup="dialog"
-                  aria-label={`Current die d${currentDie}, ${manualDie ? 'manual mode' : 'automatic mode'}`}
+                  aria-label={`Current die d${currentDie}`}
                   className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-stone-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 >
                   <span className="block text-[11px] font-black">d{currentDie}</span>
-                  <span className="block text-[8px] font-bold uppercase tracking-wide">
-                    {manualDie ? 'Manual' : 'Auto'}
-                  </span>
                 </button>
               </div>
               <div className="hidden items-center gap-2 md:flex">
@@ -238,7 +204,7 @@ export function RollHeader({
                   </div>
                 </div>
                 <div className="text-right">
-                  <Tooltip content="The die picks randomly from the series in play. Sizes run d2→d4→d6→d8→d10→d12→d20 — a larger die means more series in the roll.">
+                  <Tooltip content="The die picks randomly from the series in play. Sizes run d4→d6→d8→d10→d12→d20→d30→d50→d100 — a larger die means more series in the roll.">
                     <GlossaryLink id="die-size">
                       <span className="cursor-help border-b border-dashed border-stone-600 text-[8px] font-black uppercase tracking-wider text-stone-500">
                         Die
@@ -251,7 +217,7 @@ export function RollHeader({
                 </div>
               </div>
             </div>
-            <ReadingModeControl mode={sessionMode} onOpenSelector={onOpenModeSelector} />
+            <ReadingModeControl mode={sessionMode} />
             <Tooltip content="Pick a specific series for the next result.">
               <button
                 type="button"

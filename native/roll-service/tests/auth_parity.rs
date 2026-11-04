@@ -68,8 +68,7 @@ async fn response(app: Router, authorization: Option<&str>) -> (u16, Value, Opti
 
 #[tokio::test]
 async fn shared_python_rust_auth_and_ownership_matrix() {
-    let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
-        .expect("disposable RUST_ROLL_TEST_DATABASE_URL required; tests never silently skip");
+    let url = comicpile_roll_service::test_support::database_url().await;
     let state = state(&url);
     let connection = state.pool.get().await.unwrap();
     // Connection-local tables never touch application data, even on test failure.

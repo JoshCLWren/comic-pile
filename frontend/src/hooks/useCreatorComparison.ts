@@ -24,6 +24,8 @@ export function useCreatorComparison(keys: string[] | null | undefined) {
     queryKey: enabled ? queryKeys.creators.compare(normalized) : queryKeys.creators.compare([]),
     queryFn: () => creatorComparisonApi.getComparison(normalized),
     enabled,
+    staleTime: 10 * 60 * 1000, // 10 minutes (comparison data changes infrequently)
+    gcTime: 20 * 60 * 1000, // 20 minutes
   })
 
   return { data, isPending, isError, error }

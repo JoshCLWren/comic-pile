@@ -10,10 +10,8 @@ from app.main import create_app
 
 _ROLL_PATHS = (
     "/roll/",
-    "/roll/clear-manual-die",
     "/roll/dismiss-pending",
     "/roll/override",
-    "/roll/set-die",
 )
 
 

@@ -174,14 +174,34 @@ fn repair_session_value(value: &mut Value) -> Vec<&'static str> {
     }
     repaired
 }
-const RESOLVE_FROM: &str = "FROM sessions s LEFT JOIN LATERAL
+/// One session-resolution rule shared by every reader of the current session.
+///
+/// Roll offer, Reset, bootstrap and the folded eligible-identifier read must
+/// agree on which session row is current: a pending offer that one caller
+/// snoozes must not be invisible to another, or a read reports a pool the next
+/// write will not draw from. Only the owner expression and the two parameter
+/// positions differ, so callers fill this template instead of restating the
+/// predicate.
+///
+/// Placeholders: `{owner}`, `{now}`, `{gap}` and the twice-used `{recency}`.
+pub(crate) const SESSION_RESOLUTION_BODY: &str = "FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
- WHERE s.user_id = $1 AND s.ended_at IS NULL
- AND greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
- THEN s.pending_thread_updated_at END, e.last_event) >= to_timestamp($2) - make_interval(hours => $3)
+ WHERE s.user_id = {owner} AND s.ended_at IS NULL
+ AND {recency} >= to_timestamp({now}) - make_interval(hours => {gap})
  ORDER BY (s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL) DESC,
- greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
- THEN s.pending_thread_updated_at END, e.last_event) DESC, s.started_at DESC, s.id DESC LIMIT 1";
+ {recency} DESC, s.started_at DESC, s.id DESC LIMIT 1";
+
+/// The last-activity expression: start, pending update and newest event.
+const SESSION_ACTIVITY: &str = "greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL THEN s.pending_thread_updated_at END, e.last_event)";
+
+/// Fill [`SESSION_RESOLUTION_BODY`] for one caller's owner source and bindings.
+pub(crate) fn session_resolution_body(owner: &str, now: &str, gap: &str) -> String {
+    SESSION_RESOLUTION_BODY
+        .replace("{recency}", SESSION_ACTIVITY)
+        .replace("{owner}", owner)
+        .replace("{now}", now)
+        .replace("{gap}", gap)
+}
 
 /// Read-only authority lookup; takes a caller-owned transaction and injected UTC clock.
 pub async fn resolve_current_session(
@@ -190,7 +210,10 @@ pub async fn resolve_current_session(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<ReadingSession>, ApiError> {
-    let sql = format!("SELECT row_to_json(s)::text {RESOLVE_FROM}");
+    let sql = format!(
+        "SELECT row_to_json(s)::text {}",
+        session_resolution_body("$1", "$2", "$3")
+    );
     tx.query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
         .await
         .map_err(session_error)?
@@ -622,7 +645,7 @@ pub(crate) async fn current_session_id(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<i32>, ApiError> {
-    let sql = format!("SELECT s.id {RESOLVE_FROM}");
+    let sql = format!("SELECT s.id {}", session_resolution_body("$1", "$2", "$3"));
     let row = tx
         .query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
         .await
@@ -875,36 +898,11 @@ mod tests {
 
     #[tokio::test]
     async fn stale_pending_pointers_are_detected_for_repair() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some(state) = crate::test_support::test_state(2).await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("pending_validity_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL
-                 );
-                 INSERT INTO {schema}.users VALUES (1), (2);
-                 INSERT INTO {schema}.threads VALUES (10, 1), (20, 2);
-                 INSERT INTO {schema}.issues VALUES (100, 10), (200, 20);"
-            ))
-            .await
-            .unwrap();
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let url = crate::test_support::database_url().await;
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
@@ -912,7 +910,15 @@ mod tests {
             let _ = connection.await;
         });
         client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2'); \
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                     queue_position) \
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1), \
+                        (20, 2, 'Second', 'Comic', 1, 'active', 2); \
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) \
+                 VALUES (100, 10, '1', 'unread', now(), 1), (200, 20, '1', 'unread', now(), 1);",
+            )
             .await
             .unwrap();
         let tx = client.transaction().await.unwrap();
@@ -942,9 +948,5 @@ mod tests {
         );
 
         tx.rollback().await.unwrap();
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }

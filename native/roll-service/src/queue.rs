@@ -892,8 +892,8 @@ fn create_queue_order_documentation() {}
 /// Tests run against the canonical Alembic schema in `public` (see
 /// `crate::test_support`), never a hand-written approximation of it.
 #[cfg(test)]
-fn test_database_url() -> String {
-    std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL required")
+async fn test_database_url() -> String {
+    crate::test_support::database_url().await
 }
 
 #[cfg(test)]
@@ -901,9 +901,8 @@ mod tests {
     //! Disposable-PostgreSQL coverage for every mounted queue write handler.
     use super::*;
     use crate::config::Config;
+    use crate::test_support::DB_LOCK;
     use utoipa::OpenApi;
-
-    static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     async fn state() -> Arc<AppState> {
         state_with_pool_size(2).await
@@ -914,7 +913,7 @@ mod tests {
     /// A single-slot pool makes an accidental second concurrent connection
     /// checkout fail deterministically instead of merely slowing down.
     async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
-        let url = test_database_url();
+        let url = test_database_url().await;
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
@@ -1116,7 +1115,7 @@ mod tests {
         const QUEUE_SIZE: i32 = 300;
         const BLOCKED: i32 = 50;
         let _guard = DB_LOCK.lock().await;
-        let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL");
+        let base = crate::test_support::database_url().await;
         let separator = if base.contains('?') { '&' } else { '?' };
         let url = format!(
             "{base}{separator}options=-csearch_path%3Dqueue_unit_test%2Cpublic%20-c%20log_min_duration_statement%3D0"

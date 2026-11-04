@@ -281,6 +281,8 @@ export default function CblBrowserPage() {
     queryFn: () =>
       cblSourcesApi.browse({ folder, query: submittedQuery, page, pageSize: PAGE_SIZE }),
     placeholderData: keepPreviousData,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 15 * 60 * 1000, // 15 minutes
   })
   const browsePage = browseQuery.data ?? null
   const selectedSource =
@@ -297,6 +299,8 @@ export default function CblBrowserPage() {
       return cblSourcesApi.preview(selectedSource.id)
     },
     enabled: selectedSource !== null,
+    staleTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 20 * 60 * 1000, // 20 minutes
   })
 
   const commitMutation = useMutation({

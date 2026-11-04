@@ -51,6 +51,9 @@ const PUBLIC_ENTRIES = {
   '/demo': budget(...GUEST_AUTH_PROBE, 'GET /api/v1/demo/roll x1'),
   '/': GUEST_AUTH_PROBE,
   '/unknown': GUEST_AUTH_PROBE,
+  '/rate': GUEST_AUTH_PROBE,
+  '/analytics': GUEST_AUTH_PROBE,
+  '/roll': GUEST_AUTH_PROBE,
 } satisfies Record<string, readonly string[]>
 
 const AUX_ENTRIES = {

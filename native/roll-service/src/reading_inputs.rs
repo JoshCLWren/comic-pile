@@ -174,8 +174,7 @@ mod tests {
         use crate::config::Config;
         use std::time::Duration;
         for outer_cancel in [false, true] {
-            let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
-                .expect("disposable PostgreSQL required");
+            let url = crate::test_support::database_url().await;
             let mut state = AppState::new(
                 Config::from_lookup(|key| match key {
                     "RUST_ROLL_DATABASE_URL" => Some(url.clone()),

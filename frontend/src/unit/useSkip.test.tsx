@@ -31,7 +31,6 @@ const invalidateCurrentSessionAfterSnooze = vi.fn()
 const cacheEffects = {
   applyRatedThreadCache: vi.fn(),
   invalidateCurrentSessionAfterSnooze,
-  invalidateAfterSessionModeUpdate: vi.fn(),
 }
 const deps = { skipApi, protectedApi: protectedRollMutationApi, bootstrapApi: rollBootstrapApi, cacheEffects }
 

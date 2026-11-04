@@ -5,6 +5,8 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends pkg-con
 WORKDIR /workspace/native/roll-service
 COPY native/roll-service/Cargo.toml native/roll-service/Cargo.lock ./
 COPY native/roll-service/src/ ./src/
+# Test fixtures are loaded on demand by Rust tests; no SQL dump belongs in a
+# deployable service image or is required to compile the runtime binary.
 RUN cargo build --locked --bin comicpile-roll-service
 
 FROM debian:bookworm-slim

@@ -8,6 +8,8 @@ export function useCreatorTeamChemistry(enabled = true) {
     queryKey: queryKeys.creators.teamChemistry(),
     queryFn: () => creatorTeamChemistryApi.getChemistry(),
     enabled,
+    staleTime: 10 * 60 * 1000, // 10 minutes (team chemistry changes less frequently)
+    gcTime: 30 * 60 * 1000, // 30 minutes
   })
 
   return { data, isPending, isError, error, refetch }
