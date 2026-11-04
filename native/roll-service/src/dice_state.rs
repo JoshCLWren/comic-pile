@@ -150,9 +150,10 @@ mod tests {
     async fn newest_event_is_owner_scoped_and_ties_break_by_id() {
         // CI can run this with the same disposable local PostgreSQL as other
         // Rust database tests. Do not connect to a production database.
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable PostgreSQL");

@@ -879,7 +879,7 @@ mod tests {
             return;
         };
         let _db = crate::test_support::reset_for_test(&state).await;
-        let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL");
+        let url = crate::test_support::database_url().await;
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");

@@ -109,14 +109,134 @@ pub async fn truncate_application_tables(state: &AppState) {
         .collect::<Vec<_>>()
         .join(", ");
     connection
-        .batch_execute(&format!("TRUNCATE TABLE {tables} RESTART IDENTITY CASCADE"))
+        .batch_execute(&format!("TRUNCATE TABLE {tables} CASCADE"))
         .await
         .expect("truncate application tables");
+    // `RESTART IDENTITY` needs sequence ownership, which the DML-only test role
+    // deliberately lacks. `setval` only needs UPDATE on the sequence, so reset
+    // the counters the same way without granting ownership.
+    connection
+        .batch_execute(
+            "SELECT setval(c.oid::regclass, 1, false) \
+             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace \
+             WHERE c.relkind = 'S' AND n.nspname = 'public'",
+        )
+        .await
+        .expect("reset application sequences");
+}
+
+/// Role every Rust test connects as.
+///
+/// It holds DML only, so the suite physically cannot create, alter or drop
+/// persistent schema — PostgreSQL enforces the rule instead of a text linter.
+/// Temporary objects are still allowed: `CREATE TEMP` needs `TEMP` on the
+/// database, not `CREATE` on the schema.
+const TEST_ROLE: &str = "roll_test_dml";
+const TEST_ROLE_PASSWORD: &str = "roll-test-dml";
+
+/// The admin DSN, used only to apply the Alembic fixture and provision the role.
+fn admin_url() -> Option<String> {
+    std::env::var("RUST_ROLL_TEST_DATABASE_URL").ok()
+}
+
+/// Rewrite a DSN to connect as the DML-only role.
+fn restricted_url(admin: &str) -> String {
+    match admin.split_once("://") {
+        Some((scheme, rest)) => match rest.rsplit_once('@') {
+            Some((_, host_and_db)) => {
+                format!("{scheme}://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@{host_and_db}")
+            }
+            None => format!("{scheme}://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@{rest}"),
+        },
+        None => admin.to_string(),
+    }
+}
+
+fn state_from_url(url: &str, pool_size: usize) -> AppState {
+    let config = crate::config::Config::from_lookup(|name| match name {
+        "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
+        "RUST_ROLL_JWT_SECRET" => Some("synthetic-native-test".into()),
+        "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
+        _ => None,
+    })
+    .expect("canonical test config");
+    AppState::new(config).expect("canonical test state")
+}
+
+static ADMIN_STATE: tokio::sync::OnceCell<std::sync::Arc<AppState>> =
+    tokio::sync::OnceCell::const_new();
+static SCHEMA_READY: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
+static PROVISIONED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
+
+/// Connections the admin pool needs: one is enough because every admin
+/// operation runs exactly once per process, guarded by [`SCHEMA_READY`] and
+/// [`PROVISIONED`], rather than once per test.
+const ADMIN_POOL_SIZE: usize = 1;
+
+/// Admin pool, used only to load the fixture and provision the test role.
+async fn admin_state() -> Option<std::sync::Arc<AppState>> {
+    let url = admin_url()?;
+    let state = ADMIN_STATE
+        .get_or_init(|| async move { std::sync::Arc::new(state_from_url(&url, ADMIN_POOL_SIZE)) })
+        .await;
+    Some(state.clone())
+}
+
+/// Apply the Alembic fixture once per process, however many tests start at once.
+async fn ensure_canonical_schema() {
+    SCHEMA_READY
+        .get_or_init(|| async {
+            if let Some(admin) = admin_state().await {
+                ensure_schema(&admin).await;
+            }
+        })
+        .await;
+}
+
+/// Ensure the canonical schema exists and the DML-only role can use it.
+async fn provision() {
+    PROVISIONED
+        .get_or_init(|| async {
+            let Some(admin) = admin_state().await else {
+                return;
+            };
+            ensure_canonical_schema().await;
+            let connection = db::checkout(&admin).await.expect("admin connection");
+            connection
+                .batch_execute(&format!(
+                    "DO $$ BEGIN \
+                         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{TEST_ROLE}') THEN \
+                             CREATE ROLE {TEST_ROLE} LOGIN PASSWORD '{TEST_ROLE_PASSWORD}'; \
+                         END IF; \
+                     END $$; \
+                     REVOKE CREATE ON SCHEMA public FROM PUBLIC; \
+                     REVOKE CREATE ON SCHEMA public FROM {TEST_ROLE}; \
+                     GRANT USAGE ON SCHEMA public TO {TEST_ROLE}; \
+                     GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE \
+                         ON ALL TABLES IN SCHEMA public TO {TEST_ROLE}; \
+                     GRANT USAGE, SELECT, UPDATE \
+                         ON ALL SEQUENCES IN SCHEMA public TO {TEST_ROLE}; \
+                     ALTER DEFAULT PRIVILEGES IN SCHEMA public \
+                         GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE \
+                         ON TABLES TO {TEST_ROLE}; \
+                     ALTER DEFAULT PRIVILEGES IN SCHEMA public \
+                         GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO {TEST_ROLE};"
+                ))
+                .await
+                .expect("provision DML-only test role");
+        })
+        .await;
+}
+
+/// The DSN tests must use: the DML-only role, which cannot create schema.
+pub async fn database_url() -> String {
+    provision().await;
+    restricted_url(&admin_url().expect("RUST_ROLL_TEST_DATABASE_URL is required"))
 }
 
 /// Reset the database to an empty canonical schema before one serialized test.
 pub async fn reset(state: &AppState) {
-    ensure_schema(state).await;
+    ensure_canonical_schema().await;
     truncate_application_tables(state).await;
 }
 
@@ -132,17 +252,9 @@ pub(crate) static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_ne
 /// Build the canonical test [`AppState`], or `None` when no disposable database
 /// is configured so the caller can skip.
 pub async fn test_state(pool_size: usize) -> Option<std::sync::Arc<AppState>> {
-    let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL").ok()?;
-    let config = crate::config::Config::from_lookup(|name| match name {
-        "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
-        "RUST_ROLL_JWT_SECRET" => Some("synthetic-native-test".into()),
-        "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
-        _ => None,
-    })
-    .expect("canonical test config");
-    Some(std::sync::Arc::new(
-        AppState::new(config).expect("canonical test state"),
-    ))
+    admin_url()?;
+    let url = database_url().await;
+    Some(std::sync::Arc::new(state_from_url(&url, pool_size)))
 }
 
 /// Lock and reset the canonical schema, returning the guard for the test body.
@@ -154,4 +266,47 @@ pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static
     let guard = DB_LOCK.lock().await;
     reset(state).await;
     guard
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The point of the DML-only role: PostgreSQL itself refuses persistent
+    /// schema changes, so no linter has to guess at spellings.
+    #[tokio::test]
+    async fn the_test_role_cannot_create_persistent_schema() {
+        let Some(state) = test_state(1).await else {
+            return;
+        };
+        let _db = reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("test connection");
+
+        let error = connection
+            .batch_execute("CREATE TABLE schema_guard_probe (id integer)")
+            .await
+            .expect_err("the DML-only role must not create persistent tables");
+        assert_eq!(
+            error.code(),
+            Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE),
+            "expected a privilege error, got {error:?}"
+        );
+
+        let error = connection
+            .batch_execute("DROP TABLE threads")
+            .await
+            .expect_err("the DML-only role must not drop canonical tables");
+        assert_eq!(
+            error.code(),
+            Some(&tokio_postgres::error::SqlState::INSUFFICIENT_PRIVILEGE),
+            "expected a privilege error, got {error:?}"
+        );
+
+        // Session-local fixtures stay usable: `CREATE TEMP` needs TEMP on the
+        // database, not CREATE on the schema.
+        connection
+            .batch_execute("CREATE TEMP TABLE schema_guard_temp (id integer)")
+            .await
+            .expect("temporary tables remain available to tests");
+    }
 }

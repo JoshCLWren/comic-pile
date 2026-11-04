@@ -197,9 +197,10 @@ mod tests {
 
     #[tokio::test]
     async fn persist_reset_records_d6_and_clears_pending() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (mut client, _db) = seeded(
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
@@ -328,9 +329,10 @@ mod tests {
 
     #[tokio::test]
     async fn persist_reset_clears_every_pending_column() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (mut client, _db) = seeded(
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');

@@ -1359,9 +1359,10 @@ mod cover_source_tests {
 
     #[tokio::test]
     async fn durable_snoozed_ignores_native_reroll_events() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let _state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");
@@ -1422,9 +1423,10 @@ mod pool_parity_tests {
     /// only temporary cookie/previous-pending exclusions may shrink the offer.
     #[tokio::test]
     async fn in_play_pool_ignores_legacy_snoozes_and_matches_the_offer() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let _state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");
@@ -1506,9 +1508,10 @@ mod initialize_session_db_tests {
 
     #[tokio::test]
     async fn initialize_session_persists_timezone_without_duplicate_sessions() {
-        let Ok(database_url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let database_url = crate::test_support::database_url().await;
         let _state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");

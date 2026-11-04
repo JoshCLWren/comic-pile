@@ -372,9 +372,10 @@ mod tests {
 
     #[tokio::test]
     async fn concurrent_retries_are_exactly_once_and_other_commands_serialize() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (seed, _db) = seeded(&url).await;
         drop(seed);
         let mut first = connect(&url).await;
@@ -447,9 +448,10 @@ mod tests {
 
     #[tokio::test]
     async fn owner_checks_lock_references_through_commit() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (seed, _db) = seeded(&url).await;
         drop(seed);
         let mut writer = connect(&url).await;
@@ -519,9 +521,10 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_cross_user_references_key_conflicts_and_invalid_rating() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (seed, _db) = seeded(&url).await;
         drop(seed);
         let mut client = connect(&url).await;
@@ -587,9 +590,10 @@ mod tests {
 
     #[tokio::test]
     async fn idempotency_keys_are_scoped_to_the_reader() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (seed, _db) = seeded(&url).await;
         drop(seed);
         let mut client = connect(&url).await;

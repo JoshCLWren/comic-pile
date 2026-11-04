@@ -370,8 +370,7 @@ mod tests {
     /// Auth tests never silently skip: a missing disposable database is a hard
     /// failure. The schema comes from the Alembic fixture, not from DDL here.
     async fn canonical_auth_state() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
-        let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
-            .expect("RUST_ROLL_TEST_DATABASE_URL is required; auth tests never silently skip");
+        let url = crate::test_support::database_url().await;
         let state = state(&url);
         let guard = crate::test_support::reset_for_test(&state).await;
         (state, guard)

@@ -606,9 +606,10 @@ mod tests {
 
     #[tokio::test]
     async fn stored_offer_lookup_and_metadata_are_owner_scoped() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (client, _db) = seeded(
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
@@ -653,9 +654,10 @@ mod tests {
 
     #[tokio::test]
     async fn offer_event_insert_binds_text_json_context() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (client, _db) = seeded(
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
@@ -698,9 +700,10 @@ mod tests {
 
     #[tokio::test]
     async fn persist_offer_writes_the_event_and_pending_bridge() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (mut client, _db) = seeded(
             &url,
             r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');

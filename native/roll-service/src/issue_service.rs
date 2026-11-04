@@ -700,9 +700,10 @@ mod tests {
 
     #[tokio::test]
     async fn direct_read_is_owner_scoped_and_does_not_touch_roll_or_queue() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let _state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");
