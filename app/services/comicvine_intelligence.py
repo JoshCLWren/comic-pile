@@ -22,14 +22,11 @@ from app.schemas.comicvine import (
 )
 from app.schemas.issue import IssueCreatorsEntry, ThreadIssueCreatorsResponse
 
-from app.services.comicvine_fallback import metadata_needs_hydration
 from app.services.comicvine_metadata_repair import (
     MetadataRepairState,
     describe_metadata_status,
     refresh_retry_after_seconds,
-    request_issue_metadata_repair,
 )
-from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 from app.services.ownership import get_owned_thread_or_404
 
 COMICVINE_PROVIDER = "comicvine"
@@ -337,26 +334,20 @@ async def get_issue_intelligence(
     """
     mapped = await refresh_repository.get_confirmed_identity_with_repair(db, issue_id)
     if mapped is None:
-        await schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
     identity, stored_request = mapped
-    repair_request: MetadataRepairState | None = None
-    if metadata_needs_hydration(identity):
-        repair_request = await request_issue_metadata_repair(db, identity.id)
-        # The GET dependency closes without auto-committing. Make the idempotent
-        # work item visible to a separate worker before scheduling a drain.
-        await db.commit()
-        # The awaited native cron worker owns execution; no detached Vercel tasks.
-    else:
-        if stored_request is not None:
-            repair_request = MetadataRepairState(
-                state=stored_request.state,
-                attempts=stored_request.attempts,
-                next_attempt_at=stored_request.next_attempt_at,
-                last_error=stored_request.last_error,
-                refresh_requested=False,
-            )
+    # Legacy v1 reader is read-only. Rust v2 owns all metadata repair enqueue
+    # and the awaited provider worker. Never schedule work on a Python GET.
+    repair_request: MetadataRepairState | None = (
+        MetadataRepairState(
+            state=stored_request.state,
+            attempts=stored_request.attempts,
+            next_attempt_at=stored_request.next_attempt_at,
+            last_error=stored_request.last_error,
+            refresh_requested=False,
+        ) if stored_request is not None else None
+    )
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)
