@@ -283,8 +283,22 @@ export function createContinuityPlansApi(client: HttpClient) {
       client.post<ContinuityPlan, ContinuityPlanWrite>('/v1/continuity-plans/', payload),
     get: (planId: number) =>
       client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
-    getReader: (planId: number): Promise<ReadingPlanReaderView> =>
-      nativeV2.continuityPlanReader({ path: { plan_id: planId } }),
+    getReader: async (planId: number): Promise<ReadingPlanReaderView> => {
+      try {
+        return await nativeV2.continuityPlanReader({ path: { plan_id: planId } })
+      } catch (error) {
+        const axiosError = error as { response?: { status?: number } | null }
+        // v2 (Option E) requires a single linked authoritative Reading List.
+        // Legacy and flag-off plans have none, so v2 answers 409; fall back to
+        // the v1 legacy reader projection for those plans.
+        if (axiosError.response?.status === 409) {
+          return client.get<ReadingPlanReaderView>(
+            `/v1/continuity-plans/${planId}/reader`,
+          )
+        }
+        throw error
+      }
+    },
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
         `/v1/continuity-plans/${planId}/release-sources/reader`,

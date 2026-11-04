@@ -266,7 +266,7 @@ owner AS MATERIALIZED (
 ),
 {option_e_ctes},
 reader_plan AS MATERIALIZED (
-    SELECT p.id, p.name
+    SELECT p.id, p.name, p.nodes_json
     FROM continuity_plans p
     JOIN owner o ON o.id = p.user_id
     WHERE p.id = $4
@@ -317,6 +317,17 @@ reader_release_sources AS (
     JOIN reader_plan p ON p.id = rs.plan_id
     JOIN external_identities e ON e.id = rs.external_identity_id
 ),
+plan_thread_nodes AS (
+    SELECT (node.value ->> 'ref_id')::int AS thread_id
+    FROM reader_plan p,
+    jsonb_array_elements(p.nodes_json) AS node(value)
+    WHERE node.value ->> 'node_type' = 'thread'
+      AND node.value ->> 'ref_id' IS NOT NULL
+),
+-- Every thread the plan is about: membership Issues plus whole-series ``thread``
+-- nodes from ``continuity_plans.nodes_json``. Node-only threads (no membership
+-- row) are deduplicated out of the membership set and get a deterministic
+-- position of zero so they sort ahead of positioned membership threads.
 plan_threads AS (
     SELECT i.thread_id, t.title AS thread_title,
            min(rpi.display_position) AS first_position
@@ -326,6 +337,18 @@ plan_threads AS (
     JOIN threads t ON t.id = i.thread_id
     JOIN owner o ON o.id = t.user_id
     GROUP BY i.thread_id, t.title
+    UNION
+    SELECT n.thread_id, t.title AS thread_title, 0 AS first_position
+    FROM plan_thread_nodes n
+    CROSS JOIN reader_plan p
+    JOIN threads t ON t.id = n.thread_id
+    JOIN owner o ON o.id = t.user_id
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM reading_plan_issues rpi2
+        JOIN issues i2 ON i2.id = rpi2.issue_id
+        WHERE rpi2.plan_id = p.id AND i2.thread_id = n.thread_id
+    )
 ),
 -- Preserve Python's per-volume candidate cardinality: an already-followed
 -- volume must not hide another confirmed mapping for the same thread.
@@ -553,20 +576,32 @@ fn build_response(
     // Project each list entry to reader issue
     let mut reader_issues: Vec<ContinuityPlanReaderIssue> = Vec::with_capacity(list_entries.len());
 
+    // Threads that are not active have no next issue, so their unread entries
+    // are Inactive rather than Later. Compute the set once so every entry can
+    // consult it; Excluded takes precedence over Inactive, matching Python.
+    let inactive_threads: HashSet<i32> = validated
+        .inputs()
+        .core
+        .threads
+        .iter()
+        .filter(|thread| thread.status != "active")
+        .map(|thread| thread.id)
+        .collect();
+
     for entry in list_entries {
         let thread_id = entry.thread_id;
         let state = evaluated.get(&thread_id);
 
         let availability = if entry.status == "read" {
             ReaderAvailability::Read
-        } else if state.is_none() {
-            ReaderAvailability::Inactive
         } else if validated
             .inputs()
             .excluded_issue_ids
             .contains(&entry.issue_id)
         {
             ReaderAvailability::Excluded
+        } else if state.is_none() || inactive_threads.contains(&thread_id) {
+            ReaderAvailability::Inactive
         } else if state.as_ref().and_then(|s| s.next_issue_id) != Some(entry.issue_id) {
             ReaderAvailability::Later
         } else if state.as_ref().map(|s| s.eligible).unwrap_or(false) {
