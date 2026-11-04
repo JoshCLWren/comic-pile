@@ -178,6 +178,7 @@ where
 fn app() -> Router {
     Router::new()
         .route("/api/_native_roll/health", get(native_health))
+        .route("/api/_native_roll/comicvine-metadata-repair", get(native_dispatch))
         .route("/api/v2/roll/bootstrap", get(native_bootstrap))
         .route("/api/v2/reading-sessions", post(native_dispatch))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
