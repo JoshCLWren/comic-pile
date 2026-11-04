@@ -887,18 +887,13 @@ fn update_queue_entry_documentation() {}
 #[allow(dead_code)]
 fn create_queue_order_documentation() {}
 
-/// Test-database schema for the queue module's disposable-Postgres coverage.
+/// Disposable database URL for the queue module's PostgreSQL coverage.
 ///
-/// A dedicated PostgreSQL schema keyed off `RUST_ROLL_TEST_DATABASE_URL`
-/// keeps these focused tables out of the canonical schema the Python parity
-/// suite creates in the same database.
-/// Disposable schema selector used by the queue fixtures.
+/// Tests run against the canonical Alembic schema in `public` (see
+/// `crate::test_support`), never a hand-written approximation of it.
 #[cfg(test)]
-fn test_database_url_for(schema: &str) -> String {
-    let base =
-        std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL required");
-    let separator = if base.contains('?') { '&' } else { '?' };
-    format!("{base}{separator}options=-csearch_path%3D{schema}%2Cpublic")
+fn test_database_url() -> String {
+    std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL required")
 }
 
 #[cfg(test)]
@@ -919,12 +914,7 @@ mod tests {
     /// A single-slot pool makes an accidental second concurrent connection
     /// checkout fail deterministically instead of merely slowing down.
     async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
-        state_for_schema("queue_unit_test", pool_size).await
-    }
-
-    /// Build a test state bound to one disposable schema.
-    async fn state_for_schema(schema: &str, pool_size: usize) -> Arc<AppState> {
-        let url = test_database_url_for(schema);
+        let url = test_database_url();
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
@@ -935,129 +925,27 @@ mod tests {
         Arc::new(AppState::new(config).expect("queue test state"))
     }
 
-    /// Reset the disposable queue schema shared by these tests.
-    ///
-    /// The Option E tables stay empty unless a test seeds them, but they must
-    /// exist because `OPTION_E_ENABLED` ordering reads the same owner-scoped
-    /// snapshot the Rust Roll reader uses.
+    /// Reset the canonical Alembic schema shared by these tests.
     async fn reset(state: &AppState) {
-        let connection = db::checkout(state).await.expect("test connection");
-        connection
-            .batch_execute(
-                "CREATE SCHEMA IF NOT EXISTS queue_unit_test; \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.threads ( \
-                     id integer PRIMARY KEY, \
-                     user_id integer NOT NULL, \
-                     title text NOT NULL DEFAULT '', \
-                     status text NOT NULL DEFAULT 'active', \
-                     queue_position integer NOT NULL, \
-                     queue_position_is_manual boolean NOT NULL DEFAULT false, \
-                     queue_order_key bigint, \
-                     is_blocked boolean NOT NULL DEFAULT false, \
-                     next_unread_issue_id integer, \
-                     catalog_series_id bigint \
-                 ); \
-                 ALTER TABLE queue_unit_test.threads \
-                     ADD COLUMN IF NOT EXISTS next_unread_issue_id integer; \
-                 ALTER TABLE queue_unit_test.threads \
-                     ADD COLUMN IF NOT EXISTS catalog_series_id bigint; \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.events ( \
-                     id serial PRIMARY KEY, \
-                     type text NOT NULL, \
-                     timestamp timestamptz NOT NULL DEFAULT now(), \
-                     user_id integer, \
-                     thread_id integer, \
-                     context json \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.issues ( \
-                     id integer PRIMARY KEY, \
-                     thread_id integer NOT NULL, \
-                     position integer NOT NULL, \
-                     status text NOT NULL, \
-                     issue_number text NOT NULL DEFAULT '1', \
-                     catalog_issue_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.dependencies ( \
-                     id integer PRIMARY KEY, \
-                     source_issue_id integer NOT NULL, \
-                     target_issue_id integer NOT NULL, \
-                     origin text, \
-                     classification text, \
-                     provenance text \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.custom_cbl_lists ( \
-                     id integer PRIMARY KEY, \
-                     user_id integer NOT NULL, \
-                     mode text NOT NULL \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.custom_cbl_entries ( \
-                     id integer PRIMARY KEY, \
-                     list_id integer NOT NULL, \
-                     issue_id integer NOT NULL, \
-                     gate text NOT NULL, \
-                     skipped boolean NOT NULL DEFAULT false, \
-                     position integer NOT NULL DEFAULT 1 \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.custom_cbl_overlap_decisions ( \
-                     id integer PRIMARY KEY, \
-                     list_id integer, \
-                     user_id integer, \
-                     continuing_external_identity_id bigint, \
-                     waiting_external_identity_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.collection_exclusions ( \
-                     id integer PRIMARY KEY, \
-                     user_id integer, \
-                     issue_id integer, \
-                     thread_id integer, \
-                     provider text, \
-                     external_volume_id text \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.external_identities ( \
-                     id bigint PRIMARY KEY, \
-                     provider text NOT NULL, \
-                     external_id text NOT NULL, \
-                     entity_type text NOT NULL \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.catalog_series ( \
-                     id bigint PRIMARY KEY, \
-                     canonical_external_identity_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.catalog_issues ( \
-                     id bigint PRIMARY KEY, \
-                     catalog_series_id bigint, \
-                     canonical_external_identity_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS queue_unit_test.thread_external_series_mappings ( \
-                     thread_id integer, \
-                     external_identity_id bigint, \
-                     status text \
-                 ); \
-                 TRUNCATE queue_unit_test.threads, queue_unit_test.events, \
-                     queue_unit_test.issues, queue_unit_test.dependencies, \
-                     queue_unit_test.custom_cbl_lists, \
-                     queue_unit_test.custom_cbl_entries, \
-                     queue_unit_test.custom_cbl_overlap_decisions, \
-                     queue_unit_test.collection_exclusions, \
-                     queue_unit_test.external_identities, \
-                     queue_unit_test.catalog_series, \
-                     queue_unit_test.catalog_issues, \
-                     queue_unit_test.thread_external_series_mappings \
-                     RESTART IDENTITY;",
-            )
-            .await
-            .expect("queue test schema");
-        drop(Object::take(connection));
+        crate::test_support::reset(state).await;
     }
 
     async fn seed(db: &AppState, user_id: i32, ids: &[(i32, i32, bool)]) {
         let connection = db::checkout(db).await.expect("seed connection");
+        connection
+            .execute(
+                "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+                &[&user_id, &format!("queue-reader-{user_id}")],
+            )
+            .await
+            .expect("seed reader");
         for (id, position, blocked) in ids {
             connection
                 .execute(
-                    "INSERT INTO threads (id, user_id, status, queue_position, is_blocked) \
-                     VALUES ($1, $2, 'active', $3, $4)",
-                    &[id, &user_id, position, blocked],
+                    "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                     queue_position, is_blocked) \
+                     VALUES ($1, $2, $3, 'Comic', 1, 'active', $4, $5)",
+                    &[id, &user_id, &format!("Thread {id}"), position, blocked],
                 )
                 .await
                 .expect("seed thread");
@@ -1164,14 +1052,22 @@ mod tests {
         let connection = db::checkout(db).await.expect("option e seed connection");
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, status, queue_position, is_blocked, \
-                 next_unread_issue_id) VALUES ($1, $2, 'active', $3, $4, $5)",
+                "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+                &[&user_id, &format!("queue-reader-{user_id}")],
+            )
+            .await
+            .expect("seed option e reader");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                 queue_position, is_blocked) \
+                 VALUES ($1, $2, $3, 'Comic', 1, 'active', $4, $5)",
                 &[
                     &thread_id,
                     &user_id,
+                    &format!("Option E thread {thread_id}"),
                     &queue_position,
                     &stored_blocked,
-                    &issue_id,
                 ],
             )
             .await
@@ -1179,12 +1075,19 @@ mod tests {
         if let Some(issue_id) = issue_id {
             connection
                 .execute(
-                    "INSERT INTO issues (id, thread_id, position, status, issue_number) \
-                     VALUES ($1, $2, 1, 'unread', $3)",
+                    "INSERT INTO issues (id, thread_id, position, status, issue_number, created_at) \
+                     VALUES ($1, $2, 1, 'unread', $3, now())",
                     &[&issue_id, &thread_id, &issue_id.to_string()],
                 )
                 .await
                 .expect("seed option e issue");
+            connection
+                .execute(
+                    "UPDATE threads SET next_unread_issue_id = $1 WHERE id = $2",
+                    &[&issue_id, &thread_id],
+                )
+                .await
+                .expect("link option e thread issue");
         }
         drop(Object::take(connection));
     }
@@ -1784,8 +1687,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO dependencies \
-                     (id, source_issue_id, target_issue_id, origin, classification, provenance) \
-                 VALUES (1, 20, 40, 'reader', 'A', 'option-e-queue-test')",
+                     (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
+                 VALUES (1, now(), 20, 40, 'reader', 'A', 'option-e-queue-test')",
                 &[],
             )
             .await
@@ -2084,8 +1987,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO dependencies \
-                     (id, source_issue_id, target_issue_id, origin, classification, provenance) \
-                 VALUES (1, 10, 30, 'reader', 'A', 'option-e-lock-test')",
+                     (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
+                 VALUES (1, now(), 10, 30, 'reader', 'A', 'option-e-lock-test')",
                 &[],
             )
             .await
@@ -2239,8 +2142,8 @@ mod tests {
     #[tokio::test]
     async fn reposition_persists_against_the_production_schema_shape() {
         let _guard = DB_LOCK.lock().await;
-        let state = state_for_schema(PRODUCTION_SHAPE_SCHEMA, 2).await;
-        reset_production_shape(&state).await;
+        let state = state_with_pool_size(2).await;
+        reset(&state).await;
         let user = AuthenticatedUser::for_test(7);
         seed_production_shape(&state, 7, 330, 247).await;
 
@@ -2295,200 +2198,45 @@ mod tests {
         }
     }
 
-    const PRODUCTION_SHAPE_SCHEMA: &str = "queue_prod_shape_test";
-
-    /// Recreate the canonical constraints this handler writes through.
-    async fn reset_production_shape(state: &AppState) {
-        let schema = PRODUCTION_SHAPE_SCHEMA;
-        let connection = db::checkout(state).await.expect("test connection");
-        connection
-            .batch_execute(&format!(
-                "CREATE SCHEMA IF NOT EXISTS {schema}; \
-                 CREATE TABLE IF NOT EXISTS {schema}.users (id integer PRIMARY KEY); \
-                 CREATE TABLE IF NOT EXISTS {schema}.threads ( \
-                     id integer PRIMARY KEY, \
-                     title varchar NOT NULL, \
-                     format varchar NOT NULL, \
-                     issues_remaining integer NOT NULL, \
-                     queue_position integer NOT NULL, \
-                     status varchar NOT NULL, \
-                     last_rating double precision, \
-                     last_activity_at timestamptz, \
-                     created_at timestamptz NOT NULL, \
-                     user_id integer NOT NULL, \
-                     notes text, \
-                     is_test boolean NOT NULL DEFAULT false, \
-                     is_blocked boolean NOT NULL DEFAULT false, \
-                     total_issues integer, \
-                     next_unread_issue_id integer, \
-                     reading_progress varchar, \
-                     blocked_by_thread_ids json, \
-                     blocked_by_issue_ids json, \
-                     manual_creator_credits json NOT NULL DEFAULT '[]'::json, \
-                     catalog_series_id bigint, \
-                     queue_order_key bigint, \
-                     queue_position_is_manual boolean NOT NULL DEFAULT false, \
-                     FOREIGN KEY (user_id) REFERENCES {schema}.users(id) \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.issues ( \
-                     id integer PRIMARY KEY, \
-                     thread_id integer NOT NULL REFERENCES {schema}.threads(id), \
-                     position integer NOT NULL, \
-                     status varchar NOT NULL, \
-                     issue_number varchar NOT NULL, \
-                     catalog_issue_id bigint, \
-                     UNIQUE (thread_id, id) \
-                 ); \
-                 ALTER TABLE {schema}.threads \
-                     DROP CONSTRAINT IF EXISTS fk_threads_frontier_same_thread; \
-                 ALTER TABLE {schema}.threads \
-                     ADD CONSTRAINT fk_threads_frontier_same_thread \
-                     FOREIGN KEY (id, next_unread_issue_id) \
-                     REFERENCES {schema}.issues(thread_id, id) \
-                     DEFERRABLE INITIALLY DEFERRED; \
-                 CREATE TABLE IF NOT EXISTS {schema}.events ( \
-                     id serial PRIMARY KEY, \
-                     type varchar NOT NULL, \
-                     timestamp timestamptz NOT NULL, \
-                     user_id integer, \
-                     thread_id integer, \
-                     context json \
-                 ); \
-                 CREATE OR REPLACE FUNCTION {schema}.assign_event_owner() \
-                 RETURNS trigger LANGUAGE plpgsql AS $$ \
-                 DECLARE inferred_owner integer; \
-                 BEGIN \
-                     IF TG_OP = 'INSERT' THEN \
-                         IF NEW.thread_id IS NOT NULL THEN \
-                             SELECT user_id INTO inferred_owner \
-                             FROM {schema}.threads WHERE id = NEW.thread_id; \
-                         END IF; \
-                         IF inferred_owner IS NOT NULL AND NEW.user_id IS NOT NULL \
-                            AND NEW.user_id <> inferred_owner THEN \
-                             RAISE EXCEPTION 'event owner conflicts with owning reference' \
-                                 USING ERRCODE = '23514'; \
-                         END IF; \
-                         NEW.user_id := COALESCE(NEW.user_id, inferred_owner); \
-                         IF NEW.user_id IS NULL THEN \
-                             RAISE EXCEPTION 'event requires an owner or an owned reference' \
-                                 USING ERRCODE = '23502'; \
-                         END IF; \
-                     END IF; \
-                     RETURN NEW; \
-                 END; $$; \
-                 DROP TRIGGER IF EXISTS trg_assign_event_owner ON {schema}.events; \
-                 CREATE TRIGGER trg_assign_event_owner \
-                     BEFORE INSERT ON {schema}.events \
-                     FOR EACH ROW EXECUTE FUNCTION {schema}.assign_event_owner(); \
-                 CREATE TABLE IF NOT EXISTS {schema}.dependencies ( \
-                     id integer PRIMARY KEY, \
-                     source_issue_id integer NOT NULL, \
-                     target_issue_id integer NOT NULL, \
-                     origin text, \
-                     classification text, \
-                     provenance text \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_lists ( \
-                     id integer PRIMARY KEY, user_id integer NOT NULL, mode text NOT NULL \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_entries ( \
-                     id integer PRIMARY KEY, list_id integer NOT NULL, \
-                     issue_id integer NOT NULL, gate text NOT NULL, \
-                     skipped boolean NOT NULL DEFAULT false, \
-                     position integer NOT NULL DEFAULT 1 \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.custom_cbl_overlap_decisions ( \
-                     id integer PRIMARY KEY, list_id integer, user_id integer, \
-                     continuing_external_identity_id bigint, \
-                     waiting_external_identity_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.collection_exclusions ( \
-                     id integer PRIMARY KEY, user_id integer, issue_id integer, \
-                     thread_id integer, provider text, external_volume_id text \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.external_identities ( \
-                     id bigint PRIMARY KEY, provider text NOT NULL, \
-                     external_id text NOT NULL, entity_type text NOT NULL \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.catalog_series ( \
-                     id bigint PRIMARY KEY, canonical_external_identity_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.catalog_issues ( \
-                     id bigint PRIMARY KEY, catalog_series_id bigint, \
-                     canonical_external_identity_id bigint \
-                 ); \
-                 CREATE TABLE IF NOT EXISTS {schema}.thread_external_series_mappings ( \
-                     thread_id integer, external_identity_id bigint, status text \
-                 ); \
-                 TRUNCATE {schema}.threads, {schema}.events, {schema}.issues, \
-                     {schema}.users, {schema}.dependencies, \
-                     {schema}.custom_cbl_lists, {schema}.custom_cbl_entries, \
-                     {schema}.custom_cbl_overlap_decisions, \
-                     {schema}.collection_exclusions, \
-                     {schema}.external_identities, {schema}.catalog_series, \
-                     {schema}.catalog_issues, \
-                     {schema}.thread_external_series_mappings RESTART IDENTITY CASCADE;"
-            ))
-            .await
-            .expect("production-shape schema");
-        drop(Object::take(connection));
-    }
-
-    /// Seed a production-sized queue: `blocked` entries hold the stored tail.
     async fn seed_production_shape(state: &AppState, user_id: i32, total: i32, blocked: i32) {
-        let schema = PRODUCTION_SHAPE_SCHEMA;
         let connection = db::checkout(state)
             .await
             .expect("production-shape seed connection");
         connection
             .execute(
-                &format!("INSERT INTO {schema}.users (id) VALUES ($1)"),
-                &[&user_id],
+                "INSERT INTO users (id, username) VALUES ($1, $2)",
+                &[&user_id, &format!("queue-reader-{user_id}")],
             )
             .await
             .expect("seed owner");
-        // The deferred frontier foreign key lets the thread rows land before
-        // their issues exist, exactly like the canonical schema.
-        connection
-            .batch_execute("BEGIN")
-            .await
-            .expect("seed transaction");
+        // `threads.next_unread_issue_id` is a non-deferrable foreign key, so the
+        // thread rows land with a NULL frontier and are linked after the issues.
         connection
             .execute(
-                &format!(
-                    "INSERT INTO {schema}.threads (id, title, format, issues_remaining, \
-                     queue_position, status, created_at, user_id, is_blocked) \
-                     SELECT g, 'Series ' || g, 'series', 5, g, 'active', now(), $1, g > $2 \
-                     FROM generate_series(1, $3) g"
-                ),
+                "INSERT INTO threads (id, title, format, issues_remaining, queue_position, \
+                 status, created_at, user_id, is_blocked) \
+                 SELECT g, 'Series ' || g, 'series', 5, g, 'active', now(), $1, g > $2 \
+                 FROM generate_series(1, $3) g",
                 &[&user_id, &(total - blocked), &total],
             )
             .await
             .expect("seed production-shaped threads");
         connection
             .execute(
-                &format!(
-                    "INSERT INTO {schema}.issues (id, thread_id, position, status, issue_number) \
-                     SELECT 100000 + g, g, 1, 'unread', '1' FROM generate_series(1, $1) g"
-                ),
+                "INSERT INTO issues (id, thread_id, position, status, issue_number, created_at) \
+                 SELECT 100000 + g, g, 1, 'unread', '1', now() \
+                 FROM generate_series(1, $1) g",
                 &[&total],
             )
             .await
             .expect("seed issue frontiers");
         connection
             .execute(
-                &format!(
-                    "UPDATE {schema}.threads SET next_unread_issue_id = 100000 + id \
-                     WHERE user_id = $1"
-                ),
+                "UPDATE threads SET next_unread_issue_id = 100000 + id WHERE user_id = $1",
                 &[&user_id],
             )
             .await
             .expect("link issue frontiers");
-        connection
-            .batch_execute("COMMIT")
-            .await
-            .expect("seed commit");
         drop(Object::take(connection));
     }
 
