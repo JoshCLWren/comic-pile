@@ -3347,41 +3347,58 @@ def test_declared_dependency_gate_records_one_durable_block_reason(
     assert "#4008" in posted[0]
 
 
-def test_controller_projects_accepted_head_approval_without_event(
+def test_controller_projects_approval_after_authorized_ready(
     monkeypatch: MonkeyPatch,
 ) -> None:
-    """Controller bot comments do not trigger issue_comment GitHub Actions."""
+    """Only a fully authorized exact-head review can project approval."""
     module = load_review_controller()
-    writes: list[tuple[list[str], object]] = []
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload, payload],
+        comments=producer_contribution(),
+        mechanical=True,
+        include_diff_inspection=True,
+    )
+    projections: list[tuple[int, str, str]] = []
     monkeypatch.setattr(
-        module, "pr_json",
-        lambda _pr: {"state": "OPEN", "headRefOid": REVIEWED_HEAD},
+        module, "set_review_approval_visibility",
+        lambda number, head: projections.append(
+            (number, head, str(transitions[-1]["pr_stage"]))
+        ),
     )
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "ready"
+    assert projections == [(1390, REVIEWED_HEAD, "factory:ready")]
+    assert posted and posted[-1]["acceptance_marker"] is not None
+
+
+def test_controller_never_projects_unverified_approval(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A failed provenance gate cannot emit the informational approved label."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch, module, [payload],
+        comments=producer_contribution(),
+        mechanical=True,
+    )
+    projections: list[tuple[int, str]] = []
     monkeypatch.setattr(
-        module, "target_json",
-        lambda _pr: {"body": "", "labels": [
-            "factory", "factory:review", "factory:unowned", "priority:high"
-        ]},
+        module, "set_review_approval_visibility",
+        lambda number, head: projections.append((number, head)),
     )
-    monkeypatch.setattr(
-        module, "run_gh",
-        lambda args, *, input_json=None: writes.append((args, input_json)),
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: False)
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
     )
-    marker = (
-        "<!-- comic-pile-factory-acceptance-v1:issue-4612:"
-        f"head-{REVIEWED_HEAD}:digest-{'b' * 64} -->"
-    )
-    module.post_review_comment(
-        pr_number=4613, marker=None, reviewer="64", verdict="approve",
-        excerpt="", note="Exact-head acceptance passed", acceptance_marker=marker,
-    )
-    assert len(writes) == 3  # review comment, acceptance marker, label PUT
-    assert writes[2][0][:3] == ["api", "--method", "PUT"]
-    labels = set(writes[2][1]["labels"])
-    assert labels == {
-        "factory", "factory:review", "factory:unowned", "priority:high",
-        "factory:approved",
-    }
+    assert result["status"] == "cross-model-provenance-blocked"
+    assert transitions[-1]["pr_stage"] == "factory:blocked"
+    assert projections == []
 
 
 def test_controller_approval_visibility_rejects_stale_head_or_repair_stage(
