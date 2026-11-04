@@ -152,6 +152,77 @@ function getUVForNumber(number: number, cols: number, rows: number, uvInset = 0)
   };
 }
 
+function createD2Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+  const { cols, rows, uvInset } = atlasInfo;
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
+  const radius = 0.9;
+  const thickness = 0.05;
+  const segments = 32;
+
+  // Create a cylinder (coin) with 2 faces
+  // Top face (face 1)
+  const topCenter = [0, thickness, 0];
+  const bottomCenter = [0, -thickness, 0];
+  
+  // Top face
+  const uv1 = getUVForNumber(1, cols, rows, uvInset);
+  const topIdx = verts.length / 3;
+  verts.push(topCenter[0], topCenter[1], topCenter[2]);
+  uvs.push((uv1.u0 + uv1.u1) / 2, (uv1.v0 + uv1.v1) / 2);
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    verts.push(x, thickness, z);
+    uvs.push(uv1.u0 + (uv1.u1 - uv1.u0) * (0.5 + (Math.cos(angle) * 0.5)), uv1.v0 + (uv1.v1 - uv1.v0) * (0.5 + (-Math.sin(angle) * 0.5)));
+  }
+  for (let i = 0; i < segments; i++) {
+    inds.push(topIdx, topIdx + 1 + i, topIdx + 1 + ((i + 1) % (segments + 1)));
+  }
+  
+  // Bottom face (face 2)
+  const uv2 = getUVForNumber(2, cols, rows, uvInset);
+  const bottomIdx = verts.length / 3;
+  verts.push(bottomCenter[0], bottomCenter[1], bottomCenter[2]);
+  uvs.push((uv2.u0 + uv2.u1) / 2, (uv2.v0 + uv2.v1) / 2);
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    verts.push(x, -thickness, z);
+    uvs.push(uv2.u0 + (uv2.u1 - uv2.u0) * (0.5 + (Math.cos(angle) * 0.5)), uv2.v0 + (uv2.v1 - uv2.v0) * (0.5 + (Math.sin(angle) * 0.5)));
+  }
+  for (let i = 0; i < segments; i++) {
+    inds.push(bottomIdx, bottomIdx + 1 + ((i + 1) % (segments + 1)), bottomIdx + 1 + i);
+  }
+  
+  // Edge
+  const edgeIdx = verts.length / 3;
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const x = Math.cos(angle) * radius;
+    const z = Math.sin(angle) * radius;
+    verts.push(x, thickness, z);
+    verts.push(x, -thickness, z);
+    uvs.push(0.5, 0.5);
+    uvs.push(0.5, 0.5);
+  }
+  for (let i = 0; i < segments; i++) {
+    const base = edgeIdx + i * 2;
+    inds.push(base, base + 2, base + 1);
+    inds.push(base + 2, base + 3, base + 1);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+  geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function createD4Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset, triangleUvRadius } = atlasInfo;
   const verts: number[] = []
@@ -713,6 +784,8 @@ function createD100Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
 
 function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   switch (sides) {
+    case 2:
+      return createD2Geometry(atlasInfo);
     case 4:
       return createD4Geometry(atlasInfo);
     case 6:
