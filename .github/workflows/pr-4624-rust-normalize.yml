@@ -1,4 +1,5 @@
 name: PR 4624 one-shot Rust format and lock repair
+# Rerun after fixing provider connection lifetime and failed-job retry.
 on:
   push:
     branches: [rust/comicvine-metadata-repair-4623]
