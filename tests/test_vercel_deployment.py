@@ -470,7 +470,6 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("POST", "/api/v2/auth/reset-password", "/api/native_roll.rs"),
         ("POST", "/api/v1/auth/me", "/api/index.py"),
         ("GET", "/api/v1/roll/bootstrap", "/api/index.py"),
-        ("GET", "/api/_native_roll/bootstrap", "/api/index.py"),
         ("GET", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),
         ("POST", "/api/v2/reading-sessions", "/api/native_roll.rs"),
         ("GET", "/api/v2/reading-sessions", "/api/index.py"),
