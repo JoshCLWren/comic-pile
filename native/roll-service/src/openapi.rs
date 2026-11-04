@@ -14,11 +14,11 @@
 
 use utoipa::OpenApi;
 
-/// The fourteen `/api/v2` operations that are declared in the auth, bootstrap,
+/// The native `/api/v2` operations that are declared in the auth, bootstrap,
 /// dice, offer, reset and reading-boundary modules.
 ///
 /// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
-/// remaining seven deployed operations and are merged in [`canonical_openapi`].
+/// remaining deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
     info(
