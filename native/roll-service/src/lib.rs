@@ -196,6 +196,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
+        .route(
+            "/api/v2/health",
+            get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
         .route("/api/v2/auth/register", post(auth::handlers::register))
         .route("/api/v2/auth/login", post(auth::handlers::login))
         .route("/api/v2/auth/refresh", post(auth::handlers::refresh))
