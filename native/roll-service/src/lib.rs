@@ -170,7 +170,9 @@ async fn bound_request(
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
     let timeout = if request.uri().path() == "/api/_native_roll/comicvine-metadata-repair" {
         Duration::from_secs(50)
-    } else { state.request_timeout };
+    } else {
+        state.request_timeout
+    };
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|_| {
@@ -235,7 +237,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/auth/reset-password",
             post(auth::handlers::reset_password),
         )
-        .route("/api/_native_roll/comicvine-metadata-repair", get(comicvine_repair::drain))
+        .route(
+            "/api/_native_roll/comicvine-metadata-repair",
+            get(comicvine_repair::drain),
+        )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route(
             "/api/v2/reading-sessions",
