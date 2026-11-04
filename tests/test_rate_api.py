@@ -1,17 +1,8 @@
 """Tests for rate API endpoints."""
 
-from collections.abc import Collection
-from datetime import UTC, datetime, timedelta
-from typing import cast
 
 import pytest
-from sqlalchemy import select
 
-from app.models import Event, Issue, Thread
-from comic_pile.queue import QueuePositionChanges, get_bounded_roll_pool_rows
-from httpx import AsyncClient
-from app.models import ReadingSession
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def test_rating_settings_returns_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

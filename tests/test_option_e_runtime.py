@@ -9,7 +9,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import ReadingExecutionSettings, get_reading_execution_settings
-from app.models import Dependency, Event, Issue, ReadingSession, Snapshot, Thread, User
+from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping

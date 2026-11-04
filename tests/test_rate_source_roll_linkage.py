@@ -1,6 +1,5 @@
 """Tests linking rate events to their exact originating roll events."""
 
-from datetime import UTC, datetime
 
 import pytest
 from httpx import AsyncClient

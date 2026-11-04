@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient
 from pydantic import TypeAdapter
 from sqlalchemy import insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +20,6 @@ from app.models import (
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.services.reading_eligibility_service import get_execution_eligibility
-from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.production_reading_graph_types import (
     ProductionGraphFixture, ProductionReadingContract, RowValue,
 )
