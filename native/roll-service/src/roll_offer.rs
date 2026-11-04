@@ -328,13 +328,6 @@ pub async fn offer(
         SessionPolicy::default(),
     )
     .await?;
-    // Avoid an expensive Option E snapshot for a Queue action that was already
-    // stale when bootstrap read the session. The locked check below remains the
-    // authority if the pending thread changes after this snapshot.
-    require_expected_pending(
-        request.expected_pending_thread_id,
-        active.session.pending_thread_id,
-    )?;
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs(&state, user).await?;
