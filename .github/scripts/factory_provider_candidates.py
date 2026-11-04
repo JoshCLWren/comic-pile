@@ -17,6 +17,8 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Protocol
 
+from factory_roster import load_roster_lock
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -159,13 +161,14 @@ class OpenCodeFreeAdapter:
     ) -> Discovery:
         """Parse available OpenCode provider/model selectors."""
         configured = _configured_filter(configured_models)
+        retired = set(load_roster_lock()["retired_models"])
         models: set[str] = set()
         for raw_line in raw_catalog.splitlines():
             selector = raw_line.strip()
             if not selector or selector.startswith("#") or "/" not in selector:
                 continue
             provider_id, model = selector.split("/", 1)
-            if provider_id != "opencode" or not model:
+            if provider_id != "opencode" or not model or model in retired:
                 continue
             if configured is not None and model not in configured:
                 continue
