@@ -207,7 +207,7 @@ export function createRollApi(client: HttpClient) {
 
   return {
     roll: offer,
-    override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
+    override: (data: { thread_id: number }) => client.patch<RollResponse, { status: 'read' | 'unread' }>(`/v2/issues/${data.thread_id}`, { status: 'read' }),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
     skip: () => client.post<RollResponse>('/v1/roll/skip'),
     reroll: offer,

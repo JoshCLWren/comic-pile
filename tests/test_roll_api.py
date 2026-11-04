@@ -26,10 +26,10 @@ async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None
 
 @pytest.mark.asyncio
 async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> None:
-    """POST /roll/override/ sets specific thread."""
+    """PATCH /v2/issues/{thread_id} sets specific thread."""
     _ = sample_data
     thread_id = 1
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
+    response = await auth_client.patch(f"/api/v2/issues/{thread_id}", json={"status": "read"})
     assert response.status_code == 200
 
     data = response.json()

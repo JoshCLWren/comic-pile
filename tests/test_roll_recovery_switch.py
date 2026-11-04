@@ -88,7 +88,7 @@ async def _set_pending_roll(auth_client: AsyncClient, thread_id: int) -> None:
     Returns:
         None.
     """
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
+    response = await auth_client.patch(f"/api/v2/issues/{thread_id}", json={"status": "read"})
     assert response.status_code == 200
 
 

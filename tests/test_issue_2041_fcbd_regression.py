@@ -118,8 +118,8 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     assert rolled.status_code == 200, rolled.text
     assert rolled.json()["thread_id"] != ultimates_thread.id
 
-    blocked_override = await auth_client.post(
-        "/api/v1/roll/override", json={"thread_id": ultimates_thread.id}
+    blocked_override = await auth_client.patch(
+        f"/api/v2/issues/{ultimates_thread.id}", json={"status": "read"}
     )
     assert blocked_override.status_code == 422
     assert "blocked" in blocked_override.json()["detail"].lower()
@@ -216,8 +216,8 @@ async def test_aggregate_blocked_identifies_remaining_cause_not_read_fcbd(
     assert ultimates_thread.id not in roll_ids
     assert other_thread.id in roll_ids
 
-    blocked_override = await auth_client.post(
-        "/api/v1/roll/override", json={"thread_id": ultimates_thread.id}
+    blocked_override = await auth_client.patch(
+        f"/api/v2/issues/{ultimates_thread.id}", json={"status": "read"}
     )
     assert blocked_override.status_code == 422
 

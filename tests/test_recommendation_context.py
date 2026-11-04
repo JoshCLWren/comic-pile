@@ -176,8 +176,8 @@ async def test_override_creates_recommendation_context(
     assert roll_response.status_code == 200
 
     # Now override with the same thread
-    override_response = await auth_client.post(
-        "/api/roll/override", json={"thread_id": thread.id}
+    override_response = await auth_client.patch(
+        f"/api/v2/issues/{thread.id}", json={"status": "read"}
     )
     assert override_response.status_code == 200
     override_data = override_response.json()
