@@ -118,8 +118,30 @@ def report_from_text(review_text: str) -> Mapping[str, Any] | None:
     Returns:
         Parsed report, or None if ambiguous or invalid.
     """
-    lines = [line[len(PREFIX):] for line in review_text.splitlines()
-             if line.startswith(PREFIX)]
+    # OpenCode can emit assistant prose as JSONL text events instead of plain
+    # lines. Only inspect the assistant's text parts: tool results and event
+    # metadata can contain echoed examples or untrusted acceptance markers.
+    lines: list[str] = []
+    for raw_line in review_text.splitlines():
+        if raw_line.startswith(PREFIX):
+            lines.append(raw_line[len(PREFIX):])
+            continue
+        if not raw_line.startswith("{"):
+            continue
+        try:
+            event = json.loads(raw_line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "text":
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict) or part.get("type") != "text":
+            continue
+        message = part.get("text")
+        if not isinstance(message, str):
+            continue
+        lines.extend(line[len(PREFIX):] for line in message.splitlines()
+                     if line.startswith(PREFIX))
     if len(lines) != 1 or len(lines[0]) > 2000000:
         return None
     try:
@@ -167,7 +189,13 @@ def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str,
         seen.add(name)
         if item.get("status") != "pass":
             errors.append(f"{name}: missing PASS evidence")
-        if item.get("file") not in changed:
+        cited_file = item.get("file")
+        # Human review citations often include exact changed-file line ranges,
+        # e.g. path.py:33-69 or path.rs:191-342,245-336. Only the pathname
+        # participates in diff membership; arbitrary suffixes still fail.
+        if isinstance(cited_file, str):
+            cited_file = re.sub(r":\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$", "", cited_file)
+        if not isinstance(cited_file, str) or cited_file not in changed:
             errors.append(f"{name}: cite a file changed by this PR")
         evidence = item.get("evidence")
         if not isinstance(evidence, str) or len(evidence.strip()) < 30:
