@@ -1,4 +1,5 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
+pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod config;
@@ -24,6 +25,9 @@ pub mod roll_reset;
 mod session_bandwidth;
 pub mod skip;
 pub mod threads;
+
+#[cfg(test)]
+mod test_support;
 
 use axum::{
     extract::{Request, State},
@@ -248,6 +252,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
+        .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(

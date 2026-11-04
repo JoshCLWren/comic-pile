@@ -181,8 +181,10 @@ jobs:
             exit 0
           fi
           echo "Factory installation REST budget: ${remaining}/${limit} remaining (reset epoch ${reset})"
+          echo "reset_epoch=${reset}" >> "$GITHUB_OUTPUT"
           if (( remaining < 1200 )); then
-            echo "::warning::REST quota below 1200-request dispatch reserve; leaving worker leases untouched"
+            echo "::warning::REST quota below 1200-request dispatch reserve; leaving worker leases untouched until reset"
+            echo "quota_deferred=true" >> "$GITHUB_OUTPUT"
             echo "allow=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -773,15 +775,21 @@ jobs:
           dispatched_count=0
           dispatch_failures=0
           budget_deferred=false
+          budget_unreadable=false
           while IFS= read -r worker; do
             # The controller makes several authenticated reads per assignment.
             # Stop a batch before exhausting the installation for everyone.
             if ! remaining_core="$(gh api rate_limit --jq '.resources.core.remaining' 2>/dev/null)"; then
-              echo "::warning::Cannot confirm remaining REST quota; deferring remaining workers"
-              budget_deferred=true
+              echo "::warning::Cannot confirm remaining REST quota; failing closed without roster retry"
+              budget_unreadable=true
               break
             fi
-            if ! [[ "$remaining_core" =~ ^[0-9]+$ ]] || (( remaining_core < 450 )); then
+            if ! [[ "$remaining_core" =~ ^[0-9]+$ ]]; then
+              echo "::warning::Invalid remaining REST quota; failing closed without roster retry"
+              budget_unreadable=true
+              break
+            fi
+            if (( remaining_core < 450 )); then
               echo "::warning::REST quota reached worker reserve; deferring remaining workers"
               budget_deferred=true
               break
@@ -790,6 +798,7 @@ jobs:
           done < <(jq -r '.[]' <<< "$workers")
 
           echo "budget_deferred=${budget_deferred}" >> "$GITHUB_OUTPUT"
+          echo "budget_unreadable=${budget_unreadable}" >> "$GITHUB_OUTPUT"
           echo "Dispatched ${dispatched_count} worker entry workflow(s)"
           echo "dispatched_count=${dispatched_count}" >> "$GITHUB_OUTPUT"
           if (( dispatch_failures > 0 )); then
@@ -800,13 +809,17 @@ jobs:
           echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
 
       - name: Self-perpetuate roster cadence
-        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && steps.rotisserie_install.outcome == 'success' && steps.api_budget.outputs.allow == 'true' && steps.dispatch_workers.outputs.budget_deferred != 'true'
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
         continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           DISPATCHED_COUNT: ${{ steps.dispatch_workers.outputs.dispatched_count }}
           DISPATCH_FAILED: ${{ steps.dispatch_workers.outputs.dispatch_failed }}
+          API_RESET_EPOCH: ${{ steps.api_budget.outputs.reset_epoch }}
+          QUOTA_DEFERRED: ${{ steps.api_budget.outputs.quota_deferred }}
+          BUDGET_DEFERRED: ${{ steps.dispatch_workers.outputs.budget_deferred }}
+          BUDGET_UNREADABLE: ${{ steps.dispatch_workers.outputs.budget_unreadable }}
         run: |
           set -Eeuo pipefail
           # GitHub throttles scheduled delivery to roughly hourly. Roster-mode
@@ -817,6 +830,40 @@ jobs:
           # workflow restart a broken chain.
           dispatched_count="${DISPATCHED_COUNT:-}"
           dispatch_failed="${DISPATCH_FAILED:-}"
+
+          # A mid-batch observation failure is not a confirmed reserve hit.
+          # End the roster chain, leaving the hourly watchdog as fallback.
+          if [[ "${BUDGET_UNREADABLE:-}" == "true" ]]; then
+            echo "::warning::Unverified REST quota: ending roster without retry"
+            exit 0
+          fi
+
+          # A valid low REST budget must not kill the roster chain until GitHub's
+          # next hourly watchdog. Wait without API polling, then enqueue exactly
+          # one successor after the observed installation quota reset.
+          defer_until_reset() {
+            local reset_epoch="${API_RESET_EPOCH:-}" now_epoch delay_seconds
+            if ! [[ "$reset_epoch" =~ ^[0-9]+$ && ${#reset_epoch} -le 11 ]]; then
+              echo '::warning::REST reset epoch is absent or invalid; refusing quota-deferred chain'
+              return 1
+            fi
+            now_epoch="$(date +%s)"
+            delay_seconds=$((reset_epoch - now_epoch + 15))
+            (( delay_seconds >= 15 )) || delay_seconds=15
+            if (( delay_seconds > 3700 )); then
+              echo "::warning::REST quota reset delay ${delay_seconds}s is implausible; refusing chain"
+              return 1
+            fi
+            echo "REST reserve reached; resuming roster after quota reset in ${delay_seconds}s"
+            sleep "$delay_seconds"
+            gh workflow run fixed-model-factory-dispatch.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+          }
+
+          if [[ "${QUOTA_DEFERRED:-}" == "true" || "${BUDGET_DEFERRED:-}" == "true" ]]; then
+            defer_until_reset
+            exit 0
+          fi
 
           chain_roster_successor() {
             sleep 240

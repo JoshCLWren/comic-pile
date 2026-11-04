@@ -193,8 +193,7 @@
     "ReaderContextSeries",
     "RollResponse",
     "SetCurrentIssueResponse",
-    "SnoozeCorrectionInfo",
-    "TopRatedThread"
+    "SnoozeCorrectionInfo"
   ],
   "frontend/src/types/rollBootstrap.ts": [
     "RollPrerequisiteSwitchRequest",

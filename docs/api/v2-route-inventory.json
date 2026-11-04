@@ -5,6 +5,16 @@
   "operations": [
     {
       "method": "GET",
+      "path": "/api/v2/analytics/metrics",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4348,
+      "consumers": [
+        "frontend/src/services/api-tasks.ts"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/auth/csrf",
       "runtime": "native-rust",
       "status": "target",

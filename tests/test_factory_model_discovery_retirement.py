@@ -68,12 +68,68 @@ def _assert_validator_minutes(rows: list[dict[str, str]]) -> None:
     assert ROSTER.schedule_is_balanced(rows)
 
 
+def _assert_committed_pin(
+    by_worker: dict[str, dict[str, str]],
+    lock: dict[str, list],
+    worker: str,
+    *,
+    source: str,
+    model: str,
+    minute: str | None = None,
+) -> dict[str, str] | None:
+    """Assert a live pin's identity, or a consistently-recorded retirement.
+
+    Discovery retires catalog-absent ``nvidia``/``openrouter-free`` pins and
+    rewrites the generated pins in the same commit. This guard accepts exactly
+    that transition so a legitimate retirement PR is green on its own head
+    (#3802), while a silent re-pin or an inconsistent lock still fails.
+    Protected sources (kilo-auto, z-ai, ollama-cloud, mistral, orcarouter,
+    requesty) and dynamic ``opencode-free`` slots are asserted directly.
+
+    Returns:
+        The live roster row, or ``None`` when discovery retired the worker.
+    """
+    row = by_worker.get(worker)
+    if row is None:
+        # Only catalog-retireable fixed-provider sources may disappear through
+        # discovery. Protected/dynamic pins must stay live; a missing one is a
+        # guard regression, not a legitimate retirement (#3802 review).
+        assert source in {"nvidia", "openrouter-free"}, (worker, source)
+        assert int(worker) not in lock["expected_workers"], worker
+        assert int(worker) in lock["retired_workers"], worker
+        assert model in lock["retired_models"], (worker, model)
+        return None
+    assert row["source"] == source, (worker, row["source"])
+    assert row["model"] == model, (worker, row["model"])
+    if minute is not None:
+        assert row["minute"] == minute, (worker, row["minute"])
+    return row
+
+
 def test_committed_lock_matches_live_roster() -> None:
     """The generated expected-worker lock must stay in sync with the TSV."""
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     assert set(lock["expected_workers"]) == ROSTER.roster_worker_ids(rows)
     assert {40, 43, 44}.issubset(set(lock["retired_workers"]))
+
+
+def test_committed_roster_matches_generated_snapshot() -> None:
+    """The automation-owned snapshot must match the committed TSV and lock.
+
+    Discovery writes ``.github/factory-roster-snapshot.json`` in the same
+    commit as the TSV and lock, so a legitimate retirement updates exactly one
+    expectation artifact instead of a hand-edited per-worker guard (#3802).
+    """
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    snapshot = ROSTER.load_roster_snapshot(
+        ROOT / ".github" / "factory-roster-snapshot.json"
+    )
+    assert ROSTER.build_roster_snapshot(rows, lock) == snapshot
+    assert ROSTER.snapshot_pins_by_worker(snapshot) == {
+        row["worker"]: row for row in rows
+    }
 
 
 
@@ -309,6 +365,84 @@ def test_apply_rebalances_after_nvidia_410_zombie_pins(tmp_path: Path) -> None:
         "stepfun-ai/step-3.7-flash",
         "minimaxai/minimax-m3",
     }.issubset(set(lock["retired_models"]))
+
+
+def test_apply_refreshes_roster_snapshot_for_nvidia_retirement(tmp_path: Path) -> None:
+    """A retirement rewrites the snapshot so guard pins need no hand edit (#3802).
+
+    Reproduces the #3784 failure mode: discovery retires a catalog-absent pin
+    and commits the TSV + lock only, leaving the committed guard tests pinning
+    the dead worker. Apply must also regenerate the automation-owned
+    ``factory-roster-snapshot.json`` beside the roster in the same run so the
+    guard reads track the retirement with exactly one artifact change.
+    """
+    rows = _nvidia_410_zombie_rows()
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    comments = tmp_path / "issue-1093-comments.json"
+    ROSTER.write_roster_rows(
+        roster,
+        rows,
+        comments=("# worker\tsource\tmodel\tminute\tscheduler\tdisplay_name",),
+    )
+    ROSTER.sync_roster_lock(rows, lock_path=lock_path)
+    comments.write_text(
+        (FIXTURES / "nvidia-410-comments.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    status = RETIRE.run(
+        [
+            "apply",
+            "--roster",
+            str(roster),
+            "--lock",
+            str(lock_path),
+            "--catalog-json",
+            str(FIXTURES / "keep-present.json"),
+            "--retirement-comments",
+            str(comments),
+            "--no-add-unused-free",
+        ]
+    )
+
+    snapshot_path = tmp_path / "factory-roster-snapshot.json"
+    assert status == 0
+    assert snapshot_path.is_file()
+    snapshot = ROSTER.load_roster_snapshot(snapshot_path)
+    remaining = ROSTER.load_roster_rows(roster)
+    lock = ROSTER.load_roster_lock(lock_path)
+    pins = ROSTER.snapshot_pins_by_worker(snapshot)
+
+    assert pins == {row["worker"]: row for row in remaining}
+    assert {"9", "14"}.isdisjoint(set(pins))
+    assert {9, 14}.issubset(set(snapshot["retired_workers"]))
+    assert {
+        "stepfun-ai/step-3.7-flash",
+        "minimaxai/minimax-m3",
+    }.issubset(set(snapshot["retired_models"]))
+    assert ROSTER.build_roster_snapshot(remaining, lock) == snapshot
+
+
+def test_snapshot_command_regenerates_committed_snapshot(tmp_path: Path) -> None:
+    """The snapshot command deterministically reproduces the committed file."""
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    roster = tmp_path / "free-model-factories.tsv"
+    lock_path = tmp_path / "factory-expected-workers.json"
+    ROSTER.write_roster_rows(roster, rows)
+    ROSTER.write_roster_lock(lock_path, lock)
+
+    status = RETIRE.run(
+        ["snapshot", "--roster", str(roster), "--lock", str(lock_path)]
+    )
+
+    generated = (tmp_path / "factory-roster-snapshot.json").read_text(encoding="utf-8")
+    committed = (ROOT / ".github" / "factory-roster-snapshot.json").read_text(
+        encoding="utf-8"
+    )
+    assert status == 0
+    assert generated == committed
 
 
 def test_cli_plan_fails_closed_on_invalid_retirement_comments(tmp_path: Path) -> None:
@@ -1311,14 +1445,9 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert 50 in lock["retired_workers"]
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"] == {
-        "worker": "48",
-        "source": "mistral",
-        "model": "codestral-latest",
-        "minute": "50",
-        "scheduler": "dispatcher",
-        "display_name": "Mistral Codestral",
-    }
+    _assert_committed_pin(by_worker, lock, "48", source="mistral", model="codestral-latest")
+    assert by_worker["48"]["scheduler"] == "dispatcher"
+    assert by_worker["48"]["display_name"] == "Mistral Codestral"
     assert "49" not in by_worker
     assert "space-bunny-free" in lock["retired_models"]
     assert "space-bunny-free" not in {row["model"] for row in rows}
@@ -1368,15 +1497,23 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     before_rows = ROSTER.load_roster_rows(roster)
     before_lock = ROSTER.load_roster_lock(lock_path)
     before_workers = [row["worker"] for row in before_rows]
-    # This test's catalog must include the currently committed free pins.
-    # Keep the historical shared fixture unchanged for planner regressions.
+    # Build the catalog from whatever the committed roster currently pins, so
+    # this no-op proof stays valid after later catalog retirements (#3802)
+    # instead of naming today's free ids explicitly.
     recorded = json.loads((FIXTURES / "keep-present.json").read_text(encoding="utf-8"))
-    recorded["providers"]["opencode"].extend(
-        [
-            {"id": "deepseek-v4.1-flash-free", "cost": {"input": 0, "output": 0}},
-            {"id": "nemotron-3.5-super-vl-free", "cost": {"input": 0, "output": 0}},
-        ]
-    )
+    recorded["providers"]["opencode"] = [
+        {"id": row["model"], "cost": {"input": 0, "output": 0}}
+        for row in before_rows
+        if row["source"] == "opencode-free"
+    ]
+    recorded["providers"]["nvidia"] = [
+        {"id": row["model"]} for row in before_rows if row["source"] == "nvidia"
+    ]
+    recorded["providers"]["openrouter"] = [
+        {"id": row["model"]}
+        for row in before_rows
+        if row["source"] == "openrouter-free"
+    ]
     current_fixture = tmp_path / "current-catalog.json"
     current_fixture.write_text(json.dumps(recorded), encoding="utf-8")
 
@@ -1405,32 +1542,19 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "72" not in by_worker
     assert "stealth/pixel-canary" not in {row["model"] for row in remaining}
     assert "stealth/pixel-canary" in lock["retired_models"]
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["source"] == "mistral"
-    assert by_worker["48"]["model"] == "codestral-latest"
-    assert by_worker["48"]["minute"] == "50"
+    _assert_committed_pin(by_worker, lock, "48", source="mistral", model="codestral-latest")
     assert "49" not in by_worker
     assert 49 not in lock["expected_workers"]
     assert 49 in lock["retired_workers"]
     assert "space-bunny-free" in lock["retired_models"]
     assert "space-bunny-free" not in {row["model"] for row in remaining}
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["74"] == {
-        "worker": "74",
-        "source": "opencode-free",
-        "model": "deepseek-v4.1-flash-free",
-        "minute": "20",
-        "scheduler": "dispatcher",
-        "display_name": "OpenCode Deepseek V4.1 Flash Free",
-    }
-    assert by_worker["75"] == {
-        "worker": "75",
-        "source": "opencode-free",
-        "model": "nemotron-3.5-super-vl-free",
-        "minute": "25",
-        "scheduler": "dispatcher",
-        "display_name": "OpenCode Nemotron 3.5 Super Vl Free",
-    }
+    _assert_committed_pin(
+        by_worker, lock, "74", source="opencode-free", model="deepseek-v4.1-flash-free"
+    )
+    _assert_committed_pin(
+        by_worker, lock, "75", source="opencode-free", model="nemotron-3.5-super-vl-free"
+    )
     assert "apodex/apodex-1.1-mini:free" in lock["retired_models"]
     assert "ling-3.1-flash-free" in lock["retired_models"]
     assert "76" not in by_worker
@@ -1441,25 +1565,13 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "77" not in by_worker
     assert 77 in lock["retired_workers"]
     assert "moonshotai/kimi-k3" in lock["retired_models"]
-    # The NVIDIA GLM 5.3 410 marker retires worker 78, even though
-    # the separate NVIDIA GLM 5.3 Flash worker 80 remains.
-    assert "78" not in by_worker
-    assert 78 not in lock["expected_workers"]
-    assert 78 in lock["retired_workers"]
-    assert "z-ai/glm-5.3" in lock["retired_models"]
+    _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
     assert "79" not in by_worker
     assert 79 not in lock["expected_workers"]
     assert 79 in lock["retired_workers"]
     assert "step-5-preview-free" in lock["retired_models"]
     assert "step-5-preview-free" not in {row["model"] for row in remaining}
-    assert by_worker["80"] == {
-        "worker": "80",
-        "source": "nvidia",
-        "model": "z-ai/glm-5.3-flash",
-        "minute": "40",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA GLM 5.3 Flash",
-    }
+    _assert_committed_pin(by_worker, lock, "80", source="nvidia", model="z-ai/glm-5.3-flash")
     # Worker 81 retired: 15/15 then 23/24 "socket closed" failures and it
     # duplicated the OpenCode Zen DeepSeek V4.1 Flash lanes.
     assert "81" not in by_worker
@@ -1478,8 +1590,9 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
     assert "poolside/laguna-s-2.1:free" not in {row["model"] for row in remaining}
     assert "poolside/laguna-xs-2.1:free" not in {row["model"] for row in remaining}
-    assert by_worker["11"]["source"] == "nvidia"
-    assert by_worker["11"]["model"] == "poolside/laguna-xs-2.1"
+    _assert_committed_pin(
+        by_worker, lock, "11", source="nvidia", model="poolside/laguna-xs-2.1"
+    )
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     # Ghost free-catalog lanes retired; NVIDIA Laguna 11 / OpenCode 42 /
@@ -1496,14 +1609,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
     assert by_worker["42"]["source"] == "opencode-free"
     assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
-    assert by_worker["82"] == {
-        "worker": "82",
-        "source": "z-ai",
-        "model": "glm-4.7-flash",
-        "minute": "55",
-        "scheduler": "dispatcher",
-        "display_name": "Z.AI GLM 4.7 Flash",
-    }
+    _assert_committed_pin(by_worker, lock, "82", source="z-ai", model="glm-4.7-flash")
     assert "59" not in by_worker
     assert 59 not in lock["expected_workers"]
     assert 59 in lock["retired_workers"]
@@ -1516,14 +1622,9 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "cat-jam-free" not in {row["model"] for row in remaining}
     assert "84" not in by_worker
     assert "85" not in by_worker
-    assert by_worker["86"] == {
-        "worker": "86",
-        "source": "nvidia",
-        "model": "meta/muse-glimmer-30b",
-        "minute": "0",
-        "scheduler": "dispatcher",
-        "display_name": "NVIDIA Muse Glimmer 30B",
-    }
+    _assert_committed_pin(
+        by_worker, lock, "86", source="nvidia", model="meta/muse-glimmer-30b"
+    )
     assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in remaining}
     assert "z-ai/glm-5.2:free" not in {row["model"] for row in remaining}
     assert ROSTER.opencode_free_display_name("space-bunny-free") == (
@@ -1539,46 +1640,26 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert {51, 52, 53}.issubset(set(lock["expected_workers"]))
-    assert {51, 52, 53}.isdisjoint(set(lock["retired_workers"]))
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["48"]["source"] == "mistral"
     assert by_worker["48"]["model"] == "codestral-latest"
     assert by_worker["48"]["model"] != "mistral-small"
-    assert by_worker["51"] == {
-        "worker": "51",
-        "source": "openrouter-free",
-        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "minute": "5",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Nemotron 3 Ultra Free",
+    openrouter_pins = {
+        "51": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "52": "thinkingmachines/inkling:free",
+        "53": "thinkingmachines/inkling-small:free",
     }
-    assert by_worker["52"] == {
-        "worker": "52",
-        "source": "openrouter-free",
-        "model": "thinkingmachines/inkling:free",
-        "minute": "10",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Inkling Free",
-    }
-    assert by_worker["53"] == {
-        "worker": "53",
-        "source": "openrouter-free",
-        "model": "thinkingmachines/inkling-small:free",
-        "minute": "15",
-        "scheduler": "dispatcher",
-        "display_name": "OpenRouter Inkling Small Free",
-    }
-    assert by_worker["51"]["model"] not in lock["retired_models"]
-    assert by_worker["52"]["model"] not in lock["retired_models"]
-    assert by_worker["53"]["model"] not in lock["retired_models"]
+    for worker, model in openrouter_pins.items():
+        live = _assert_committed_pin(
+            by_worker, lock, worker, source="openrouter-free", model=model
+        )
+        if live is not None:
+            assert live["model"] not in lock["retired_models"]
+            assert ROSTER.openrouter_model_is_free(live["model"])
     assert "84" not in by_worker
     assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
     assert "thinkingmachines/inkling" in lock["retired_models"]
-    assert ROSTER.openrouter_model_is_free(by_worker["51"]["model"])
-    assert ROSTER.openrouter_model_is_free(by_worker["52"]["model"])
-    assert ROSTER.openrouter_model_is_free(by_worker["53"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
 
 
@@ -1592,23 +1673,17 @@ def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> Non
     assert {54, 55}.isdisjoint(set(lock["retired_workers"]))
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["53"]["source"] == "openrouter-free"
-    assert by_worker["54"] == {
-        "worker": "54",
-        "source": "z-ai",
-        "model": "glm-4.5-flash",
-        "minute": "20",
-        "scheduler": "dispatcher",
-        "display_name": "Z.AI GLM 4.5 Flash",
-    }
-    assert by_worker["55"] == {
-        "worker": "55",
-        "source": "ollama-cloud",
-        "model": "nemotron-3-nano:30b",
-        "minute": "25",
-        "scheduler": "dispatcher",
-        "display_name": "Ollama Cloud Nemotron 3 Nano 30B",
-    }
+    _assert_committed_pin(
+        by_worker, lock, "53", source="openrouter-free", model="thinkingmachines/inkling-small:free"
+    )
+    _assert_committed_pin(by_worker, lock, "54", source="z-ai", model="glm-4.5-flash")
+    _assert_committed_pin(
+        by_worker, lock, "55", source="ollama-cloud", model="nemotron-3-nano:30b"
+    )
+    assert by_worker["54"]["scheduler"] == "dispatcher"
+    assert by_worker["54"]["display_name"] == "Z.AI GLM 4.5 Flash"
+    assert by_worker["55"]["scheduler"] == "dispatcher"
+    assert by_worker["55"]["display_name"] == "Ollama Cloud Nemotron 3 Nano 30B"
     assert by_worker["54"]["model"] not in lock["retired_models"]
     assert by_worker["55"]["model"] not in lock["retired_models"]
     assert "z-ai/glm-4.5-flash" not in lock["retired_models"]
@@ -1625,19 +1700,22 @@ def test_committed_tsv_retires_openrouter_dots_preview_worker_56() -> None:
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert 56 not in lock["expected_workers"]
-    assert 56 in lock["retired_workers"]
-    assert "56" not in by_worker
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["54"]["source"] == "z-ai"
     assert by_worker["54"]["model"] == "glm-4.5-flash"
     assert by_worker["55"]["source"] == "ollama-cloud"
     assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
-    assert "dots-studio/dots-3-note-preview:free" not in {
-        row["model"] for row in rows
-    }
+    dots_pin = _assert_committed_pin(
+        by_worker,
+        lock,
+        "56",
+        source="openrouter-free",
+        model="dots-studio/dots-3-note-preview:free",
+    )
+    if dots_pin is not None:
+        assert dots_pin["model"] not in lock["retired_models"]
+        assert ROSTER.openrouter_model_is_free(dots_pin["model"])
     assert ROSTER.schedule_is_balanced(rows)
 
 
@@ -1721,19 +1799,20 @@ def test_committed_tsv_retires_openrouter_laguna_workers_68_and_69() -> None:
     assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
     assert "poolside/laguna-s-2.1:free" not in models
     assert "poolside/laguna-xs-2.1:free" not in models
-    assert by_worker["11"]["source"] == "nvidia"
-    assert by_worker["11"]["model"] == "poolside/laguna-xs-2.1"
-    assert by_worker["11"]["minute"] == "15"
+    _assert_committed_pin(
+        by_worker, lock, "11", source="nvidia", model="poolside/laguna-xs-2.1"
+    )
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["60"]["source"] == "openrouter-free"
-    assert by_worker["60"]["model"] == "cohere/north-mini-code:free"
-    assert by_worker["60"]["minute"] == "30"
+    north = _assert_committed_pin(
+        by_worker, lock, "60", source="openrouter-free", model="cohere/north-mini-code:free"
+    )
+    if north is not None:
+        assert ROSTER.openrouter_model_is_free(north["model"])
     assert "63" not in by_worker
     assert 63 not in lock["expected_workers"]
     assert 63 in lock["retired_workers"]
     assert "nvidia/nemotron-3-super-120b-a12b:free" in lock["retired_models"]
-    assert ROSTER.openrouter_model_is_free(by_worker["60"]["model"])
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
@@ -1773,17 +1852,20 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert "minimax/minimax-m3.1-flash:free" not in models
     assert by_worker["42"]["source"] == "opencode-free"
     assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
-    assert by_worker["42"]["minute"] == "20"
+    assert by_worker["42"]["scheduler"] == "dispatcher"
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["46"]["minute"] == "40"
+    assert by_worker["46"]["scheduler"] == "dispatcher"
     assert by_worker["93"]["source"] == "requesty"
     assert by_worker["93"]["model"] == "nvidia/nemotron-3-super-120b-a12b"
-    assert by_worker["93"]["minute"] == "5"
-    assert "95" not in by_worker
-    assert 95 not in lock["expected_workers"]
-    assert 95 in lock["retired_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" in lock["retired_models"]
+    assert by_worker["93"]["scheduler"] == "dispatcher"
+    _assert_committed_pin(
+        by_worker,
+        lock,
+        "95",
+        source="nvidia",
+        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+    )
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
@@ -1794,38 +1876,37 @@ def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert 41 in lock["expected_workers"]
-    assert 41 not in lock["retired_workers"]
-    assert by_worker["21"]["source"] == "nvidia"
-    assert by_worker["21"]["model"] == "google/gemma-4-31b-it"
+    _assert_committed_pin(
+        by_worker, lock, "21", source="nvidia", model="google/gemma-4-31b-it"
+    )
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["54"]["source"] == "z-ai"
     assert by_worker["54"]["model"] == "glm-4.5-flash"
     assert by_worker["55"]["source"] == "ollama-cloud"
     assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
-    assert "56" not in by_worker
-    assert 56 not in lock["expected_workers"]
-    assert 56 in lock["retired_workers"]
-    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
-    assert by_worker["41"] == {
-        "worker": "41",
-        "source": "opencode-free",
-        "model": "mimo-v2.6-flash-free",
-        "minute": "15",
-        "scheduler": "dispatcher",
-        "display_name": "OpenCode MiMo V2.6 Flash Free",
-    }
-    assert by_worker["41"]["model"] not in lock["retired_models"]
+    _assert_committed_pin(
+        by_worker,
+        lock,
+        "56",
+        source="openrouter-free",
+        model="dots-studio/dots-3-note-preview:free",
+    )
+    mimo_pin = _assert_committed_pin(
+        by_worker, lock, "41", source="opencode-free", model="mimo-v2.6-flash-free"
+    )
+    if mimo_pin is not None:
+        assert mimo_pin["model"] not in lock["retired_models"]
+        assert mimo_pin["model"].endswith("-free")
+        assert ROSTER.opencode_model_is_free(mimo_pin["model"])
+        assert mimo_pin["scheduler"] == "dispatcher"
     assert "mimo-v2.6-flash-free" not in lock["retired_models"]
-    assert by_worker["41"]["model"].endswith("-free")
-    assert ROSTER.opencode_model_is_free(by_worker["41"]["model"])
     assert "xiaomi/mimo-v2.6-flash" not in {row["model"] for row in rows}
     assert not ROSTER.openrouter_model_is_free("xiaomi/mimo-v2.6-flash")
     catalogs = CATALOG.load_catalog_fixture(FIXTURES / "keep-present.json")
     assert "mimo-v2.6-flash-free" in catalogs["opencode"].model_ids()
     assert ROSTER.opencode_free_display_name("mimo-v2.6-flash-free") == (
-        by_worker["41"]["display_name"]
+        "OpenCode MiMo V2.6 Flash Free"
     )
     assert ROSTER.schedule_is_balanced(rows)
 

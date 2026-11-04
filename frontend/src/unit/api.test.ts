@@ -172,6 +172,7 @@ it('calls every remaining API resource endpoint', async () => {
   await dependenciesApi.getConnectedThreads(1)
   await dependenciesApi.updateDependency(3, null)
   await tasksApi.getMetrics()
+  expect(get).toHaveBeenCalledWith('/v2/analytics/metrics')
   await snoozeApi.snooze()
   await snoozeApi.unsnooze(2)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })

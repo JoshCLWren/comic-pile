@@ -6,6 +6,14 @@ supports issue #638 (Developer experience and frontend simplification) and the
 `tests/test_api_v1_canonical_contract.py` enforces every statement below against the
 generated OpenAPI schema, so this list cannot silently drift.
 
+## Native v2 analytics transition
+
+`GET /api/v2/analytics/metrics` is the new bounded native Rust resource. The legacy
+`GET /api/v1/analytics/metrics` and `/api/analytics/metrics` handlers remain available until the
+replacement is deployed and authenticated production proof exists, per #4348. The real frontend
+service already calls the native v2 resource; the legacy handlers are not a long-lived parallel
+implementation.
+
 ## Canonical families (must use `/api/v1`)
 
 These retained first-party client families are exposed under `/api/v1/<family>` and are
@@ -13,7 +21,7 @@ the supported, documented surface. New client code must call these paths:
 
 | Family | Canonical prefix |
 |--------|------------------|
-| Analytics | `/api/v1/analytics` |
+| Analytics | `/api/v1/analytics` (legacy retained until #4348 production proof; new clients use `/api/v2/analytics/metrics`) |
 | Auth | `/api/v1/auth` |
 | Continuity | `/api/v1/continuity` |
 | Continuity plans | `/api/v1/continuity-plans` |

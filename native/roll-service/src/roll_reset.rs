@@ -39,11 +39,19 @@ pub(crate) async fn persist_reset(
     let mutation =
         dice_mutation::persist_in_transaction(tx, user, idempotency_key, &DiceCommand::Reset)
             .await?;
+    // A committed retry must be a read-only replay. The reader may have rolled
+    // another comic since the original reset; clearing the current session on
+    // replay would silently discard that newer pending selection.
+    if mutation.replayed {
+        return Ok(mutation);
+    }
     if let Some(session_id) = session_id {
         let updated = tx
             .execute(
                 "UPDATE sessions
                  SET pending_thread_id=NULL,pending_issue_id=NULL,
+                 -- Clear the legacy pin with the pending selection so it cannot
+                 -- override Reset Dice's event-derived d6 on the next bootstrap.
                      pending_thread_updated_at=NULL,manual_die=NULL
                  WHERE id=$1 AND user_id=$2",
                 &[&session_id, &user.id()],
@@ -285,6 +293,19 @@ mod tests {
         assert_eq!(stale.get::<_, i32>(1), 100);
         assert_eq!(stale.get::<_, i32>(2), 12);
 
+        // A fresh roll/manual selection can occur after the reset's response
+        // was lost. Retrying the old key must not clear that newer intent.
+        client
+            .execute(
+                "UPDATE sessions
+                 SET pending_thread_id=10, pending_issue_id=100,
+                     pending_thread_updated_at=NOW(), manual_die=12
+                 WHERE id=2",
+                &[],
+            )
+            .await
+            .unwrap();
+
         let tx = client.transaction().await.unwrap();
         let replay = persist_reset(&tx, user, "reset-dice-test-001", session_id)
             .await
@@ -292,6 +313,19 @@ mod tests {
         tx.commit().await.unwrap();
         assert!(replay.replayed);
         assert_eq!(replay.event_id, mutation.event_id);
+        let pending_after_replay = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id,
+                        pending_thread_updated_at IS NOT NULL,manual_die
+                 FROM sessions WHERE id=2",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending_after_replay.get::<_, i32>(0), 10);
+        assert_eq!(pending_after_replay.get::<_, i32>(1), 100);
+        assert!(pending_after_replay.get::<_, bool>(2));
+        assert_eq!(pending_after_replay.get::<_, i32>(3), 12);
         let count = client
             .query_one(
                 "SELECT count(*)::int FROM events WHERE type='reset_dice'",

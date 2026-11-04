@@ -72,6 +72,11 @@ REQUESTY_APPROVED_MODELS = frozenset(
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha"})
 LOCK_SCHEMA_VERSION = 1
+# Automation-owned frozen view of the committed roster + lock. Discovery
+# rewrites it in the same commit as the TSV/lock so guard tests never need a
+# hand-written pin update after a legitimate retirement (#3802).
+ROSTER_SNAPSHOT_FILENAME = "factory-roster-snapshot.json"
+ROSTER_SNAPSHOT_SCHEMA_VERSION = 1
 
 
 class RosterRow(TypedDict):
@@ -113,6 +118,24 @@ def default_lock_path() -> Path:
     if cwd.is_file() or cwd.parent.is_dir():
         return cwd
     return _repo_root() / ".github" / "factory-expected-workers.json"
+
+
+def default_roster_snapshot_path() -> Path:
+    """Return the generated roster-snapshot path, preferring a checkout path."""
+    cwd = Path(".github") / ROSTER_SNAPSHOT_FILENAME
+    if cwd.is_file():
+        return cwd
+    return _repo_root() / ".github" / ROSTER_SNAPSHOT_FILENAME
+
+
+def roster_snapshot_path_for(roster_path: Path) -> Path:
+    """Return the snapshot path that accompanies a roster TSV.
+
+    Tests write rosters into temporary directories; deriving the snapshot
+    location from the roster keeps those runs from mutating the committed
+    ``.github/factory-roster-snapshot.json``.
+    """
+    return roster_path.with_name(ROSTER_SNAPSHOT_FILENAME)
 
 
 def opencode_model_is_free(model: str) -> bool:
@@ -573,6 +596,128 @@ def write_roster_lock(path: Path, lock: RosterLock) -> None:
         "retired_models": sorted({str(item) for item in lock["retired_models"]}),
     }
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def build_roster_snapshot(
+    rows: Sequence[RosterRow],
+    lock: RosterLock,
+) -> dict[str, object]:
+    """Return the automation-owned expectation snapshot for a roster + lock.
+
+    The snapshot is the single artifact guard tests compare the committed TSV
+    and lock against. Discovery writes it in the same commit as those two
+    files, so a legitimate catalog retirement updates exactly one expectation
+    artifact instead of requiring a hand-edited per-worker pin assertion.
+
+    Args:
+        rows: Roster rows after any retirement apply.
+        lock: Expected-worker lock written alongside those rows.
+
+    Returns:
+        JSON-serializable snapshot with the sorted pin list and lock sections.
+    """
+    pins = [
+        {
+            "worker": row["worker"],
+            "source": row["source"],
+            "model": row["model"],
+            "minute": row["minute"],
+            "scheduler": row["scheduler"],
+            "display_name": row["display_name"],
+        }
+        for row in sorted(rows, key=lambda item: int(item["worker"]))
+    ]
+    return {
+        "schema_version": ROSTER_SNAPSHOT_SCHEMA_VERSION,
+        "pins": pins,
+        "expected_workers": sorted({int(item) for item in lock["expected_workers"]}),
+        "retired_workers": sorted({int(item) for item in lock["retired_workers"]}),
+        "retired_models": sorted({str(item) for item in lock["retired_models"]}),
+    }
+
+
+def write_roster_snapshot(
+    path: Path,
+    rows: Sequence[RosterRow],
+    lock: RosterLock,
+) -> dict[str, object]:
+    """Persist the roster expectation snapshot as stable JSON."""
+    snapshot = build_roster_snapshot(rows, lock)
+    path.write_text(json.dumps(snapshot, indent=2) + "\n", encoding="utf-8")
+    return snapshot
+
+
+def load_roster_snapshot(path: Path | None = None) -> dict[str, object]:
+    """Load the generated roster expectation snapshot.
+
+    Args:
+        path: Optional snapshot path. Defaults to
+            :func:`default_roster_snapshot_path`.
+
+    Returns:
+        Parsed snapshot document, or an empty one when the file is absent.
+    """
+    snapshot_path = path or default_roster_snapshot_path()
+    if not snapshot_path.is_file():
+        return {
+            "schema_version": ROSTER_SNAPSHOT_SCHEMA_VERSION,
+            "pins": [],
+            "expected_workers": [],
+            "retired_workers": [],
+            "retired_models": [],
+        }
+    payload = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return {
+            "schema_version": ROSTER_SNAPSHOT_SCHEMA_VERSION,
+            "pins": [],
+            "expected_workers": [],
+            "retired_workers": [],
+            "retired_models": [],
+        }
+    pins = payload.get("pins")
+    return {
+        "schema_version": int(
+            payload.get("schema_version") or ROSTER_SNAPSHOT_SCHEMA_VERSION
+        ),
+        "pins": [dict(item) for item in pins] if isinstance(pins, list) else [],
+        "expected_workers": [
+            int(item) for item in payload.get("expected_workers") or []
+        ],
+        "retired_workers": [
+            int(item) for item in payload.get("retired_workers") or []
+        ],
+        "retired_models": [
+            str(item) for item in payload.get("retired_models") or []
+        ],
+    }
+
+
+def snapshot_pins_by_worker(snapshot: Mapping[str, object]) -> dict[str, RosterRow]:
+    """Return snapshot pins keyed by worker id string.
+
+    Args:
+        snapshot: Parsed snapshot from :func:`load_roster_snapshot`.
+
+    Returns:
+        Mapping of worker id string to a :class:`RosterRow` view.
+    """
+    pins = snapshot.get("pins")
+    if not isinstance(pins, list):
+        return {}
+    result: dict[str, RosterRow] = {}
+    for item in pins:
+        if not isinstance(item, Mapping):
+            continue
+        result[str(item.get("worker"))] = RosterRow(
+            worker=str(item.get("worker")),
+            source=str(item.get("source")),
+            model=str(item.get("model")),
+            minute=str(item.get("minute")),
+            scheduler=str(item.get("scheduler")),
+            display_name=str(item.get("display_name")),
+        )
+    return result
 
 
 def expected_workers(
