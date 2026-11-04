@@ -1,0 +1,36 @@
+name: PR 4624 one-shot Rust format and lock repair
+on:
+  push:
+    branches: [rust/comicvine-metadata-repair-4623]
+    paths: [.github/workflows/pr-4624-rust-normalize.yml]
+permissions:
+  contents: write
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: rust/comicvine-metadata-repair-4623
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Regenerate existing Cargo lockfiles and run rustfmt
+        run: |
+          set -euo pipefail
+          cargo metadata --manifest-path native/roll-service/Cargo.toml --format-version 1 > /dev/null
+          cargo metadata --manifest-path Cargo.toml --format-version 1 > /dev/null
+          cargo fmt --manifest-path native/roll-service/Cargo.toml --all
+          cargo fmt --manifest-path Cargo.toml --all
+          git diff --stat
+      - name: Commit normalized sources to this PR branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -u
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(#4624): normalize Rust sources and Cargo locks'
+            git push origin HEAD:rust/comicvine-metadata-repair-4623
+          fi
