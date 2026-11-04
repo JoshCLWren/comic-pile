@@ -1,7 +1,11 @@
 //! Bounded, awaited ComicVine metadata-repair worker.
 //! A Vercel request is the lifetime of the work: never spawn and forget a task.
 use crate::{db, ApiError, AppState};
-use axum::{extract::State, http::{HeaderMap, StatusCode}, Json};
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    Json,
+};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::client::conn::http1;
@@ -96,14 +100,20 @@ enum ProviderFailure {
 }
 
 fn allowed(headers: &HeaderMap, expected: Option<&str>) -> bool {
-    let Some(secret) = expected.filter(|s| s.len() >= 16) else { return false; };
+    let Some(secret) = expected.filter(|s| s.len() >= 16) else {
+        return false;
+    };
     let Some(header) = headers.get("authorization").and_then(|h| h.to_str().ok()) else {
         return false;
     };
-    let Some(provided) = header.strip_prefix("Bearer ") else { return false; };
+    let Some(provided) = header.strip_prefix("Bearer ") else {
+        return false;
+    };
     let a = provided.as_bytes();
     let b = secret.as_bytes();
-    if a.len() != b.len() { return false; }
+    if a.len() != b.len() {
+        return false;
+    }
     a.iter().zip(b).fold(0_u8, |v, (x, y)| v | (x ^ y)) == 0
 }
 
@@ -113,28 +123,57 @@ fn issue_id(external_id: &str) -> Option<u32> {
 }
 
 fn compact_refs(value: &Value) -> Value {
-    Value::Array(value.as_array().into_iter().flatten().filter_map(|v| {
-        let source = v.as_object()?;
-        let mut compact = Map::new();
-        for field in ["id", "name", "api_detail_url", "site_detail_url", "role"] {
-            if let Some(value) = source.get(field) { compact.insert(field.to_owned(), value.clone()); }
-        }
-        Some(Value::Object(compact))
-    }).collect())
+    Value::Array(
+        value
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|v| {
+                let source = v.as_object()?;
+                let mut compact = Map::new();
+                for field in ["id", "name", "api_detail_url", "site_detail_url", "role"] {
+                    if let Some(value) = source.get(field) {
+                        compact.insert(field.to_owned(), value.clone());
+                    }
+                }
+                Some(Value::Object(compact))
+            })
+            .collect(),
+    )
 }
 
-fn normalized_metadata(result: &Value, expected_id: u32) -> Result<(Value, bool, Option<String>, Option<String>), ProviderFailure> {
+fn normalized_metadata(
+    result: &Value,
+    expected_id: u32,
+) -> Result<(Value, bool, Option<String>, Option<String>), ProviderFailure> {
     let obj = result.as_object().ok_or(ProviderFailure::InvalidPayload)?;
     if obj.get("id").and_then(Value::as_u64) != Some(u64::from(expected_id)) {
         return Err(ProviderFailure::InvalidPayload);
     }
-    for field in ["name","issue_number","cover_date","store_date","image","volume",
-        "person_credits","character_credits","team_credits","story_arc_credits","date_last_updated"] {
-        if !obj.contains_key(field) { return Err(ProviderFailure::InvalidPayload); }
+    for field in [
+        "name",
+        "issue_number",
+        "cover_date",
+        "store_date",
+        "image",
+        "volume",
+        "person_credits",
+        "character_credits",
+        "team_credits",
+        "story_arc_credits",
+        "date_last_updated",
+    ] {
+        if !obj.contains_key(field) {
+            return Err(ProviderFailure::InvalidPayload);
+        }
     }
     let image = obj.get("image").and_then(Value::as_object);
-    let cover = image.and_then(|v| ["original_url","super_url","medium_url","small_url"]
-        .iter().filter_map(|k| v.get(*k).and_then(Value::as_str)).find(|s| !s.is_empty()));
+    let cover = image.and_then(|v| {
+        ["original_url", "super_url", "medium_url", "small_url"]
+            .iter()
+            .filter_map(|k| v.get(*k).and_then(Value::as_str))
+            .find(|s| !s.is_empty())
+    });
     let person = compact_refs(&result["person_credits"]);
     let present = person.as_array().is_some_and(|v| !v.is_empty());
     let patch = json!({
@@ -151,11 +190,15 @@ fn normalized_metadata(result: &Value, expected_id: u32) -> Result<(Value, bool,
         "raw_provider_payload": result,
         "deep_metadata_refreshed_at": chrono::Utc::now().to_rfc3339(),
     });
-    let url = result["site_detail_url"].as_str()
+    let url = result["site_detail_url"]
+        .as_str()
         .filter(|s| s.starts_with("https://comicvine.gamespot.com/"))
         .map(str::to_owned);
-    let updated = result["date_last_updated"].as_str().and_then(|stamp|
-        chrono::DateTime::parse_from_rfc3339(stamp).ok().map(|t| t.to_rfc3339()));
+    let updated = result["date_last_updated"].as_str().and_then(|stamp| {
+        chrono::DateTime::parse_from_rfc3339(stamp)
+            .ok()
+            .map(|t| t.to_rfc3339())
+    });
     Ok((patch, present, url, updated))
 }
 
@@ -165,82 +208,176 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         return Err(ProviderFailure::Unavailable);
     }
     let connect = async {
-        let tcp = tokio::net::TcpStream::connect((HOST, 443)).await.map_err(|_| ProviderFailure::Unavailable)?;
+        let tcp = tokio::net::TcpStream::connect((HOST, 443))
+            .await
+            .map_err(|_| ProviderFailure::Unavailable)?;
         let tls = native_tls::TlsConnector::new().map_err(|_| ProviderFailure::Unavailable)?;
-        let tls = tokio_native_tls::TlsConnector::from(tls).connect(HOST, tcp)
-            .await.map_err(|_| ProviderFailure::Unavailable)?;
+        let tls = tokio_native_tls::TlsConnector::from(tls)
+            .connect(HOST, tcp)
+            .await
+            .map_err(|_| ProviderFailure::Unavailable)?;
         let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
-            .await.map_err(|_| ProviderFailure::Unavailable)?;
-        tokio::spawn(async move { let _ = connection.await; });
-        let path = format!("/api/issue/4000-{id}/?api_key={api_key}&format=json&field_list={FIELDS}");
-        let request = http::Request::builder().method("GET").uri(path)
-            .header("host", HOST).header("accept", "application/json")
+            .await
+            .map_err(|_| ProviderFailure::Unavailable)?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let path =
+            format!("/api/issue/4000-{id}/?api_key={api_key}&format=json&field_list={FIELDS}");
+        let request = http::Request::builder()
+            .method("GET")
+            .uri(path)
+            .header("host", HOST)
+            .header("accept", "application/json")
             .header("user-agent", "ComicPile/1.0 (metadata repair)")
-            .body(Empty::<Bytes>::new()).map_err(|_| ProviderFailure::Unavailable)?;
-        let mut response = sender.send_request(request).await.map_err(|_| ProviderFailure::Unavailable)?;
-        if response.status() == StatusCode::TOO_MANY_REQUESTS || response.status() == StatusCode::FORBIDDEN {
-            let retry = response.headers().get("retry-after").and_then(|h| h.to_str().ok())
-                .and_then(|h| h.parse::<u32>().ok()).unwrap_or(60).clamp(60, 3600);
+            .body(Empty::<Bytes>::new())
+            .map_err(|_| ProviderFailure::Unavailable)?;
+        let mut response = sender
+            .send_request(request)
+            .await
+            .map_err(|_| ProviderFailure::Unavailable)?;
+        if response.status() == StatusCode::TOO_MANY_REQUESTS
+            || response.status() == StatusCode::FORBIDDEN
+        {
+            let retry = response
+                .headers()
+                .get("retry-after")
+                .and_then(|h| h.to_str().ok())
+                .and_then(|h| h.parse::<u32>().ok())
+                .unwrap_or(60)
+                .clamp(60, 3600);
             return Err(ProviderFailure::RateLimited(retry));
         }
-        if !response.status().is_success() { return Err(ProviderFailure::Unavailable); }
-        if response.headers().get("content-length").and_then(|h|h.to_str().ok())
-            .and_then(|n|n.parse::<usize>().ok()).is_some_and(|n|n > MAX_BODY) {
+        if !response.status().is_success() {
+            return Err(ProviderFailure::Unavailable);
+        }
+        if response
+            .headers()
+            .get("content-length")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|n| n.parse::<usize>().ok())
+            .is_some_and(|n| n > MAX_BODY)
+        {
             return Err(ProviderFailure::InvalidPayload);
         }
         let mut data = Vec::new();
         while let Some(frame) = response.body_mut().frame().await {
             let frame = frame.map_err(|_| ProviderFailure::Unavailable)?;
             if let Ok(bytes) = frame.into_data() {
-                if data.len() + bytes.len() > MAX_BODY { return Err(ProviderFailure::InvalidPayload); }
+                if data.len() + bytes.len() > MAX_BODY {
+                    return Err(ProviderFailure::InvalidPayload);
+                }
                 data.extend_from_slice(&bytes);
             }
         }
-        let payload: Value = serde_json::from_slice(&data).map_err(|_| ProviderFailure::InvalidPayload)?;
-        if payload["status_code"].as_i64() != Some(1) { return Err(ProviderFailure::Unavailable); }
-        payload.get("results").cloned().ok_or(ProviderFailure::InvalidPayload)
+        let payload: Value =
+            serde_json::from_slice(&data).map_err(|_| ProviderFailure::InvalidPayload)?;
+        if payload["status_code"].as_i64() != Some(1) {
+            return Err(ProviderFailure::Unavailable);
+        }
+        payload
+            .get("results")
+            .cloned()
+            .ok_or(ProviderFailure::InvalidPayload)
     };
-    tokio::time::timeout(PROVIDER_TIMEOUT, connect).await.map_err(|_| ProviderFailure::Unavailable)?
+    tokio::time::timeout(PROVIDER_TIMEOUT, connect)
+        .await
+        .map_err(|_| ProviderFailure::Unavailable)?
 }
 
 async fn claim(state: &AppState) -> Result<Option<Job>, ApiError> {
     let connection = db::checkout(state).await?;
-    let row = connection.query_opt(CLAIM, &[]).await.map_err(db::query_error)?;
-    row.map(|row| Ok(Job {
-        id: row.try_get(0).map_err(db::query_error)?,
-        identity_id: row.try_get(1).map_err(db::query_error)?,
-        attempt: row.try_get(2).map_err(db::query_error)?,
-        external_id: row.try_get(3).map_err(db::query_error)?,
-        provider: row.try_get(4).map_err(db::query_error)?,
-        entity_type: row.try_get(5).map_err(db::query_error)?,
-        metadata: row.try_get(6).map_err(db::query_error)?,
-    })).transpose()
+    let row = connection
+        .query_opt(CLAIM, &[])
+        .await
+        .map_err(db::query_error)?;
+    row.map(|row| {
+        Ok(Job {
+            id: row.try_get(0).map_err(db::query_error)?,
+            identity_id: row.try_get(1).map_err(db::query_error)?,
+            attempt: row.try_get(2).map_err(db::query_error)?,
+            external_id: row.try_get(3).map_err(db::query_error)?,
+            provider: row.try_get(4).map_err(db::query_error)?,
+            entity_type: row.try_get(5).map_err(db::query_error)?,
+            metadata: row.try_get(6).map_err(db::query_error)?,
+        })
+    })
+    .transpose()
 }
 
-async fn settle(state: &AppState, job: &Job, status: &str, delay: i32, error: Option<&str>) -> Result<(), ApiError> {
+async fn settle(
+    state: &AppState,
+    job: &Job,
+    status: &str,
+    delay: i32,
+    error: Option<&str>,
+) -> Result<(), ApiError> {
     let connection = db::checkout(state).await?;
-    connection.query_opt(SETTLE, &[&job.id, &job.identity_id, &job.attempt,
-        &status, &delay, &error]).await.map_err(db::query_error)?;
+    connection
+        .query_opt(
+            SETTLE,
+            &[
+                &job.id,
+                &job.identity_id,
+                &job.attempt,
+                &status,
+                &delay,
+                &error,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
     Ok(())
 }
 
-async fn persist(state: &AppState, job: &Job, patch: &Value, has_credits: bool,
-    url: &Option<String>, updated: &Option<String>) -> Result<bool, ApiError> {
+async fn persist(
+    state: &AppState,
+    job: &Job,
+    patch: &Value,
+    has_credits: bool,
+    url: &Option<String>,
+    updated: &Option<String>,
+) -> Result<bool, ApiError> {
     let content = patch.to_string();
-    let status = if has_credits { "completed" } else { "no_credits" };
+    let status = if has_credits {
+        "completed"
+    } else {
+        "no_credits"
+    };
     let connection = db::checkout(state).await?;
-    let row = connection.query_one(PERSIST, &[&job.identity_id, &job.id, &job.attempt,
-        &content, url, updated, &status]).await.map_err(db::query_error)?;
+    let row = connection
+        .query_one(
+            PERSIST,
+            &[
+                &job.identity_id,
+                &job.id,
+                &job.attempt,
+                &content,
+                url,
+                updated,
+                &status,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
     row.try_get(0).map_err(db::query_error)
 }
 
 fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i32, &'static str) {
     match error {
-        ProviderFailure::RateLimited(delay) => ("deferred", (*delay).min(3600) as i32, "rate_limit"),
-        ProviderFailure::InvalidPayload if attempt >= 3 => ("failed", 21600, "invalid_provider_payload"),
+        ProviderFailure::RateLimited(delay) => {
+            ("deferred", (*delay).min(3600) as i32, "rate_limit")
+        }
+        ProviderFailure::InvalidPayload if attempt >= 3 => {
+            ("failed", 21600, "invalid_provider_payload")
+        }
         ProviderFailure::InvalidPayload => ("deferred", 300, "invalid_provider_payload"),
         ProviderFailure::Unavailable if attempt >= 3 => ("failed", 21600, "provider_unavailable"),
-        ProviderFailure::Unavailable => ("deferred", if attempt <= 1 {60} else {300}, "provider_unavailable"),
+        ProviderFailure::Unavailable => (
+            "deferred",
+            if attempt <= 1 { 60 } else { 300 },
+            "provider_unavailable",
+        ),
     }
 }
 
@@ -253,27 +390,64 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
         settle(state, job, "failed", 21600, Some("invalid_external_id")).await?;
         return Ok("failed");
     };
-    if let Some(metadata) = job.metadata.as_deref().and_then(|v|serde_json::from_str::<Value>(v).ok()) {
-        let fetched_at = metadata["deep_metadata_refreshed_at"].as_str()
+    if let Some(metadata) = job
+        .metadata
+        .as_deref()
+        .and_then(|v| serde_json::from_str::<Value>(v).ok())
+    {
+        let fetched_at = metadata["deep_metadata_refreshed_at"]
+            .as_str()
             .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
-        let deep = metadata["raw_provider_payload"].as_object().is_some_and(|raw|
-            ["person_credits","character_credits","team_credits","story_arc_credits","date_last_updated"].iter()
-                .all(|k| raw.contains_key(*k)));
-        if deep && fetched_at.is_some_and(|date| chrono::Utc::now().signed_duration_since(date)
-            < chrono::Duration::days(30)) {
-            let has = metadata["creator_credits"].as_array().is_some_and(|v| !v.is_empty());
-            settle(state, job, if has {"completed"} else {"no_credits"}, 0, None).await?;
-            return Ok(if has {"completed"} else {"no_credits"});
+        let deep = metadata["raw_provider_payload"]
+            .as_object()
+            .is_some_and(|raw| {
+                [
+                    "person_credits",
+                    "character_credits",
+                    "team_credits",
+                    "story_arc_credits",
+                    "date_last_updated",
+                ]
+                .iter()
+                .all(|k| raw.contains_key(*k))
+            });
+        if deep
+            && fetched_at.is_some_and(|date| {
+                chrono::Utc::now().signed_duration_since(date) < chrono::Duration::days(30)
+            })
+        {
+            let has = metadata["creator_credits"]
+                .as_array()
+                .is_some_and(|v| !v.is_empty());
+            settle(
+                state,
+                job,
+                if has { "completed" } else { "no_credits" },
+                0,
+                None,
+            )
+            .await?;
+            return Ok(if has { "completed" } else { "no_credits" });
         }
     }
     let Some(key) = key else {
-        settle(state, job, "deferred", 21600, Some("provider_not_configured")).await?;
+        settle(
+            state,
+            job,
+            "deferred",
+            21600,
+            Some("provider_not_configured"),
+        )
+        .await?;
         return Ok("deferred");
     };
-    match provider_issue(id, key).await.and_then(|value| normalized_metadata(&value, id)) {
+    match provider_issue(id, key)
+        .await
+        .and_then(|value| normalized_metadata(&value, id))
+    {
         Ok((patch, has, url, updated)) => {
             if persist(state, job, &patch, has, &url, &updated).await? {
-                Ok(if has {"completed"} else {"no_credits"})
+                Ok(if has { "completed" } else { "no_credits" })
             } else {
                 // Another worker reclaimed the expired lease; its result is authoritative.
                 Ok("deferred")
@@ -298,9 +472,14 @@ pub async fn drain(
     }
     let key = std::env::var("COMICVINE_API_KEY").ok();
     let key = key.as_deref().filter(|v| !v.is_empty());
-    let mut report = DrainReport { provider_configured: key.is_some(), ..Default::default() };
+    let mut report = DrainReport {
+        provider_configured: key.is_some(),
+        ..Default::default()
+    };
     for index in 0..BATCH_LIMIT {
-        let Some(job) = claim(&state).await? else { break; };
+        let Some(job) = claim(&state).await? else {
+            break;
+        };
         report.claimed += 1;
         match process(&state, &job, key).await? {
             "completed" => report.completed += 1,
@@ -335,20 +514,26 @@ mod tests {
             "person_credits":[{"id":1,"name":"Jamie Delano","api_detail_url":"https://example"}],
             "character_credits":[], "team_credits":[], "story_arc_credits":[],
             "date_last_updated":"2020-01-01T00:00:00+00:00"});
-        let (metadata, present, _, _) = normalized_metadata(&result,29319).unwrap();
+        let (metadata, present, _, _) = normalized_metadata(&result, 29319).unwrap();
         assert!(present);
-        assert_eq!(metadata["creator_credits"][0]["name"],"Jamie Delano");
-        assert!(normalized_metadata(&result,29320).is_err());
-        let mut incomplete=result;
+        assert_eq!(metadata["creator_credits"][0]["name"], "Jamie Delano");
+        assert!(normalized_metadata(&result, 29320).is_err());
+        let mut incomplete = result;
         incomplete.as_object_mut().unwrap().remove("person_credits");
-        assert!(normalized_metadata(&incomplete,29319).is_err());
+        assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
     #[test]
     fn backoff_does_not_retry_exhausted_jobs_without_cooldown() {
         assert!(CLAIM.contains("FOR UPDATE SKIP LOCKED"));
         assert!(PERSIST.contains("lease_expires_at > now()"));
-        assert_eq!(failure_transition(&ProviderFailure::Unavailable,3).0,"failed");
-        assert_eq!(failure_transition(&ProviderFailure::RateLimited(120),1).1,120);
-        assert_eq!(issue_id("4000-29319"),Some(29319));
+        assert_eq!(
+            failure_transition(&ProviderFailure::Unavailable, 3).0,
+            "failed"
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(120), 1).1,
+            120
+        );
+        assert_eq!(issue_id("4000-29319"), Some(29319));
     }
 }

@@ -2,7 +2,11 @@
 //! A single SQL statement validates authentication, reads the complete display
 //! projection and idempotently writes the work record when deep metadata is stale.
 use crate::{auth::VerifiedAccessClaims, db, ApiError, AppState};
-use axum::{extract::{Path, State}, http::StatusCode, Json};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -260,29 +264,50 @@ fn as_string(value: &Value) -> Option<String> {
 }
 
 fn as_id(value: &Value) -> Option<i64> {
-    value.as_i64().or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok()))
+    value
+        .as_i64()
+        .or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok()))
 }
 
 fn refs<'a>(metadata: &'a Value, primary: &str, fallback: &str) -> &'a [Value] {
-    metadata.get(primary).or_else(|| metadata.get(fallback))
-        .and_then(Value::as_array).map(Vec::as_slice).unwrap_or(&[])
+    metadata
+        .get(primary)
+        .or_else(|| metadata.get(fallback))
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
 }
 
 fn creators(metadata: &Value) -> Vec<Creator> {
     let mut result: Vec<Creator> = Vec::new();
     for credit in refs(metadata, "person_credits", "creator_credits") {
-        let Some(name) = as_string(&credit["name"]) else { continue; };
+        let Some(name) = as_string(&credit["name"]) else {
+            continue;
+        };
         let id = as_id(&credit["id"]);
-        let roles: Vec<String> = as_string(&credit["role"]).unwrap_or_default()
-            .split(',').map(str::trim).filter(|s| !s.is_empty())
-            .map(str::to_owned).collect();
-        if let Some(existing) = id.and_then(|key| result.iter_mut()
-            .find(|person| person.creator_id == Some(key))) {
+        let roles: Vec<String> = as_string(&credit["role"])
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect();
+        if let Some(existing) = id.and_then(|key| {
+            result
+                .iter_mut()
+                .find(|person| person.creator_id == Some(key))
+        }) {
             for role in roles {
-                if !existing.roles.contains(&role) { existing.roles.push(role); }
+                if !existing.roles.contains(&role) {
+                    existing.roles.push(role);
+                }
             }
         } else {
-            result.push(Creator { creator_id: id, name, roles });
+            result.push(Creator {
+                creator_id: id,
+                name,
+                roles,
+            });
         }
     }
     result
@@ -290,36 +315,58 @@ fn creators(metadata: &Value) -> Vec<Creator> {
 
 fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
     if metadata["volume"].is_object() {
-        (as_id(&metadata["volume"]["id"]), as_string(&metadata["volume"]["name"]))
+        (
+            as_id(&metadata["volume"]["id"]),
+            as_string(&metadata["volume"]["name"]),
+        )
     } else {
-        (as_id(&metadata["volume_id"]), as_string(&metadata["volume_name"]))
+        (
+            as_id(&metadata["volume_id"]),
+            as_string(&metadata["volume_name"]),
+        )
     }
 }
 
 fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
-        .or_else(|| ["original_url", "super_url", "medium_url", "small_url"]
-            .iter().find_map(|key| as_string(&metadata["image"][*key])))
+        .or_else(|| {
+            ["original_url", "super_url", "medium_url", "small_url"]
+                .iter()
+                .find_map(|key| as_string(&metadata["image"][*key]))
+        })
 }
 
 fn plain_text(value: &Value) -> Option<String> {
     let source = value.as_str()?.trim();
-    if source.is_empty() { return None; }
+    if source.is_empty() {
+        return None;
+    }
     let mut text = String::new();
     let mut in_tag = false;
     for c in source.chars() {
         match c {
             '<' => in_tag = true,
-            '>' if in_tag => { in_tag = false; text.push(' '); },
+            '>' if in_tag => {
+                in_tag = false;
+                text.push(' ');
+            }
             _ if !in_tag => text.push(c),
             _ => {}
         }
     }
-    let decoded = text.replace("&amp;", "&").replace("&lt;", "<")
-        .replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'");
+    let decoded = text
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'");
     let normalized = decoded.split_whitespace().collect::<Vec<_>>().join(" ");
-    if normalized.is_empty() { None } else { Some(normalized) }
+    if normalized.is_empty() {
+        None
+    } else {
+        Some(normalized)
+    }
 }
 
 fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
@@ -333,27 +380,55 @@ fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
         };
         if let Some(state) = active {
             let retry = if state == "refresh_deferred" || state == "refresh_failed" {
-                repair.next_attempt_at.map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64)
-                    .max(0.0) as i64)
-            } else { None };
+                repair
+                    .next_attempt_at
+                    .map(|stamp| (stamp - chrono::Utc::now().timestamp() as f64).max(0.0) as i64)
+            } else {
+                None
+            };
             return (state.to_string(), retry);
         }
     }
     let raw = &mapped.metadata["raw_provider_payload"];
-    let deep = ["id","name","issue_number","cover_date","store_date","image","volume",
-        "person_credits","character_credits","team_credits","story_arc_credits","date_last_updated"]
-        .iter().all(|key| raw.get(*key).is_some());
-    if !deep { ("not_deep_fetched".into(), None) }
-    else if creators(&mapped.metadata).is_empty() { ("deep_fetched_no_credits".into(), None) }
-    else { ("complete".into(), None) }
+    let deep = [
+        "id",
+        "name",
+        "issue_number",
+        "cover_date",
+        "store_date",
+        "image",
+        "volume",
+        "person_credits",
+        "character_credits",
+        "team_credits",
+        "story_arc_credits",
+        "date_last_updated",
+    ]
+    .iter()
+    .all(|key| raw.get(*key).is_some());
+    if !deep {
+        ("not_deep_fetched".into(), None)
+    } else if creators(&mapped.metadata).is_empty() {
+        ("deep_fetched_no_credits".into(), None)
+    } else {
+        ("complete".into(), None)
+    }
 }
 
-fn response(mapped: Mapped, repair: Option<Repair>, arcs: Vec<ArcReference>,
-    related: Vec<Related>) -> IssueIntelligence {
+fn response(
+    mapped: Mapped,
+    repair: Option<Repair>,
+    arcs: Vec<ArcReference>,
+    related: Vec<Related>,
+) -> IssueIntelligence {
     let mut story_arcs = Vec::new();
     for arc in arcs {
-        let Some(name) = as_string(&arc.reference["name"]) else { continue; };
-        let mut issues: Vec<RelatedIssue> = related.iter().filter(|item| item.arc_id == arc.id)
+        let Some(name) = as_string(&arc.reference["name"]) else {
+            continue;
+        };
+        let mut issues: Vec<RelatedIssue> = related
+            .iter()
+            .filter(|item| item.arc_id == arc.id)
             .map(|item| {
                 let (_, series_name) = series(&item.metadata);
                 RelatedIssue {
@@ -362,21 +437,32 @@ fn response(mapped: Mapped, repair: Option<Repair>, arcs: Vec<ArcReference>,
                     issue_number: as_string(&item.metadata["issue_number"]),
                     name: as_string(&item.metadata["name"]),
                     cover_date: as_string(&item.metadata["cover_date"]),
-                    comicvine_url: item.external_url.clone().or_else(||
-                        as_string(&item.metadata["site_detail_url"])),
+                    comicvine_url: item
+                        .external_url
+                        .clone()
+                        .or_else(|| as_string(&item.metadata["site_detail_url"])),
                     comicpile_matches: item.comicpile_matches.clone(),
                 }
-            }).collect();
-        issues.sort_by(|left, right| (
-            left.cover_date.as_deref().unwrap_or(""),
-            left.series_name.as_deref().unwrap_or(""),
-            left.issue_number.as_deref().unwrap_or(""))
-            .cmp(&(
-                right.cover_date.as_deref().unwrap_or(""),
-                right.series_name.as_deref().unwrap_or(""),
-                right.issue_number.as_deref().unwrap_or(""))));
+            })
+            .collect();
+        issues.sort_by(|left, right| {
+            (
+                left.cover_date.as_deref().unwrap_or(""),
+                left.series_name.as_deref().unwrap_or(""),
+                left.issue_number.as_deref().unwrap_or(""),
+            )
+                .cmp(&(
+                    right.cover_date.as_deref().unwrap_or(""),
+                    right.series_name.as_deref().unwrap_or(""),
+                    right.issue_number.as_deref().unwrap_or(""),
+                ))
+        });
         issues.truncate(60);
-        let total = if arc.total > issues.len() as i32 { Some(arc.total) } else { None };
+        let total = if arc.total > issues.len() as i32 {
+            Some(arc.total)
+        } else {
+            None
+        };
         story_arcs.push(StoryArc {
             comicvine_arc_id: arc.id,
             name,
@@ -389,9 +475,11 @@ fn response(mapped: Mapped, repair: Option<Repair>, arcs: Vec<ArcReference>,
     let (metadata_status, refresh_retry_after_seconds) = status(&mapped, repair.as_ref());
     IssueIntelligence {
         comicvine_issue_id: mapped.external_id,
-        comicvine_url: mapped.external_url
+        comicvine_url: mapped
+            .external_url
             .or_else(|| as_string(&mapped.metadata["site_detail_url"])),
-        series_id, series_name,
+        series_id,
+        series_name,
         issue_number: as_string(&mapped.metadata["issue_number"]),
         name: as_string(&mapped.metadata["name"]),
         description: plain_text(&mapped.metadata["description"]),
@@ -419,22 +507,41 @@ pub async fn issue_intelligence(
     let jti = claims.jti().to_owned();
     let epoch = claims.expected_epoch().unwrap_or(i64::MAX);
     let connection = db::checkout(&state).await?;
-    let row = db::query_one_optional(&state, connection, READ_SQL,
-        &[&username, &jti, &epoch, &issue_id]).await?
-        .ok_or_else(|| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error".into()))?;
+    let row = db::query_one_optional(
+        &state,
+        connection,
+        READ_SQL,
+        &[&username, &jti, &epoch, &issue_id],
+    )
+    .await?
+    .ok_or_else(|| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal Server Error".into(),
+        )
+    })?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
-    let snapshot: Snapshot = serde_json::from_str(&payload)
-        .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid stored metadata".into()))?;
-    let auth = snapshot.auth.ok_or_else(|| unauthorized("User not found"))?;
-    if auth.revoked { return Err(unauthorized("Token has been revoked")); }
+    let snapshot: Snapshot = serde_json::from_str(&payload).map_err(|_| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid stored metadata".into(),
+        )
+    })?;
+    let auth = snapshot
+        .auth
+        .ok_or_else(|| unauthorized("User not found"))?;
+    if auth.revoked {
+        return Err(unauthorized("Token has been revoked"));
+    }
     if claims.expected_epoch()? < auth.password_epoch {
         return Err(unauthorized("Password changed; please sign in again."));
     }
     if !snapshot.owned {
         return Err(ApiError(StatusCode::NOT_FOUND, "Issue not found".into()));
     }
-    Ok(Json(snapshot.mapped.map(|metadata|
-        response(metadata, snapshot.repair, snapshot.arcs, snapshot.related))))
+    Ok(Json(snapshot.mapped.map(|metadata| {
+        response(metadata, snapshot.repair, snapshot.arcs, snapshot.related)
+    })))
 }
 
 /// Canonical Rust-derived v2 endpoint documentation.
@@ -450,10 +557,14 @@ struct IssueSecurityAddon;
 impl utoipa::Modify for IssueSecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
         if let Some(components) = openapi.components.as_mut() {
-            components.add_security_scheme("HTTPBearer",
+            components.add_security_scheme(
+                "HTTPBearer",
                 utoipa::openapi::security::SecurityScheme::Http(
                     utoipa::openapi::security::Http::new(
-                        utoipa::openapi::security::HttpAuthScheme::Bearer)));
+                        utoipa::openapi::security::HttpAuthScheme::Bearer,
+                    ),
+                ),
+            );
         }
     }
 }
@@ -485,10 +596,10 @@ mod tests {
             {"id":1,"name":"Jamie Delano","role":"writer, co-plotter"},
             {"name":"Unknown","role":"artist"}
         ]});
-        let people=creators(&metadata);
-        assert_eq!(people.len(),2);
-        assert_eq!(people[0].roles,vec!["writer","co-plotter"]);
-        assert_eq!(people[1].creator_id,None);
+        let people = creators(&metadata);
+        assert_eq!(people.len(), 2);
+        assert_eq!(people[0].roles, vec!["writer", "co-plotter"]);
+        assert_eq!(people[1].creator_id, None);
     }
     #[test]
     fn queue_is_owner_scoped_and_single_statement() {
@@ -496,22 +607,30 @@ mod tests {
         assert!(READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
         assert!(READ_SQL.contains("WHERE f.needs_repair"));
         assert!(READ_SQL.contains("FOR UPDATE SKIP LOCKED") == false);
-        assert_eq!(as_id(&json!("29319")),Some(29319));
+        assert_eq!(as_id(&json!("29319")), Some(29319));
     }
     #[test]
     fn render_the_existing_issue_intelligence_shape() {
-        let mapped=Mapped {
-            external_id:"29319".into(), external_url:None,
-            metadata:json!({"name":"Going For It","volume":{"id":1,"name":"Hellblazer"},
+        let mapped = Mapped {
+            external_id: "29319".into(),
+            external_url: None,
+            metadata: json!({"name":"Going For It","volume":{"id":1,"name":"Hellblazer"},
                 "creator_credits":[{"id":1,"name":"Jamie Delano"}],
                 "cover_date":"1988-03-01","store_date":"1988-03-24"}),
         };
-        let wire=serde_json::to_value(response(mapped,Some(Repair{
-            state:"pending".into(),next_attempt_at:None
-        }),vec![],vec![])).unwrap();
-        assert_eq!(wire["creators"][0]["name"],"Jamie Delano");
-        assert_eq!(wire["metadata_status"],"refresh_pending");
+        let wire = serde_json::to_value(response(
+            mapped,
+            Some(Repair {
+                state: "pending".into(),
+                next_attempt_at: None,
+            }),
+            vec![],
+            vec![],
+        ))
+        .unwrap();
+        assert_eq!(wire["creators"][0]["name"], "Jamie Delano");
+        assert_eq!(wire["metadata_status"], "refresh_pending");
         assert!(wire["story_arcs"].is_array());
-        assert_eq!(wire["series_name"],"Hellblazer");
+        assert_eq!(wire["series_name"], "Hellblazer");
     }
 }

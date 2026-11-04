@@ -2,8 +2,8 @@
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
-pub mod comicvine_repair;
 pub mod comicvine_issue;
+pub mod comicvine_repair;
 pub mod config;
 pub mod db;
 pub mod dice_api;

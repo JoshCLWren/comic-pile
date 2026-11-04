@@ -176,10 +176,7 @@ fn app() -> Router {
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v2/analytics/metrics", get(native_dispatch))
-        .route(
-            "/api/v2/issues/{issue_id}/comicvine",
-            get(native_dispatch),
-        )
+        .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))
