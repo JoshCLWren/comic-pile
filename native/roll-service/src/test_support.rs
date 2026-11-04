@@ -145,6 +145,26 @@ fn admin_url() -> Option<String> {
 /// query parameters such as `?user=` override URI credentials in
 /// `tokio-postgres`, so they are stripped rather than forwarded. Anything this
 /// function cannot reason about is a panic, never a silent fall-back to admin.
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let high = (bytes[index + 1] as char).to_digit(16);
+            let low = (bytes[index + 2] as char).to_digit(16);
+            if let (Some(high), Some(low)) = (high, low) {
+                out.push((high * 16 + low) as u8);
+                index += 3;
+                continue;
+            }
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 fn restricted_url(admin: &str) -> String {
     let Some((scheme, rest)) = admin.split_once("://") else {
         panic!(
@@ -171,7 +191,9 @@ fn restricted_url(admin: &str) -> String {
         let kept: Vec<&str> = query
             .split('&')
             .filter(|pair| {
-                let key = pair.split('=').next().unwrap_or_default();
+                // Percent-encoded keys (`%75ser`) are decoded by the driver, so
+                // decode before comparing or they slip through unchecked.
+                let key = percent_decode(pair.split('=').next().unwrap_or_default());
                 !key.eq_ignore_ascii_case("user") && !key.eq_ignore_ascii_case("password")
             })
             .collect();
@@ -357,6 +379,17 @@ mod tests {
     fn restricted_url_drops_query_credentials_that_would_override_the_role() {
         let url = restricted_url(
             "postgresql://postgres:secret@db/native_test?user=postgres&password=secret&sslmode=disable",
+        );
+        assert_eq!(
+            url,
+            format!("postgresql://{TEST_ROLE}:{TEST_ROLE_PASSWORD}@db/native_test?sslmode=disable")
+        );
+    }
+
+    #[test]
+    fn restricted_url_drops_percent_encoded_query_credentials() {
+        let url = restricted_url(
+            "postgresql://postgres:secret@db/native_test?%75ser=postgres&%70assword=secret&sslmode=disable",
         );
         assert_eq!(
             url,
