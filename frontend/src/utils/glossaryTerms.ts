@@ -48,7 +48,7 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
   },
   {
     term: 'Die size',
-    def: 'Sets how many series the roll can pick from. Sizes run d2 → d4 → d6 → d8 → d10 → d12 → d20 → d30 → d50 → d100, and a larger die includes more of your in-play series. A readout like "d6 → d8" shows the step your die moves after a rating.',
+    def: 'Sets how many series the roll can pick from. Sizes run d4 → d6 → d8 → d10 → d12 → d20 → d30 → d50 → d100, and a larger die includes more of your in-play series. A readout like "d6 → d8" shows the step your die moves after a rating.',
     aliases: ['die-ladder'],
   },
   {

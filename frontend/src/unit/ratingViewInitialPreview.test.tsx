@@ -108,8 +108,6 @@ describe('RatingView initial preview', () => {
 
   it('computePredictedDie handles boundaries', () => {
     expect(computePredictedDie(4, 3.0)).toBe(6)
-    expect(computePredictedDie(2, 4.0)).toBe(2)
-    expect(computePredictedDie(2, 3.0)).toBe(4)
     expect(computePredictedDie(20, 3.0)).toBe(30)
   })
 
