@@ -28,7 +28,6 @@ from app.services.comicvine_metadata_repair import (
     describe_metadata_status,
     refresh_retry_after_seconds,
     request_issue_metadata_repair,
-    schedule_metadata_repair_drain,
 )
 from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 from app.services.ownership import get_owned_thread_or_404
@@ -348,8 +347,7 @@ async def get_issue_intelligence(
         # The GET dependency closes without auto-committing. Make the idempotent
         # work item visible to a separate worker before scheduling a drain.
         await db.commit()
-        schedule_metadata_repair_drain()
-        schedule_issue_metadata_refresh(identity.id)
+        # The awaited native cron worker owns execution; no detached Vercel tasks.
     else:
         if stored_request is not None:
             repair_request = MetadataRepairState(
