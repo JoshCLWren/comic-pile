@@ -6,6 +6,10 @@
 use crate::reading_constraints::EligibleFrontier;
 use std::collections::HashSet;
 
+/// Maximum number of browser-supplied temporary snoozes one Roll request
+/// accepts, whether they arrive in a request body or in a query parameter.
+pub(crate) const MAX_TEMPORARY_SNOOZES: usize = 200;
+
 /// Take the highest-ranked `die` candidates remaining after temporary exclusions.
 pub(crate) fn bounded_pool<T>(
     candidates: impl IntoIterator<Item = T>,
@@ -64,7 +68,8 @@ pub(crate) fn browser_snoozes(headers: &axum::http::HeaderMap) -> HashSet<i32> {
                 .replace("%2C", ",")
                 .replace("%2c", ",");
             let ids: Vec<i32> = serde_json::from_str(&decoded).ok()?;
-            (ids.len() <= 200 && ids.iter().all(|id| *id > 0)).then(|| ids.into_iter().collect())
+            (ids.len() <= MAX_TEMPORARY_SNOOZES && ids.iter().all(|id| *id > 0))
+                .then(|| ids.into_iter().collect())
         })
         .unwrap_or_default()
 }

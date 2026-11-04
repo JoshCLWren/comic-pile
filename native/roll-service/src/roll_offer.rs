@@ -11,7 +11,7 @@ use crate::{
     dice_mutation::{self, DiceCommand},
     dice_state, option_inputs,
     reading_session::{self, SessionPolicy},
-    roll_pool::offer_frontiers,
+    roll_pool::{offer_frontiers, MAX_TEMPORARY_SNOOZES},
     ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
@@ -21,8 +21,6 @@ use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use tokio_postgres::IsolationLevel;
 
-/// Maximum number of browser-supplied temporary snoozes accepted per roll.
-const MAX_COOKIE_SNOOZES: usize = 200;
 /// Leave room for the derived snooze key inside the writer's 128-byte limit.
 const MAX_OFFER_KEY: usize = 100;
 
@@ -301,7 +299,7 @@ pub async fn offer(
     Json(request): Json<RollOfferRequest>,
 ) -> Result<Json<RollOfferResponse>, ApiError> {
     validate_key(&request.idempotency_key)?;
-    if request.snoozed_thread_ids.len() > MAX_COOKIE_SNOOZES {
+    if request.snoozed_thread_ids.len() > MAX_TEMPORARY_SNOOZES {
         return Err(ApiError(
             StatusCode::UNPROCESSABLE_ENTITY,
             "Too many temporary snoozes".to_string(),
