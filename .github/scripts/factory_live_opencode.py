@@ -55,6 +55,7 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
             for marker in (
                 "<!-- factory-attempt-outcome:v1 ",
                 "<!-- factory-model-unavailable:v1 ",
+                "<!-- factory-provider-quota:v1 ",
                 "<!-- factory-model-retired-410:v1 -->",
             )
         ):
