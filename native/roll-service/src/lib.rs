@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod comicvine_repair;
+pub mod comicvine_issue;
 pub mod config;
 pub mod db;
 pub mod dice_api;
@@ -168,7 +169,7 @@ async fn bound_request(
     let method = request.method().clone();
     let started = Instant::now();
     // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
-    let timeout = if request.uri().path() == "/api/_native_roll/comicvine-metadata-repair" {
+    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
         Duration::from_secs(50)
     } else {
         state.request_timeout
@@ -238,7 +239,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(auth::handlers::reset_password),
         )
         .route(
-            "/api/_native_roll/comicvine-metadata-repair",
+            "/api/v2/maintenance/comicvine-metadata-repairs",
             get(comicvine_repair::drain),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
@@ -264,6 +265,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
+        .route(
+            "/api/v2/issues/{issue_id}/comicvine",
+            get(comicvine_issue::issue_intelligence),
+        )
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(
