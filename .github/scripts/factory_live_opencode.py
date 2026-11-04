@@ -27,6 +27,7 @@ MODEL_UNAVAILABLE_RE = re.compile(
     re.IGNORECASE,
 )
 RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
+FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
 
 def free_models(raw_catalog: str) -> list[str]:
@@ -68,7 +69,7 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
         if RETIREMENT_MARKER not in body and (
             outcome is None
             or outcome.group("outcome")
-            not in HEALTHY_OUTCOMES | {"model_unavailable", "model_retired_410"}
+            not in HEALTHY_OUTCOMES | {"model_unavailable", "model_retired_410", "provider_quota"}
         ):
             continue
         comments.append(comment)
@@ -77,7 +78,7 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
         if evidence.provider != "opencode-free" or evidence.updated > now_epoch:
             continue
         if evidence.outcome == "model_retired_410" or (
-            evidence.outcome == "model_unavailable"
+            evidence.outcome in {"model_unavailable", "provider_quota"}
             and now_epoch < evidence.updated + COOLDOWN_SECONDS
         ):
             excluded.add(evidence.model.removeprefix("opencode/"))
@@ -85,7 +86,13 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
 
 
 def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
-    """Persist exact-model unavailability for the terminal registry reporter."""
+    """Persist recognizable OpenCode smoke errors for the registry reporter."""
+    if runtime_model.startswith("opencode/") and FREE_QUOTA_RE.search(log_content):
+        outcome_file.write_text(
+            f"provider_quota\tOpenCode free quota exhausted for {runtime_model}\n",
+            encoding="utf-8",
+        )
+        return True
     if not any(
         match.group("model") == runtime_model
         for match in MODEL_UNAVAILABLE_RE.finditer(log_content)
