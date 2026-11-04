@@ -23,3 +23,7 @@ def test_deepseek_comparison_is_manual_only() -> None:
     assert "  workflow_dispatch:" in comparison
     assert "  schedule:" not in comparison
     assert "  pull_request:" not in comparison
+    smoke = Path(".github/workflows/opencode-deepseek-free-smoke.yml").read_text()
+    assert "  workflow_dispatch:" in smoke
+    assert "  schedule:" not in smoke
+    assert "  pull_request:" not in smoke
