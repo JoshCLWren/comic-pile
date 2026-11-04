@@ -118,11 +118,12 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     assert rolled.status_code == 200, rolled.text
     assert rolled.json()["thread_id"] != ultimates_thread.id
 
-    blocked_override = await auth_client.patch(
-        f"/api/v2/issues/{ultimates_thread.id}", json={"status": "read"}
+    # Attempting to read the blocked issue should fail with 422
+    blocked_read = await auth_client.patch(
+        f"/api/v2/issues/{ultimates_18.id}", json={"status": "read"}
     )
-    assert blocked_override.status_code == 422
-    assert "blocked" in blocked_override.json()["detail"].lower()
+    assert blocked_read.status_code == 422
+    assert "blocked" in blocked_read.json()["detail"].lower()
 
     fcbd_issue.status = "read"
     fcbd_issue.read_at = datetime.now(UTC)
@@ -216,10 +217,11 @@ async def test_aggregate_blocked_identifies_remaining_cause_not_read_fcbd(
     assert ultimates_thread.id not in roll_ids
     assert other_thread.id in roll_ids
 
-    blocked_override = await auth_client.patch(
-        f"/api/v2/issues/{ultimates_thread.id}", json={"status": "read"}
+    # Attempting to read the blocked issue should fail with 422
+    blocked_read = await auth_client.patch(
+        f"/api/v2/issues/{ultimates_18.id}", json={"status": "read"}
     )
-    assert blocked_override.status_code == 422
+    assert blocked_read.status_code == 422
 
 
 @pytest.mark.asyncio

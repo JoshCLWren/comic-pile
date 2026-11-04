@@ -59,11 +59,11 @@ async def test_override_snoozed_thread_keeps_it_snoozed(
     assert rolled_thread_id in snooze_data["snoozed_thread_ids"]
 
     # Overriding a snoozed thread is allowed and returns it as the current thread.
-    override_response = await auth_client.patch(
-        f"/api/v2/issues/{thread1.id}", json={"status": "read"}
+    override_response = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": thread1.id}
     )
     assert override_response.status_code == 200, override_response.text
-    assert override_response.json()["id"] == thread1.id
+    assert override_response.json()["thread_id"] == thread1.id
 
     # The snooze is preserved: the explicit override must not clear durable read state.
     session_response = await auth_client.get("/api/v1/sessions/current/")

@@ -131,8 +131,8 @@ async def test_override_roll_records_override_selection_method(
     # Roll once to create a pending thread
     await auth_client.post("/api/roll/")
 
-    override_response = await auth_client.patch(
-        f"/api/v2/issues/{thread.id}", json={"status": "read"}
+    override_response = await auth_client.post(
+        "/api/v1/roll/override", json={"thread_id": thread.id}
     )
     assert override_response.status_code == 200
 

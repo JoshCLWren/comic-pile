@@ -1,5 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { RollResponse } from '../types'
+import type { RollResponse, OverrideRollPayload } from '../types'
 
 type ManualDieCommand = {
   kind: 'manual_select'
@@ -207,7 +207,7 @@ export function createRollApi(client: HttpClient) {
 
   return {
     roll: offer,
-    override: (data: { thread_id: number }) => client.patch<RollResponse, { status: 'read' | 'unread' }>(`/v2/issues/${data.thread_id}`, { status: 'read' }),
+    override: (data: { thread_id: number }) => client.post<RollResponse, OverrideRollPayload>('/v1/roll/override', data),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
     skip: () => client.post<RollResponse>('/v1/roll/skip'),
     reroll: offer,
