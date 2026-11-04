@@ -1,10 +1,7 @@
 name: OpenCode DeepSeek free endpoint smoke
 
 on:
-  pull_request:
-    paths:
-      - '.github/free-model-factories.tsv'
-      - '.github/workflows/opencode-deepseek-free-smoke.yml'
+  # Worker 74 is retired. Preserve this probe for manual diagnostics only.
   workflow_dispatch:
 
 permissions:

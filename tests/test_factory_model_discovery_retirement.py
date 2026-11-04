@@ -1419,35 +1419,23 @@ def test_committed_tsv_retires_ling_promos_and_preserves_muse_spark() -> None:
     assert ROSTER.schedule_is_balanced(rows)
 
 
-def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free() -> None:
-    """Nex pins became pickles; surplus pickle 48 is now native Codestral.
+def test_committed_tsv_preserves_historical_conversions_and_retirements() -> None:
+    """Historical Nex/Big Pickle/Space Bunny conversions remain locked out.
 
-    OpenRouter Nex N2.5 Pro/Mini free pins expired 2026-09-25 and were
-    replaced in place by OpenCode Big Pickle on workers 48-49. Discovery
-    then converted the highest surplus pickle (49) to unused
-    ``space-bunny-free``. Worker 48, the last surplus pickle, is the
-    native Mistral ``codestral-latest`` pin (not mistral-small).
-    Worker 50 later retired when ``inclusionai/ling-3.0-flash-vl:free``
-    left the live OpenRouter/OpenCode catalogs. Worker 49 later retired
-    when ``space-bunny-free`` left the free catalog. Remaining worker ids
-    stay; kilo-auto 46 is untouched. ``deepseek-v4-flash-free`` stays
-    lock-retired and is not re-pinned.
+    Budget-exhausted Mistral worker 48 is now retired, alongside worker 55
+    (Ollama Cloud); Kilo worker 46 remains available. Model retirements are
+    durable even when their provider catalogs still expose the model.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert 48 in lock["expected_workers"]
-    assert 49 not in lock["expected_workers"]
-    assert 50 not in lock["expected_workers"]
-    assert 48 not in lock["retired_workers"]
-    assert 49 in lock["retired_workers"]
-    assert 50 in lock["retired_workers"]
+    assert {48, 49, 50, 55}.isdisjoint(lock["expected_workers"])
+    assert {48, 49, 50, 55}.issubset(lock["retired_workers"])
+    assert {"codestral-latest", "nemotron-3-nano:30b"}.issubset(lock["retired_models"])
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    _assert_committed_pin(by_worker, lock, "48", source="mistral", model="codestral-latest")
-    assert by_worker["48"]["scheduler"] == "dispatcher"
-    assert by_worker["48"]["display_name"] == "Mistral Codestral"
+    assert {"48", "55"}.isdisjoint(by_worker)
     assert "49" not in by_worker
     assert "space-bunny-free" in lock["retired_models"]
     assert "space-bunny-free" not in {row["model"] for row in rows}
@@ -1465,10 +1453,9 @@ def test_committed_tsv_converts_nex_to_pickle_then_surplus_to_space_bunny_free()
     assert "72" not in by_worker
     assert "stealth/pixel-canary" not in {row["model"] for row in rows}
     assert "stealth/pixel-canary" in lock["retired_models"]
-    assert ROSTER.mistral_model_is_pinned(by_worker["48"]["model"])
+    assert ROSTER.mistral_model_is_pinned("codestral-latest")
     assert not ROSTER.mistral_model_is_pinned("mistral-small")
     assert ROSTER.opencode_model_is_free("space-bunny-free")
-    assert by_worker["48"]["display_name"] == "Mistral Codestral"
     assert ROSTER.opencode_free_display_name("space-bunny-free") == (
         "OpenCode Space Bunny Free"
     )
@@ -1542,16 +1529,15 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "72" not in by_worker
     assert "stealth/pixel-canary" not in {row["model"] for row in remaining}
     assert "stealth/pixel-canary" in lock["retired_models"]
-    _assert_committed_pin(by_worker, lock, "48", source="mistral", model="codestral-latest")
+    assert "48" not in by_worker and 48 in lock["retired_workers"]
     assert "49" not in by_worker
     assert 49 not in lock["expected_workers"]
     assert 49 in lock["retired_workers"]
     assert "space-bunny-free" in lock["retired_models"]
     assert "space-bunny-free" not in {row["model"] for row in remaining}
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    _assert_committed_pin(
-        by_worker, lock, "74", source="opencode-free", model="deepseek-v4.1-flash-free"
-    )
+    assert "74" not in by_worker and 74 in lock["retired_workers"]
+    assert "deepseek-v4.1-flash-free" in lock["retired_models"]
     _assert_committed_pin(
         by_worker, lock, "75", source="opencode-free", model="nemotron-3.5-super-vl-free"
     )
@@ -1642,9 +1628,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
 
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["source"] == "mistral"
-    assert by_worker["48"]["model"] == "codestral-latest"
-    assert by_worker["48"]["model"] != "mistral-small"
+    assert "48" not in by_worker and 48 in lock["retired_workers"]
     openrouter_pins = {
         "51": "nvidia/nemotron-3-ultra-550b-a55b:free",
         "52": "thinkingmachines/inkling:free",
@@ -1663,33 +1647,30 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
     assert ROSTER.schedule_is_balanced(rows)
 
 
-def test_committed_tsv_converts_surplus_pickle_to_z_ai_and_ollama_cloud() -> None:
-    """Workers 54-55 stay expected and pin Harvy-smoked OpenAI-compat free models."""
+def test_committed_tsv_retains_z_ai_and_records_ollama_retirement() -> None:
+    """Worker 54 remains active; expired Ollama Cloud worker 55 is retired."""
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
 
-    assert {54, 55}.issubset(set(lock["expected_workers"]))
-    assert {54, 55}.isdisjoint(set(lock["retired_workers"]))
+    assert 54 in lock["expected_workers"] and 55 not in lock["expected_workers"]
+    assert 54 not in lock["retired_workers"] and 55 in lock["retired_workers"]
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     _assert_committed_pin(
         by_worker, lock, "53", source="openrouter-free", model="thinkingmachines/inkling-small:free"
     )
     _assert_committed_pin(by_worker, lock, "54", source="z-ai", model="glm-4.5-flash")
-    _assert_committed_pin(
-        by_worker, lock, "55", source="ollama-cloud", model="nemotron-3-nano:30b"
-    )
+    assert "55" not in by_worker
     assert by_worker["54"]["scheduler"] == "dispatcher"
     assert by_worker["54"]["display_name"] == "Z.AI GLM 4.5 Flash"
-    assert by_worker["55"]["scheduler"] == "dispatcher"
-    assert by_worker["55"]["display_name"] == "Ollama Cloud Nemotron 3 Nano 30B"
+    assert "nemotron-3-nano:30b" in lock["retired_models"]
     assert by_worker["54"]["model"] not in lock["retired_models"]
-    assert by_worker["55"]["model"] not in lock["retired_models"]
+    assert "nemotron-3-nano:30b" in lock["retired_models"]
     assert "z-ai/glm-4.5-flash" not in lock["retired_models"]
     assert "ollama-cloud/nemotron-3-nano:30b" not in lock["retired_models"]
     assert ROSTER.z_ai_model_is_free(by_worker["54"]["model"])
-    assert ROSTER.ollama_cloud_model_is_free(by_worker["55"]["model"])
+    assert ROSTER.ollama_cloud_model_is_free("nemotron-3-nano:30b")
     assert not ROSTER.z_ai_model_is_free("glm-5")
     assert ROSTER.schedule_is_balanced(rows)
 
@@ -1704,8 +1685,7 @@ def test_committed_tsv_retires_openrouter_dots_preview_worker_56() -> None:
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["54"]["source"] == "z-ai"
     assert by_worker["54"]["model"] == "glm-4.5-flash"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
+    assert "55" not in by_worker and 55 in lock["retired_workers"]
     dots_pin = _assert_committed_pin(
         by_worker,
         lock,
@@ -1883,8 +1863,7 @@ def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["54"]["source"] == "z-ai"
     assert by_worker["54"]["model"] == "glm-4.5-flash"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
+    assert "55" not in by_worker and 55 in lock["retired_workers"]
     _assert_committed_pin(
         by_worker,
         lock,

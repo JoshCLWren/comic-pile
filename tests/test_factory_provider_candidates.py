@@ -28,6 +28,8 @@ def load_module() -> ModuleType:
     return module
 
 
+# The adapter imports its sibling factory_roster module when loaded directly in tests.
+sys.path.insert(0, str(SCRIPT.parent))
 CANDIDATES = load_module()
 
 
@@ -90,6 +92,15 @@ def test_opencode_uses_project_available_cli_catalog() -> None:
     assert [candidate.model for candidate in result.candidates] == ["new-free"]
     assert result.candidates[0].discovered_by == "opencode_models"
 
+
+
+def test_opencode_adapter_excludes_lock_retired_models() -> None:
+    """Cross-provider discovery cannot revive retired OpenCode model IDs."""
+    result = CANDIDATES.discover(
+        "opencode-free",
+        "opencode/deepseek-v4.1-flash-free\nopencode/current-free\n",
+    )
+    assert [candidate.model for candidate in result.candidates] == ["current-free"]
 
 
 def test_omniroute_exposes_native_free_intent_routes() -> None:

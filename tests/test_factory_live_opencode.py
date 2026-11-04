@@ -66,6 +66,14 @@ def test_paid_names_do_not_bypass_free_cost_policy() -> None:
     assert selector.free_models(raw) == ["big-pickle", "eligible-by-cost"]
 
 
+def test_retired_models_are_not_reselected_from_a_live_catalog(tmp_path: Path) -> None:
+    """Permanent retirement overrides even a still-free provider catalog entry."""
+    raw = catalog(("deepseek-v4.1-flash-free", 0, 0), ("big-pickle", 0, 0))
+    assert selector.free_models(raw) == ["big-pickle"]
+    for turn in range(3):
+        assert selector.select_model(raw, 41, turn, roster(tmp_path))["model"] == "big-pickle"
+
+
 def test_empty_catalog_and_non_opencode_worker_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no provably free"):
         selector.select_model(catalog(("paid", 1, 1)), 41, 0, roster(tmp_path))
