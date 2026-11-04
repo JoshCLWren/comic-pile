@@ -158,7 +158,6 @@
     "BugReportResponse",
     "CheckPotentialDuplicatesRequest",
     "CheckPotentialDuplicatesResponse",
-    "CorrectionSheetExamplesResponse",
     "CreatorComparisonCoverage",
     "CreatorComparisonIssueRef",
     "CreatorComparisonItem",
@@ -193,7 +192,6 @@
     "ReaderContextResponse",
     "ReaderContextSeries",
     "RollResponse",
-    "SessionModeUpdateRequest",
     "SetCurrentIssueResponse",
     "SnoozeCorrectionInfo"
   ],

@@ -8,7 +8,6 @@ import {
   invalidateAfterResumeRecovery,
   invalidateAfterUndo,
   invalidateCurrentSessionAfterSnooze,
-  invalidateAfterSessionModeUpdate,
   applyCreatedCustomCBL,
   applyUpdatedCustomCBL,
   applyDeletedCustomCBL,
@@ -571,25 +570,6 @@ describe('targeted cache effects', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
-    })
-  })
-
-  describe('session mode cache effects', () => {
-    it('invalidates roll bootstrap and current session after a session-mode update', async () => {
-      const { client, invalidateQueries, resetQueries } = createSpiedClient()
-
-      await invalidateAfterSessionModeUpdate(client)
-
-      expect(invalidateQueries).toHaveBeenCalledTimes(2)
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.roll.bootstrap(),
-        exact: true,
-      })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.session.current(),
-        exact: true,
-      })
-      expect(resetQueries).not.toHaveBeenCalled()
     })
   })
 })

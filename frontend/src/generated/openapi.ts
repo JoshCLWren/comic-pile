@@ -4271,33 +4271,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/clear-manual-die": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clear Manual Die
-         * @description Clear manual die size and return to automatic dice ladder mode.
-         *
-         *     Args:
-         *         current_user: The authenticated user making the request.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         HTML string with the current die size.
-         */
-        post: operations["clear_manual_die_api_v1_roll_clear_manual_die_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/dismiss-pending": {
         parameters: {
             query?: never;
@@ -4385,71 +4358,6 @@ export interface paths {
          *         HTTPException: If thread not found.
          */
         post: operations["override_roll_api_v1_roll_override_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/session-mode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Session Mode
-         * @description Update the active session's bandwidth and/or intent.
-         *
-         *     Only the supplied dimensions are changed. Omitting both is a no-op and
-         *     returns the current mode state. Changed dimensions are marked with source
-         *     ``manual`` and a call-level version tag so the frontend can distinguish
-         *     user overrides from algorithm predictions.
-         *
-         *     Args:
-         *         mode_update: The mode values to apply. Omitted dimensions are not reset.
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionModeResponse with the updated canonical mode state.
-         */
-        patch: operations["update_session_mode_api_v1_roll_session_mode_patch"];
-        trace?: never;
-    };
-    "/api/v1/roll/set-die": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Manual Die
-         * @description Set manual die size for current session.
-         *
-         *     Args:
-         *         die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         HTML string with the die size.
-         *
-         *     Raises:
-         *         HTTPException: If die size is invalid.
-         */
-        post: operations["set_manual_die_api_v1_roll_set_die_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -15808,55 +15716,6 @@ export interface components {
             user_id: number;
         };
         /**
-         * SessionModeResponse
-         * @description Canonical session mode returned from manual change and bootstrap endpoints.
-         */
-        SessionModeResponse: {
-            /** Active Bandwidth */
-            active_bandwidth: string | null;
-            /** Active Intent */
-            active_intent: string | null;
-            /** Bandwidth Confidence */
-            bandwidth_confidence?: number | null;
-            /** Bandwidth Source */
-            bandwidth_source?: ("inferred" | "manual" | "snooze" | "quiz") | null;
-            /** Bandwidth Version */
-            bandwidth_version?: string | null;
-            /** Intent Confidence */
-            intent_confidence?: number | null;
-            /** Intent Source */
-            intent_source?: ("inferred" | "manual" | "snooze" | "quiz") | null;
-            /** Intent Version */
-            intent_version?: string | null;
-            /** Predicted Bandwidth */
-            predicted_bandwidth: string | null;
-            /** Predicted Intent */
-            predicted_intent: string | null;
-            /** Session Mode Correction Guidance */
-            session_mode_correction_guidance?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * SessionModeUpdateRequest
-         * @description Canonical request to update active session bandwidth and/or intent.
-         *
-         *     Only the supplied dimensions are changed; the other dimension is left
-         *     untouched. Omitting both is a no-op and returns the current mode unchanged.
-         */
-        SessionModeUpdateRequest: {
-            /**
-             * Bandwidth
-             * @description Active bandwidth to set. Omit to leave unchanged.
-             */
-            bandwidth?: ("light" | "balanced" | "deep") | null;
-            /**
-             * Intent
-             * @description Active intent to set. Omit to leave unchanged. Setting to 'random' bypasses contextual weighting.
-             */
-            intent?: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
-        };
-        /**
          * SessionResponse
          * @description Schema for session response.
          */
@@ -22695,26 +22554,6 @@ export interface operations {
             };
         };
     };
-    clear_manual_die_api_v1_roll_clear_manual_die_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
-    };
     dismiss_pending_roll_api_v1_roll_dismiss_pending_post: {
         parameters: {
             query?: never;
@@ -22784,70 +22623,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_session_mode_api_v1_roll_session_mode_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionModeUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionModeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_manual_die_api_v1_roll_set_die_post: {
-        parameters: {
-            query: {
-                die: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
                 };
             };
             /** @description Validation Error */

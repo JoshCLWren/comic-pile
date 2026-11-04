@@ -25,7 +25,6 @@ it('calls Rust v2 offer for Roll/Reroll while composite mutations remain on v1',
   await rollApi.override({ thread_id: 7 })
   await rollApi.dismissPending()
   await rollApi.setDie(12)
-  await rollApi.clearManualDie()
   await rateApi.rate({ thread_id: 7, rating: 4 })
   await rollBootstrapApi.get()
 
@@ -43,26 +42,11 @@ it('calls Rust v2 offer for Roll/Reroll while composite mutations remain on v1',
     die: 12,
     idempotency_key: expect.stringMatching(/^roll-[0-9a-f]{32}$/),
   })
-  expect(client.post).toHaveBeenCalledWith('/v1/roll/clear-manual-die', undefined, {
-    responseType: 'text',
-  })
   expect(client.post).toHaveBeenCalledWith('/v1/rate/', {
     thread_id: 7,
     rating: 4,
   })
   expect(client.get).toHaveBeenCalledWith('/v2/roll/bootstrap')
-})
-
-it('reads the automatic die that clear-manual-die reports (#4279)', async () => {
-  client.post.mockResolvedValueOnce('d8')
-
-  await expect(rollApi.clearManualDie()).resolves.toBe(8)
-})
-
-it('reports no die when the clear-manual-die body is not a die label', async () => {
-  client.post.mockResolvedValueOnce('ok')
-
-  await expect(rollApi.clearManualDie()).resolves.toBeNull()
 })
 
 it('reads native v2 during auth recovery while keeping mutations on v1', async () => {

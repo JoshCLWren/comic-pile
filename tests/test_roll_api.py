@@ -3,7 +3,6 @@
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -186,89 +185,6 @@ async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: 
     response = await auth_client.post("/api/v1/roll/override", json={"thread_id": 999})
     assert response.status_code == 404
     assert "not found" in response.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_set_manual_die(
-    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
-) -> None:
-    """POST /roll/set-die sets manual_die on session."""
-    _ = sample_data
-    _ = async_db
-    response = await auth_client.post("/api/v1/roll/set-die?die=20")
-    assert response.status_code == 200
-    assert response.text == "d20"
-
-    session_response = await auth_client.get("/api/v1/sessions/current/")
-    assert session_response.status_code == 200
-    session_data = session_response.json()
-    assert session_data["manual_die"] == 20
-
-
-@pytest.mark.asyncio
-async def test_clear_manual_die(
-    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
-) -> None:
-    """POST /roll/clear-manual-die clears manual_die and returns to auto mode."""
-    _ = sample_data
-    from app.models import ReadingSession
-
-    result = await async_db.execute(select(ReadingSession).where(ReadingSession.ended_at.is_(None)))
-    session = result.scalars().first()
-    assert session is not None
-
-    session.manual_die = 12
-    await async_db.commit()
-
-    response = await auth_client.post("/api/v1/roll/clear-manual-die")
-    assert response.status_code == 200
-    assert response.text == "d8"
-
-    session_response = await auth_client.get("/api/v1/sessions/current/")
-    assert session_response.status_code == 200
-    session_data = session_response.json()
-    assert session_data["manual_die"] is None
-
-
-@pytest.mark.asyncio
-async def test_clear_manual_die_with_no_manual_set(
-    auth_client: AsyncClient, sample_data: dict
-) -> None:
-    """POST /roll/clear-manual-die works even when manual_die is not set."""
-    _ = sample_data
-    response = await auth_client.post("/api/v1/roll/clear-manual-die")
-    assert response.status_code == 200
-    assert response.text == "d8"
-
-
-@pytest.mark.asyncio
-async def test_clear_manual_die_returns_correct_current_die_regression(
-    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
-) -> None:
-    """Regression test for bug where clearing manual die returned wrong die value.
-
-    When manual mode is disengaged by clicking auto, the endpoint should return
-    the correct current die from the dice ladder, not a stale cached value.
-    """
-    _ = sample_data
-    from app.models import ReadingSession
-
-    result = await async_db.execute(select(ReadingSession).where(ReadingSession.ended_at.is_(None)))
-    session = result.scalars().first()
-    assert session is not None
-
-    session.manual_die = 20
-    await async_db.commit()
-
-    response = await auth_client.post("/api/v1/roll/clear-manual-die")
-    assert response.status_code == 200
-
-    session_response = await auth_client.get("/api/v1/sessions/current/")
-    assert session_response.status_code == 200
-    session_data = session_response.json()
-
-    assert session_data["manual_die"] is None
-    assert response.text == f"d{session_data['current_die']}"
 
 
 @pytest.mark.asyncio
