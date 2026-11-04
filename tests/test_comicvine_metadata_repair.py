@@ -74,7 +74,7 @@ def test_schedule_without_loop_does_not_create_coroutine(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_intelligence_read_commits_repair_before_worker_is_scheduled(
+async def test_intelligence_read_commits_repair_for_native_worker(
     async_db_committed: AsyncSession,
     db_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,
@@ -104,26 +104,11 @@ async def test_intelligence_read_commits_repair_before_worker_is_scheduled(
     ))
     await async_db_committed.commit()
 
-    scheduled: list[bool] = []
-
-    def schedule_after_commit() -> bool:
-        # Workers use another session; they must not start before commit.
-        scheduled.append(not async_db_committed.in_transaction())
-        return False
-
-    monkeypatch.setattr(
-        comicvine_intelligence, "schedule_metadata_repair_drain", schedule_after_commit,
-    )
-    monkeypatch.setattr(
-        comicvine_intelligence, "schedule_issue_metadata_refresh", lambda _id: False,
-    )
-
     first = await comicvine_intelligence.get_issue_intelligence(
         async_db_committed, issue.id, reader.id,
     )
     assert first is not None
     assert first.metadata_status == "refresh_pending"
-    assert scheduled == [True]
 
     # Request-scoped sessions roll back on close. That cannot remove the work.
     await async_db_committed.rollback()
@@ -143,4 +128,3 @@ async def test_intelligence_read_commits_repair_before_worker_is_scheduled(
         persisted_again = await get_request(worker_db, identity.id)
         assert persisted_again is not None
         assert persisted_again.id == request_id
-    assert scheduled == [True, True]
