@@ -210,7 +210,7 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/_native_roll/health",
+      "src": "/api/v2/health",
       "methods": [
         "GET"
       ],
