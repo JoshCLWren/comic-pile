@@ -17821,6 +17821,130 @@
         "title": "ResetPasswordRequest",
         "type": "object"
       },
+      "RollDieStateResponse": {
+        "description": "The reader's current logical die and the approved ladder.",
+        "properties": {
+          "default_die": {
+            "description": "The die an explicit reset returns to.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "die": {
+            "description": "The current logical die.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "ladder": {
+            "description": "The approved dice ladder, smallest to largest.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "last_roll": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RollLastRoll",
+                "description": "The most recent recorded roll, when the reader has rolled."
+              }
+            ]
+          }
+        },
+        "required": [
+          "die",
+          "ladder",
+          "default_die"
+        ],
+        "type": "object"
+      },
+      "RollEligibleIssueIdsResponse": {
+        "description": "The ordered eligible issue identifiers for the current die.",
+        "properties": {
+          "die": {
+            "description": "The logical die that bounded the list.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_ids": {
+            "description": "The eligible issue identifiers, in queue order.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "thread_ids": {
+            "description": "The owning thread identifiers, parallel to `issue_ids`.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "die",
+          "issue_ids",
+          "thread_ids"
+        ],
+        "type": "object"
+      },
+      "RollLastRoll": {
+        "description": "The most recent Roll recorded for this reader.",
+        "properties": {
+          "die": {
+            "description": "The die that produced the roll.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "description": "The rolled issue.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "description": "The rolled issue number.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "description": "The recorded roll result.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rolled_at": {
+            "description": "When the roll was recorded.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "description": "The rolled thread.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "RollOfferRequest": {
         "additionalProperties": false,
         "properties": {
@@ -19269,197 +19393,6 @@
           "snapshot_count"
         ],
         "title": "SessionListItem",
-        "type": "object"
-      },
-      "SessionModeResponse": {
-        "description": "Canonical session mode returned from manual change and bootstrap endpoints.",
-        "properties": {
-          "active_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Bandwidth"
-          },
-          "active_intent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Intent"
-          },
-          "bandwidth_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bandwidth Confidence"
-          },
-          "bandwidth_source": {
-            "anyOf": [
-              {
-                "enum": [
-                  "inferred",
-                  "manual",
-                  "snooze",
-                  "quiz"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bandwidth Source"
-          },
-          "bandwidth_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bandwidth Version"
-          },
-          "intent_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Intent Confidence"
-          },
-          "intent_source": {
-            "anyOf": [
-              {
-                "enum": [
-                  "inferred",
-                  "manual",
-                  "snooze",
-                  "quiz"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Intent Source"
-          },
-          "intent_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Intent Version"
-          },
-          "predicted_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predicted Bandwidth"
-          },
-          "predicted_intent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predicted Intent"
-          },
-          "session_mode_correction_guidance": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Mode Correction Guidance"
-          }
-        },
-        "required": [
-          "active_bandwidth",
-          "predicted_bandwidth",
-          "active_intent",
-          "predicted_intent"
-        ],
-        "title": "SessionModeResponse",
-        "type": "object"
-      },
-      "SessionModeUpdateRequest": {
-        "additionalProperties": false,
-        "description": "Canonical request to update active session bandwidth and/or intent.\n\nOnly the supplied dimensions are changed; the other dimension is left\nuntouched. Omitting both is a no-op and returns the current mode unchanged.",
-        "properties": {
-          "bandwidth": {
-            "anyOf": [
-              {
-                "enum": [
-                  "light",
-                  "balanced",
-                  "deep"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Active bandwidth to set. Omit to leave unchanged.",
-            "title": "Bandwidth"
-          },
-          "intent": {
-            "anyOf": [
-              {
-                "enum": [
-                  "balanced",
-                  "momentum",
-                  "familiar",
-                  "explore",
-                  "random"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Active intent to set. Omit to leave unchanged. Setting to 'random' bypasses contextual weighting.",
-            "title": "Intent"
-          }
-        },
-        "title": "SessionModeUpdateRequest",
         "type": "object"
       },
       "SessionResponse": {
@@ -31735,34 +31668,6 @@
         ]
       }
     },
-    "/api/v1/roll/clear-manual-die": {
-      "post": {
-        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: Async database session.\n\nReturns:\n    HTML string with the current die size.",
-        "operationId": "clear_manual_die_api_v1_roll_clear_manual_die_post",
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Clear Manual Die",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
     "/api/v1/roll/dismiss-pending": {
       "post": {
         "description": "Clear any pending thread for the current session.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.",
@@ -31875,103 +31780,6 @@
           }
         ],
         "summary": "Override Roll",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/session-mode": {
-      "patch": {
-        "description": "Update the active session's bandwidth and/or intent.\n\nOnly the supplied dimensions are changed. Omitting both is a no-op and\nreturns the current mode state. Changed dimensions are marked with source\n``manual`` and a call-level version tag so the frontend can distinguish\nuser overrides from algorithm predictions.\n\nArgs:\n    mode_update: The mode values to apply. Omitted dimensions are not reset.\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionModeResponse with the updated canonical mode state.",
-        "operationId": "update_session_mode_api_v1_roll_session_mode_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SessionModeUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionModeResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Update Session Mode",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/set-die": {
-      "post": {
-        "description": "Set manual die size for current session.\n\nArgs:\n    die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with the die size.\n\nRaises:\n    HTTPException: If die size is invalid.",
-        "operationId": "set_manual_die_api_v1_roll_set_die_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "die",
-            "required": true,
-            "schema": {
-              "title": "Die",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Set Manual Die",
         "tags": [
           "roll",
           "roll"
@@ -36286,6 +36094,92 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted v2 manual-die command.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/die-state": {
+      "get": {
+        "description": "The published response is the actual handler DTO, so the current logical die, approved d2-d20 ladder, default die and last roll stay in the live contract.",
+        "operationId": "die_state_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollDieStateResponse"
+                }
+              }
+            },
+            "description": "Current logical die, approved ladder and last roll"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll die-state read.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/eligible-issue-ids": {
+      "get": {
+        "description": "The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.",
+        "operationId": "eligible_issue_ids_documentation",
+        "parameters": [
+          {
+            "description": "Comma-separated browser-owned temporary snoozed thread identifiers",
+            "in": "query",
+            "name": "snoozed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollEligibleIssueIdsResponse"
+                }
+              }
+            },
+            "description": "Ordered eligible issue identifiers for the current die"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid temporary snooze identifiers"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 eligible-identifier read.",
         "tags": [
           "roll"
         ]

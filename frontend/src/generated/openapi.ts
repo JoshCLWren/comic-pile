@@ -4251,33 +4251,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/clear-manual-die": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Clear Manual Die
-         * @description Clear manual die size and return to automatic dice ladder mode.
-         *
-         *     Args:
-         *         current_user: The authenticated user making the request.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         HTML string with the current die size.
-         */
-        post: operations["clear_manual_die_api_v1_roll_clear_manual_die_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/dismiss-pending": {
         parameters: {
             query?: never;
@@ -4365,71 +4338,6 @@ export interface paths {
          *         HTTPException: If thread not found.
          */
         post: operations["override_roll_api_v1_roll_override_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/session-mode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update Session Mode
-         * @description Update the active session's bandwidth and/or intent.
-         *
-         *     Only the supplied dimensions are changed. Omitting both is a no-op and
-         *     returns the current mode state. Changed dimensions are marked with source
-         *     ``manual`` and a call-level version tag so the frontend can distinguish
-         *     user overrides from algorithm predictions.
-         *
-         *     Args:
-         *         mode_update: The mode values to apply. Omitted dimensions are not reset.
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionModeResponse with the updated canonical mode state.
-         */
-        patch: operations["update_session_mode_api_v1_roll_session_mode_patch"];
-        trace?: never;
-    };
-    "/api/v1/roll/set-die": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Set Manual Die
-         * @description Set manual die size for current session.
-         *
-         *     Args:
-         *         die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         HTML string with the die size.
-         *
-         *     Raises:
-         *         HTTPException: If die size is invalid.
-         */
-        post: operations["set_manual_die_api_v1_roll_set_die_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6630,6 +6538,46 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for the mounted v2 manual-die command. */
         post: operations["manual_die_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/die-state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted v2 Roll die-state read.
+         * @description The published response is the actual handler DTO, so the current logical die, approved d2-d20 ladder, default die and last roll stay in the live contract.
+         */
+        get: operations["die_state_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/roll/eligible-issue-ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted v2 eligible-identifier read.
+         * @description The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.
+         */
+        get: operations["eligible_issue_ids_documentation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -15044,6 +14992,61 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** @description The reader's current logical die and the approved ladder. */
+        RollDieStateResponse: {
+            /**
+             * Format: int32
+             * @description The die an explicit reset returns to.
+             */
+            default_die: number;
+            /**
+             * Format: int32
+             * @description The current logical die.
+             */
+            die: number;
+            /** @description The approved dice ladder, smallest to largest. */
+            ladder: number[];
+            last_roll?: null | components["schemas"]["RollLastRoll"];
+        };
+        /** @description The ordered eligible issue identifiers for the current die. */
+        RollEligibleIssueIdsResponse: {
+            /**
+             * Format: int32
+             * @description The logical die that bounded the list.
+             */
+            die: number;
+            /** @description The eligible issue identifiers, in queue order. */
+            issue_ids: number[];
+            /** @description The owning thread identifiers, parallel to `issue_ids`. */
+            thread_ids: number[];
+        };
+        /** @description The most recent Roll recorded for this reader. */
+        RollLastRoll: {
+            /**
+             * Format: int32
+             * @description The die that produced the roll.
+             */
+            die?: number | null;
+            /**
+             * Format: int32
+             * @description The rolled issue.
+             */
+            issue_id?: number | null;
+            /** @description The rolled issue number. */
+            issue_number?: string | null;
+            /**
+             * Format: int32
+             * @description The recorded roll result.
+             */
+            result?: number | null;
+            /** @description When the roll was recorded. */
+            rolled_at?: string | null;
+            /**
+             * Format: int32
+             * @description The rolled thread.
+             */
+            thread_id?: number | null;
+        };
         RollOfferRequest: {
             /** @description Stable client key; retries return the original offer without re-rolling. */
             idempotency_key: string;
@@ -15687,55 +15690,6 @@ export interface components {
             started_at: string | null;
             /** User Id */
             user_id: number;
-        };
-        /**
-         * SessionModeResponse
-         * @description Canonical session mode returned from manual change and bootstrap endpoints.
-         */
-        SessionModeResponse: {
-            /** Active Bandwidth */
-            active_bandwidth: string | null;
-            /** Active Intent */
-            active_intent: string | null;
-            /** Bandwidth Confidence */
-            bandwidth_confidence?: number | null;
-            /** Bandwidth Source */
-            bandwidth_source?: ("inferred" | "manual" | "snooze" | "quiz") | null;
-            /** Bandwidth Version */
-            bandwidth_version?: string | null;
-            /** Intent Confidence */
-            intent_confidence?: number | null;
-            /** Intent Source */
-            intent_source?: ("inferred" | "manual" | "snooze" | "quiz") | null;
-            /** Intent Version */
-            intent_version?: string | null;
-            /** Predicted Bandwidth */
-            predicted_bandwidth: string | null;
-            /** Predicted Intent */
-            predicted_intent: string | null;
-            /** Session Mode Correction Guidance */
-            session_mode_correction_guidance?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * SessionModeUpdateRequest
-         * @description Canonical request to update active session bandwidth and/or intent.
-         *
-         *     Only the supplied dimensions are changed; the other dimension is left
-         *     untouched. Omitting both is a no-op and returns the current mode unchanged.
-         */
-        SessionModeUpdateRequest: {
-            /**
-             * Bandwidth
-             * @description Active bandwidth to set. Omit to leave unchanged.
-             */
-            bandwidth?: ("light" | "balanced" | "deep") | null;
-            /**
-             * Intent
-             * @description Active intent to set. Omit to leave unchanged. Setting to 'random' bypasses contextual weighting.
-             */
-            intent?: ("balanced" | "momentum" | "familiar" | "explore" | "random") | null;
         };
         /**
          * SessionResponse
@@ -22543,26 +22497,6 @@ export interface operations {
             };
         };
     };
-    clear_manual_die_api_v1_roll_clear_manual_die_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
-    };
     dismiss_pending_roll_api_v1_roll_dismiss_pending_post: {
         parameters: {
             query?: never;
@@ -22632,70 +22566,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_session_mode_api_v1_roll_session_mode_patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SessionModeUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionModeResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_manual_die_api_v1_roll_set_die_post: {
-        parameters: {
-            query: {
-                die: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
                 };
             };
             /** @description Validation Error */
@@ -25590,6 +25460,98 @@ export interface operations {
             };
             /** @description Invalid die or idempotency key */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    die_state_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current logical die, approved ladder and last roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollDieStateResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    eligible_issue_ids_documentation: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated browser-owned temporary snoozed thread identifiers */
+                snoozed?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ordered eligible issue identifiers for the current die */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollEligibleIssueIdsResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid temporary snooze identifiers */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native Roll projection */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

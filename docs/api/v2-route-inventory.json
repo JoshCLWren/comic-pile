@@ -240,6 +240,20 @@
       "runtime": "python-fastapi",
       "retired_by_issue": 4354,
       "replacement": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rate/",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4337,
+      "replacement": "PATCH /api/v2/issues/{issue_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rate/",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4337,
+      "replacement": "PATCH /api/v2/issues/{issue_id}"
     }
   ]
 }
