@@ -5,6 +5,10 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends pkg-con
 WORKDIR /workspace/native/roll-service
 COPY native/roll-service/Cargo.toml native/roll-service/Cargo.lock ./
 COPY native/roll-service/src/ ./src/
+# `test_support` is part of the library (integration tests link it without
+# `cfg(test)`) and embeds the canonical schema fixture, so it must be present
+# for the library to compile.
+COPY native/roll-service/tests/fixtures/ ./tests/fixtures/
 RUN cargo build --locked --bin comicpile-roll-service
 
 FROM debian:bookworm-slim
