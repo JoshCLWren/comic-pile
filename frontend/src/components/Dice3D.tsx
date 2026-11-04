@@ -864,6 +864,7 @@ function buildNumberNormals(
   return normals
 }
 
+export { createD2Geometry }
 export function getFaceRotation(value: number, normalMap: NumberNormals | null): FaceRotation {
   const normal = normalMap?.get(value)
   if (!normal) {
