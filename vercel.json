@@ -9,7 +9,7 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/v1/cron/comicvine-metadata-repair",
+      "path": "/api/_native_roll/comicvine-metadata-repair",
       "schedule": "0 10 * * *"
     }
   ],
@@ -327,6 +327,13 @@
         "POST"
       ],
       "dest": "/api/native_issue.rs"
+    },
+    {
+      "src": "/api/_native_roll/comicvine-metadata-repair",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api(?:/.*)?",
