@@ -519,8 +519,8 @@ describe('RollPage parent handlers', () => {
   })
 
   it('shows the maximum-die snooze guidance', () => {
-    sessionData.current_die = 20
-    bootstrapData.current_die = 20
+    sessionData.current_die = 100
+    bootstrapData.current_die = 100
     sessionData.snoozed_threads = [{ id: 9, title: 'Snoozed', format: 'Comic' }]
     bootstrapData.snoozed_threads = [{ id: 9, title: 'Snoozed', format: 'Comic' }]
     bootstrapData.snoozed_count = 1

@@ -30,8 +30,11 @@ describe('d2Geometry', () => {
     expect(geometry.getIndex()).toBeDefined()
     
     // Check that we have vertices for both faces plus edge
+    // SAFETY: createD2Geometry always produces BufferGeometry with these attributes.
     const positionAttribute = geometry.getAttribute('position') as THREE.BufferAttribute
+    // SAFETY: geometry created by createD2Geometry always has uv attribute.
     const uvAttribute = geometry.getAttribute('uv') as THREE.BufferAttribute
+    // SAFETY: createD2Geometry always sets the index attribute.
     const indexAttribute = geometry.getIndex() as THREE.BufferAttribute
     
     const positionCount = positionAttribute.count
@@ -70,6 +73,7 @@ describe('d2Geometry', () => {
     }
 
     const geometry = createD2Geometry(atlasInfo)
+    // SAFETY: geometry created by createD2Geometry always has uv attribute.
     const uvAttribute = geometry.getAttribute('uv') as THREE.BufferAttribute
     
     // First vertex should be the center of face 1
@@ -101,6 +105,7 @@ describe('d2Geometry', () => {
     }
 
     const geometry = createD2Geometry(atlasInfo)
+    // SAFETY: geometry created by createD2Geometry always has uv attribute.
     const uvAttribute = geometry.getAttribute('uv') as THREE.BufferAttribute
     
     // The center of the bottom face should be around vertex 34 (1 + 33 + 1)
