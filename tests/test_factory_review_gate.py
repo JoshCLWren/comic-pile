@@ -1760,7 +1760,8 @@ def test_trusted_native_changes_requested_routes_to_repair_only() -> None:
     assert "types: [submitted, dismissed]" in workflow
     assert "await visibility({ github, context });" in workflow
     assert (
-        '[[ "$EVENT_NAME" == \'pull_request_review\' || '
+        '[[ "$EVENT_NAME" == \'issue_comment\' || '
+        '"$EVENT_NAME" == \'pull_request_review\' || '
         '"$EVENT_NAME" == \'pull_request_review_comment\' ]] && exit 0'
     ) in workflow
     # Review votes never feed ready or merge gates. Those remain controller-only.
