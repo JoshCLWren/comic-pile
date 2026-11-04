@@ -173,7 +173,15 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    async fn test_client(url: &str, schema: &str) -> tokio_postgres::Client {
+    /// Reset the canonical Alembic schema, seed `statements`, and hold the lock.
+    async fn seeded(
+        url: &str,
+        statements: &str,
+    ) -> (tokio_postgres::Client, tokio::sync::MutexGuard<'static, ()>) {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
         let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
@@ -181,10 +189,10 @@ mod tests {
             let _ = connection.await;
         });
         client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .batch_execute(statements)
             .await
-            .unwrap();
-        client
+            .expect("seed canonical schema");
+        (client, guard)
     }
 
     #[tokio::test]
@@ -192,46 +200,28 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("reset_dice_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL, ended_at timestamptz,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz, manual_die integer
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, session_id integer,
-                     timestamp timestamptz DEFAULT NOW(),
-                     die integer, die_after integer, thread_id integer,
-                     issue_id integer, rating double precision, context json
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES
-                     (1, 1, NOW() - interval '10 hours', NULL, 10, 100,
+        let (mut client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1),
+                        (20, 1, 'Second', 'Comic', 1, 'active', 2);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1),
+                        (200, 20, '1', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      pending_issue_id, pending_thread_updated_at, manual_die)
+                 VALUES
+                     (1, 1, NOW() - interval '10 hours', 6, 10, 100,
                       NOW() - interval '10 hours', 12),
-                     (2, 1, NOW(), NULL, NULL, 200, NOW(), 12);
-                 INSERT INTO {schema}.events
-                     (user_id, type, session_id, die, die_after, context)
-                 VALUES (1, 'manual_die', 2, 6, 20, '{{}}'::json);"
-            ))
-            .await
-            .unwrap();
-        let mut client = test_client(&url, &schema).await;
+                     (2, 1, NOW(), 6, NULL, 200, NOW(), 12);
+                 INSERT INTO events (user_id, type, session_id, die, die_after, context)
+                 VALUES (1, 'manual_die', 2, 6, 20, '{}'::json);"#,
+        )
+        .await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -334,11 +324,6 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count.get::<_, i32>(0), 1);
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
@@ -346,41 +331,23 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("reset_clear_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL, ended_at timestamptz,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz, manual_die integer
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, session_id integer,
-                     timestamp timestamptz DEFAULT NOW(),
-                     die integer, die_after integer, thread_id integer,
-                     issue_id integer, rating double precision, context json
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES
-                     (1, 1, NOW(), NULL, 10, 100, NOW(), 12);"
-            ))
-            .await
-            .unwrap();
-        let mut client = test_client(&url, &schema).await;
+        let (mut client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1),
+                        (20, 1, 'Second', 'Comic', 1, 'active', 2);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1),
+                        (200, 20, '1', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      pending_issue_id, pending_thread_updated_at, manual_die)
+                 VALUES (1, 1, NOW(), 6, 10, 100, NOW(), 12);"#,
+        )
+        .await;
         let user = AuthenticatedUser::for_test(1);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -412,10 +379,5 @@ mod tests {
         assert!(cleared.get::<_, Option<i32>>(1).is_none());
         assert!(cleared.get::<_, bool>(2));
         assert!(cleared.get::<_, Option<i32>>(3).is_none());
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }

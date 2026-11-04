@@ -309,7 +309,6 @@ pub async fn execute_standalone(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
     use tokio_postgres::NoTls;
 
     #[test]
@@ -346,48 +345,29 @@ mod tests {
         client
     }
 
-    async fn test_schema(url: &str) -> String {
-        let client = connect(url).await;
-        let nanos = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("dice_mutation_{}_{}", std::process::id(), nanos);
-        client
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
-                     die integer, die_after integer, thread_id integer,
-                     issue_id integer, rating double precision, context json
-                 );
-                 CREATE UNIQUE INDEX dice_test_receipt_idx
-                     ON {schema}.events (user_id, ((context->>'dice_command_key')))
-                     WHERE (context->>'dice_command_key') IS NOT NULL;
-                 INSERT INTO {schema}.users VALUES (1), (2);
-                 INSERT INTO {schema}.threads VALUES (10, 1), (20, 2);
-                 INSERT INTO {schema}.issues VALUES (100, 10), (200, 20);"
-            ))
+    /// Seed the canonical Alembic schema and hold it for one serialized test.
+    ///
+    /// The unique receipt index these tests depend on is a real migration
+    /// (`ix_events_user_dice_command_key`), not a test-only fixture.
+    async fn seeded(url: &str) -> (Client, tokio::sync::MutexGuard<'static, ()>) {
+        let state = crate::test_support::test_state(2)
             .await
-            .unwrap();
-        schema
-    }
-
-    async fn scoped_client(url: &str, schema: &str) -> Client {
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
         let client = connect(url).await;
         client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2'); \
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                     queue_position) \
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1), \
+                        (20, 2, 'Second', 'Comic', 1, 'active', 2); \
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) \
+                 VALUES (100, 10, '1', 'unread', now(), 1), (200, 20, '1', 'unread', now(), 1);",
+            )
             .await
-            .unwrap();
-        client
+            .expect("seed canonical schema");
+        (client, guard)
     }
 
     #[tokio::test]
@@ -395,9 +375,10 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let schema = test_schema(&url).await;
-        let mut first = scoped_client(&url, &schema).await;
-        let mut second = scoped_client(&url, &schema).await;
+        let (seed, _db) = seeded(&url).await;
+        drop(seed);
+        let mut first = connect(&url).await;
+        let mut second = connect(&url).await;
         let cmd = DiceCommand::Reroll { thread_id: 10 };
         let (one, two) = tokio::join!(
             async {
@@ -432,8 +413,8 @@ mod tests {
         assert_eq!(one.die_after, 8);
         assert_ne!(one.replayed, two.replayed);
 
-        let mut third = scoped_client(&url, &schema).await;
-        let mut fourth = scoped_client(&url, &schema).await;
+        let mut third = connect(&url).await;
+        let mut fourth = connect(&url).await;
         let (a, b) = tokio::join!(
             execute_standalone(
                 &mut third,
@@ -455,7 +436,7 @@ mod tests {
             (a.die_before == 8 && b.die_before == 12 && b.die_after == 6)
                 || (b.die_before == 8 && a.die_before == 6 && a.die_after == 12)
         );
-        let client = scoped_client(&url, &schema).await;
+        let client = connect(&url).await;
         let count: i64 = client
             .query_one("SELECT COUNT(*) FROM events WHERE user_id = 1", &[])
             .await
@@ -469,9 +450,10 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let schema = test_schema(&url).await;
-        let mut writer = scoped_client(&url, &schema).await;
-        let transfer = scoped_client(&url, &schema).await;
+        let (seed, _db) = seeded(&url).await;
+        drop(seed);
+        let mut writer = connect(&url).await;
+        let transfer = connect(&url).await;
         let tx = writer.transaction().await.unwrap();
 
         let result = persist_in_transaction(
@@ -521,7 +503,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut retry = scoped_client(&url, &schema).await;
+        let mut retry = connect(&url).await;
         let tx = retry.transaction().await.unwrap();
         let err = persist_in_transaction(
             &tx,
@@ -540,8 +522,9 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let schema = test_schema(&url).await;
-        let mut client = scoped_client(&url, &schema).await;
+        let (seed, _db) = seeded(&url).await;
+        drop(seed);
+        let mut client = connect(&url).await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -607,8 +590,9 @@ mod tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let schema = test_schema(&url).await;
-        let mut client = scoped_client(&url, &schema).await;
+        let (seed, _db) = seeded(&url).await;
+        drop(seed);
+        let mut client = connect(&url).await;
         let alice = AuthenticatedUser::for_test(1);
         let bob = AuthenticatedUser::for_test(2);
 

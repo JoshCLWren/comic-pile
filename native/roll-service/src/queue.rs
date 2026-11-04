@@ -738,9 +738,8 @@ mod tests {
     //! Disposable-PostgreSQL coverage for every mounted queue write handler.
     use super::*;
     use crate::config::Config;
+    use crate::test_support::DB_LOCK;
     use utoipa::OpenApi;
-
-    static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     async fn state() -> Arc<AppState> {
         state_with_pool_size(2).await

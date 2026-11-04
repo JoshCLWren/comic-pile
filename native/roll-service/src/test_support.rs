@@ -119,3 +119,39 @@ pub async fn reset(state: &AppState) {
     ensure_schema(state).await;
     truncate_application_tables(state).await;
 }
+
+/// Crate-wide lock serializing every test that touches the canonical schema.
+///
+/// The canonical Alembic schema lives in `public`, so tests cannot each get a
+/// private namespace without issuing DDL — which is exactly what this module
+/// exists to prevent. Tests therefore take this lock, reset, seed and assert
+/// while holding it. Doing so keeps one shared, production-identical schema
+/// instead of a per-test approximation.
+pub(crate) static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Build the canonical test [`AppState`], or `None` when no disposable database
+/// is configured so the caller can skip.
+pub async fn test_state(pool_size: usize) -> Option<std::sync::Arc<AppState>> {
+    let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL").ok()?;
+    let config = crate::config::Config::from_lookup(|name| match name {
+        "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+        "RUST_ROLL_JWT_SECRET" => Some("synthetic-native-test".into()),
+        "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
+        _ => None,
+    })
+    .expect("canonical test config");
+    Some(std::sync::Arc::new(
+        AppState::new(config).expect("canonical test state"),
+    ))
+}
+
+/// Lock and reset the canonical schema, returning the guard for the test body.
+///
+/// Hold the returned guard for the whole test; dropping it releases the next
+/// test. This replaces the per-test `CREATE SCHEMA`/`CREATE TABLE` fixtures that
+/// let production-only schema differences escape the suite (#4535).
+pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static, ()> {
+    let guard = DB_LOCK.lock().await;
+    reset(state).await;
+    guard
+}

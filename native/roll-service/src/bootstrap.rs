@@ -1357,64 +1357,39 @@ mod cover_source_tests {
         );
     }
 
-    async fn test_client(url: &str, schema: &str) -> tokio_postgres::Client {
-        let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
-            .await
-            .unwrap();
-        client
-    }
-
     #[tokio::test]
     async fn durable_snoozed_ignores_native_reroll_events() {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+        let _state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&_state).await;
+        let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("durable_snoozed_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     last_activity_at timestamptz
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     thread_id integer, type text, timestamp timestamptz,
-                     context json
-                 );
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.threads VALUES (10, 1, NULL), (20, 1, NULL);
-                 INSERT INTO {schema}.sessions VALUES (1, 1, NOW() - interval '1 hour');
-                 INSERT INTO {schema}.events (thread_id, type, timestamp, context)
+        client
+            .batch_execute(
+                r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status,
+                      queue_position, last_activity_at)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1, NULL),
+                        (20, 1, 'Second', 'Comic', 1, 'active', 2, NULL);
+                 INSERT INTO sessions (id, user_id, started_at, start_die)
+                 VALUES (1, 1, NOW() - interval '1 hour', 6);
+                 INSERT INTO events (thread_id, type, timestamp, context)
                  VALUES
-                   (10, 'snooze', NOW(), '{{}}'::json),
-                   (20, 'snooze', NOW(), '{{\"dice_command_key\":\"roll-abc-snooze\"}}'::json);"
-            ))
+                   (10, 'snooze', NOW(), '{}'::json),
+                   (20, 'snooze', NOW(),
+                    '{"dice_command_key":"roll-abc-snooze"}'::json);"#,
+            )
             .await
-            .unwrap();
-        let client = test_client(&url, &schema).await;
+            .expect("seed canonical schema");
         let excluded = crate::bootstrap::durable_snoozed(
             &client,
             crate::auth::AuthenticatedUser::for_test(1),
@@ -1424,11 +1399,6 @@ mod cover_source_tests {
         .unwrap();
         assert!(excluded.contains(&10));
         assert!(!excluded.contains(&20));
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }
 
@@ -1455,57 +1425,32 @@ mod pool_parity_tests {
         let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+        let _state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&_state).await;
+        let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_pool_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     last_activity_at timestamptz
-                 );
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     thread_id integer, type text NOT NULL,
-                     timestamp timestamptz NOT NULL, context json
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.threads
-                     SELECT id, 1, NULL FROM generate_series(1, 12) AS id;
-                 INSERT INTO {schema}.sessions
-                     VALUES (1, 1, now() - interval '1 day');
-                 INSERT INTO {schema}.events (thread_id, type, timestamp)
-                     VALUES (2, 'snooze', now());"
-            ))
+        client
+            .batch_execute(
+                r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status,
+                      queue_position, last_activity_at)
+                 SELECT id, 1, 'Thread ' || id, 'Comic', 1, 'active', id, NULL
+                 FROM generate_series(1, 12) AS id;
+                 INSERT INTO sessions (id, user_id, started_at, start_die)
+                 VALUES (1, 1, now() - interval '1 day', 6);
+                 INSERT INTO events (thread_id, type, timestamp)
+                 VALUES (2, 'snooze', now());"#,
+            )
             .await
-            .unwrap();
-        let client = {
-            let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-                .await
-                .expect("disposable Postgres");
-            tokio::spawn(async move {
-                let _ = connection.await;
-            });
-            client
-                .batch_execute(&format!("SET search_path TO {schema}, public"))
-                .await
-                .unwrap();
-            client
-        };
+            .expect("seed canonical schema");
+
         let owner = AuthenticatedUser::for_test(1);
         let candidates: Vec<_> = (1..=12).map(frontier).collect();
         let candidate_ids: Vec<i32> = candidates.iter().map(|item| item.thread_id).collect();
@@ -1550,82 +1495,41 @@ mod pool_parity_tests {
                 "legacy exclusion {thread_id} must remain selectable"
             );
         }
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }
 
 #[cfg(test)]
 mod initialize_session_db_tests {
     use super::{initialize_session, InitializeSessionRequest};
-    use crate::{auth::AuthenticatedUser, config::Config, AppState};
+    use crate::auth::AuthenticatedUser;
     use axum::{extract::State, Json};
-    use std::sync::Arc;
 
     #[tokio::test]
     async fn initialize_session_persists_timezone_without_duplicate_sessions() {
         let Ok(database_url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let _state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&_state).await;
         let (admin, connection) = tokio_postgres::connect(&database_url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
         tokio::spawn(async move {
             let _ = connection.await;
         });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("session_init_{}_{}", std::process::id(), nanos);
         admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (id integer PRIMARY KEY, user_id integer NOT NULL);
-                 CREATE TABLE {schema}.issues (id integer PRIMARY KEY, thread_id integer NOT NULL);
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     session_id integer, type text, timestamp timestamptz,
-                     die_after integer, context json
-                 );
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL, ended_at timestamptz,
-                     start_die integer NOT NULL, manual_die integer,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz,
-                     snoozed_thread_ids integer[], skipped_thread_ids integer[],
-                     timezone text, predicted_bandwidth text, active_bandwidth text,
-                     bandwidth_confidence double precision, bandwidth_source text,
-                     bandwidth_version text, bandwidth_updated_at timestamptz,
-                     reading_bandwidth text, reading_intent text, reading_mode_source text,
-                     reading_mode_suggested boolean NOT NULL,
-                     active_intent text, predicted_intent text, intent_confidence double precision,
-                     intent_source text, intent_version text,
-                     session_mode_correction_guidance jsonb
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions
-                     (id, user_id, started_at, start_die, reading_mode_suggested, bandwidth_source)
-                 VALUES (7, 1, NOW(), 6, false, 'manual');"
-            ))
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (1, 'reader-1'); \
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die,
+                      reading_mode_suggested, bandwidth_source)
+                 VALUES (7, 1, NOW(), 6, false, 'manual');",
+            )
             .await
-            .unwrap();
-        // Set only this test pool's search path, never mutate the shared test database.
-        let mut config = Config::from_lookup(|key| match key {
-            "RUST_ROLL_DATABASE_URL" => Some(database_url.clone()),
-            "RUST_ROLL_JWT_SECRET" => Some("synthetic-jwt-secret".into()),
-            _ => None,
-        })
-        .unwrap();
-        config
-            .database
-            .options(format!("-c search_path={schema},public"));
-        let state = Arc::new(AppState::new(config).unwrap());
+            .expect("seed canonical schema");
+        let state = _state.clone();
 
         let Json(first) = initialize_session(
             State(state.clone()),
@@ -1639,10 +1543,7 @@ mod initialize_session_db_tests {
         assert_eq!(first.session_id, 7);
         assert!(!first.created);
         let timezone = admin
-            .query_one(
-                &format!("SELECT timezone FROM {schema}.sessions WHERE id=7"),
-                &[],
-            )
+            .query_one("SELECT timezone FROM sessions WHERE id=7", &[])
             .await
             .unwrap();
         assert_eq!(
@@ -1662,10 +1563,7 @@ mod initialize_session_db_tests {
         assert_eq!(second.session_id, 7);
         assert!(!second.created);
         let row = admin
-            .query_one(
-                &format!("SELECT count(*), max(timezone) FROM {schema}.sessions"),
-                &[],
-            )
+            .query_one("SELECT count(*), max(timezone) FROM sessions", &[])
             .await
             .unwrap();
         assert_eq!(row.get::<_, i64>(0), 1);
@@ -1676,9 +1574,5 @@ mod initialize_session_db_tests {
 
         state.pool.close();
         drop(state);
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }

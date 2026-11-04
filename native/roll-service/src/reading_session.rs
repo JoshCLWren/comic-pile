@@ -875,36 +875,11 @@ mod tests {
 
     #[tokio::test]
     async fn stale_pending_pointers_are_detected_for_repair() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some(state) = crate::test_support::test_state(2).await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("pending_validity_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL
-                 );
-                 INSERT INTO {schema}.users VALUES (1), (2);
-                 INSERT INTO {schema}.threads VALUES (10, 1), (20, 2);
-                 INSERT INTO {schema}.issues VALUES (100, 10), (200, 20);"
-            ))
-            .await
-            .unwrap();
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let url = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL");
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
@@ -912,7 +887,15 @@ mod tests {
             let _ = connection.await;
         });
         client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2'); \
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
+                     queue_position) \
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1), \
+                        (20, 2, 'Second', 'Comic', 1, 'active', 2); \
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position) \
+                 VALUES (100, 10, '1', 'unread', now(), 1), (200, 20, '1', 'unread', now(), 1);",
+            )
             .await
             .unwrap();
         let tx = client.transaction().await.unwrap();
@@ -942,9 +925,5 @@ mod tests {
         );
 
         tx.rollback().await.unwrap();
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }
