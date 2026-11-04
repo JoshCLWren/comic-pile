@@ -1182,7 +1182,7 @@ describe('RollPage parent handlers', () => {
     render(<RollPage />)
     expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()
 
-    await userEvent.setup().click(screen.getByRole('button', { name: /^current die d6$/i }))
+    await userEvent.setup().click(screen.getByRole('button', { name: /^current die d4$/i }))
     const modal = screen.getByRole('heading', { name: 'Select Die' }).closest('section')!
     spies.setDie.mockRejectedValueOnce(new Error('die failed'))
     await userEvent.setup().click(within(modal).getByRole('button', { name: 'd4' }))
