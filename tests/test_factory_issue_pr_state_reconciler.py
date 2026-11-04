@@ -431,4 +431,7 @@ def test_trusted_review_comment_events_route_to_visibility_without_issue_sweep()
     # Bot-authored comments cannot enqueue an Actions workflow via GITHUB_TOKEN.
     # The same reviewed head is labeled directly in the trusted controller.
     controller = (SCRIPTS / "factory-review-controller.py").read_text(encoding="utf-8")
-    assert "set_review_approval_visibility(pr_number, match.group(1))" in controller
+    assert "set_review_approval_visibility(pr_number, reviewed_head)" in controller
+    assert controller.index('pr_stage="factory:ready",') < controller.index(
+        "set_review_approval_visibility(pr_number, reviewed_head)"
+    )
