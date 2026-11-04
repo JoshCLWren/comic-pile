@@ -88,8 +88,9 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 21] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 22] = [
     ("get", "/api/v2/analytics/metrics"),
+    ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
@@ -123,6 +124,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::analytics::AnalyticsApi::openapi())
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
 }
 
 #[cfg(test)]
