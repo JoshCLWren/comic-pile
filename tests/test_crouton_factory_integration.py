@@ -46,7 +46,8 @@ def test_crouton_runner_scopes_existing_zen_credential_and_checks_real_tool_use(
     assert "crouton-tool-smoke-marker" in smoke_step
     assert '"$(cat "$crouton_marker" 2>/dev/null || true)"' in smoke_step
     assert "grep -Eq '^(model_unavailable|provider_quota)'" in smoke_step
-    assert "factory-provider-quota:v1 run=" in workflow
+    assert "marker_type=\'factory-provider-quota\'" in workflow
+    assert "${marker_type}:v1 run=" in workflow
 
 
 def test_crouton_quota_smoke_is_classified_without_permanent_retirement(tmp_path: Path) -> None:
