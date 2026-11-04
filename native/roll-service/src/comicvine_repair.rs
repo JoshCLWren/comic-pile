@@ -18,11 +18,23 @@ const HOST: &str = "comicvine.gamespot.com";
 const MAX_BODY: usize = 2_000_000;
 const BATCH_LIMIT: usize = 8;
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
+
+// A provider connection must not outlive its awaited Vercel request. In
+// particular, early return on malformed/oversized provider responses must
+// cancel the HTTP driver instead of leaving a detached serverless task.
+struct ConnectionGuard(tokio::task::JoinHandle<()>);
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 const FIELDS: &str = "id,name,issue_number,cover_date,store_date,image,volume,person_credits,character_credits,team_credits,story_arc_credits,date_last_updated";
 const CLAIM: &str = r#"
 WITH candidate AS (
   SELECT id FROM comicvine_metadata_refresh_requests
-  WHERE (state IN ('pending', 'deferred') AND next_attempt_at <= now())
+  WHERE (state IN ('pending', 'deferred', 'failed') AND next_attempt_at <= now())
      OR (state = 'running' AND (lease_expires_at IS NULL OR lease_expires_at <= now()))
   ORDER BY next_attempt_at, id LIMIT 1 FOR UPDATE SKIP LOCKED
 ), claimed AS (
@@ -219,9 +231,9 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
             .await
             .map_err(|_| ProviderFailure::Unavailable)?;
-        tokio::spawn(async move {
+        let _connection_guard = ConnectionGuard(tokio::spawn(async move {
             let _ = connection.await;
-        });
+        }));
         let path =
             format!("/api/issue/4000-{id}/?api_key={api_key}&format=json&field_list={FIELDS}");
         let request = http::Request::builder()
@@ -525,6 +537,10 @@ mod tests {
     #[test]
     fn backoff_does_not_retry_exhausted_jobs_without_cooldown() {
         assert!(CLAIM.contains("FOR UPDATE SKIP LOCKED"));
+        // Failed jobs are durable but must retry after their cooldown without
+        // requiring a user to reopen the issue to enqueue them again.
+        assert!(CLAIM.contains("\'failed\'"));
+        assert!(CLAIM.contains("next_attempt_at <= now()"));
         assert!(PERSIST.contains("lease_expires_at > now()"));
         assert_eq!(
             failure_transition(&ProviderFailure::Unavailable, 3).0,
