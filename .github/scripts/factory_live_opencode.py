@@ -114,6 +114,7 @@ def select_model(
     comments_path: Path | None = None,
     *,
     now_epoch: int | None = None,
+    attempted: set[str] | None = None,
 ) -> dict[str, str | int]:
     """Rotate all free models without assigning duplicate permanent pins.
 
@@ -131,7 +132,7 @@ def select_model(
             payload,
             now_epoch=int(time.time()) if now_epoch is None else now_epoch,
         )
-    available_models = [model for model in models if model not in excluded]
+    available_models = [model for model in models if model not in excluded and model not in (attempted or set())]
     if not available_models:
         raise ValueError(f"All {len(models)} candidates are unavailable or in cooldown")
 
@@ -158,6 +159,7 @@ def main() -> None:
     parser.add_argument("--outcome-file", type=Path)
     parser.add_argument("--worker", type=int)
     parser.add_argument("--rotation", type=int, default=0)
+    parser.add_argument("--attempted", action="append", default=[])
     parser.add_argument("--roster", type=Path, default=Path(".github/free-model-factories.tsv"))
     args = parser.parse_args()
     if args.smoke_log is not None:
@@ -177,6 +179,7 @@ def main() -> None:
         args.rotation,
         args.roster,
         args.comments,
+        attempted=set(args.attempted),
     )
     print(json.dumps(selected, sort_keys=True))
 
