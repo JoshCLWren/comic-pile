@@ -298,6 +298,29 @@ async def create_issues(
     adopted_issues = await issue_repository.issues_ordered(db, thread_id)
     tracking_state = apply_thread_issue_tracking_state(thread, adopted_issues)
 
+    # Natural insertion may renumber *all* existing numeric Issues, including
+    # reader-curated exceptions to numeric order. If their relative order was
+    # changed, validate the projected global graph before the router commits.
+    # A conflicting strict CBL must not become a persistent read-path 500.
+    original_order = [row[0] for row in sorted(existing_rows, key=lambda row: (row[2], row[0]))]
+    original_ids = set(original_order)
+    reordered_existing = [issue.id for issue in adopted_issues if issue.id in original_ids]
+    if reordered_existing != original_order:
+        from app.services.reading_list_authoring import load_authoring_snapshot
+        from app.services.reading_list_cycle_validator import (
+            ReadingCycleError,
+            validate_reading_constraints,
+        )
+
+        projected, _names = await load_authoring_snapshot(db, current_user_id)
+        try:
+            validate_reading_constraints(projected)
+        except ReadingCycleError:
+            # This service participates in a router-owned commit. Roll back
+            # inserted Issues, reseated positions, and any adoption writes.
+            await db.rollback()
+            raise
+
     if tracking_state.next_unread_issue_id is None:
         if thread.apply_derived_status("completed"):
             thread.queue_position = 0
