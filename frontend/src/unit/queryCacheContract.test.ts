@@ -214,10 +214,9 @@ describe('targeted cache effects', () => {
     // Native v2 returns thread progress, not the full detail representation.
     // Rating may update progress but must never replace authoritative metadata
     // with synthetic adapter values (such as queue_position: 0).
-    const update = setQueryData.mock.calls[0]?.[1]
-    if (typeof update !== 'function') {
-      throw new Error('Expected a functional updater for rated thread cache')
-    }
+    // SAFETY: The preceding spy assertions verify the detail-cache argument is
+    // a function updater. The test calls it with a valid Thread fixture.
+    const update = setQueryData.mock.calls[0]?.[1] as (current: Thread) => Thread
     const existing: Thread = {
       ...thread,
       queue_position: 27,
