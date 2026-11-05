@@ -209,19 +209,31 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     await page.getByText('Idempotency Retry Thread').first().click()
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    // Submit rating
+    // Submit first rating
     const ratingInput = page.locator('#rating-input')
     await ratingInput.fill('5')
 
-    const { response } = await waitForNativePatchResponse(page)
+    const { response: response1 } = await waitForNativePatchResponse(page)
 
-    expect(await response.ok()).toBeTruthy()
-    const responseBody1 = (await response.json()) as Record<string, unknown>
+    expect(await response1.ok()).toBeTruthy()
+    const responseBody1 = (await response1.json()) as Record<string, unknown>
     expect(responseBody1.replayed).toBe(false)
+    expect(responseBody1.read_event_created).toBe(true)
+    expect(responseBody1.rating_event_created).toBe(true)
 
+    // Wait a moment and submit the same rating again
     // The idempotency key is stored in the client and reused for retries
-    // If we try to use a different payload with the same key, we should get 409
-    // But for the same payload, we should get a 200 with replayed=true
+    // The same payload with the same key should return replayed=true
+    await page.waitForTimeout(500)
+    await ratingInput.fill('5')
+
+    const { response: response2 } = await waitForNativePatchResponse(page)
+
+    expect(await response2.ok()).toBeTruthy()
+    const responseBody2 = (await response2.json()) as Record<string, unknown>
+    expect(responseBody2.replayed).toBe(true)
+    expect(responseBody2.read_event_created).toBe(false) // No new read event
+    expect(responseBody2.rating_event_created).toBe(false) // No new rating event
   })
 
   test('verified OpenAPI schema compliance for IssueReadRateResponse', async ({
@@ -271,11 +283,28 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(issue).toHaveProperty('has_confirmed_identity')
     expect(issue).toHaveProperty('mapping_state')
 
+    // Validate status enum values
+    const validStatuses = ['read', 'unread', 'skipped']
+    expect(validStatuses).toContain(issue.status)
+
     // Optional fields that should exist but can be null
     expect(issue).toHaveProperty('read_at') // Can be null
     expect(issue).toHaveProperty('rating') // Can be null
     expect(issue).toHaveProperty('comicvine_issue_id') // Can be null
     expect(issue).toHaveProperty('cover_image_url') // Can be null
+
+    // Validate rating type (number or null)
+    if (issue.rating !== null) {
+      expect(typeof issue.rating).toBe('number')
+      expect(issue.rating).toBeGreaterThanOrEqual(0)
+      expect(issue.rating).toBeLessThanOrEqual(5)
+    }
+
+    // Validate issue_number type (number or null)
+    if (issue.issue_number !== null) {
+      expect(typeof issue.issue_number).toBe('number')
+      expect(issue.issue_number).toBeGreaterThan(0)
+    }
 
     // ThreadProgress required fields
     const thread = responseBody.thread as Record<string, unknown>
@@ -283,12 +312,39 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(thread).toHaveProperty('status')
     expect(thread).toHaveProperty('issues_remaining')
 
+    // Validate thread status enum
+    expect(validStatuses).toContain(thread.status)
+
+    // Validate issues_remaining type (integer)
+    expect(typeof thread.issues_remaining).toBe('number')
+    expect(thread.issues_remaining).toBeGreaterThanOrEqual(0)
+
     // ThreadProgress optional fields
     expect(thread).toHaveProperty('next_unread_issue_id') // Can be null
     expect(thread).toHaveProperty('reading_progress') // Can be null
     expect(thread).toHaveProperty('last_rating') // Can be null
 
+    // Validate last_rating type (number or null)
+    if (thread.last_rating !== null) {
+      expect(typeof thread.last_rating).toBe('number')
+      expect(thread.last_rating).toBeGreaterThanOrEqual(0)
+      expect(thread.last_rating).toBeLessThanOrEqual(5)
+    }
+
+    // Validate reading_progress type (number or null)
+    if (thread.reading_progress !== null) {
+      expect(typeof thread.reading_progress).toBe('number')
+      expect(thread.reading_progress).toBeGreaterThanOrEqual(0)
+      expect(thread.reading_progress).toBeLessThanOrEqual(1)
+    }
+
     // die_after is optional and null for direct source
     expect(responseBody).toHaveProperty('die_after') // Can be null
+
+    // Validate die_after type (number or null)
+    if (responseBody.die_after !== null) {
+      expect(typeof responseBody.die_after).toBe('number')
+      expect(responseBody.die_after).toBeGreaterThan(0)
+    }
   })
 })
