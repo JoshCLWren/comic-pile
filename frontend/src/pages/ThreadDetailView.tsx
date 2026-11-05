@@ -400,8 +400,7 @@ export default function ThreadDetailView() {
     (editForm.title !== thread.title ||
       editForm.format !== thread.format ||
       editForm.notes !== (thread.notes ?? '') ||
-      (thread.total_issues == null &&
-        editForm.issuesRemaining !== thread.issues_remaining) ||
+      editForm.issuesRemaining !== thread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
   const editHasUnsavedChanges = editFormIsDirty || hasPendingIssueEdits
 
