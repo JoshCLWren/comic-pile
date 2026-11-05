@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
 import ComicIssueMappingAction from '../../../components/ComicIssueMappingAction'
+import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
 import QueueMapSeriesDialog from '../../../components/QueueMapSeriesDialog'
 import OverflowMenu, { type OverflowMenuItem } from '../../../components/OverflowMenu'
 import { getProgressPercentage } from '../utils'
@@ -258,6 +259,22 @@ export function ComicPillar({
           threadTitle={threadTitle}
           onClose={() => setIsSeriesMappingDialogOpen(false)}
           onMapped={() => { void mapping.fetchIdentity() }}
+        />
+      )}
+
+      {/* The overflow "Wrong series?" action opens the parent hook's replace
+          dialog; the child mapping control owns its own instance, so render
+          this one here too. */}
+      {mapping.isSearchDialogOpen && issueId && (
+        <ComicVineSearchDialog
+          isOpen
+          issueId={issueId}
+          threadTitle={threadTitle}
+          issueNumber={issueNumber}
+          mode={mapping.searchMode}
+          onClose={mapping.closeSearchDialog}
+          onConfirmed={mapping.handleIdentityConfirmed}
+          onSiblingsMapped={mapping.handleSiblingsMapped}
         />
       )}
     </div>

@@ -36,6 +36,11 @@ vi.mock('../components/Modal', () => ({
     isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
 }))
 
+vi.mock('../components/ComicVineSearchDialog', () => ({
+  default: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div role="dialog"><h2>ComicVine search</h2></div> : null,
+}))
+
 vi.mock('../components/IssueCorrectionDialog', () => ({
   default: ({
     isOpen,
@@ -227,7 +232,11 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     renderPillar()
 
     const status = await screen.findByTestId('comic-mapping-status')
-    expect(status).toHaveAttribute('data-mapping-status', 'linked')
+    // The identity GET resolves after the first render; wait for the mapped
+    // projection before asserting the visible status.
+    await waitFor(() =>
+      expect(status).toHaveAttribute('data-mapping-status', 'linked'),
+    )
     expect(status).toHaveTextContent('Mapped')
     expect(screen.queryByRole('dialog')).toBeNull()
   })
