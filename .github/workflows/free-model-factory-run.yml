@@ -853,6 +853,8 @@ jobs:
           set -Eeuo pipefail
           before="$(git status --porcelain)"
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
+          # Fresh runners can initially expose only OpenCode's older bundled catalog.
+          bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL"
           smoke_prompt='Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.'
           if [[ "$RUNTIME_MODEL" == 'opencode/crouton-alpha-free' ]]; then
             # An answer alone is not proof the agent can execute coding tools.
