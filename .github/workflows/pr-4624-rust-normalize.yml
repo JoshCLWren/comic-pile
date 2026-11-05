@@ -1,5 +1,5 @@
 name: PR 4624 one-shot Rust format and lock repair
-# Rerun after fixing provider connection lifetime and failed-job retry.
+# Generate the merged v2 contract after the repaired SQL parser and main reconciliation.
 on:
   push:
     branches: [rust/comicvine-metadata-repair-4623]
