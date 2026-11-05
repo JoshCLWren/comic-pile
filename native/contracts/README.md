@@ -3,9 +3,9 @@
 `roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
 `frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
 GET `/api/v1/roll/bootstrap` (#4350). It includes nested models, security
-schemes and query defaults. Arrays retain their original ordering. The
-PostgreSQL-backed test also compares it with the live FastAPI `app.openapi()`
-operation, so a stale generated client file cannot silently become the oracle.
+schemes and query defaults. Arrays retain their original ordering. The Python handler and its PostgreSQL-backed port-oracle test were both
+removed by #4397, so this file is a frozen comparison baseline for the native
+port, not a live oracle.
 
 `issue-v2.openapi.json` is the generated native contract for the new product
 behaviour in #4443: `PATCH /api/v2/issues/{issue_id}` and the bounded
@@ -81,10 +81,11 @@ Its checked-in drift test is `threads::tests::checked_in_openapi_contract_is_cur
 The normal consumer is `frontend/src/services/api-threads.ts` (`list` only; the
 remaining thread mutations stay on their existing v1 paths).
 
-The real normal consumer is `frontend/src/services/rollBootstrapApi.ts`.
-Recovery uses `frontend/src/services/protectedRollMutationApi.ts`. Both keep
-their existing v1 URL. The legacy `/api/roll/bootstrap` alias shares the Python
-handler and must also move before Python deletion. V2 is a separate contract.
+The normal consumer is `frontend/src/services/rollBootstrapApi.ts`; recovery
+uses `frontend/src/services/protectedRollMutationApi.ts`. Both already call
+`/api/v2/roll/bootstrap`. The legacy `/api/roll/bootstrap` and
+`/api/v1/roll/bootstrap` aliases were removed with the Python handler (#4397)
+and now fall through to the Python catch-all. V2 is a separate contract.
 
 `GET /api/v2/analytics/metrics` (#4348) is documented by
 `comicpile_roll_service::analytics::AnalyticsApi`. Emit its operation with:
@@ -112,26 +113,23 @@ top-level response. It must receive actual native-generated output. The frozen
 Python file alone does not establish native parity, runtime behavior, or a
 production cutover.
 
-`tests/test_roll_bootstrap_port_oracle.py` executes the original Python v1
-handler against fixture-owned synthetic PostgreSQL data, including pool,
-snoozed, skipped, blocked, stale, completed and deprioritized sections. It
-validates the response against the frozen schema and records every emitted
-statement, driver bind type/container shape, bind order when available, and
-connection transaction events. Scalars are never recorded. The transcript is
-available as `roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact
-for the shard running that test. A failed test does not export a success artifact.
+The retired `tests/test_roll_bootstrap_port_oracle.py` executed the original
+Python v1 handler, validated its response against the frozen schema and recorded
+the emitted SQL, bind shapes and connection transaction events as
+`roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is
+historical evidence only.
 
-This is one representative existing-session path, not a complete SQL inventory:
-new-session creation, pending recovery, and timezone updates still need targeted
-captures as the native handler is implemented. Do not substitute these queries
-for those unrecorded branches or treat the file as proof they are equivalent.
+The captured transcript covered one representative existing-session path, not a
+complete SQL inventory: new-session creation, pending recovery, and timezone
+updates still needed targeted captures. Do not substitute those queries for the
+unrecorded branches or treat the file as proof they are equivalent.
 
-Run the focused reference checks:
+Run the focused reference check:
 
 ```sh
-pytest tests/test_rust_endpoint_oracle.py tests/test_roll_bootstrap_port_oracle.py --no-cov
+pytest tests/test_rust_endpoint_oracle.py --no-cov
 ```
 
-This infrastructure does not change ingress, implement Rust v1, or delete
-Python. #4350 stays open until the actual contract-preserving native deployment
-and the subsequent Python-deletion deployment both succeed.
+This infrastructure does not change ingress. The Python bootstrap handlers and
+read model are removed (#4397, #4350); deleting the native Rust v2 handler
+remains #4299's scope.

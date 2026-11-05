@@ -1,52 +1,68 @@
-# GET /api/v2/roll/bootstrap: Python contract/behavior oracle for a Rust implementation
+# GET /api/v2/roll/bootstrap: behavior contract
 
-> **API v2 is a URL contract, not Rust.** This document describes the Python
-> implementation of the existing `GET /api/v2/roll/bootstrap` operation so
-> its **same-path** Rust replacement can be checked. The `v1` directory in
-> `tests/fixtures/roll-v2/v1/` is a golden-fixture revision, **not** the public
-> API v1 route. `GET /api/v1/roll/bootstrap` is a distinct operation, tracked
-> by #4350, with its own Python response and SQL oracle. Do not change either
-> endpoint's URL or treat one as the implementation of the other.
+> **API v2 is a URL contract, not Rust.** The only public Roll bootstrap GET is
+> `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
+> in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
+> handler: the v1/legacy aliases were removed by #4397, and #4350 removed the
+> dead Python v1 read model and the unused Python v2 response DTO. The Python
+> v2 projection and parity services and repositories remain test/script-only
+> tooling. The `v1`
+> directory in `tests/fixtures/roll-v2/v1/` is a
+> golden-fixture revision, **not** the public API v1 route. Do not change the URL
+> or treat one endpoint as the implementation of another.
 >
 > The language-only cutover contract in #4335 supersedes older notes below
 > referring to component gates or a v1→v2 client migration.
 
 
-The wire contract already exists: FastAPI's `app.openapi()` operation
-`GET /api/v2/roll/bootstrap`, its `RollV2BootstrapResponse` component and referenced
-components. Export it with `python scripts/export_openapi_schema.py --output /tmp/roll-openapi.json`.
-`frontend/src/generated/openapi.ts` is generated from that same contract. Do not
-introduce a second Rust-specific schema or hand-maintained field inventory.
+The wire contract is the native operation `GET /api/v2/roll/bootstrap` and its
+`BootstrapResponseV2` component. `frontend/src/generated/openapi.ts` is generated
+from it; `frontend/src/types/rollV2.ts` is the hand-maintained UI type over the
+same payload. Do not introduce a second schema or another field inventory.
 
-`tests/test_roll_v2_golden.py` supplements OpenAPI with complete Python HTTP JSON
-and before/after durable state in `tests/fixtures/roll-v2/v1/`. Tests validate
-responses through the existing Pydantic model and verify the OpenAPI operation's
-response reference, timezone parameter, and bearer security. The production
-handler and Python evaluator remain the oracle; native output must not be used
-to regenerate these expectations.
+The executable witnesses are the Rust unit tests in
+`native/roll-service/src/bootstrap.rs` plus the native contract-generation check
+described in `native/contracts/README.md`. JSON under
+`tests/fixtures/roll-v2/v1/` is historical fixture material from the retired
+Python oracle; nothing regenerates native output from it.
 
 ## Reproduce
 
-Use Python 3.14 and `uv sync --frozen --all-extras`. Set `TEST_DATABASE_URL` and
-`DATABASE_URL` to the same **disposable local PostgreSQL test database**. Shared
-fixtures truncate test data and refuse non-test database names. Never point this
-suite at a reader's library, a read-only testuser snapshot, or production.
+Use Python 3.14 and `uv sync --frozen --all-extras`. The Rust database-backed
+bootstrap tests read `RUST_ROLL_TEST_DATABASE_URL` and self-skip (reporting
+success without exercising SQL) when it is unset; CI sets the variable, so this
+is a local-only skip. Point it at a disposable local PostgreSQL test database.
+The Python checks below use `TEST_DATABASE_URL`
+and `DATABASE_URL` and refuse non-test database names. Never point either suite
+at a reader's library, a read-only testuser snapshot, or production.
 
 ```sh
-uv run pytest tests/test_roll_v2_golden.py tests/test_roll_v2_contract.py \
-  tests/test_option_e_runtime.py tests/test_roll_v2_projection.py -q --no-cov
+RUST_ROLL_TEST_DATABASE_URL=postgresql://... \
+  cargo test --manifest-path native/roll-service/Cargo.toml --locked bootstrap
+uv run pytest tests/test_roll_v2_contract.py tests/test_option_e_runtime.py \
+  tests/test_roll_v2_projection.py -q --no-cov
 bash scripts/check-python-ci-lint.sh
 ```
 
+The deployable field list is pinned by
+`openapi::tests::bootstrap_and_reading_session_responses_keep_their_typed_ui_fields`
+in `native/roll-service/src/openapi.rs`.
+
+**Historical methodology.** This describes the retired Python oracle harness.
+The fixtures under `tests/fixtures/roll-v2/v1/` are frozen history: no test
+reads them and no Python bootstrap GET exists to regenerate them. Keep them for
+the fixture-design record and use the Rust witnesses named above for live
+verification.
+
 The decision clock is 2026-01-04 12:00 UTC. Model session/snapshot defaults and
-bandwidth initialization use that clock too; authentication uses real short-lived
+bandwidth initialization use that clock too; authentication used real short-lived
 synthetic credentials generated in memory. No tokens are stored in JSON. Each
-case seeds its own owner and library using database-generated keys. JSON maps
+case seeded its own owner and library using database-generated keys. JSON mapped
 those keys to ordinal identities per domain; ordering, nulls, numbers, labels,
-fixed timestamps and all response fields remain significant. Repeated GETs must
-return identical payloads and leave the post-first-request state unchanged.
-Tests only read checked-in expectations. Changing an expectation requires an
-explicitly reviewed Python-contract change and fresh isolated Python capture.
+fixed timestamps and all response fields remained significant. Repeated GETs
+returned identical payloads and left the post-first-request state unchanged.
+Changing an expectation once required an explicitly reviewed Python-contract
+change and fresh isolated Python capture; that path no longer exists.
 
 ## Scenario matrix
 
@@ -65,7 +81,7 @@ positions, counters, cached frontier, read progress, rating and activity time.
 | pending | Beta #1 remains pending; active thread retained |
 | snoozed / skipped | Alpha excluded via the respective session ID collection |
 | manual_die | Manual d4 overrides automatic die selection |
-| auto_die | Synthetic session rate event with die_after=8; automatic ladder is evaluated by Python |
+| auto_die | Synthetic session rate event with die_after=8; automatic ladder evaluated by the bootstrap handler |
 | last_read | Same session-scoped rating/read event projects Alpha #1 and read time |
 | recovery | Strict Alpha #1 before pending Beta #1; structured blockers and readable prerequisite |
 | strict | Alpha #1 before Beta #1 blocks Beta |
@@ -98,19 +114,26 @@ positions, counters, cached frontier, read progress, rating and activity time.
 4. Load safe active-thread context, die/ladder, bandwidth and session mode. Load
    cross-session backoff/snooze exclusions and recovery for the preserved pending
    selection. Recovery is explanatory: it does not clear pending state or roll.
-5. `get_v2_rollable_projection` consumes live validated Option E eligibility,
-   applies exclusions before die limiting, and reads issue identities, canonical
-   metadata, direct provider artwork URLs, reader stats, group routes and
-   session-scoped last-read. Stored blocked/frontier flags are not authority.
-6. `RollService.load_bootstrap_thread_data` derives owner-scoped snoozed/skipped/
-   blocked/stale summaries and counts. OpenAPI models bound summary lists to 20;
-   routes are capped at three with overflow count. V2 replaces v1 `roll_pool`
-   with non-null-issue `rollable` and nullable `last_read`.
+5. The live GET is served by `native/roll-service/src/bootstrap.rs`: it consumes
+   validated Option E eligibility, applies exclusions before die limiting, and
+   reads issue identities, canonical metadata, direct provider artwork URLs,
+   reader stats, group routes and session-scoped last-read. The Python
+   projection and parity services and repositories
+   (`app/services/roll_v2_projection.py`, `app/repositories/roll_v2_projection.py`,
+   `app/services/roll_v2_parity.py`, `app/repositories/roll_v2_parity.py`)
+   remain test/script-only tooling. Stored blocked/frontier flags are not
+   authority.
+6. Summary-section derivation for the retired Python payload lived in
+   `RollService.load_bootstrap_thread_data`; that reference implementation and
+   its unused Python `RollV2BootstrapResponse` DTO were removed by #4350. V2
+   replaces v1 `roll_pool` with non-null-issue `rollable` and nullable
+   `last_read`.
 
 GET can create reading history, initialize bandwidth, capture timezone and write
 an undo snapshot. It does not rate/read an issue, roll/select a new target,
 change queue positions, rotate refresh credentials or emit a reading Event.
-The golden before/after state makes these writes visible to native parity tests.
+The parity harnesses seed their own scenarios; the frozen golden JSON is not
+read by any test.
 
 ## Error boundary and remaining campaign work
 

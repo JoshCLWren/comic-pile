@@ -1,13 +1,10 @@
 """Roll-related Pydantic schemas for request/response validation."""
 
-from typing import ClassVar, Literal
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.continuity_blocking import ContinuityBlocker
-from app.schemas.dependency import BlockingDependency
-from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, SessionMode
-from app.schemas.tags import TagResponse
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -76,20 +73,6 @@ class OverrideRequest(BaseModel):
     thread_id: int
 
 
-class RollBootstrapThread(BaseModel):
-    """Lightweight thread summary for the roll bootstrap pool."""
-
-    id: int
-    title: str
-    format: str
-    issue_id: int | None = None
-    issue_number: str | None = None
-    blocking_reasons: list[str] = Field(default_factory=list)
-    route_labels: list[str] = Field(default_factory=list)
-    last_activity_at: str | None = None
-    tags: list[TagResponse] = Field(default_factory=list)
-
-
 class RollRecoveryPrerequisite(BaseModel):
     """One currently readable prerequisite recommended for a blocked active roll."""
 
@@ -126,73 +109,3 @@ class RollRecoveryInfo(BaseModel):
     readable_prerequisites: list[RollRecoveryPrerequisite] = Field(default_factory=list)
     chains: list[list[RollRecoveryChainNode]] = Field(default_factory=list)
     diagnostics: list[RollRecoveryDiagnostic] = Field(default_factory=list)
-
-
-class ThreadExclusionReason(BaseModel):
-    """One series excluded from the roll pool, with the reason the user can understand.
-
-    ``blocking_reasons`` and ``blocking_dependencies`` carry the live eligibility
-    explanation for blocked series in the retained v1 bootstrap projection.
-    """
-
-    thread_id: int
-    title: str
-    format: str
-    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
-    detail: str | None = None
-    blocking_reasons: list[str] = Field(default_factory=list)
-    blocking_dependencies: list[BlockingDependency] = Field(default_factory=list)
-    last_activity_at: str | None = None
-
-
-class RollBootstrapResponse(BaseModel):
-    """Bounded bootstrap payload for the Roll initial render.
-
-    Returns only the retained data required for the first interactive screen.
-    Does not include the full queue, collection data, or secondary detail panels.
-    """
-
-    session_id: int
-    user_id: int
-    summary_limit: ClassVar[int] = 20
-
-    current_die: int
-    manual_die: int | None
-    pending_thread_id: int | None
-    last_rolled_result: int | None
-    session_mode: SessionMode
-    active_thread: ActiveThreadInfo | None
-    roll_recovery: RollRecoveryInfo | None = None
-    bandwidth: SessionBandwidthState
-    roll_pool: list[RollBootstrapThread]
-    snoozed_threads: list[RollBootstrapThread]
-    snoozed_count: int
-    skipped_thread_ids: list[int] = []
-    skipped_threads: list[RollBootstrapThread] = []
-    blocked_count: int
-    blocked_threads: list[RollBootstrapThread]
-    stale_thread_count: int
-    stale_thread: RollBootstrapThread | None
-    timezone: str | None = None
-
-    # Exclusion transparency for issue #3125: every series not in the roll pool
-    # is explained with a reason so the user can see why options vanish.
-    total_threads: int
-    available_threads: int
-    excluded_count: int
-    excluded_threads: list[ThreadExclusionReason] = Field(default_factory=list)
-    inactive_count: int = 0
-    inactive_threads: list[ThreadExclusionReason] = Field(default_factory=list)
-
-    @model_validator(mode="before")
-    @classmethod
-    def bound_summary_lists(cls, data: object) -> object:
-        """Keep summary collections bounded even when stored session IDs grow."""
-        if not isinstance(data, dict):
-            return data
-
-        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads", "excluded_threads", "inactive_threads"):
-            values = data.get(field_name)
-            if isinstance(values, list):
-                data[field_name] = values[: cls.summary_limit]
-        return data
