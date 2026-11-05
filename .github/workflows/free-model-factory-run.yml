@@ -958,13 +958,13 @@ jobs:
                 [[ "$kind" == provider_quota ]] && type=factory-provider-quota
                 gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
                   -f body="<!-- ${type}:v1 run=${GITHUB_RUN_ID} -->
-Worker: opencode-free-model-factory-${WORKER}
-Model: ${model}
-Source: opencode-free
-Attempt outcome: ${kind}
-Detail: ${detail}
-Updated: ${now}
-Run: ${GITHUB_RUN_ID}" >/dev/null
+                  Worker: opencode-free-model-factory-${WORKER}
+                  Model: ${model}
+                  Source: opencode-free
+                  Attempt outcome: ${kind}
+                  Detail: ${detail}
+                  Updated: ${now}
+                  Run: ${GITHUB_RUN_ID}" >/dev/null
                 attempted+=("$model")
                 exclusions=()
                 for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
