@@ -42,6 +42,8 @@ export function ComicPillar({
     onMapped: onRefreshThread,
   })
   const identityState = mapping.identity
+  const needsIdentity = mapping.needsIdentity
+  const isLinked = mapping.isMapped
   const totalIssues = activeRatingThread?.total_issues ?? null
   const issuesRemaining = activeRatingThread?.issues_remaining ?? 0
   const progress = getProgressPercentage(activeRatingThread)
@@ -111,8 +113,28 @@ export function ComicPillar({
       })
     }
 
+    if (needsIdentity && issueId) {
+      entries.push({
+        key: 'find-comicvine-match',
+        label: 'Find ComicVine match',
+        ariaLabel: 'Find ComicVine match',
+        description: 'Match this issue to a ComicVine series',
+        onSelect: () => mapping.openMappingDialog('confirm'),
+      })
+    }
+
+    if (isLinked && issueId) {
+      entries.push({
+        key: 'wrong-series',
+        label: 'Wrong series?',
+        ariaLabel: 'Wrong series?',
+        description: 'Map this issue to a different series',
+        onSelect: () => mapping.openMappingDialog('replace'),
+      })
+    }
+
     return entries
-  }, [activeRatingThread?.id, issueId, issueNumber, storyTitle, threadTitle])
+  }, [activeRatingThread?.id, issueId, issueNumber, isLinked, mapping, needsIdentity, storyTitle, threadTitle])
 
   return (
     <div className="w-full space-y-4">

@@ -106,11 +106,13 @@ const confirmedThread = {
   last_rolled_result: null,
 }
 
-/** #3008: correction actions now live in the quiet overflow menu (#3008). */
-async function openCorrectionAction(name: string): Promise<HTMLElement> {
-  const trigger = await screen.findByRole('button', { name: 'Comic corrections' })
-  fireEvent.click(trigger)
-  return screen.findByRole('menuitem', { name })
+/** Issue #4450: mapping actions are first-class visible controls (not overflow-only). */
+async function openReplaceMapping(): Promise<HTMLElement> {
+  return screen.findByRole('button', { name: /Change ComicVine mapping/i })
+}
+
+async function openFirstMatch(): Promise<HTMLElement> {
+  return screen.findByRole('button', { name: /Map .* to ComicVine|Review mapping/i })
 }
 
 describe('ComicPillar Wrong comic? flow', () => {
@@ -128,10 +130,10 @@ describe('ComicPillar Wrong comic? flow', () => {
     })
   })
 
-  it('routes a correction opened via Wrong comic? to the replace endpoint', async () => {
+  it('routes a correction opened via Change mapping to the replace endpoint', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    fireEvent.click(await openCorrectionAction('Wrong series?'))
+    fireEvent.click(await openReplaceMapping())
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -149,7 +151,7 @@ describe('ComicPillar Wrong comic? flow', () => {
     expect(confirmIdentitySpy).not.toHaveBeenCalled()
   })
 
-  it('routes a first-time match via Find ComicVine match to the confirm endpoint', async () => {
+  it('routes a first-time match via Map comic to the confirm endpoint', async () => {
     getIssueIdentitySpy.mockResolvedValue({
       has_confirmed_identity: false,
       confirmed_mappings: [],
@@ -157,7 +159,7 @@ describe('ComicPillar Wrong comic? flow', () => {
 
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    fireEvent.click(await openCorrectionAction('Find ComicVine match'))
+    fireEvent.click(await openFirstMatch())
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
@@ -194,17 +196,17 @@ describe('ComicPillar confirmed mapping display', () => {
   it('never renders the raw ComicVine mapping ID as visible text', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
-    expect(await screen.findByText('Linked')).toBeInTheDocument()
+    expect(await screen.findByText('Mapped')).toBeInTheDocument()
     expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
     expect(screen.queryByText(/36956/)).not.toBeInTheDocument()
   })
 
-  it('keeps Wrong comic? targeting the exact hidden mapping without exposing it', async () => {
+  it('keeps Change mapping targeting the exact hidden mapping without exposing it', async () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
 
     expect(screen.queryByText(/ComicVine #\d+/)).not.toBeInTheDocument()
 
-    fireEvent.click(await openCorrectionAction('Wrong series?'))
+    fireEvent.click(await openReplaceMapping())
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
