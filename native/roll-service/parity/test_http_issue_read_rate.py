@@ -475,6 +475,7 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
                 start_die=6,
                 pending_thread_id=thread.id,
                 pending_issue_id=first.id,
+                pending_thread_updated_at=now,
             )
             db.add(session)
             await db.commit()
@@ -564,6 +565,7 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
             restored_session = await db.get(ReadingSession, session_id)
             assert restored_session is not None
             assert restored_session.pending_thread_id == thread_id
+            assert restored_session.pending_thread_updated_at is not None
             undo_events = (
                 await db.execute(
                     text(
