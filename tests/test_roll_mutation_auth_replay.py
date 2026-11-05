@@ -54,49 +54,6 @@ def _set_access_token(client: AsyncClient, username: str, *, expired: bool) -> N
 
 
 @pytest.mark.asyncio
-async def test_rate_expired_token_has_no_partial_write_and_replay_commits_once(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    test_username: str,
-) -> None:
-    """A rejected rate can be replayed after auth recovery without a duplicate transition."""
-    session, thread = await _pending_roll(async_db)
-
-    _set_access_token(auth_client, test_username, expired=True)
-    rejected = await auth_client.post("/api/v1/rate/", json={"rating": 4.5})
-    assert rejected.status_code == 401
-
-    await async_db.refresh(session)
-    await async_db.refresh(thread)
-    assert session.pending_thread_id == thread.id
-    assert thread.issues_remaining == 5
-    assert thread.last_rating is None
-    result = await async_db.execute(
-        select(Event).where(Event.session_id == session.id, Event.type == "rate")
-    )
-    assert result.scalars().all() == []
-
-    _set_access_token(auth_client, test_username, expired=False)
-    replay = await auth_client.post("/api/v1/rate/", json={"rating": 4.5})
-    assert replay.status_code == 200
-
-    duplicate = await auth_client.post("/api/v1/rate/", json={"rating": 4.5})
-    assert duplicate.status_code == 400
-
-    await async_db.refresh(session)
-    await async_db.refresh(thread)
-    assert session.pending_thread_id is None
-    assert thread.issues_remaining == 4
-    assert thread.last_rating == 4.5
-    result = await async_db.execute(
-        select(Event).where(Event.session_id == session.id, Event.type == "rate")
-    )
-    rate_events = result.scalars().all()
-    assert len(rate_events) == 1
-    assert rate_events[0].thread_id == thread.id
-
-
-@pytest.mark.asyncio
 async def test_snooze_expired_token_has_no_partial_write_and_replay_commits_once(
     auth_client: AsyncClient,
     async_db: AsyncSession,

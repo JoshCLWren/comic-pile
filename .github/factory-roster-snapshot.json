@@ -184,6 +184,14 @@
       "minute": "45",
       "scheduler": "dispatcher",
       "display_name": "Requesty Nemotron 3 Super"
+    },
+    {
+      "worker": "96",
+      "source": "openrouter-free",
+      "model": "stealth/crouton-alpha",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Crouton Alpha Free"
     }
   ],
   "expected_workers": [
@@ -209,7 +217,8 @@
     86,
     91,
     92,
-    93
+    93,
+    96
   ],
   "retired_workers": [
     9,

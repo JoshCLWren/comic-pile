@@ -2056,6 +2056,13 @@
             "format": "double",
             "description": "Effective issue rating in 0.5-point steps. Omit to keep the stored rating."
           },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Source of the issue action. Omitted or \"direct\" is a manual read from a\nThread row: it never steps the die and never repositions the queue.\n\"roll_offer\" is a Roll completion: it applies the Roll rating semantics\n(die stepping, queue placement, and a link back to the originating offer\nevent) in the same transaction as the read."
+          },
           "status": {
             "type": [
               "string",
@@ -2076,6 +2083,14 @@
           "replayed"
         ],
         "properties": {
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source."
+          },
           "final_rating": {
             "type": [
               "number",

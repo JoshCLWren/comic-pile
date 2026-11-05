@@ -100,8 +100,23 @@ export async function applyRatedThreadCache(
   client: QueryClient,
   thread: RateResponsePayload,
 ): Promise<void> {
-  client.setQueryData(queryKeys.thread.detail(thread.id), thread)
-  client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+  // The native PATCH writer returns issue/thread progress, not a complete
+  // ThreadResponse. The compatibility adapter fills other fields solely for
+  // legacy callers. Never overwrite real cached thread metadata, queue rank,
+  // timestamps, or ownership flags with those non-authoritative placeholders.
+  const mergeProgress = (cached: Thread | undefined): Thread | undefined => {
+    if (!cached) return undefined
+    return {
+      ...cached,
+      issues_remaining: thread.issues_remaining,
+      status: thread.status,
+      last_rating: thread.last_rating,
+      reading_progress: thread.reading_progress,
+      next_unread_issue_id: thread.next_unread_issue_id,
+    }
+  }
+  client.setQueryData<Thread>(queryKeys.thread.detail(thread.id), mergeProgress)
+  client.setQueryData<Thread>(queryKeys.thread.summary(thread.id), mergeProgress)
 
   // #2720: seed the session last-read projection from the committed rate
   // response before the authoritative bootstrap refresh lands. Only write when

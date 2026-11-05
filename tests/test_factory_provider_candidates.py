@@ -80,6 +80,21 @@ def test_openrouter_requires_catalog_evidence_of_free_cost() -> None:
     )
 
 
+def test_openrouter_crouton_uses_existing_free_catalog_route() -> None:
+    """Stealth promo without :free is eligible only while its price is zero."""
+    raw = {
+        "data": [
+            {"id": "stealth/crouton-alpha", "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "stealth/paid-alpha", "pricing": {"prompt": "1", "completion": "0"}},
+        ]
+    }
+    result = CANDIDATES.discover("openrouter-free", json.dumps(raw))
+    assert [candidate.runtime_model for candidate in result.candidates] == [
+        "openrouter/stealth/crouton-alpha",
+    ]
+
+
+
 def test_opencode_uses_project_available_cli_catalog() -> None:
     """Only OpenCode selectors exposed to the current project are candidates."""
     result = CANDIDATES.discover(

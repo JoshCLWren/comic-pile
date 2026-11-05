@@ -495,7 +495,13 @@ async fn load_pool(
 
 /// Durable cross-session snooze backoff, mirroring
 /// `derive_cross_session_excluded_thread_ids` in legacy execution.
-async fn durable_snoozed(tx: &Transaction<'_>, user_id: i32) -> Result<HashSet<i32>, ApiError> {
+///
+/// Transaction-scoped so any writer that needs the roll pool exclusion set -
+/// Skip, and rating-time queue placement - resolves it on its own connection.
+pub(crate) async fn durable_snoozed(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<HashSet<i32>, ApiError> {
     let rows = tx
         .query(
             "SELECT t.id, extract(epoch FROM t.last_activity_at)::float8, e.type,
@@ -574,7 +580,13 @@ async fn durable_snoozed(tx: &Transaction<'_>, user_id: i32) -> Result<HashSet<i
 }
 
 /// Reader-owned durable queue exclusions (`fetch_excluded_thread_ids`).
-async fn excluded_status_ids(tx: &Transaction<'_>, user_id: i32) -> Result<Vec<i32>, ApiError> {
+/// Durable "Remove from Queue" exclusions, reader-owned rather than
+/// session-owned: the series stays out of the roll pool across sessions until
+/// it is explicitly restored (#3807).
+pub(crate) async fn excluded_status_ids(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<Vec<i32>, ApiError> {
     Ok(tx
         .query(
             "SELECT id FROM threads WHERE user_id = $1 AND status = 'excluded' ORDER BY id",

@@ -73,9 +73,6 @@ vi.mock('../services/api', () => ({
     skip: vi.fn().mockResolvedValue(undefined),
     unskip: vi.fn().mockResolvedValue(undefined),
   },
-  sessionApi: {
-    updateMode: vi.fn().mockResolvedValue({}),
-  },
 }))
 vi.mock('../services/api-reading-orders', () => ({
   readingOrdersApi: { getForThread: vi.fn().mockResolvedValue({ reading_orders: [] }) },
