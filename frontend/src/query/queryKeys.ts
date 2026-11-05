@@ -231,6 +231,22 @@ export const queryKeys = {
     issuePagesAll: (threadId: number) =>
       ['thread', threadId, 'issues', 'all'] as const,
     /**
+     * Canonical key for the Rust issue-card ratings read that serves the
+     * thread issue rows' saved ratings (#4204). The canonical id set keeps
+     * one entry per distinct visible page of rows; cursors stay out of the
+     * key, and the `issueRatingsPrefix` is the invalidation boundary a
+     * committed rating uses so Thread/Roll ratings agree everywhere.
+     */
+    issueRatings: (threadId: number, issueIds: number[]) =>
+      [
+        'thread',
+        threadId,
+        'issue-ratings',
+        [...new Set(issueIds)].sort((left, right) => left - right),
+      ] as const,
+    /** Prefix of every per-id-set issue-ratings read for one thread. */
+    issueRatingsPrefix: (threadId: number) => ['thread', threadId, 'issue-ratings'] as const,
+    /**
      * Canonical key for the bulk per-issue ComicVine creator-credits read
      * that serves the thread issue list's creator column (#3461). Kept out
      * of the `issuePages` prefix so page-shape cache updates never touch it.

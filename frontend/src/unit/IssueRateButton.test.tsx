@@ -106,6 +106,88 @@ describe('IssueRateButton', () => {
     expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
   })
 
+  it('shows the persisted rating after reload instead of a bare Rate button (#4204)', () => {
+    const ratedIssue: Issue = { ...issue, status: 'read', read_at: '2026-11-04T18:30:00Z', rating: 4 }
+    render(
+      <IssueRateButton
+        issue={ratedIssue}
+        snapshot={{ issues: [ratedIssue], thread }}
+        onSnapshotChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+
+    expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Rate' })).not.toBeInTheDocument()
+  })
+
+  it('syncs the displayed rating when the server value changes', () => {
+    const first: Issue = { ...issue, status: 'read', rating: 4 }
+    const { rerender } = render(
+      <IssueRateButton
+        issue={first}
+        snapshot={{ issues: [first], thread }}
+        onSnapshotChange={vi.fn()}
+      />,
+      { wrapper },
+    )
+    expect(screen.getByRole('button', { name: 'Rated 4' })).toBeInTheDocument()
+
+    const corrected: Issue = { ...issue, status: 'read', rating: 5 }
+    rerender(
+      <IssueRateButton
+        issue={corrected}
+        snapshot={{ issues: [corrected], thread }}
+        onSnapshotChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Rated 5' })).toBeInTheDocument()
+  })
+
+  it('corrects an already-rated row without marking it unread (#4405)', async () => {
+    const ratedIssue: Issue = {
+      ...issue,
+      status: 'read',
+      read_at: '2026-11-04T18:30:00Z',
+      rating: 4,
+    }
+    const ratedSnapshot: IssueMutationSnapshot = { issues: [ratedIssue], thread }
+    const ratedThread: RateResponsePayload = {
+      ...thread,
+      issues_remaining: 2,
+      next_unread_issue_id: 12,
+      next_unread_issue_number: '3',
+      last_rating: 5,
+      rated_issue_read_at: '2026-11-04T18:30:00Z',
+    }
+    vi.mocked(nativeRollMutationApi.rate).mockResolvedValue(ratedThread)
+    const onSnapshotChange = vi.fn()
+
+    render(
+      <IssueRateButton
+        issue={ratedIssue}
+        snapshot={ratedSnapshot}
+        onSnapshotChange={onSnapshotChange}
+      />,
+      { wrapper },
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rated 4' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rate issue #2 5 out of 5' }))
+
+    await waitFor(() => expect(onSnapshotChange).toHaveBeenCalledTimes(1))
+    // Direct correction: a new latest rating event only, no Roll effects.
+    expect(nativeRollMutationApi.rate).toHaveBeenCalledWith({
+      thread_id: 7,
+      rating: 5,
+      issue_id: 11,
+      source: 'direct',
+    })
+    // Reading progress and read time are preserved; only the rating changes.
+    expect(onSnapshotChange).toHaveBeenCalledWith(ratedSnapshot)
+    expect(screen.getByRole('button', { name: 'Rated 5' })).toBeInTheDocument()
+  })
+
   it('shows an error and keeps the issue unread when the server rejects the rating', async () => {
     vi.mocked(nativeRollMutationApi.rate).mockRejectedValue(new Error('nope'))
     const onSnapshotChange = vi.fn()

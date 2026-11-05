@@ -397,6 +397,12 @@ export type Issue = Omit<components['schemas']['IssueResponse'], 'status' | 'pos
   status: 'unread' | 'read';
   /** Canonical one-based reading-order position when supplied by the API */
   position?: number;
+  /**
+   * Effective saved rating for this issue (0.5-5), or null when unrated.
+   * Supplied by the Rust issue-card projection merge (#4204), not by the
+   * Python issue-list payload; absent until that read resolves.
+   */
+  rating?: number | null;
 };
 
 /**

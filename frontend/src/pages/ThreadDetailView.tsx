@@ -14,6 +14,7 @@ import { useThread, useUpdateThread } from '../hooks/useThread'
 import { useConnectedThreads } from '../hooks/useReaderContext'
 import { useThreadIssuePages } from '../hooks/useThreadIssues'
 import { useThreadIssueCreators } from '../hooks/useThreadIssueCreators'
+import { useThreadIssueRatings } from '../hooks/useThreadIssueRatings'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import {
   applyEditedThreadToQueuePages,
@@ -189,6 +190,20 @@ export default function ThreadDetailView() {
   // issue so each row shows its own ComicVine creators (falling back to the
   // series' manual credits) without one provider request per issue.
   const issueCreatorsQuery = useThreadIssueCreators(threadId, issuesExpanded)
+  // Row-level saved ratings (#4204): one bounded Rust card batch covers every
+  // visible issue so a row rated from Thread or Roll shows "Rated N" after
+  // reload instead of a bare Rate button. The merge overlays only rated rows;
+  // unrated rows keep the Python list payload untouched.
+  const issueIds = useMemo(() => issues.map((issue) => issue.id), [issues])
+  const issueRatings = useThreadIssueRatings(threadId, issueIds, issuesExpanded)
+  const ratedIssues = useMemo(
+    () =>
+      issues.map((issue) => {
+        const rating = issueRatings.ratingsByIssueId.get(issue.id)
+        return rating == null ? issue : { ...issue, rating }
+      }),
+    [issues, issueRatings.ratingsByIssueId],
+  )
   const issuesTotal = issuesQuery.totalCount
   const issuesLoading = issuesQuery.isPending
   const issuesError = issuesQuery.isError
@@ -742,9 +757,9 @@ export default function ThreadDetailView() {
                   <p className="text-xs text-stone-500">No issues yet</p>
                 )}
 
-                {issuesLoaded && issues.length > 0 && (
+                {issuesLoaded && ratedIssues.length > 0 && (
                   <div className="space-y-2">
-                    {issues.map((issue) => {
+                    {ratedIssues.map((issue) => {
                       const rowTags = rowTagsByIssueId.get(issue.id)
                       return (
                         <div
@@ -814,12 +829,12 @@ export default function ThreadDetailView() {
                               </span>
                               <IssueReadStatusButton
                                 issue={issue}
-                                snapshot={{ issues, thread }}
+                                snapshot={{ issues: ratedIssues, thread }}
                                 onSnapshotChange={handleIssueSnapshotChange}
                               />
                               <IssueRateButton
                                 issue={issue}
-                                snapshot={{ issues, thread }}
+                                snapshot={{ issues: ratedIssues, thread }}
                                 onSnapshotChange={handleIssueSnapshotChange}
                               />
                             </div>

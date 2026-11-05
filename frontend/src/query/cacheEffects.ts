@@ -147,6 +147,10 @@ export async function applyRatedThreadCache(
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    // A rating changes the effective saved rating Thread rows display (#4204),
+    // so the Rust card-projection ratings read for this thread must refetch
+    // on next visit, whichever surface committed the rating.
+    client.invalidateQueries({ queryKey: queryKeys.thread.issueRatingsPrefix(thread.id) }),
   ])
 }
 

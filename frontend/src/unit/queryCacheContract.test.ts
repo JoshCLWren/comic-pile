@@ -230,7 +230,7 @@ describe('targeted cache effects', () => {
       issues_remaining: thread.issues_remaining,
       last_rating: thread.last_rating,
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -247,6 +247,11 @@ describe('targeted cache effects', () => {
     // Rating marks the issue read, so canonical reading boundaries must
     // recompute instead of retaining the pre-rating blocker.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
+    // A rating changes the saved rating Thread rows display (#4204), so the
+    // Rust card-projection ratings read must refetch on next visit.
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.thread.issueRatingsPrefix(thread.id),
+    })
     expect(resetQueries).not.toHaveBeenCalled()
   })
 
