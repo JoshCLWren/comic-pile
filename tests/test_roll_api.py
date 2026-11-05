@@ -39,7 +39,7 @@ async def test_roll_offer_with_snoozed_threads(auth_client: AsyncClient, sample_
     assert first_response.status_code == 200
     
     # Get session to find thread IDs
-    session_response = await auth_client.get("/api/v2/sessions/current/")
+    session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.status_code == 200
     session_data = session_response.json()
     

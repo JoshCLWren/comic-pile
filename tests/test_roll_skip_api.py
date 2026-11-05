@@ -26,7 +26,7 @@ async def test_skip_advances_to_different_result(auth_client: AsyncClient, sampl
     assert data["thread_id"] != first_thread_id
     assert data["die_size"] >= 1
 
-    session_response = await auth_client.get("/api/v2/sessions/current/")
+    session_response = await auth_client.get("/api/v1/sessions/current/")
     assert session_response.json()["pending_thread_id"] == data["thread_id"]
 
 
@@ -116,11 +116,9 @@ async def test_skip_without_pending_returns_409(auth_client: AsyncClient, sample
     """Skip without pending roll returns 409."""
     _ = sample_data
     # Ensure no pending
-    await auth_client.post("/api/v2/sessions/dismiss-pending")
-    response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    await auth_client.post("/api/v1/roll/dismiss-pending")
+    # Skip endpoint requires a pending roll
+    response = await auth_client.post("/api/v1/roll/skip")
     assert response.status_code == 409
     assert "No pending roll" in response.json()["detail"]
 
@@ -195,7 +193,10 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
 async def test_skip_records_skipped_event(auth_client: AsyncClient, sample_data: dict) -> None:
     """Skip records a rolled_but_skipped event for the ORIGINAL thread (issue #3706)."""
     _ = sample_data
-    roll_response = await auth_client.post("/api/v1/roll/")
+    roll_response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert roll_response.status_code == 200
     original_thread_id = roll_response.json()["thread_id"]
     original_title = roll_response.json()["title"]
@@ -243,7 +244,10 @@ async def test_skip_event_precedes_replacement_roll(
     )
 
     _ = sample_data
-    roll_response = await auth_client.post("/api/v1/roll/")
+    roll_response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert roll_response.status_code == 200
     original_thread_id = roll_response.json()["thread_id"]
 
