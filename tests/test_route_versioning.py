@@ -6,10 +6,12 @@ The API exposes a legacy surface (/api/*) and a versioned surface (/api/v1/*).
 without behavior changes. See docs/API.md (API Versioning) and the convention
 comment in app/main.py.
 
-This test file verifies two things:
+This test file verifies three things:
 1. The alias does not drift for the /sessions/current/ endpoint.
 2. No new client-facing routes are added under bare /api/* (regression guard
    for the convention documented in app/main.py).
+3. Retired operations stay retired: the Roll skip/unskip surface has no
+   handler, and re-adding one fails this suite.
 """
 
 import pytest
@@ -222,8 +224,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/roll/bootstrap",
             "/api/roll/dismiss-pending",
             "/api/roll/override",
-            "/api/roll/skip",
-            "/api/roll/skip/{thread_id}/unskip",
             "/api/roll/events/{event_id}/recommendation-explanation",
             "/api/sessions/",
             "/api/sessions/current/",
@@ -289,6 +289,29 @@ def test_retired_move_to_front_routes_are_absent() -> None:
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     for prefix in ("/api/queue", "/api/v1/queue"):
         assert f"{prefix}/threads/{{thread_id}}/front/" not in methods_by_path
+
+
+def test_retired_roll_skip_routes_are_absent() -> None:
+    """Reroll (POST /api/v2/roll/offer) replaced skip and unskip on every alias.
+
+    Regression guard for the retired skip surface: no Python handler may be
+    re-registered for either legacy prefix, and the generated OpenAPI contract
+    must not publish the operation again. Reroll is the only move-past action.
+    """
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for prefix in ("/api/roll", "/api/v1/roll"):
+        assert f"{prefix}/skip" not in methods_by_path, (
+            f"{prefix}/skip must not be re-added; Reroll (/api/v2/roll/offer) "
+            "is the replacement"
+        )
+        assert f"{prefix}/skip/{{thread_id}}/unskip" not in methods_by_path, (
+            f"{prefix}/skip/{{thread_id}}/unskip must not be re-added"
+        )
+
+    schema = create_app(serve_frontend=False).openapi()
+    for path in ("/api/v1/roll/skip", "/api/roll/skip"):
+        assert path not in schema["paths"], f"{path} must stay out of the OpenAPI contract"
+    assert "/api/v1/roll/skip/{thread_id}/unskip" not in schema["paths"]
 
 
 def test_analytics_legacy_routes_remain_until_production_proof() -> None:

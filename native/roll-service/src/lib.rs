@@ -21,12 +21,12 @@ pub mod reading_constraints;
 pub mod reading_eligibility;
 pub mod reading_inputs;
 pub mod reading_session;
+pub mod roll_exclusions;
 pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
 mod session_bandwidth;
-pub mod skip;
 pub mod threads;
 
 /// Test scaffolding shared by unit and integration tests.
@@ -282,8 +282,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
         )
-        .route("/api/v1/roll/skip", post(skip::skip_roll))
-        .route("/api/roll/skip", post(skip::skip_roll))
         .route(
             "/api/v1/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),

@@ -1064,7 +1064,7 @@
         "type": "object"
       },
       "BootstrapThreadSummary": {
-        "description": "Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows.",
+        "description": "Owner-scoped thread summary shown by Roll snooze chips and rollable rows.",
         "properties": {
           "format": {
             "type": "string"
@@ -32022,83 +32022,6 @@
           }
         ],
         "summary": "Override Roll",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/skip": {
-      "post": {
-        "description": "Skip the current pending roll and advance to another eligible thread.\n\nThe skipped thread is not marked read, its read_at and ratings remain\nunchanged, and dependencies are not rewritten. The skip applies only to\nthe current roll/session by excluding the pending thread from the\nimmediate candidate pool; a later session may roll it again. Blocked and\notherwise ineligible threads remain excluded via the standard pool rules.\n\nArgs:\n    request: FastAPI request for rate limiting.\n    current_user: The authenticated user making the request.\n    db: Async database session.\n\nReturns:\n    RollResponse for the newly selected thread.\n\nRaises:\n    HTTPException: 409 when no pending roll exists, 400 when no\n        alternative threads are available.",
-        "operationId": "skip_roll_api_v1_roll_skip_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RollResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Skip Roll",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/skip/{thread_id}/unskip": {
-      "post": {
-        "description": "Remove a thread from the skipped list for the current session.\n\nArgs:\n    thread_id: The ID of the thread to unskip.\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionResponse containing the updated session.\n\nRaises:\n    HTTPException: If no active session exists.",
-        "operationId": "unskip_thread_api_v1_roll_skip__thread_id__unskip_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "title": "Thread Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Unskip Thread",
         "tags": [
           "roll",
           "roll"

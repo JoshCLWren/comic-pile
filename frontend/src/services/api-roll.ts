@@ -217,7 +217,6 @@ export function createRollApi(client: HttpClient) {
     roll: offer,
     override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
-    skip: () => client.post<RollResponse>('/v1/roll/skip'),
     reroll: offer,
     setDie: async (die: number): Promise<void> => {
       const key = unresolvedManual?.die === die ? unresolvedManual.key : newCommandKey()

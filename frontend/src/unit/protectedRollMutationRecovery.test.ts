@@ -7,7 +7,7 @@ import type { ProtectedRollMutationApi } from '../services/apiTypes'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
 function makeProtectedApi(): ProtectedRollMutationApi {
-  return { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() }
+  return { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() }
 }
 
 const protectedRollMutationApi = makeProtectedApi()

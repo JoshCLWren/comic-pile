@@ -12,7 +12,6 @@ import {
   useSetDie,
 } from '../../hooks/useRoll'
 import { useSnooze } from '../../hooks/useSnooze'
-import { useSkip, useUnskip } from '../../hooks/useSkip'
 import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
@@ -25,7 +24,6 @@ import { useRollBootstrapSync } from './useRollBootstrapSync'
 import { useRollPendingSession } from './useRollPendingSession'
 import { useRollRating } from './useRollRating'
 import { useRollSnooze } from './useRollSnooze'
-import { useRollSkip } from './useRollSkip'
 import { useRollActions } from './useRollActions'
 import { useRollModals } from './useRollModals'
 import { useRollViewport } from './useRollViewport'
@@ -93,8 +91,6 @@ export default function RollPage() {
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
   const overrideMutation = useOverrideRoll()
-  const skipMutation = useSkip()
-  const unskipMutation = useUnskip()
   const snoozeMutation = useSnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
@@ -122,23 +118,6 @@ export default function RollPage() {
       },
     )
   }, [showToast, retrySnoozeRefresh])
-
-  // A committed skip enters the next rating view from the mutation response,
-  // so an exhausted authoritative refresh can only be reported from the page.
-  // The toast reloads Roll state without repeating the skip.
-  const retrySkipRefresh = skipMutation.retryRefresh
-  const reportSkipRefreshFailed = useCallback((refreshError: unknown) => {
-    showToast(
-      `Skipped, but the Roll pool did not refresh. ${getApiErrorDetail(refreshError)}`,
-      'error',
-      {
-        label: 'Retry refresh',
-        onClick: () => {
-          void retrySkipRefresh()
-        },
-      },
-    )
-  }, [showToast, retrySkipRefresh])
 
   useRollBootstrapSync({
     state,
@@ -214,16 +193,6 @@ export default function RollPage() {
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
-  const skip = useRollSkip({
-    state,
-    skipMutation,
-    unskipMutation,
-    refetchBootstrap,
-    enterRatingView: rating.enterRatingView,
-    expectedPendingThreadId: bootstrap?.pending_thread_id ?? undefined,
-    onRefreshFailed: reportSkipRefreshFailed,
-  })
-
   const actions = useRollActions({
     state,
     bootstrap,
@@ -233,8 +202,6 @@ export default function RollPage() {
       setDieMutation,
       rollMutation,
       snoozeMutation,
-      skipMutation,
-      unskipMutation,
       moveToFrontMutation,
       moveToBackMutation,
       shuffleQueueMutation,
@@ -243,7 +210,6 @@ export default function RollPage() {
     enterRatingView: rating.enterRatingView,
     threadsApi,
     onSnoozeRefreshFailed: reportSnoozeRefreshFailed,
-    onSkipRefreshFailed: reportSkipRefreshFailed,
   })
 
   const modals = useRollModals({
@@ -329,19 +295,16 @@ export default function RollPage() {
     connectedThreadsError: rating.connectedThreadsError,
     rating,
     snooze,
-    onSkip: skip.handleSkip,
     rateMutation,
     snoozeMutation,
     rerollMutation: rollMutation,
     onReroll: snooze.handleReroll,
     onResetDice: () => state.setIsDieModalOpen(true),
     dismissPendingMutation,
-    skipMutation,
     ratingViewTopRef,
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  const skippedThreads = bootstrap?.skipped_threads ?? []
   const dieSize = state.currentDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -520,18 +483,12 @@ export default function RollPage() {
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
               snoozedExpanded={state.snoozedExpanded}
-              skippedThreads={skippedThreads}
-              skippedCount={bootstrap?.skipped_thread_ids?.length ?? skippedThreads.length}
-              skippedExpanded={state.skippedExpanded}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
-              onUnskip={skip.handleUnskip}
               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
-              onToggleSkipped={() => state.setSkippedExpanded(!state.skippedExpanded)}
 
               onShuffle={actions.handleShufflePool}
               unsnoozeIsPending={false}
-              unskipIsPending={unskipMutation.isPending}
               shuffleIsPending={shuffleQueueMutation.isPending}
             />
           </div>

@@ -48,20 +48,20 @@ const thread: Thread = {
   created_at: '2000-01-01T00:00:00Z',
 }
 const callbacks = () => ({
-  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onUnskip: vi.fn(), onToggleSnoozed: vi.fn(),
-  onToggleSkipped: vi.fn(), onShuffle: vi.fn(),
+  onThreadClick: vi.fn(), onUnsnooze: vi.fn(), onToggleSnoozed: vi.fn(),
+  onShuffle: vi.fn(),
 })
 
 describe('ThreadPool diagnostic removal (#4441)', () => {
   it('renders the empty state and retains available issue controls', async () => {
     const actions = callbacks()
     const { rerender } = render(
-      <MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
+      <MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
     )
     expect(screen.getByText('Nothing to roll yet')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: /add a series/i }))
     rerender(
-      <MemoryRouter><ThreadPool pool={[thread]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} skippedThreads={[]} skippedExpanded={false} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
+      <MemoryRouter><ThreadPool pool={[thread]} isRatingView={false} selectedThreadId={null} snoozedThreads={[]} snoozedExpanded={false} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>,
     )
     expect(screen.queryByText(/waiting for earlier issues/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/out of the roll pool/i)).not.toBeInTheDocument()
@@ -70,14 +70,12 @@ describe('ThreadPool diagnostic removal (#4441)', () => {
     expect(actions.onThreadClick).toHaveBeenCalledWith(thread)
   })
 
-  it('keeps snooze and skip controls without retired reports', async () => {
+  it('keeps snooze controls visible with the retired skip section gone', async () => {
     const actions = callbacks()
-    render(<MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[{id:3,title:'Snoozed',format:'Comic'}]} snoozedExpanded={true} skippedThreads={[{id:4,title:'Skipped',format:'Comic'}]} skippedExpanded={true} unsnoozeIsPending={false} unskipIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
+    render(<MemoryRouter><ThreadPool pool={[]} isRatingView={false} selectedThreadId={null} snoozedThreads={[{id:3,title:'Snoozed',format:'Comic'}]} snoozedExpanded={true} unsnoozeIsPending={false} shuffleIsPending={false} {...actions} /></MemoryRouter>)
     expect(screen.getByText('Every series is snoozed')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Unsnooze this comic' }))
     expect(actions.onUnsnooze).toHaveBeenCalledWith(3)
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Unskip this comic' }))
-    expect(actions.onUnskip).toHaveBeenCalledWith(4)
     expect(screen.queryByText(/waiting for earlier issues/i)).not.toBeInTheDocument()
   })
 })
@@ -86,7 +84,7 @@ describe('RatingView', () => {
   function makeData(overrides: Partial<RatingViewData> = {}): RatingViewData {
     return {
       activeRatingThread: { id: 1, title: 'Saga', format: 'Comic', issues_remaining: 5, total_issues: 10, issue_number: '3', next_issue_number: '4', reading_progress: 'in_progress', queue_position: 0, issue_id: 100, next_issue_id: 101 },
-      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, rerollIsPending: false, dismissIsPending: false, skipIsPending: false, manualDie: null, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrders: [], connectedThreads: [], onShowContext: vi.fn(), onShowBoundaries: vi.fn(), readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
+      currentDie: 6, rolledResult: 3, rating: 3.0, predictedDie: 8, errorMessage: '', rateIsPending: false, rerollIsPending: false, dismissIsPending: false, manualDie: null, onUpdateRating: vi.fn(), onSubmitRating: vi.fn(), onReroll: vi.fn().mockResolvedValue(undefined), onCancel: vi.fn(), onRefreshThread: vi.fn(), readerContext: null, isReaderContextLoading: false, readerContextError: null, ratingViewTopRef: null, issuesRemaining: 5, readingContextRequested: false, readingBoundariesRequested: false, readingOrders: [], connectedThreads: [], onShowContext: vi.fn(), onShowBoundaries: vi.fn(), readingOrdersIsLoading: false, readingOrdersError: null, connectedThreadsIsLoading: false, connectedThreadsError: null, ...overrides,
     }
   }
 

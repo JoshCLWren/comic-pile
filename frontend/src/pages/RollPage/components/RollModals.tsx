@@ -114,7 +114,7 @@ interface RollModalsProps {
   isActionSheetOpen: boolean
   selectedThread: RollBootstrapThread | null
   /**
-   * The reading session's pending thread. `POST /v1/snooze/` acts on this
+   * The reading session's pending thread. The native Roll offer acts on this
    * thread, so the action sheet's Snooze entry is only available for it.
    */
   pendingThreadId: number | null

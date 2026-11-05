@@ -21,16 +21,11 @@ describe('ThreadPool bootstrap edge branches', () => {
         selectedThreadId={0}
         snoozedThreads={[]}
         snoozedExpanded={false}
-        skippedThreads={[]}
-        skippedExpanded={false}
         onThreadClick={onThreadClick}
         onUnsnooze={vi.fn()}
-        onUnskip={vi.fn()}
         onToggleSnoozed={vi.fn()}
-        onToggleSkipped={vi.fn()}
         onShuffle={vi.fn()}
         unsnoozeIsPending={false}
-        unskipIsPending={false}
         shuffleIsPending={false}
       /></MemoryRouter>,
     )

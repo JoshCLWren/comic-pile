@@ -11,7 +11,6 @@ export interface RollApi {
   roll: () => Promise<RollResponse>
   override: (data: OverrideRollPayload) => Promise<RollResponse>
   dismissPending: () => Promise<void>
-  skip: () => Promise<RollResponse>
   reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
   reset: () => Promise<{ die: number; replayed: boolean }>
@@ -20,7 +19,6 @@ export interface RollApi {
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
   snooze: () => Promise<SnoozeSessionResponse>
-  skip: () => Promise<RollResponse>
   bootstrap: () => Promise<RollBootstrapResponse>
 }
 
@@ -36,17 +34,11 @@ export interface CacheEffectsApi {
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }
 
-export interface SkipApi {
-  skip: () => Promise<RollResponse>
-  unskip: (threadId: number) => Promise<void>
-}
-
-/** Injectable dependencies for the Roll mutation hooks (snooze/skip/rate). */
+/** Injectable dependencies for the Roll mutation hooks (snooze/rate). */
 export interface RollMutationDeps {
   protectedApi?: ProtectedRollMutationApi
   bootstrapApi?: RollBootstrapApi
   cacheEffects?: CacheEffectsApi
-  skipApi?: SkipApi
 }
 
 /** The subset of `dependenciesApi` used by the Roll page's batch blocker load. */

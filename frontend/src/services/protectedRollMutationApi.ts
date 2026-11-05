@@ -35,8 +35,6 @@ export function createProtectedRollMutationApi(client: HttpClient) {
         correction: null,
       }
     },
-    skip: (): Promise<RollResponse> =>
-      client.post<RollResponse>('/v1/roll/skip', undefined, RECOVERY_CONFIG),
     bootstrap: async (): Promise<RollBootstrapResponse> =>
       adaptRollV2Bootstrap(
         await client.get<RollV2BootstrapResponse>('/v2/roll/bootstrap', RECOVERY_CONFIG),

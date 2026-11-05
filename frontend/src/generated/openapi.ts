@@ -4344,76 +4344,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/skip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Skip Roll
-         * @description Skip the current pending roll and advance to another eligible thread.
-         *
-         *     The skipped thread is not marked read, its read_at and ratings remain
-         *     unchanged, and dependencies are not rewritten. The skip applies only to
-         *     the current roll/session by excluding the pending thread from the
-         *     immediate candidate pool; a later session may roll it again. Blocked and
-         *     otherwise ineligible threads remain excluded via the standard pool rules.
-         *
-         *     Args:
-         *         request: FastAPI request for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         RollResponse for the newly selected thread.
-         *
-         *     Raises:
-         *         HTTPException: 409 when no pending roll exists, 400 when no
-         *             alternative threads are available.
-         */
-        post: operations["skip_roll_api_v1_roll_skip_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/skip/{thread_id}/unskip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Unskip Thread
-         * @description Remove a thread from the skipped list for the current session.
-         *
-         *     Args:
-         *         thread_id: The ID of the thread to unskip.
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse containing the updated session.
-         *
-         *     Raises:
-         *         HTTPException: If no active session exists.
-         */
-        post: operations["unskip_thread_api_v1_roll_skip__thread_id__unskip_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/switch-prerequisite": {
         parameters: {
             query?: never;
@@ -7128,7 +7058,7 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** @description Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows. */
+        /** @description Owner-scoped thread summary shown by Roll snooze chips and rollable rows. */
         BootstrapThreadSummary: {
             format: string;
             /** Format: int32 */
@@ -22577,57 +22507,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    skip_roll_api_v1_roll_skip_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-        };
-    };
-    unskip_thread_api_v1_roll_skip__thread_id__unskip_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
             /** @description Validation Error */

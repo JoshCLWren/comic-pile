@@ -75,11 +75,6 @@ function renderActionSheet(options: HarnessOptions = {}) {
         setDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation: { mutate: snoozeMutate, isPending: false },
-        skipMutation: {
-          mutate: vi.fn(() => Promise.resolve({ response: undefined, refreshed: true, refreshError: null })),
-          isPending: false,
-        },
-        unskipMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         moveToFrontMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         moveToBackMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         shuffleQueueMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },

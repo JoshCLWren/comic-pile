@@ -6,7 +6,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     dice_mutation::{self, DiceCommand},
-    dice_state, option_inputs, queue, skip, ApiError,
+    dice_state, option_inputs, queue, roll_exclusions, ApiError,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -342,11 +342,10 @@ async fn canonical_blocked_thread_ids(
 /// Refresh the persisted derived `threads.is_blocked` flag for one owner.
 ///
 /// `is_blocked` is denormalized issue-read state, so every writer that changes
-/// read state must refresh it in the same transaction. Native Skip
-/// (`native/roll-service/src/skip.rs`) and the legacy queue projection both
-/// filter on the stored column; a stale value lets a re-blocked thread enter the
-/// pool or hides a just-unblocked one. Mirrors
-/// `comic_pile.dependencies.refresh_user_blocked_status`.
+/// read state must refresh it in the same transaction. The Roll offer writer and
+/// the legacy queue projection both filter on the stored column; a stale value
+/// lets a re-blocked thread enter the pool or hides a just-unblocked one.
+/// Mirrors `comic_pile.dependencies.refresh_user_blocked_status`.
 async fn refresh_blocked_threads(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
     let blocked = canonical_blocked_thread_ids(tx, user_id).await?;
     // `id = ANY($2)` is false for an empty array, so this blocks exactly the
@@ -520,12 +519,12 @@ async fn effective_roll_exclusions(
             }
         }
     }
-    for thread_id in skip::durable_snoozed(tx, user.id()).await? {
+    for thread_id in roll_exclusions::durable_snoozed(tx, user.id()).await? {
         if seen.insert(thread_id) {
             excluded.push(thread_id);
         }
     }
-    for thread_id in skip::excluded_status_ids(tx, user.id()).await? {
+    for thread_id in roll_exclusions::excluded_status_ids(tx, user.id()).await? {
         if seen.insert(thread_id) {
             excluded.push(thread_id);
         }
