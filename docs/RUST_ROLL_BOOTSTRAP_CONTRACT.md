@@ -1,29 +1,27 @@
-# GET /api/v2/roll/bootstrap: Python contract/behavior oracle for a Rust implementation
+# GET /api/v2/roll/bootstrap: behavior contract
 
-> **API v2 is a URL contract, not Rust.** This document describes the Python
-> implementation of the existing `GET /api/v2/roll/bootstrap` operation so
-> its **same-path** Rust replacement can be checked. The `v1` directory in
-> `tests/fixtures/roll-v2/v1/` is a golden-fixture revision, **not** the public
-> API v1 route. `GET /api/v1/roll/bootstrap` is a distinct operation, tracked
-> by #4350, with its own Python response and SQL oracle. Do not change either
-> endpoint's URL or treat one as the implementation of the other.
+> **API v2 is a URL contract, not Rust.** The only public Roll bootstrap GET is
+> `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
+> in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
+> handler: the v1/legacy aliases were removed by #4397 and the last Python read
+> model by #4350. The `v1` directory in `tests/fixtures/roll-v2/v1/` is a
+> golden-fixture revision, **not** the public API v1 route. Do not change the URL
+> or treat one endpoint as the implementation of another.
 >
 > The language-only cutover contract in #4335 supersedes older notes below
 > referring to component gates or a v1→v2 client migration.
 
 
-The wire contract already exists: FastAPI's `app.openapi()` operation
-`GET /api/v2/roll/bootstrap`, its `RollV2BootstrapResponse` component and referenced
-components. Export it with `python scripts/export_openapi_schema.py --output /tmp/roll-openapi.json`.
-`frontend/src/generated/openapi.ts` is generated from that same contract. Do not
-introduce a second Rust-specific schema or hand-maintained field inventory.
+The wire contract is the native operation `GET /api/v2/roll/bootstrap` and its
+`BootstrapResponseV2` component. `frontend/src/generated/openapi.ts` and
+`frontend/src/types/rollV2.ts` mirror that contract. Do not introduce a second
+schema or a hand-maintained field inventory.
 
-`tests/test_roll_v2_golden.py` supplements OpenAPI with complete Python HTTP JSON
-and before/after durable state in `tests/fixtures/roll-v2/v1/`. Tests validate
-responses through the existing Pydantic model and verify the OpenAPI operation's
-response reference, timezone parameter, and bearer security. The production
-handler and Python evaluator remain the oracle; native output must not be used
-to regenerate these expectations.
+The executable witnesses are the Rust unit tests in
+`native/roll-service/src/bootstrap.rs` plus the native contract-generation check
+described in `native/contracts/README.md`. JSON under
+`tests/fixtures/roll-v2/v1/` is historical fixture material from the retired
+Python oracle; nothing regenerates native output from it.
 
 ## Reproduce
 
@@ -33,8 +31,9 @@ fixtures truncate test data and refuse non-test database names. Never point this
 suite at a reader's library, a read-only testuser snapshot, or production.
 
 ```sh
-uv run pytest tests/test_roll_v2_golden.py tests/test_roll_v2_contract.py \
-  tests/test_option_e_runtime.py tests/test_roll_v2_projection.py -q --no-cov
+cargo test --manifest-path native/roll-service/Cargo.toml --locked bootstrap
+uv run pytest tests/test_roll_v2_contract.py tests/test_option_e_runtime.py \
+  tests/test_roll_v2_projection.py -q --no-cov
 bash scripts/check-python-ci-lint.sh
 ```
 
@@ -102,11 +101,10 @@ positions, counters, cached frontier, read progress, rating and activity time.
    applies exclusions before die limiting, and reads issue identities, canonical
    metadata, direct provider artwork URLs, reader stats, group routes and
    session-scoped last-read. Stored blocked/frontier flags are not authority.
-6. The native Rust v2 handler derives owner-scoped snoozed/skipped/blocked/stale
-   summaries and counts; the retired Python `RollService.load_bootstrap_thread_data`
-   reference implementation was removed by #4350. OpenAPI models bound summary
-   lists to 20; routes are capped at three with overflow count. V2 replaces v1
-   `roll_pool` with non-null-issue `rollable` and nullable `last_read`.
+6. Summary-section derivation for the retired Python payload lived in
+   `RollService.load_bootstrap_thread_data`; that reference implementation and
+   its unused `RollV2BootstrapResponse` DTO were removed by #4350. V2 replaces
+   v1 `roll_pool` with non-null-issue `rollable` and nullable `last_read`.
 
 GET can create reading history, initialize bandwidth, capture timezone and write
 an undo snapshot. It does not rate/read an issue, roll/select a new target,

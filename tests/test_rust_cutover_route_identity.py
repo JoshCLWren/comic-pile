@@ -145,8 +145,8 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
 
     Bootstrap GET has the owner-approved v2-only exception (#4350), while
     other endpoints retain independent same-path implementation migrations.
-    The v1 GET Python route remains temporarily until production v2 proof
-    and the immediate follow-up Python deletion PR.
+    The Python bootstrap GET handlers and their read model are gone, so the
+    retired aliases fall through to the Python catch-all and return 404.
     """
     expected = {
         ("GET", "/api/v1/roll/bootstrap"): "/api/index.py",

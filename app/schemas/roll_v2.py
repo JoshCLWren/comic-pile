@@ -8,14 +8,12 @@ null canonical-series stats per #1401, never a thread-title substitution).
 
 from datetime import datetime
 from enum import StrEnum
-from typing import ClassVar, Literal
+from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.roll import RollRecoveryInfo, ThreadExclusionReason
 from app.schemas.tags import TagResponse
-from app.schemas.session import ActiveThreadInfo, SessionBandwidthState, SessionMode
 from app.schemas.thread import ThreadResponse
 
 
@@ -119,59 +117,6 @@ class RollLastRead(BaseModel):
     thread_id: int | None = None
     thread_title: str | None = None
     read_at: datetime | None = None
-
-
-class RollV2BootstrapResponse(BaseModel):
-    """V2 bootstrap response superset with rollable and last_read fields.
-
-    Replaces the v1 roll_pool with rollable[] and adds nullable last_read.
-    Maintains all v1 session/recovery/partition fields with unchanged semantics.
-    """
-
-    session_id: int
-    user_id: int
-    summary_limit: ClassVar[int] = 20
-
-    current_die: int
-    manual_die: int | None
-    pending_thread_id: int | None
-    last_rolled_result: int | None
-    session_mode: SessionMode
-    active_thread: ActiveThreadInfo | None
-    roll_recovery: RollRecoveryInfo | None = None
-    bandwidth: SessionBandwidthState
-    rollable: list[RollableItem]  # Replaces roll_pool
-    last_read: RollLastRead | None  # New nullable session-scoped field
-    snoozed_threads: list[RollableThread] = Field(default_factory=list)
-    snoozed_count: int
-    skipped_thread_ids: list[int] = []
-    skipped_threads: list[RollableThread] = []
-    blocked_count: int
-    blocked_threads: list[RollableThread] = []
-    stale_thread_count: int
-    stale_thread: RollableThread | None
-    timezone: str | None = None
-
-    # v1 Roll visibility intentionally survives the v2 candidate projection.
-    total_threads: int
-    available_threads: int
-    excluded_count: int
-    excluded_threads: list[ThreadExclusionReason] = Field(default_factory=list)
-    inactive_count: int
-    inactive_threads: list[ThreadExclusionReason] = Field(default_factory=list)
-
-    @model_validator(mode="before")
-    @classmethod
-    def bound_summary_lists(cls, data: object) -> object:
-        """Keep summary collections bounded even when stored session IDs grow."""
-        if not isinstance(data, dict):
-            return data
-
-        for field_name in ("snoozed_threads", "skipped_threads", "blocked_threads", "excluded_threads", "inactive_threads"):
-            values = data.get(field_name)
-            if isinstance(values, list):
-                data[field_name] = values[: cls.summary_limit]
-        return data
 
 
 class RollReconciliation(BaseModel):

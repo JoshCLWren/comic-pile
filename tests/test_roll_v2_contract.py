@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.schemas.roll import RollRecoveryInfo
 from app.schemas.roll_v2 import (
     IdentityState,
     ProgressScope,
@@ -17,68 +16,13 @@ from app.schemas.roll_v2 import (
     RollableThread,
     RollLastRead,
     RollReconciliation,
-    RollV2BootstrapResponse,
     RouteKind,
 )
 from app.schemas.thread import ThreadResponse
 
 
-class TestRollV2BootstrapResponse:
-    """Test the v2 bootstrap response schema."""
-
-    def test_v2_response_retains_every_retired_v1_field(self):
-        """Pin the v2 contract after the Python v1 bootstrap schema deletion.
-
-        The v1 Python bootstrap response schema is removed by the #4350
-        cleanup, so the retained UI contract is asserted directly here rather
-        than by comparing two Python schemas. Every field the Roll screen used
-        must survive in v2, alongside the v2-only ``rollable``/``last_read``.
-        """
-        retained_v1_fields = {
-            "session_id",
-            "user_id",
-            "current_die",
-            "manual_die",
-            "pending_thread_id",
-            "last_rolled_result",
-            "session_mode",
-            "active_thread",
-            "roll_recovery",
-            "bandwidth",
-            "snoozed_threads",
-            "snoozed_count",
-            "skipped_thread_ids",
-            "skipped_threads",
-            "blocked_count",
-            "blocked_threads",
-            "stale_thread_count",
-            "stale_thread",
-            "timezone",
-            "total_threads",
-            "available_threads",
-            "excluded_count",
-            "excluded_threads",
-            "inactive_count",
-            "inactive_threads",
-        }
-        assert set(RollV2BootstrapResponse.model_fields) == retained_v1_fields | {
-            "rollable",
-            "last_read",
-        }
-
-    def test_rollable_replaces_roll_pool(self):
-        """Test that rollable replaces roll_pool and has correct structure."""
-        # roll_pool should not exist in v2
-        assert 'roll_pool' not in RollV2BootstrapResponse.model_fields
-
-        # rollable should exist and be a list of RollableItem
-        assert 'rollable' in RollV2BootstrapResponse.model_fields
-        assert RollV2BootstrapResponse.model_fields['rollable'].annotation == list[RollableItem]
-
-    def test_last_read_is_nullable_session_scoped(self):
-        """Test that last_read is nullable and session-scoped."""
-        assert 'last_read' in RollV2BootstrapResponse.model_fields
-        assert RollV2BootstrapResponse.model_fields['last_read'].annotation == RollLastRead | None
+class TestRollableItem:
+    """Rollable item and route contracts."""
 
     def test_rollable_item_structure(self):
         """Test that rollable items have the required structure."""
@@ -300,16 +244,6 @@ class TestNullabilityContracts:
 
 class TestV2BootstrapEndpointContract:
     """Test the v2 bootstrap endpoint contract requirements."""
-
-    def test_no_unversioned_alias(self):
-        """Test that v2 bootstrap has no unversioned alias."""
-        # This is a structural test - the endpoint should only exist at /v2/bootstrap
-        # not at /bootstrap (which should remain v1 only)
-
-        # In a real test environment, we would make API calls to verify this
-        # For now, we verify the schema exists and is distinct
-        assert RollV2BootstrapResponse is not None
-        assert RollV2BootstrapResponse is not RollRecoveryInfo  # Different from v1
 
     def test_rollable_issue_required_non_null(self):
         """Test that rollable[].issue is required/non-null."""
