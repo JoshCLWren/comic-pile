@@ -249,6 +249,11 @@ class UndoSnapshotService:
             session.manual_die = session_state.get("manual_die", session.manual_die)
             if "pending_thread_id" in session_state:
                 session.pending_thread_id = session_state["pending_thread_id"]
+            if "pending_issue_id" in session_state:
+                # Newer native ratings pin the exact offered issue, not only
+                # the thread. Older deltas omit the key, so they keep the
+                # existing pending issue untouched.
+                session.pending_issue_id = session_state["pending_issue_id"]
             if "pending_thread_updated_at" in session_state:
                 session.pending_thread_updated_at = self._deserialize_datetime(
                     session_state["pending_thread_updated_at"]

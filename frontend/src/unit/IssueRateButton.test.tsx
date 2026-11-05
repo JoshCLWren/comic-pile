@@ -6,11 +6,11 @@ import { IssueRateButton } from '../pages/thread-detail/IssueRateButton'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
-import { rateApi } from '../services/api-rate'
-import type { Issue, Thread } from '../types'
+import { nativeRollMutationApi } from '../services/nativeRollMutationApi'
+import type { Issue, RateResponsePayload, Thread } from '../types'
 
-vi.mock('../services/api-rate', () => ({
-  rateApi: { rate: vi.fn() },
+vi.mock('../services/nativeRollMutationApi', () => ({
+  nativeRollMutationApi: { rate: vi.fn() },
 }))
 
 vi.mock('../query/cacheEffects', () => ({
@@ -61,14 +61,17 @@ describe('IssueRateButton', () => {
   })
 
   it('rates the row directly and reconciles the issue and thread cache', async () => {
-    const ratedThread: Thread = {
+    const ratedThread: RateResponsePayload = {
       ...thread,
       issues_remaining: 1,
       next_unread_issue_id: 12,
       next_unread_issue_number: '3',
       last_rating: 4,
+      // The native PATCH returns this issue timestamp; Thread.last_activity_at
+      // is not authoritative for when the issue was marked read.
+      rated_issue_read_at: '2026-11-04T18:30:00Z',
     }
-    vi.mocked(rateApi.rate).mockResolvedValue(ratedThread)
+    vi.mocked(nativeRollMutationApi.rate).mockResolvedValue(ratedThread)
     const onSnapshotChange = vi.fn()
 
     render(
@@ -84,15 +87,15 @@ describe('IssueRateButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rate issue #2 4 out of 5' }))
 
     await waitFor(() => expect(onSnapshotChange).toHaveBeenCalledTimes(1))
-    expect(rateApi.rate).toHaveBeenCalledWith({
+    expect(nativeRollMutationApi.rate).toHaveBeenCalledWith({
       thread_id: 7,
       rating: 4,
-      direct: true,
-      issue_number: '2',
+      issue_id: 11,
+      source: 'direct',
     })
     expect(applyRatedThreadCache).toHaveBeenCalledWith(queryClient, ratedThread)
     expect(onSnapshotChange).toHaveBeenCalledWith({
-      issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
+      issues: [{ ...issue, status: 'read', read_at: '2026-11-04T18:30:00Z' }],
       thread: {
         ...thread,
         issues_remaining: 1,
@@ -104,7 +107,7 @@ describe('IssueRateButton', () => {
   })
 
   it('shows an error and keeps the issue unread when the server rejects the rating', async () => {
-    vi.mocked(rateApi.rate).mockRejectedValue(new Error('nope'))
+    vi.mocked(nativeRollMutationApi.rate).mockRejectedValue(new Error('nope'))
     const onSnapshotChange = vi.fn()
 
     render(

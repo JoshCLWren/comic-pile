@@ -57,7 +57,6 @@ REQUIRED_V1_FAMILIES = frozenset(
         "dependencies",
         "issues",
         "queue",
-        "rate",
         "reading-order-groups",
         "releases",
         "roll",
@@ -156,6 +155,26 @@ def test_retained_families_expose_canonical_v1_routes() -> None:
 
     missing = REQUIRED_V1_FAMILIES - v1_families
     assert not missing, f"Retained families missing canonical /api/v1 routes: {sorted(missing)}"
+
+
+def test_retired_rate_route_is_replaced_by_native_v2_issue_patch() -> None:
+    """The retired v1 rating route is absent and Rust owns issue rating."""
+    python_schema = _load_schema()
+    assert "/api/v1/rate/" not in python_schema["paths"]
+    assert "/api/v1/rate" not in python_schema["paths"]
+
+    native_schema = json.loads(
+        (
+            Path(__file__).resolve().parent.parent
+            / "native/contracts/issue-v2.openapi.json"
+        ).read_text(encoding="utf-8")
+    )
+    patch = native_schema["paths"]["/api/v2/issues/{issue_id}"]["patch"]
+    assert patch["requestBody"]["content"]["application/json"]["schema"]["$ref"] == (
+        "#/components/schemas/IssueReadRateRequest"
+    )
+    assert patch["security"][0]["HTTPBearer"] == []
+
 
 
 def test_legacy_api_aliases_are_explicit_allowlist() -> None:
