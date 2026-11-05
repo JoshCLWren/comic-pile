@@ -31,6 +31,12 @@ const DEFAULT_GLOBAL_CONFIG = {
 export const DEFAULT_DICE_RENDER_CONFIG: DiceRenderConfig = {
   global: DEFAULT_GLOBAL_CONFIG,
   perSides: {
+    2: {
+      fontScale: 0.62,
+      textOffsetY: 0,
+      borderWidth: 0,
+      uvInset: 0.08,
+    },
     6: {
       textOffsetY: 0.04,
       fontScale: 0.58,
