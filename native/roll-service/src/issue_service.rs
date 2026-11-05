@@ -844,13 +844,13 @@ pub(crate) async fn persist(
     };
     // Mirror `get_current_die_for_session`: an explicit manual die wins over the
     // event-derived ladder, so the undo event records the die the reader saw.
+    // Resolve the fallback lazily so a manual-die session does not pay for an
+    // unnecessary event query.
     let pre_die = match &pre_session {
-        Some((_, state)) => Some(
-            state["manual_die"]
-                .as_i64()
-                .map(|die| die as i32)
-                .unwrap_or(dice_state::current_die(tx, user).await?),
-        ),
+        Some((_, state)) => Some(match state["manual_die"].as_i64() {
+            Some(die) => die as i32,
+            None => dice_state::current_die(tx, user).await?,
+        }),
         None => None,
     };
     let old_rating_row = tx

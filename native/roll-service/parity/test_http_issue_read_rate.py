@@ -565,6 +565,7 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
             restored_session = await db.get(ReadingSession, session_id)
             assert restored_session is not None
             assert restored_session.pending_thread_id == thread_id
+            assert restored_session.pending_issue_id == issue_id
             assert restored_session.pending_thread_updated_at is not None
             undo_events = (
                 await db.execute(
@@ -576,6 +577,233 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
                 )
             ).scalar_one()
             assert undo_events == 1
+    finally:
+        await engine.dispose()
+        async with admin.begin() as connection:
+            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
+
+
+@pytest.mark.asyncio
+async def test_native_completion_undo_restores_queue_and_blocked_state() -> None:
+    """Undo must restore the queue rows and blocked flags a completion rating moved.
+
+    A native completion rating can move several queue positions and clear a
+    dependent series' persisted blocked flag. The delta snapshot records those
+    pre-action values, and the retained Python undo service must apply them.
+    """
+    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
+    name = f"rust_issue_queue_undo_{uuid4().hex}"
+    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    async with admin.begin() as connection:
+        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
+    engine = create_async_engine(
+        url.replace("postgresql://", "postgresql+asyncpg://"),
+        connect_args={"server_settings": {"search_path": f"{name},public"}},
+    )
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
+
+        now = datetime.now(UTC)
+        username = f"queueundo_{uuid4().hex[:16]}"
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            owner = User(username=username)
+            db.add(owner)
+            await db.flush()
+
+            rated_thread = Thread(
+                user_id=owner.id,
+                title="Rating Run",
+                format="Comic",
+                queue_position=1,
+                issues_remaining=1,
+                total_issues=1,
+                status="active",
+                reading_progress="in_progress",
+            )
+            middle_thread = Thread(
+                user_id=owner.id,
+                title="Middle Run",
+                format="Comic",
+                queue_position=2,
+                issues_remaining=1,
+                total_issues=1,
+                status="active",
+                reading_progress="in_progress",
+            )
+            blocked_thread = Thread(
+                user_id=owner.id,
+                title="Blocked Run",
+                format="Comic",
+                queue_position=3,
+                issues_remaining=1,
+                total_issues=1,
+                status="active",
+                reading_progress="in_progress",
+                is_blocked=True,
+            )
+            db.add_all([rated_thread, middle_thread, blocked_thread])
+            await db.flush()
+
+            rated_issue = Issue(
+                thread_id=rated_thread.id,
+                issue_number="1",
+                position=1,
+                status="unread",
+            )
+            middle_issue = Issue(
+                thread_id=middle_thread.id,
+                issue_number="1",
+                position=1,
+                status="unread",
+            )
+            blocked_issue = Issue(
+                thread_id=blocked_thread.id,
+                issue_number="1",
+                position=1,
+                status="unread",
+            )
+            db.add_all([rated_issue, middle_issue, blocked_issue])
+            await db.flush()
+
+            rated_thread.next_unread_issue_id = rated_issue.id
+            middle_thread.next_unread_issue_id = middle_issue.id
+            blocked_thread.next_unread_issue_id = blocked_issue.id
+            db.add(
+                Dependency(
+                    source_issue_id=rated_issue.id,
+                    target_issue_id=blocked_issue.id,
+                    note=None,
+                )
+            )
+            session = ReadingSession(
+                user_id=owner.id,
+                started_at=now,
+                start_die=6,
+                pending_thread_id=rated_thread.id,
+                pending_issue_id=rated_issue.id,
+                pending_thread_updated_at=now,
+            )
+            db.add(session)
+            await db.commit()
+
+            session_id = session.id
+            rated_thread_id = rated_thread.id
+            middle_thread_id = middle_thread.id
+            blocked_thread_id = blocked_thread.id
+            rated_issue_id = rated_issue.id
+            owner_id = owner.id
+
+        token = jwt.encode(
+            {
+                "sub": username,
+                "jti": "native-issue-queue-undo-fixture",
+                "type": "access",
+                "exp": int((now + timedelta(hours=1)).timestamp()),
+            },
+            SECRET,
+            "HS256",
+        )
+        query = f"options=-csearch_path%3D{name}"
+        env = {
+            **os.environ,
+            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_TEST_TOKEN": token,
+            "RUST_ROLL_POOL_SIZE": "2",
+            "RUST_ROLL_TEST_ISSUE_ID": str(rated_issue_id),
+            "RUST_ROLL_TEST_BODY": json.dumps(
+                {
+                    "status": "read",
+                    "rating": 4.5,
+                    "idempotency_key": "native-undo-queue-01",
+                    "source": "roll_offer",
+                }
+            ),
+        }
+
+        rated = await _run_command(env)
+        assert rated["status"] == 200, rated
+
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            snapshot = (
+                await db.execute(
+                    text(
+                        "SELECT id, thread_states::text, session_state::text"
+                        " FROM snapshots WHERE session_id = :session_id"
+                        " ORDER BY id DESC LIMIT 1"
+                    ),
+                    {"session_id": session_id},
+                )
+            ).one()
+            states = json.loads(snapshot.thread_states)
+            assert states["_queue_changes"] == {
+                str(rated_thread_id): 1,
+                str(middle_thread_id): 2,
+                str(blocked_thread_id): 3,
+            }
+            assert states["_blocked_changes"] == {str(blocked_thread_id): True}
+            session_state = json.loads(snapshot.session_state)
+            assert session_state["pending_issue_id"] == rated_issue_id
+            snapshot_id = snapshot.id
+
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            service = UndoSnapshotService(db)
+            await service.apply_snapshot(session_id, snapshot_id, owner_id)
+            await db.commit()
+
+        async with AsyncSession(engine, expire_on_commit=False) as db:
+            positions = dict(
+                (
+                    await db.execute(
+                        text(
+                            "SELECT id, queue_position FROM threads"
+                            " WHERE id IN (:rated, :middle, :blocked)"
+                        ),
+                        {
+                            "rated": rated_thread_id,
+                            "middle": middle_thread_id,
+                            "blocked": blocked_thread_id,
+                        },
+                    )
+                ).all()
+            )
+            assert positions == {
+                rated_thread_id: 1,
+                middle_thread_id: 2,
+                blocked_thread_id: 3,
+            }
+            flags = dict(
+                (
+                    await db.execute(
+                        text(
+                            "SELECT id, is_blocked FROM threads"
+                            " WHERE id IN (:rated, :middle, :blocked)"
+                        ),
+                        {
+                            "rated": rated_thread_id,
+                            "middle": middle_thread_id,
+                            "blocked": blocked_thread_id,
+                        },
+                    )
+                ).all()
+            )
+            assert flags[blocked_thread_id] is True
+            assert flags[rated_thread_id] is False
+            restored_issue = await db.get(Issue, rated_issue_id)
+            assert restored_issue is not None
+            assert restored_issue.status == "unread"
+            restored_thread = await db.get(Thread, rated_thread_id)
+            assert restored_thread is not None
+            assert restored_thread.status == "active"
+            assert restored_thread.issues_remaining == 1
+            restored_session = await db.get(ReadingSession, session_id)
+            assert restored_session is not None
+            assert restored_session.pending_issue_id == rated_issue_id
     finally:
         await engine.dispose()
         async with admin.begin() as connection:
