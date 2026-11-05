@@ -792,8 +792,8 @@ pub(crate) async fn persist(
         .query_one(
             "INSERT INTO events
             (user_id,type,timestamp,thread_id,issue_id,issue_number,
-             rating,issues_read,context)
-         VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8::text::json) RETURNING id",
+             rating,issues_read,die_after,source_roll_event_id,context)
+         VALUES ($1,$2,NOW(),$3,$4,$5,$6,$7,$8,$9,$10::text::json) RETURNING id",
             &[
                 &user.id(),
                 &event_type,
@@ -802,6 +802,8 @@ pub(crate) async fn persist(
                 &issue_number,
                 &recorded_rating,
                 &issues_read,
+                &die_after,
+                &source_roll_event_id,
                 &context.to_string(),
             ],
         )
@@ -1433,7 +1435,9 @@ mod tests {
             .get(0);
         let linked = client
             .query_one(
-                "SELECT context->>'source', context->>'source_roll_event_id' FROM events
+                "SELECT context->>'source', context->>'source_roll_event_id',
+                        source_roll_event_id, die_after
+                 FROM events
                  WHERE context->>'issue_command_key'='roll-offer-high-001'",
                 &[],
             )
@@ -1444,6 +1448,8 @@ mod tests {
             linked.get::<_, Option<String>>(1),
             Some(offering_roll.to_string())
         );
+        assert_eq!(linked.get::<_, Option<i32>>(2), Some(offering_roll));
+        assert_eq!(linked.get::<_, Option<i32>>(3), Some(6));
         // The pending offer for the exact rated issue is retired, so the next
         // roll is a fresh offer rather than a snooze of the finished series.
         let pending = client
