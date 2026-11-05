@@ -2340,13 +2340,13 @@ mod tests {
 
     /// Canonical-schema coverage for the reposition path (#4535).
     ///
-    /// The shared `queue_unit_test` fixture is hand-rolled, so it cannot catch a
-    /// production shape difference. The real `threads` row is NOT NULL across ten
-    /// columns and defaults the rest, `events` carries the owner-assignment
-    /// trigger, and `threads(id, next_unread_issue_id)` is a deferred foreign key
-    /// to `issues(thread_id, id)`. This fixture mirrors those constraints and
-    /// seeds a production-sized queue (330 entries, 247 blocked) so the move runs
-    /// against the shape production actually serves.
+    /// Tests use the canonical Alembic schema fixture (`public_schema.sql`) rather
+    /// than hand-rolled DDL, so schema differences are caught. The real `threads`
+    /// table is NOT NULL across ten columns and defaults the rest, `events` has an
+    /// owner-assignment `BEFORE INSERT` trigger, and `threads(id,
+    /// next_unread_issue_id)` has a deferred foreign key to `issues(thread_id, id)`.
+    /// This test seeds a production-sized queue (330 entries, 247 blocked) so the
+    /// move runs against the exact shape production serves.
     #[tokio::test]
     async fn reposition_persists_against_the_production_schema_shape() {
         let _guard = DB_LOCK.lock().await;
