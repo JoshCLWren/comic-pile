@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { useLocation } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { useInfiniteCollection } from '../pagination'
@@ -112,6 +113,9 @@ export function queueThreadsQueryOptions(
  * never by automatic traversal. Changing `searchTerm` or `sort` changes the
  * query key, which resets the loader to the first compatible page.
  *
+ * Same-route navigation triggers a refetch to keep an already-open Queue tab
+ * fresh when series are renamed or threads completed (MQA-QUEUE-010).
+ *
  * @param searchTerm - Retained search filter; empty string means no filter.
  * @param sort - Retained sort order; drives the server-side deterministic cursor.
  * @param threadsList - Injectable lazy thread-list loader (defaults to the real service).
@@ -121,6 +125,7 @@ export function useQueueThreads(
   sort: QueueSortBy = 'position',
   threadsList: Pick<typeof threadsApi, 'list'> = threadsApi,
 ) {
+  const location = useLocation()
   const query = useInfiniteCollection<ThreadListItem, ThreadListResponse>({
     ...queueThreadsQueryOptions(searchTerm, sort, threadsList),
     retry: false,
@@ -128,6 +133,14 @@ export function useQueueThreads(
     refetchOnWindowFocus: 'always',
     selectPage: (page) => page.threads,
   })
+
+  // Trigger a refetch when navigating to the same queue route to update stale data.
+  // This handles the already-open-tab leg of MQA-QUEUE-010 where a rename or
+  // completion leaves the Queue row showing old title/state until a fresh search.
+  const isQueueRoute = location.pathname === '/queue'
+  if (isQueueRoute) {
+    query.refetch()
+  }
 
   const hasData = query.pages.length > 0
   const data = hasData ? query.items : null
