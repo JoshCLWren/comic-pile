@@ -922,123 +922,69 @@ mod tests {
         }
     }
 
-    /// Fresh disposable schema for one Roll-offer rating scenario.
-    ///
-    /// Two readable series and a third control series sit in one queue, one
-    /// series is blocked, one belongs to another reader, and the die is at d8
-    /// from a prior rating event. The active session holds a pending offer on
-    /// thread 10 issue 101, recorded by one roll event that offered that exact
-    /// issue.
-    async fn roll_offer_schema(admin: &tokio_postgres::Client, schema: &str) {
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     title text NOT NULL, status text NOT NULL,
-                     issues_remaining integer NOT NULL,
-                     next_unread_issue_id integer, reading_progress text,
-                     last_rating double precision, queue_position integer NOT NULL,
-                     queue_position_is_manual boolean NOT NULL,
-                     last_activity_at timestamptz,
-                     is_blocked boolean NOT NULL DEFAULT false,
-                     catalog_series_id bigint, total_issues integer
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL,
-                     issue_number text NOT NULL, status text NOT NULL,
-                     position integer NOT NULL, read_at timestamptz,
-                     catalog_issue_id bigint
-                 );
-                 CREATE TABLE {schema}.dependencies (
-                     id integer PRIMARY KEY, source_issue_id integer NOT NULL,
-                     target_issue_id integer NOT NULL, origin text,
-                     classification text, provenance text, note text
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
-                     thread_id integer, issue_id integer, issue_number text,
-                     session_id integer, selected_thread_id integer,
-                     die integer, die_after integer, result integer,
-                     rating double precision, issues_read integer, context json
-                 );
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz,
-                     manual_die integer, ended_at timestamptz,
-                     started_at timestamptz NOT NULL DEFAULT NOW(),
-                     snoozed_thread_ids integer[], skipped_thread_ids integer[]
-                 );
-                 CREATE TABLE {schema}.custom_cbl_lists (
-                     id integer PRIMARY KEY, user_id integer NOT NULL, mode text NOT NULL
-                 );
-                 CREATE TABLE {schema}.custom_cbl_entries (
-                     id integer PRIMARY KEY, list_id integer NOT NULL,
-                     issue_id integer NOT NULL, gate text NOT NULL,
-                     skipped boolean NOT NULL DEFAULT false,
-                     position integer NOT NULL DEFAULT 1
-                 );
-                 CREATE TABLE {schema}.custom_cbl_overlap_decisions (
-                     id integer PRIMARY KEY, list_id integer, user_id integer,
-                     continuing_external_identity_id bigint,
-                     waiting_external_identity_id bigint
-                 );
-                 CREATE TABLE {schema}.collection_exclusions (
-                     id integer PRIMARY KEY, user_id integer, issue_id integer,
-                     thread_id integer, provider text, external_volume_id text
-                 );
-                 CREATE TABLE {schema}.external_identities (
-                     id bigint PRIMARY KEY, provider text NOT NULL,
-                     external_id text NOT NULL, entity_type text NOT NULL,
-                     metadata_json json
-                 );
-                 CREATE TABLE {schema}.catalog_series (
-                     id bigint PRIMARY KEY, canonical_external_identity_id bigint
-                 );
-                 CREATE TABLE {schema}.catalog_issues (
-                     id bigint PRIMARY KEY, catalog_series_id bigint,
-                     canonical_external_identity_id bigint
-                 );
-                 CREATE TABLE {schema}.thread_external_series_mappings (
-                     thread_id integer, external_identity_id bigint, status text
-                 );
-                 INSERT INTO {schema}.users VALUES (1), (2);
-                 INSERT INTO {schema}.sessions
-                     (id,user_id,pending_thread_id,pending_issue_id,started_at)
-                     VALUES (1,1,10,101,'2026-10-01T00:00:00Z');
-                 INSERT INTO {schema}.threads VALUES
-                     (10,1,'Offered run','active',2,101,'in_progress',NULL,1,false,NULL,false,NULL,2),
-                     (20,1,'Second run','active',1,201,'in_progress',NULL,2,false,NULL,false,NULL,1),
-                     (30,1,'Control run','active',1,301,'in_progress',NULL,3,false,NULL,false,NULL,1),
-                     (40,1,'Blocked run','active',1,401,'in_progress',NULL,4,false,NULL,true,NULL,1),
-                     (60,2,'Foreign run','active',1,601,'in_progress',NULL,1,false,NULL,false,NULL,1);
-                 INSERT INTO {schema}.issues VALUES
-                     (101,10,'1','unread',1,NULL,NULL),
-                     (102,10,'2','unread',2,NULL,NULL),
-                     (201,20,'1','unread',1,NULL,NULL),
-                     (301,30,'1','unread',1,NULL,NULL),
-                     (401,40,'1','unread',1,NULL,NULL),
-                     (601,60,'1','unread',1,NULL,NULL);
-                 -- Thread 40 waits on a real unread prerequisite, so it is not
-                 -- in the rollable set the next roll can draw from.
-                 INSERT INTO {schema}.dependencies
-                     (id,source_issue_id,target_issue_id,origin)
-                     VALUES (1,102,401,'reader');
-                 -- The die is at d8 from the most recent rating outcome.
-                 INSERT INTO {schema}.events (user_id,type,rating,die_after)
-                     VALUES (1,'rate',4.5,8);
-                 -- The offer this rating finishes: one roll event naming the
-                 -- exact issue the pending session holds.
-                 INSERT INTO {schema}.events
-                     (user_id,type,session_id,selected_thread_id,die,result,
-                      issue_id,issue_number,context)
-                     VALUES (1,'roll',1,10,6,1,101,'1','{{}}'::json);"
-            ))
+    /// A Roll rating fixture against the real Alembic schema, never a
+    /// hand-written approximation. Hold the returned guard through assertions,
+    /// since the canonical `public` schema is shared by all native tests.
+    async fn roll_offer_fixture() -> Option<(
+        tokio_postgres::Client,
+        tokio::sync::MutexGuard<'static, ()>,
+    )> {
+        let state = crate::test_support::test_state(2).await?;
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let url = crate::test_support::database_url().await;
+        let (client, connection) =
+            tokio_postgres::connect(&url, tokio_postgres::NoTls)
+                .await
+                .expect("canonical test connection");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        // References to next_unread_issue_id and pending_issue_id are linked
+        // only after their Issue rows exist: the FKs are not deferrable.
+        client
+            .batch_execute(
+                r#"INSERT INTO users (id, username)
+                       VALUES (1, 'roll-reader'), (2, 'other-reader');
+                   INSERT INTO threads
+                       (id, user_id, title, format, status, issues_remaining,
+                        reading_progress, queue_position, queue_position_is_manual,
+                        is_blocked, total_issues)
+                   VALUES
+                       (10,1,'Offered run','Comic','active',2,'in_progress',1,false,false,2),
+                       (20,1,'Second run','Comic','active',1,'in_progress',2,false,false,1),
+                       (30,1,'Control run','Comic','active',1,'in_progress',3,false,false,1),
+                       (40,1,'Blocked run','Comic','active',1,'in_progress',4,false,true,1),
+                       (60,2,'Foreign run','Comic','active',1,'in_progress',1,false,false,1);
+                   INSERT INTO issues
+                       (id, thread_id, issue_number, status, position, created_at)
+                   VALUES
+                       (101,10,'1','unread',1,now()),
+                       (102,10,'2','unread',2,now()),
+                       (201,20,'1','unread',1,now()),
+                       (301,30,'1','unread',1,now()),
+                       (401,40,'1','unread',1,now()),
+                       (601,60,'1','unread',1,now());
+                   UPDATE threads
+                      SET next_unread_issue_id = CASE id
+                          WHEN 10 THEN 101 WHEN 20 THEN 201 WHEN 30 THEN 301
+                          WHEN 40 THEN 401 WHEN 60 THEN 601 END
+                    WHERE id IN (10,20,30,40,60);
+                   INSERT INTO sessions
+                       (id, user_id, pending_thread_id, pending_issue_id, started_at)
+                   VALUES (1,1,10,101,'2026-10-01T00:00:00Z');
+                   INSERT INTO dependencies
+                       (id,source_issue_id,target_issue_id,origin,created_at)
+                   VALUES (1,102,401,'reader',now());
+                   INSERT INTO events (user_id,type,rating,die_after)
+                   VALUES (1,'rate',4.5,8);
+                   INSERT INTO events
+                       (user_id,type,session_id,selected_thread_id,die,result,
+                        issue_id,issue_number,context)
+                   VALUES (1,'roll',1,10,6,1,101,'1','{}'::json);"#,
+            )
             .await
-            .unwrap();
+            .expect("seed canonical Roll offer fixture");
+        Some((client, guard))
     }
 
     /// Queue positions of one reader's owned threads in id order.
@@ -1436,22 +1382,9 @@ mod tests {
 
     #[tokio::test]
     async fn roll_offer_rating_steps_the_die_down_and_moves_the_series_forward() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_high_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -1543,30 +1476,13 @@ mod tests {
             4
         );
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn roll_offer_low_rating_steps_the_die_up_and_seats_the_series_last() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_low_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -1600,30 +1516,13 @@ mod tests {
             "completed"
         );
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn roll_offer_completion_moves_the_series_to_the_back() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_done_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         // The last unread issue of the front series, rated above threshold:
@@ -1676,42 +1575,25 @@ mod tests {
             .unwrap()
             .get::<_, bool>(0));
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn roll_offer_rating_of_a_manually_placed_series_keeps_its_position() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_manual_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
         // A second unread issue keeps the series in play after the first
         // rating, and the reader has placed it by hand.
-        admin
-            .batch_execute(&format!(
-                "INSERT INTO {schema}.issues
-                     (id,thread_id,issue_number,status,position)
-                 VALUES (302,30,'2','unread',2);
-                 UPDATE {schema}.threads
+        client
+            .batch_execute(
+                "INSERT INTO issues
+                     (id,thread_id,issue_number,status,position,created_at)
+                 VALUES (302,30,'2','unread',2,now());
+                 UPDATE threads
                  SET issues_remaining=2, queue_position_is_manual=true WHERE id=30"
-            ))
+            )
             .await
             .unwrap();
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         // The reader placed this series by hand, so a below-threshold rating
@@ -1777,51 +1659,34 @@ mod tests {
             "completing a series clears its reader placement"
         );
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn roll_offer_low_rating_never_repositions_a_blocked_series() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_blocked_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
         // A second unread issue keeps the blocked series in play, and that
         // remaining issue carries its own unread prerequisite so the series
         // stays outside the rollable set after the first issue is read. The
         // series is also moved to the front of the queue, so a completion move
         // to the back is observable.
-        admin
-            .batch_execute(&format!(
-                "INSERT INTO {schema}.issues
-                     (id,thread_id,issue_number,status,position)
-                 VALUES (402,40,'2','unread',2);
-                 INSERT INTO {schema}.dependencies
-                     (id,source_issue_id,target_issue_id,origin)
-                 VALUES (2,102,402,'reader');
-                 UPDATE {schema}.threads SET issues_remaining=2 WHERE id=40;
-                 UPDATE {schema}.threads SET queue_position=1 WHERE id=40;
-                 UPDATE {schema}.threads SET queue_position=2 WHERE id=10;
-                 UPDATE {schema}.threads SET queue_position=3 WHERE id=20;
-                 UPDATE {schema}.threads SET queue_position=4 WHERE id=30;"
-            ))
+        client
+            .batch_execute(
+                "INSERT INTO issues
+                     (id,thread_id,issue_number,status,position,created_at)
+                 VALUES (402,40,'2','unread',2,now());
+                 INSERT INTO dependencies
+                     (id,source_issue_id,target_issue_id,origin,created_at)
+                 VALUES (2,102,402,'reader',now());
+                 UPDATE threads SET issues_remaining=2 WHERE id=40;
+                 UPDATE threads SET queue_position=1 WHERE id=40;
+                 UPDATE threads SET queue_position=2 WHERE id=10;
+                 UPDATE threads SET queue_position=3 WHERE id=20;
+                 UPDATE threads SET queue_position=4 WHERE id=30;"
+            )
             .await
             .unwrap();
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         // A blocked series is outside the rollable set, so the below-threshold
@@ -1865,30 +1730,13 @@ mod tests {
             vec![1, 2, 3, 4]
         );
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn roll_offer_rating_is_not_gated_by_a_changed_frontier_or_queue() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_frontier_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         // #4453: eligibility decides what Roll offers; it never revokes
@@ -1896,18 +1744,18 @@ mod tests {
         // push this series to the back, block it, snooze it, and drop the
         // pending session offer, then rate the exact offered issue.
         client
-            .batch_execute(&format!(
-                "UPDATE {schema}.threads SET queue_position=4 WHERE id=10;
-                 UPDATE {schema}.threads SET queue_position=1 WHERE id=30;
-                 UPDATE {schema}.threads SET queue_position=2 WHERE id=20;
-                 UPDATE {schema}.threads SET queue_position=3 WHERE id=40;
-                 UPDATE {schema}.threads SET is_blocked=true WHERE id=10;
-                 UPDATE {schema}.sessions SET pending_thread_id=NULL,pending_issue_id=NULL
+            .batch_execute(
+                "UPDATE threads SET queue_position=4 WHERE id=10;
+                 UPDATE threads SET queue_position=1 WHERE id=30;
+                 UPDATE threads SET queue_position=2 WHERE id=20;
+                 UPDATE threads SET queue_position=3 WHERE id=40;
+                 UPDATE threads SET is_blocked=true WHERE id=10;
+                 UPDATE sessions SET pending_thread_id=NULL,pending_issue_id=NULL
                      WHERE id=1;
-                 INSERT INTO {schema}.events
+                 INSERT INTO events
                      (user_id,type,rating,die_after,thread_id)
                      VALUES (1,'rate',4.0,12,10);"
-            ))
+            )
             .await
             .unwrap();
 
@@ -1935,30 +1783,13 @@ mod tests {
             vec![1, 3, 2, 4]
         );
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn roll_offer_rating_correction_creates_no_new_read() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .unwrap();
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_correct_{}_{}", std::process::id(), nanos);
-        roll_offer_schema(&admin, &schema).await;
-        let mut client = scoped_client(&url, &schema).await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -2023,10 +1854,6 @@ mod tests {
         assert_eq!(counts.get::<_, i64>(0), 5);
         assert_eq!(counts.get::<_, i64>(1), 2);
 
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[test]
