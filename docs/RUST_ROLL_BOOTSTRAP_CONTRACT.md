@@ -118,8 +118,11 @@ positions, counters, cached frontier, read progress, rating and activity time.
    validated Option E eligibility, applies exclusions before die limiting, and
    reads issue identities, canonical metadata, direct provider artwork URLs,
    reader stats, group routes and session-scoped last-read. The Python
-   `get_v2_rollable_projection` remains test/script-only parity tooling. Stored
-   blocked/frontier flags are not authority.
+   projection and parity services and repositories
+   (`app/services/roll_v2_projection.py`, `app/repositories/roll_v2_projection.py`,
+   `app/services/roll_v2_parity.py`, `app/repositories/roll_v2_parity.py`)
+   remain test/script-only tooling. Stored blocked/frontier flags are not
+   authority.
 6. Summary-section derivation for the retired Python payload lived in
    `RollService.load_bootstrap_thread_data`; that reference implementation and
    its unused Python `RollV2BootstrapResponse` DTO were removed by #4350. V2
