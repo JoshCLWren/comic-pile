@@ -180,15 +180,6 @@ function clearPendingManualDie(key: string): void {
  * network failures. A different die is a new intent; a retry of the same
  * unanswered intent reuses its original key. Successful responses clear it.
  */
-const DIE_LABEL_PATTERN = /^d(\d+)$/
-
-function parseDieLabel(label: string): number | null {
-  const trimmed = label?.trim?.()
-  if (!trimmed) return null
-  const match = DIE_LABEL_PATTERN.exec(trimmed)
-  return match ? Number(match[1]) : null
-}
-
 export function createRollApi(client: HttpClient) {
   let unresolvedManual: PendingManualDie | null = readPendingManualDie()
   let unresolvedOfferKey: string | null = readPendingOfferKey()
@@ -255,13 +246,6 @@ export function createRollApi(client: HttpClient) {
         // The in-memory keys above are still cleared.
       }
       return response
-    },
-    // Legacy auto toggle remains until the sessionless Roll UI is cut over.
-    clearManualDie: async () => {
-      const label = await client.post<string>('/v1/roll/clear-manual-die', undefined, {
-        responseType: 'text',
-      })
-      return parseDieLabel(label)
     },
   }
 }

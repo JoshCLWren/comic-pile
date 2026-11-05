@@ -89,6 +89,8 @@ export function useCreatorsList(
   const query = useInfiniteQuery({
     ...creatorListQueryOptions(selection, listApi),
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 
   const pages = query.data?.pages ?? []

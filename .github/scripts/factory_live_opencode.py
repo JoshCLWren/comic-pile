@@ -19,7 +19,7 @@ from factory_candidate_health import (
 )
 from factory_completion_controller import parse_time
 from factory_model_catalog import parse_opencode_models_text
-from factory_roster import load_roster_rows, opencode_model_is_free
+from factory_roster import load_roster_lock, load_roster_rows, opencode_model_is_free
 
 COOLDOWN_SECONDS = 6 * 60 * 60
 MODEL_UNAVAILABLE_RE = re.compile(
@@ -27,15 +27,19 @@ MODEL_UNAVAILABLE_RE = re.compile(
     re.IGNORECASE,
 )
 RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
+FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
 
 def free_models(raw_catalog: str) -> list[str]:
     """Cost metadata wins over names: never silently select a paid model."""
     catalog = parse_opencode_models_text(raw_catalog, "opencode")
+    retired = set(load_roster_lock()["retired_models"])
     return sorted(
         entry.model_id
         for entry in catalog.entries
-        if not entry.cost_is_paid and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
+        if entry.model_id not in retired
+        and not entry.cost_is_paid
+        and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
     )
 
 
@@ -51,6 +55,7 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
             for marker in (
                 "<!-- factory-attempt-outcome:v1 ",
                 "<!-- factory-model-unavailable:v1 ",
+                "<!-- factory-provider-quota:v1 ",
                 "<!-- factory-model-retired-410:v1 -->",
             )
         ):
@@ -65,7 +70,7 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
         if RETIREMENT_MARKER not in body and (
             outcome is None
             or outcome.group("outcome")
-            not in HEALTHY_OUTCOMES | {"model_unavailable", "model_retired_410"}
+            not in HEALTHY_OUTCOMES | {"model_unavailable", "model_retired_410", "provider_quota"}
         ):
             continue
         comments.append(comment)
@@ -74,7 +79,7 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
         if evidence.provider != "opencode-free" or evidence.updated > now_epoch:
             continue
         if evidence.outcome == "model_retired_410" or (
-            evidence.outcome == "model_unavailable"
+            evidence.outcome in {"model_unavailable", "provider_quota"}
             and now_epoch < evidence.updated + COOLDOWN_SECONDS
         ):
             excluded.add(evidence.model.removeprefix("opencode/"))
@@ -82,7 +87,13 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
 
 
 def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
-    """Persist exact-model unavailability for the terminal registry reporter."""
+    """Persist recognizable OpenCode smoke errors for the registry reporter."""
+    if runtime_model.startswith("opencode/") and FREE_QUOTA_RE.search(log_content):
+        outcome_file.write_text(
+            f"provider_quota\tOpenCode free quota exhausted for {runtime_model}\n",
+            encoding="utf-8",
+        )
+        return True
     if not any(
         match.group("model") == runtime_model
         for match in MODEL_UNAVAILABLE_RE.finditer(log_content)

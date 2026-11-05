@@ -39,6 +39,16 @@ export type CreateQueueOrderResponse = components['schemas']['QueueOrderResponse
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
 
+export type DieStateResponse = components['schemas']['RollDieStateResponse']
+
+export interface EligibleIssueIdsRequest {
+  query?: {
+    snoozed?: string
+  }
+}
+
+export type EligibleIssueIdsResponse = components['schemas']['RollEligibleIssueIdsResponse']
+
 export interface ForgotPasswordRequest {
   body: components['schemas']['NativeForgotPasswordRequest']
 }
@@ -152,6 +162,8 @@ export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   csrf(): Promise<CsrfResponse>
+  dieState(): Promise<DieStateResponse>
+  eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
@@ -188,6 +200,15 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
+    },
+    dieState() {
+      return client.get<DieStateResponse>("/v2/roll/die-state")
+    },
+    eligibleIssueIds(args: EligibleIssueIdsRequest = {}) {
+      return client.get<EligibleIssueIdsResponse>(
+        "/v2/roll/eligible-issue-ids",
+        { params: compactQuery(args.query) },
+      )
     },
     forgotPassword(args: ForgotPasswordRequest) {
       return client.post<ForgotPasswordResponse, ForgotPasswordRequest['body']>(

@@ -40,6 +40,8 @@ use utoipa::OpenApi;
         crate::dice_api::manual_die_documentation,
         crate::roll_offer::offer_documentation,
         crate::roll_reset::reset_documentation,
+        crate::roll_resources::die_state_documentation,
+        crate::roll_resources::eligible_issue_ids_documentation,
         crate::reading_boundary::reading_boundary_batch_documentation
     ),
     components(schemas(
@@ -59,6 +61,9 @@ use utoipa::OpenApi;
         crate::roll_offer::RollOfferResponse,
         crate::roll_reset::ResetDiceRequest,
         crate::roll_reset::ResetDiceResponse,
+        crate::roll_resources::RollDieStateResponse,
+        crate::roll_resources::RollLastRoll,
+        crate::roll_resources::RollEligibleIssueIdsResponse,
         crate::reading_boundary::ReadingBoundaryBatchRequest,
         crate::reading_boundary::ReadingBoundaryBatchResponseV2
     )),
@@ -88,13 +93,15 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 22] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 24] = [
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
     ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/roll/bootstrap"),
+    ("get", "/api/v2/roll/die-state"),
+    ("get", "/api/v2/roll/eligible-issue-ids"),
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),

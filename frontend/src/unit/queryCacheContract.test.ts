@@ -8,7 +8,6 @@ import {
   invalidateAfterResumeRecovery,
   invalidateAfterUndo,
   invalidateCurrentSessionAfterSnooze,
-  invalidateAfterSessionModeUpdate,
   applyCreatedCustomCBL,
   applyUpdatedCustomCBL,
   applyDeletedCustomCBL,
@@ -205,13 +204,32 @@ describe('targeted cache effects', () => {
     expect(setQueryData).toHaveBeenNthCalledWith(
       1,
       queryKeys.thread.detail(thread.id),
-      thread,
+      expect.any(Function),
     )
     expect(setQueryData).toHaveBeenNthCalledWith(
       2,
       queryKeys.thread.summary(thread.id),
-      thread,
+      expect.any(Function),
     )
+    // Native v2 returns thread progress, not the full detail representation.
+    // Rating may update progress but must never replace authoritative metadata
+    // with synthetic adapter values (such as queue_position: 0).
+    // SAFETY: The preceding spy assertions verify the detail-cache argument is
+    // a function updater. The test calls it with a valid Thread fixture.
+    const update = setQueryData.mock.calls[0]?.[1] as (current: Thread) => Thread
+    const existing: Thread = {
+      ...thread,
+      queue_position: 27,
+      format: 'Trade Paperback',
+      created_at: '2025-01-01T00:00:00Z',
+    }
+    expect(update(existing)).toMatchObject({
+      queue_position: 27,
+      format: 'Trade Paperback',
+      created_at: '2025-01-01T00:00:00Z',
+      issues_remaining: thread.issues_remaining,
+      last_rating: thread.last_rating,
+    })
     expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
@@ -571,25 +589,6 @@ describe('targeted cache effects', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
-    })
-  })
-
-  describe('session mode cache effects', () => {
-    it('invalidates roll bootstrap and current session after a session-mode update', async () => {
-      const { client, invalidateQueries, resetQueries } = createSpiedClient()
-
-      await invalidateAfterSessionModeUpdate(client)
-
-      expect(invalidateQueries).toHaveBeenCalledTimes(2)
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.roll.bootstrap(),
-        exact: true,
-      })
-      expect(invalidateQueries).toHaveBeenCalledWith({
-        queryKey: queryKeys.session.current(),
-        exact: true,
-      })
-      expect(resetQueries).not.toHaveBeenCalled()
     })
   })
 })

@@ -405,18 +405,28 @@ Manually select a thread instead of rolling.
 
 ---
 
-### Manual die mode
+### Manual die selection
 
-`POST /api/v1/roll/set-die?die=20` pins the visible die. Ratings and snoozes
-keep that die fixed; their timeline records carry the actual die in `die` and
-the unchanged visible die in `die_after`. New manual outcome events preserve
-the suspended automatic ladder in `context.automatic_die_after`.
+`POST /api/v2/roll/dice-command` is the only way to choose a die. The command
+body carries `kind: "manual_select"`, the requested `die`, and an
+`idempotency_key`:
 
-`POST /api/v1/roll/clear-manual-die` resumes that automatic value, rather than
-stepping from the manual die. Session details, History, and roll selection use
-the same automatic baseline. Undo of a new rating preserves both values.
-Events without this metadata retain their historical interpretation; this
-change does not rewrite previously recorded ladder steps.
+```json
+{
+  "kind": "manual_select",
+  "die": 20,
+  "idempotency_key": "roll-0123456789abcdef0123456789abcdef"
+}
+```
+
+The selection is one event, not a pinned mode: the die is projected from the
+owner's newest die-changing event, so it survives navigation and applies to
+every later roll. `POST /api/v2/roll/reset` returns the die to d6 and clears
+the browser's temporary snoozes and the pending roll.
+
+The v1 `POST /api/v1/roll/set-die` and `POST /api/v1/roll/clear-manual-die`
+routes were retired (#4352, #4353): nothing pins a manual die any more, so
+there is no automatic ladder to resume.
 
 ## Rate
 

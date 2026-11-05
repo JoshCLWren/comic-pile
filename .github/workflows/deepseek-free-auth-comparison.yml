@@ -1,14 +1,8 @@
 name: DeepSeek OpenCode Free anonymous versus existing-key comparison
 
 on:
-  pull_request:
-    paths:
-      - '.github/free-model-factories.tsv'
-      - '.github/workflows/free-model-factory-run.yml'
-      - '.github/workflows/deepseek-free-auth-comparison.yml'
+  # Retired free-model experiment: only explicit manual diagnostics remain.
   workflow_dispatch:
-  schedule:
-    - cron: '11 */6 * * *'
 
 permissions:
   contents: read

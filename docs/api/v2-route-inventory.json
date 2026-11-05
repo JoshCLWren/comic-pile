@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
-  "updated_by_issue": 4457,
+  "updated_by_issue": 4337,
   "operations": [
     {
       "method": "GET",
@@ -58,6 +58,22 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/roll/die-state",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4595,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/eligible-issue-ids",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4595,
+      "consumers": []
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/threads",
       "runtime": "native-rust",
       "status": "target",
@@ -72,7 +88,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4443,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/nativeRollMutationApi.ts"
+      ]
     },
     {
       "method": "PATCH",
@@ -199,6 +217,43 @@
       "consumers": [
         "frontend/src/services/api-roll.ts"
       ]
+    }
+  ],
+  "retired_legacy_operations": [
+    {
+      "method": "POST",
+      "path": "/api/v1/roll/set-die",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4352,
+      "replacement": "POST /api/v2/roll/dice-command"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/roll/clear-manual-die",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4353,
+      "replacement": "POST /api/v2/roll/reset"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/roll/session-mode",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4354,
+      "replacement": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/rate/",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4337,
+      "replacement": "PATCH /api/v2/issues/{issue_id}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/rate/",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4337,
+      "replacement": "PATCH /api/v2/issues/{issue_id}"
     }
   ]
 }

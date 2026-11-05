@@ -170,6 +170,8 @@ fn app() -> Router {
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
+        .route("/api/v2/roll/die-state", get(native_dispatch))
+        .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))

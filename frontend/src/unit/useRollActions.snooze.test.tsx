@@ -74,7 +74,6 @@ function renderActionSheet(options: HarnessOptions = {}) {
       navigate: vi.fn() as NavigateFunction,
       mutations: {
         setDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
-        clearManualDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation: { mutate: snoozeMutate, isPending: false },
         unsnoozeMutation: { mutate: unsnoozeMutate, isPending: false },

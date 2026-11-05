@@ -48,9 +48,172 @@ use deadpool_postgres::Object;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio_postgres::Transaction;
 
 /// Advisory-lock namespace shared with `comic_pile.queue.ADVISORY_LOCK_NAMESPACE`.
-const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+pub(crate) const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+
+/// Hold the transaction-scoped queue advisory lock for one reader.
+///
+/// Every writer that rewrites a reader's `threads.queue_position` values takes
+/// this lock, so a concurrent move, shuffle or rating-time placement can
+/// neither interleave with it nor be undone by it. A caller that already holds
+/// the per-reader dice lock takes this one second, matching the order
+/// `comic_pile.queue.acquire_queue_lock` documents for the legacy writers.
+pub(crate) async fn lock_queue(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+    tx.query_one(
+        "SELECT pg_advisory_xact_lock($1, $2)",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// Dense-reposition one owned thread to a stored rank for an automatic move.
+///
+/// This is the write surface `comic_pile.queue._MOVE_POSITION_SQL` defines: the
+/// target takes the requested rank and every row between its old and new rank
+/// shifts by one, so the stored positions stay dense. Unlike the reader-driven
+/// `reposition` route it never records `queue_position_is_manual`, because an
+/// automatic rating- or completion-time placement is not a reader placement
+/// (#3638). A thread outside the active queue is not matched, so the move is a
+/// no-op for it.
+pub(crate) async fn move_to_rank(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+    raw_rank: i32,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "WITH ranked AS ( \
+             SELECT id, row_number() OVER (ORDER BY queue_position, id) AS seq \
+             FROM threads \
+             WHERE user_id = $1::int AND status = 'active' AND queue_position >= 1 \
+         ), \
+         target AS (SELECT seq FROM ranked WHERE id = $2::int), \
+         moved AS ( \
+             SELECT ranked.id, \
+                    CASE \
+                        WHEN ranked.id = $2::int THEN $3::int \
+                        WHEN target.seq < $3::int THEN \
+                            CASE WHEN ranked.seq > target.seq AND ranked.seq <= $3::int \
+                                 THEN ranked.seq - 1 ELSE ranked.seq END \
+                        ELSE \
+                            CASE WHEN ranked.seq >= $3::int AND ranked.seq < target.seq \
+                                 THEN ranked.seq + 1 ELSE ranked.seq END \
+                    END AS new_position \
+             FROM ranked CROSS JOIN target \
+         ) \
+         UPDATE threads AS t \
+         SET queue_position = moved.new_position \
+         FROM moved \
+         WHERE t.id = moved.id",
+        &[&user_id, &thread_id, &raw_rank],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// Move one owned thread behind the active queue, mirroring
+/// `comic_pile.queue._MOVE_TO_BACK_SQL`.
+///
+/// The target is ranked even when it has just been marked completed, and every
+/// row that ranked behind it moves up one so the stored positions stay dense.
+/// The reader-visible manual-placement flag is left untouched here; completing
+/// a series clears it in the caller's progress update (#3638).
+pub(crate) async fn move_to_back(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "WITH ranked AS ( \
+             SELECT id, row_number() OVER (ORDER BY queue_position, id) AS seq \
+             FROM threads \
+             WHERE user_id = $1::int AND queue_position >= 1 \
+               AND (status = 'active' OR id = $2::int) \
+         ), \
+         target AS (SELECT seq FROM ranked WHERE id = $2::int), \
+         bounds AS (SELECT count(*)::int AS total FROM ranked) \
+         UPDATE threads AS t \
+         SET queue_position = CASE \
+             WHEN t.id = $2::int THEN bounds.total \
+             WHEN ranked.seq > target.seq THEN ranked.seq - 1 \
+             ELSE ranked.seq END \
+         FROM ranked, target, bounds \
+         WHERE t.id = ranked.id",
+        &[&user_id, &thread_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// Compute the stored rank a below-threshold rating places its thread at,
+/// mirroring `comic_pile.queue.move_to_safe_position`.
+///
+/// Only threads the next roll could actually select are counted, so `eligible`
+/// is the Option E authority and `excluded` the complete rating-time exclusion
+/// set (session snoozes, session skips, durable backoff and durable removals).
+/// The target is seated at the rank of the `die_size`-th rollable thread other
+/// than itself, which is the position immediately after that thread once the
+/// move rewrites the ranks.
+///
+/// Returns `None` when no write is required: the thread is not in the rollable
+/// set, it is the only rollable series, it is already ranked at or beyond the
+/// die range, or the computed rank is the rank it already holds.
+pub(crate) async fn safe_position_rank(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    thread_id: i32,
+    die_size: i32,
+    excluded: &[i32],
+    eligible: &[i32],
+) -> Result<Option<i32>, ApiError> {
+    let row = tx
+        .query_one(
+            "WITH active AS ( \
+                 SELECT id, row_number() OVER (ORDER BY queue_position, id)::int AS seq \
+                 FROM threads \
+                 WHERE user_id = $1::int AND status = 'active' AND queue_position >= 1 \
+             ), \
+             rollable AS ( \
+                 SELECT a.id, a.seq, \
+                        row_number() OVER (ORDER BY a.seq)::int AS rollable_rank \
+                 FROM active a \
+                 WHERE a.id <> ALL($4::int[]) AND a.id = ANY($5::int[]) \
+             ) \
+             SELECT (SELECT count(*)::int FROM active) AS total, \
+                    (SELECT seq FROM active WHERE id = $2::int) AS current_seq, \
+                    (SELECT count(*)::int FROM rollable) AS rollable_total, \
+                    (SELECT rollable_rank FROM rollable WHERE id = $2::int) AS rollable_rank, \
+                    (SELECT CASE WHEN count(*) >= $3::int \
+                                 THEN (array_agg(seq ORDER BY seq))[$3::int] \
+                                 ELSE (SELECT count(*)::int FROM active) END \
+                       FROM rollable WHERE id <> $2::int) AS anchor_seq",
+            &[&user_id, &thread_id, &die_size, &excluded, &eligible],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let total: i32 = row.get(0);
+    let current_seq: Option<i32> = row.get(1);
+    let rollable_total: i32 = row.get(2);
+    let rollable_rank: Option<i32> = row.get(3);
+    let anchor_seq: Option<i32> = row.get(4);
+    let (Some(current_seq), Some(rollable_rank)) = (current_seq, rollable_rank) else {
+        return Ok(None);
+    };
+    if rollable_total <= 1 || rollable_rank >= die_size {
+        return Ok(None);
+    }
+    let target = anchor_seq.unwrap_or(total).min(total);
+    if target == current_seq {
+        return Ok(None);
+    }
+    Ok(Some(target))
+}
 
 /// Queue entry resource returned by GET and PATCH.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -128,7 +291,7 @@ fn not_found(thread_id: i32) -> ApiError {
     )
 }
 
-fn option_e_enabled() -> bool {
+pub(crate) fn option_e_enabled() -> bool {
     let enabled = std::env::var("OPTION_E_ENABLED")
         .map(|value| {
             matches!(
@@ -167,9 +330,9 @@ async fn eligible_thread_ids(
 
 /// Reduce validated Option E inputs to the eligible thread ids.
 ///
-/// Shares one authority and one error surface between the pool-based read path
-/// and the in-transaction write path.
-fn evaluated_eligible_ids(
+/// Shares one authority and one error surface between the pool-based read path,
+/// the in-transaction write path, and rating-time queue placement.
+pub(crate) fn evaluated_eligible_ids(
     validated: &crate::reading_constraints::ValidatedReadingInputs,
 ) -> Result<std::collections::HashSet<i32>, ApiError> {
     let evaluated = crate::reading_eligibility::evaluate(validated)?;
@@ -729,8 +892,8 @@ fn create_queue_order_documentation() {}
 /// Tests run against the canonical Alembic schema in `public` (see
 /// `crate::test_support`), never a hand-written approximation of it.
 #[cfg(test)]
-fn test_database_url() -> String {
-    std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL required")
+async fn test_database_url() -> String {
+    crate::test_support::database_url().await
 }
 
 #[cfg(test)]
@@ -738,9 +901,8 @@ mod tests {
     //! Disposable-PostgreSQL coverage for every mounted queue write handler.
     use super::*;
     use crate::config::Config;
+    use crate::test_support::DB_LOCK;
     use utoipa::OpenApi;
-
-    static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
     async fn state() -> Arc<AppState> {
         state_with_pool_size(2).await
@@ -751,7 +913,7 @@ mod tests {
     /// A single-slot pool makes an accidental second concurrent connection
     /// checkout fail deterministically instead of merely slowing down.
     async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
-        let url = test_database_url();
+        let url = test_database_url().await;
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
@@ -763,14 +925,10 @@ mod tests {
     }
 
     /// Reset the canonical Alembic schema shared by these tests.
-    ///
-    /// The Option E tables stay empty because every test truncates first, but
-    /// they exist with their real columns, constraints and triggers.
     async fn reset(state: &AppState) {
         crate::test_support::reset(state).await;
     }
 
-    /// Seed one reader and their active queue entries.
     async fn seed(db: &AppState, user_id: i32, ids: &[(i32, i32, bool)]) {
         let connection = db::checkout(db).await.expect("seed connection");
         connection
@@ -901,8 +1059,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
-                 queue_position, is_blocked, next_unread_issue_id) \
-                 VALUES ($1, $2, $3, 'Comic', 1, 'active', $4, $5, NULL)",
+                 queue_position, is_blocked) \
+                 VALUES ($1, $2, $3, 'Comic', 1, 'active', $4, $5)",
                 &[
                     &thread_id,
                     &user_id,
@@ -957,9 +1115,11 @@ mod tests {
         const QUEUE_SIZE: i32 = 300;
         const BLOCKED: i32 = 50;
         let _guard = DB_LOCK.lock().await;
-        let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL");
+        let base = crate::test_support::database_url().await;
         let separator = if base.contains('?') { '&' } else { '?' };
-        let url = format!("{base}{separator}options=-c%20log_min_duration_statement%3D0");
+        let url = format!(
+            "{base}{separator}options=-csearch_path%3Dqueue_unit_test%2Cpublic%20-c%20log_min_duration_statement%3D0"
+        );
         let config = Config::from_lookup(|name| match name {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
@@ -974,18 +1134,8 @@ mod tests {
             .expect("measurement seed connection");
         connection
             .execute(
-                "INSERT INTO users (id, username) VALUES (7, 'queue-reader-7') \
-                 ON CONFLICT (id) DO NOTHING",
-                &[],
-            )
-            .await
-            .expect("measurement reader");
-        connection
-            .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
-                 queue_position, is_blocked) \
-                 SELECT g, 7, 'Thread ' || g, 'Comic', 1, 'active', g, g > $1 \
-                 FROM generate_series(1, $2) g",
+                "INSERT INTO threads (id, user_id, status, queue_position, is_blocked) \
+                 SELECT g, 7, 'active', g, g > $1 FROM generate_series(1, $2) g",
                 &[&(QUEUE_SIZE - BLOCKED), &QUEUE_SIZE],
             )
             .await
@@ -1536,8 +1686,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO dependencies \
-                     (id, source_issue_id, target_issue_id, origin, classification, provenance, created_at) \
-                 VALUES (1, 20, 40, 'reader', 'A', 'option-e-queue-test', now())",
+                     (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
+                 VALUES (1, now(), 20, 40, 'reader', 'A', 'option-e-queue-test')",
                 &[],
             )
             .await
@@ -1836,8 +1986,8 @@ mod tests {
         connection
             .execute(
                 "INSERT INTO dependencies \
-                     (id, source_issue_id, target_issue_id, origin, classification, provenance, created_at) \
-                 VALUES (1, 10, 30, 'reader', 'A', 'option-e-lock-test', now())",
+                     (id, created_at, source_issue_id, target_issue_id, origin, classification, provenance) \
+                 VALUES (1, now(), 10, 30, 'reader', 'A', 'option-e-lock-test')",
                 &[],
             )
             .await
@@ -1979,19 +2129,22 @@ mod tests {
         );
     }
 
-    /// Large-queue coverage for the reposition path (#4535).
+    /// Canonical-schema coverage for the reposition path (#4535).
     ///
-    /// Every test in this module runs the canonical Alembic schema, so this one
-    /// adds scale rather than environment: a production-sized queue of 330
-    /// entries with a 247-row blocked tail, the owner-assignment trigger, and
-    /// the deferred `threads.next_unread_issue_id` key all in play.
+    /// The shared `queue_unit_test` fixture is hand-rolled, so it cannot catch a
+    /// production shape difference. The real `threads` row is NOT NULL across ten
+    /// columns and defaults the rest, `events` carries the owner-assignment
+    /// trigger, and `threads(id, next_unread_issue_id)` is a deferred foreign key
+    /// to `issues(thread_id, id)`. This fixture mirrors those constraints and
+    /// seeds a production-sized queue (330 entries, 247 blocked) so the move runs
+    /// against the shape production actually serves.
     #[tokio::test]
-    async fn reposition_keeps_a_large_queue_dense_with_the_blocked_tail_last() {
+    async fn reposition_persists_against_the_production_schema_shape() {
         let _guard = DB_LOCK.lock().await;
         let state = state_with_pool_size(2).await;
         reset(&state).await;
         let user = AuthenticatedUser::for_test(7);
-        seed_large_queue(&state, 7, 330, 247).await;
+        seed_production_shape(&state, 7, 330, 247).await;
 
         // Stored-authority phase: the blocked tail keeps its grouping authority.
         let moved = update_queue_entry(
@@ -2001,7 +2154,7 @@ mod tests {
             Json(QueueEntryPatch { position: 4 }),
         )
         .await
-        .expect("reposition inside a production-sized queue")
+        .expect("reposition against the production-shaped schema")
         .0;
         assert_eq!(moved.thread_id, 3);
         assert_eq!(moved.position, 4);
@@ -2022,7 +2175,8 @@ mod tests {
             "the trigger-accepted reorder event carries the owner"
         );
 
-        // Option E phase: eligibility is evaluated inside the locked transaction.
+        // Option E phase: eligibility evaluated inside the locked transaction,
+        // still against the canonical NOT NULL/trigger/deferred-key shape.
         {
             let _option_e = OptionEEnv::enable();
             let clamped = update_queue_entry(
@@ -2032,7 +2186,7 @@ mod tests {
                 Json(QueueEntryPatch { position: 2 }),
             )
             .await
-            .expect("Option E reposition inside a production-sized queue")
+            .expect("Option E reposition against the production-shaped schema")
             .0;
             assert_eq!(clamped.position, 2);
             assert_eq!(
@@ -2043,26 +2197,45 @@ mod tests {
         }
     }
 
-    /// Seed one reader with `total` active entries, `blocked` of them a blocked tail.
-    async fn seed_large_queue(state: &AppState, user_id: i32, total: i32, blocked: i32) {
-        let connection = db::checkout(state).await.expect("large queue connection");
+    async fn seed_production_shape(state: &AppState, user_id: i32, total: i32, blocked: i32) {
+        let connection = db::checkout(state)
+            .await
+            .expect("production-shape seed connection");
         connection
             .execute(
-                "INSERT INTO users (id, username) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+                "INSERT INTO users (id, username) VALUES ($1, $2)",
                 &[&user_id, &format!("queue-reader-{user_id}")],
             )
             .await
-            .expect("seed large queue reader");
+            .expect("seed owner");
+        // `threads.next_unread_issue_id` is a non-deferrable foreign key, so the
+        // thread rows land with a NULL frontier and are linked after the issues.
         connection
             .execute(
-                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, \
-                 queue_position, is_blocked) \
-                 SELECT g, $1, 'Thread ' || g, 'Comic', 1, 'active', g, g > $2 \
-                 FROM generate_series(1, $3) AS g",
+                "INSERT INTO threads (id, title, format, issues_remaining, queue_position, \
+                 status, created_at, user_id, is_blocked) \
+                 SELECT g, 'Series ' || g, 'series', 5, g, 'active', now(), $1, g > $2 \
+                 FROM generate_series(1, $3) g",
                 &[&user_id, &(total - blocked), &total],
             )
             .await
-            .expect("seed large queue");
+            .expect("seed production-shaped threads");
+        connection
+            .execute(
+                "INSERT INTO issues (id, thread_id, position, status, issue_number, created_at) \
+                 SELECT 100000 + g, g, 1, 'unread', '1', now() \
+                 FROM generate_series(1, $1) g",
+                &[&total],
+            )
+            .await
+            .expect("seed issue frontiers");
+        connection
+            .execute(
+                "UPDATE threads SET next_unread_issue_id = 100000 + id WHERE user_id = $1",
+                &[&user_id],
+            )
+            .await
+            .expect("link issue frontiers");
         drop(Object::take(connection));
     }
 

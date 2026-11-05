@@ -3,7 +3,6 @@ import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
-  useClearManualDie,
   useDismissPending,
   useOverrideRoll,
   useReroll,
@@ -15,7 +14,7 @@ import type { OverrideRollPayload } from '../types'
 import { cast } from '../utils/cast'
 import { invalidateAfterRollDieModeUpdate } from '../query/cacheEffects'
 
-vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined), applyClearedManualDie: vi.fn() }))
+vi.mock('../query/cacheEffects', () => ({ invalidateAfterRollDieModeUpdate: vi.fn().mockResolvedValue(undefined) }))
 
 function wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
@@ -28,7 +27,6 @@ vi.mock('../services/api-roll', () => ({
     override: vi.fn(),
     dismissPending: vi.fn(),
     setDie: vi.fn(),
-    clearManualDie: vi.fn(),
     reroll: vi.fn(),
   },
 }))
@@ -63,8 +61,6 @@ beforeEach(() => {
   mockedRollApi.dismissPending.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.dismissPending>>>(undefined))
   // SAFETY: setDie resolves void; undefined matches the mocked resolution.
   mockedRollApi.setDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.setDie>>>(undefined))
-  // SAFETY: clearManualDie resolves null; null preserves the contract.
-  mockedRollApi.clearManualDie.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.clearManualDie>>>(null))
   // SAFETY: reroll mock returns an empty roll success shape that the test does not inspect.
   mockedRollApi.reroll.mockResolvedValue(cast<Awaited<ReturnType<typeof mockedRollApi.reroll>>>({}))
 })
@@ -88,11 +84,6 @@ it('calls dismiss pending mutation', async () => {
 it('calls set die mutation', async () => {
   await setupMutation(useSetDie, 12)
   expect(mockedRollApi.setDie).toHaveBeenCalledWith(12)
-})
-
-it('calls clear manual die mutation', async () => {
-  await setupMutation(useClearManualDie, undefined)
-  expect(mockedRollApi.clearManualDie).toHaveBeenCalled()
 })
 
 it('refreshes the die and eligible pool after reroll has updated browser snoozes', async () => {

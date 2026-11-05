@@ -12,6 +12,7 @@ use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
+    sync::OnceLock,
     time::Instant,
 };
 use tokio_postgres::{IsolationLevel, Transaction};
@@ -117,12 +118,17 @@ fn volume_key(provider: &str, external_id: &str) -> Option<String> {
 //
 // TODO: Consider defensive pagination or payload limiting if memory usage becomes problematic
 // in production. Monitor payload sizes and consider adding a LIMIT clause for large datasets.
-const SNAPSHOT_SQL: &str = r#"
-WITH
-owned_threads AS MATERIALIZED (
+//
+// The statement is split into its CTE body and its JSON projection so the
+// same owner-scoped constraints can be assembled with different owner-id
+// sources. Every owned row is filtered by the single `me` CTE, which the
+// caller declares: the pre-authenticated loader binds the verified owner id,
+// while the single-statement resource loader resolves it from the folded
+// authentication CTE. One constraint set, two owner-id sources.
+pub(crate) const SNAPSHOT_CTES: &str = r#"owned_threads AS MATERIALIZED (
     SELECT id, status, title, next_unread_issue_id, is_blocked,
            queue_position, catalog_series_id
-    FROM threads WHERE user_id = $1
+    FROM threads WHERE user_id = (SELECT user_id FROM me)
 ),
 owned_issues AS MATERIALIZED (
     SELECT i.id, i.thread_id, i.position, i.status, i.issue_number,
@@ -130,7 +136,7 @@ owned_issues AS MATERIALIZED (
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
 ),
 owned_lists AS (
-    SELECT id, mode FROM custom_cbl_lists WHERE user_id = $1
+    SELECT id, mode FROM custom_cbl_lists WHERE user_id = (SELECT user_id FROM me)
 ),
 owned_entries AS (
     SELECT e.id, e.list_id, e.issue_id, e.gate, e.skipped, e.position
@@ -165,11 +171,11 @@ overlap_rows AS (
     JOIN external_identities c ON c.id = d.continuing_external_identity_id
     JOIN external_identities w ON w.id = d.waiting_external_identity_id
     JOIN owned_lists l ON l.id = d.list_id
-    WHERE d.user_id = $1
+    WHERE d.user_id = (SELECT user_id FROM me)
 ),
 exclusion_rows AS (
     SELECT issue_id, thread_id, provider, external_volume_id
-    FROM collection_exclusions WHERE user_id = $1
+    FROM collection_exclusions WHERE user_id = (SELECT user_id FROM me)
 ),
 issue_volume_rows AS (
     SELECT i.id AS issue_id, e.provider, e.external_id
@@ -177,33 +183,53 @@ issue_volume_rows AS (
     JOIN catalog_issues ci ON ci.id = i.catalog_issue_id
     JOIN catalog_series s ON s.id = ci.catalog_series_id
     JOIN external_identities e ON e.id = s.canonical_external_identity_id
-)
-SELECT jsonb_build_object(
-    'threads', COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id)
-                         FROM owned_threads t), '[]'::jsonb),
-    'issues', COALESCE((SELECT jsonb_agg(to_jsonb(i)
-                         ORDER BY i.thread_id, i.position, i.id)
-                        FROM owned_issues i), '[]'::jsonb),
-    'lists', COALESCE((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id)
-                       FROM owned_lists l), '[]'::jsonb),
-    'entries', COALESCE((SELECT jsonb_agg(to_jsonb(e)
-                         ORDER BY e.list_id, e.position, e.id)
-                         FROM owned_entries e), '[]'::jsonb),
-    'prerequisites', COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id)
-                              FROM reader_prerequisites p), '[]'::jsonb),
-    'evidence', COALESCE((SELECT jsonb_agg(to_jsonb(v))
-                         FROM volume_evidence v), '[]'::jsonb),
-    'overlaps', COALESCE((SELECT jsonb_agg(to_jsonb(o) ORDER BY o.id)
-                         FROM overlap_rows o), '[]'::jsonb),
-    'exclusions', COALESCE((SELECT jsonb_agg(to_jsonb(x))
-                           FROM exclusion_rows x), '[]'::jsonb),
-    'issue_volumes', COALESCE((SELECT jsonb_agg(to_jsonb(v))
-                              FROM issue_volume_rows v), '[]'::jsonb)
-)::text
-"#;
+)"#;
 
-#[derive(Deserialize)]
-struct SnapshotRows {
+/// The snapshot JSON projection over [`SNAPSHOT_CTES`].
+///
+/// The projection is a CTE rather than the statement's final `SELECT` so one
+/// caller can embed the snapshot inside a larger single-statement response
+/// instead of issuing a second statement for the same owner-scoped data.
+pub(crate) const SNAPSHOT_PROJECTION: &str = r#"snapshot AS (
+    SELECT jsonb_build_object(
+        'threads', COALESCE((SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id)
+                             FROM owned_threads t), '[]'::jsonb),
+        'issues', COALESCE((SELECT jsonb_agg(to_jsonb(i)
+                             ORDER BY i.thread_id, i.position, i.id)
+                            FROM owned_issues i), '[]'::jsonb),
+        'lists', COALESCE((SELECT jsonb_agg(to_jsonb(l) ORDER BY l.id)
+                           FROM owned_lists l), '[]'::jsonb),
+        'entries', COALESCE((SELECT jsonb_agg(to_jsonb(e)
+                             ORDER BY e.list_id, e.position, e.id)
+                             FROM owned_entries e), '[]'::jsonb),
+        'prerequisites', COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id)
+                                  FROM reader_prerequisites p), '[]'::jsonb),
+        'evidence', COALESCE((SELECT jsonb_agg(to_jsonb(v))
+                             FROM volume_evidence v), '[]'::jsonb),
+        'overlaps', COALESCE((SELECT jsonb_agg(to_jsonb(o) ORDER BY o.id)
+                             FROM overlap_rows o), '[]'::jsonb),
+        'exclusions', COALESCE((SELECT jsonb_agg(to_jsonb(x))
+                               FROM exclusion_rows x), '[]'::jsonb),
+        'issue_volumes', COALESCE((SELECT jsonb_agg(to_jsonb(v))
+                                  FROM issue_volume_rows v), '[]'::jsonb)
+    ) AS value
+)"#;
+
+/// The owner-scoped snapshot statement for an already authenticated owner.
+///
+/// The verified owner id is bound as `$1`, so this loader never issues an
+/// authentication statement of its own.
+fn preauthenticated_statement() -> &'static str {
+    static SQL: OnceLock<String> = OnceLock::new();
+    SQL.get_or_init(|| {
+        format!(
+            "WITH me AS (SELECT $1::int AS user_id),\n{SNAPSHOT_CTES},\n{SNAPSHOT_PROJECTION}\nSELECT value::text FROM snapshot"
+        )
+    })
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct SnapshotRows {
     threads: Vec<ThreadRow>,
     issues: Vec<IssueRow>,
     lists: Vec<ListRow>,
@@ -214,7 +240,7 @@ struct SnapshotRows {
     exclusions: Vec<ExclusionRow>,
     issue_volumes: Vec<IssueVolumeRow>,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ThreadRow {
     id: i32,
     status: String,
@@ -223,7 +249,7 @@ struct ThreadRow {
     is_blocked: bool,
     queue_position: i32,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct IssueRow {
     id: i32,
     thread_id: i32,
@@ -231,12 +257,12 @@ struct IssueRow {
     status: String,
     issue_number: String,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ListRow {
     id: i32,
     mode: String,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct EntryRow {
     id: i32,
     list_id: i32,
@@ -244,7 +270,7 @@ struct EntryRow {
     gate: String,
     skipped: bool,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct PrerequisiteRow {
     id: i32,
     source_issue_id: i32,
@@ -252,14 +278,14 @@ struct PrerequisiteRow {
     classification: Option<String>,
     provenance: Option<String>,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct VolumeEvidenceRow {
     thread_id: i32,
     provider: String,
     external_id: String,
     entity_type: String,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct OverlapRow {
     list_id: i32,
     continuing_provider: String,
@@ -267,14 +293,14 @@ struct OverlapRow {
     waiting_provider: String,
     waiting_external_id: String,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct ExclusionRow {
     issue_id: Option<i32>,
     thread_id: Option<i32>,
     provider: Option<String>,
     external_volume_id: Option<String>,
 }
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct IssueVolumeRow {
     issue_id: i32,
     provider: String,
@@ -286,7 +312,7 @@ async fn load_transaction(
     user: AuthenticatedUser,
 ) -> Result<OptionInputs, ApiError> {
     let row = tx
-        .query_one(SNAPSHOT_SQL, &[&user.id()])
+        .query_one(preauthenticated_statement(), &[&user.id()])
         .await
         .map_err(db::query_error)?;
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
@@ -300,7 +326,12 @@ async fn load_transaction(
     assemble_snapshot(snapshot)
 }
 
-fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
+/// Assemble the validated Option E inputs from one decoded snapshot.
+///
+/// The caller owns the statement that produced the snapshot; this only turns
+/// the owner-scoped rows into the evaluator's inputs and fails closed on a
+/// row that references data the reader does not own.
+pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, ApiError> {
     let core = CoreReadingInputs {
         threads: snapshot
             .threads
@@ -510,7 +541,7 @@ pub async fn load_option_diagnostics(
     }
 }
 /// Validate loaded inputs, failing closed on missing or foreign constraint endpoints.
-fn validated(
+pub(crate) fn validated(
     inputs: OptionInputs,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
     crate::reading_constraints::ValidatedReadingInputs::new(inputs, &BTreeMap::new()).map_err(

@@ -29,7 +29,15 @@ WRITE_ROUTE_RE = re.compile(
     r'(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)\s*,?\s*\)',
     re.DOTALL,
 )
-DB_TEST_MARKER = "RUST_ROLL_TEST_DATABASE_URL"
+# A write-path test is database-backed when it reaches the disposable database.
+# `test_support` is the canonical accessor and the raw env var is the legacy /
+# skip-guard spelling, so accept either.
+DB_TEST_MARKERS = (
+    "RUST_ROLL_TEST_DATABASE_URL",
+    "test_support::database_url",
+    "test_support::test_state",
+    "test_support::reset_for_test",
+)
 
 # PATCH issue handler delegates its write to a transaction-bound service.
 # Require the real delegation and the writer's own DB-backed mutation test.
@@ -121,7 +129,9 @@ def _tests_write_path(module: str, handler: str) -> bool:
         handler = writer
     else:
         tests = _test_module(module)
-    if not tests or DB_TEST_MARKER not in tests or "#[tokio::test]" not in tests:
+    if not tests or "#[tokio::test]" not in tests:
+        return False
+    if not any(marker in tests for marker in DB_TEST_MARKERS):
         return False
     # Word-boundary match so a read helper like `existing_offer(` does not
     # masquerade as a call to `offer(`.
@@ -234,8 +244,9 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
             "against the canonical schema"
         )
         parity_source = parity.read_text(encoding="utf-8")
-        assert DB_TEST_MARKER in parity_source, (
-            f"{parity.name} must run against RUST_ROLL_TEST_DATABASE_URL"
+        assert any(marker in parity_source for marker in DB_TEST_MARKERS), (
+            f"{parity.name} must run against the disposable PostgreSQL database "
+            "(RUST_ROLL_TEST_DATABASE_URL or a test_support accessor)"
         )
         assert "Base.metadata.create_all" in parity_source, (
             f"{parity.name} must build the canonical app schema"

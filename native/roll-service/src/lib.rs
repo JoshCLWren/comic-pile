@@ -24,12 +24,16 @@ pub mod reading_session;
 pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
+pub mod roll_resources;
 mod session_bandwidth;
 pub mod skip;
 pub mod threads;
 
-#[cfg(test)]
-mod test_support;
+/// Test scaffolding shared by unit and integration tests.
+///
+/// Not `#[cfg(test)]` because integration tests link the library without that
+/// cfg. Nothing here runs unless a test calls it.
+pub mod test_support;
 
 use axum::{
     extract::{Request, State},
@@ -247,6 +251,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_repair::drain),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v2/roll/die-state", get(roll_resources::die_state))
+        .route(
+            "/api/v2/roll/eligible-issue-ids",
+            get(roll_resources::eligible_issue_ids),
+        )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),

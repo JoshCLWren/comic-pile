@@ -10,10 +10,8 @@ from app.main import create_app
 
 _ROLL_PATHS = (
     "/roll/",
-    "/roll/clear-manual-die",
     "/roll/dismiss-pending",
     "/roll/override",
-    "/roll/set-die",
 )
 
 
@@ -62,8 +60,8 @@ def _route_by_path(app: FastAPI, path: str) -> APIRoute:
     )
 
 
-def test_roll_and_rating_v1_aliases_reuse_legacy_handlers() -> None:
-    """Canonical v1 aliases must share handlers with compatibility routes."""
+def test_roll_v1_aliases_and_retired_rate_routes() -> None:
+    """Retained Roll aliases match; both retired Python rating paths are absent."""
     app = create_app(serve_frontend=False)
 
     for suffix in _ROLL_PATHS:
@@ -72,18 +70,18 @@ def test_roll_and_rating_v1_aliases_reuse_legacy_handlers() -> None:
         assert canonical.endpoint is legacy.endpoint
         assert canonical.methods == legacy.methods
 
-    legacy_rate = _route_by_path(app, "/api/rate/")
-    canonical_rate = _route_by_path(app, "/api/v1/rate/")
-    assert canonical_rate.endpoint is legacy_rate.endpoint
-    assert canonical_rate.methods == legacy_rate.methods
+    effective_paths = {path for path, _ in _iter_effective_api_routes(app)}
+    assert "/api/rate/" not in effective_paths
+    assert "/api/v1/rate/" not in effective_paths
 
 
-def test_roll_and_rating_v1_routes_are_exposed_once_in_openapi() -> None:
+def test_roll_v1_routes_have_unique_operation_ids_without_retired_rate() -> None:
     """OpenAPI must expose canonical routes without duplicate operation IDs."""
     app = create_app(serve_frontend=False)
     schema = app.openapi()
 
-    expected_paths = {f"/api/v1{suffix}" for suffix in _ROLL_PATHS} | {"/api/v1/rate/"}
+    expected_paths = {f"/api/v1{suffix}" for suffix in _ROLL_PATHS}
+    assert "/api/v1/rate/" not in schema["paths"]
     assert expected_paths <= schema["paths"].keys()
 
     operation_ids = [

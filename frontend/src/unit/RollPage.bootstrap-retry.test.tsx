@@ -16,7 +16,6 @@ vi.mock('../contexts/useBugReportRestore', () => ({
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
-  useClearManualDie: () => ({ mutate: vi.fn(), isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
@@ -57,9 +56,6 @@ vi.mock('../services/api', () => ({
   skipApi: {
     skip: vi.fn().mockResolvedValue(undefined),
     unskip: vi.fn().mockResolvedValue(undefined),
-  },
-  sessionApi: {
-    updateMode: vi.fn().mockResolvedValue({}),
   },
 }))
 vi.mock('../services/api-reading-orders', () => ({

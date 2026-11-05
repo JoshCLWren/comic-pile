@@ -100,8 +100,23 @@ export async function applyRatedThreadCache(
   client: QueryClient,
   thread: RateResponsePayload,
 ): Promise<void> {
-  client.setQueryData(queryKeys.thread.detail(thread.id), thread)
-  client.setQueryData(queryKeys.thread.summary(thread.id), thread)
+  // The native PATCH writer returns issue/thread progress, not a complete
+  // ThreadResponse. The compatibility adapter fills other fields solely for
+  // legacy callers. Never overwrite real cached thread metadata, queue rank,
+  // timestamps, or ownership flags with those non-authoritative placeholders.
+  const mergeProgress = (cached: Thread | undefined): Thread | undefined => {
+    if (!cached) return undefined
+    return {
+      ...cached,
+      issues_remaining: thread.issues_remaining,
+      status: thread.status,
+      last_rating: thread.last_rating,
+      reading_progress: thread.reading_progress,
+      next_unread_issue_id: thread.next_unread_issue_id,
+    }
+  }
+  client.setQueryData<Thread>(queryKeys.thread.detail(thread.id), mergeProgress)
+  client.setQueryData<Thread>(queryKeys.thread.summary(thread.id), mergeProgress)
 
   // #2720: seed the session last-read projection from the committed rate
   // response before the authoritative bootstrap refresh lands. Only write when
@@ -794,14 +809,13 @@ export function applyUpdatedPreferencesCache(
 }
 
 /**
- * Refresh the resources that carry `manual_die` after a die-mode change
- * (`POST /roll/set-die` or `POST /roll/clear-manual-die`).
+ * Refresh the resources that carry the die after a die command
+ * (`POST /v2/roll/dice-command` or `POST /v2/roll/reset`).
  *
- * Pinned-versus-automatic mode is server truth, and both the roll bootstrap and
- * the current session report `manual_die`. Without this invalidation the cached
- * bootstrap keeps the pre-change value for the rest of the Roll session, so the
- * rating card can keep promising a ladder move that manual mode suppresses
- * (#3144) and the header's `Auto` segment keeps reading as selected.
+ * The die is server truth, and both the roll bootstrap and the current session
+ * report it. Without this invalidation the cached bootstrap keeps the
+ * pre-command value for the rest of the Roll session, so the header can keep
+ * showing the die the reader just replaced.
  */
 export async function invalidateAfterRollDieModeUpdate(
   client: QueryClient,
@@ -819,35 +833,6 @@ export async function invalidateAfterRollDieModeUpdate(
 }
 
 /**
- * Invalidate the roll bootstrap and current session after a session-mode
- * update. Replaces the imperative `sessionApi.updateMode` + `refetchBootstrap()`
- * pattern in RollPage (#2649).
- *
- * A session-mode change and a die-mode change project the same retained
- * resources, so both share one invalidation implementation.
- */
-export function applyClearedManualDie(
-  client: QueryClient,
-  automaticDie: number,
-): void {
-  const current = client.getQueryData<RollBootstrapResponse | null>(
-    queryKeys.roll.bootstrap(),
-  )
-  if (!current) return
-  client.setQueryData<RollBootstrapResponse>(queryKeys.roll.bootstrap(), {
-    ...current,
-    current_die: automaticDie,
-    manual_die: null,
-  })
-}
-
-export async function invalidateAfterSessionModeUpdate(
-  client: QueryClient,
-): Promise<void> {
-  await invalidateAfterRollDieModeUpdate(client)
-}
-
-/**
  * Mark the roll bootstrap query stale when navigating away from Roll
  * (e.g., Roll -> Queue). This avoids an eager HTTP request on navigation
  * while preserving the #3761 pending-roll correctness guarantee: the query
@@ -860,7 +845,7 @@ export async function invalidateRollBootstrapOnNavigation(
   await client.invalidateQueries({
     queryKey: queryKeys.roll.bootstrap(),
     exact: true,
-    refetchType: 'all',
+    refetchType: 'none',
   })
 }
 

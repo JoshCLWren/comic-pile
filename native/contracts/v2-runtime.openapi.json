@@ -761,6 +761,92 @@
         ]
       }
     },
+    "/api/v2/roll/die-state": {
+      "get": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll die-state read.",
+        "description": "The published response is the actual handler DTO, so the current logical die, approved d2-d20 ladder, default die and last roll stay in the live contract.",
+        "operationId": "die_state_documentation",
+        "responses": {
+          "200": {
+            "description": "Current logical die, approved ladder and last roll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollDieStateResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/roll/eligible-issue-ids": {
+      "get": {
+        "tags": [
+          "roll"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 eligible-identifier read.",
+        "description": "The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.",
+        "operationId": "eligible_issue_ids_documentation",
+        "parameters": [
+          {
+            "name": "snoozed",
+            "in": "query",
+            "description": "Comma-separated browser-owned temporary snoozed thread identifiers",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered eligible issue identifiers for the current die",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollEligibleIssueIdsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid temporary snooze identifiers"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/roll/offer": {
       "post": {
         "tags": [
@@ -1970,6 +2056,13 @@
             "format": "double",
             "description": "Effective issue rating in 0.5-point steps. Omit to keep the stored rating."
           },
+          "source": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Source of the issue action. Omitted or \"direct\" is a manual read from a\nThread row: it never steps the die and never repositions the queue.\n\"roll_offer\" is a Roll completion: it applies the Roll rating semantics\n(die stepping, queue placement, and a link back to the originating offer\nevent) in the same transaction as the read."
+          },
           "status": {
             "type": [
               "string",
@@ -1990,6 +2083,14 @@
           "replayed"
         ],
         "properties": {
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source."
+          },
           "final_rating": {
             "type": [
               "number",
@@ -2430,6 +2531,130 @@
           },
           "token": {
             "type": "string"
+          }
+        }
+      },
+      "RollDieStateResponse": {
+        "type": "object",
+        "description": "The reader's current logical die and the approved ladder.",
+        "required": [
+          "die",
+          "ladder",
+          "default_die"
+        ],
+        "properties": {
+          "default_die": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The die an explicit reset returns to."
+          },
+          "die": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The current logical die."
+          },
+          "ladder": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The approved dice ladder, smallest to largest."
+          },
+          "last_roll": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RollLastRoll",
+                "description": "The most recent recorded roll, when the reader has rolled."
+              }
+            ]
+          }
+        }
+      },
+      "RollEligibleIssueIdsResponse": {
+        "type": "object",
+        "description": "The ordered eligible issue identifiers for the current die.",
+        "required": [
+          "die",
+          "issue_ids",
+          "thread_ids"
+        ],
+        "properties": {
+          "die": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The logical die that bounded the list."
+          },
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The eligible issue identifiers, in queue order."
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "The owning thread identifiers, parallel to `issue_ids`."
+          }
+        }
+      },
+      "RollLastRoll": {
+        "type": "object",
+        "description": "The most recent Roll recorded for this reader.",
+        "properties": {
+          "die": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The die that produced the roll."
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The rolled issue."
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The rolled issue number."
+          },
+          "result": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The recorded roll result."
+          },
+          "rolled_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When the roll was recorded."
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "The rolled thread."
           }
         }
       },

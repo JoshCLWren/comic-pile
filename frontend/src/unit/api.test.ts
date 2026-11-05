@@ -18,7 +18,6 @@ const {
   migrationApi,
   preferencesApi,
   queueApi,
-  rateApi,
   rollApi,
   sessionApi,
   snoozeApi,
@@ -159,15 +158,12 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.dismissPending()
   await rollApi.reroll()
   await rollApi.setDie(6)
-  await rollApi.clearManualDie()
-  await rateApi.rate({ thread_id: 1, rating: 4 })
   await sessionApi.list({ status: 'complete' }, 'page')
   await sessionApi.get(1)
   await sessionApi.getCurrent()
   await sessionApi.getDetails('2')
   await sessionApi.getSnapshots(2)
   await sessionApi.restoreSessionStart(2)
-  await sessionApi.updateMode({ bandwidth: 'light', intent: 'familiar' })
   await undoApi.undo(1, 'snap')
   await undoApi.listSnapshots(1)
   await dependenciesApi.getIssueDependencies(2)
@@ -191,26 +187,12 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses canonical v1 paths for session, snooze, and undo resources', async () => {
-  await sessionApi.list()
-  await sessionApi.get(7)
-  await sessionApi.getCurrent()
-  await sessionApi.getDetails(7)
-  await sessionApi.getSnapshots(7)
-  await sessionApi.restoreSessionStart(7)
-  await sessionApi.updateMode({ bandwidth: 'light' })
+it('uses canonical v1 paths for snooze and undo resources', async () => {
   await snoozeApi.snooze()
   await snoozeApi.unsnooze(9)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
-  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/current/')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
-  expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
-  expect(patch).toHaveBeenCalledWith('/v1/roll/session-mode', { bandwidth: 'light' })
   expect(post).toHaveBeenCalledWith('/v1/snooze/')
   expect(post).toHaveBeenCalledWith('/v1/snooze/9/unsnooze')
   expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')

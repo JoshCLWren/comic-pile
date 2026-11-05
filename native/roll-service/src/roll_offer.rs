@@ -11,7 +11,7 @@ use crate::{
     dice_mutation::{self, DiceCommand},
     dice_state, option_inputs,
     reading_session::{self, SessionPolicy},
-    roll_pool::offer_frontiers,
+    roll_pool::{offer_frontiers, MAX_TEMPORARY_SNOOZES},
     ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
@@ -21,8 +21,6 @@ use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use tokio_postgres::IsolationLevel;
 
-/// Maximum number of browser-supplied temporary snoozes accepted per roll.
-const MAX_COOKIE_SNOOZES: usize = 200;
 /// Leave room for the derived snooze key inside the writer's 128-byte limit.
 const MAX_OFFER_KEY: usize = 100;
 
@@ -301,7 +299,7 @@ pub async fn offer(
     Json(request): Json<RollOfferRequest>,
 ) -> Result<Json<RollOfferResponse>, ApiError> {
     validate_key(&request.idempotency_key)?;
-    if request.snoozed_thread_ids.len() > MAX_COOKIE_SNOOZES {
+    if request.snoozed_thread_ids.len() > MAX_TEMPORARY_SNOOZES {
         return Err(ApiError(
             StatusCode::UNPROCESSABLE_ENTITY,
             "Too many temporary snoozes".to_string(),
@@ -582,7 +580,15 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    async fn test_client(url: &str, schema: &str) -> tokio_postgres::Client {
+    /// Reset the canonical Alembic schema, seed `statements`, and hold the lock.
+    async fn seeded(
+        url: &str,
+        statements: &str,
+    ) -> (tokio_postgres::Client, tokio::sync::MutexGuard<'static, ()>) {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
         let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
@@ -590,60 +596,36 @@ mod tests {
             let _ = connection.await;
         });
         client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .batch_execute(statements)
             .await
-            .unwrap();
-        client
+            .expect("seed canonical schema");
+        (client, guard)
     }
 
     #[tokio::test]
     async fn stored_offer_lookup_and_metadata_are_owner_scoped() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("roll_offer_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL, title text,
-                     format text, issues_remaining integer, queue_position integer,
-                     total_issues integer, reading_progress text, next_unread_issue_id integer
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer, issue_number text
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, timestamp timestamptz DEFAULT NOW(),
-                     selected_thread_id integer, die integer, result integer,
-                     issue_id integer, issue_number text, selection_method text,
-                     context json
-                 );
-                 INSERT INTO {schema}.users VALUES (1), (2);
-                 INSERT INTO {schema}.threads VALUES
-                     (10, 1, 'Saga', 'Comic', 3, 1, 12, '25%', 100);
-                 INSERT INTO {schema}.issues VALUES (100, 10, '1');
-                 INSERT INTO {schema}.events
+        let url = crate::test_support::database_url().await;
+        let (client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status,
+                      queue_position, total_issues, reading_progress)
+                 VALUES (10, 1, 'Saga', 'Comic', 3, 'active', 1, 12, '25%');
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1);
+                 UPDATE threads SET next_unread_issue_id = 100 WHERE id = 10;
+                 INSERT INTO events
                      (user_id, type, selected_thread_id, die, result, issue_id,
                       issue_number, context)
                  VALUES (1, 'roll', 10, 6, 2, 100, '1',
-                         '{{\"roll_offer_key\":\"roll-offer-abc\",\"snoozed_thread_id\":7}}');"
-            ))
-            .await
-            .unwrap();
-        let client = test_client(&url, &schema).await;
+                         '{"roll_offer_key":"roll-offer-abc","snoozed_thread_id":7}'::json);"#,
+        )
+        .await;
         let owner = AuthenticatedUser::for_test(1);
         let other = AuthenticatedUser::for_test(2);
 
@@ -666,57 +648,26 @@ mod tests {
         assert_eq!(metadata.thread_id, 10);
         assert_eq!(metadata.title, "Saga");
         assert!(offer_metadata(&client, other, 10).await.is_err());
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn offer_event_insert_binds_text_json_context() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("offer_insert_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     type text NOT NULL, user_id integer, session_id integer,
-                     selected_thread_id integer, die integer, result integer,
-                     issue_id integer, issue_number text, selection_method text,
-                     context json, timestamp timestamptz DEFAULT NOW()
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES (1, 1);
-                 INSERT INTO {schema}.threads VALUES (10, 1);
-                 INSERT INTO {schema}.issues VALUES (100, 10);"
-            ))
-            .await
-            .unwrap();
-        let client = test_client(&url, &schema).await;
+        let url = crate::test_support::database_url().await;
+        let (client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6);
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1);"#,
+        )
+        .await;
         let context = json!({
             "roll_offer_key": "roll-offer-0123456789",
             "snoozed_thread_id": null,
@@ -743,59 +694,26 @@ mod tests {
             .await
             .unwrap();
         assert!(row.get::<_, i32>(0) > 0);
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn persist_offer_writes_the_event_and_pending_bridge() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("offer_write_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz
-                 );
-                 CREATE TABLE {schema}.threads (
-                     id integer PRIMARY KEY, user_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.issues (
-                     id integer PRIMARY KEY, thread_id integer NOT NULL
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     type text NOT NULL, user_id integer, session_id integer,
-                     selected_thread_id integer, die integer, result integer,
-                     issue_id integer, issue_number text, selection_method text,
-                     context json, timestamp timestamptz DEFAULT NOW()
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES (1, 1, NULL, NULL, NULL);
-                 INSERT INTO {schema}.threads VALUES (10, 1);
-                 INSERT INTO {schema}.issues VALUES (100, 10);"
-            ))
-            .await
-            .unwrap();
-        let mut client = test_client(&url, &schema).await;
+        let url = crate::test_support::database_url().await;
+        let (mut client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO sessions (id, user_id, start_die) VALUES (1, 1, 6);
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1);"#,
+        )
+        .await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -856,10 +774,5 @@ mod tests {
         assert_eq!(stored.die, 8);
         assert_eq!(stored.result, 2);
         assert_eq!(stored.snoozed_thread_id, Some(9));
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }

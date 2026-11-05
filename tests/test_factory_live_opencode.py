@@ -56,6 +56,21 @@ def test_new_catalog_models_rotate_without_roster_pr(tmp_path: Path) -> None:
     assert selected == set(selector.free_models(raw))
 
 
+def test_crouton_alpha_joins_dynamic_opencode_free_rotation(tmp_path: Path) -> None:
+    """The new stealth Zen free model uses existing slots, not a fixed worker."""
+    raw = catalog(
+        ("big-pickle", 0, 0),
+        ("crouton-alpha-free", 0, 0),
+        ("premium-free", 1, 1),
+    )
+    assert selector.free_models(raw) == ["big-pickle", "crouton-alpha-free"]
+    selected = {
+        selector.select_model(raw, 41, turn, roster(tmp_path))["runtime_model"]
+        for turn in range(2)
+    }
+    assert selected == {"opencode/big-pickle", "opencode/crouton-alpha-free"}
+
+
 def test_paid_names_do_not_bypass_free_cost_policy() -> None:
     raw = catalog(
         ("premium-free", 0, 1),
@@ -64,6 +79,14 @@ def test_paid_names_do_not_bypass_free_cost_policy() -> None:
         ("big-pickle", 0, 0),
     )
     assert selector.free_models(raw) == ["big-pickle", "eligible-by-cost"]
+
+
+def test_retired_models_are_not_reselected_from_a_live_catalog(tmp_path: Path) -> None:
+    """Permanent retirement overrides even a still-free provider catalog entry."""
+    raw = catalog(("deepseek-v4.1-flash-free", 0, 0), ("big-pickle", 0, 0))
+    assert selector.free_models(raw) == ["big-pickle"]
+    for turn in range(3):
+        assert selector.select_model(raw, 41, turn, roster(tmp_path))["model"] == "big-pickle"
 
 
 def test_empty_catalog_and_non_opencode_worker_fail_closed(tmp_path: Path) -> None:

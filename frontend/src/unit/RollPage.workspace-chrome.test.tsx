@@ -49,9 +49,7 @@ function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>>
     pool: [],
     isRatingView: false,
     setDiePending: false,
-    clearManualDiePending: false,
     onSetDie: vi.fn(),
-    onClearManualDie: vi.fn(),
     onOpenOverride: vi.fn(),
     onOpenDieModal: vi.fn(),
     ...overrides,
@@ -113,7 +111,8 @@ describe('Roll rating header chrome (#2712)', () => {
     // to that view, never a replacement for controls the die view still needs.
     expect(screen.getByRole('button', { name: 'Pick manually' })).toBeInTheDocument()
     expect(container.querySelector('[data-roll-die-selector="primary"]')).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Auto' })).toBeInTheDocument()
+    // The die is event-derived, so there is no Auto/Manual segment (#4353).
+    expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()
   })
 })
 

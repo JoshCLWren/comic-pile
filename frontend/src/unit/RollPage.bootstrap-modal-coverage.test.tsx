@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
@@ -36,7 +36,6 @@ vi.mock('../hooks/useRollBootstrap', () => ({
 }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: state.setDiePending }),
-  useClearManualDie: () => ({ mutate: spies.clearDie, isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: () => ({ mutate: vi.fn(), isPending: false }),
   useDismissPending: () => ({ mutate: vi.fn(), isPending: false }),
@@ -73,9 +72,6 @@ vi.mock('../services/api', () => ({
   skipApi: {
     skip: vi.fn().mockResolvedValue(undefined),
     unskip: vi.fn().mockResolvedValue(undefined),
-  },
-  sessionApi: {
-    updateMode: vi.fn().mockResolvedValue({}),
   },
 }))
 vi.mock('../services/api-reading-orders', () => ({
@@ -159,12 +155,8 @@ describe('RollPage bootstrap modal coverage', () => {
     await user.click(screen.getByRole('button', { name: 'close modal' }))
     expect(screen.queryByRole('heading', { name: 'Pick manually' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: /current die d6, manual mode/i }))
-    const dieModalTitle = screen.getByRole('heading', { name: 'Select Die' })
-    expect(dieModalTitle).toBeInTheDocument()
-    const dieModal = dieModalTitle.closest('section')
-    if (!dieModal) throw new Error('Die controls must be rendered inside the Select Die modal')
-    expect(within(dieModal).getByRole('button', { name: 'Reset Dice' })).toBeVisible()
+    await user.click(screen.getByRole('button', { name: /^current die d6$/i }))
+    expect(screen.getByRole('heading', { name: 'Select Die' })).toBeInTheDocument()
     const d8Buttons = screen.getAllByRole('button', { name: 'd8' })
     await user.click(d8Buttons[d8Buttons.length - 1]!)
     await waitFor(() => expect(spies.setDie).toHaveBeenCalledWith(8))
