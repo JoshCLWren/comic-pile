@@ -47,4 +47,4 @@ jobs:
             echo "::error::ComicVine worker response was invalid or COMICVINE_API_KEY is missing in Vercel production."
             exit 1
           fi
-          jq -r '"ComicVine bounded drain: claimed=\\(.claimed), completed=\\(.completed), no_credits=\\(.no_credits), failed=\\(.failed), deferred=\\(.deferred)"' "$response" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '"ComicVine bounded drain: claimed=\(.claimed), completed=\(.completed), no_credits=\(.no_credits), failed=\(.failed), deferred=\(.deferred)"' "$response" >> "$GITHUB_STEP_SUMMARY"
