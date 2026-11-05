@@ -68,7 +68,6 @@ _EXPORT_MODULES: dict[str, str] = {
     "ThemeId": "app.schemas.preferences",
     "UserPreferencesResponse": "app.schemas.preferences",
     "UserPreferencesPatchRequest": "app.schemas.preferences",
-    "RollRequest": "app.schemas.roll",
     "RollResponse": "app.schemas.roll",
     "OverrideRequest": "app.schemas.roll",
     "SetCurrentIssueRequest": "app.schemas.roll",
@@ -145,7 +144,6 @@ __all__ = [
     "RecommendationDiagnosticsResponse",
     "RecommendationExplanationResponse",
     "RefreshTokenRequest",
-    "RollRequest",
     "RollResponse",
     "RollingRecommendationContext",
     "SessionBandwidthState",
@@ -264,7 +262,6 @@ if TYPE_CHECKING:
     )
     from app.schemas.roll import (
         OverrideRequest,
-        RollRequest,
         RollResponse,
         SetCurrentIssueRequest,
         SetCurrentIssueResponse,

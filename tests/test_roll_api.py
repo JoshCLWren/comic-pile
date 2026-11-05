@@ -2,26 +2,26 @@
 
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from tests.roll_flow import roll_pending_thread
+
 
 @pytest.mark.asyncio
-async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
-    """POST /roll/ returns valid thread."""
-    response = await auth_client.post("/api/v1/roll/")
-    assert response.status_code == 200
+async def test_roll_success(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """The retained Roll flow returns a valid thread."""
+    data = await roll_pending_thread(async_db)
 
-    data = response.json()
-    assert "thread_id" in data
-    assert "title" in data
-    assert "die_size" in data
-    assert "result" in data
-    assert data["die_size"] == 8
-    assert 1 <= data["result"] <= 8
+    assert data.title
+    assert data.die_size == 8
+    assert 1 <= data.result <= 8
 
     thread_ids = [t.id for t in sample_data["threads"] if t.status == "active"]
-    assert data["thread_id"] in thread_ids
+    assert data.thread_id in thread_ids
 
 
 @pytest.mark.asyncio
@@ -46,9 +46,10 @@ async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) ->
 
     await get_or_create_user_async(async_db)
 
-    response = await auth_client.post("/api/v1/roll/")
-    assert response.status_code == 400
-    assert "No active threads" in response.json()["detail"]
+    with pytest.raises(HTTPException) as exc_info:
+        await roll_pending_thread(async_db)
+    assert exc_info.value.status_code == 400
+    assert "No active threads" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio
@@ -71,38 +72,19 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
     await async_db.commit()
     await async_db.refresh(thread)
 
-    response = await auth_client.post("/api/v1/roll/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["thread_id"] == thread.id
-    assert 1 <= data["result"] <= 1
-
-
-@pytest.mark.asyncio
-async def test_roll_blocked_when_pending_exists(
-    auth_client: AsyncClient, sample_data: dict
-) -> None:
-    """POST /roll/ returns 409 when a pending thread exists."""
-    _ = sample_data
-
-    first_response = await auth_client.post("/api/v1/roll/")
-    assert first_response.status_code == 200
-
-    second_response = await auth_client.post("/api/v1/roll/")
-    assert second_response.status_code == 409
-    assert "already pending" in second_response.json()["detail"]
+    data = await roll_pending_thread(async_db)
+    assert data.thread_id == thread.id
+    assert 1 <= data.result <= 1
 
 
 @pytest.mark.asyncio
 async def test_dismiss_pending_clears_pending_thread(
-    auth_client: AsyncClient, sample_data: dict
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """POST /roll/dismiss-pending clears pending thread in current session."""
     _ = sample_data
 
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
+    await roll_pending_thread(async_db)
 
     before_session = await auth_client.get("/api/v1/sessions/current/")
     assert before_session.status_code == 200
@@ -133,49 +115,6 @@ async def test_dismiss_pending_when_no_pending_exists(
     after_session = await auth_client.get("/api/v1/sessions/current/")
     assert after_session.status_code == 200
     assert after_session.json()["pending_thread_id"] is None
-
-
-@pytest.mark.asyncio
-async def test_roll_pending_message_does_not_leak_other_user_thread_title(
-    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
-) -> None:
-    """POST /roll/ does not leak another user's thread title in pending-roll detail."""
-    import os
-    from datetime import UTC, datetime
-
-    from app.models import ReadingSession, Thread
-    from tests.conftest import get_or_create_user_async
-
-    session_response = await auth_client.get("/api/v1/sessions/current/")
-    assert session_response.status_code == 200
-    current_session_id = session_response.json()["id"]
-
-    other_user = await get_or_create_user_async(async_db, username=f"other_user_{os.getpid()}")
-    private_title = "Private Other User Thread"
-    private_thread = Thread(
-        title=private_title,
-        format="Comic",
-        issues_remaining=3,
-        queue_position=99,
-        status="active",
-        user_id=other_user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(private_thread)
-    await async_db.commit()
-    await async_db.refresh(private_thread)
-
-    current_session = await async_db.get(ReadingSession, current_session_id)
-    assert current_session is not None
-    current_session.pending_thread_id = private_thread.id
-    current_session.pending_thread_updated_at = datetime.now(UTC)
-    await async_db.commit()
-
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 409
-    detail = roll_response.json()["detail"]
-    assert "already pending" in detail
-    assert private_title not in detail
 
 
 @pytest.mark.asyncio
@@ -286,12 +225,9 @@ async def test_roll_die_boundary_caps_result(
     async_db.add_all(threads)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["die_size"] == 4
-    assert 1 <= data["result"] <= 4
+    data = await roll_pending_thread(async_db)
+    assert data.die_size == 4
+    assert 1 <= data.result <= 4
 
 
 @pytest.mark.asyncio
@@ -337,12 +273,9 @@ async def test_roll_d20_includes_all_available_threads(
     async_db.add_all(threads)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["die_size"] == 20
-    assert 1 <= data["result"] <= 6
+    data = await roll_pending_thread(async_db)
+    assert data.die_size == 20
+    assert 1 <= data.result <= 6
 
 
 @pytest.mark.asyncio
@@ -402,13 +335,10 @@ async def test_roll_snoozed_thread_excluded_from_pool(
     session.snoozed_thread_ids = [snoozed_thread.id]
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["die_size"] == 4
-    assert 1 <= data["result"] <= 4
-    assert data["thread_id"] != snoozed_thread.id
+    data = await roll_pending_thread(async_db)
+    assert data.die_size == 4
+    assert 1 <= data.result <= 4
+    assert data.thread_id != snoozed_thread.id
 
 
 @pytest.mark.asyncio
@@ -436,3 +366,23 @@ async def test_retired_session_mode_endpoint_not_found(auth_client: AsyncClient)
     )
     assert response.status_code == 404
     assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["/api/v1/roll/", "/api/roll/"])
+async def test_retired_roll_mutation_endpoint_not_found(
+    auth_client: AsyncClient, path: str
+) -> None:
+    """POST /api/v1/roll/ was retired (#4336). Both aliases return 404."""
+    response = await auth_client.post(path)
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_retired_roll_mutation_absent_from_openapi(auth_client: AsyncClient) -> None:
+    """The retired Roll mutation is no longer advertised as an active capability."""
+    response = await auth_client.get("/openapi.json")
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+    assert "post" not in paths.get("/api/v1/roll/", {})
