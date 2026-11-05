@@ -71,7 +71,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     // Verify the response body matches the expected schema
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
-    const responseBody = (await response.json()) as unknown as IssueReadRateResponse
+    const responseBody = (await response.json()) as IssueReadRateResponse
 
     // IssueReadRateResponse schema validation
     expect(responseBody.issue).toBeDefined()
@@ -137,7 +137,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     // Clear any stored auth
     await page.evaluate(() => {
       localStorage.removeItem('auth_token')
-      delete (window as any).__COMIC_PILE_ACCESS_TOKEN
+      Reflect.deleteProperty(window, '__COMIC_PILE_ACCESS_TOKEN')
     })
 
     // Attempt to make a PATCH request without authentication
@@ -183,7 +183,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     expect(await response.ok()).toBeTruthy()
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
-    const responseBody = (await response.json()) as unknown as IssueReadRateResponse
+    const responseBody = (await response.json()) as IssueReadRateResponse
 
     // For roll_offer source with rating >= 4.0, die_after should be set
     expect(responseBody.die_after).toBeGreaterThan(0)
@@ -221,7 +221,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     expect(await response1.ok()).toBeTruthy()
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
-    const responseBody1 = (await response1.json()) as unknown as IssueReadRateResponse
+    const responseBody1 = (await response1.json()) as IssueReadRateResponse
     expect(responseBody1.replayed).toBe(false)
     expect(responseBody1.read_event_created).toBe(true)
     expect(responseBody1.rating_event_created).toBe(true)
@@ -235,7 +235,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     expect(await response2.ok()).toBeTruthy()
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
-    const responseBody2 = (await response2.json()) as unknown as IssueReadRateResponse
+    const responseBody2 = (await response2.json()) as IssueReadRateResponse
     expect(responseBody2.replayed).toBe(false)
     expect(responseBody2.read_event_created).toBe(true)
     expect(responseBody2.rating_event_created).toBe(true)
@@ -268,7 +268,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     expect(await response.ok()).toBeTruthy()
     // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
-    const responseBody = (await response.json()) as unknown as IssueReadRateResponse
+    const responseBody = (await response.json()) as IssueReadRateResponse
 
     // Validate all required fields from the OpenAPI schema
     // IssueReadRateResponse required fields
