@@ -2134,10 +2134,12 @@ mod tests {
 
     /// Transport-failure proxy state: once armed, the next client statement
     /// on any proxied connection is consumed and the sockets are torn down
-    /// instead of the bytes reaching PostgreSQL.
+    /// instead of the bytes reaching PostgreSQL. `armed` is a one-shot latch:
+    /// the first statement after arming swaps it back to false, so exactly one
+    /// chunk is ever swallowed however many connections are proxied.
     struct DropNextStatement {
         armed: std::sync::atomic::AtomicBool,
-        drops_left: std::sync::atomic::AtomicUsize,
+        dropped: std::sync::atomic::AtomicUsize,
     }
 
     /// The host:port a proxied PostgreSQL URI must forward to.
@@ -2204,22 +2206,9 @@ mod tests {
                 if read == 0 {
                     return;
                 }
-                if drop.armed.load(std::sync::atomic::Ordering::SeqCst)
-                    && drop
-                        .drops_left
-                        .try_update(
-                            std::sync::atomic::Ordering::SeqCst,
-                            std::sync::atomic::Ordering::SeqCst,
-                            |left| {
-                                if left > 0 {
-                                    Some(left - 1)
-                                } else {
-                                    None
-                                }
-                            },
-                        )
-                        .is_ok()
-                {
+                if drop.armed.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                    drop.dropped
+                        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                     // Swallow the statement and hang up: the write half
                     // closing sends FIN to PostgreSQL, which ends the
                     // backend, and the backward pump then ends the client
@@ -2287,7 +2276,7 @@ mod tests {
         let proxy_addr = listener.local_addr().expect("proxy address");
         let drop_state = Arc::new(DropNextStatement {
             armed: std::sync::atomic::AtomicBool::new(false),
-            drops_left: std::sync::atomic::AtomicUsize::new(0),
+            dropped: std::sync::atomic::AtomicUsize::new(0),
         });
         let proxy = tokio::spawn(run_drop_proxy(
             listener,
@@ -2308,7 +2297,6 @@ mod tests {
 
         // Arm the drop: the next statement on the pooled connection dies in
         // flight. The retry's fresh connection must pass through untouched.
-        drop_state.drops_left.store(1, Ordering::SeqCst);
         drop_state.armed.store(true, Ordering::SeqCst);
 
         let moved = update_queue_entry(
@@ -2322,9 +2310,9 @@ mod tests {
         .0;
 
         assert_eq!(
-            drop_state.drops_left.load(Ordering::SeqCst),
-            0,
-            "the proxy must have dropped the first statement in flight"
+            drop_state.dropped.load(Ordering::SeqCst),
+            1,
+            "the proxy must have dropped exactly the first statement in flight"
         );
         assert_eq!(moved.position, 3);
         assert_eq!(positions(&state, 7).await, vec![(2, 1), (3, 2), (1, 3)]);
