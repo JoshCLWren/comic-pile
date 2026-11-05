@@ -79,7 +79,7 @@ async def test_legacy_intelligence_reader_does_not_enqueue_metadata_repair(
     db_engine: AsyncEngine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A repair created by GET survives request teardown and is visible to workers."""
+    """Legacy GET never creates a repair, even across transaction boundaries."""
     now = datetime.now(UTC)
     reader = User(username="creator-repair-reader", created_at=now)
     async_db_committed.add(reader)
@@ -124,4 +124,4 @@ async def test_legacy_intelligence_reader_does_not_enqueue_metadata_repair(
     assert second.metadata_status == "not_deep_fetched"
     await async_db_committed.rollback()
     async with AsyncSession(db_engine, expire_on_commit=False) as worker_db:
-        assert await get_request(worker_db, identity.id) is None
+        assert await get_request(worker_db, identity_id) is None
