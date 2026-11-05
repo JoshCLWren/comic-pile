@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from datetime import datetime
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from sqlalchemy import Text, and_, any_, bindparam, func, or_, select
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -111,7 +111,7 @@ def _route_labels_subquery(
         .scalar_subquery()
         .cast(ARRAY(Text))
     )
-    return subq
+    return cast(ColumnElement[Sequence[str]], subq)
 
 
 async def fetch_rollable_candidates(
