@@ -29,6 +29,11 @@ from app.services.issue_insertion import create_issues_in_natural_order
 from app.services.issue_tracking import apply_thread_issue_tracking_state
 from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from app.services.provider_issue_adoption import adopt_comicvine_issue
+from app.services.reading_list_authoring import load_authoring_snapshot
+from app.services.reading_list_cycle_validator import (
+    ReadingCycleError,
+    validate_reading_constraints,
+)
 from app.services.tag_service import purge_target_assignments
 from app.utils.issue_parser import parse_issue_ranges
 from comic_pile.dependencies import refresh_user_blocked_status
@@ -306,12 +311,6 @@ async def create_issues(
     original_ids = set(original_order)
     reordered_existing = [issue.id for issue in adopted_issues if issue.id in original_ids]
     if reordered_existing != original_order:
-        from app.services.reading_list_authoring import load_authoring_snapshot
-        from app.services.reading_list_cycle_validator import (
-            ReadingCycleError,
-            validate_reading_constraints,
-        )
-
         projected, _names = await load_authoring_snapshot(db, current_user_id)
         try:
             validate_reading_constraints(projected)

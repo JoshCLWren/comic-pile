@@ -15,12 +15,18 @@ from app.services.reading_list_evaluator import (
     ReadingThread,
 )
 
+#: Synthetic evaluator snapshot for the B.P.R.D. Hell on Earth cycle case. This
+#: test never touches the database; the snapshot is a pure evaluator fixture, so
+#: the reader id is a module constant referenced by name (see the
+#: hardcoded-ID guard in tests/test_hardcoded_ids.py).
+READER_ID = 1
+
 
 @pytest.mark.parametrize("method", ["GET", "PUT"])
 def test_persisted_bprd_cycle_returns_actionable_conflict(method: str) -> None:
     """A Julix-style cross-order cycle fails closed with issue-level evidence."""
     snapshot = ReadingSnapshot(
-        user_id=1,
+        user_id=READER_ID,
         threads=(ReadingThread(18874, name="B.P.R.D.: Hell on Earth"),),
         issues=(
             ReadingIssue(117477, 18874, 26),
