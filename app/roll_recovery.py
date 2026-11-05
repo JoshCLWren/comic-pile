@@ -16,7 +16,7 @@ from app.schemas.roll import (
 from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.reading_recovery_service import build_reading_recovery
 from app.repositories.roll_repository import fetch_active_session
-from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+from app.services.roll_exclusion import derive_effective_roll_excluded_thread_ids
 
 logger = logging.getLogger(__name__)
 

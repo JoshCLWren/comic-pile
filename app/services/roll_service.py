@@ -40,7 +40,7 @@ from app.services.reading_eligibility_service import (
     get_execution_eligibility,
 )
 from app.services.bandwidth_selection import select_bandwidth_weighted
-from app.services.snooze_service import (
+from app.services.roll_exclusion import (
     derive_effective_roll_excluded_thread_ids,
     derive_cross_session_excluded_thread_ids,
 )

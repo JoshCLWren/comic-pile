@@ -38,7 +38,7 @@ from app.models import (
     Thread,
     User,
 )
-from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+from app.services.roll_exclusion import derive_effective_roll_excluded_thread_ids
 from app.services.thread_service import list_queue_threads
 
 PASSWORD_HASH = hash_password("password")

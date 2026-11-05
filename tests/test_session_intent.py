@@ -327,60 +327,6 @@ async def test_end_session_clears_ephemeral_intent(
 
 
 @pytest.mark.asyncio
-async def test_snooze_endpoint_exposes_intent_state(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user
-) -> None:
-    """Snooze response exposes stored active/predicted intent independently."""
-    session = ReadingSession(
-        start_die=6,
-        user_id=default_user.id,
-        active_intent="familiar",
-        predicted_intent="familiar",
-        intent_source="manual",
-        intent_confidence=0.8,
-        intent_version="snooze-test",
-    )
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Snooze Test Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=default_user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    event = Event(
-        type="roll",
-        die=6,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-        thread_id=thread.id,
-    )
-    async_db.add(event)
-    session.pending_thread_id = thread.id
-    await async_db.commit()
-
-    response = await auth_client.post("/api/v1/snooze/")
-    assert response.status_code == 200
-    data = response.json()
-    assert data["intent"] is not None
-    assert data["intent"]["active_intent"] == "familiar"
-    assert data["intent"]["predicted_intent"] == "familiar"
-    assert data["intent"]["confidence"] == 0.8
-    assert data["intent"]["source"] == "manual"
-    assert data["intent"]["mode_version"] == "snooze-test"
-
-
-@pytest.mark.asyncio
 async def test_undo_endpoint_exposes_intent_state(
     auth_client: AsyncClient, async_db: AsyncSession, default_user
 ) -> None:

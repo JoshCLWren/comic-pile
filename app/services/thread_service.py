@@ -52,7 +52,7 @@ from app.services.ownership_guard import (
     require_frontier_in_thread,
     require_session_pending_consistent,
 )
-from app.services.snooze_service import derive_effective_roll_excluded_thread_ids
+from app.services.roll_exclusion import derive_effective_roll_excluded_thread_ids
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.tag_service import purge_target_assignments
 from app.services.queue_pagination import (
@@ -444,7 +444,7 @@ async def list_stale_thread_responses(
     Returns:
         Responses for stale threads ordered by oldest activity first.
     """
-    from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+    from app.services.roll_exclusion import derive_cross_session_excluded_thread_ids
 
     reading_session = await reading_session_repository.fetch_active_reading_session(db, user_id)
     current_snoozed = reading_session.snoozed_thread_ids if reading_session is not None else []

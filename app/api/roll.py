@@ -23,7 +23,7 @@ from app.services.reading_effort import (
 from app.services.recommendation_explanation import RecommendationExplanationProjection
 from app.services.roll_service import RollService
 from app.services.roll_phase_trace import RollPhaseTrace
-from app.services.snooze_service import (
+from app.services.roll_exclusion import (
     derive_effective_roll_excluded_thread_ids,
 )
 from app.schemas import (

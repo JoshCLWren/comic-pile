@@ -20,7 +20,6 @@ const {
   queueApi,
   rollApi,
   sessionApi,
-  snoozeApi,
   tasksApi,
   threadsApi,
   undoApi,
@@ -171,8 +170,6 @@ it('calls every remaining API resource endpoint', async () => {
   await dependenciesApi.updateDependency(3, null)
   await tasksApi.getMetrics()
   expect(get).toHaveBeenCalledWith('/v2/analytics/metrics')
-  await snoozeApi.snooze()
-  await snoozeApi.unsnooze(2)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
   await bugReportsApi.create({ title: 'Bug', description: 'Description', diagnostics: {} })
   await preferencesApi.get()
@@ -187,14 +184,22 @@ it('calls every remaining API resource endpoint', async () => {
 })
 
 
-it('uses canonical v1 paths for snooze and undo resources', async () => {
-  await snoozeApi.snooze()
-  await snoozeApi.unsnooze(9)
+it('uses canonical v1 paths for session and undo resources', async () => {
+  await sessionApi.list()
+  await sessionApi.get(7)
+  await sessionApi.getCurrent()
+  await sessionApi.getDetails(7)
+  await sessionApi.getSnapshots(7)
+  await sessionApi.restoreSessionStart(7)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
-  expect(post).toHaveBeenCalledWith('/v1/snooze/')
-  expect(post).toHaveBeenCalledWith('/v1/snooze/9/unsnooze')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
+  expect(get).toHaveBeenCalledWith('/v1/sessions/7')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/current/')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
+  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
+  expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
   expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
   expect(get).toHaveBeenCalledWith('/v1/undo/7/snapshots')
 })

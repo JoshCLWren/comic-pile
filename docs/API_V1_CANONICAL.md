@@ -34,9 +34,14 @@ the supported, documented surface. New client code must call these paths:
 | Releases | `/api/v1/releases` |
 | Roll | `/api/v1/roll` |
 | Sessions | `/api/v1/sessions` |
-| Snooze | `/api/v1/snooze` |
 | Threads | `/api/v1/threads` (collection read moved to native `GET /api/v2/threads`) |
 | Undo | `/api/v1/undo` |
+
+The v1 snooze family (`POST /api/v1/snooze/`, `POST /api/v1/snooze/{id}/unsnooze`,
+and the legacy `/api/snooze` alias) was retired with the Rust roll cutover (#4338,
+#4349). Snooze is the native `POST /api/v2/roll/offer` reroll, which records the
+snooze and rolls the replacement in one transaction; unsnooze is client-only (the
+`comicpile_roll_snoozes` browser cookie) and has no server route.
 
 ## Intentional legacy aliases (`/api`)
 
@@ -44,7 +49,7 @@ Two categories of bare `/api/<segment>` routes are retained deliberately and mus
 on the explicit allowlist:
 
 1. **Compatibility aliases** — the families above that also keep a legacy
-   `/api/<family>` path (`auth`, `queue`, `rate`, `roll`, `sessions`, `snooze`,
+   `/api/<family>` path (`auth`, `queue`, `rate`, `roll`, `sessions`,
    `threads`, `undo`). These are tested backwards-compatibility surfaces; maintained
    first-party consumers should prefer the `/api/v1` equivalent.
 2. **Tooling-only surfaces** — administrative and non-production routes that are never

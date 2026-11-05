@@ -11,7 +11,7 @@ import {
  useRoll,
  useSetDie,
 } from '../hooks/useRoll'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
@@ -48,10 +48,7 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
 }))
-vi.mock('../hooks/useSnooze', () => ({
-  useSnooze: vi.fn(),
-  useUnsnooze: vi.fn(),
-}))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
@@ -81,8 +78,6 @@ const mockedUseOverrideRoll = vi.mocked(useOverrideRoll) as any
 const mockedUseDismissPending = vi.mocked(useDismissPending) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSnooze = vi.mocked(useSnooze) as any
-// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseMoveToFront = vi.mocked(useMoveToFront) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
@@ -140,7 +135,6 @@ beforeEach(() => {
   mockedUseOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseDismissPending.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToFront.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseMoveToBack.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseShuffleQueue.mockReturnValue({ mutate: vi.fn(), isPending: false })

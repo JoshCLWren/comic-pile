@@ -6,7 +6,7 @@ import QueuePage from '../pages/QueuePage'
 import { useCreateThread, useUpdateThread, useDeleteThread, useReactivateThread } from '../hooks/useThread'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
@@ -15,7 +15,7 @@ const toastMocks = vi.hoisted(() => ({ showToast: vi.fn(), removeToast: vi.fn() 
 vi.mock('../hooks/useThread', () => ({ useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useCreateThread: vi.fn(), useUpdateThread: vi.fn(), useDeleteThread: vi.fn(), useReactivateThread: vi.fn() }))
 vi.mock('../hooks/useQueue', () => ({ useExcludedThreads: vi.fn(() => ({ threads: [], isPending: false, isError: false })), useRestoreThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })), useMoveToBack: vi.fn(), useMoveToFront: vi.fn(), useMoveToPosition: vi.fn(), useQueueThreads: vi.fn(), useShuffleQueue: vi.fn() }))
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: vi.fn() } }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { listBlockedThreadIds: vi.fn(), getBlockingInfo: vi.fn() } }))
 vi.mock('../hooks/useReadingBoundaries', () => ({ useReadingBoundaries: () => ({ data: { threads: {} }, isPending: false, isError: false, refetch: vi.fn() }) }))
@@ -78,8 +78,6 @@ beforeEach(() => {
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(useSnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
-  // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
-  vi.mocked(useUnsnooze).mockReturnValue({ mutate: mocks.mutate, isPending: false } as never)
   // SAFETY: mocked hook returns partial shape; as never satisfies the mock return type
   vi.mocked(threadsApi.setPending).mockResolvedValue({ thread_id: 1 } as never)
   vi.mocked(dependenciesApi.listBlockedThreadIds).mockResolvedValue([])
@@ -489,8 +487,12 @@ describe('QueuePage callback coverage', () => {
     renderPage()
     await user.click(screen.getByText('read callback'))
     expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Cannot read yet'))
+    // Queue unsnooze is client-only since the v1 unsnooze route was retired:
+    // it drops the id from the browser snooze cookie without a server write.
+    document.cookie = `comicpile_roll_snoozes=${encodeURIComponent('[1]')}; path=/`
     await user.click(screen.getByText('snooze callback'))
-    expect(mocks.mutate).toHaveBeenCalled()
+    await waitFor(() => expect(document.cookie).not.toContain(encodeURIComponent('[1]')))
+    expect(toastMocks.showToast).not.toHaveBeenCalledWith(expect.stringContaining('Failed'), 'error')
   })
 
   it('renders pending mutation labels for create, edit, and reactivation', async () => {

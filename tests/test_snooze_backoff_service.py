@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.services.snooze_service import derive_cross_session_excluded_thread_ids
+from app.services.roll_exclusion import derive_cross_session_excluded_thread_ids
 
 BASE = datetime(2026, 1, 1, tzinfo=UTC)
 HOUR = timedelta(hours=1)
@@ -46,11 +46,11 @@ async def _derive(
     db = AsyncMock()
     with (
         patch(
-            "app.services.snooze_service.fetch_snooze_backoff_rows",
+            "app.services.roll_exclusion.fetch_snooze_backoff_rows",
             AsyncMock(return_value=rows),
         ),
         patch(
-            "app.services.snooze_service.fetch_user_session_started_ats",
+            "app.services.roll_exclusion.fetch_user_session_started_ats",
             AsyncMock(return_value=session_starts),
         ),
     ):
@@ -62,7 +62,7 @@ async def test_no_snooze_evidence_yields_no_exclusions() -> None:
     """A user with no snooze evidence has no cross-session exclusions."""
     db = AsyncMock()
     with patch(
-        "app.services.snooze_service.fetch_snooze_backoff_rows",
+        "app.services.roll_exclusion.fetch_snooze_backoff_rows",
         AsyncMock(return_value=[]),
     ) as rows:
         excluded = await derive_cross_session_excluded_thread_ids(db, 7)
@@ -190,11 +190,11 @@ async def test_derivation_is_batched_regardless_of_candidate_count() -> None:
     db = AsyncMock()
     with (
         patch(
-            "app.services.snooze_service.fetch_snooze_backoff_rows",
+            "app.services.roll_exclusion.fetch_snooze_backoff_rows",
             AsyncMock(return_value=rows),
         ) as rows_patch,
         patch(
-            "app.services.snooze_service.fetch_user_session_started_ats",
+            "app.services.roll_exclusion.fetch_user_session_started_ats",
             AsyncMock(return_value=sessions),
         ) as sessions_patch,
     ):
