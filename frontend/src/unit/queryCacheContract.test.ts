@@ -214,19 +214,23 @@ describe('targeted cache effects', () => {
     // Native v2 returns thread progress, not the full detail representation.
     // Rating may update progress but must never replace authoritative metadata
     // with synthetic adapter values (such as queue_position: 0).
-    const update = setQueryData.mock.calls[0]?.[1] as (current: Thread) => Thread
+    const update = setQueryData.mock.calls[0]?.[1]
+    if (typeof update !== 'function') {
+      throw new Error('Expected a functional updater for rated thread cache')
+    }
     const existing: Thread = {
       ...thread,
       queue_position: 27,
       format: 'Trade Paperback',
       created_at: '2025-01-01T00:00:00Z',
     }
-    const merged = update(existing)
-    expect(merged.queue_position).toBe(27)
-    expect(merged.format).toBe('Trade Paperback')
-    expect(merged.created_at).toBe('2025-01-01T00:00:00Z')
-    expect(merged.issues_remaining).toBe(thread.issues_remaining)
-    expect(merged.last_rating).toBe(thread.last_rating)
+    expect(update(existing)).toMatchObject({
+      queue_position: 27,
+      format: 'Trade Paperback',
+      created_at: '2025-01-01T00:00:00Z',
+      issues_remaining: thread.issues_remaining,
+      last_rating: thread.last_rating,
+    })
     expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
