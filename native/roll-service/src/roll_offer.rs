@@ -35,6 +35,9 @@ pub struct RollOfferRequest {
     pub snoozed_thread_ids: Vec<i32>,
     /// Stable client key; retries return the original offer without re-rolling.
     pub idempotency_key: String,
+    /// A Queue action may only reroll the exact pending thread shown to the user.
+    #[serde(default)]
+    pub expected_pending_thread_id: Option<i32>,
 }
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -293,6 +296,17 @@ pub(crate) async fn persist_offer(
     Ok(row.get(0))
 }
 
+/// Reject a stale Queue action before recording any snooze/die/offer event.
+fn require_expected_pending(expected: Option<i32>, actual: Option<i32>) -> Result<(), ApiError> {
+    if expected.is_some() && expected != actual {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Pending roll changed; refresh Queue before snoozing".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 pub async fn offer(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -368,6 +382,7 @@ pub async fn offer(
             "Reading session changed; try again".to_string(),
         ))?;
     let previous_offer: Option<i32> = locked.try_get(0).map_err(db::query_error)?;
+    require_expected_pending(request.expected_pending_thread_id, previous_offer)?;
 
     // Temporary snoozes are cookie-owned. Legacy session skip/snooze arrays and
     // the durable Fibonacci backoff must not remove candidates from the new
@@ -475,6 +490,21 @@ mod tests {
         http::{Request, StatusCode},
     };
     use tower::ServiceExt;
+
+    #[test]
+    fn stale_queue_snooze_cannot_target_a_different_pending_offer() {
+        assert!(require_expected_pending(None, None).is_ok());
+        assert!(require_expected_pending(None, Some(7)).is_ok());
+        assert!(require_expected_pending(Some(7), Some(7)).is_ok());
+        assert_eq!(
+            require_expected_pending(Some(7), Some(8)).unwrap_err().0,
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            require_expected_pending(Some(7), None).unwrap_err().0,
+            StatusCode::CONFLICT
+        );
+    }
 
     #[test]
     fn rejects_unbounded_or_malformed_idempotency_keys() {
@@ -774,5 +804,82 @@ mod tests {
         assert_eq!(stored.die, 8);
         assert_eq!(stored.result, 2);
         assert_eq!(stored.snoozed_thread_id, Some(9));
+    }
+
+    #[tokio::test]
+    async fn stale_authenticated_queue_offer_returns_conflict_without_mutation() {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+            return;
+        };
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let url = crate::test_support::database_url().await;
+        let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(
+                r#"INSERT INTO users (id, username) VALUES (1, 'route-reader');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (8, 1, 'Eight', 'Comic', 1, 'active', 1);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (80, 8, '1', 'unread', now(), 1);
+                 INSERT INTO sessions (id, user_id, start_die, pending_thread_id,
+                     pending_issue_id, pending_thread_updated_at)
+                 VALUES (1, 1, 6, 8, 80, now());"#,
+            )
+            .await
+            .expect("seed canonical schema");
+
+        let app = router(state);
+        let token = jsonwebtoken::encode(
+            &jsonwebtoken::Header::default(),
+            &json!({
+                "sub": "route-reader",
+                "type": "access",
+                "jti": "stale-offer-route-token",
+            }),
+            &jsonwebtoken::EncodingKey::from_secret(
+                crate::test_support::TEST_JWT_SECRET.as_bytes(),
+            ),
+        )
+        .unwrap();
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v2/roll/offer")
+                    .header("content-type", "application/json")
+                    .header("authorization", format!("Bearer {token}"))
+                    .header("cookie", "csrf_token=synthetic-test-csrf")
+                    .header("x-csrf-token", "synthetic-test-csrf")
+                    .body(Body::from(
+                        r#"{"idempotency_key":"roll-offer-stale-012345","expected_pending_thread_id":7}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+
+        let pending: i32 = client
+            .query_one("SELECT pending_thread_id FROM sessions WHERE id = 1", &[])
+            .await
+            .unwrap()
+            .get(0);
+        let events: i64 = client
+            .query_one("SELECT count(*) FROM events WHERE user_id = 1", &[])
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(pending, 8);
+        assert_eq!(events, 0);
     }
 }
