@@ -29,7 +29,7 @@ beforeEach(() => {
   document.cookie = 'csrf_token=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
 })
 
-it('bootstraps csrf through the canonical v1 auth endpoint', async () => {
+it('bootstraps csrf through the canonical v2 auth endpoint', async () => {
   transport.get.mockResolvedValue({ csrf_token: 'fresh-token' })
 
   const config = await requestInterceptor({
@@ -38,16 +38,16 @@ it('bootstraps csrf through the canonical v1 auth endpoint', async () => {
     headers: {},
   })
 
-  expect(transport.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(transport.get).toHaveBeenCalledWith('/v2/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })
 
 it('keeps canonical credential endpoints exempt from csrf bootstrap', async () => {
-  const login = await requestInterceptor({ method: 'post', url: '/v1/auth/login', headers: {} })
-  const register = await requestInterceptor({ method: 'post', url: '/v1/auth/register', headers: {} })
-  const refresh = await requestInterceptor({ method: 'post', url: '/v1/auth/refresh', headers: {} })
-  const forgot = await requestInterceptor({ method: 'post', url: '/v1/auth/forgot-password', headers: {} })
-  const reset = await requestInterceptor({ method: 'post', url: '/v1/auth/reset-password', headers: {} })
+  const login = await requestInterceptor({ method: 'post', url: '/v2/auth/login', headers: {} })
+  const register = await requestInterceptor({ method: 'post', url: '/v2/auth/register', headers: {} })
+  const refresh = await requestInterceptor({ method: 'post', url: '/v2/auth/refresh', headers: {} })
+  const forgot = await requestInterceptor({ method: 'post', url: '/v2/auth/forgot-password', headers: {} })
+  const reset = await requestInterceptor({ method: 'post', url: '/v2/auth/reset-password', headers: {} })
 
   expect(login.headers).toEqual({})
   expect(register.headers).toEqual({})
@@ -62,7 +62,7 @@ it('keeps password-reset secrets out of console diagnostics', async () => {
   try {
     await responseInterceptor({
       config: {
-        url: '/v1/auth/reset-password',
+        url: '/v2/auth/reset-password',
         data: JSON.stringify({ token: 'raw-reset-token', new_password: 'hunter2hunter2' }),
         headers: {},
       },
@@ -70,7 +70,7 @@ it('keeps password-reset secrets out of console diagnostics', async () => {
     }).catch(() => undefined)
 
     const logged = JSON.stringify(consoleError.mock.calls)
-    expect(logged).toContain('/v1/auth/reset-password')
+    expect(logged).toContain('/v2/auth/reset-password')
     expect(logged).not.toContain('raw-reset-token')
     expect(logged).not.toContain('hunter2hunter2')
   } finally {
@@ -82,7 +82,7 @@ it('keeps ordinary endpoint diagnostics unchanged', async () => {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   try {
     const error = {
-      config: { url: '/v1/threads/42', data: JSON.stringify({ title: 'Saga' }), headers: {} },
+      config: { url: '/v2/threads/42', data: JSON.stringify({ title: 'Saga' }), headers: {} },
       response: { status: 500, data: { detail: 'boom' } },
     }
     await responseInterceptor(error).catch(() => undefined)
