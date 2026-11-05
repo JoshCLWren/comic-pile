@@ -37,6 +37,7 @@ from app.schemas.issue_dependency_batch import ThreadIssueDependenciesResponse
 from comic_pile.dependencies import (
     BlockingDependency as InternalBlockingDependency,
     detect_circular_dependency,
+    find_dependency_cycle_path,
     format_blocking_reason,
     get_blocked_thread_ids,
     get_blocking_explanations_batch,
@@ -349,6 +350,40 @@ async def create_dependency(
     if await detect_circular_dependency(
         source_issue_id, target_issue_id, "issue", db
     ):
+        cycle_path_ids = await find_dependency_cycle_path(
+            source_issue_id, target_issue_id, "issue", db
+        )
+        if cycle_path_ids:
+            # Build human-readable cycle description
+            # Cycle path is target -> ... -> source; prepend source to close loop
+            full_path_ids = [source_issue_id] + cycle_path_ids
+            # Fetch issues and threads for the path
+            from sqlalchemy import select
+            result = await db.execute(
+                select(Issue).where(Issue.id.in_(full_path_ids))
+            )
+            issues_map = {i.id: i for i in result.scalars()}
+            thread_ids = {issues_map[i].thread_id for i in full_path_ids if i in issues_map}
+            thread_result = await db.execute(
+                select(Thread).where(Thread.id.in_(thread_ids))
+            )
+            threads_map = {t.id: t for t in thread_result.scalars()}
+
+            labels = []
+            for iid in full_path_ids:
+                issue = issues_map.get(iid)
+                if not issue:
+                    continue
+                thread = threads_map.get(issue.thread_id)
+                if thread:
+                    labels.append(f"{thread.title} #{issue.issue_number}")
+                else:
+                    labels.append(f"Issue {iid}")
+            # Build cycle string, avoid duplicate trailing element
+            # The path may end with source again; keep it to show loop
+            cycle_desc = " → ".join(labels)
+            # Ensure loop is explicit: if last label equals first, it's fine
+            return None, f"Cannot create dependency: would create circular dependency: {cycle_desc}"
         return None, "Cannot create dependency: would create circular dependency"
 
     # Check if dependency already exists
