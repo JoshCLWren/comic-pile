@@ -15,6 +15,10 @@ IMAGE_TAG="comic-pile-ci:local"
 PG_CONTAINER="comic-pile-ci-postgres"
 CI_NETWORK="comic-pile-ci-net-$RANDOM"
 API_PORT="9000"
+# NOTE: Playwright specs that exercise /api/v2/* (including native auth) need
+# the native Roll service on :8010 plus scripts/e2e_native_ingress.py; this
+# local runner starts only FastAPI. Required CI runs the self-contained
+# `pnpm run audit:ui` instead. See docs/E2E_CHROMIUM_REGRESSION.md.
 DEFAULT_DB_NAME="comic_pile_test"
 DB_URL="postgresql+asyncpg://postgres:postgres@postgres:5432/${DEFAULT_DB_NAME}"
 

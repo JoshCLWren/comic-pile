@@ -79,7 +79,7 @@ async function seedCoverIdentity(
   seriesId: number,
 ): Promise<void> {
   const token = await getAuthToken(page)
-  const csrfResponse = await page.request.get('/api/auth/csrf', {
+  const csrfResponse = await page.request.get('/api/v2/auth/csrf', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(csrfResponse.ok()).toBeTruthy()

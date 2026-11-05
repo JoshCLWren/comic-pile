@@ -16,11 +16,11 @@ for (const count of [1, 25]) {
     await page.route('**/api/**', async route => {
       const request = route.request()
       const path = new URL(request.url()).pathname
-      if (path.endsWith('/v1/auth/me')) {
+      if (path.endsWith('/v2/auth/me')) {
         return route.fulfill({ json: { id: 1, username: 'reader', email: 'reader@example.test', preferences: { theme: 'classic' } } })
       }
-      if (path.endsWith('/v1/auth/refresh')) return route.fulfill({ json: { access_token: 'test-access-token' } })
-      if (path.endsWith('/v1/auth/csrf')) return route.fulfill({ json: { csrf_token: 'test-csrf' } })
+      if (path.endsWith('/v2/auth/refresh')) return route.fulfill({ json: { access_token: 'test-access-token' } })
+      if (path.endsWith('/v2/auth/csrf')) return route.fulfill({ json: { csrf_token: 'test-csrf' } })
       if (path.endsWith('/roll/offer')) {
         if (count === 1) return route.fulfill({ status: 400, json: { detail: exhaustedMessage } })
         // SAFETY: this route receives the real Roll client payload; the assertion below checks its exclusion array.

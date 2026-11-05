@@ -293,7 +293,7 @@ describe('creator reads during recoverable auth revalidation (issue #3212)', () 
 
     expect(navigations).toEqual([])
     expect(getAccessToken()).toBe('refreshed-token')
-    expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh', undefined, {
+    expect(transport.post).toHaveBeenCalledWith('/v2/auth/refresh', undefined, {
       skipAuthRedirect: true,
     })
     expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({

@@ -50,7 +50,7 @@ function escapeRegExp(value: string): string {
 async function authHeaders(page: Page) {
   const token = await getAuthToken(page)
   expect(token).toBeTruthy()
-  const csrfResponse = await page.request.get('/api/auth/csrf', {
+  const csrfResponse = await page.request.get('/api/v2/auth/csrf', {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   })
   expect(csrfResponse.ok()).toBeTruthy()

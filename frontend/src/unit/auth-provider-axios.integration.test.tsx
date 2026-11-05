@@ -29,7 +29,7 @@ async function mount() {
   reply()
   render(<AuthProvider><Consumer /></AuthProvider>)
   await waitFor(() => expect(auth.authState.status).toBe('authenticated'))
-  expect(calls).toEqual(['get /v1/auth/me'])
+  expect(calls).toEqual(['get /v2/auth/me'])
   calls.length = 0
 }
 beforeEach(() => {
@@ -56,7 +56,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     await mount()
     reply()
     await act(async () => auth.retryAuth())
-    expect(calls).toEqual(['get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me'])
     expect(auth.authState.status).toBe('authenticated')
     expect(getAccessToken()).toBe('existing-token')
   })
@@ -77,7 +77,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     await act(async () => { finish(); await Promise.all([pending, second]) })
     expect(auth.authState.isLoading).toBe(false)
     expect(auth.authState.status).toBe('authenticated')
-    expect(calls).toEqual(['get /v1/auth/me', 'get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me', 'get /v2/auth/me'])
   })
   it.each(['503', 'timeout', 'network'])('preserves the session on %s and recovers without rotation', async failure => {
     await mount()
@@ -89,7 +89,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     expect(getAccessToken()).toBe('existing-token')
     reply()
     await act(async () => auth.retryAuth())
-    expect(calls).toEqual(['get /v1/auth/me', 'get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me', 'get /v2/auth/me'])
     expect(auth.authState.status).toBe('authenticated')
   })
   it.each([401, 403])('refreshes once after auth %i then validates once', async status => {
@@ -98,7 +98,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     reply(200, { access_token: 'renewed-token' })
     reply()
     await act(async () => auth.retryAuth())
-    expect(calls).toEqual(['get /v1/auth/me', 'post /v1/auth/refresh', 'get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me', 'post /v2/auth/refresh', 'get /v2/auth/me'])
     expect(auth.authState.status).toBe('authenticated')
     expect(getAccessToken()).toBe('renewed-token')
   })
@@ -108,7 +108,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     reply(200, { access_token: 'renewed-token' })
     reply(401)
     await act(async () => { await expect(auth.retryAuth()).rejects.toMatchObject({ response: { status: 401 } }) })
-    expect(calls).toEqual(['get /v1/auth/me', 'post /v1/auth/refresh', 'get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me', 'post /v2/auth/refresh', 'get /v2/auth/me'])
     expect(auth.authState.status).toBe('unauthenticated')
     expect(getAccessToken()).toBeNull()
   })
@@ -120,7 +120,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     expect(auth.authState.status).toBe('unauthenticated')
     expect(getAccessToken()).toBeNull()
     await act(async () => { await expect(auth.retryAuth()).rejects.toMatchObject({ response: { status: 401 } }) })
-    expect(calls).toEqual(['get /v1/auth/me', 'post /v1/auth/refresh'])
+    expect(calls).toEqual(['get /v2/auth/me', 'post /v2/auth/refresh'])
   })
   it.each(['503', 'timeout', 'network'])('keeps the token when refresh fails with %s', async failure => {
     await mount()
@@ -128,14 +128,14 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     if (failure === '503') reply(503)
     else transportFailure(failure === 'timeout' ? 'ECONNABORTED' : 'ERR_NETWORK')
     await act(async () => { await expect(auth.retryAuth()).rejects.toSatisfy(axios.isAxiosError) })
-    expect(calls).toEqual(['get /v1/auth/me', 'post /v1/auth/refresh'])
+    expect(calls).toEqual(['get /v2/auth/me', 'post /v2/auth/refresh'])
     expect(getAccessToken()).toBe('existing-token')
     expect(auth.user).toEqual(user)
     expect(auth.authState.status).toBe(failure === 'network' ? 'network_error' : 'service_unavailable')
     reply()
     await act(async () => auth.retryAuth())
     expect(auth.authState.status).toBe('authenticated')
-    expect(calls).toEqual(['get /v1/auth/me', 'post /v1/auth/refresh', 'get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me', 'post /v2/auth/refresh', 'get /v2/auth/me'])
   })
   it('coalesces bootstrap, resume, and rapid retry into one validation and refresh', async () => {
     let release!: () => void
@@ -152,7 +152,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
       release()
       await Promise.all(attempts)
     })
-    expect(calls).toEqual(['get /v1/auth/me', 'post /v1/auth/refresh', 'get /v1/auth/me'])
+    expect(calls).toEqual(['get /v2/auth/me', 'post /v2/auth/refresh', 'get /v2/auth/me'])
     expect(auth.authState.status).toBe('authenticated')
   })
   it.each([
@@ -182,7 +182,7 @@ describe('AuthProvider with the real Axios interceptor pipeline', () => {
     expect(auth.user?.username ?? null).toBe(action === 'logout' ? null : 'second')
     expect(getAccessToken()).toBe(action === 'logout' ? null : 'second-token')
     expect(calls).toEqual(action === 'logout'
-      ? ['get /v1/auth/me', 'post /v1/auth/refresh']
-      : ['get /v1/auth/me', 'post /v1/auth/refresh', 'get /v1/auth/me'])
+      ? ['get /v2/auth/me', 'post /v2/auth/refresh']
+      : ['get /v2/auth/me', 'post /v2/auth/refresh', 'get /v2/auth/me'])
   })
 })

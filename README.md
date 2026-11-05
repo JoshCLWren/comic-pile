@@ -103,6 +103,17 @@ make dev
 
 This starts the Vite frontend and the FastAPI API together. Alternatively, run only the API with `make dev-api`.
 
+`/api/v2/*` resources — including the native auth routes — are served by the Rust
+Roll service on `:8010`, not by FastAPI. Start it in a second terminal when
+exercising login, Roll, or Queue locally:
+
+```bash
+make dev-native
+```
+
+See [`docs/E2E_CHROMIUM_REGRESSION.md`](docs/E2E_CHROMIUM_REGRESSION.md) for the
+full same-origin native ingress used by Playwright.
+
 ### ComicVine API key (optional)
 
 Comic Vine integration is optional for a basic local run; the app works without it. A key is only needed for live ComicVine hydration/backfill (see [`docs/COMICVINE_HYDRATOR.md`](docs/COMICVINE_HYDRATOR.md)).
@@ -163,6 +174,7 @@ The application accepts standard `postgresql://` or `postgres://` connection str
 ```bash
 make dev        # frontend + API development servers
 make dev-api    # API only
+make dev-native # native Rust Roll/auth service on :8010 for /api/v2/* routes
 make migrate    # run Alembic migrations
 make seed       # seed local sample data
 make lint       # repository lint/type checks
