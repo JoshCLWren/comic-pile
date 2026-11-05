@@ -48,11 +48,11 @@ describe('public route network budgets', () => {
       const app = renderAppAtRoute(path, {
         auth: 'guest',
         handlers: {
-          'GET /api/v1/auth/me': () =>
+          'GET /api/v2/auth/me': () =>
             refreshed
               ? { data: TEST_USER }
               : { status: 401, data: { detail: 'Not authenticated' } },
-          'POST /api/v1/auth/refresh': () => {
+          'POST /api/v2/auth/refresh': () => {
             refreshed = true
             return { data: { access_token: 'cookie-only-token', refresh_token: 'cookie-refresh' } }
           },
@@ -71,7 +71,7 @@ describe('public route network budgets', () => {
     const app = renderAppAtRoute('/forgot-password', {
       auth: 'guest',
       handlers: {
-        'POST /api/v1/auth/forgot-password': () => ({ data: { message: 'sent' } }),
+        'POST /api/v2/auth/forgot-password': () => ({ data: { message: 'sent' } }),
       },
     })
     await app.settle()
@@ -83,7 +83,7 @@ describe('public route network budgets', () => {
     })
 
     expect(app.rows(app.ledger.since(base))).toEqual([
-      'POST /api/v1/auth/forgot-password x1',
+      'POST /api/v2/auth/forgot-password x1',
     ])
     expect(screen.getByText('Check your email')).toBeInTheDocument()
   })
@@ -92,7 +92,7 @@ describe('public route network budgets', () => {
     const app = renderAppAtRoute('/reset-password?token=reset-token-1', {
       auth: 'guest',
       handlers: {
-        'POST /api/v1/auth/reset-password': () => ({ data: { message: 'ok' } }),
+        'POST /api/v2/auth/reset-password': () => ({ data: { message: 'ok' } }),
       },
     })
     await app.settle()
@@ -107,7 +107,7 @@ describe('public route network budgets', () => {
     })
 
     expect(app.rows(app.ledger.since(base))).toEqual([
-      'POST /api/v1/auth/reset-password x1',
+      'POST /api/v2/auth/reset-password x1',
     ])
     expect(screen.getByRole('link', { name: 'Sign In with New Password' })).toBeInTheDocument()
   })
@@ -117,7 +117,7 @@ describe('public route network budgets', () => {
     const app = renderAppAtRoute('/forgot-password', { auth: 'authenticated' })
     await app.settle()
     expect(app.currentPath()).toBe('/')
-    expect(app.rows()).toContain('GET /api/v1/auth/me x1')
+    expect(app.rows()).toContain('GET /api/v2/auth/me x1')
     expect(app.rows()).toContain('GET /api/v1/users/me/preferences x1')
     expect(screen.queryByLabelText('Email')).not.toBeInTheDocument()
   })
@@ -193,7 +193,7 @@ describe('public route network budgets', () => {
     // 404 uses PublicLayout, so the authenticated page shell (and its
     // PreferencesSync read) is intentionally absent.
     expect(app.rows()).toEqual([
-      'GET /api/v1/auth/me x1',
+      'GET /api/v2/auth/me x1',
       'GET /api/v1/identity-inbox?limit=1&offset=0 x1',
     ])
     expect(app.currentPath()).toBe('/definitely-missing')

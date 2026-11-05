@@ -215,7 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const retryAuth = useCallback(() => {
     // Manual recovery takes over from the automatic budget before touching the
-    // recovery promise, so a pending timer cannot issue a second /v1/auth/me.
+    // recovery promise, so a pending timer cannot issue a second /v2/auth/me.
     resetBootstrapRetry()
     setAuthState(prev => ({
       ...prev,

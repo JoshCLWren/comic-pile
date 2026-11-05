@@ -96,7 +96,7 @@ it('keeps ordinary endpoint diagnostics unchanged', async () => {
 it('matches absolute canonical client URLs by pathname', async () => {
   const login = await requestInterceptor({
     method: 'post',
-    url: 'https://comic-pile.example/v1/auth/login?returnTo=/queue',
+    url: 'https://comic-pile.example/v2/auth/login?returnTo=/queue',
     headers: {},
   })
 
@@ -109,25 +109,25 @@ it('does not exempt protected requests that only mention an auth path in the que
 
   const config = await requestInterceptor({
     method: 'post',
-    url: '/threads/9?returnTo=/v1/auth/login',
+    url: '/threads/9?returnTo=/v2/auth/login',
     headers: {},
   })
 
-  expect(transport.get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(transport.get).toHaveBeenCalledWith('/v2/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })
 
-it('refreshes expired requests through the canonical v1 auth endpoint', async () => {
+it('refreshes expired requests through the canonical v2 auth endpoint', async () => {
   transport.post.mockResolvedValue({ access_token: 'refreshed-token' })
   transport.request.mockResolvedValue({ refreshed: true })
 
-  const originalRequest = { url: '/v1/threads/42', headers: {} }
+  const originalRequest = { url: '/v2/threads/42', headers: {} }
   const result = await responseInterceptor({
     config: originalRequest,
     response: { status: 401 },
   })
 
-  expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(transport.post).toHaveBeenCalledWith('/v2/auth/refresh')
   expect(transport.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,
@@ -140,13 +140,13 @@ it('refreshes a protected request whose query mentions an auth path', async () =
   transport.post.mockResolvedValue({ access_token: 'refreshed-token' })
   transport.request.mockResolvedValue({ refreshed: true })
 
-  const originalRequest = { url: '/v1/threads/42?returnTo=/v1/auth/login', headers: {} }
+  const originalRequest = { url: '/v2/threads/42?returnTo=/v2/auth/login', headers: {} }
   const result = await responseInterceptor({
     config: originalRequest,
     response: { status: 401 },
   })
 
-  expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(transport.post).toHaveBeenCalledWith('/v2/auth/refresh')
   expect(transport.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,

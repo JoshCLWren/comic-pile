@@ -265,7 +265,7 @@ describe('semantic theme runtime bootstrap', () => {
 
     await waitFor(() => expect(auth?.isAuthenticated).toBe(true))
     await waitForPreferencesApplied()
-    expect(mocks.get).toHaveBeenNthCalledWith(1, '/v1/auth/me', AUTH_ME_CONFIG)
+    expect(mocks.get).toHaveBeenNthCalledWith(1, '/v2/auth/me', AUTH_ME_CONFIG)
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/v1/users/me/preferences', PREFERENCES_CONFIG)
     expect(document.documentElement).toHaveAttribute('data-theme', 'command-center')
   })

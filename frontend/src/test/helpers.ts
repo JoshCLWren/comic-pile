@@ -307,7 +307,7 @@ export async function registerUser(page: Page, user: TestUser): Promise<void> {
 }
 
 export async function loginUser(page: Page, user: TestUser): Promise<string> {
-  const response = await page.request.post('/api/auth/login', {
+  const response = await page.request.post('/api/v2/auth/login', {
     data: {
       username: user.username,
       password: user.password,
@@ -363,7 +363,7 @@ async function getCsrfToken(page: Page, token: string | null): Promise<string> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const response = await page.request.get('/api/auth/csrf', {
+  const response = await page.request.get('/api/v2/auth/csrf', {
     headers,
   });
 

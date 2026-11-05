@@ -299,7 +299,7 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
   await expect(result).resolves.toEqual({ authenticated: true })
   expect(post).toHaveBeenCalledWith('/v2/auth/refresh')
   expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
-    url: '/v1/auth/me',
+    url: '/v2/auth/me',
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },
   }))
@@ -358,7 +358,7 @@ it('covers csrf fallback, redirect guards, and queued refresh rejection', async 
   expect(get).toHaveBeenCalledWith('/v2/auth/csrf', { skipAuthRedirect: true })
 
   window.history.pushState({}, '', '/login')
-  await expect(responseInterceptor({ config: { url: '/v1/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
+  await expect(responseInterceptor({ config: { url: '/v2/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
   setAccessToken('token')
   window.history.pushState({}, '', '/queue')
 

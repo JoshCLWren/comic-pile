@@ -10,10 +10,10 @@ type JsonRequestHeaders = {
 
 async function getCsrf(page: Page, token: string | null): Promise<string> {
   const response = token
-    ? await page.request.get('/api/auth/csrf', {
+    ? await page.request.get('/api/v2/auth/csrf', {
         headers: { Authorization: `Bearer ${token}` },
       })
-    : await page.request.get('/api/auth/csrf')
+    : await page.request.get('/api/v2/auth/csrf')
   expect(response.ok()).toBeTruthy()
   // SAFETY: the test reads only csrf_token from the response body
   const data = await response.json() as { csrf_token?: string }

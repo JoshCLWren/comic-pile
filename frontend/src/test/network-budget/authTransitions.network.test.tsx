@@ -20,10 +20,10 @@ describe('authentication transitions', () => {
     const app = renderAppAtRoute('/login', {
       auth: 'guest',
       handlers: {
-        'POST /api/v1/auth/login': () => ({
+        'POST /api/v2/auth/login': () => ({
           data: { access_token: 'token-a', refresh_token: 'refresh-a' },
         }),
-        'GET /api/v1/auth/me': () => ({ data: currentUser }),
+        'GET /api/v2/auth/me': () => ({ data: currentUser }),
       },
     })
     await app.settle()
@@ -35,13 +35,13 @@ describe('authentication transitions', () => {
     await waitFor(() => expect(app.currentPath()).toBe('/'))
 
     const rows = app.rows(app.ledger.since(base))
-    expect(rows.filter(row => row.startsWith('POST /api/v1/auth/login'))).toEqual([
-      'POST /api/v1/auth/login x1',
+    expect(rows.filter(row => row.startsWith('POST /api/v2/auth/login'))).toEqual([
+      'POST /api/v2/auth/login x1',
     ])
-    expect(rows.filter(row => row.startsWith('GET /api/v1/auth/me'))).toEqual([
-      'GET /api/v1/auth/me x1',
+    expect(rows.filter(row => row.startsWith('GET /api/v2/auth/me'))).toEqual([
+      'GET /api/v2/auth/me x1',
     ])
-    expect(rows.some(row => row.startsWith('POST /api/v1/auth/refresh'))).toBe(false)
+    expect(rows.some(row => row.startsWith('POST /api/v2/auth/refresh'))).toBe(false)
     expect(rows.filter(row => row.startsWith('GET /api/v1/identity-inbox'))).toHaveLength(1)
 
     currentUser = OTHER_USER
@@ -60,8 +60,8 @@ describe('authentication transitions', () => {
 
     expect(app.currentPath()).toBe('/login')
     expect(app.rows(app.ledger.since(base))).toEqual([
-      'GET /api/v1/auth/csrf x1',
-      'POST /api/v1/auth/logout x1',
+      'GET /api/v2/auth/csrf x1',
+      'POST /api/v2/auth/logout x1',
     ])
     expect(app.queryClient.getQueryCache().getAll().filter(query => query.state.data !== undefined)).toEqual([])
   })
@@ -71,10 +71,10 @@ describe('authentication transitions', () => {
     const app = renderAppAtRoute('/whats-new', {
       auth: 'authenticated',
       handlers: {
-        'POST /api/v1/auth/login': () => ({
+        'POST /api/v2/auth/login': () => ({
           data: { access_token: 'token-b', refresh_token: 'refresh-b' },
         }),
-        'GET /api/v1/auth/me': () => ({ data: currentUser }),
+        'GET /api/v2/auth/me': () => ({ data: currentUser }),
       },
     })
     await app.settle()
