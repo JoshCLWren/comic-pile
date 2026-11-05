@@ -913,9 +913,12 @@ mod tests {
     /// A single-slot pool makes an accidental second concurrent connection
     /// checkout fail deterministically instead of merely slowing down.
     async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
-        let url = test_database_url().await;
+        state_with_database_url(&test_database_url().await, pool_size).await
+    }
+
+    async fn state_with_database_url(url: &str, pool_size: usize) -> Arc<AppState> {
         let config = Config::from_lookup(|name| match name {
-            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
@@ -2127,6 +2130,212 @@ mod tests {
             1,
             "the repaired attempt records exactly one reorder event"
         );
+    }
+
+    /// Transport-failure proxy state: once armed, the next client statement
+    /// on any proxied connection is consumed and the sockets are torn down
+    /// instead of the bytes reaching PostgreSQL.
+    struct DropNextStatement {
+        armed: std::sync::atomic::AtomicBool,
+        drops_left: std::sync::atomic::AtomicUsize,
+    }
+
+    /// The host:port a proxied PostgreSQL URI must forward to.
+    fn upstream_addr(real_url: &str) -> std::net::SocketAddr {
+        use std::net::ToSocketAddrs;
+        let authority = real_url
+            .split_once("://")
+            .map(|(_, rest)| rest)
+            .unwrap_or(real_url)
+            .split('/')
+            .next()
+            .unwrap_or_default();
+        let host_port = authority
+            .rsplit_once('@')
+            .map(|(_, host)| host)
+            .unwrap_or(authority);
+        let host_port = if host_port.contains(':') {
+            host_port.to_string()
+        } else {
+            format!("{host_port}:5432")
+        };
+        host_port
+            .to_socket_addrs()
+            .expect("resolve the test database address")
+            .next()
+            .expect("the test database address must resolve")
+    }
+
+    /// Rewrite only the host:port of a PostgreSQL URI to point at the proxy,
+    /// keeping credentials, database and query exactly as configured.
+    fn proxied_database_url(real_url: &str, proxy: std::net::SocketAddr) -> String {
+        let (scheme, rest) = real_url.split_once("://").expect("PostgreSQL URI");
+        let (authority, path) = match rest.split_once('/') {
+            Some((authority, path)) => (authority, format!("/{path}")),
+            None => (rest, String::new()),
+        };
+        let credentials = authority
+            .rsplit_once('@')
+            .map(|(credentials, _)| format!("{credentials}@"))
+            .unwrap_or_default();
+        format!("{scheme}://{credentials}{proxy}{path}")
+    }
+
+    /// Forward one proxied connection in both directions. The client-to-server
+    /// direction is where the frozen-connection drop lands: while armed, its
+    /// next chunk — the first statement on an idle, already checked-out
+    /// pooled connection — is swallowed and both sockets are shut down, so
+    /// the statement fails in flight with a transport error while the client
+    /// still believes the connection is open. Bytes are forwarded opaquely,
+    /// so this works whether or not the session negotiated TLS.
+    async fn pump_proxied_connection(
+        client: tokio::net::TcpStream,
+        upstream: tokio::net::TcpStream,
+        drop: Arc<DropNextStatement>,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut client_rx, mut client_tx) = tokio::io::split(client);
+        let (mut upstream_rx, mut upstream_tx) = tokio::io::split(upstream);
+        let forward = async move {
+            let mut buffer = [0u8; 8192];
+            loop {
+                let read = client_rx.read(&mut buffer).await;
+                let Ok(read) = read else { return };
+                if read == 0 {
+                    return;
+                }
+                if drop.armed.load(std::sync::atomic::Ordering::SeqCst)
+                    && drop
+                        .drops_left
+                        .try_update(
+                            std::sync::atomic::Ordering::SeqCst,
+                            std::sync::atomic::Ordering::SeqCst,
+                            |left| {
+                                if left > 0 {
+                                    Some(left - 1)
+                                } else {
+                                    None
+                                }
+                            },
+                        )
+                        .is_ok()
+                {
+                    // Swallow the statement and hang up: the write half
+                    // closing sends FIN to PostgreSQL, which ends the
+                    // backend, and the backward pump then ends the client
+                    // socket — the statement fails in flight.
+                    let _ = upstream_tx.shutdown().await;
+                    return;
+                }
+                if upstream_tx.write_all(&buffer[..read]).await.is_err() {
+                    return;
+                }
+            }
+        };
+        let backward = async move {
+            let mut buffer = [0u8; 8192];
+            while let Ok(read) = upstream_rx.read(&mut buffer).await {
+                if read == 0 || client_tx.write_all(&buffer[..read]).await.is_err() {
+                    return;
+                }
+            }
+        };
+        tokio::join!(forward, backward);
+    }
+
+    /// Accept proxied connections until the listener is aborted.
+    async fn run_drop_proxy(
+        listener: tokio::net::TcpListener,
+        upstream: std::net::SocketAddr,
+        drop: Arc<DropNextStatement>,
+    ) {
+        loop {
+            let Ok((client, _)) = listener.accept().await else {
+                return;
+            };
+            let Ok(upstream_stream) = tokio::net::TcpStream::connect(upstream).await else {
+                continue;
+            };
+            let drop = Arc::clone(&drop);
+            tokio::spawn(pump_proxied_connection(client, upstream_stream, drop));
+        }
+    }
+
+    /// #4535 frozen-connection regression: a pooled connection that still
+    /// looks alive at checkout but whose first statement fails with a
+    /// transport error must be retried exactly once on a fresh connection.
+    ///
+    /// `pg_terminate_backend` cannot prove this: it closes the socket
+    /// cleanly, the client notices before the next request, and the pool
+    /// hands out a fresh connection — so the retry branch never runs. The
+    /// proxy above instead tears the socket down *while the first statement
+    /// is in flight*, after checkout has already handed the connection to
+    /// the request, which is the state a platform freeze leaves behind.
+    #[tokio::test]
+    async fn reposition_retries_when_the_first_statement_fails_in_flight() {
+        use std::sync::atomic::Ordering;
+        let _guard = DB_LOCK.lock().await;
+        let state = state_with_pool_size(1).await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+
+        let real_url = test_database_url().await;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind the transport-failure proxy");
+        let proxy_addr = listener.local_addr().expect("proxy address");
+        let drop_state = Arc::new(DropNextStatement {
+            armed: std::sync::atomic::AtomicBool::new(false),
+            drops_left: std::sync::atomic::AtomicUsize::new(0),
+        });
+        let proxy = tokio::spawn(run_drop_proxy(
+            listener,
+            upstream_addr(&real_url),
+            Arc::clone(&drop_state),
+        ));
+        let proxied =
+            state_with_database_url(&proxied_database_url(&real_url, proxy_addr), 1).await;
+
+        // Warm the single proxied pool slot through the proxy, so the next
+        // reposition is handed this exact, already-established connection.
+        let connection = db::checkout(&proxied).await.expect("warm connection");
+        connection
+            .query_one("SELECT 1", &[])
+            .await
+            .expect("warm query through the proxy");
+        drop(connection);
+
+        // Arm the drop: the next statement on the pooled connection dies in
+        // flight. The retry's fresh connection must pass through untouched.
+        drop_state.drops_left.store(1, Ordering::SeqCst);
+        drop_state.armed.store(true, Ordering::SeqCst);
+
+        let moved = update_queue_entry(
+            State(proxied.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 3 }),
+        )
+        .await
+        .expect("a reposition must retry once on a fresh connection")
+        .0;
+
+        assert_eq!(
+            drop_state.drops_left.load(Ordering::SeqCst),
+            0,
+            "the proxy must have dropped the first statement in flight"
+        );
+        assert_eq!(moved.position, 3);
+        assert_eq!(positions(&state, 7).await, vec![(2, 1), (3, 2), (1, 3)]);
+        assert_eq!(
+            event_count(&state, "reorder").await,
+            1,
+            "the retried attempt records exactly one reorder event"
+        );
+
+        proxy.abort();
+        drop(proxied);
     }
 
     /// Canonical-schema coverage for the reposition path (#4535).
