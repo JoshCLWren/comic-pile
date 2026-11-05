@@ -44,7 +44,8 @@ WITH auth AS (
           to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
       WHEN m.provider_updated_at IS NOT NULL THEN
         (m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
-          AND LEFT(m.metadata->'raw_provider_payload'->>'date_last_updated', 19) <
+          AND LEFT(replace(
+            m.metadata->'raw_provider_payload'->>'date_last_updated', ' ', 'T'), 19) <
           to_char(m.provider_updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'))
         OR m.provider_updated_at <= now()-interval '30 days'
       ELSE m.updated_at <= now()-interval '30 days'

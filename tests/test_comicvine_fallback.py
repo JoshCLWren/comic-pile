@@ -338,12 +338,17 @@ async def _mapped_issue(
 
 
 @pytest.mark.asyncio
-async def test_missing_metadata_schedules_refresh_without_blocking(
+async def test_missing_metadata_is_served_without_scheduling_python_work(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A missing metadata row is served from the database while refresh runs behind the read."""
-    user, issue, identity = await _mapped_issue(
+    """The legacy v1 reader is read-only: it serves stored data and never schedules work.
+
+    Native Rust v2 owns metadata-repair enqueue and the awaited provider worker, so
+    a missing Python metadata row must not create a detached refresh task or a
+    repair request from this read path.
+    """
+    user, issue, _identity_row = await _mapped_issue(
         async_db,
         metadata={"issue_number": "1"},
         username="comicvine_fallback_missing",
@@ -367,7 +372,8 @@ async def test_missing_metadata_schedules_refresh_without_blocking(
     assert result is not None
     assert result.comicvine_issue_id == "123"
     assert result.issue_number == "1"
-    assert scheduled == [identity.id]
+    assert result.metadata_status == "not_deep_fetched"
+    assert scheduled == []
     assert awaited == []
 
 

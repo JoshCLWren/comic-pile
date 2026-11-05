@@ -318,11 +318,13 @@ async def get_issue_intelligence(
 ) -> ComicVineIssueIntelligence | None:
     """Build curated metadata and explicit story-arc relationships for one issue.
 
-    The response is served entirely from trusted stored data: missing or stale
-    provider metadata schedules a non-blocking background refresh and the
-    current database-backed result is returned immediately. Interactive reads
-    never wait on live ComicVine network I/O (issue #3248). Related story-arc
-    members are likewise bounded to the per-arc display window.
+    The response is served entirely from trusted stored data. This legacy v1
+    reader is deliberately read-only: it reports the stored repair state but
+    never enqueues a repair or starts a provider fetch. Native Rust v2 owns the
+    metadata-repair producer and the awaited provider worker (#4623).
+    Interactive reads never wait on live ComicVine network I/O (issue #3248).
+    Related story-arc members are likewise bounded to the per-arc display
+    window.
 
     Args:
         db: Async database session.

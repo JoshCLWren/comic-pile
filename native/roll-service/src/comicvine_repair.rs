@@ -50,9 +50,9 @@ FROM claimed c LEFT JOIN external_identities e ON e.id=c.external_identity_id
 "#;
 const SETTLE: &str = r#"
 UPDATE comicvine_metadata_refresh_requests
-SET state=$4, lease_expires_at=NULL,
+SET state=($4::text)::varchar, lease_expires_at=NULL,
     next_attempt_at=now()+($5::integer * interval '1 second'),
-    last_error=$6, completed_at=CASE WHEN $4 IN ('completed','no_credits')
+    last_error=$6, completed_at=CASE WHEN ($4::text) IN ('completed','no_credits')
       THEN now() ELSE NULL END, updated_at=now()
 WHERE id=$1 AND external_identity_id=$2 AND attempts=$3
   AND state='running' AND lease_expires_at > now()
@@ -66,9 +66,9 @@ WITH lease AS (
   FOR UPDATE
 ), hydrated AS (
   UPDATE external_identities e SET
-    metadata_json=(e.metadata_json::jsonb || $4::jsonb)::json,
+    metadata_json=(e.metadata_json::jsonb || ($4::text)::jsonb)::json,
     external_url=COALESCE($5, e.external_url),
-    provider_updated_at=COALESCE($6::timestamptz, e.provider_updated_at),
+    provider_updated_at=COALESCE(($6::text)::timestamptz, e.provider_updated_at),
     updated_at=now()
   WHERE e.id=$1 AND e.provider='comicvine' AND e.entity_type='issue'
     AND EXISTS (SELECT 1 FROM lease)
@@ -206,12 +206,24 @@ fn normalized_metadata(
         .as_str()
         .filter(|s| s.starts_with("https://comicvine.gamespot.com/"))
         .map(str::to_owned);
-    let updated = result["date_last_updated"].as_str().and_then(|stamp| {
-        chrono::DateTime::parse_from_rfc3339(stamp)
-            .ok()
-            .map(|t| t.to_rfc3339())
-    });
+    let updated = provider_timestamp(&result["date_last_updated"]);
     Ok((patch, present, url, updated))
+}
+
+/// Parse ComicVine's provider revision stamp.
+///
+/// ComicVine documents RFC 3339 timestamps but the live API commonly returns
+/// `YYYY-MM-DD HH:MM:SS` without an offset. Both forms are UTC-equivalent, so
+/// accept either instead of silently dropping the provider revision clock.
+fn provider_timestamp(value: &Value) -> Option<String> {
+    let stamp = value.as_str()?;
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(stamp) {
+        return Some(parsed.to_rfc3339());
+    }
+    let naive = chrono::NaiveDateTime::parse_from_str(stamp, "%Y-%m-%d %H:%M:%S").ok()?;
+    Some(
+        chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(naive, chrono::Utc).to_rfc3339(),
+    )
 }
 
 async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
@@ -503,6 +515,171 @@ pub async fn drain(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use deadpool_postgres::Object;
+
+    async fn seed_identity(state: &AppState) -> i32 {
+        let connection = db::checkout(state).await.expect("seed connection");
+        let identity_id: i32 = connection
+            .query_one(
+                "INSERT INTO external_identities \
+                 (provider, entity_type, external_id, metadata_json, created_at, updated_at) \
+                 VALUES ('comicvine', 'issue', '4000-29319', '{}'::json, now(), now()) \
+                 RETURNING id",
+                &[],
+            )
+            .await
+            .expect("seed identity")
+            .get(0);
+        drop(Object::take(connection));
+        identity_id
+    }
+
+    async fn seed_request(
+        state: &AppState,
+        identity_id: i32,
+        request_state: &str,
+        attempts: i32,
+        next_attempt_offset: &str,
+        lease_offset: Option<&str>,
+    ) {
+        let connection = db::checkout(state).await.expect("request connection");
+        connection
+            .execute(
+                "INSERT INTO comicvine_metadata_refresh_requests \
+                 (external_identity_id, state, attempts, next_attempt_at, lease_expires_at, \
+                  created_at, updated_at) \
+                 VALUES ($1, $2, $3, now()+($4::text)::interval, \
+                   CASE WHEN $5::text IS NULL THEN NULL \
+                        ELSE now()+($5::text)::interval END, \
+                   now(), now())",
+                &[
+                    &identity_id,
+                    &request_state,
+                    &attempts,
+                    &next_attempt_offset,
+                    &lease_offset,
+                ],
+            )
+            .await
+            .expect("seed request");
+        drop(Object::take(connection));
+    }
+
+    #[tokio::test]
+    async fn expired_lease_is_reclaimed_and_persist_is_fenced() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(
+            &state,
+            identity_id,
+            "running",
+            2,
+            "-1 hour",
+            Some("-1 minute"),
+        )
+        .await;
+
+        let job = claim(&state)
+            .await
+            .expect("claim")
+            .expect("expired lease job");
+        assert_eq!(job.attempt, 3);
+        assert_eq!(job.identity_id, identity_id);
+
+        let patch = json!({"creator_credits": [{"id": 1, "name": "Jamie Delano"}]});
+        let stale = Job {
+            id: job.id,
+            identity_id: job.identity_id,
+            attempt: job.attempt + 1,
+            external_id: job.external_id.clone(),
+            provider: job.provider.clone(),
+            entity_type: job.entity_type.clone(),
+            metadata: job.metadata.clone(),
+        };
+        assert!(!persist(&state, &stale, &patch, true, &None, &None)
+            .await
+            .expect("stale persist"));
+        assert!(persist(&state, &job, &patch, true, &None, &None)
+            .await
+            .expect("current persist"));
+
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let row = connection
+            .query_one(
+                "SELECT state, lease_expires_at IS NULL \
+                 FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read settled request");
+        let request_state: String = row.get(0);
+        let lease_cleared: bool = row.get(1);
+        assert_eq!(request_state, "completed");
+        assert!(lease_cleared);
+        drop(Object::take(connection));
+
+        assert!(claim(&state).await.expect("empty claim").is_none());
+    }
+
+    #[tokio::test]
+    async fn unreleased_lease_is_not_double_claimed_and_settle_is_fenced() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let identity_id = seed_identity(&state).await;
+        seed_request(&state, identity_id, "pending", 0, "0 seconds", None).await;
+
+        let job = claim(&state).await.expect("claim").expect("due job");
+        assert_eq!(job.attempt, 1);
+        assert!(claim(&state).await.expect("leased claim").is_none());
+
+        let stale = Job {
+            id: job.id,
+            identity_id: job.identity_id,
+            attempt: job.attempt + 1,
+            external_id: job.external_id.clone(),
+            provider: job.provider.clone(),
+            entity_type: job.entity_type.clone(),
+            metadata: job.metadata.clone(),
+        };
+        settle(&state, &stale, "deferred", 60, Some("provider_unavailable"))
+            .await
+            .expect("stale settle");
+        let connection = db::checkout(&state).await.expect("assert connection");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read running request")
+            .get(0);
+        assert_eq!(request_state, "running");
+
+        settle(&state, &job, "deferred", 60, Some("provider_unavailable"))
+            .await
+            .expect("current settle");
+        let request_state: String = connection
+            .query_one(
+                "SELECT state FROM comicvine_metadata_refresh_requests \
+                 WHERE external_identity_id=$1",
+                &[&identity_id],
+            )
+            .await
+            .expect("read settled request")
+            .get(0);
+        assert_eq!(request_state, "deferred");
+        drop(Object::take(connection));
+
+        assert!(claim(&state).await.expect("cooled claim").is_none());
+    }
+
     #[test]
     fn cron_auth_fails_closed() {
         let mut headers = HeaderMap::new();
@@ -528,6 +705,19 @@ mod tests {
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
+    #[test]
+    fn provider_timestamp_accepts_rfc3339_and_comicvine_space_format() {
+        assert_eq!(
+            provider_timestamp(&json!("2020-01-01T00:00:00+00:00")).as_deref(),
+            Some("2020-01-01T00:00:00+00:00")
+        );
+        assert_eq!(
+            provider_timestamp(&json!("2020-01-01 00:00:00")).as_deref(),
+            Some("2020-01-01T00:00:00+00:00")
+        );
+        assert!(provider_timestamp(&json!("not-a-timestamp")).is_none());
+    }
+
     #[test]
     fn cached_metadata_requires_all_provider_fields_before_skipping_refresh() {
         let mut fields = Map::new();
