@@ -81,10 +81,11 @@ Its checked-in drift test is `threads::tests::checked_in_openapi_contract_is_cur
 The normal consumer is `frontend/src/services/api-threads.ts` (`list` only; the
 remaining thread mutations stay on their existing v1 paths).
 
-The real normal consumer is `frontend/src/services/rollBootstrapApi.ts`.
-Recovery uses `frontend/src/services/protectedRollMutationApi.ts`. Both keep
-their existing v1 URL. The legacy `/api/roll/bootstrap` alias shares the Python
-handler and must also move before Python deletion. V2 is a separate contract.
+The normal consumer is `frontend/src/services/rollBootstrapApi.ts`; recovery
+uses `frontend/src/services/protectedRollMutationApi.ts`. Both already call
+`/api/v2/roll/bootstrap`. The legacy `/api/roll/bootstrap` and
+`/api/v1/roll/bootstrap` aliases were removed with the Python handler (#4397)
+and now fall through to the Python catch-all. V2 is a separate contract.
 
 `GET /api/v2/analytics/metrics` (#4348) is documented by
 `comicpile_roll_service::analytics::AnalyticsApi`. Emit its operation with:

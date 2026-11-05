@@ -3,8 +3,9 @@
 > **API v2 is a URL contract, not Rust.** The only public Roll bootstrap GET is
 > `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
 > in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
-> handler: the v1/legacy aliases were removed by #4397 and the last Python read
-> model by #4350. The `v1` directory in `tests/fixtures/roll-v2/v1/` is a
+> handler: the v1/legacy aliases were removed by #4397, and #4350 removed the
+> dead Python v1 read model and the unused Python v2 response DTO. The `v1`
+> directory in `tests/fixtures/roll-v2/v1/` is a
 > golden-fixture revision, **not** the public API v1 route. Do not change the URL
 > or treat one endpoint as the implementation of another.
 >
@@ -13,9 +14,9 @@
 
 
 The wire contract is the native operation `GET /api/v2/roll/bootstrap` and its
-`BootstrapResponseV2` component. `frontend/src/generated/openapi.ts` and
-`frontend/src/types/rollV2.ts` mirror that contract. Do not introduce a second
-schema or a hand-maintained field inventory.
+`BootstrapResponseV2` component. `frontend/src/generated/openapi.ts` is generated
+from it; `frontend/src/types/rollV2.ts` is the hand-maintained UI type over the
+same payload. Do not introduce a second schema or another field inventory.
 
 The executable witnesses are the Rust unit tests in
 `native/roll-service/src/bootstrap.rs` plus the native contract-generation check
@@ -27,8 +28,9 @@ Python oracle; nothing regenerates native output from it.
 
 Use Python 3.14 and `uv sync --frozen --all-extras`. The Rust database-backed
 bootstrap tests read `RUST_ROLL_TEST_DATABASE_URL` and self-skip (reporting
-success without exercising SQL) when it is unset, so point it at a disposable
-local PostgreSQL test database. The Python checks below use `TEST_DATABASE_URL`
+success without exercising SQL) when it is unset; CI sets the variable, so this
+is a local-only skip. Point it at a disposable local PostgreSQL test database.
+The Python checks below use `TEST_DATABASE_URL`
 and `DATABASE_URL` and refuse non-test database names. Never point either suite
 at a reader's library, a read-only testuser snapshot, or production.
 
@@ -110,19 +112,23 @@ positions, counters, cached frontier, read progress, rating and activity time.
 4. Load safe active-thread context, die/ladder, bandwidth and session mode. Load
    cross-session backoff/snooze exclusions and recovery for the preserved pending
    selection. Recovery is explanatory: it does not clear pending state or roll.
-5. `get_v2_rollable_projection` consumes live validated Option E eligibility,
-   applies exclusions before die limiting, and reads issue identities, canonical
-   metadata, direct provider artwork URLs, reader stats, group routes and
-   session-scoped last-read. Stored blocked/frontier flags are not authority.
+5. The live GET is served by `native/roll-service/src/bootstrap.rs`: it consumes
+   validated Option E eligibility, applies exclusions before die limiting, and
+   reads issue identities, canonical metadata, direct provider artwork URLs,
+   reader stats, group routes and session-scoped last-read. The Python
+   `get_v2_rollable_projection` remains test/script-only parity tooling. Stored
+   blocked/frontier flags are not authority.
 6. Summary-section derivation for the retired Python payload lived in
    `RollService.load_bootstrap_thread_data`; that reference implementation and
-   its unused `RollV2BootstrapResponse` DTO were removed by #4350. V2 replaces
-   v1 `roll_pool` with non-null-issue `rollable` and nullable `last_read`.
+   its unused Python `RollV2BootstrapResponse` DTO were removed by #4350. V2
+   replaces v1 `roll_pool` with non-null-issue `rollable` and nullable
+   `last_read`.
 
 GET can create reading history, initialize bandwidth, capture timezone and write
 an undo snapshot. It does not rate/read an issue, roll/select a new target,
 change queue positions, rotate refresh credentials or emit a reading Event.
-The golden before/after state makes these writes visible to native parity tests.
+The parity harnesses seed their own scenarios; the frozen golden JSON is not
+read by any test.
 
 ## Error boundary and remaining campaign work
 

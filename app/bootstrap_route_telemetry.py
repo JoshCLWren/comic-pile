@@ -10,10 +10,12 @@ Both Python bootstrap GET handlers were removed by #4397, and #4350 removed the
 last Python read model. The retired aliases now reach the Python catch-all
 while v2 GET is served by the native Rust function. All three stay classified
 on purpose: a hit on a retired path is the residual-consumer evidence behind
-the zero-web-origin deletion gate (#2718/#3040), and a GET hit on the v2 path
+the zero-web-origin deletion gate (#2718/#3040), and a hit on the v2 path
 inside this middleware means that request was routed to Python instead of the
-Rust function. Recording only v2 would silently report zero for the retired
-paths that actually reach this process.
+native function. Only GET is routed to Rust, so every other method legitimately
+reaches Python and is recorded under the same v2 bucket. Recording only v2
+would silently report zero for the retired paths that actually reach this
+process.
 
 For each alias the telemetry records whether the caller looked like a
 web-origin (browser) client. Only classification facts are stored: header
