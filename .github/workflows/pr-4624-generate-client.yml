@@ -1,0 +1,43 @@
+name: PR 4624 one-shot generated API client reconciliation
+on:
+  push:
+    branches: [rust/comicvine-metadata-repair-4623]
+    paths: [.github/workflows/pr-4624-generate-client.yml]
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: test-secret-key-for-openapi-only
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/comic_pile_test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: rust/comicvine-metadata-repair-4623
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.14'
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - name: Generate the contract, TypeScript types, and native v2 client
+        run: |
+          set -euo pipefail
+          corepack enable
+          uv sync --frozen
+          uv run --no-sync python scripts/generate_openapi_types.py
+          git diff --stat
+      - name: Commit all generated artifacts on this PR branch
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/generated/openapi.json frontend/src/generated/openapi.ts frontend/src/generated/nativeV2Client.ts
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix(#4624): generate synced frontend API types and native client'
+            git push origin HEAD:rust/comicvine-metadata-repair-4623
+          fi
