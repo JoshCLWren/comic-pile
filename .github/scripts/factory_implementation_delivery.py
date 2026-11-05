@@ -310,7 +310,7 @@ def _has_code_delta(patch: str, path: str) -> bool:
 
 def _file_patches(diff_text: str) -> dict[str, str]:
     """Split a unified Git diff into authoritative per-file patches.
-    
+
     Concatenates multiple patch sections for the same file (which can occur
     when `gh pr diff --patch` produces commit-by-commit diffs) rather than
     keeping only the last one. This ensures earlier commit behavioral changes

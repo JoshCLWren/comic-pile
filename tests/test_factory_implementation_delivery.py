@@ -1585,11 +1585,10 @@ def test_multi_commit_diff_preserves_earlier_behavior_changes():
     patches = delivery._file_patches(multi_commit_diff)
     assert 'app/constants.py' in patches
     patch_content = patches['app/constants.py']
-    
     # The combined patch should contain both the color change and the comment change
     assert '"red": "#FF0000"' in patch_content, "Behavior change from commit 1 should be preserved"
     assert '"green": "#22C55E"' in patch_content, "Code from both commits should be present"
-    
+
     # Now verify that pr_delivers_implementation correctly detects the behavioral change
     full_diff = delivery._unified_file_diff(
         'app/constants.py',
