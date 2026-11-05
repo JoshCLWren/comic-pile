@@ -19,7 +19,7 @@ SELECTOR = ROOT / ".github/scripts/factory_live_opencode.py"
 def test_same_run_smoke_excludes_attempted_models_and_never_falls_back_to_paid() -> None:
     """Every retry uses the existing catalog policy and excludes prior failures."""
     workflow = WORKFLOW.read_text()
-    assert 'if [[ "$SOURCE" == opencode-free && "$DEEPSEEK_MODE" == normal ]]' in workflow
+    assert 'if [[ "${SOURCE:-}" == opencode-free && "${DEEPSEEK_MODE:-}" == normal ]]' in workflow
     assert 'attempted+=("$model")' in workflow
     assert 'exclusions+=(--attempted "$prior")' in workflow
     assert '--catalog "$catalog" --comments "$comments" --worker "$WORKER"' in workflow
