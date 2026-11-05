@@ -81,7 +81,15 @@ behaviors:
     behavior: "User can rate a comic after viewing"
     priority: P0
     status: covered
-    specs: ["p0-rate-comic.spec.ts"]
+    specs: ["p0-rate-comic.spec.ts", "p0-native-issue-verification.spec.ts"]
+
+  # ---- Native issue endpoint verification (P0) ----
+  - id: P0-NATIVE-ISSUE
+    area: rate
+    behavior: "Rust native PATCH /api/v2/issues/{issue_id} endpoint works in authenticated browser flows with correct runtime and response schema"
+    priority: P0
+    status: covered
+    specs: ["p0-native-issue-verification.spec.ts"]
 
   # ---- Snooze / unsnooze (P0) ----
   - id: SNOOZE-001
