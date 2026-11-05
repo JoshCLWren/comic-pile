@@ -6,7 +6,7 @@ use crate::{
     auth::AuthenticatedUser,
     db,
     dice_mutation::{self, DiceCommand},
-    option_inputs, queue, skip, ApiError,
+    dice_state, option_inputs, queue, skip, ApiError,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -548,6 +548,165 @@ async fn eligible_thread_ids(
     Ok(ids)
 }
 
+/// One owned thread's queue position and derived blocked flag before an action.
+#[derive(Clone, Copy)]
+struct ThreadPreState {
+    queue_position: i32,
+    is_blocked: bool,
+}
+
+/// Capture every owned thread's queue position and derived blocked flag.
+///
+/// Undo restores the queue and blocking changes a rating caused, so the delta
+/// snapshot records only the pre-action values that actually differ afterwards.
+async fn thread_pre_states(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<HashMap<i32, ThreadPreState>, ApiError> {
+    let rows = tx
+        .query(
+            "SELECT id, queue_position, is_blocked FROM threads WHERE user_id=$1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            (
+                row.get(0),
+                ThreadPreState {
+                    queue_position: row.get(1),
+                    is_blocked: row.get(2),
+                },
+            )
+        })
+        .collect())
+}
+
+/// Capture the active reading session's pre-action state for undo.
+///
+/// The snapshot stores the session fields a rating can change (the pending Roll
+/// offer, snoozes, die and ephemeral mode state) so the existing Python undo
+/// service can restore them exactly. A direct rating without an active session
+/// has no session-keyed undo record, matching the retired Python writer.
+async fn active_session_pre_state(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<Option<(i32, Value)>, ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT id, start_die, manual_die, pending_thread_id, pending_issue_id,
+                    pending_thread_updated_at::text, ended_at::text,
+                    COALESCE(snoozed_thread_ids::text, 'null'),
+                    predicted_bandwidth, active_bandwidth, bandwidth_confidence,
+                    bandwidth_source, bandwidth_version, bandwidth_updated_at::text,
+                    active_intent, predicted_intent, intent_confidence,
+                    intent_source, intent_version
+             FROM sessions
+             WHERE user_id=$1 AND ended_at IS NULL
+             ORDER BY started_at DESC, id DESC LIMIT 1",
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let Some(row) = row else {
+        return Ok(None);
+    };
+    let snoozed: Value = row
+        .get::<_, Option<String>>(7)
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or(Value::Null);
+    let session_state = json!({
+        "start_die": row.get::<_, i32>(1),
+        "manual_die": row.get::<_, Option<i32>>(2),
+        "pending_thread_id": row.get::<_, Option<i32>>(3),
+        "pending_issue_id": row.get::<_, Option<i32>>(4),
+        "pending_thread_updated_at": row.get::<_, Option<String>>(5),
+        "ended_at": row.get::<_, Option<String>>(6),
+        "snoozed_thread_ids": snoozed,
+        "predicted_bandwidth": row.get::<_, Option<String>>(8),
+        "active_bandwidth": row.get::<_, Option<String>>(9),
+        "bandwidth_confidence": row.get::<_, Option<f64>>(10),
+        "bandwidth_source": row.get::<_, Option<String>>(11),
+        "bandwidth_version": row.get::<_, Option<String>>(12),
+        "bandwidth_updated_at": row.get::<_, Option<String>>(13),
+        "active_intent": row.get::<_, Option<String>>(14),
+        "predicted_intent": row.get::<_, Option<String>>(15),
+        "intent_confidence": row.get::<_, Option<f64>>(16),
+        "intent_source": row.get::<_, Option<String>>(17),
+        "intent_version": row.get::<_, Option<String>>(18),
+    });
+    Ok(Some((row.get(0), session_state)))
+}
+
+/// One rating's bounded pre-action undo payload.
+struct RatingSnapshot<'a> {
+    event_id: i32,
+    session_id: i32,
+    thread_id: i32,
+    thread_state: Value,
+    issue_state: Value,
+    pre_positions: &'a HashMap<i32, ThreadPreState>,
+    session_state: Value,
+    pre_die: i32,
+}
+
+/// Persist one bounded pre-action undo delta for an issue rating.
+///
+/// This is the native counterpart of the retired Python rate writer's
+/// `snapshot_thread_states` call. The payload is the version-two compact delta
+/// the undo service consumes: the rated thread's changed fields, the rated
+/// issue's preimage, and only the queue/blocked rows that actually changed.
+async fn insert_rating_snapshot(
+    tx: &Transaction<'_>,
+    user: AuthenticatedUser,
+    snapshot: RatingSnapshot<'_>,
+) -> Result<(), ApiError> {
+    let after = thread_pre_states(tx, user).await?;
+    let mut queue_changes = serde_json::Map::new();
+    let mut blocked_changes = serde_json::Map::new();
+    for (id, before) in snapshot.pre_positions {
+        let Some(now) = after.get(id) else { continue };
+        if before.queue_position != now.queue_position {
+            queue_changes.insert(id.to_string(), json!(before.queue_position));
+        }
+        if before.is_blocked != now.is_blocked {
+            blocked_changes.insert(id.to_string(), json!(before.is_blocked));
+        }
+    }
+
+    let mut states = serde_json::Map::new();
+    states.insert("_version".into(), json!(2));
+    let mut rated = snapshot.thread_state;
+    if let Some(object) = rated.as_object_mut() {
+        object.insert("issue_changes".into(), json!([snapshot.issue_state]));
+    }
+    states.insert(snapshot.thread_id.to_string(), rated);
+    if !queue_changes.is_empty() {
+        states.insert("_queue_changes".into(), Value::Object(queue_changes));
+    }
+    if !blocked_changes.is_empty() {
+        states.insert("_blocked_changes".into(), Value::Object(blocked_changes));
+    }
+    let mut session_state = snapshot.session_state;
+    session_state["current_die"] = json!(snapshot.pre_die);
+    tx.execute(
+        "INSERT INTO snapshots
+         (session_id,event_id,thread_states,session_state,created_at,description,snapshot_kind,schema_version)
+         VALUES ($1,$2,$3::text::json,$4::text::json,NOW(),'After rating','delta',2)",
+        &[
+            &snapshot.session_id,
+            &snapshot.event_id,
+            &Value::Object(states).to_string(),
+            &session_state.to_string(),
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
 /// Apply the exact issue action inside an existing owner-serialized transaction.
 ///
 /// A `direct` action only advances the issue and its thread progress. A
@@ -584,9 +743,13 @@ pub(crate) async fn persist(
     // must not demote a placement the reader chose by hand (#3638).
     let owner = tx
         .query_opt(
-            "SELECT t.id, t.queue_position_is_manual FROM threads t
-         JOIN issues i ON i.thread_id=t.id
-         WHERE i.id=$1 AND t.user_id=$2 FOR UPDATE OF t,i",
+            "SELECT t.id, t.queue_position_is_manual,
+                    t.issues_remaining, t.last_rating, t.last_activity_at::text,
+                    t.total_issues, t.next_unread_issue_id, t.reading_progress,
+                    t.status
+             FROM threads t
+             JOIN issues i ON i.thread_id=t.id
+             WHERE i.id=$1 AND t.user_id=$2 FOR UPDATE OF t,i",
             &[&issue_id, &user.id()],
         )
         .await
@@ -594,6 +757,17 @@ pub(crate) async fn persist(
         .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Issue not found".into()))?;
     let thread_id: i32 = owner.get(0);
     let placement_is_manual: bool = owner.get(1);
+    let thread_pre_state = json!({
+        "issues_remaining": owner.get::<_, i32>(2),
+        "last_rating": owner.get::<_, Option<f64>>(3),
+        "last_activity_at": owner.get::<_, Option<String>>(4),
+        "total_issues": owner.get::<_, Option<i32>>(5),
+        "next_unread_issue_id": owner.get::<_, Option<i32>>(6),
+        "reading_progress": owner.get::<_, Option<String>>(7),
+        "queue_position_is_manual": placement_is_manual,
+        "status": owner.get::<_, String>(8),
+        "uses_issue_tracking": owner.get::<_, Option<i32>>(5).is_some(),
+    });
 
     // Replays, including a lost response to a no-op, return their original receipt.
     // Same user/key with a different issue or payload is a conflict.
@@ -641,14 +815,38 @@ pub(crate) async fn persist(
 
     let issue = tx
         .query_one(
-            "SELECT status, issue_number FROM issues
-         WHERE id=$1 AND thread_id=$2 FOR UPDATE",
+            "SELECT status, issue_number, position, read_at::text, catalog_issue_id
+             FROM issues
+             WHERE id=$1 AND thread_id=$2 FOR UPDATE",
             &[&issue_id, &thread_id],
         )
         .await
         .map_err(db::query_error)?;
     let old_status: String = issue.get(0);
     let issue_number: String = issue.get(1);
+    let issue_state = json!({
+        "id": issue_id,
+        "number": issue_number,
+        "status": old_status,
+        "read_at": issue.get::<_, Option<String>>(3),
+        "position": issue.get::<_, i32>(2),
+        "catalog_issue_id": issue.get::<_, Option<i64>>(4),
+    });
+
+    // Capture the pre-action undo payload before any read/progress/queue write.
+    // A direct rating outside an active session has no session-keyed undo row,
+    // matching the retired Python writer.
+    let pre_session = active_session_pre_state(tx, user).await?;
+    let pre_positions = if pre_session.is_some() {
+        Some(thread_pre_states(tx, user).await?)
+    } else {
+        None
+    };
+    let pre_die = if pre_session.is_some() {
+        Some(dice_state::current_die(tx, user).await?)
+    } else {
+        None
+    };
     let old_rating_row = tx
         .query_opt(
             "SELECT rating FROM events
@@ -846,6 +1044,26 @@ pub(crate) async fn persist(
     )
     .await
     .map_err(db::query_error)?;
+
+    if let (Some((session_id, session_state)), Some(pre_positions), Some(pre_die)) =
+        (pre_session, pre_positions, pre_die)
+    {
+        insert_rating_snapshot(
+            tx,
+            user,
+            RatingSnapshot {
+                event_id,
+                session_id,
+                thread_id,
+                thread_state: thread_pre_state,
+                issue_state,
+                pre_positions: &pre_positions,
+                session_state,
+                pre_die,
+            },
+        )
+        .await?;
+    }
     Ok(result)
 }
 
@@ -1241,6 +1459,21 @@ mod tests {
                 .get::<_, bool>(0),
             "reading the prerequisite must clear the dependent thread's flag"
         );
+        // The undo delta records the pre-action blocked flag so undo re-blocks
+        // the dependent series.
+        let blocked_states: Value = serde_json::from_str(
+            &first
+                .query_one(
+                    "SELECT thread_states::text FROM snapshots
+                     WHERE session_id=1 ORDER BY id DESC LIMIT 1",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+        )
+        .unwrap();
+        assert_eq!(blocked_states["_blocked_changes"]["30"], true);
         let tx = first.transaction().await.unwrap();
         let reblocked = persist(
             &tx,
@@ -1462,6 +1695,30 @@ mod tests {
         assert_eq!(pending.get::<_, Option<i32>>(0), None);
         assert_eq!(pending.get::<_, Option<i32>>(1), None);
 
+        // The rating writes the version-two undo delta the Python undo service
+        // consumes, so the Roll "Undo rating" action still restores this state.
+        let snapshot = client
+            .query_one(
+                "SELECT thread_states::text, session_state::text, description,
+                        snapshot_kind, schema_version, event_id
+                 FROM snapshots WHERE session_id=1 ORDER BY id DESC LIMIT 1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(snapshot.get::<_, String>(2), "After rating");
+        assert_eq!(snapshot.get::<_, String>(3), "delta");
+        assert_eq!(snapshot.get::<_, i32>(4), 2);
+        assert!(snapshot.get::<_, Option<i32>>(5).is_some());
+        let states: Value = serde_json::from_str(&snapshot.get::<_, String>(0)).unwrap();
+        assert_eq!(states["_version"], 2);
+        assert_eq!(states["10"]["issues_remaining"], 2);
+        assert_eq!(states["10"]["next_unread_issue_id"], 101);
+        assert_eq!(states["10"]["issue_changes"][0]["status"], "unread");
+        let session_state: Value = serde_json::from_str(&snapshot.get::<_, String>(1)).unwrap();
+        assert_eq!(session_state["current_die"], 8);
+        assert_eq!(session_state["pending_issue_id"], 101);
+
         // An identical retry replays the original receipt and never steps the
         // ladder or the queue twice.
         let tx = client.transaction().await.unwrap();
@@ -1491,6 +1748,15 @@ mod tests {
                 .unwrap()
                 .get::<_, i64>(0),
             4
+        );
+        // A replayed request must not write a second undo point.
+        assert_eq!(
+            client
+                .query_one("SELECT COUNT(*) FROM snapshots WHERE session_id=1", &[])
+                .await
+                .unwrap()
+                .get::<_, i64>(0),
+            1
         );
     }
 
@@ -1531,6 +1797,23 @@ mod tests {
                 .get::<_, String>(0),
             "completed"
         );
+        // The undo delta records the pre-rating queue positions of every row
+        // the rating moved, so undo restores the exact queue order.
+        let states: Value = serde_json::from_str(
+            &client
+                .query_one(
+                    "SELECT thread_states::text FROM snapshots
+                     WHERE session_id=1 ORDER BY id DESC LIMIT 1",
+                    &[],
+                )
+                .await
+                .unwrap()
+                .get::<_, String>(0),
+        )
+        .unwrap();
+        assert_eq!(states["_queue_changes"]["20"], 2);
+        assert_eq!(states["_queue_changes"]["30"], 3);
+        assert_eq!(states["_queue_changes"]["40"], 4);
     }
 
     #[tokio::test]
