@@ -393,6 +393,12 @@ fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i
     }
 }
 
+fn has_complete_provider_payload(metadata: &Value) -> bool {
+    metadata["raw_provider_payload"]
+        .as_object()
+        .is_some_and(|raw| FIELDS.split(',').all(|key| raw.contains_key(key)))
+}
+
 async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'static str, ApiError> {
     if job.provider.as_deref() != Some("comicvine") || job.entity_type.as_deref() != Some("issue") {
         settle(state, job, "failed", 21600, Some("identity_ineligible")).await?;
@@ -410,19 +416,7 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
         let fetched_at = metadata["deep_metadata_refreshed_at"]
             .as_str()
             .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
-        let deep = metadata["raw_provider_payload"]
-            .as_object()
-            .is_some_and(|raw| {
-                [
-                    "person_credits",
-                    "character_credits",
-                    "team_credits",
-                    "story_arc_credits",
-                    "date_last_updated",
-                ]
-                .iter()
-                .all(|k| raw.contains_key(*k))
-            });
+        let deep = has_complete_provider_payload(&metadata);
         if deep
             && fetched_at.is_some_and(|date| {
                 chrono::Utc::now().signed_duration_since(date) < chrono::Duration::days(30)
@@ -534,6 +528,21 @@ mod tests {
         incomplete.as_object_mut().unwrap().remove("person_credits");
         assert!(normalized_metadata(&incomplete, 29319).is_err());
     }
+    #[test]
+    fn cached_metadata_requires_all_provider_fields_before_skipping_refresh() {
+        let mut fields = Map::new();
+        for field in FIELDS.split(',') {
+            fields.insert(field.to_string(), Value::Null);
+        }
+        let mut metadata = json!({"raw_provider_payload": fields});
+        assert!(has_complete_provider_payload(&metadata));
+        metadata["raw_provider_payload"]
+            .as_object_mut()
+            .expect("provider payload")
+            .remove("image");
+        assert!(!has_complete_provider_payload(&metadata));
+    }
+
     #[test]
     fn backoff_does_not_retry_exhausted_jobs_without_cooldown() {
         assert!(CLAIM.contains("FOR UPDATE SKIP LOCKED"));
