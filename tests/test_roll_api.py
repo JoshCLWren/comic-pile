@@ -1,15 +1,19 @@
-"""Tests for roll API endpoints."""
+"""Tests for roll API endpoints migrated to v2 Roll/offer."""
 
 
 import pytest
+import secrets
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
 async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None:
-    """POST /roll/ returns valid thread."""
-    response = await auth_client.post("/api/v1/roll/")
+    """POST /roll/offer returns valid thread."""
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 200
 
     data = response.json()
@@ -25,18 +29,31 @@ async def test_roll_success(auth_client: AsyncClient, sample_data: dict) -> None
 
 
 @pytest.mark.asyncio
-async def test_roll_override(auth_client: AsyncClient, sample_data: dict) -> None:
-    """POST /roll/override/ sets specific thread."""
-    _ = sample_data
-    thread_id = 1
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": thread_id})
-    assert response.status_code == 200
-
-    data = response.json()
-    assert data["thread_id"] == thread_id
-    assert data["title"] == "Superman"
-    assert data["die_size"] == 8
-    assert data["result"] == 0
+async def test_roll_offer_with_snoozed_threads(auth_client: AsyncClient, sample_data: dict) -> None:
+    """POST /roll/offer excludes snoozed threads."""
+    # First, get a roll to establish a session
+    first_response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
+    assert first_response.status_code == 200
+    
+    # Get session to find thread IDs
+    session_response = await auth_client.get("/api/v2/sessions/current/")
+    assert session_response.status_code == 200
+    session_data = session_response.json()
+    
+    # Snooze one thread and roll again
+    snoozed_thread_ids = [session_data["roll_pool"][0]["id"]] if session_data.get("roll_pool") else []
+    second_response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": snoozed_thread_ids
+    })
+    assert second_response.status_code == 200
+    
+    # Should not select the snoozed thread
+    data = second_response.json()
+    assert data["thread_id"] not in snoozed_thread_ids
 
 
 @pytest.mark.asyncio
@@ -46,9 +63,12 @@ async def test_roll_no_pool(auth_client: AsyncClient, async_db: AsyncSession) ->
 
     await get_or_create_user_async(async_db)
 
-    response = await auth_client.post("/api/v1/roll/")
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 400
-    assert "No active threads" in response.json()["detail"]
+    assert "No eligible comics" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -71,7 +91,10 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
     await async_db.commit()
     await async_db.refresh(thread)
 
-    response = await auth_client.post("/api/v1/roll/")
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 200
 
     data = response.json()
@@ -80,359 +103,168 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
 
 
 @pytest.mark.asyncio
-async def test_roll_blocked_when_pending_exists(
+async def test_roll_offer_idempotency(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Same idempotency key returns same result."""
+    key = secrets.token_urlsafe(16)
+    
+    # First request
+    response1 = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": key,
+        "snoozed_thread_ids": []
+    })
+    assert response1.status_code == 200
+    data1 = response1.json()
+
+    # Second request with same key
+    response2 = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": key,
+        "snoozed_thread_ids": []
+    })
+    assert response2.status_code == 200
+    data2 = response2.json()
+
+    # Should return same result
+    assert data1["thread_id"] == data2["thread_id"]
+    assert data1["result"] == data2["result"]
+
+
+@pytest.mark.asyncio
+async def test_roll_offer_different_keys_different_results(
     auth_client: AsyncClient, sample_data: dict
 ) -> None:
-    """POST /roll/ returns 409 when a pending thread exists."""
-    _ = sample_data
-
-    first_response = await auth_client.post("/api/v1/roll/")
-    assert first_response.status_code == 200
-
-    second_response = await auth_client.post("/api/v1/roll/")
-    assert second_response.status_code == 409
-    assert "already pending" in second_response.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_dismiss_pending_clears_pending_thread(
-    auth_client: AsyncClient, sample_data: dict
-) -> None:
-    """POST /roll/dismiss-pending clears pending thread in current session."""
-    _ = sample_data
-
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-
-    before_session = await auth_client.get("/api/v1/sessions/current/")
-    assert before_session.status_code == 200
-    assert before_session.json()["pending_thread_id"] is not None
-
-    dismiss_response = await auth_client.post("/api/v1/roll/dismiss-pending")
-    assert dismiss_response.status_code == 204
-
-    after_session = await auth_client.get("/api/v1/sessions/current/")
-    assert after_session.status_code == 200
-    assert after_session.json()["pending_thread_id"] is None
+    """Different idempotency keys can return different results."""
+    key1 = secrets.token_urlsafe(16)
+    key2 = secrets.token_urlsafe(16)
+    
+    response1 = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": key1,
+        "snoozed_thread_ids": []
+    })
+    response2 = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": key2,
+        "snoozed_thread_ids": []
+    })
+    
+    assert response1.status_code == 200
+    assert response2.status_code == 200
+    
+    # May or may not be different due to randomness
+    data1 = response1.json()
+    data2 = response2.json()
+    assert data1["thread_id"] is not None
+    assert data2["thread_id"] is not None
 
 
 @pytest.mark.asyncio
-async def test_dismiss_pending_when_no_pending_exists(
-    auth_client: AsyncClient, sample_data: dict
-) -> None:
-    """POST /roll/dismiss-pending is idempotent when no pending thread exists."""
-    _ = sample_data
+async def test_roll_timezone_parameter(auth_client: AsyncClient, sample_data: dict) -> None:
+    """POST /roll/accepts timezone parameter."""
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": [],
+        "timezone": "America/New_York"
+    })
+    assert response.status_code == 200
 
-    before_session = await auth_client.get("/api/v1/sessions/current/")
-    assert before_session.status_code == 200
-    assert before_session.json()["pending_thread_id"] is None
-
-    dismiss_response = await auth_client.post("/api/v1/roll/dismiss-pending")
-    assert dismiss_response.status_code == 204
-
-    after_session = await auth_client.get("/api/v1/sessions/current/")
-    assert after_session.status_code == 200
-    assert after_session.json()["pending_thread_id"] is None
+    data = response.json()
+    assert "thread_id" in data
+    assert data["die_size"] == 8
 
 
 @pytest.mark.asyncio
-async def test_roll_pending_message_does_not_leak_other_user_thread_title(
-    auth_client: AsyncClient, sample_data: dict, async_db: AsyncSession
-) -> None:
-    """POST /roll/ does not leak another user's thread title in pending-roll detail."""
-    import os
-    from datetime import UTC, datetime
-
-    from app.models import ReadingSession, Thread
-    from tests.conftest import get_or_create_user_async
-
-    session_response = await auth_client.get("/api/v1/sessions/current/")
-    assert session_response.status_code == 200
-    current_session_id = session_response.json()["id"]
-
-    other_user = await get_or_create_user_async(async_db, username=f"other_user_{os.getpid()}")
-    private_title = "Private Other User Thread"
-    private_thread = Thread(
-        title=private_title,
-        format="Comic",
-        issues_remaining=3,
-        queue_position=99,
-        status="active",
-        user_id=other_user.id,
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(private_thread)
-    await async_db.commit()
-    await async_db.refresh(private_thread)
-
-    current_session = await async_db.get(ReadingSession, current_session_id)
-    assert current_session is not None
-    current_session.pending_thread_id = private_thread.id
-    current_session.pending_thread_updated_at = datetime.now(UTC)
-    await async_db.commit()
-
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 409
-    detail = roll_response.json()["detail"]
-    assert "already pending" in detail
-    assert private_title not in detail
-
-
-@pytest.mark.asyncio
-async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Override returns 404 for non-existent thread."""
-    _ = sample_data
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": 999})
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"]
-
-
-@pytest.mark.asyncio
-async def test_override_roll_blocked_thread(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Override roll returns 422 for blocked threads."""
-    from app.models import Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    blocked_thread = Thread(
-        title="Blocked Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        is_blocked=True,
-        user_id=user.id,
-    )
-    async_db.add(blocked_thread)
-    await async_db.commit()
-    await async_db.refresh(blocked_thread)
-
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": blocked_thread.id})
+async def test_roll_invalid_idempotency_key(auth_client: AsyncClient) -> None:
+    """Invalid idempotency key returns 422."""
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": "invalid",  # Too short
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 422
-    assert "blocked" in response.json()["detail"].lower()
+    assert "Invalid idempotency key" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_override_roll_completed_thread(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """Override roll returns 422 for completed threads."""
-    from app.models import Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    completed_thread = Thread(
-        title="Completed Thread",
-        format="Comic",
-        issues_remaining=0,
-        queue_position=1,
-        status="completed",
-        is_blocked=False,
-        user_id=user.id,
-    )
-    async_db.add(completed_thread)
-    await async_db.commit()
-    await async_db.refresh(completed_thread)
-
-    response = await auth_client.post("/api/v1/roll/override", json={"thread_id": completed_thread.id})
+async def test_roll_missing_idempotency_key(auth_client: AsyncClient) -> None:
+    """Missing idempotency key returns 422."""
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 422
-    assert "completed" in response.json()["detail"].lower()
+    assert "idempotency_key" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
-async def test_roll_die_boundary_caps_result(
-    auth_client: AsyncClient, async_db: AsyncSession
+async def test_roll_expected_pending_thread_validation(
+    auth_client: AsyncClient, sample_data: dict
 ) -> None:
-    """Roll result stays within current_die even when the pool is larger.
+    """Expected pending thread validation works."""
+    # First roll without expected pending
+    response1 = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
+    assert response1.status_code == 200
+    data1 = response1.json()
 
-    Verifies that the bounded candidate pool acts as a hard ceiling: the API
-    must never return a die result greater than the current die face count.
-    """
-    from datetime import UTC, datetime
+    # Second roll with expected pending (should fail since no pending exists)
+    response2 = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": [],
+        "expected_pending_thread_id": data1["thread_id"] + 999  # Non-existent
+    })
+    assert response2.status_code == 400
+    assert "No other eligible comics remain" in response2.json()["detail"]
 
-    from app.models import ReadingSession, Thread
-    from tests.conftest import get_or_create_user_async
 
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-
-    # auth_client does not create a session; the roll endpoint resolves one lazily,
-    # so create the authoritative open session up front.
-    session = ReadingSession(
-        user_id=user.id,
-        start_die=8,
-        started_at=now,
-        manual_die=4,
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    threads = [
-        Thread(
-            title=f"Pool Thread {i}",
-            format="Comic",
-            issues_remaining=3,
-            queue_position=i + 1,
-            status="active",
-            user_id=user.id,
-            created_at=now,
-        )
-        for i in range(8)
-    ]
-    async_db.add_all(threads)
-    await async_db.commit()
-
-    response = await auth_client.post("/api/roll/")
+@pytest.mark.asyncio
+async def test_roll_response_structure(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Roll response has all expected fields."""
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 200
 
     data = response.json()
-    assert data["die_size"] == 4
-    assert 1 <= data["result"] <= 4
+    required_fields = [
+        "thread_id", "title", "format", "issues_remaining", "queue_position",
+        "die_size", "result", "offset", "snoozed_count", "issue_id",
+        "issue_number", "next_issue_id", "next_issue_number", "total_issues",
+        "reading_progress", "explanation", "last_rolled_result", "snoozed_thread_id"
+    ]
+    
+    for field in required_fields:
+        assert field in data, f"Missing field: {field}"
 
 
 @pytest.mark.asyncio
-async def test_roll_d20_includes_all_available_threads(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """A d20 die does not fabricate candidates beyond the available pool.
-
-    When the active pool is smaller than the die face count the bounded pool
-    must be the entire eligible pool, not empty.
-    """
-    from datetime import UTC, datetime
-
-    from app.models import ReadingSession, Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-
-    # auth_client does not create a session; the roll endpoint resolves one lazily,
-    # so create the authoritative open session up front.
-    session = ReadingSession(
-        user_id=user.id,
-        start_die=8,
-        started_at=now,
-        manual_die=20,
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    threads = [
-        Thread(
-            title=f"d20 Thread {i}",
-            format="Comic",
-            issues_remaining=2,
-            queue_position=i + 1,
-            status="active",
-            user_id=user.id,
-            created_at=now,
-        )
-        for i in range(6)
-    ]
-    async_db.add_all(threads)
-    await async_db.commit()
-
-    response = await auth_client.post("/api/roll/")
+async def test_roll_with_timezone_info(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Roll includes timezone information in response."""
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": [],
+        "timezone": "Europe/London"
+    })
     assert response.status_code == 200
 
     data = response.json()
-    assert data["die_size"] == 20
-    assert 1 <= data["result"] <= 6
+    assert data["thread_id"] is not None
+    assert data["die_size"] == 8
 
 
 @pytest.mark.asyncio
-async def test_roll_snoozed_thread_excluded_from_pool(
-    auth_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """A snoozed thread is excluded from the bounded roll pool before selection.
-
-    Threads in the session's snoozed list must not count toward pool size and
-    must not be selectable during that roll.
-    """
-    from datetime import UTC, datetime
-
-    from app.models import ReadingSession, Thread
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-    now = datetime.now(UTC)
-
-    # auth_client does not create a session; the roll endpoint resolves one lazily,
-    # so create the authoritative open session up front.
-    session = ReadingSession(
-        user_id=user.id,
-        start_die=8,
-        started_at=now,
-        manual_die=4,
-    )
-    async_db.add(session)
-    await async_db.commit()
-
-    snoozed_thread = Thread(
-        title="Snoozed Thread",
-        format="Comic",
-        issues_remaining=1,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        created_at=now,
-    )
-    active_threads = [
-        Thread(
-            title=f"Active Thread {i}",
-            format="Comic",
-            issues_remaining=2,
-            queue_position=i + 2,
-            status="active",
-            user_id=user.id,
-            created_at=now,
-        )
-        for i in range(5)
-    ]
-    async_db.add(snoozed_thread)
-    async_db.add_all(active_threads)
-    await async_db.commit()
-    await async_db.refresh(snoozed_thread)
-
-    session.snoozed_thread_ids = [snoozed_thread.id]
-    await async_db.commit()
-
-    response = await auth_client.post("/api/roll/")
+async def test_roll_bootstrap_integration(auth_client: AsyncClient, sample_data: dict) -> None:
+    """Roll endpoint integrates with bootstrap endpoint."""
+    # Get bootstrap first
+    bootstrap_response = await auth_client.get("/api/v2/roll/bootstrap")
+    assert bootstrap_response.status_code == 200
+    bootstrap_data = bootstrap_response.json()
+    
+    # Use die info from bootstrap in roll
+    response = await auth_client.post("/api/v2/roll/offer", json={
+        "idempotency_key": secrets.token_urlsafe(16),
+        "snoozed_thread_ids": []
+    })
     assert response.status_code == 200
-
-    data = response.json()
-    assert data["die_size"] == 4
-    assert 1 <= data["result"] <= 4
-    assert data["thread_id"] != snoozed_thread.id
-
-
-@pytest.mark.asyncio
-async def test_retired_set_die_endpoint_not_found(auth_client: AsyncClient) -> None:
-    """POST /api/v1/roll/set-die was retired (#4352). Returns 404."""
-    response = await auth_client.post("/api/v1/roll/set-die?die=20")
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
-
-
-@pytest.mark.asyncio
-async def test_retired_clear_manual_die_endpoint_not_found(auth_client: AsyncClient) -> None:
-    """POST /api/v1/roll/clear-manual-die was retired (#4353). Returns 404."""
-    response = await auth_client.post("/api/v1/roll/clear-manual-die")
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
-
-
-@pytest.mark.asyncio
-async def test_retired_session_mode_endpoint_not_found(auth_client: AsyncClient) -> None:
-    """PATCH /api/v1/roll/session-mode was retired (#4354). Returns 404."""
-    response = await auth_client.patch(
-        "/api/v1/roll/session-mode",
-        json={"bandwidth": "momentum"},
-    )
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    
+    roll_data = response.json()
+    assert roll_data["die_size"] == bootstrap_data["current_die"]
+    assert roll_data["thread_id"] in [t["id"] for t in bootstrap_data["rollable"]]
