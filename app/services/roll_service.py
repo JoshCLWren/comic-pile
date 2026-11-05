@@ -28,7 +28,6 @@ from app.repositories.roll_repository import (
     fetch_session_events,
     insert_recommendation_context,
     update_session_pending_thread,
-    update_session_skipped,
 )
 from app.services.queue_display import display_position
 from app.services.reading_effort import (
@@ -167,7 +166,6 @@ class RollService:
         excluded_ids: list[int],
         selection_bandwidth: str,
         selection_intent: str,
-        selection_method_override: str | None = None,
         empty_pool_detail: str = "No active threads available to roll",
     ) -> _SelectionArtifacts:
         """Run the weighted bounded-pool selection shared by roll and skip.
@@ -331,13 +329,8 @@ class RollService:
             control_mode=control_mode,
         )
 
-        # The recorded method follows the active mode; only an explicit caller
-        # override (a manual pick, a skip, a quiz correction) replaces it.
-        selection_method = (
-            selection_method_override
-            if selection_method_override is not None
-            else mode_selection_method
-        )
+        # The recorded method follows the active mode for this endpoint.
+        selection_method = mode_selection_method
 
         effort_estimate_str = (
             selected_effort_estimate.band
@@ -584,16 +577,15 @@ class RollService:
         bandwidth: str | None = None,
         intent: str | None = None,
         extra_excluded_ids: Sequence[int] = (),
-        selection_method_override: str | None = None,
         empty_pool_detail: str = "No active threads available to roll",
     ) -> tuple[int, _SelectionArtifacts]:
         """Resolve the die, exclusions, and one Option E selection for a session.
 
-        Shared by the retained skip route and the in-process test flow that
-        replaced the retired ``POST /api/v1/roll/`` mutation (#4336). The
-        selection rules themselves live in ``select_pending_thread``; this
-        method only resolves the session-scoped inputs the caller would
-        otherwise duplicate.
+        Used by the in-process test flow that replaced the retired
+        ``POST /api/v1/roll/`` mutation (#4336). The selection rules
+        themselves live in ``select_pending_thread``; this method only
+        resolves the session-scoped inputs the caller would otherwise
+        duplicate.
 
         Args:
             current_session: The reader's active reading session.
@@ -601,8 +593,6 @@ class RollService:
             bandwidth: Explicit reading-bandwidth override, when requested.
             intent: Explicit reading-intent override, when requested.
             extra_excluded_ids: Threads excluded for this selection only.
-            selection_method_override: Recorded method override (for example
-                ``"skip"``); ``None`` records the mode-derived method.
             empty_pool_detail: Client-facing message for an empty pool.
 
         Returns:
@@ -625,7 +615,6 @@ class RollService:
             excluded_ids=[*excluded_ids, *extra_excluded_ids],
             selection_bandwidth=bandwidth or current_session.active_bandwidth or DEFAULT_BANDWIDTH,
             selection_intent=intent or current_session.active_intent or DEFAULT_INTENT,
-            selection_method_override=selection_method_override,
             empty_pool_detail=empty_pool_detail,
         )
         return current_die, artifacts
@@ -708,46 +697,6 @@ class RollService:
         await self._db.commit()
         return response
 
-
-    async def record_skip_outcome(
-        self,
-        *,
-        current_session: ReadingSession,
-        thread_id: int,
-    ) -> None:
-        """Record that a session's pending thread was abandoned by a skip (#3706).
-
-        Persistence goes through ``app.repositories.roll_repository``. Callers
-        must invoke this BEFORE adding the replacement roll event to the
-        session: both history readers resolve event order by
-        ``(timestamp, id)`` (``get_session_with_thread_safe`` and
-        ``project_decision_history``), so a skip saved after the replacement
-        roll would hide the new pending comic's rolled result and would
-        attribute the skip to the replacement roll attempt instead of the
-        original one.
-
-        The skipped thread also joins the session's skipped list so later
-        selections in the same session keep excluding it.
-
-        Args:
-            current_session: Session where the skip happened.
-            thread_id: The pending thread that was skipped.
-        """
-        event = Event(
-            type="rolled_but_skipped",
-            session_id=current_session.id,
-            thread_id=thread_id,
-        )
-        await insert_event(self._db, event)
-        # Flush now so this event gets the earlier timestamp and id before the
-        # replacement roll event is inserted.
-        await self._db.flush()
-
-        skipped_ids = list(current_session.skipped_thread_ids or [])
-        if thread_id not in skipped_ids:
-            skipped_ids.append(thread_id)
-            await update_session_skipped(self._db, current_session.id, skipped_ids)
-            current_session.skipped_thread_ids = skipped_ids
 
     async def execute_override(self, *, thread_id: int, current_user: User) -> RollResponse:
         """Select an owned Thread using the active eligibility authority.

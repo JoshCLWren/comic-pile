@@ -32,12 +32,10 @@ interface UseRatingViewParams {
   snooze: { handleSnooze: () => Promise<void> }
   onResetDice?: () => void
   onReroll?: () => Promise<void>
-  onSkip: () => Promise<void>
   rateMutation: { isPending: boolean }
   snoozeMutation: { isPending: boolean }
   rerollMutation?: { isPending: boolean }
   dismissPendingMutation: { isPending: boolean }
-  skipMutation: { isPending: boolean }
   ratingViewTopRef: React.RefObject<HTMLDivElement | null> | null
 }
 
@@ -52,14 +50,12 @@ export interface RatingViewData {
   snoozeIsPending?: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  skipIsPending: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze?: () => void
   onResetDice?: () => void
   onReroll?: () => Promise<void>
-  onSkip?: () => void
   onCancel: () => void
   onRefreshThread: () => void
   readerContext: ReaderContextResponse | null
@@ -116,12 +112,10 @@ export function useRatingView({
   snooze,
   onReroll,
   onResetDice,
-  onSkip,
   rateMutation,
   snoozeMutation,
   rerollMutation,
   dismissPendingMutation,
-  skipMutation,
   ratingViewTopRef,
 }: UseRatingViewParams): RatingViewData {
   const {
@@ -156,7 +150,6 @@ export function useRatingView({
     rateIsPending: rateMutation.isPending,
     snoozeIsPending: (rerollMutation ?? snoozeMutation).isPending,
     dismissIsPending: dismissPendingMutation.isPending,
-    skipIsPending: skipMutation.isPending,
     manualDie: bootstrap?.manual_die ?? null,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
@@ -164,7 +157,6 @@ export function useRatingView({
     onReroll,
     onResetDice,
     rerollIsPending: rerollMutation?.isPending ?? false,
-    onSkip,
     onCancel: rating.handleCancelRating,
     onRefreshThread: rating.handleRefreshThread,
     readerContext,

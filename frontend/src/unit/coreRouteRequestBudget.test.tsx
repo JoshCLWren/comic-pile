@@ -41,7 +41,6 @@ import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useSession } from '../hooks/useSession'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
-import type { SkipMutationOutcome } from '../hooks/useSkip'
 import { useQueueThreadActions } from '../pages/QueuePage/useQueueThreadActions'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
@@ -116,7 +115,7 @@ const queueThreads = [1, 2].map((id) => ({
  * Typed stand-ins for the sibling Roll mutations this probe does not exercise.
  *
  * The budget assertions cover the move-to-front request path, so the roll,
- * snooze and skip mutations must resolve with the exact shapes their hooks
+ * snooze mutations must resolve with the exact shapes their hooks
  * declare. Returning `undefined` where a response object is required would not
  * type-check, and the anti-slop rules forbid casting around that.
  */
@@ -139,12 +138,6 @@ const stubRollResponse: RollResponse = {
 }
 
 const stubSnoozeOutcome: SnoozeMutationOutcome = {
-  response: undefined,
-  refreshed: false,
-  refreshError: undefined,
-}
-
-const stubSkipOutcome: SkipMutationOutcome = {
   response: undefined,
   refreshed: false,
   refreshError: undefined,
@@ -221,8 +214,6 @@ function RollMoveBudgetProbe() {
       rollMutation: { mutate: () => Promise.resolve(stubRollResponse), isPending: false },
       snoozeMutation: { mutate: () => Promise.resolve(stubSnoozeOutcome), isPending: false },
       unsnoozeMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
-      skipMutation: { mutate: () => Promise.resolve(stubSkipOutcome), isPending: false },
-      unskipMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       moveToFrontMutation: {
         mutate: moveToFrontMutation.mutate,
         isPending: moveToFrontMutation.isPending,

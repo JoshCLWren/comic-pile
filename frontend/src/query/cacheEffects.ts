@@ -471,6 +471,21 @@ export async function invalidateComicVineIssueIntelligenceMany(
 }
 
 /**
+ * Invalidate the `comicVine.issueIdentity(issueId)` cache bucket after an
+ * identity confirm/replace/remove so every card for the same canonical Issue
+ * re-reads the new mapping state without a full-page refresh.
+ */
+export async function invalidateComicVineIssueIdentity(
+  client: QueryClient,
+  issueId: number,
+): Promise<void> {
+  await client.invalidateQueries({
+    queryKey: queryKeys.comicVine.issueIdentity(issueId),
+    exact: true,
+  })
+}
+
+/**
  * Update the cached `image_url` for an issue's ComicVine intelligence in-place
  * so the newly selected cover renders immediately after a correction. The
  * subsequent invalidation/refetch confirms the optimistic value from the server.

@@ -1,10 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
-import Modal from '../../../components/Modal'
 import GlossaryLink from '../../../components/GlossaryLink'
 import { RATING_THRESHOLD, getRatingColorClass } from '../utils'
 import {
-  rollDangerActionClass,
-  rollDialogSecondaryActionClass,
   rollPrimaryActionClass,
   rollSecondaryActionClass,
   rollSecondaryActionGroupClass,
@@ -21,12 +18,10 @@ interface DecisionCardProps {
   rateIsPending: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onReroll?: () => Promise<void>
-  onSkip?: () => void
   onResetDice?: () => void
   onCancel: () => void
 }
@@ -37,7 +32,7 @@ interface DecisionCardProps {
  * Key features:
  * - Rating slider with visual feedback based on rating value
  * - Die readout that reports the truthful die outcome for the active mode
- * - Action buttons for saving, rolling again, skipping, and canceling
+ * - Action buttons for saving, rolling again, and canceling
  *
  * Manual die mode:
  * - When `manualDie` is not null the die is pinned, so the ladder move never
@@ -54,13 +49,11 @@ export function DecisionCard({
   errorMessage,
   rateIsPending,
   dismissIsPending,
-  skipIsPending = false,
   manualDie,
   onUpdateRating,
   onSubmitRating,
   onReroll,
   rerollIsPending = false,
-  onSkip,
   onCancel,
   onResetDice,
 }: DecisionCardProps) {
@@ -73,17 +66,11 @@ export function DecisionCard({
     Math.max(0, ((rating - 0.5) / (5.0 - 0.5)) * 100),
   )
 
-  const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   useEffect(() => {
     setCopyStatus('idle')
   }, [threadTitle, issueNumber])
-
-  const handleConfirmSkip = () => {
-    setIsSkipConfirmOpen(false)
-    onSkip?.()
-  }
 
   async function handleCopyComicReference() {
     if (!threadTitle || issueNumber == null) return
@@ -231,18 +218,6 @@ export function DecisionCard({
               {rerollIsPending ? 'Rolling…' : 'Roll again'}
             </button>
           )}
-          {onSkip && (
-            <button
-              type="button"
-              onClick={() => setIsSkipConfirmOpen(true)}
-              disabled={skipIsPending}
-              data-testid="skip-roll"
-              aria-label="Skip current roll"
-              className={rollSecondaryActionClass}
-            >
-              {skipIsPending ? 'Skipping…' : 'Skip'}
-            </button>
-          )}
           <button
             type="button"
             onClick={onCancel}
@@ -254,44 +229,6 @@ export function DecisionCard({
           </button>
         </div>
       </div>
-
-      <Modal
-        isOpen={isSkipConfirmOpen}
-        title="Skip comic"
-        onClose={() => setIsSkipConfirmOpen(false)}
-        data-testid="skip-confirm-dialog"
-      >
-        <div className="space-y-4">
-          <p className="text-sm text-[var(--theme-text-muted)]">
-            Skip moves past this rolled comic without saving a rating. Nothing is marked read, and
-            it can come up again in a future roll.
-          </p>
-          <p className="text-xs text-[var(--theme-text-dim)]">
-            Roll again snoozes this comic temporarily and selects the next offer. Cancel roll exits
-            without rating. Skip is different from both — it moves past this comic now.
-          </p>
-          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
-            <button
-              type="button"
-              onClick={() => setIsSkipConfirmOpen(false)}
-              disabled={skipIsPending}
-              data-testid="skip-cancel"
-              className={`min-h-11 sm:min-h-9 ${rollDialogSecondaryActionClass}`}
-            >
-              Keep this comic
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmSkip}
-              disabled={skipIsPending}
-              data-testid="skip-confirm"
-              className={`min-h-11 sm:min-h-9 ${rollDangerActionClass}`}
-            >
-              {skipIsPending ? 'Skipping…' : 'Skip comic'}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </section>
   )
 }

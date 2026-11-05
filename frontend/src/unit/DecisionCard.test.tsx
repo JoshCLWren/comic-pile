@@ -27,12 +27,10 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     rateIsPending: false,
     rerollIsPending: false,
     dismissIsPending: false,
-    skipIsPending: false,
     manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onReroll: vi.fn().mockResolvedValue(undefined),
-    onSkip: vi.fn(),
     onCancel: vi.fn(),
     ...overrides,
   }
@@ -47,12 +45,10 @@ interface DecisionCardProps {
   rateIsPending: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  skipIsPending?: boolean
   manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onReroll?: () => Promise<void>
-  onSkip?: () => void
   onResetDice?: () => void
   onCancel: () => void
 }
@@ -176,23 +172,13 @@ describe('DecisionCard', () => {
     expect(screen.getByRole('button', { name: /rolling…/i })).toBeInTheDocument()
   })
 
-  it('shows skip button when skipIsPending is false', () => {
-    const callbacks = makeDecisionCardProps({
-      skipIsPending: false,
-    })
+  it('never renders a skip control: reroll is the only move-past action', () => {
+    const callbacks = makeDecisionCardProps()
 
     renderDecisionCard(callbacks)
 
-    expect(screen.getByRole('button', { name: /skip/i })).toBeInTheDocument()
-  })
-
-  it('shows skipping state when skipIsPending is true', () => {
-    const callbacks = makeDecisionCardProps({
-      skipIsPending: true,
-    })
-
-    renderDecisionCard(callbacks)
-
-    expect(screen.getByTestId('skip-roll')).toHaveTextContent('Skipping…')
+    expect(screen.queryByTestId('skip-roll')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('skip-confirm-dialog')).not.toBeInTheDocument()
+    expect(screen.getByTestId('reroll-offer')).toBeInTheDocument()
   })
 })

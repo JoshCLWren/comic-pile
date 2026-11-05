@@ -62,7 +62,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     overrideThreadId: '',
     overrideErrorMessage: '',
     snoozedExpanded: false,
-    skippedExpanded: false,
     isDieModalOpen: false,
     isSetCurrentIssueOpen: false,
     selectedThread: null,
@@ -77,7 +76,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     rating: 3.0,
     errorMessage: '',
     suppressPendingAutoOpenRef: { current: false },
-    ignoredPendingThreadIdRef: { current: null },
     rollIntervalRef: { current: null },
     rollTimeoutRef: { current: null },
     setIsRolling: vi.fn(),
@@ -89,7 +87,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     setOverrideThreadId: vi.fn(),
     setOverrideErrorMessage: vi.fn(),
     setSnoozedExpanded: vi.fn(),
-    setSkippedExpanded: vi.fn(),
     setIsDieModalOpen: vi.fn(),
     setIsSetCurrentIssueOpen: vi.fn(),
     setSelectedThread: vi.fn(),
@@ -118,7 +115,6 @@ const snooze = { handleSnooze: vi.fn() }
 const rateMutation = { isPending: false }
 const snoozeMutation = { isPending: false }
 const dismissPendingMutation = { isPending: false }
-const skipMutation = { isPending: false }
 const ratingViewTopRef = { current: null }
 
 interface ScopeOverrides {
@@ -148,11 +144,9 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
     connectedThreadsError: null,
     rating,
     snooze,
-    onSkip: vi.fn(),
     rateMutation,
     snoozeMutation,
     dismissPendingMutation,
-    skipMutation,
     ratingViewTopRef,
     ...initialScopes,
   }
@@ -259,11 +253,9 @@ it('a failed reader-context request stays out of the shared rating error channel
         connectedThreadsError: new Error('connected threads unavailable'),
         rating,
         snooze,
-        onSkip: vi.fn(),
         rateMutation,
         snoozeMutation,
         dismissPendingMutation,
-        skipMutation,
         ratingViewTopRef,
       }),
     { wrapper: createWrapper() },

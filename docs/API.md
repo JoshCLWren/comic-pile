@@ -363,8 +363,7 @@ Dice roll for thread selection.
 #4336. The public Roll mutation is now the sessionless native
 `POST /api/v2/roll/offer`, which is not served by the Python FastAPI app; both
 retired Python paths return `404`. The retained Python Roll operations are
-`override`, `skip`, `skip/{thread_id}/unskip`, `dismiss-pending`, and the
-recommendation-explanation read.
+`override`, `dismiss-pending`, and the recommendation-explanation read.
 
 ### POST /roll/override
 
