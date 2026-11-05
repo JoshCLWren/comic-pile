@@ -857,7 +857,7 @@ jobs:
           set -Eeuo pipefail
           # Dynamic catalog workers retry distinct, proven-free models within this job.
           # Pinned DeepSeek and other provider lanes retain their existing smoke.
-          if [[ "$SOURCE" == opencode-free && "$DEEPSEEK_MODE" == normal ]]; then
+          if [[ "${SOURCE:-}" == opencode-free && "${DEEPSEEK_MODE:-}" == normal ]]; then
             [[ -z "$(git status --porcelain)" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
             catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
             comments="$RUNNER_TEMP/factory-opencode-attempt-comments.json"
