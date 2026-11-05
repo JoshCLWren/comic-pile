@@ -26,6 +26,8 @@ export type Thread = components['schemas']['ThreadResponse']
  * data on the wire instead of dropping it at the service boundary.
  */
 export type RateResponsePayload = components['schemas']['ThreadResponse'] & {
+  /** Actual read time of the issue returned by the native v2 writer. */
+  rated_issue_read_at?: string | null
   roll_reconciliation?: {
     last_read: RollLastReadPayload
   }
