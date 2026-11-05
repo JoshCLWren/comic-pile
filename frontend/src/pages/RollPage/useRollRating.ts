@@ -147,9 +147,20 @@ export function useRollRating({
       refetchBootstrap()
       setShowMigrationDialog(false)
       setThreadToMigrate(null)
-      enterRatingView(migratedThread.id, null, migratedThread)
+      // Migration materializes this series' issues; it does not change which
+      // issue Roll offered. Carry the offer's identity forward, falling back to
+      // the migrated thread's own frontier, so the rating that follows still
+      // rates the exact issue the reader was offered.
+      const retained = threadToMigrate
+      enterRatingView(migratedThread.id, null, {
+        ...migratedThread,
+        issue_id: retained?.issue_id ?? migratedThread.next_unread_issue_id ?? null,
+        issue_number: retained?.issue_number ?? migratedThread.next_unread_issue_number ?? null,
+        next_issue_id: retained?.next_issue_id ?? migratedThread.next_unread_issue_id ?? null,
+        next_issue_number: retained?.next_issue_number ?? migratedThread.next_unread_issue_number ?? null,
+      })
     },
-    [refetchBootstrap, enterRatingView, setShowMigrationDialog, setThreadToMigrate],
+    [refetchBootstrap, enterRatingView, setShowMigrationDialog, setThreadToMigrate, threadToMigrate],
   )
 
   const handleMigrationSkip = useCallback(() => {
@@ -168,12 +179,17 @@ export function useRollRating({
       // state, so this handler consumes that snapshot instead of issuing a
       // second bootstrap request.
       setShowSimpleMigration(false)
+      const issueId = activeRatingThread!.issue_id ?? activeRatingThread!.next_issue_id
+      if (issueId == null) {
+        setErrorMessage('Unable to determine issue ID for rating')
+        return
+      }
       rateMutation
         .mutate({
           thread_id: activeRatingThread!.id,
           rating,
-          finish_session: false,
-          issue_number: issueNumber,
+          issue_id: issueId,
+          source: 'roll_offer',
         })
         .then((outcome) => {
           const rateResponse = outcome.rate
@@ -224,7 +240,12 @@ export function useRollRating({
     setRating(num)
   }
 
-  async function handleSubmitRating(finishSession = false) {
+  // The retired `POST /v1/rate/` route could also end the reading session from
+  // the rating request. The native issue writer owns neither session lifecycle
+  // nor that flag, and no caller requests it, so the parameter stays to keep
+  // the rating-view contract intact without pretending the rating can finish a
+  // session.
+  async function handleSubmitRating(_finishSession = false) {
     navigator.vibrate?.(20)
     if (rating >= RATING_THRESHOLD) createExplosion()
 
@@ -247,11 +268,16 @@ export function useRollRating({
     // bootstrap refetch.
 
     try {
+      const issueId = activeRatingThread.issue_id ?? activeRatingThread.next_issue_id
+      if (issueId == null) {
+        setErrorMessage('Unable to determine issue ID for rating')
+        return
+      }
       const outcome = await rateMutation.mutate({
         thread_id: activeRatingThread.id,
         rating,
-        finish_session: finishSession,
-        issue_number: activeRatingThread.issue_number || undefined,
+        issue_id: issueId,
+        source: 'roll_offer',
       })
       const rateResponse = outcome.rate
 

@@ -583,9 +583,9 @@ test.describe('CBL replacement review', () => {
 
     const pending = await page.request.post(`/api/threads/${rated.id}/set-pending`, { headers })
     expect(pending.ok(), await pending.text()).toBeTruthy()
-    const rating = await page.request.post('/api/v1/rate/', {
+    const rating = await page.request.patch(`/api/v2/issues/${ratedIssueId}`, {
       headers,
-      data: { rating: 4.5, finish_session: false, issue_number: '1' },
+      data: { status: 'read', rating: 4.5, idempotency_key: `test-cbl-${ratedIssueId}-${Date.now()}`, source: 'direct' },
     })
     expect(rating.ok(), await rating.text()).toBeTruthy()
     const threadAfterRating = await page.request.get(`/api/v1/threads/${rated.id}`, { headers })
