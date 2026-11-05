@@ -90,9 +90,9 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// source drifts from the generated contract.
 pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 22] = [
     ("get", "/api/v2/analytics/metrics"),
-    ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
+    ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/roll/bootstrap"),
     ("get", "/api/v2/threads"),
