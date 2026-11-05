@@ -49,6 +49,7 @@ def test_python_bootstrap_projection_stays_deleted() -> None:
     """
     assert not hasattr(roll_schemas, "RollBootstrapResponse")
     assert not hasattr(roll_schemas, "RollBootstrapThread")
+    assert not hasattr(roll_schemas, "ThreadExclusionReason")
     assert not hasattr(RollService, "load_bootstrap_thread_data")
     assert not hasattr(roll_service_module, "BootstrapThreadData")
     assert not hasattr(roll_service_module, "BootstrapLibrarySummary")

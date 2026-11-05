@@ -5,7 +5,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.continuity_blocking import ContinuityBlocker
-from app.schemas.dependency import BlockingDependency
 from comic_pile.recommendation_selection import Bandwidth, Intent
 
 
@@ -110,20 +109,3 @@ class RollRecoveryInfo(BaseModel):
     readable_prerequisites: list[RollRecoveryPrerequisite] = Field(default_factory=list)
     chains: list[list[RollRecoveryChainNode]] = Field(default_factory=list)
     diagnostics: list[RollRecoveryDiagnostic] = Field(default_factory=list)
-
-
-class ThreadExclusionReason(BaseModel):
-    """One series excluded from the roll pool, with the reason the user can understand.
-
-    ``blocking_reasons`` and ``blocking_dependencies`` carry the live eligibility
-    explanation for blocked series in the v2 bootstrap projection.
-    """
-
-    thread_id: int
-    title: str
-    format: str
-    reason: Literal["blocked", "snoozed", "skipped", "completed", "not_in_queue"]
-    detail: str | None = None
-    blocking_reasons: list[str] = Field(default_factory=list)
-    blocking_dependencies: list[BlockingDependency] = Field(default_factory=list)
-    last_activity_at: str | None = None

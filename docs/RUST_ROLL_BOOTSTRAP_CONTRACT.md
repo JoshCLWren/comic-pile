@@ -25,27 +25,40 @@ Python oracle; nothing regenerates native output from it.
 
 ## Reproduce
 
-Use Python 3.14 and `uv sync --frozen --all-extras`. Set `TEST_DATABASE_URL` and
-`DATABASE_URL` to the same **disposable local PostgreSQL test database**. Shared
-fixtures truncate test data and refuse non-test database names. Never point this
-suite at a reader's library, a read-only testuser snapshot, or production.
+Use Python 3.14 and `uv sync --frozen --all-extras`. The Rust database-backed
+bootstrap tests read `RUST_ROLL_TEST_DATABASE_URL` and self-skip (reporting
+success without exercising SQL) when it is unset, so point it at a disposable
+local PostgreSQL test database. The Python checks below use `TEST_DATABASE_URL`
+and `DATABASE_URL` and refuse non-test database names. Never point either suite
+at a reader's library, a read-only testuser snapshot, or production.
 
 ```sh
-cargo test --manifest-path native/roll-service/Cargo.toml --locked bootstrap
+RUST_ROLL_TEST_DATABASE_URL=postgresql://... \
+  cargo test --manifest-path native/roll-service/Cargo.toml --locked bootstrap
 uv run pytest tests/test_roll_v2_contract.py tests/test_option_e_runtime.py \
   tests/test_roll_v2_projection.py -q --no-cov
 bash scripts/check-python-ci-lint.sh
 ```
 
+The deployable field list is pinned by
+`openapi::tests::bootstrap_and_reading_session_responses_keep_their_typed_ui_fields`
+in `native/roll-service/src/openapi.rs`.
+
+**Historical methodology.** This describes the retired Python oracle harness.
+The fixtures under `tests/fixtures/roll-v2/v1/` are frozen history: no test
+reads them and no Python bootstrap GET exists to regenerate them. Keep them for
+the fixture-design record and use the Rust witnesses named above for live
+verification.
+
 The decision clock is 2026-01-04 12:00 UTC. Model session/snapshot defaults and
-bandwidth initialization use that clock too; authentication uses real short-lived
+bandwidth initialization use that clock too; authentication used real short-lived
 synthetic credentials generated in memory. No tokens are stored in JSON. Each
-case seeds its own owner and library using database-generated keys. JSON maps
+case seeded its own owner and library using database-generated keys. JSON mapped
 those keys to ordinal identities per domain; ordering, nulls, numbers, labels,
-fixed timestamps and all response fields remain significant. Repeated GETs must
-return identical payloads and leave the post-first-request state unchanged.
-Tests only read checked-in expectations. Changing an expectation requires an
-explicitly reviewed Python-contract change and fresh isolated Python capture.
+fixed timestamps and all response fields remained significant. Repeated GETs
+returned identical payloads and left the post-first-request state unchanged.
+Changing an expectation once required an explicitly reviewed Python-contract
+change and fresh isolated Python capture; that path no longer exists.
 
 ## Scenario matrix
 
@@ -64,7 +77,7 @@ positions, counters, cached frontier, read progress, rating and activity time.
 | pending | Beta #1 remains pending; active thread retained |
 | snoozed / skipped | Alpha excluded via the respective session ID collection |
 | manual_die | Manual d4 overrides automatic die selection |
-| auto_die | Synthetic session rate event with die_after=8; automatic ladder is evaluated by Python |
+| auto_die | Synthetic session rate event with die_after=8; automatic ladder evaluated by the bootstrap handler |
 | last_read | Same session-scoped rating/read event projects Alpha #1 and read time |
 | recovery | Strict Alpha #1 before pending Beta #1; structured blockers and readable prerequisite |
 | strict | Alpha #1 before Beta #1 blocks Beta |

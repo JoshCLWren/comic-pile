@@ -3,10 +3,9 @@
 `roll-bootstrap-v1.openapi.json` is the transitive operation snapshot from
 `frontend/src/generated/openapi.json` at production commit `cdaa74f`, for
 GET `/api/v1/roll/bootstrap` (#4350). It includes nested models, security
-schemes and query defaults. Arrays retain their original ordering. The Python
-handler and its PostgreSQL-backed port-oracle test were removed by #4397 and
-#4350, so this file is a frozen comparison baseline for the native port, not a
-live oracle.
+schemes and query defaults. Arrays retain their original ordering. The Python handler and its PostgreSQL-backed port-oracle test were both
+removed by #4397, so this file is a frozen comparison baseline for the native
+port, not a live oracle.
 
 `issue-v2.openapi.json` is the generated native contract for the new product
 behaviour in #4443: `PATCH /api/v2/issues/{issue_id}` and the bounded
@@ -116,9 +115,8 @@ production cutover.
 The retired `tests/test_roll_bootstrap_port_oracle.py` executed the original
 Python v1 handler, validated its response against the frozen schema and recorded
 the emitted SQL, bind shapes and connection transaction events as
-`roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle
-was removed with the Python handler (#4397, #4350); its transcript is historical
-evidence only.
+`roll-bootstrap-v1.sql.json` in the CI `rust-sql-oracle-*` artifact. The oracle was removed with the Python handler (#4397); its transcript is
+historical evidence only.
 
 The captured transcript covered one representative existing-session path, not a
 complete SQL inventory: new-session creation, pending recovery, and timezone
