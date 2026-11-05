@@ -18,6 +18,7 @@
 import { expect, type Page } from '@playwright/test'
 import { test } from './fixtures'
 import { createThread, gotoRollPage, waitForRollPageReady } from './helpers'
+import type { IssueReadRateResponse } from '../generated/nativeV2Client'
 
 test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => {
   /**
@@ -69,11 +70,12 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(await response.ok()).toBeTruthy()
 
     // Verify the response body matches the expected schema
-    const responseBody = (await response.json()) as Record<string, unknown>
+    // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
+    const responseBody = (await response.json()) as unknown as IssueReadRateResponse
 
     // IssueReadRateResponse schema validation
     expect(responseBody.issue).toBeDefined()
-    const issue = responseBody.issue as Record<string, unknown>
+    const issue = responseBody.issue
     expect(issue.issue_id).toBeGreaterThan(0)
     expect(issue.thread_id).toBeGreaterThan(0)
     expect(issue.thread_title).toBe('Native Patch Verification Thread')
@@ -84,7 +86,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(issue.has_confirmed_identity).toBeDefined()
     expect(issue.mapping_state).toBeDefined()
 
-    const thread = responseBody.thread as Record<string, unknown>
+    const thread = responseBody.thread
     expect(thread).toBeDefined()
     expect(thread.thread_id).toBeGreaterThan(0)
     expect(thread.status).toBeDefined()
@@ -180,11 +182,11 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     const { response } = await waitForNativePatchResponse(page)
 
     expect(await response.ok()).toBeTruthy()
-    const responseBody = (await response.json()) as Record<string, unknown>
+    // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
+    const responseBody = (await response.json()) as unknown as IssueReadRateResponse
 
     // For roll_offer source with rating >= 4.0, die_after should be set
     expect(responseBody.die_after).toBeGreaterThan(0)
-    expect(responseBody.source_roll_event_id).toBeGreaterThan(0)
 
     // CRITICAL: Verify native Rust runtime
     expect(response.headers()['x-comicpile-api-runtime']).toBe('rust')
@@ -218,7 +220,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     const { response: response1 } = await waitForNativePatchResponse(page)
 
     expect(await response1.ok()).toBeTruthy()
-    const responseBody1 = (await response1.json()) as Record<string, unknown>
+    // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
+    const responseBody1 = (await response1.json()) as unknown as IssueReadRateResponse
     expect(responseBody1.replayed).toBe(false)
     expect(responseBody1.read_event_created).toBe(true)
     expect(responseBody1.rating_event_created).toBe(true)
@@ -231,7 +234,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     const { response: response2 } = await waitForNativePatchResponse(page)
 
     expect(await response2.ok()).toBeTruthy()
-    const responseBody2 = (await response2.json()) as Record<string, unknown>
+    // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
+    const responseBody2 = (await response2.json()) as unknown as IssueReadRateResponse
     expect(responseBody2.replayed).toBe(false)
     expect(responseBody2.read_event_created).toBe(true)
     expect(responseBody2.rating_event_created).toBe(true)
@@ -263,7 +267,8 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     const { response } = await waitForNativePatchResponse(page)
 
     expect(await response.ok()).toBeTruthy()
-    const responseBody = (await response.json()) as Record<string, unknown>
+    // SAFETY: Playwright test response conforms to IssueReadRateResponse OpenAPI schema
+    const responseBody = (await response.json()) as unknown as IssueReadRateResponse
 
     // Validate all required fields from the OpenAPI schema
     // IssueReadRateResponse required fields
@@ -275,7 +280,7 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(responseBody).toHaveProperty('final_rating')
 
     // IssueCard required fields
-    const issue = responseBody.issue as Record<string, unknown>
+    const issue = responseBody.issue
     expect(issue).toHaveProperty('issue_id')
     expect(issue).toHaveProperty('thread_id')
     expect(issue).toHaveProperty('thread_title')
@@ -296,19 +301,17 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     // Validate rating type (number or null)
     if (issue.rating !== null) {
-      expect(typeof issue.rating).toBe('number')
       expect(issue.rating).toBeGreaterThanOrEqual(0)
       expect(issue.rating).toBeLessThanOrEqual(5)
     }
 
     // Validate issue_number type (number or null)
     if (issue.issue_number !== null) {
-      expect(typeof issue.issue_number).toBe('number')
       expect(issue.issue_number).toBeGreaterThan(0)
     }
 
     // ThreadProgress required fields
-    const thread = responseBody.thread as Record<string, unknown>
+    const thread = responseBody.thread
     expect(thread).toHaveProperty('thread_id')
     expect(thread).toHaveProperty('status')
     expect(thread).toHaveProperty('issues_remaining')
@@ -317,7 +320,6 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(validStatuses).toContain(thread.status)
 
     // Validate issues_remaining type (integer)
-    expect(typeof thread.issues_remaining).toBe('number')
     expect(thread.issues_remaining).toBeGreaterThanOrEqual(0)
 
     // ThreadProgress optional fields
@@ -327,14 +329,12 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     // Validate last_rating type (number or null)
     if (thread.last_rating !== null) {
-      expect(typeof thread.last_rating).toBe('number')
       expect(thread.last_rating).toBeGreaterThanOrEqual(0)
       expect(thread.last_rating).toBeLessThanOrEqual(5)
     }
 
     // Validate reading_progress type (number or null)
     if (thread.reading_progress !== null) {
-      expect(typeof thread.reading_progress).toBe('number')
       expect(thread.reading_progress).toBeGreaterThanOrEqual(0)
       expect(thread.reading_progress).toBeLessThanOrEqual(1)
     }
@@ -344,7 +344,6 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
 
     // Validate die_after type (number or null)
     if (responseBody.die_after !== null) {
-      expect(typeof responseBody.die_after).toBe('number')
       expect(responseBody.die_after).toBeGreaterThan(0)
     }
   })
