@@ -428,6 +428,56 @@
         ]
       }
     },
+    "/api/v2/issues/{issue_id}/comicvine": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "operationId": "issue_intelligence_docs",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owner-scoped ComicPile issue id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stored ComicVine intelligence, or null without a mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IssueIntelligence"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue is not owned by the reader"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/queue-entries/{thread_id}": {
       "get": {
         "tags": [
@@ -1833,6 +1883,36 @@
           }
         }
       },
+      "ComicPileMatch": {
+        "type": "object",
+        "description": "Owner-scoped local representations of a related ComicVine issue.",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        }
+      },
       "ComicVineMappingHealth": {
         "type": "object",
         "description": "Compact confirmed ComicVine mapping health for one queue row.",
@@ -1867,6 +1947,32 @@
           "tracked_issue_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "Creator": {
+        "type": "object",
+        "description": "An issue's credited creator with stable provider identity and merged roles.",
+        "required": [
+          "name",
+          "roles"
+        ],
+        "properties": {
+          "creator_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         }
       },
@@ -2035,6 +2141,98 @@
               "$ref": "#/components/schemas/IssueCard"
             },
             "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueIntelligence": {
+        "type": "object",
+        "description": "Wire parity with Python's ComicVineIssueIntelligence.",
+        "required": [
+          "comicvine_issue_id",
+          "creators",
+          "story_arcs",
+          "metadata_status"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Creator"
+            }
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata_status": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "refresh_retry_after_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "story_arcs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryArc"
+            }
           }
         }
       },
@@ -2490,6 +2688,55 @@
           }
         }
       },
+      "RelatedIssue": {
+        "type": "object",
+        "description": "Related issue derived from a confirmed explicit story-arc relationship.",
+        "required": [
+          "comicvine_issue_id",
+          "comicpile_matches"
+        ],
+        "properties": {
+          "comicpile_matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComicPileMatch"
+            }
+          },
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "ResetDiceRequest": {
         "type": "object",
         "required": [
@@ -2788,6 +3035,43 @@
             "type": "string"
           },
           "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "StoryArc": {
+        "type": "object",
+        "description": "A provider story arc with bounded related issues and a correct total.",
+        "required": [
+          "comicvine_arc_id",
+          "name",
+          "related_issues"
+        ],
+        "properties": {
+          "comicvine_arc_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "related_issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelatedIssue"
+            }
+          },
+          "total_related_count": {
             "type": [
               "integer",
               "null"

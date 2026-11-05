@@ -81,18 +81,6 @@ fn resolve_roll_state() -> Result<Arc<AppState>, &'static str> {
         .clone()
 }
 
-/// Keep the request's query and authentication intact when the isolated
-/// production probe is forwarded through the same authenticated Rust handler.
-fn normalize_bootstrap_request(request: &mut Request) {
-    if request.uri().path() == "/api/_native_roll/bootstrap" {
-        let target = match request.uri().query() {
-            Some(query) => format!("/api/v2/roll/bootstrap?{query}"),
-            None => "/api/v2/roll/bootstrap".to_owned(),
-        };
-        *request.uri_mut() = target.parse().expect("valid native bootstrap URI");
-    }
-}
-
 async fn native_dispatch(request: Request) -> Response {
     init_tracing();
     // Log only the fixed ingress path, status and elapsed time. Never log query,
@@ -126,11 +114,6 @@ async fn native_dispatch(request: Request) -> Response {
         started.elapsed().as_millis()
     );
     result
-}
-
-async fn native_bootstrap(mut request: Request) -> Response {
-    normalize_bootstrap_request(&mut request);
-    native_dispatch(request).await
 }
 
 /// Vercel's stock layer drops the per-invocation runtime state, which owns the
@@ -177,8 +160,12 @@ where
 
 fn app() -> Router {
     Router::new()
-        .route("/api/_native_roll/health", get(native_health))
-        .route("/api/v2/roll/bootstrap", get(native_bootstrap))
+        .route("/api/v2/health", get(native_health))
+        .route(
+            "/api/v2/maintenance/comicvine-metadata-repairs",
+            get(native_dispatch),
+        )
+        .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
@@ -191,7 +178,7 @@ fn app() -> Router {
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v2/analytics/metrics", get(native_dispatch))
-        .route("/api/_native_roll/bootstrap", get(native_bootstrap))
+        .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))
@@ -228,7 +215,7 @@ async fn main() -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use super::{app, normalize_bootstrap_request, NativeVercelService, TEST_ROLL_STATE};
+    use super::{app, NativeVercelService, TEST_ROLL_STATE};
     use axum::{
         body::{to_bytes, Body},
         http::{header, Request, StatusCode},
@@ -476,32 +463,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn isolated_bootstrap_preserves_auth_and_query_through_native_ingress() {
-        let build_request = || {
-            Request::builder()
-                .method("GET")
-                .uri("/api/_native_roll/bootstrap?timezone=America%2FChicago")
-                .header("authorization", "Bearer synthetic-test-token")
-                .body(Body::empty())
-                .expect("isolated native request")
-        };
-        let mut normalized = build_request();
-        normalize_bootstrap_request(&mut normalized);
+    async fn canonical_bootstrap_preserves_auth_and_query_through_rust_ingress() {
+        let request = Request::builder()
+            .method("GET")
+            .uri("/api/v2/roll/bootstrap?timezone=America%2FChicago")
+            .header("authorization", "Bearer synthetic-test-token")
+            .body(Body::empty())
+            .expect("canonical request");
         assert_eq!(
-            normalized.uri().to_string(),
+            request.uri().to_string(),
             "/api/v2/roll/bootstrap?timezone=America%2FChicago"
         );
         assert_eq!(
-            normalized.headers().get("authorization"),
+            request.headers().get("authorization"),
             Some(&axum::http::HeaderValue::from_static(
                 "Bearer synthetic-test-token"
             ))
         );
 
-        // Exercise the actual production Axum router; the native runtime marker
-        // distinguishes this path from an accidental 404 or Python fallback.
+        // Exercise the actual production Axum router with no special-case URL rewrite.
         let mut router = app();
-        let response = router.call(build_request()).await.expect("native response");
+        let response = router.call(request).await.expect("Rust response");
         assert_eq!(
             response.headers().get("x-comicpile-api-runtime"),
             Some(&axum::http::HeaderValue::from_static("rust"))
@@ -509,7 +491,7 @@ mod tests {
         assert!(
             response.status() == StatusCode::SERVICE_UNAVAILABLE
                 || response.status() == StatusCode::UNAUTHORIZED,
-            "isolated path must reach native startup or bearer authentication"
+            "canonical path must reach Rust startup or bearer authentication"
         );
     }
 
@@ -518,7 +500,7 @@ mod tests {
         let mut router = app();
         let request = Request::builder()
             .method("GET")
-            .uri("/api/_native_roll/health")
+            .uri("/api/v2/health")
             .body(Body::empty())
             .expect("valid request");
         let response = router.call(request).await.expect("health response");

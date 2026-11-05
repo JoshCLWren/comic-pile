@@ -31,6 +31,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/comicvine",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4623,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/queue-entries/{thread_id}",
       "runtime": "native-rust",
       "status": "target",

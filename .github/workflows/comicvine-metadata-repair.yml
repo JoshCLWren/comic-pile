@@ -1,0 +1,50 @@
+name: ComicVine Metadata Repair Drain
+# GitHub Actions provides a free cadence that Vercel Hobby cron cannot.
+# Only main may call the production worker; never run secret-bearing PR code.
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: comicvine-metadata-repair-production
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    if: github.ref == 'refs/heads/main'
+    name: Drain a bounded authenticated production batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Call the awaited Rust worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${#CRON_SECRET}" -lt 16 ]]; then
+            echo "::error::The GitHub Actions CRON_SECRET repository secret must match the Vercel production CRON_SECRET."
+            exit 1
+          fi
+          response="$RUNNER_TEMP/comicvine-repair.json"
+          status="$(curl --silent --show-error --retry 2 --retry-delay 2 \
+            --retry-all-errors --connect-timeout 10 --max-time 55 \
+            --output "$response" --write-out '%{http_code}' \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            'https://comic-pile.vercel.app/api/v2/maintenance/comicvine-metadata-repairs')"
+          if [[ "$status" != "200" ]]; then
+            echo "::error::ComicVine production drain returned HTTP $status"
+            exit 1
+          fi
+          if ! jq -e 'type == "object" and .provider_configured == true
+              and (.claimed | type == "number")
+              and (.completed | type == "number")
+              and (.failed | type == "number")' "$response" > /dev/null; then
+            echo "::error::ComicVine worker response was invalid or COMICVINE_API_KEY is missing in Vercel production."
+            exit 1
+          fi
+          jq -r '"ComicVine bounded drain: claimed=\(.claimed), completed=\(.completed), no_credits=\(.no_credits), failed=\(.failed), deferred=\(.deferred)"' "$response" >> "$GITHUB_STEP_SUMMARY"

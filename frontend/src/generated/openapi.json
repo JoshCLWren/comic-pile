@@ -3673,6 +3673,36 @@
         "title": "CollectionExclusionResponse",
         "type": "object"
       },
+      "ComicPileMatch": {
+        "description": "Owner-scoped local representations of a related ComicVine issue.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
       "ComicVineComicPileMatch": {
         "description": "One user-owned ComicPile representation of an external issue.",
         "properties": {
@@ -5520,6 +5550,32 @@
           "note"
         ],
         "title": "CoverageInfo",
+        "type": "object"
+      },
+      "Creator": {
+        "description": "An issue's credited creator with stable provider identity and merged roles.",
+        "properties": {
+          "creator_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles"
+        ],
         "type": "object"
       },
       "CreatorComparisonCoverage": {
@@ -12308,6 +12364,98 @@
         "title": "IssueIdentityResponse",
         "type": "object"
       },
+      "IssueIntelligence": {
+        "description": "Wire parity with Python's ComicVineIssueIntelligence.",
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/Creator"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata_status": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "refresh_retry_after_seconds": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "story_arcs": {
+            "items": {
+              "$ref": "#/components/schemas/StoryArc"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "creators",
+          "story_arcs",
+          "metadata_status"
+        ],
+        "type": "object"
+      },
       "IssueListResponse": {
         "description": "Schema for paginated issue list response.",
         "properties": {
@@ -17422,6 +17570,55 @@
         ],
         "type": "object"
       },
+      "RelatedIssue": {
+        "description": "Related issue derived from a confirmed explicit story-arc relationship.",
+        "properties": {
+          "comicpile_matches": {
+            "items": {
+              "$ref": "#/components/schemas/ComicPileMatch"
+            },
+            "type": "array"
+          },
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "comicpile_matches"
+        ],
+        "type": "object"
+      },
       "ReleaseListResponse": {
         "description": "Paginated published releases for What's New.",
         "properties": {
@@ -19939,6 +20136,43 @@
           "error"
         ],
         "title": "SourceSyncFailure",
+        "type": "object"
+      },
+      "StoryArc": {
+        "description": "A provider story arc with bounded related issues and a correct total.",
+        "properties": {
+          "comicvine_arc_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "related_issues": {
+            "items": {
+              "$ref": "#/components/schemas/RelatedIssue"
+            },
+            "type": "array"
+          },
+          "total_related_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_arc_id",
+          "name",
+          "related_issues"
+        ],
         "type": "object"
       },
       "SyncReport": {
@@ -35712,6 +35946,56 @@
           }
         ],
         "summary": "Documentation-only operation used to emit the generated PATCH contract.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/issues/{issue_id}/comicvine": {
+      "get": {
+        "operationId": "issue_intelligence_docs",
+        "parameters": [
+          {
+            "description": "Owner-scoped ComicPile issue id",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IssueIntelligence"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Stored ComicVine intelligence, or null without a mapping"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue is not owned by the reader"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "tags": [
           "issues"
         ]

@@ -14,12 +14,11 @@
 
 use utoipa::OpenApi;
 
-/// The sixteen `/api/v2` operations that are declared in the auth, bootstrap,
-/// dice, offer, reset, reading-boundary and Roll-resource modules (the two
-/// scoped Roll resources replace the bootstrap projection).
+/// The native `/api/v2` operations that are declared in the auth, bootstrap,
+/// dice, offer, reset and reading-boundary modules.
 ///
 /// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
-/// remaining seven deployed operations and are merged in [`canonical_openapi`].
+/// remaining deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
     info(
@@ -94,10 +93,11 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 23] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 24] = [
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
+    ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/roll/bootstrap"),
     ("get", "/api/v2/roll/die-state"),
@@ -131,6 +131,7 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::analytics::AnalyticsApi::openapi())
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
 }
 
 #[cfg(test)]

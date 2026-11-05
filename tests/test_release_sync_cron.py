@@ -182,7 +182,7 @@ def test_vercel_config_declares_daily_release_and_metadata_repair_crons() -> Non
 
     assert config["crons"] == [
         {"path": CRON_URL, "schedule": "0 9 * * *"},
-        {"path": "/api/v1/cron/comicvine-metadata-repair", "schedule": "0 10 * * *"},
+        {"path": "/api/v2/maintenance/comicvine-metadata-repairs", "schedule": "0 10 * * *"},
     ]
 
     from scripts.validate_vercel_config import check_hobby_cron

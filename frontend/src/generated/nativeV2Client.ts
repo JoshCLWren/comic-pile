@@ -75,6 +75,14 @@ export interface IssueCardsRequest {
 
 export type IssueCardsResponse = components['schemas']['IssueCardsResponse']
 
+export interface IssueIntelligenceDocsRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueIntelligenceDocsResponse = null | components['schemas']['IssueIntelligence']
+
 export interface IssueReadRateRequest {
   path: {
     issue_id: number
@@ -168,6 +176,7 @@ export interface NativeV2Client {
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
+  issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -231,6 +240,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<IssueCardsResponse, IssueCardsRequest['body']>(
         "/v2/issues/cards",
         args.body,
+      )
+    },
+    issueIntelligenceDocs(args: IssueIntelligenceDocsRequest) {
+      return client.get<IssueIntelligenceDocsResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/comicvine`,
       )
     },
     issueReadRate(args: IssueReadRateRequest) {

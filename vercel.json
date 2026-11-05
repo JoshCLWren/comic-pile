@@ -9,7 +9,7 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/v1/cron/comicvine-metadata-repair",
+      "path": "/api/v2/maintenance/comicvine-metadata-repairs",
       "schedule": "0 10 * * *"
     }
   ],
@@ -210,7 +210,7 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "/api/_native_roll/health",
+      "src": "/api/v2/health",
       "methods": [
         "GET"
       ],
@@ -341,6 +341,20 @@
         "POST"
       ],
       "dest": "/api/native_issue.rs"
+    },
+    {
+      "src": "/api/v2/maintenance/comicvine-metadata-repairs",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/issues/[0-9]+/comicvine$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "/api(?:/.*)?",
