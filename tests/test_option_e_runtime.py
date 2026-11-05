@@ -9,7 +9,7 @@ from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.config import ReadingExecutionSettings, get_reading_execution_settings
-from app.models import Dependency, Event, Issue, ReadingSession, Snapshot, Thread, User
+from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
@@ -409,168 +409,6 @@ async def test_exclusion_delete_rolls_back_when_stored_graph_is_invalid(
     assert await async_db.get(CollectionExclusion, exclusion_id) is not None
 
 
-async def test_rating_a_stale_offer_cannot_consume_the_next_issue(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """A read elsewhere invalidates the offer instead of moving its rating forward."""
-    user = await get_or_create_user_async(async_db)
-    _, issues = await _series(async_db, user.id, "Changed after roll", 1, count=3)
-    issue_ids = [issue.id for issue in issues]
-    await async_db.commit()
-    offered = await auth_client.post("/api/v1/roll/")
-    assert offered.status_code == 200 and offered.json()["issue_id"] == issue_ids[0]
-    issue = await async_db.get(Issue, issue_ids[0])
-    assert issue is not None
-    issue.status = "read"
-    await async_db.commit()
-    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert response.status_code == 409
-    remaining = list(
-        (await async_db.scalars(select(Issue.status).where(Issue.id.in_(issue_ids[1:])))).all()
-    )
-    assert remaining == ["unread", "unread"]
-    assert await async_db.scalar(select(Event.id).where(Event.type == "rate")) is None
-
-
-async def test_unidentified_legacy_offer_cannot_trigger_automatic_issue_migration(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Missing canonical offer identity requires a new roll, never inferred read history."""
-    from sqlalchemy import func
-
-    user = await get_or_create_user_async(async_db)
-    thread, _ = await _series(async_db, user.id, "Unidentified offer", 1)
-    thread.total_issues = None
-    thread.issues_remaining = 17
-    reading_session = ReadingSession(user_id=user.id, pending_thread_id=thread.id)
-    async_db.add(reading_session)
-    await async_db.flush()
-    async_db.add(
-        Event(
-            type="roll",
-            session_id=reading_session.id,
-            selected_thread_id=thread.id,
-            issue_id=None,
-            die=6,
-            result=1,
-        )
-    )
-    thread_id = thread.id
-    await async_db.commit()
-    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0, "issue_number": "9"})
-    assert response.status_code == 409
-    assert (
-        await async_db.scalar(select(func.count(Issue.id)).where(Issue.thread_id == thread_id)) == 2
-    )
-    assert await async_db.scalar(select(Thread.total_issues).where(Thread.id == thread_id)) is None
-    assert (
-        await async_db.scalar(select(Thread.issues_remaining).where(Thread.id == thread_id)) == 17
-    )
-
-
-async def test_rating_completes_an_offer_removed_from_the_queue(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Queue membership at rating time never revokes the comic already offered (#4453)."""
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Removed after roll", 1)
-    thread_id, issue_id, next_issue_id = thread.id, issues[0].id, issues[1].id
-    await async_db.commit()
-    offered = await auth_client.post("/api/v1/roll/")
-    assert offered.status_code == 200 and offered.json()["issue_id"] == issue_id
-    current = await async_db.get(Thread, thread_id)
-    assert current is not None
-    current.queue_position = 0
-    await async_db.commit()
-    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert response.status_code == 200, response.text
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "read"
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == next_issue_id)) == "unread"
-    assert (
-        await async_db.scalar(select(Thread.next_unread_issue_id).where(Thread.id == thread_id))
-        == next_issue_id
-    )
-    rate_events = (await async_db.scalars(select(Event).where(Event.type == "rate"))).all()
-    assert len(rate_events) == 1
-    assert rate_events[0].issue_id == issue_id
-
-
-async def test_rating_completes_the_offer_after_a_session_snooze(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """A session snooze at rating time never revokes the comic already offered (#4453)."""
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Snoozed after roll", 1)
-    thread_id, issue_id, next_issue_id = thread.id, issues[0].id, issues[1].id
-    await async_db.commit()
-    offered = await auth_client.post("/api/v1/roll/")
-    assert offered.status_code == 200 and offered.json()["issue_id"] == issue_id
-    session = await async_db.scalar(
-        select(ReadingSession).where(ReadingSession.user_id == user.id)
-    )
-    assert session is not None
-    session.snoozed_thread_ids = [thread_id]
-    await async_db.commit()
-    response = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert response.status_code == 200, response.text
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "read"
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == next_issue_id)) == "unread"
-    assert (
-        await async_db.scalar(select(Thread.next_unread_issue_id).where(Thread.id == thread_id))
-        == next_issue_id
-    )
-    rate_events = (await async_db.scalars(select(Event).where(Event.type == "rate"))).all()
-    assert len(rate_events) == 1
-    assert rate_events[0].issue_id == issue_id
-
-
-async def test_rating_completes_the_offer_after_the_frontier_moves(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """A later automatic frontier never steals the comic already offered (#4453)."""
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Frontier moved after roll", 1)
-    thread_id, issue_id, next_issue_id = thread.id, issues[0].id, issues[1].id
-    offered_number = issues[0].issue_number
-    await async_db.commit()
-    offered = await auth_client.post("/api/v1/roll/")
-    assert offered.status_code == 200 and offered.json()["issue_id"] == issue_id
-    roll_event_id = await async_db.scalar(
-        select(Event.id).where(Event.type == "roll", Event.issue_id == issue_id)
-    )
-    assert roll_event_id is not None
-    # A newly added earlier issue moves the automatic frontier off the offer.
-    earlier = Issue(thread_id=thread_id, issue_number="0", position=0, status="unread")
-    async_db.add(earlier)
-    await async_db.commit()
-    earlier_id = earlier.id
-    response = await auth_client.post(
-        "/api/v1/rate/", json={"rating": 4.0, "issue_number": offered_number}
-    )
-    assert response.status_code == 200, response.text
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_id)) == "read"
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == next_issue_id)) == "unread"
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == earlier_id)) == "unread"
-    assert (
-        await async_db.scalar(select(Thread.next_unread_issue_id).where(Thread.id == thread_id))
-        == earlier_id
-    )
-    rate_events = (await async_db.scalars(select(Event).where(Event.type == "rate"))).all()
-    assert len(rate_events) == 1
-    assert rate_events[0].issue_id == issue_id
-    assert rate_events[0].source_roll_event_id == roll_event_id
-
-
 async def test_live_explanations_agree_for_all_reader_surfaces(
     option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
 ) -> None:
@@ -739,66 +577,6 @@ async def test_thread_connection_panel_uses_only_reader_prerequisites_when_enabl
     }
 
 
-@pytest.mark.parametrize("stale_cache", [False, True])
-async def test_read_now_binds_canonical_issue_for_rating_and_undo(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    stale_cache: bool,
-) -> None:
-    """Read now must persist the same exact offer that rating consumes."""
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Read now regression", 1)
-    thread_id, issue_ids = thread.id, [issue.id for issue in issues]
-    if stale_cache:
-        thread.is_blocked = True
-        thread.issues_remaining = 0
-        thread.total_issues = None
-        thread.next_unread_issue_id = issue_ids[1]
-    session = ReadingSession(user_id=user.id, pending_issue_id=issue_ids[1])
-    async_db.add(session)
-    await async_db.flush()
-    session_id = session.id
-    await async_db.commit()
-
-    selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
-    assert selected.status_code == 200, selected.text
-    assert selected.json()["issue_id"] == issue_ids[0]
-    assert selected.json()["issues_remaining"] == 2
-    event = await async_db.scalar(select(Event).where(Event.selection_method == "manual"))
-    assert event is not None
-    assert (event.selected_thread_id, event.issue_id, event.issue_number) == (
-        thread_id,
-        issue_ids[0],
-        "1",
-    )
-    assert (
-        await async_db.scalar(
-            select(ReadingSession.pending_issue_id).where(ReadingSession.id == session_id)
-        )
-        == issue_ids[0]
-    )
-
-    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert rated.status_code == 200, rated.text
-    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_ids[0]
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_ids[0])) == "read"
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_ids[1])) == "unread"
-    snapshot_id = await async_db.scalar(
-        select(Snapshot.id)
-        .where(
-            Snapshot.session_id == session_id,
-            Snapshot.description == "After rating",
-        )
-        .order_by(Snapshot.id.desc())
-        .limit(1)
-    )
-    assert snapshot_id is not None
-    undone = await auth_client.post(f"/api/v1/undo/{session_id}/undo/{snapshot_id}")
-    assert undone.status_code == 200, undone.text
-    assert await async_db.scalar(select(Issue.status).where(Issue.id == issue_ids[0])) == "unread"
-
-
 async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
     option_e: None,
     auth_client: AsyncClient,
@@ -824,95 +602,6 @@ async def test_read_now_rejects_canonical_blocked_and_session_skipped_threads(
         selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
         assert selected.status_code == 400, selected.text
     assert await async_db.scalar(select(Event.id).where(Event.selection_method == "manual")) is None
-
-
-async def test_read_now_clears_current_snooze_before_rating(
-    option_e: None,
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Manual selection keeps its explicit current-session unsnooze behavior."""
-    from datetime import UTC, datetime, timedelta
-
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Read now snoozed", 1)
-    session = ReadingSession(user_id=user.id, snoozed_thread_ids=[thread.id])
-    async_db.add(session)
-    await async_db.flush()
-    async_db.add(Event(
-        type="snooze", thread_id=thread.id, session_id=session.id,
-        timestamp=datetime.now(UTC) - timedelta(minutes=1),
-    ))
-    thread_id, issue_id, session_id = thread.id, issues[0].id, session.id
-    await async_db.commit()
-    selected = await auth_client.post(f"/api/v1/threads/{thread_id}/set-pending")
-    assert selected.status_code == 200, selected.text
-    assert selected.json()["issue_id"] == issue_id
-    assert await async_db.scalar(select(Event.id).where(Event.type == "unsnooze")) is not None
-    assert await async_db.scalar(
-        select(ReadingSession.snoozed_thread_ids).where(ReadingSession.id == session_id)
-    ) == []
-    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert rated.status_code == 200, rated.text
-    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_id
-
-
-async def test_set_current_issue_creates_a_rateable_canonical_offer(
-    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
-) -> None:
-    """Correcting the current issue also enters rating with a fresh bound offer."""
-    user = await get_or_create_user_async(async_db)
-    thread, issues = await _series(async_db, user.id, "Correct then rate", 1, count=3)
-    thread.total_issues = None
-    thread_id, issue_ids = thread.id, [issue.id for issue in issues]
-    await async_db.commit()
-    corrected = await auth_client.post(
-        f"/api/v1/threads/{thread_id}:setCurrentIssue", json={"issue_number": "2"},
-    )
-    assert corrected.status_code == 200, corrected.text
-    assert corrected.json()["issue_id"] == issue_ids[1]
-    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert rated.status_code == 200, rated.text
-    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_ids[1]
-    statuses = list((await async_db.scalars(
-        select(Issue.status).where(Issue.id.in_(issue_ids)).order_by(Issue.position)
-    )).all())
-    assert statuses == ["read", "read", "unread"]
-
-
-async def test_canonical_prerequisite_read_now_ignores_retired_frontier_and_edges(
-    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
-) -> None:
-    """Recovery Read now selects and rates the canonical prerequisite leaf."""
-    user = await get_or_create_user_async(async_db)
-    source, source_issues = await _series(async_db, user.id, "Recovery first", 1, blocked=True)
-    target, target_issues = await _series(async_db, user.id, "Recovery waiting", 2)
-    source.next_unread_issue_id = source_issues[1].id
-    _, historical_issues = await _series(async_db, user.id, "Retired blocker", 3)
-    async_db.add(Dependency(
-        source_issue_id=historical_issues[0].id, target_issue_id=source_issues[0].id,
-        origin="converted", classification="C", provenance="Retired generated edge",
-    ))
-    reading_list = CustomCBLList(user_id=user.id, name="Recovery sequence", mode="strict")
-    async_db.add(reading_list)
-    await async_db.flush()
-    async_db.add_all([
-        CustomCBLEntry(list_id=reading_list.id, issue_id=source_issues[0].id, position=1),
-        CustomCBLEntry(list_id=reading_list.id, issue_id=target_issues[0].id, position=2),
-        ReadingSession(user_id=user.id, pending_thread_id=target.id, pending_issue_id=target_issues[0].id),
-    ])
-    source_id, target_id, issue_id = source.id, target.id, source_issues[0].id
-    await async_db.commit()
-    switched = await auth_client.post(
-        "/api/v1/roll/switch-prerequisite", json={"node_type": "issue", "node_id": issue_id},
-    )
-    assert switched.status_code == 200, switched.text
-    assert switched.json()["original_thread_id"] == target_id
-    assert switched.json()["target_thread_id"] == source_id
-    assert switched.json()["target_issue_id"] == issue_id
-    rated = await auth_client.post("/api/v1/rate/", json={"rating": 4.0})
-    assert rated.status_code == 200, rated.text
-    assert rated.json()["roll_reconciliation"]["last_read"]["issue_id"] == issue_id
 
 
 async def test_rejected_current_issue_correction_does_not_commit_progress(
@@ -987,7 +676,6 @@ async def test_option_e_roll_pool_never_reaggregates_unread_issues(
     assert "join issues" not in sql
     assert "from issues" not in sql
     assert "count(" not in sql
-
 
 
 async def test_roll_response_reuses_precommit_snapshot_without_postcommit_reads(

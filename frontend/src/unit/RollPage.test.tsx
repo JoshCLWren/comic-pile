@@ -6,7 +6,6 @@ import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
-  useClearManualDie,
   useDismissPending,
   useOverrideRoll,
   useRoll,
@@ -37,7 +36,6 @@ vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
-  useClearManualDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
@@ -126,8 +124,6 @@ beforeEach(() => {
 
   // SAFETY: Test stub for useSetDie; stub shape matches the hook's mutation return and is only read for isPending/mutate.
   vi.mocked(useSetDie).mockReturnValue(cast<ReturnType<typeof useSetDie>>({ mutate: vi.fn(), isPending: false }))
-  // SAFETY: Test stub for useClearManualDie; cast is safe because only mutate/isPending are accessed.
-  vi.mocked(useClearManualDie).mockReturnValue(cast<ReturnType<typeof useClearManualDie>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useRoll; minimal stub preserves the mutation contract used by the component.
   vi.mocked(useRoll).mockReturnValue(cast<ReturnType<typeof useRoll>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useOverrideRoll; safe widening for the mocked hook return.
@@ -216,16 +212,15 @@ it('loads every active override page only after the modal opens', async () => {
   expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
 })
 
-it('explains automatic and manual die modes on mobile', async () => {
+it('names the mobile die control for the event-derived die without an Auto mode (#4353)', async () => {
   const user = userEvent.setup()
   renderRollPage()
 
-  const dieControl = screen.getByRole('button', { name: /current die d6, automatic mode/i })
-  expect(dieControl).toHaveTextContent('Auto')
+  const dieControl = screen.getByRole('button', { name: /^current die d6$/i })
+  expect(dieControl).not.toHaveTextContent('Auto')
   await user.click(dieControl)
-  expect(screen.getByText(/automatic mode is active at d6/i)).toBeInTheDocument()
   const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
-  expect(within(dieModal).getByRole('button', { name: /^auto$/i })).toBeInTheDocument()
+  expect(within(dieModal).queryByRole('button', { name: /^auto$/i })).not.toBeInTheDocument()
 })
 
 it('shows a retry action when bootstrap loading fails', async () => {

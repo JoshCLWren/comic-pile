@@ -43,17 +43,17 @@ const DEFINITIONS: GlossaryTermDefinition[] = [
   },
   {
     term: 'Auto-adjust',
-    def: 'Lets the die pick its own size to match how many series are in play. The "Auto" control on Roll turns it back on after you choose a die size by hand.',
+    def: 'Lets the die pick its own size to match how many series are in play. After you choose a die size by hand, the next rating or snooze moves the die on the ladder again.',
     aliases: ['ladder-mode'],
   },
   {
     term: 'Die size',
-    def: 'Sets how many series the roll can pick from. Sizes run d4 → d6 → d8 → d10 → d12 → d20 → d30 → d50 → d100, and a larger die includes more of your in-play series. A readout like "d6 → d8" shows the step your die moves after a rating.',
+    def: 'Sets how many series the roll can pick from. Sizes run d2 (coin flip) → d4 → d6 → d8 → d10 → d12 → d20, and a larger die includes more of your in-play series. A readout like "d6 → d8" shows the step your die moves after a rating.',
     aliases: ['die-ladder'],
   },
   {
     term: 'Auto',
-    def: 'Keeps the die size matched to your in-play series. The "Auto" control on Roll turns this back on after you choose a die size by hand.',
+    def: 'Keeps the die size matched to your in-play series. "Reset Dice" on Roll puts the die back to d6 and clears your temporary snoozes.',
     aliases: ['autoladder'],
   },
   {

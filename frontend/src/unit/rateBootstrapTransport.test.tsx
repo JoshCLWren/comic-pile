@@ -54,6 +54,10 @@ const METADATA: ThreadMetadata = {
   issues_remaining: 5,
   queue_position: 1,
   total_issues: 10,
+  issue_id: 11,
+  issue_number: '5',
+  next_issue_id: 12,
+  next_issue_number: '6',
 }
 
 function bootstrapState(overrides: Partial<RollBootstrapResponse> = {}): RollBootstrapResponse {

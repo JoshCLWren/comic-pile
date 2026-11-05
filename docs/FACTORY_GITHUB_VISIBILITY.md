@@ -55,7 +55,13 @@ it means a trusted reviewer has posted a PASS marker for the current PR head.
 It may coexist with `factory:review` while independent controller acceptance is
 still outstanding, or with `factory:ci` / `factory:ready` as the same work advances.
 A stale-head PASS, generic GitHub `COMMENTED` review, self-authored prose, or green
-CI alone does not mint it. Any new head or trusted actionable changes-required
+CI alone does not mint it. Current controller `semantic-review-v1` markers and
+legacy `review-v2` PASS comments are recognized only for the matching PR and
+live head. The trusted controller writes the approval label directly after an
+accepted semantic review, because its `GITHUB_TOKEN` comments cannot trigger
+new GitHub Actions runs; human/owner-authored review comments route through a
+filtered `issue_comment` workflow. Neither path supplies merge authorization.
+Any new head or trusted actionable changes-required
 feedback removes it. The existing **`factory:changes-requested`** (spelled exactly
 that way) is the blocking repair stage; **`factory:ready`** means all exact-head
 merge gates pass. `factory:approved` is visibility only: it cannot approve a

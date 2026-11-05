@@ -1,4 +1,4 @@
-"""Keep the retired Python Roll bootstrap GETs from silently returning.
+"""Keep the retired Python Roll bootstrap surface from silently returning.
 
 The public v2 bootstrap belongs to the native Rust Vercel handler, not FastAPI.
 These assertions deliberately do not require an authenticated Rust fixture.
@@ -9,7 +9,12 @@ from pathlib import Path
 
 from fastapi.routing import APIRoute
 
+import app.schemas.roll_v2 as roll_v2_schemas
+import app.services.roll_service as roll_service_module
 from app.main import app
+from app.repositories import roll_repository
+from app.schemas import roll as roll_schemas
+from app.services.roll_service import RollService
 
 
 BOOTSTRAP_PATHS = (
@@ -32,6 +37,28 @@ def test_python_exposes_no_roll_bootstrap_get_handlers() -> None:
     paths = app.openapi()["paths"]
     for path in BOOTSTRAP_PATHS:
         assert "get" not in paths.get(path, {})
+
+
+def test_python_bootstrap_projection_stays_deleted() -> None:
+    """Do not resurrect the retired Python bootstrap read model (#4350).
+
+    The Python v1 projection had no live caller once both clients moved to the
+    Rust v2 resource, and the unused Python v2 response DTO followed it.
+    Deleting them is only durable if reintroduction fails here rather than
+    silently re-adding query code no route serves.
+    """
+    assert not hasattr(roll_schemas, "RollBootstrapResponse")
+    assert not hasattr(roll_schemas, "RollBootstrapThread")
+    assert not hasattr(roll_schemas, "ThreadExclusionReason")
+    assert not hasattr(RollService, "load_bootstrap_thread_data")
+    assert not hasattr(roll_service_module, "BootstrapThreadData")
+    assert not hasattr(roll_service_module, "BootstrapLibrarySummary")
+    assert not hasattr(roll_service_module, "_classify_library")
+    assert not hasattr(roll_service_module, "_summary_thread")
+    assert not hasattr(roll_v2_schemas, "RollV2BootstrapResponse")
+    assert [
+        name for name in dir(roll_repository) if name.startswith("fetch_bootstrap_")
+    ] == []
 
 
 def test_public_v2_bootstrap_routes_to_native_rust() -> None:
@@ -63,7 +90,7 @@ def test_frontend_bootstrap_and_recovery_call_only_v2_rust_route() -> None:
         assert "'/v1/roll/bootstrap'" not in source, path
         assert "'/roll/bootstrap'" not in source, path
     acceptance = (root / "frontend/src/test/reading-mode-acceptance.spec.ts").read_text()
-    assert "page.request.get('/api/v2/roll/bootstrap'" in acceptance
+    assert "fetch('/api/v2/roll/bootstrap'" in acceptance
     assert "page.request.get('/api/roll/bootstrap'" not in acceptance
     assert "page.request.get('/api/v1/roll/bootstrap'" not in acceptance
     native = (root / "native/roll-service/src/lib.rs").read_text()

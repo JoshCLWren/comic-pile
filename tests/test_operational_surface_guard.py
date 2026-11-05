@@ -6,9 +6,9 @@ assets. These are consumed by uptime monitors, cold-start crons, browsers, and
 the SPA bundle rather than versioned API clients, so relocating them is a
 production incident even when every API consumer has migrated.
 
-Regression provenance: an earlier cutover attempt moved the analytics mount
-(which also carries the health router) from ``/api`` to ``/api/v1``, which
-orphaned ``/api/health``, shifted the canonical bounded probes to
+Regression provenance: an earlier cutover attempt moved the operational health
+mount (at the time registered alongside analytics) from ``/api`` to ``/api/v1``,
+which orphaned ``/api/health``, shifted the canonical bounded probes to
 ``/api/v1/v1/health/*``, and broke the frontend heartbeat fetch of
 ``/api/ping``. The guards below pin those surfaces so the final bare-mount
 deletion step cannot silently relocate them.
@@ -37,7 +37,7 @@ _BARE_OPERATIONAL_ROUTES: frozenset[str] = frozenset(
 )
 
 #: Canonical bounded health probes served under the versioned prefix via the
-#: analytics mount. Uptime tooling calls these instead of the legacy URL.
+#: health mount. Uptime tooling calls these instead of the legacy URL.
 #: ``/api/v1/health/*`` remains the operational surface.
 _CANONICAL_HEALTH_ROUTES: frozenset[str] = frozenset(
     {

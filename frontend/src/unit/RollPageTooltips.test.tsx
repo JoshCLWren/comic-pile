@@ -6,7 +6,6 @@ import RollPage from '../pages/RollPage'
 import { useSession } from '../hooks/useSession'
 import { useStaleThreads } from '../hooks/useThread'
 import {
- useClearManualDie,
  useDismissPending,
  useOverrideRoll,
  useRoll,
@@ -44,7 +43,6 @@ vi.mock('../hooks/useThread', () => ({ useStaleThreads: vi.fn() }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
-  useClearManualDie: vi.fn(),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
   useRoll: vi.fn(),
   useOverrideRoll: vi.fn(),
@@ -72,8 +70,6 @@ const mockedUseStaleThreads = vi.mocked(useStaleThreads) as any
 const mockedUseRollBootstrap = vi.mocked(useRollBootstrap) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseSetDie = vi.mocked(useSetDie) as any
-// SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
-const mockedUseClearManualDie = vi.mocked(useClearManualDie) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
 const mockedUseRoll = vi.mocked(useRoll) as any
 // SAFETY: vi.mocked() widens to the full hook type; tests only read the mockReturnValue shape and `any` keeps that ergonomic.
@@ -135,7 +131,6 @@ beforeEach(() => {
   })
   mockedUseStaleThreads.mockReturnValue({ data: [], refetch: vi.fn().mockResolvedValue(undefined) })
   mockedUseSetDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseClearManualDie.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseOverrideRoll.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseDismissPending.mockReturnValue({ mutate: vi.fn(), isPending: false })

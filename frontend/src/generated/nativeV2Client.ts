@@ -39,6 +39,16 @@ export type CreateQueueOrderResponse = components['schemas']['QueueOrderResponse
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
 
+export type DieStateResponse = components['schemas']['RollDieStateResponse']
+
+export interface EligibleIssueIdsRequest {
+  query?: {
+    snoozed?: string
+  }
+}
+
+export type EligibleIssueIdsResponse = components['schemas']['RollEligibleIssueIdsResponse']
+
 export interface ForgotPasswordRequest {
   body: components['schemas']['NativeForgotPasswordRequest']
 }
@@ -64,6 +74,14 @@ export interface IssueCardsRequest {
 }
 
 export type IssueCardsResponse = components['schemas']['IssueCardsResponse']
+
+export interface IssueIntelligenceDocsRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type IssueIntelligenceDocsResponse = null | components['schemas']['IssueIntelligence']
 
 export interface IssueReadRateRequest {
   path: {
@@ -100,6 +118,8 @@ export interface ManualDieRequest {
 export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['NativeUserResponse']
+
+export type MetricsResponse = components['schemas']['NativeAnalyticsMetricsResponse']
 
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']
@@ -150,16 +170,20 @@ export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   csrf(): Promise<CsrfResponse>
+  dieState(): Promise<DieStateResponse>
+  eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
+  issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
   manualDie(args: ManualDieRequest): Promise<ManualDieResponse>
   me(): Promise<MeResponse>
+  metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
@@ -186,6 +210,15 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
     },
+    dieState() {
+      return client.get<DieStateResponse>("/v2/roll/die-state")
+    },
+    eligibleIssueIds(args: EligibleIssueIdsRequest = {}) {
+      return client.get<EligibleIssueIdsResponse>(
+        "/v2/roll/eligible-issue-ids",
+        { params: compactQuery(args.query) },
+      )
+    },
     forgotPassword(args: ForgotPasswordRequest) {
       return client.post<ForgotPasswordResponse, ForgotPasswordRequest['body']>(
         "/v2/auth/forgot-password",
@@ -207,6 +240,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<IssueCardsResponse, IssueCardsRequest['body']>(
         "/v2/issues/cards",
         args.body,
+      )
+    },
+    issueIntelligenceDocs(args: IssueIntelligenceDocsRequest) {
+      return client.get<IssueIntelligenceDocsResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/comicvine`,
       )
     },
     issueReadRate(args: IssueReadRateRequest) {
@@ -238,6 +276,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     me() {
       return client.get<MeResponse>("/v2/auth/me")
+    },
+    metrics() {
+      return client.get<MetricsResponse>("/v2/analytics/metrics")
     },
     offer(args: OfferRequest) {
       return client.post<OfferResponse, OfferRequest['body']>(

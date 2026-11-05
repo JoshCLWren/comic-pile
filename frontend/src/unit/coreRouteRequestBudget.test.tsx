@@ -25,6 +25,7 @@ import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { dependenciesApi } from '../services/api-dependencies'
 import { createAppQueryClient, queryClient as sharedQueryClient } from '../query/queryClient'
+import { resetRollBootstrapSessionState } from '../services/rollBootstrapApi'
 import { queryKeys } from '../query/queryKeys'
 import { adaptRollV2Bootstrap } from '../services/adaptRollV2Bootstrap'
 import api from '../services/api'
@@ -217,7 +218,6 @@ function RollMoveBudgetProbe() {
     navigate: budgetNavigate,
     mutations: {
       setDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
-      clearManualDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       rollMutation: { mutate: () => Promise.resolve(stubRollResponse), isPending: false },
       snoozeMutation: { mutate: () => Promise.resolve(stubSnoozeOutcome), isPending: false },
       skipMutation: { mutate: () => Promise.resolve(stubSkipOutcome), isPending: false },
@@ -451,6 +451,10 @@ beforeEach(() => {
   // A per-test client keeps these budgets independent of the process-wide
   // singleton that other unit files populate.
   sharedQueryClient.clear()
+  // The singleton bootstrap service resolves the reading session once per
+  // client lifetime; without this reset a later budget would skip the cold
+  // session POST its cold-load assertion counts (#4276).
+  resetRollBootstrapSessionState()
   routeQueryClient = createAppQueryClient()
   const defaults = routeQueryClient.getDefaultOptions()
   routeQueryClient.setDefaultOptions({
@@ -674,9 +678,11 @@ describe('core route request budgets', () => {
     })
 
     // The move mutation's queue-movement invalidation refetches the active
-    // bootstrap once. The retired explicit `refetchBootstrap()` in
-    // `handleAction` used to append one more POST /v2/reading-sessions and
-    // GET /v2/roll/bootstrap per move action.
+    // bootstrap once. This probe seeds the cache instead of cold-loading, so
+    // this refresh is also the first resolution of the client-lifetime session
+    // (#4276): exactly one session POST and one bootstrap GET. The retired
+    // explicit `refetchBootstrap()` in `handleAction` used to append a second
+    // bootstrap refresh per move action.
     await waitFor(() =>
       expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1),
     )

@@ -264,7 +264,7 @@ it('renders dice container', () => {
 })
 
 it('builds each supported geometry and handles animation/value changes', () => {
-  for (const sides of [4, 6, 8, 10, 12, 20, 30, 50, 100] as const) {
+  for (const sides of [2, 4, 6, 8, 10, 12, 20, 30, 50, 100] as const) {
     const { unmount } = render(
       <Dice3D sides={sides} value={sides > 1 ? sides - 1 : 1} isRolling showValue={false} color={0xffaa00} />,
     )
@@ -275,6 +275,21 @@ it('builds each supported geometry and handles animation/value changes', () => {
   rerender(<Dice3D sides={6} value={6} isRolling />)
   expect(document.querySelector('.dice-3d')).toBeInTheDocument()
   expect(diceMock.geometryCounts.length).toBeGreaterThanOrEqual(10)
+})
+
+it('renders a distinct two-faced coin and lands on the correct face', () => {
+  const { rerender, unmount } = render(<Dice3D sides={2} value={1} lockMotion />)
+  // The coin uses a 64-segment circular face and beveled rim, never a d6.
+  expect(diceMock.geometryCounts.at(-1)).toBeGreaterThan(100)
+  expect(diceMock.lastMesh?.rotation.set).toHaveBeenLastCalledWith(0, 0, 0)
+
+  rerender(<Dice3D sides={2} value={2} lockMotion />)
+  expect(diceMock.lastMesh?.rotation.set).toHaveBeenLastCalledWith(Math.PI, 0, 0)
+
+  // Stale result values from a previous, larger die cannot produce face 3.
+  rerender(<Dice3D sides={2} value={3} lockMotion />)
+  expect(diceMock.lastMesh?.rotation.set).toHaveBeenLastCalledWith(0, 0, 0)
+  unmount()
 })
 
 it('falls back to a six-sided geometry for an unsupported side count', () => {

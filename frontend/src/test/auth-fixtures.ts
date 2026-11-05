@@ -114,12 +114,12 @@ export const test = base.extend<AuthFixtures>({
 
     const mockApi = {
       setupAuthUser: async () => {
-        mockApi.post('/api/v1/auth/login').as('login').reply(200, {
+        mockApi.post('/api/v2/auth/login').as('login').reply(200, {
           access_token: 'test-access-token',
           refresh_token: 'test-refresh-token',
         })
 
-        mockApi.get('/api/v1/auth/me').as('authMe').reply(200, {
+        mockApi.get('/api/v2/auth/me').as('authMe').reply(200, {
           id: 1,
           username: 'testuser',
           email: 'test@example.com',
@@ -130,7 +130,7 @@ export const test = base.extend<AuthFixtures>({
 
         // Session renewal must stay inside the mock: a real refresh against
         // the backend would 401 and end the mocked session mid-test.
-        mockApi.post('/api/v1/auth/refresh').as('refresh').replyAlways(200, {
+        mockApi.post('/api/v2/auth/refresh').as('refresh').replyAlways(200, {
           access_token: 'test-access-token',
           refresh_token: 'test-refresh-token',
         })

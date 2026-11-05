@@ -7,7 +7,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
-  const response = await page.request.get('/api/auth/csrf', {
+  const response = await page.request.get('/api/v2/auth/csrf', {
     headers,
   })
   expect(response.ok()).toBeTruthy()

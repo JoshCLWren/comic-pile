@@ -35,7 +35,7 @@ function normalizeSessionRecord(record: JsonRecord, index: number) {
  * Authentication identity and persisted test data remain untouched on the server.
  */
 export function stabilizeAuditApiPayload(pathname: string, payload: unknown) {
-  if (pathname === '/api/v1/auth/me' && isJsonRecord(payload)) {
+  if (pathname === '/api/v2/auth/me' && isJsonRecord(payload)) {
     return { ...payload, username: AUDIT_FIXED_USERNAME }
   }
 

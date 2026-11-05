@@ -191,10 +191,16 @@ describe('ThreadDetailView Edit dialog defers issue Add until Save (#3444)', () 
     await user.click(screen.getByTestId('issue-add-button'))
     expect(await screen.findByTestId('pending-creates')).toHaveTextContent('7-8')
 
+    // A queued issue edit makes the draft unsaved, so the close control asks
+    // before discarding (MQA-QUEUE-008 / #4356).
     await user.click(screen.getByRole('button', { name: 'Close modal' }))
-
+    const prompt = await screen.findByRole('dialog', { name: 'Discard changes?' })
+    expect(prompt).toBeInTheDocument()
     expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Discard changes' }))
     expect(screen.queryByTestId('pending-creates')).not.toBeInTheDocument()
+    expect(mockedIssuesApiCreate).not.toHaveBeenCalled()
   })
 })
 

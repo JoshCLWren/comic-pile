@@ -218,16 +218,12 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/queue/shuffle/",
             "/api/queue/threads/{thread_id}/back/",
             "/api/queue/threads/{thread_id}/position/",
-            "/api/rate/",
             "/api/roll/",
             "/api/roll/bootstrap",
-            "/api/roll/clear-manual-die",
             "/api/roll/dismiss-pending",
             "/api/roll/override",
             "/api/roll/skip",
             "/api/roll/skip/{thread_id}/unskip",
-            "/api/roll/session-mode",
-            "/api/roll/set-die",
             "/api/roll/events/{event_id}/recommendation-explanation",
             "/api/sessions/",
             "/api/sessions/current/",
@@ -293,3 +289,17 @@ def test_retired_move_to_front_routes_are_absent() -> None:
     methods_by_path = _collect_routes(create_app(serve_frontend=False))
     for prefix in ("/api/queue", "/api/v1/queue"):
         assert f"{prefix}/threads/{{thread_id}}/front/" not in methods_by_path
+
+
+def test_analytics_legacy_routes_remain_until_production_proof() -> None:
+    """Keep the Python v1/bare metrics handlers until the Rust cutover is proven.
+
+    #4348 requires deletion only after the native v2 resource is deployed and
+    authenticated production proof exists. The transition guard keeps the real
+    legacy handler visible rather than silently removing a supported API.
+    """
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    assert "GET" in methods_by_path["/api/v1/analytics/metrics"]
+    assert "GET" in methods_by_path["/api/analytics/metrics"]

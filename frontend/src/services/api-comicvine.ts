@@ -229,7 +229,7 @@ export interface MetadataCorrectionsResponse {
 
 export const comicVineApi = {
   getIssueIntelligence: (issueId: number) =>
-    api.get<ComicVineIssueIntelligence | null>(`/v1/issues/${issueId}/comicvine`),
+    api.get<ComicVineIssueIntelligence | null>(`/v2/issues/${issueId}/comicvine`),
   importIssue: (payload: ComicVineImportIssuePayload) =>
     api.post<ComicVineImportIssueResult, ComicVineImportIssuePayload>('/v1/comicvine/issues:import', payload),
   importSeries: (payload: ComicVineImportSeriesPayload) =>

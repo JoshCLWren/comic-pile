@@ -87,6 +87,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   vi.clearAllMocks()
   sharedQueryClient.clear()
+  globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
 
 describe('useQueueThreadActions', () => {

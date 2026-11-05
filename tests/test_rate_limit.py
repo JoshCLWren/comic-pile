@@ -36,25 +36,6 @@ async def test_rate_limit_on_thread_create(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_on_rate(auth_client: AsyncClient) -> None:
-    """Test that rate limiting is applied to POST /rate/ endpoint."""
-    limiter.reset()
-
-    for _ in range(60):
-        response = await auth_client.post(
-            "/api/v1/rate/",
-            json={"rating": 3, "issues_read": 1},
-        )
-        assert response.status_code in (200, 400)
-
-    response = await auth_client.post(
-        "/api/v1/rate/",
-        json={"rating": 3, "issues_read": 1},
-    )
-    assert response.status_code == 429
-
-
-@pytest.mark.asyncio
 async def test_rate_limit_on_auth_refresh(client: AsyncClient) -> None:
     """Missing-cookie refresh stampedes must be bounded without changing login limits."""
     limiter.reset()

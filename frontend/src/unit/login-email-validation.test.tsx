@@ -59,7 +59,7 @@ describe('LoginPage Email Validation', () => {
       screen.queryByText('Sign in with your username, not your email.'),
     ).not.toBeInTheDocument()
     expect(api.post).toHaveBeenCalledWith(
-      '/v1/auth/login',
+      '/v2/auth/login',
       expect.objectContaining({ username: 'validusername', password: 'password123' }),
     )
   })

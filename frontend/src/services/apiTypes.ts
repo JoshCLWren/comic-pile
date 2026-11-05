@@ -14,7 +14,6 @@ export interface RollApi {
   skip: () => Promise<RollResponse>
   reroll: (expectedPendingThreadId?: number) => Promise<RollResponse>
   setDie: (die: number) => Promise<void>
-  clearManualDie: () => Promise<void>
   reset: () => Promise<{ die: number; replayed: boolean }>
 }
 
@@ -35,11 +34,6 @@ export type SessionApi = ReturnType<typeof import('./api-sessions').createSessio
 export interface CacheEffectsApi {
   applyRatedThreadCache: (client: import('@tanstack/react-query').QueryClient, thread: RateResponsePayload) => Promise<void>
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
-  invalidateAfterSessionModeUpdate: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
-}
-
-export interface SessionModeApi {
-  updateMode: (data: import('../types').SessionModeUpdateRequest) => Promise<import('../types').SessionModeResponse>
 }
 
 export interface SkipApi {
@@ -58,11 +52,4 @@ export interface RollMutationDeps {
 /** The subset of `dependenciesApi` used by the Roll page's batch blocker load. */
 export interface RollDependenciesApi {
   getBatchBlockingInfo: (threadIds: number[]) => Promise<import('../types').BatchBlockingInfoResponse>
-}
-
-/** Injectable dependencies for the session mode mutation hook. */
-export interface SessionModeMutationDeps {
-  sessionApi?: SessionModeApi
-  cacheEffects?: CacheEffectsApi
-  queryClientInstance?: import('@tanstack/react-query').QueryClient
 }

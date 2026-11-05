@@ -26,6 +26,7 @@ import yaml
         ".python-version",
         "native/roll-service/parity/test_core_inputs.py",
         "native/roll-service/src/reading_inputs.rs",
+        "scripts/export_roll_test_schema.py",
         "tests/fixtures/roll-v2/auth-matrix.json",
     ],
 )

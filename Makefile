@@ -238,6 +238,9 @@ migrate:  ## Run database migrations (alembic upgrade head)
 	@echo "Running database migrations..."
 	@alembic upgrade head
 
+roll-test-schema:  ## Regenerate native/roll-service/tests/fixtures/schema/public_schema.sql from Alembic head
+	@uv run python scripts/export_roll_test_schema.py --database-url "$(DATABASE_URL)"
+
 worktrees:  ## List all git worktrees
 	@echo "Git worktrees:"
 	@git worktree list
@@ -452,6 +455,10 @@ railway-control-c32-compare:  ## Compare only isolated concurrency-32 diagnostic
 
 dev-all:  ## Run both frontend and backend dev servers (Vite proxies /api to backend)
 	@bash scripts/dev-all.sh
+
+dev-native:  ## Run the native Rust Roll/auth service on :8010 for local /api/v2/* routes
+	@echo "Starting native Roll service on http://127.0.0.1:8010"
+	@RUST_ROLL_BIND=127.0.0.1:8010 cargo run --manifest-path native/roll-service/Cargo.toml
 
 dev-frontend:  ## Run frontend dev server only (pnpm --filter frontend run dev)
 	@echo "Checking for running servers..."

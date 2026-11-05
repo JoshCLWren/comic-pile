@@ -162,29 +162,39 @@ def _route_destination(method: str, path: str) -> str | None:
     return None
 
 
-def _consumer_prefix(path: str) -> str:
-    """Return the client-relative static prefix for one API path.
+def _call_pattern(path: str) -> re.Pattern[str]:
+    """Return the full template-literal URL pattern for one API path.
 
-    ``/api/v2/queue-entries/{thread_id}`` becomes ``/v2/queue-entries/`` so the
-    scan matches template-literal calls such as ``/v2/queue-entries/${id}``.
+    ``/api/v2/issues/{issue_id}/comicvine`` matches
+    ``/v2/issues/${...}/comicvine`` but not the sibling ``/v2/issues/${...}``
+    call. Matching the complete path, not just the prefix before the first
+    parameter, keeps a caller of one operation from being attributed to
+    another operation that shares that prefix.
     """
     tail = path.removeprefix("/api")
-    marker = tail.find("{")
-    return tail if marker < 0 else tail[:marker]
+    parts: list[str] = []
+    for segment in re.split(r"(\{[^}]+\})", tail):
+        if not segment:
+            continue
+        if segment.startswith("{") and segment.endswith("}"):
+            parts.append(r"\$\{[^}]+\}")
+        else:
+            parts.append(re.escape(segment))
+    return re.compile("".join(parts) + r"(?![\w/])")
 
 
 def _service_callers(path: str, method_name: str | None) -> set[str]:
     """Find frontend services that call one operation.
 
-    A service either uses the literal path prefix or calls the generated
-    ``nativeV2Client`` method by name (the generated SDK owns the URL).
+    A service either uses the literal template-literal URL or calls the
+    generated ``nativeV2Client`` method by name (the generated SDK owns the URL).
     """
-    prefix = _consumer_prefix(path)
+    path_marker = _call_pattern(path)
     method_marker = f".{method_name}(" if method_name is not None else ""
     callers: set[str] = set()
     for service in sorted(FRONTEND_SERVICES.glob("*.ts")):
         source = service.read_text(encoding="utf-8")
-        if prefix in source or (method_marker and method_marker in source):
+        if path_marker.search(source) or (method_marker and method_marker in source):
             callers.add(service.relative_to(ROOT).as_posix())
     return callers
 

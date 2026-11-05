@@ -3673,6 +3673,36 @@
         "title": "CollectionExclusionResponse",
         "type": "object"
       },
+      "ComicPileMatch": {
+        "description": "Owner-scoped local representations of a related ComicVine issue.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
       "ComicVineComicPileMatch": {
         "description": "One user-owned ComicPile representation of an external issue.",
         "properties": {
@@ -5520,6 +5550,32 @@
           "note"
         ],
         "title": "CoverageInfo",
+        "type": "object"
+      },
+      "Creator": {
+        "description": "An issue's credited creator with stable provider identity and merged roles.",
+        "properties": {
+          "creator_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "roles"
+        ],
         "type": "object"
       },
       "CreatorComparisonCoverage": {
@@ -12308,6 +12364,98 @@
         "title": "IssueIdentityResponse",
         "type": "object"
       },
+      "IssueIntelligence": {
+        "description": "Wire parity with Python's ComicVineIssueIntelligence.",
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/Creator"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata_status": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "refresh_retry_after_seconds": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_id": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "store_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "story_arcs": {
+            "items": {
+              "$ref": "#/components/schemas/StoryArc"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "creators",
+          "story_arcs",
+          "metadata_status"
+        ],
+        "type": "object"
+      },
       "IssueListResponse": {
         "description": "Schema for paginated issue list response.",
         "properties": {
@@ -12401,6 +12549,13 @@
               "null"
             ]
           },
+          "source": {
+            "description": "Source of the issue action. Omitted or \"direct\" is a manual read from a\nThread row: it never steps the die and never repositions the queue.\n\"roll_offer\" is a Roll completion: it applies the Roll rating semantics\n(die stepping, queue placement, and a link back to the originating offer\nevent) in the same transaction as the read.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "description": "Explicit new status. Omit to leave read state unchanged.",
             "type": [
@@ -12416,6 +12571,14 @@
       },
       "IssueReadRateResponse": {
         "properties": {
+          "die_after": {
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "final_rating": {
             "format": "double",
             "type": [
@@ -12823,6 +12986,64 @@
         "title": "MinimalReleaseResponse",
         "type": "object"
       },
+      "NativeAnalyticsMetricsResponse": {
+        "description": "Reading metrics and analytics for the authenticated user.",
+        "properties": {
+          "active_threads": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "average_session_hours": {
+            "format": "double",
+            "type": "number"
+          },
+          "completed_threads": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "completion_rate": {
+            "format": "double",
+            "type": "number"
+          },
+          "event_stats": {
+            "additionalProperties": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "propertyNames": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "recent_sessions": {
+            "items": {
+              "$ref": "#/components/schemas/NativeRecentSession"
+            },
+            "type": "array"
+          },
+          "top_rated_threads": {
+            "items": {
+              "$ref": "#/components/schemas/NativeTopRatedThread"
+            },
+            "type": "array"
+          },
+          "total_threads": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_threads",
+          "active_threads",
+          "completed_threads",
+          "completion_rate",
+          "average_session_hours",
+          "recent_sessions",
+          "event_stats",
+          "top_rated_threads"
+        ],
+        "type": "object"
+      },
       "NativeBoundaryEditorTarget": {
         "properties": {
           "issue_id": {
@@ -13141,6 +13362,34 @@
         ],
         "type": "object"
       },
+      "NativeRecentSession": {
+        "description": "Summary of one recent reading session.",
+        "properties": {
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "start_die": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "started_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "started_at",
+          "start_die"
+        ],
+        "type": "object"
+      },
       "NativeRefreshTokenRequest": {
         "description": "Optional request body for token refresh; the refresh cookie is also accepted.",
         "properties": {
@@ -13186,6 +13435,32 @@
           "access_token",
           "refresh_token",
           "token_type"
+        ],
+        "type": "object"
+      },
+      "NativeTopRatedThread": {
+        "description": "Summary of one highly rated thread.",
+        "properties": {
+          "format": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rating": {
+            "format": "double",
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "rating",
+          "format"
         ],
         "type": "object"
       },
@@ -14255,237 +14530,6 @@
           "threads"
         ],
         "title": "QueueThreadListResponse",
-        "type": "object"
-      },
-      "RateRequest": {
-        "description": "Schema for rating request.",
-        "properties": {
-          "direct": {
-            "default": false,
-            "description": "Set by a Thread issue row rating (issue #3581). Roll requests keep the session-driven path even though they also send ``thread_id``.",
-            "title": "Direct",
-            "type": "boolean"
-          },
-          "finish_session": {
-            "default": false,
-            "title": "Finish Session",
-            "type": "boolean"
-          },
-          "issue_number": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Issue number just read, e.g. '5' or 'Annual 1' (triggers migration if provided)",
-            "title": "Issue Number"
-          },
-          "rating": {
-            "maximum": 5.0,
-            "minimum": 0.5,
-            "title": "Rating",
-            "type": "number"
-          },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Explicit thread being rated (issue #3581). Required when ``direct`` is true; the rating is then applied to that owned thread instead of the pending Roll target.",
-            "title": "Thread Id"
-          }
-        },
-        "required": [
-          "rating"
-        ],
-        "title": "RateRequest",
-        "type": "object"
-      },
-      "RateResponse": {
-        "description": "Rate response extending ThreadResponse with roll reconciliation.\n\nSubclasses ThreadResponse so every current top-level field is preserved\nexactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.\nDeclared as the FastAPI ``response_model`` so the extra field is not\nfiltered out.",
-        "properties": {
-          "blocking_reasons": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Blocking Reasons",
-            "type": "array"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "format": {
-            "title": "Format",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "is_blocked": {
-            "default": false,
-            "title": "Is Blocked",
-            "type": "boolean"
-          },
-          "is_test": {
-            "title": "Is Test",
-            "type": "boolean"
-          },
-          "issues_remaining": {
-            "title": "Issues Remaining",
-            "type": "integer"
-          },
-          "last_activity_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Activity At"
-          },
-          "last_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Rating"
-          },
-          "manual_creator_credits": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "roles": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "name",
-                "roles"
-              ],
-              "title": "ManualCreatorCredit",
-              "type": "object"
-            },
-            "title": "Manual Creator Credits",
-            "type": "array"
-          },
-          "next_unread_issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Unread Issue Id"
-          },
-          "next_unread_issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Unread Issue Number"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "queue_position": {
-            "title": "Queue Position",
-            "type": "integer"
-          },
-          "reading_progress": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Progress"
-          },
-          "roll_reconciliation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RollReconciliation"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "total_issues": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Issues"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "status",
-          "last_rating",
-          "last_activity_at",
-          "notes",
-          "is_test",
-          "created_at"
-        ],
-        "title": "RateResponse",
         "type": "object"
       },
       "ReactivateRequest": {
@@ -17526,6 +17570,55 @@
         ],
         "type": "object"
       },
+      "RelatedIssue": {
+        "description": "Related issue derived from a confirmed explicit story-arc relationship.",
+        "properties": {
+          "comicpile_matches": {
+            "items": {
+              "$ref": "#/components/schemas/ComicPileMatch"
+            },
+            "type": "array"
+          },
+          "comicvine_issue_id": {
+            "type": "string"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cover_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "comicpile_matches"
+        ],
+        "type": "object"
+      },
       "ReleaseListResponse": {
         "description": "Paginated published releases for What's New.",
         "properties": {
@@ -17925,67 +18018,128 @@
         "title": "ResetPasswordRequest",
         "type": "object"
       },
-      "RollLastRead": {
-        "description": "Session-scoped last read information.",
+      "RollDieStateResponse": {
+        "description": "The reader's current logical die and the approved ladder.",
         "properties": {
-          "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
+          "default_die": {
+            "description": "The die an explicit reset returns to.",
+            "format": "int32",
+            "type": "integer"
           },
-          "issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Number"
+          "die": {
+            "description": "The current logical die.",
+            "format": "int32",
+            "type": "integer"
           },
-          "read_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read At"
+          "ladder": {
+            "description": "The approved dice ladder, smallest to largest.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
           },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
+          "last_roll": {
+            "oneOf": [
               {
                 "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          },
-          "thread_title": {
-            "anyOf": [
-              {
-                "type": "string"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RollLastRoll",
+                "description": "The most recent recorded roll, when the reader has rolled."
               }
-            ],
-            "title": "Thread Title"
+            ]
           }
         },
-        "title": "RollLastRead",
+        "required": [
+          "die",
+          "ladder",
+          "default_die"
+        ],
+        "type": "object"
+      },
+      "RollEligibleIssueIdsResponse": {
+        "description": "The ordered eligible issue identifiers for the current die.",
+        "properties": {
+          "die": {
+            "description": "The logical die that bounded the list.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_ids": {
+            "description": "The eligible issue identifiers, in queue order.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "thread_ids": {
+            "description": "The owning thread identifiers, parallel to `issue_ids`.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "die",
+          "issue_ids",
+          "thread_ids"
+        ],
+        "type": "object"
+      },
+      "RollLastRoll": {
+        "description": "The most recent Roll recorded for this reader.",
+        "properties": {
+          "die": {
+            "description": "The die that produced the roll.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "description": "The rolled issue.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "description": "The rolled issue number.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "description": "The recorded roll result.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rolled_at": {
+            "description": "When the roll was recorded.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "description": "The rolled thread.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "RollOfferRequest": {
@@ -18192,19 +18346,6 @@
           "changed"
         ],
         "title": "RollPrerequisiteSwitchResponse",
-        "type": "object"
-      },
-      "RollReconciliation": {
-        "description": "Roll reconciliation information for rate response.",
-        "properties": {
-          "last_read": {
-            "$ref": "#/components/schemas/RollLastRead"
-          }
-        },
-        "required": [
-          "last_read"
-        ],
-        "title": "RollReconciliation",
         "type": "object"
       },
       "RollRequest": {
@@ -19459,197 +19600,6 @@
         "title": "SessionListItem",
         "type": "object"
       },
-      "SessionModeResponse": {
-        "description": "Canonical session mode returned from manual change and bootstrap endpoints.",
-        "properties": {
-          "active_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Bandwidth"
-          },
-          "active_intent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Intent"
-          },
-          "bandwidth_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bandwidth Confidence"
-          },
-          "bandwidth_source": {
-            "anyOf": [
-              {
-                "enum": [
-                  "inferred",
-                  "manual",
-                  "snooze",
-                  "quiz"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bandwidth Source"
-          },
-          "bandwidth_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bandwidth Version"
-          },
-          "intent_confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Intent Confidence"
-          },
-          "intent_source": {
-            "anyOf": [
-              {
-                "enum": [
-                  "inferred",
-                  "manual",
-                  "snooze",
-                  "quiz"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Intent Source"
-          },
-          "intent_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Intent Version"
-          },
-          "predicted_bandwidth": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predicted Bandwidth"
-          },
-          "predicted_intent": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predicted Intent"
-          },
-          "session_mode_correction_guidance": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Mode Correction Guidance"
-          }
-        },
-        "required": [
-          "active_bandwidth",
-          "predicted_bandwidth",
-          "active_intent",
-          "predicted_intent"
-        ],
-        "title": "SessionModeResponse",
-        "type": "object"
-      },
-      "SessionModeUpdateRequest": {
-        "additionalProperties": false,
-        "description": "Canonical request to update active session bandwidth and/or intent.\n\nOnly the supplied dimensions are changed; the other dimension is left\nuntouched. Omitting both is a no-op and returns the current mode unchanged.",
-        "properties": {
-          "bandwidth": {
-            "anyOf": [
-              {
-                "enum": [
-                  "light",
-                  "balanced",
-                  "deep"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Active bandwidth to set. Omit to leave unchanged.",
-            "title": "Bandwidth"
-          },
-          "intent": {
-            "anyOf": [
-              {
-                "enum": [
-                  "balanced",
-                  "momentum",
-                  "familiar",
-                  "explore",
-                  "random"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Active intent to set. Omit to leave unchanged. Setting to 'random' bypasses contextual weighting.",
-            "title": "Intent"
-          }
-        },
-        "title": "SessionModeUpdateRequest",
-        "type": "object"
-      },
       "SessionResponse": {
         "description": "Schema for session response.",
         "properties": {
@@ -20194,6 +20144,43 @@
           "error"
         ],
         "title": "SourceSyncFailure",
+        "type": "object"
+      },
+      "StoryArc": {
+        "description": "A provider story arc with bounded related issues and a correct total.",
+        "properties": {
+          "comicvine_arc_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "comicvine_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "related_issues": {
+            "items": {
+              "$ref": "#/components/schemas/RelatedIssue"
+            },
+            "type": "array"
+          },
+          "total_related_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_arc_id",
+          "name",
+          "related_issues"
+        ],
         "type": "object"
       },
       "SyncReport": {
@@ -30466,53 +30453,6 @@
         ]
       }
     },
-    "/api/v1/rate/": {
-      "post": {
-        "description": "Delegate rating orchestration to the rate service.",
-        "operationId": "post_rate_api_v1_rate__post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RateResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Post Rate",
-        "tags": [
-          "rate"
-        ]
-      }
-    },
     "/api/v1/reading-boundaries": {
       "post": {
         "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",
@@ -31970,34 +31910,6 @@
         ]
       }
     },
-    "/api/v1/roll/clear-manual-die": {
-      "post": {
-        "description": "Clear manual die size and return to automatic dice ladder mode.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: Async database session.\n\nReturns:\n    HTML string with the current die size.",
-        "operationId": "clear_manual_die_api_v1_roll_clear_manual_die_post",
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Clear Manual Die",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
     "/api/v1/roll/dismiss-pending": {
       "post": {
         "description": "Clear any pending thread for the current session.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.",
@@ -32110,103 +32022,6 @@
           }
         ],
         "summary": "Override Roll",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/session-mode": {
-      "patch": {
-        "description": "Update the active session's bandwidth and/or intent.\n\nOnly the supplied dimensions are changed. Omitting both is a no-op and\nreturns the current mode state. Changed dimensions are marked with source\n``manual`` and a call-level version tag so the frontend can distinguish\nuser overrides from algorithm predictions.\n\nArgs:\n    mode_update: The mode values to apply. Omitted dimensions are not reset.\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    SessionModeResponse with the updated canonical mode state.",
-        "operationId": "update_session_mode_api_v1_roll_session_mode_patch",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SessionModeUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionModeResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Update Session Mode",
-        "tags": [
-          "roll",
-          "roll"
-        ]
-      }
-    },
-    "/api/v1/roll/set-die": {
-      "post": {
-        "description": "Set manual die size for current session.\n\nArgs:\n    die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    HTML string with the die size.\n\nRaises:\n    HTTPException: If die size is invalid.",
-        "operationId": "set_manual_die_api_v1_roll_set_die_post",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "die",
-            "required": true,
-            "schema": {
-              "title": "Die",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Set Manual Die",
         "tags": [
           "roll",
           "roll"
@@ -35650,6 +35465,35 @@
         ]
       }
     },
+    "/api/v2/analytics/metrics": {
+      "get": {
+        "operationId": "metrics_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAnalyticsMetricsResponse"
+                }
+              }
+            },
+            "description": "Owner-scoped bounded reading metrics"
+          },
+          "401": {
+            "description": "Not authenticated, revoked token, or stale credential epoch"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation used by the canonical Rust OpenAPI generator.",
+        "tags": [
+          "analytics"
+        ]
+      }
+    },
     "/api/v2/auth/csrf": {
       "get": {
         "operationId": "csrf_documentation",
@@ -36040,6 +35884,56 @@
         ]
       }
     },
+    "/api/v2/issues/{issue_id}/comicvine": {
+      "get": {
+        "operationId": "issue_intelligence_docs",
+        "parameters": [
+          {
+            "description": "Owner-scoped ComicPile issue id",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "$ref": "#/components/schemas/IssueIntelligence"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Stored ComicVine intelligence, or null without a mapping"
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "404": {
+            "description": "Issue is not owned by the reader"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "tags": [
+          "issues"
+        ]
+      }
+    },
     "/api/v2/queue-entries/{thread_id}": {
       "get": {
         "operationId": "get_queue_entry_documentation",
@@ -36417,6 +36311,92 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted v2 manual-die command.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/die-state": {
+      "get": {
+        "description": "The published response is the actual handler DTO, so the current logical die, approved d2-d20 ladder, default die and last roll stay in the live contract.",
+        "operationId": "die_state_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollDieStateResponse"
+                }
+              }
+            },
+            "description": "Current logical die, approved ladder and last roll"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll die-state read.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/eligible-issue-ids": {
+      "get": {
+        "description": "The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.",
+        "operationId": "eligible_issue_ids_documentation",
+        "parameters": [
+          {
+            "description": "Comma-separated browser-owned temporary snoozed thread identifiers",
+            "in": "query",
+            "name": "snoozed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollEligibleIssueIdsResponse"
+                }
+              }
+            },
+            "description": "Ordered eligible issue identifiers for the current die"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid temporary snooze identifiers"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 eligible-identifier read.",
         "tags": [
           "roll"
         ]

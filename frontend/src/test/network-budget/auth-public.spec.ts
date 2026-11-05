@@ -45,7 +45,7 @@ test('guest /forgot-password renders without any API request', async ({ page }) 
 
 test('guest /reset-password renders and submits without a CSRF probe', async ({ page }) => {
   await stubApi(page)
-  await page.route('**/api/v1/auth/reset-password', route =>
+  await page.route('**/api/v2/auth/reset-password', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"message":"ok"}' }),
   )
   const requests = recordApiRequests(page)
@@ -60,14 +60,14 @@ test('guest /reset-password renders and submits without a CSRF probe', async ({ 
 
   await expect(page.getByRole('link', { name: 'Sign In with New Password' })).toBeVisible()
   expect(requests).toEqual([
-    { method: 'POST', url: '/api/v1/auth/reset-password' },
+    { method: 'POST', url: '/api/v2/auth/reset-password' },
   ])
-  expect(requests.some(row => row.url.includes('/api/v1/auth/csrf'))).toBe(false)
+  expect(requests.some(row => row.url.includes('/api/v2/auth/csrf'))).toBe(false)
 })
 
 test('guest /forgot-password submits once without a CSRF probe', async ({ page }) => {
   await stubApi(page)
-  await page.route('**/api/v1/auth/forgot-password', route =>
+  await page.route('**/api/v2/auth/forgot-password', route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{"message":"sent"}' }),
   )
   const requests = recordApiRequests(page)
@@ -81,15 +81,15 @@ test('guest /forgot-password submits once without a CSRF probe', async ({ page }
 
   await expect(page.getByRole('heading', { name: 'Check your email' })).toBeVisible()
   expect(requests).toEqual([
-    { method: 'POST', url: '/api/v1/auth/forgot-password' },
+    { method: 'POST', url: '/api/v2/auth/forgot-password' },
   ])
-  expect(requests.some(row => row.url.includes('/api/v1/auth/csrf'))).toBe(false)
+  expect(requests.some(row => row.url.includes('/api/v2/auth/csrf'))).toBe(false)
 })
 
 test('a stored token still validates and redirects away from the credential form', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('auth_token', 'stored-browser-token'))
   const requests = recordApiRequests(page)
-  await page.route('**/api/v1/auth/me', route =>
+  await page.route('**/api/v2/auth/me', route =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -115,17 +115,17 @@ test('a stored token still validates and redirects away from the credential form
   await page.goto('/forgot-password')
 
   await page.waitForURL(url => url.pathname === '/')
-  expect(requests.some(row => row.method === 'GET' && row.url === '/api/v1/auth/me')).toBe(true)
+  expect(requests.some(row => row.method === 'GET' && row.url === '/api/v2/auth/me')).toBe(true)
   await expect(page.getByLabel('Email')).toHaveCount(0)
 })
 
 test('a rejected stored token shows the credential form after probing once each', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('auth_token', 'stale-browser-token'))
   const requests = recordApiRequests(page)
-  await page.route('**/api/v1/auth/me', route =>
+  await page.route('**/api/v2/auth/me', route =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' }),
   )
-  await page.route('**/api/v1/auth/refresh', route =>
+  await page.route('**/api/v2/auth/refresh', route =>
     route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' }),
   )
 
@@ -133,7 +133,7 @@ test('a rejected stored token shows the credential form after probing once each'
 
   await expect(page.getByLabel('Email')).toBeVisible()
   expect(requests).toEqual([
-    { method: 'GET', url: '/api/v1/auth/me' },
-    { method: 'POST', url: '/api/v1/auth/refresh' },
+    { method: 'GET', url: '/api/v2/auth/me' },
+    { method: 'POST', url: '/api/v2/auth/refresh' },
   ])
 })

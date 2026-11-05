@@ -73,7 +73,7 @@ describe('hard refresh session bootstrap', () => {
     await waitFor(() => {
       expect(authState?.isAuthenticated).toBe(true)
     })
-    expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', {
+    expect(mockApiGet).toHaveBeenCalledWith('/v2/auth/me', {
       timeout: 15000,
       skipAuthRedirect: true,
       skipAuthRefresh: true,

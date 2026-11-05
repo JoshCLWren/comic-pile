@@ -247,7 +247,7 @@ export default function Navigation({ onBugReportSubmit }: NavigationProps) {
 
   const handleLogout = useCallback(async () => {
     try {
-      await api.post('/v1/auth/logout', null, { skipAuthRedirect: true })
+      await api.post('/v2/auth/logout', null, { skipAuthRedirect: true })
     } catch (err: unknown) {
       console.error('Logout API failed:', err)
     }

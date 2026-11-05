@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
-from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +36,6 @@ from app.schemas import (
     RecommendationExplanationResponse,
     RollRequest,
     RollResponse,
-    SessionModeResponse,
-    SessionModeUpdateRequest,
     SessionResponse,
 )
 from app.schemas.recommendation_context import (
@@ -48,7 +45,6 @@ from app.schemas.session import (
     SnoozedThreadInfo,
     build_session_bandwidth_state,
     build_session_intent_state,
-    normalize_reading_mode_source,
 )
 from comic_pile.recommendation_selection import (
     DEFAULT_BANDWIDTH,
@@ -681,166 +677,6 @@ async def override_roll(
     """
     return await RollService(db).execute_override(
         thread_id=request.thread_id, current_user=current_user
-    )
-
-
-@router.post("/set-die", response_class=HTMLResponse)
-async def set_manual_die(
-    die: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> str:
-    """Set manual die size for current session.
-
-    Args:
-        die: The die size to set (must be one of: 4, 6, 8, 10, 12, 20, 30, 50, or 100).
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        HTML string with the die size.
-
-    Raises:
-        HTTPException: If die size is invalid.
-    """
-    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
-
-    if die not in [4, 6, 8, 10, 12, 20, 30, 50, 100]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid die size. Must be one of: 4, 6, 8, 10, 12, 20, 30, 50, 100",
-        )
-
-    current_session.manual_die = die
-    await db.commit()
-    return f"d{die}"
-
-
-@router.post("/clear-manual-die", response_class=HTMLResponse)
-async def clear_manual_die(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> str:
-    """Clear manual die size and return to automatic dice ladder mode.
-
-    Args:
-        current_user: The authenticated user making the request.
-        db: Async database session.
-
-    Returns:
-        HTML string with the current die size.
-    """
-    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
-
-    current_session.manual_die = None
-    await db.commit()
-
-    await db.refresh(current_session)
-    current_die = await get_current_die_for_session(current_session, db)
-    return f"d{current_die}"
-
-
-@router.patch("/session-mode", response_model=SessionModeResponse)
-@limiter.limit("60/minute")
-async def update_session_mode(
-    request: Request,
-    mode_update: SessionModeUpdateRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> SessionModeResponse:
-    """Update the active session's bandwidth and/or intent.
-
-    Only the supplied dimensions are changed. Omitting both is a no-op and
-    returns the current mode state. Changed dimensions are marked with source
-    ``manual`` and a call-level version tag so the frontend can distinguish
-    user overrides from algorithm predictions.
-
-    Args:
-        mode_update: The mode values to apply. Omitted dimensions are not reset.
-        request: FastAPI request object for rate limiting.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        SessionModeResponse with the updated canonical mode state.
-    """
-    current_session = await get_or_create(db, user_id=current_user.id, existing_user=current_user)
-
-    active_bandwidth = current_session.active_bandwidth
-    predicted_bandwidth = current_session.predicted_bandwidth
-    bandwidth_confidence = current_session.bandwidth_confidence
-    bandwidth_source = current_session.bandwidth_source
-    bandwidth_version = current_session.bandwidth_version
-    active_intent = current_session.active_intent
-    predicted_intent = current_session.predicted_intent
-    intent_confidence = current_session.intent_confidence
-    intent_source = current_session.intent_source
-    intent_version = current_session.intent_version
-    guidance = current_session.session_mode_correction_guidance
-    session_id = current_session.id
-
-    version_tag = f"manual-{int(datetime.now(UTC).timestamp())}"
-
-    changed_dimensions: list[str] = []
-
-    if mode_update.bandwidth is not None:
-        current_session.active_bandwidth = mode_update.bandwidth
-        current_session.predicted_bandwidth = mode_update.bandwidth
-        current_session.bandwidth_source = "manual"
-        current_session.bandwidth_confidence = 1.0
-        current_session.bandwidth_version = version_tag
-        active_bandwidth = mode_update.bandwidth
-        predicted_bandwidth = mode_update.bandwidth
-        bandwidth_source = "manual"
-        bandwidth_confidence = 1.0
-        bandwidth_version = version_tag
-        changed_dimensions.append("bandwidth")
-
-    if mode_update.intent is not None:
-        current_session.active_intent = mode_update.intent
-        current_session.predicted_intent = mode_update.intent
-        current_session.intent_source = "manual"
-        current_session.intent_confidence = 1.0
-        current_session.intent_version = version_tag
-        active_intent = mode_update.intent
-        predicted_intent = mode_update.intent
-        intent_source = "manual"
-        intent_confidence = 1.0
-        intent_version = version_tag
-        changed_dimensions.append("intent")
-
-    if changed_dimensions:
-        db.add(
-            Event(
-                session_id=session_id,
-                type="session_mode",
-                die=None,
-                selected_thread_id=None,
-                thread_id=None,
-                issue_id=None,
-                context={
-                    "source": "manual",
-                    "changed": changed_dimensions,
-                    "bandwidth": active_bandwidth,
-                    "intent": active_intent,
-                    "version": version_tag,
-                },
-            )
-        )
-    await db.commit()
-
-    return SessionModeResponse(
-        active_bandwidth=active_bandwidth,
-        predicted_bandwidth=predicted_bandwidth,
-        bandwidth_confidence=bandwidth_confidence,
-        bandwidth_source=normalize_reading_mode_source(bandwidth_source),
-        bandwidth_version=bandwidth_version,
-        active_intent=active_intent,
-        predicted_intent=predicted_intent,
-        intent_confidence=intent_confidence,
-        intent_source=normalize_reading_mode_source(intent_source),
-        intent_version=intent_version,
-        session_mode_correction_guidance=guidance,
     )
 
 

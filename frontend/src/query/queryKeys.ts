@@ -164,12 +164,6 @@ export const queryKeys = {
       ['session', 'snapshots', sessionId] as const,
     /** Prefix of every session snapshot list, for scanning invalidations. */
     snapshotsAll: () => ['session', 'snapshots'] as const,
-    /**
-     * Canonical key for the #2744 correction-sheet example lines. Examples are
-     * derived from the reader's own rating history, so this key is invalidated
-     * alongside the roll/queue mutations that change that history.
-     */
-    correctionExamples: () => ['session', 'correction-examples'] as const,
   },
   roll: {
     all: ['roll'] as const,

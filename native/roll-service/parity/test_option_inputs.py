@@ -34,11 +34,18 @@ async def test_option_input_parity() -> None:
         await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
     engine = create_async_engine(
         url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": schema}},
+        connect_args={"server_settings": {"search_path": f"{schema},public"}},
     )
     try:
         async with engine.begin() as connection:
-            await connection.run_sync(Base.metadata.create_all)
+            # Isolated schema first; keep public on the path for pg_trgm's
+            # gin_trgm_ops operator class (Alembic c40080000001).
+            # Skip catalog checks so public tables are not mistaken for isolated tables.
+            await connection.run_sync(
+                lambda sync_connection: Base.metadata.create_all(
+                    sync_connection, checkfirst=False
+                )
+            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="option-reader"), User(username="private-reader")
             db.add_all([reader, foreign])

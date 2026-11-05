@@ -39,11 +39,19 @@ pub(crate) async fn persist_reset(
     let mutation =
         dice_mutation::persist_in_transaction(tx, user, idempotency_key, &DiceCommand::Reset)
             .await?;
+    // A committed retry must be a read-only replay. The reader may have rolled
+    // another comic since the original reset; clearing the current session on
+    // replay would silently discard that newer pending selection.
+    if mutation.replayed {
+        return Ok(mutation);
+    }
     if let Some(session_id) = session_id {
         let updated = tx
             .execute(
                 "UPDATE sessions
                  SET pending_thread_id=NULL,pending_issue_id=NULL,
+                 -- Clear the legacy pin with the pending selection so it cannot
+                 -- override Reset Dice's event-derived d6 on the next bootstrap.
                      pending_thread_updated_at=NULL,manual_die=NULL
                  WHERE id=$1 AND user_id=$2",
                 &[&session_id, &user.id()],
@@ -165,7 +173,15 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 
-    async fn test_client(url: &str, schema: &str) -> tokio_postgres::Client {
+    /// Reset the canonical Alembic schema, seed `statements`, and hold the lock.
+    async fn seeded(
+        url: &str,
+        statements: &str,
+    ) -> (tokio_postgres::Client, tokio::sync::MutexGuard<'static, ()>) {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
         let (client, connection) = tokio_postgres::connect(url, tokio_postgres::NoTls)
             .await
             .expect("disposable Postgres");
@@ -173,57 +189,40 @@ mod tests {
             let _ = connection.await;
         });
         client
-            .batch_execute(&format!("SET search_path TO {schema}, public"))
+            .batch_execute(statements)
             .await
-            .unwrap();
-        client
+            .expect("seed canonical schema");
+        (client, guard)
     }
 
     #[tokio::test]
     async fn persist_reset_records_d6_and_clears_pending() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("reset_dice_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL, ended_at timestamptz,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz, manual_die integer
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, session_id integer,
-                     timestamp timestamptz DEFAULT NOW(),
-                     die integer, die_after integer, thread_id integer,
-                     issue_id integer, rating double precision, context json
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES
-                     (1, 1, NOW() - interval '10 hours', NULL, 10, 100,
+        let url = crate::test_support::database_url().await;
+        let (mut client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1),
+                        (20, 1, 'Second', 'Comic', 1, 'active', 2);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1),
+                        (200, 20, '1', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      pending_issue_id, pending_thread_updated_at, manual_die)
+                 VALUES
+                     (1, 1, NOW() - interval '10 hours', 6, 10, 100,
                       NOW() - interval '10 hours', 12),
-                     (2, 1, NOW(), NULL, NULL, 200, NOW(), 12);
-                 INSERT INTO {schema}.events
-                     (user_id, type, session_id, die, die_after, context)
-                 VALUES (1, 'manual_die', 2, 6, 20, '{{}}'::json);"
-            ))
-            .await
-            .unwrap();
-        let mut client = test_client(&url, &schema).await;
+                     (2, 1, NOW(), 6, NULL, 200, NOW(), 12);
+                 INSERT INTO events (user_id, type, session_id, die, die_after, context)
+                 VALUES (1, 'manual_die', 2, 6, 20, '{}'::json);"#,
+        )
+        .await;
         let user = AuthenticatedUser::for_test(1);
 
         let tx = client.transaction().await.unwrap();
@@ -285,6 +284,19 @@ mod tests {
         assert_eq!(stale.get::<_, i32>(1), 100);
         assert_eq!(stale.get::<_, i32>(2), 12);
 
+        // A fresh roll/manual selection can occur after the reset's response
+        // was lost. Retrying the old key must not clear that newer intent.
+        client
+            .execute(
+                "UPDATE sessions
+                 SET pending_thread_id=10, pending_issue_id=100,
+                     pending_thread_updated_at=NOW(), manual_die=12
+                 WHERE id=2",
+                &[],
+            )
+            .await
+            .unwrap();
+
         let tx = client.transaction().await.unwrap();
         let replay = persist_reset(&tx, user, "reset-dice-test-001", session_id)
             .await
@@ -292,6 +304,19 @@ mod tests {
         tx.commit().await.unwrap();
         assert!(replay.replayed);
         assert_eq!(replay.event_id, mutation.event_id);
+        let pending_after_replay = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id,
+                        pending_thread_updated_at IS NOT NULL,manual_die
+                 FROM sessions WHERE id=2",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending_after_replay.get::<_, i32>(0), 10);
+        assert_eq!(pending_after_replay.get::<_, i32>(1), 100);
+        assert!(pending_after_replay.get::<_, bool>(2));
+        assert_eq!(pending_after_replay.get::<_, i32>(3), 12);
         let count = client
             .query_one(
                 "SELECT count(*)::int FROM events WHERE type='reset_dice'",
@@ -300,53 +325,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(count.get::<_, i32>(0), 1);
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 
     #[tokio::test]
     async fn persist_reset_clears_every_pending_column() {
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
-        let (admin, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
-            .await
-            .expect("disposable Postgres");
-        tokio::spawn(async move {
-            let _ = connection.await;
-        });
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let schema = format!("reset_clear_{}_{}", std::process::id(), nanos);
-        admin
-            .batch_execute(&format!(
-                "CREATE SCHEMA {schema};
-                 CREATE TABLE {schema}.users (id integer PRIMARY KEY);
-                 CREATE TABLE {schema}.sessions (
-                     id integer PRIMARY KEY, user_id integer NOT NULL,
-                     started_at timestamptz NOT NULL, ended_at timestamptz,
-                     pending_thread_id integer, pending_issue_id integer,
-                     pending_thread_updated_at timestamptz, manual_die integer
-                 );
-                 CREATE TABLE {schema}.events (
-                     id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-                     user_id integer, type text, session_id integer,
-                     timestamp timestamptz DEFAULT NOW(),
-                     die integer, die_after integer, thread_id integer,
-                     issue_id integer, rating double precision, context json
-                 );
-                 INSERT INTO {schema}.users VALUES (1);
-                 INSERT INTO {schema}.sessions VALUES
-                     (1, 1, NOW(), NULL, 10, 100, NOW(), 12);"
-            ))
-            .await
-            .unwrap();
-        let mut client = test_client(&url, &schema).await;
+        let url = crate::test_support::database_url().await;
+        let (mut client, _db) = seeded(
+            &url,
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1),
+                        (20, 1, 'Second', 'Comic', 1, 'active', 2);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1),
+                        (200, 20, '1', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      pending_issue_id, pending_thread_updated_at, manual_die)
+                 VALUES (1, 1, NOW(), 6, 10, 100, NOW(), 12);"#,
+        )
+        .await;
         let user = AuthenticatedUser::for_test(1);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -378,10 +381,5 @@ mod tests {
         assert!(cleared.get::<_, Option<i32>>(1).is_none());
         assert!(cleared.get::<_, bool>(2));
         assert!(cleared.get::<_, Option<i32>>(3).is_none());
-
-        admin
-            .batch_execute(&format!("DROP SCHEMA {schema} CASCADE"))
-            .await
-            .unwrap();
     }
 }

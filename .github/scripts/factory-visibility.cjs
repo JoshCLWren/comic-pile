@@ -1091,13 +1091,23 @@ async function reconcile({ github, context }) {
     const currentOwner = [...current].find(isOwnerLabel) || null;
     const currentStage = STAGE_LABELS.find(label => current.has(label));
     const requestedStage = stageFrom(body);
-    // The marker is trusted as *review visibility* only when it names the live
-    // PR head. It is not an authorization to merge or a controller attestation.
-    const verdict = body.match(/<!-- comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required) -->/);
-    if (verdict) {
+    // The trusted controller now writes semantic-review-v1 markers. Legacy
+    // review-v2 markers are still supported for historical workflows.
+    // Only a matching PR + exact live head can affect approval visibility.
+    // Neither format supplies merge authority or a GitHub APPROVED review.
+    const firstLine = body.split(/\r?\n/, 1)[0];
+    const semanticVerdict = firstLine.match(
+      /^<!-- comic-pile-factory-semantic-review-v1:pr-(\d+):head-([a-f0-9]{40}):reviewer-(\d+):producer-(\d+|unknown):verdict-(approve|repair|reject|obsolete|duplicate|superseded|delivered) -->$/,
+    );
+    const legacyVerdict = body.match(
+      /<!-- comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required) -->/,
+    );
+    if (semanticVerdict || legacyVerdict) {
       if (!context.payload.issue.pull_request) return;
+      if (semanticVerdict && Number(semanticVerdict[1]) !== number) return;
       const live = await livePullRequest(github, context, number);
-      if (!live || verdict[1] !== live.head?.sha) return;
+      const markerHead = semanticVerdict ? semanticVerdict[2] : legacyVerdict[1];
+      if (!live || markerHead !== live.head?.sha) return;
     }
     const preserveAdvancedPrStage = Boolean(context.payload.issue.pull_request)
       && requestedStage === 'factory:building'
@@ -1106,7 +1116,8 @@ async function reconcile({ github, context }) {
     await reconcileLabels(github, context, number, {
       owner: released ? 'factory:unowned' : worker ? ownerFor(worker) : currentOwner,
       stage: preserveAdvancedPrStage ? currentStage : requestedStage || currentStage,
-      approved: verdict ? verdict[2] === 'pass' : undefined,
+      approved: semanticVerdict ? semanticVerdict[5] === 'approve'
+        : legacyVerdict ? legacyVerdict[2] === 'pass' : undefined,
     });
     return;
   }

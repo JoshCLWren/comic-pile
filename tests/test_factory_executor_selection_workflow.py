@@ -125,8 +125,15 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"SOURCE: {selected_source}" in workflow
     assert f"FACTORY_SOURCE: {selected_source}" in workflow
     assert f"MODEL: {selected_model}" in workflow
-    assert f"FACTORY_MODEL: {selected_model}" in workflow
-    assert f"FACTORY_RUNTIME_MODEL: {selected_runtime}" in workflow
+    assert (
+        "FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}"
+        in workflow
+    )
+    assert (
+        "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
+        in workflow
+    )
+    assert f"RUNTIME_MODEL: {selected_runtime}" in workflow
     assert f"FACTORY_BRANCH_SUFFIX: {selected_branch}" in workflow
 
 

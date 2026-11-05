@@ -1,6 +1,9 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
+pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
+pub mod comicvine_issue;
+pub mod comicvine_repair;
 pub mod config;
 pub mod db;
 pub mod dice_api;
@@ -21,9 +24,16 @@ pub mod reading_session;
 pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
+pub mod roll_resources;
 mod session_bandwidth;
 pub mod skip;
 pub mod threads;
+
+/// Test scaffolding shared by unit and integration tests.
+///
+/// Not `#[cfg(test)]` because integration tests link the library without that
+/// cfg. Nothing here runs unless a test calls it.
+pub mod test_support;
 
 use axum::{
     extract::{Request, State},
@@ -162,7 +172,13 @@ async fn bound_request(
 ) -> Response {
     let method = request.method().clone();
     let started = Instant::now();
-    let response = tokio::time::timeout(state.request_timeout, next.run(request))
+    // Cron drains are explicitly awaited, and bounded by the Vercel invocation.
+    let timeout = if request.uri().path() == "/api/v2/maintenance/comicvine-metadata-repairs" {
+        Duration::from_secs(50)
+    } else {
+        state.request_timeout
+    };
+    let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|_| {
             ApiError(
@@ -182,6 +198,10 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route(
             "/health",
+            get(|| async { Json(serde_json::json!({"status": "ok"})) }),
+        )
+        .route(
+            "/api/v2/health",
             get(|| async { Json(serde_json::json!({"status": "ok"})) }),
         )
         .route("/api/v2/auth/register", post(auth::handlers::register))
@@ -226,7 +246,16 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/auth/reset-password",
             post(auth::handlers::reset_password),
         )
+        .route(
+            "/api/v2/maintenance/comicvine-metadata-repairs",
+            get(comicvine_repair::drain),
+        )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v2/roll/die-state", get(roll_resources::die_state))
+        .route(
+            "/api/v2/roll/eligible-issue-ids",
+            get(roll_resources::eligible_issue_ids),
+        )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
@@ -248,6 +277,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
+        .route("/api/v2/analytics/metrics", get(analytics::metrics))
+        .route(
+            "/api/v2/issues/{issue_id}/comicvine",
+            get(comicvine_issue::issue_intelligence),
+        )
         .route("/api/v1/roll/skip", post(skip::skip_roll))
         .route("/api/roll/skip", post(skip::skip_roll))
         .route(

@@ -40,16 +40,17 @@ def test_repo_config_pauses_w48_and_w55_until_november() -> None:
     assert qp.active_pauses(AFTER_RESET) == {}
 
 
-def test_paused_workers_remain_on_roster_and_expected_workers() -> None:
-    """Quota pause is not retirement: w48/w55 stay in the TSV and expected list."""
+def test_retired_workers_stay_unscheduled_after_legacy_pause_expires() -> None:
+    """Old quota records cannot reactivate the retired worker IDs."""
     tsv = (ROOT / ".github" / "free-model-factories.tsv").read_text(encoding="utf-8")
     rostered = {
         line.split("\t")[0] for line in tsv.splitlines() if line and not line.startswith("#")
     }
     expected = json.loads((ROOT / ".github" / "factory-expected-workers.json").read_text())
     for worker in (48, 55):
-        assert str(worker) in rostered
-        assert worker in expected["expected_workers"]
+        assert str(worker) not in rostered
+        assert worker not in expected["expected_workers"]
+        assert worker in expected["retired_workers"]
 
 
 def test_filter_preserves_order_and_logs_paused(monkeypatch: pytest.MonkeyPatch) -> None:

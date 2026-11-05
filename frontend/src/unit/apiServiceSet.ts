@@ -7,7 +7,6 @@ import { createTasksApi } from '../services/api-tasks'
 import { createCreatorsApi } from '../services/api-creators'
 import { createDependenciesApi } from '../services/api-dependencies'
 import { createQueueApi } from '../services/api-queue'
-import { createRateApi } from '../services/api-rate'
 import { createRollApi } from '../services/api-roll'
 import { createSessionApi } from '../services/api-sessions'
 import { createThreadsApi } from '../services/api-threads'
@@ -28,7 +27,6 @@ export function createApiServiceSet(client: HttpClient) {
     migrationApi: createMigrationApi(client),
     preferencesApi: createPreferencesApi(client),
     queueApi: createQueueApi(client),
-    rateApi: createRateApi(client),
     rollApi: createRollApi(client),
     sessionApi: createSessionApi(client),
     tasksApi: createTasksApi(client),

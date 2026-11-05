@@ -89,7 +89,6 @@ function makeApis() {
     cacheEffects: {
       applyRatedThreadCache: vi.fn(),
       invalidateCurrentSessionAfterSnooze: vi.fn().mockResolvedValue(undefined),
-      invalidateAfterSessionModeUpdate: vi.fn(),
     },
   }
 }
@@ -129,7 +128,6 @@ function renderSnoozeFlow(apis: Apis) {
       navigate: vi.fn() as NavigateFunction,
       mutations: {
         setDieMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
-        clearManualDieMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation,
         skipMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },

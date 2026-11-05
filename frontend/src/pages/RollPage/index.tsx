@@ -5,7 +5,6 @@ import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
-  useClearManualDie,
   useResetDice,
   useDismissPending,
   useOverrideRoll,
@@ -17,13 +16,9 @@ import { useSkip, useUnskip } from '../../hooks/useSkip'
 import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
-import { useSessionMode } from '../../hooks/useSessionMode'
-import { useCorrectionSheetExamples } from '../../hooks/useCorrectionSheetExamples'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
-import type { ReadingModeState, SessionModeUpdateRequest, SnoozeCorrectionInfo, CorrectionChoiceId } from '../../types'
-import { FEATURES } from '../../config/features'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
@@ -49,9 +44,6 @@ import { RollModals } from './components/RollModals'
 import { RollCta } from './components/RollCta'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
-import ReadingModeQuiz from '../../components/ReadingModeQuiz'
-import ModeSelectorSheet from '../../components/ModeSelectorSheet'
-import CorrectionSheet from '../../components/CorrectionSheet'
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
@@ -85,46 +77,6 @@ export default function RollPage() {
   const [dismissedLastReadKey, setDismissedLastReadKey] = useState<string | null>(null)
   const showLastRead = lastRead != null && lastReadKey !== dismissedLastReadKey
 
-  const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false)
-  const [isQuizOpen, setIsQuizOpen] = useState(false)
-  const [isCorrectionOpen, setIsCorrectionOpen] = useState(false)
-
-  const sessionModeMutation = useSessionMode()
-  // One bounded request serves the whole sheet, and only while the sheet is
-  // actually open (issue #2744). A failed lookup leaves the sheet on plain copy.
-  const { examples: correctionExamples } = useCorrectionSheetExamples(isCorrectionOpen)
-
-  const handleModeSelectorSubmit = useCallback(
-    async (patch: SessionModeUpdateRequest) => {
-      await sessionModeMutation.mutate(patch)
-    },
-    [sessionModeMutation],
-  )
-
-  const handleOpenQuiz = useCallback(() => {
-    setIsModeSelectorOpen(false)
-    setIsCorrectionOpen(false)
-    setIsQuizOpen(true)
-  }, [])
-
-  const handleCloseQuiz = useCallback(() => {
-    setIsQuizOpen(false)
-  }, [])
-
-  const handleQuizComplete = useCallback(
-    async (_state: ReadingModeState) => {
-      setIsQuizOpen(false)
-      await refetchBootstrap()
-    },
-    [refetchBootstrap],
-  )
-
-  const handleCorrectionSuggested = useCallback((_correction: SnoozeCorrectionInfo) => {
-    // A one-tap correction may be insufficient after repeated/contradictory
-    // mismatches (issue #1739): surface the sheet, which itself offers the quiz.
-    setIsCorrectionOpen(true)
-  }, [])
-
   const handleBackToQueue = useCallback(() => {
     // Leaving for the queue is navigation, not resolution (issue #3761): the
     // pending read stays server-side, so the unresolved selection is still
@@ -136,15 +88,7 @@ export default function RollPage() {
     navigate('/queue')
   }, [navigate, queryClient])
 
-  const handleCorrectionSubmit = useCallback(
-    async (_choiceId: CorrectionChoiceId, patch: SessionModeUpdateRequest) => {
-      await sessionModeMutation.mutate(patch)
-    },
-    [sessionModeMutation],
-  )
-
   const setDieMutation = useSetDie()
-  const clearManualDieMutation = useClearManualDie()
   const resetDiceMutation = useResetDice()
   const rollMutation = useRoll()
   const dismissPendingMutation = useDismissPending()
@@ -267,7 +211,6 @@ export default function RollPage() {
     rerollMutation: rollMutation,
     enterRatingView: rating.enterRatingView,
     refetchBootstrap,
-    onClarificationSuggested: handleCorrectionSuggested,
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
 
@@ -288,7 +231,6 @@ export default function RollPage() {
     navigate,
     mutations: {
       setDieMutation,
-      clearManualDieMutation,
       rollMutation,
       snoozeMutation,
       skipMutation,
@@ -483,12 +425,9 @@ export default function RollPage() {
         pool={pool}
         isRatingView={state.isRatingView}
         setDiePending={setDieMutation.isPending}
-        clearManualDiePending={clearManualDieMutation.isPending}
         onSetDie={actions.handleSetDie}
-        onClearManualDie={actions.handleClearManualDie}
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
-        onOpenModeSelector={() => setIsModeSelectorOpen(true)}
         onBackToQueue={handleBackToQueue}
       />
 
@@ -513,7 +452,7 @@ export default function RollPage() {
                   onKeyDown={actions.handleKeyDown}
                   role="button"
                   tabIndex={0}
-                  aria-label="Roll the dice"
+                  aria-label={displayDie === 2 ? "Flip the coin" : "Roll the dice"}
                   className={`dice-state-${state.diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
                   style={{ width: '200px', height: '200px' }}
                   data-testid="main-die-3d"
@@ -521,7 +460,7 @@ export default function RollPage() {
                   <div className="w-full h-full main-die-optical-center">
                     <LazyDice3D
                       sides={displayDie}
-                      value={state.rolledResult || 1}
+                      value={Math.max(1, Math.min(state.rolledResult ?? 1, displayDie))}
                       isRolling={state.isRolling}
                       showValue={false}
                       color={0xffffff}
@@ -623,15 +562,12 @@ export default function RollPage() {
           onCloseOverride={modals.closeOverrideModal}
           isDieModalOpen={state.isDieModalOpen}
           onCloseDieModal={() => state.setIsDieModalOpen(false)}
-          manualDie={bootstrap.manual_die}
           currentDie={state.currentDie}
           onSetDie={actions.handleSetDie}
-          onClearManualDie={actions.handleClearManualDie}
           onResetDice={handleResetDice}
           resetDicePending={resetDiceMutation.isPending}
           resetDiceError={resetDiceError}
           setDiePending={setDieMutation.isPending}
-          clearManualDiePending={clearManualDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
           selectedThread={state.selectedThread}
           pendingThreadId={bootstrap.pending_thread_id}
@@ -649,35 +585,6 @@ export default function RollPage() {
           shufflePending={shuffleQueueMutation.isPending}
           shuffleError={state.shuffleError}
           seriesCount={activeSeriesCount ?? 0}
-        />
-
-        <ModeSelectorSheet
-          isOpen={isModeSelectorOpen}
-          currentMode={bootstrap.session_mode ? {
-            bandwidth: bootstrap.session_mode.active_bandwidth,
-            intent: bootstrap.session_mode.active_intent,
-          } : null}
-          onClose={() => setIsModeSelectorOpen(false)}
-          onSubmit={handleModeSelectorSubmit}
-          onOpenQuiz={handleOpenQuiz}
-          quizEnabled={FEATURES.readingModeQuiz}
-        />
-
-        {FEATURES.readingModeQuiz && (
-          <ReadingModeQuiz
-            isOpen={isQuizOpen}
-            onClose={handleCloseQuiz}
-            onComplete={handleQuizComplete}
-          />
-        )}
-
-        <CorrectionSheet
-          isOpen={isCorrectionOpen}
-          onClose={() => setIsCorrectionOpen(false)}
-          onSubmit={handleCorrectionSubmit}
-          onOpenQuiz={handleOpenQuiz}
-          quizEnabled={FEATURES.readingModeQuiz}
-          examples={correctionExamples}
         />
       </div>
     </div>

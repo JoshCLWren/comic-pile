@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import type { BlockingDependency, SessionCurrent, ThreadListItem } from '../../types'
 import { useNavigate } from 'react-router-dom'
 import { canSnoozeSeries } from '../../components/snoozeAvailability'
+import { rollApi } from '../../services/api-roll'
 import { useQueueBlockingInfo } from '../../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../../hooks/useReadingBoundaries'
 import QueueThreadCard from './QueueThreadCard'
@@ -74,8 +75,13 @@ export function useQueueThreadCards({
   // Memoized so the render callback keeps a stable identity across renders
   // instead of being invalidated by a fresh array on every session snapshot.
   const snoozedThreadIds = useMemo(
-    () => session?.snoozed_threads?.map((t) => t.id),
-    [session],
+    () => Array.from(new Set([
+      ...(session?.snoozed_threads?.map((t) => t.id) ?? []),
+      ...activeThreads
+        .map((thread) => thread.id)
+        .filter((threadId) => rollApi.isTemporarilySnoozed(threadId)),
+    ])),
+    [activeThreads, session],
   )
 
   const renderThreadCard = useCallback(

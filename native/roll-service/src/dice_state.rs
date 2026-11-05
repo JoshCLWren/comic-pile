@@ -20,6 +20,22 @@ WHERE user_id = $1
 ORDER BY timestamp DESC, id DESC
 LIMIT 1";
 
+/// The same newest owner-scoped die outcome as a CTE over the `me` CTE.
+///
+/// The predicate and the ordering are identical to [`LATEST_DIE_SQL`]; only
+/// the owner source differs, so the folded one-statement resource read and
+/// the transaction read can never disagree about which outcome is current.
+/// `newest_event_is_owner_scoped_and_ties_break_by_id` pins that equality.
+pub(crate) const LATEST_DIE_CTE: &str = r#"die_state AS (
+    SELECT die_after
+    FROM events
+    WHERE user_id = (SELECT user_id FROM me)
+      AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
+      AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
+    ORDER BY timestamp DESC, id DESC
+    LIMIT 1
+)"#;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DiceAction {
     RollRating(f64),
@@ -166,9 +182,10 @@ mod tests {
     async fn newest_event_is_owner_scoped_and_ties_break_by_id() {
         // CI can run this with the same disposable local PostgreSQL as other
         // Rust database tests. Do not connect to a production database.
-        let Ok(url) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
             return;
         };
+        let url = crate::test_support::database_url().await;
         let (mut client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
             .await
             .expect("disposable PostgreSQL");
@@ -207,6 +224,22 @@ mod tests {
             read(tx.query_opt(LATEST_DIE_SQL, &[&30_i32]).await.unwrap()),
             6
         );
+
+        // The folded one-statement resource read composes the same CTE over
+        // its own `me` CTE; both readers must resolve the same current die.
+        let folded = format!(
+            "WITH me AS (SELECT $1::int AS user_id),\n{LATEST_DIE_CTE}\n\
+             SELECT die_after FROM die_state"
+        );
+        for owner in [10_i32, 20, 30] {
+            let folded_die = read(tx.query_opt(&folded, &[&owner]).await.unwrap());
+            assert_eq!(
+                folded_die,
+                read(tx.query_opt(LATEST_DIE_SQL, &[&owner]).await.unwrap()),
+                "reader {owner}: the folded CTE and the transaction read agree"
+            );
+        }
+
         tx.rollback().await.unwrap();
     }
 }

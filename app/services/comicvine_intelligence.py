@@ -22,15 +22,11 @@ from app.schemas.comicvine import (
 )
 from app.schemas.issue import IssueCreatorsEntry, ThreadIssueCreatorsResponse
 
-from app.services.comicvine_fallback import metadata_needs_hydration
 from app.services.comicvine_metadata_repair import (
     MetadataRepairState,
     describe_metadata_status,
     refresh_retry_after_seconds,
-    request_issue_metadata_repair,
-    schedule_metadata_repair_drain,
 )
-from app.services.comicvine_series_resolution import schedule_series_issue_resolution
 from app.services.ownership import get_owned_thread_or_404
 
 COMICVINE_PROVIDER = "comicvine"
@@ -322,11 +318,13 @@ async def get_issue_intelligence(
 ) -> ComicVineIssueIntelligence | None:
     """Build curated metadata and explicit story-arc relationships for one issue.
 
-    The response is served entirely from trusted stored data: missing or stale
-    provider metadata schedules a non-blocking background refresh and the
-    current database-backed result is returned immediately. Interactive reads
-    never wait on live ComicVine network I/O (issue #3248). Related story-arc
-    members are likewise bounded to the per-arc display window.
+    The response is served entirely from trusted stored data. This legacy v1
+    reader is deliberately read-only: it reports the stored repair state but
+    never enqueues a repair or starts a provider fetch. Native Rust v2 owns the
+    metadata-repair producer and the awaited provider worker (#4623).
+    Interactive reads never wait on live ComicVine network I/O (issue #3248).
+    Related story-arc members are likewise bounded to the per-arc display
+    window.
 
     Args:
         db: Async database session.
@@ -338,27 +336,20 @@ async def get_issue_intelligence(
     """
     mapped = await refresh_repository.get_confirmed_identity_with_repair(db, issue_id)
     if mapped is None:
-        await schedule_series_issue_resolution(db, issue_id, user_id)
         return None
 
     identity, stored_request = mapped
-    repair_request: MetadataRepairState | None = None
-    if metadata_needs_hydration(identity):
-        repair_request = await request_issue_metadata_repair(db, identity.id)
-        # The GET dependency closes without auto-committing. Make the idempotent
-        # work item visible to a separate worker before scheduling a drain.
-        await db.commit()
-        schedule_metadata_repair_drain()
-        schedule_issue_metadata_refresh(identity.id)
-    else:
-        if stored_request is not None:
-            repair_request = MetadataRepairState(
-                state=stored_request.state,
-                attempts=stored_request.attempts,
-                next_attempt_at=stored_request.next_attempt_at,
-                last_error=stored_request.last_error,
-                refresh_requested=False,
-            )
+    # Legacy v1 reader is read-only. Rust v2 owns all metadata repair enqueue
+    # and the awaited provider worker. Never schedule work on a Python GET.
+    repair_request: MetadataRepairState | None = (
+        MetadataRepairState(
+            state=stored_request.state,
+            attempts=stored_request.attempts,
+            next_attempt_at=stored_request.next_attempt_at,
+            last_error=stored_request.last_error,
+            refresh_requested=False,
+        ) if stored_request is not None else None
+    )
 
     metadata = identity.metadata_json
     arc_refs = _arc_references(metadata)

@@ -18,7 +18,7 @@ import {
   resetRollBootstrapAfterManualSelection,
 } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
-import { getApiErrorDetail } from '../../utils/apiError'
+import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 
 interface UseQueueThreadActionsParams {
   navigateToRoll: (thread: ThreadListItem, response: unknown) => void
@@ -351,6 +351,9 @@ export function useQueueThreadActions(
         restoreSeriesActionsFocus(thread.id)
       } catch (error: unknown) {
         console.error('Snooze action failed:', error)
+        if (!isSnoozed && getApiErrorStatus(error) === 409) {
+          await invalidateAfterQueueMovement(queryClient).catch(() => undefined)
+        }
         showToast(
           `Failed to ${isSnoozed ? 'unsnooze' : 'snooze'} thread: ${getApiErrorDetail(error)}`,
           'error',

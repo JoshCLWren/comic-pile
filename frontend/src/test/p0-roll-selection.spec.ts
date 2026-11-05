@@ -167,11 +167,12 @@ test.describe('ROLL-001: Roll selection', () => {
     ).not.toBeVisible()
 
     // Exactly one bootstrap refresh per move — owned by the move mutation's
-    // queue-movement invalidation. The retired explicit `refetchBootstrap()`
-    // used to append one more POST /v2/reading-sessions and GET
-    // /v2/roll/bootstrap, which would trip either count below.
+    // queue-movement invalidation. The session was already resolved by the
+    // cold Roll load, so the refresh is the read-only GET alone (#4276): the
+    // retired explicit `refetchBootstrap()` used to append one more POST
+    // /v2/reading-sessions and one more GET /v2/roll/bootstrap per move.
     expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(1)
-    expect(ledger.count('POST', '/api/v2/reading-sessions') - before.sessionPost).toBe(1)
+    expect(ledger.count('POST', '/api/v2/reading-sessions') - before.sessionPost).toBe(0)
     expect(ledger.count('PATCH', `/api/v2/queue-entries/${beta.id}`) - before.movePatch).toBe(1)
   })
 
@@ -220,10 +221,12 @@ test.describe('ROLL-001: Roll selection', () => {
     await expect(page.getByTestId('shuffle-queue-error')).not.toBeVisible()
 
     // One whole-queue shuffle POST and one authoritative bootstrap refresh —
-    // the retired explicit `refetchBootstrap()` after the mutation used to
-    // spend a second refresh (POST /v2/reading-sessions + GET /v2/roll/bootstrap).
+    // a refresh of the already-resolved session, so the read-only GET alone
+    // (#4276). The retired explicit `refetchBootstrap()` after the mutation
+    // used to spend a second refresh (POST /v2/reading-sessions + GET
+    // /v2/roll/bootstrap).
     expect(ledger.count('POST', '/api/v2/queue-orders') - before.orders).toBe(1)
     expect(ledger.count('GET', '/api/v2/roll/bootstrap') - before.bootstrap).toBe(1)
-    expect(ledger.count('POST', '/api/v2/reading-sessions') - before.sessionPost).toBe(1)
+    expect(ledger.count('POST', '/api/v2/reading-sessions') - before.sessionPost).toBe(0)
   })
 })

@@ -162,7 +162,6 @@ function renderActionSheet(bootstrap: RollBootstrapResponse): Harness {
       navigate: vi.fn() as NavigateFunction,
       mutations: {
         setDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
-        clearManualDieMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation: {
           mutate: vi.fn(() => Promise.resolve({ response: undefined, refreshed: true, refreshError: null })),

@@ -32,7 +32,7 @@ const REGION_NAMES = [
 ] as const;
 
 async function getCsrfToken(request: APIRequestContext, token: string): Promise<string> {
-  const response = await request.get('/api/auth/csrf', {
+  const response = await request.get('/api/v2/auth/csrf', {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!response.ok()) {
