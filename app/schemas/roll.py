@@ -5,21 +5,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.continuity_blocking import ContinuityBlocker
-from comic_pile.recommendation_selection import Bandwidth, Intent
-
-
-class RollRequest(BaseModel):
-    """Schema for roll request.
-
-    Optional reading-mode context may be supplied for telemetry and for the
-    selection control path. Both fields are neutral-by-default: absent values
-    resolve to ``balanced`` and never change legacy unweighted selection.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    bandwidth: Bandwidth | None = None
-    intent: Intent | None = None
 
 
 class RollResponse(BaseModel):

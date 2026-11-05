@@ -102,7 +102,7 @@ def test_prune_legacy_bare_paths_drops_aliases_and_tooling() -> None:
 
 def test_prune_legacy_bare_paths_returns_original_when_fully_client_facing() -> None:
     """Return the input document unchanged when no path requires pruning."""
-    schema = {"paths": {"/api/v1/roll/": {"post": {}}, "/api/ping": {"get": {}}}}
+    schema = {"paths": {"/api/v1/threads/": {"get": {}}, "/api/ping": {"get": {}}}}
 
     assert prune_legacy_bare_paths(schema) is schema
 

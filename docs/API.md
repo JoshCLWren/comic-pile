@@ -357,28 +357,13 @@ Move thread to the back of the queue.
 
 Dice roll for thread selection.
 
-### POST /roll/
+### POST /roll/ (retired)
 
-Roll the dice to select a thread from the roll pool. The roll pool includes threads at positions 1 through the current die size.
-
-**Response**: `200 OK`
-
-```json
-{
-  "thread_id": 3,
-  "title": "The Walking Dead Vol. 1",
-  "die_size": 6,
-  "result": 2
-}
-```
-
-**Response**: `400 Bad Request`
-
-```json
-{
-  "detail": "No active threads available to roll"
-}
-```
+`POST /api/v1/roll/` and its unversioned `POST /api/roll/` alias were retired in
+#4336. The public Roll mutation is now the sessionless native
+`POST /api/v2/roll/offer`, which is not served by the Python FastAPI app; both
+retired Python paths return `404`. The retained Python Roll operations are
+`override`, `dismiss-pending`, and the recommendation-explanation read.
 
 ### POST /roll/override
 

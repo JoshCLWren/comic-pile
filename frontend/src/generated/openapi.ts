@@ -4219,38 +4219,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Roll Dice
-         * @description Roll dice to select a thread.
-         *
-         *     Args:
-         *         roll_request: The roll request.
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         RollResponse with selected thread and die result.
-         *
-         *     Raises:
-         *         HTTPException: If no active threads available.
-         */
-        post: operations["roll_dice_api_v1_roll__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/dismiss-pending": {
         parameters: {
             query?: never;
@@ -6770,12 +6738,6 @@ export interface components {
             /** Total Threads */
             total_threads: number;
         };
-        /**
-         * Bandwidth
-         * @description Reading-bandwidth vocabulary from the personalized-Roll roadmap.
-         * @enum {string}
-         */
-        Bandwidth: "light" | "balanced" | "deep";
         /**
          * BatchBlockingExplanationRequest
          * @description Schema for batch blocking-info request.
@@ -12225,12 +12187,6 @@ export interface components {
             total_items: number;
         };
         /**
-         * Intent
-         * @description Reading-intent vocabulary from the personalized-Roll roadmap.
-         * @enum {string}
-         */
-        Intent: "balanced" | "momentum" | "familiar" | "explore" | "random";
-        /**
          * IssueAttachRequest
          * @description Schema for attaching an issue to a thread.
          */
@@ -15051,18 +15007,6 @@ export interface components {
             target_thread_id: number;
             /** Target Thread Title */
             target_thread_title: string;
-        };
-        /**
-         * RollRequest
-         * @description Schema for roll request.
-         *
-         *     Optional reading-mode context may be supplied for telemetry and for the
-         *     selection control path. Both fields are neutral-by-default: absent values
-         *     resolve to ``balanced`` and never change legacy unweighted selection.
-         */
-        RollRequest: {
-            bandwidth?: components["schemas"]["Bandwidth"] | null;
-            intent?: components["schemas"]["Intent"] | null;
         };
         /**
          * RollResponse
@@ -22392,39 +22336,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReleaseResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    roll_dice_api_v1_roll__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["RollRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
                 };
             };
             /** @description Validation Error */

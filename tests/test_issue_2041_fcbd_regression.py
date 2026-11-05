@@ -21,6 +21,7 @@ from app.models.thread import Thread
 from comic_pile.dependencies import get_blocking_explanations, refresh_user_blocked_status
 from comic_pile.queue import get_bounded_roll_pool_rows
 from tests.conftest import get_or_create_user_async
+from tests.roll_flow import roll_pending_thread
 
 
 async def _make_thread_with_issue(
@@ -114,9 +115,8 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     assert fcbd_thread.id in roll_ids
     assert ultimates_thread.id not in roll_ids
 
-    rolled = await auth_client.post("/api/v1/roll/")
-    assert rolled.status_code == 200, rolled.text
-    assert rolled.json()["thread_id"] != ultimates_thread.id
+    rolled = (await roll_pending_thread(async_db)).model_dump()
+    assert rolled["thread_id"] != ultimates_thread.id
 
     blocked_override = await auth_client.post(
         "/api/v1/roll/override", json={"thread_id": ultimates_thread.id}
@@ -149,9 +149,8 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     assert fcbd_thread.id not in roll_ids_after
 
     await auth_client.post("/api/v1/roll/dismiss-pending")
-    rolled_after = await auth_client.post("/api/v1/roll/")
-    assert rolled_after.status_code == 200, rolled_after.text
-    assert rolled_after.json()["thread_id"] == ultimates_thread.id
+    rolled_after = (await roll_pending_thread(async_db)).model_dump()
+    assert rolled_after["thread_id"] == ultimates_thread.id
 
 
 @pytest.mark.asyncio

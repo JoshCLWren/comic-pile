@@ -301,9 +301,6 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
     assert _response_schema("/api/v1/threads/{thread_id}/dependencies") == {
         "$ref": "#/components/schemas/ThreadDependenciesResponse"
     }
-    assert _response_schema("/api/v1/roll/", method="post") == {
-        "$ref": "#/components/schemas/RollResponse"
-    }
     assert _response_schema(
         "/api/v1/threads/{thread_id}:getBlockingInfo",
         method="post",

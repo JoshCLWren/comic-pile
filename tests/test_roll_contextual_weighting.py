@@ -33,6 +33,7 @@ from app.models.external_identity import (
 from app.models.recommendation_context import RecommendationContext
 from app.services.bandwidth_selection import select_bandwidth_weighted
 from comic_pile.recommendation_selection import SelectionMode
+from tests.roll_flow import roll_pending_thread
 
 
 async def _add_thread(
@@ -322,9 +323,8 @@ async def test_light_bandwidth_roll_persists_bandwidth_context(
     await _confirm_series_era(async_db, medium, "2010-01-01")
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
-    assert response.status_code == 200
-    roll_data = response.json()
+    response = (await roll_pending_thread(async_db, bandwidth="light")).model_dump()
+    roll_data = response
     assert roll_data["thread_id"] in {light.id, medium.id}
 
     event_result = await async_db.execute(

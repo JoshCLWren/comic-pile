@@ -6,6 +6,7 @@ and cache invalidation. Query construction lives in
 """
 
 import logging
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TypedDict
 
@@ -29,7 +30,6 @@ from app.repositories.roll_repository import (
     update_session_pending_thread,
 )
 from app.services.queue_display import display_position
-from app.services.roll_phase_trace import RollPhaseTrace
 from app.services.reading_effort import (
     EffortEstimate,
     build_recommendation_context,
@@ -167,9 +167,8 @@ class RollService:
         selection_bandwidth: str,
         selection_intent: str,
         empty_pool_detail: str = "No active threads available to roll",
-        trace: RollPhaseTrace | None = None,
     ) -> _SelectionArtifacts:
-        """Run the weighted bounded-pool selection for the roll endpoint.
+        """Run the weighted bounded-pool selection shared by roll and skip.
 
         Returns a dictionary of selection artifacts without committing.
 
@@ -179,13 +178,9 @@ class RollService:
         from comic_pile.queue import get_bounded_roll_pool_rows
 
         eligibility = await get_execution_eligibility(self._db, user_id)
-        if trace is not None:
-            trace.mark("eligibility")
         bounded_rows = await get_bounded_roll_pool_rows(
             user_id, self._db, current_die, excluded_ids,
         )
-        if trace is not None:
-            trace.mark("candidate_pool")
         if not bounded_rows:
             raise HTTPException(status_code=400, detail=empty_pool_detail)
 
@@ -214,8 +209,6 @@ class RollService:
         effort_map = await compute_effort_estimates_batch(
             self._db, user_id=user_id, candidates=candidate_pairs
         )
-        if trace is not None:
-            trace.mark("effort_estimates")
         effort_estimates = [effort_map[pair] for pair in candidate_pairs]
         effort_minutes_by_thread: dict[int, float | None] = {}
         for thread_id, issue_id in candidate_pairs:
@@ -274,8 +267,6 @@ class RollService:
             candidate_weights = selected.weights
             weights_applied = selected.weights_applied
 
-        if trace is not None:
-            trace.mark("weighting")
         mode_selection_method, recommendation_reason_codes = derive_recorded_selection_method(
             resolved_mode=resolved_mode,
             selection_bandwidth=selection_bandwidth,
@@ -416,8 +407,6 @@ class RollService:
             effort_sample_count=selected_effort_estimate.sample_count,
         )
 
-        if trace is not None:
-            trace.mark("selection_artifacts")
         return {
             "selected_thread": selected_thread,
             "unread_count": unread_count,
@@ -486,7 +475,6 @@ class RollService:
         self,
         *,
         selected_thread: Thread | None = None,
-        thread_attrs: dict | None = None,
         current_die: int,
         selected_index: int,
         unread_count: int,
@@ -499,17 +487,14 @@ class RollService:
     ) -> RollResponse:
         """Convert selection artifacts into the public RollResponse.
 
-        Either ``selected_thread`` or ``thread_attrs`` must be provided. The
-        displayed Queue ordinal is resolved here, in the service layer, so the
-        router never performs the whole-queue lookup itself. Optional issue
+        The displayed Queue ordinal is resolved here, in the service layer, so
+        the router never performs the whole-queue lookup itself. Optional issue
         fields and reason codes let callers surface the selected issue and its
         reader-facing explanation while keeping response assembly in the
         service.
 
         Args:
             selected_thread: ORM thread selected by the roll.
-            thread_attrs: Pre-extracted thread attributes (alternative to
-                ``selected_thread``).
             current_die: Current die size at roll time.
             selected_index: Zero-based index of the selected candidate.
             unread_count: Remaining unread issue count.
@@ -524,25 +509,17 @@ class RollService:
         Returns:
             A fully populated ``RollResponse``.
         """
-        if thread_attrs is not None:
-            thread_id = thread_attrs["thread_id"]
-            title = thread_attrs["title"]
-            format_ = normalize_format_value(thread_attrs["format"]) if isinstance(thread_attrs.get("format"), str) else normalize_format_value(thread_attrs["format"]) if thread_attrs.get("format") else None
-            queue_position = thread_attrs["queue_position"]
-            total_issues = thread_attrs["total_issues"]
-            reading_progress = thread_attrs["reading_progress"]
-        else:
-            if selected_thread is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Selected thread not found",
-                )
-            thread_id = selected_thread.id
-            title = selected_thread.title
-            format_ = normalize_format_value(selected_thread.format)
-            queue_position = await display_position(self._db, selected_thread)
-            total_issues = selected_thread.total_issues
-            reading_progress = selected_thread.reading_progress
+        if selected_thread is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Selected thread not found",
+            )
+        thread_id = selected_thread.id
+        title = selected_thread.title
+        format_ = normalize_format_value(selected_thread.format)
+        queue_position = await display_position(self._db, selected_thread)
+        total_issues = selected_thread.total_issues
+        reading_progress = selected_thread.reading_progress
         return RollResponse(
             thread_id=thread_id,
             title=title,
@@ -592,111 +569,134 @@ class RollService:
         await clear_session_pending(self._db, current_session.id, now)
         await self._db.commit()
 
-    async def execute_roll(
+    async def prepare_selection(
         self,
         *,
-        current_user_id: int,
-        roll_request: object,
-    ) -> RollResponse:
-        """Execute the full roll_dice flow."""
-        user_id = current_user_id
-        current_session = await get_or_create(self._db, user_id=user_id, existing_user=None)
+        current_session: ReadingSession,
+        user_id: int,
+        bandwidth: str | None = None,
+        intent: str | None = None,
+        extra_excluded_ids: Sequence[int] = (),
+        empty_pool_detail: str = "No active threads available to roll",
+    ) -> tuple[int, _SelectionArtifacts]:
+        """Resolve the die, exclusions, and one Option E selection for a session.
 
-        if current_session.pending_thread_id is not None:
-            pending_thread = await self._db.get(Thread, current_session.pending_thread_id)
-            pending_title = pending_thread.title if pending_thread else "another thread"
-            pending_reference = f"'{pending_title}'" if pending_thread else "another thread"
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"A roll is already pending for {pending_reference}. "
-                    "Rate, snooze, or cancel the pending roll before rolling again."
-                ),
-            )
+        Used by the in-process test flow that replaced the retired
+        ``POST /api/v1/roll/`` mutation (#4336). The selection rules
+        themselves live in ``select_pending_thread``; this method only
+        resolves the session-scoped inputs the caller would otherwise
+        duplicate.
 
+        Args:
+            current_session: The reader's active reading session.
+            user_id: Owner whose eligible pool is selected from.
+            bandwidth: Explicit reading-bandwidth override, when requested.
+            intent: Explicit reading-intent override, when requested.
+            extra_excluded_ids: Threads excluded for this selection only.
+            empty_pool_detail: Client-facing message for an empty pool.
+
+        Returns:
+            The current die and the selected artifacts, uncommitted.
+
+        Raises:
+            HTTPException: 400 when the bounded pool is empty.
+        """
         current_die = await get_current_die_for_session(current_session, self._db)
-        snoozed_ids = current_session.snoozed_thread_ids or []
-        skipped_ids = current_session.skipped_thread_ids or []
         excluded_ids = await derive_effective_roll_excluded_thread_ids(
             self._db,
             user_id,
-            session_snoozed_ids=snoozed_ids,
-            session_skipped_ids=skipped_ids,
+            session_snoozed_ids=current_session.snoozed_thread_ids or [],
+            session_skipped_ids=current_session.skipped_thread_ids or [],
         )
-
-        selection_bandwidth = (
-            roll_request.bandwidth
-            if hasattr(roll_request, 'bandwidth') and roll_request.bandwidth is not None
-            else (current_session.active_bandwidth or DEFAULT_BANDWIDTH)
-        )
-        selection_intent = (
-            roll_request.intent
-            if hasattr(roll_request, 'intent') and roll_request.intent is not None
-            else (current_session.active_intent or DEFAULT_INTENT)
-        )
-
         artifacts = await self.select_pending_thread(
             user_id=user_id,
             current_session=current_session,
             current_die=current_die,
-            excluded_ids=excluded_ids,
-            selection_bandwidth=selection_bandwidth,
-            selection_intent=selection_intent,
+            excluded_ids=[*excluded_ids, *extra_excluded_ids],
+            selection_bandwidth=bandwidth or current_session.active_bandwidth or DEFAULT_BANDWIDTH,
+            selection_intent=intent or current_session.active_intent or DEFAULT_INTENT,
+            empty_pool_detail=empty_pool_detail,
         )
+        return current_die, artifacts
 
-        selected_thread: Thread = artifacts["selected_thread"]
-        event: Event = artifacts["event"]
-        rec_context_create: RecommendationContextCreate = artifacts["rec_context_create"]
+    async def persist_selection(
+        self,
+        *,
+        current_session: ReadingSession,
+        artifacts: _SelectionArtifacts,
+        current_die: int,
+    ) -> RollResponse:
+        """Persist one selected roll outcome and build its response.
+
+        Writes the ``roll`` event and its recommendation context, moves the
+        session's pending pointer, and returns the public response. The
+        response is projected before the commit so the Queue ordinal reuses
+        this transaction's Option E snapshot instead of reloading every
+        eligibility input afterwards.
+
+        Args:
+            current_session: The reader's active reading session.
+            artifacts: Selection artifacts from ``prepare_selection``.
+            current_die: Die face count used for this selection.
+
+        Returns:
+            The committed ``RollResponse``.
+        """
+        selected_thread = artifacts["selected_thread"]
+        event = artifacts["event"]
+        rec_context_create = artifacts["rec_context_create"]
 
         self._db.add(event)
         await self._db.flush()
-
-        rec_context = RecContextModel(
-            event_id=event.id,
-            schema_version=rec_context_create.schema_version,
-            intent=rec_context_create.intent,
-            intent_source=rec_context_create.intent_source,
-            intent_confidence=rec_context_create.intent_confidence,
-            bandwidth=rec_context_create.bandwidth,
-            bandwidth_source=rec_context_create.bandwidth_source,
-            bandwidth_confidence=rec_context_create.bandwidth_confidence,
-            candidate_factors=[f.model_dump() for f in rec_context_create.candidate_factors]
-            if rec_context_create.candidate_factors else None,
-            final_weight=rec_context_create.final_weight,
-            random_bypass=rec_context_create.random_bypass,
-            balanced_neutrality=rec_context_create.balanced_neutrality,
-            effort_minutes=rec_context_create.effort_minutes,
-            effort_band=rec_context_create.effort_band,
-            effort_source=rec_context_create.effort_source,
-            effort_confidence=rec_context_create.effort_confidence,
-            effort_sample_count=rec_context_create.effort_sample_count,
+        await insert_recommendation_context(
+            self._db,
+            RecContextModel(
+                event_id=event.id,
+                schema_version=rec_context_create.schema_version,
+                intent=rec_context_create.intent,
+                intent_source=rec_context_create.intent_source,
+                intent_confidence=rec_context_create.intent_confidence,
+                bandwidth=rec_context_create.bandwidth,
+                bandwidth_source=rec_context_create.bandwidth_source,
+                bandwidth_confidence=rec_context_create.bandwidth_confidence,
+                candidate_factors=[
+                    f.model_dump() for f in rec_context_create.candidate_factors
+                ]
+                if rec_context_create.candidate_factors
+                else None,
+                final_weight=rec_context_create.final_weight,
+                random_bypass=rec_context_create.random_bypass,
+                balanced_neutrality=rec_context_create.balanced_neutrality,
+                effort_minutes=rec_context_create.effort_minutes,
+                effort_band=rec_context_create.effort_band,
+                effort_source=rec_context_create.effort_source,
+                effort_confidence=rec_context_create.effort_confidence,
+                effort_sample_count=rec_context_create.effort_sample_count,
+            ),
         )
-        await insert_recommendation_context(self._db, rec_context)
+        await update_session_pending_thread(
+            self._db,
+            current_session.id,
+            selected_thread.id,
+            datetime.now(UTC),
+        )
 
-        now = datetime.now(UTC)
-        await update_session_pending_thread(self._db, current_session.id, selected_thread.id, now)
-
-        # Extract thread info before commit to avoid MissingGreenlet
-        queue_position = await display_position(self._db, selected_thread)
-        thread_attrs = {
-            "thread_id": selected_thread.id,
-            "title": selected_thread.title,
-            "format": normalize_format_value(selected_thread.format),
-            "queue_position": queue_position,
-            "total_issues": selected_thread.total_issues,
-            "reading_progress": selected_thread.reading_progress,
-        }
-        await self._db.commit()
-
-        selected_index: int = artifacts["selected_index"]
-        unread_count: int = artifacts["unread_count"]
-        return await self.build_roll_response(
-            thread_attrs=thread_attrs,
+        snoozed_count = len(current_session.snoozed_thread_ids or [])
+        response = await self.build_roll_response(
+            selected_thread=selected_thread,
             current_die=current_die,
-            selected_index=selected_index,
-            unread_count=unread_count,
-            snoozed_count=len(snoozed_ids),
+            selected_index=artifacts["selected_index"],
+            unread_count=artifacts["unread_count"],
+            snoozed_count=snoozed_count,
+            issue_id=artifacts["selected_thread_issue_id"],
+            issue_number=artifacts["selected_thread_issue_number"],
+            next_issue_id=artifacts["selected_thread_issue_id"],
+            next_issue_number=artifacts["selected_thread_issue_number"],
+            recommendation_reason_codes=artifacts["recommendation_reason_codes"],
         )
+        await self._db.commit()
+        return response
+
 
     async def execute_override(self, *, thread_id: int, current_user: User) -> RollResponse:
         """Select an owned Thread using the active eligibility authority.

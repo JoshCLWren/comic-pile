@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
 from app.models import ReadingSession
+from tests.roll_flow import roll_pending_thread
 
 
 async def _latest_rate_event(async_db: AsyncSession, session_id: int) -> Event:
@@ -43,8 +44,7 @@ async def _roll_via_api(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> tuple[ReadingSession, Event]:
     """Roll through the API and return the authoritative session and roll event."""
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
+    await roll_pending_thread(async_db)
 
     session_result = await async_db.execute(
         select(ReadingSession).where(ReadingSession.ended_at.is_(None))

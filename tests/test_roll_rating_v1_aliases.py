@@ -9,7 +9,6 @@ from app.main import create_app
 
 
 _ROLL_PATHS = (
-    "/roll/",
     "/roll/dismiss-pending",
     "/roll/override",
 )

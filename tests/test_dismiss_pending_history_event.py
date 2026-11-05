@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -19,10 +20,9 @@ async def test_dismiss_pending_records_a_classified_dismiss_event(
     """Cancelling a pending roll records one dismiss event for that series."""
     _ = sample_data
 
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    rolled_thread_id = roll_response.json()["thread_id"]
-    rolled_title = roll_response.json()["title"]
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    rolled_thread_id = roll_response["thread_id"]
+    rolled_title = roll_response["title"]
 
     current = await auth_client.get("/api/v1/sessions/current/")
     assert current.status_code == 200

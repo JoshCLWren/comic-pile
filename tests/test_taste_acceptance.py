@@ -51,6 +51,7 @@ from app.services.taste_inference import (
     compute_signal_metrics,
     merge_inferred_into,
 )
+from tests.roll_flow import roll_pending_thread
 
 
 # ---------------------------------------------------------------------------
@@ -425,8 +426,7 @@ class TestCriterion5DiscoveryNonBlocking:
         assert discoveries.status_code == 200
         assert len(discoveries.json()["discoveries"]) == 1
 
-        roll = await auth_client.post("/api/v1/roll/")
-        assert roll.status_code == 200
+        await roll_pending_thread(async_db)
 
 
 # ---------------------------------------------------------------------------

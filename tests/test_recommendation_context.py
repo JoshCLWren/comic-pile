@@ -23,6 +23,7 @@ from app.schemas.recommendation_context import (
     RecommendationContextCreate,
     RecommendationContextResponse,
 )
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -43,9 +44,8 @@ async def test_roll_creates_recommendation_context(
     async_db.add(thread)
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
-    roll_data = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    roll_data = roll_response
 
     # Verify recommendation context was created
     result = await async_db.execute(
@@ -114,9 +114,8 @@ async def test_momentum_roll_records_factor_breakdown(
     async_db.add_all([hot, cold])
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
-    roll_data = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    roll_data = roll_response
 
     result = await async_db.execute(
         select(RecommendationContext)
@@ -172,8 +171,7 @@ async def test_override_creates_recommendation_context(
     await async_db.commit()
 
     # First roll to create a pending thread
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
+    await roll_pending_thread(async_db)
 
     # Now override with the same thread
     override_response = await auth_client.post(
@@ -223,9 +221,8 @@ async def test_recommendation_context_schema_versioning(
     await async_db.commit()
 
     # Roll to create context
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
-    roll_data = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    roll_data = roll_response
 
     # Get the context
     result = await async_db.execute(

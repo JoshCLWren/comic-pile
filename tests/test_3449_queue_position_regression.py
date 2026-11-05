@@ -22,6 +22,7 @@ from app.schemas.thread import ThreadCreate, ThreadUpdate
 from app.services import issue as issue_service
 from app.services import thread_service
 from comic_pile.queue import ADVISORY_LOCK_NAMESPACE, acquire_queue_lock
+from tests.roll_flow import roll_pending_thread
 
 
 async def _active_positions(async_db: AsyncSession, user_id: int) -> list[int]:
@@ -347,9 +348,8 @@ async def test_sparse_existing_positions_agree_across_api_surfaces(
         assert detail.status_code == 200, detail.text
         assert detail.json()["queue_position"] == position
 
-    roll = await auth_client.post("/api/v1/roll/")
-    assert roll.status_code == 200, roll.text
-    assert roll.json()["queue_position"] == expected[roll.json()["thread_id"]]
+    roll = (await roll_pending_thread(async_db)).model_dump()
+    assert roll["queue_position"] == expected[roll["thread_id"]]
     restored = await auth_client.get("/api/v1/sessions/current/")
     assert restored.status_code == 200, restored.text
     active = restored.json()["active_thread"]
@@ -396,10 +396,9 @@ async def test_display_positions_agree_after_queue_removal(
     detail = await auth_client.get(f"/api/v1/threads/{last.id}")
     assert detail.status_code == 200, detail.text
     assert detail.json()["queue_position"] == 1
-    roll = await auth_client.post("/api/v1/roll/")
-    assert roll.status_code == 200, roll.text
-    assert roll.json()["thread_id"] == last.id
-    assert roll.json()["queue_position"] == 1
+    roll = (await roll_pending_thread(async_db)).model_dump()
+    assert roll["thread_id"] == last.id
+    assert roll["queue_position"] == 1
 
 
 @pytest.mark.asyncio

@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Event, RecommendationContext, Thread, User
 from app.services.roll_service import derive_recorded_selection_method
 from comic_pile.recommendation_selection import SelectionMode
+from tests.roll_flow import roll_pending_thread
 
 
 async def _add_thread(
@@ -176,10 +177,7 @@ async def test_balanced_intent_records_one_method_across_pools(
     rated = await _add_thread(async_db, default_user, "Iron Man", queue_position=2)
     await async_db.commit()
 
-    first_response = await auth_client.post(
-        "/api/roll/", json={"intent": "balanced", "bandwidth": "balanced"}
-    )
-    assert first_response.status_code == 200
+    await roll_pending_thread(async_db, intent="balanced", bandwidth="balanced")
     first_event = await _latest_roll_event(async_db)
     first_context = await _context_for(async_db, first_event)
 
@@ -192,10 +190,7 @@ async def test_balanced_intent_records_one_method_across_pools(
     rated.last_activity_at = datetime.now(UTC) - timedelta(hours=1)
     await async_db.commit()
 
-    second_response = await auth_client.post(
-        "/api/roll/", json={"intent": "balanced", "bandwidth": "balanced"}
-    )
-    assert second_response.status_code == 200
+    await roll_pending_thread(async_db, intent="balanced", bandwidth="balanced")
     second_event = await _latest_roll_event(async_db)
     second_context = await _context_for(async_db, second_event)
 
@@ -228,8 +223,7 @@ async def test_default_roll_records_momentum_method(
     await _add_thread(async_db, default_user, "Alpha Flight", queue_position=2)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
+    await roll_pending_thread(async_db)
 
     event = await _latest_roll_event(async_db)
     assert event.selection_method == "momentum"
@@ -249,8 +243,7 @@ async def test_random_intent_records_random_method(
     rated.last_activity_at = datetime.now(UTC) - timedelta(hours=1)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/", json={"intent": "random"})
-    assert response.status_code == 200
+    await roll_pending_thread(async_db, intent="random")
 
     event = await _latest_roll_event(async_db)
     assert event.selection_method == "random"
@@ -273,8 +266,7 @@ async def test_light_bandwidth_records_bandwidth_method_without_signal(
     await _add_thread(async_db, default_user, "Hawkeye", queue_position=2)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
-    assert response.status_code == 200
+    await roll_pending_thread(async_db, bandwidth="light")
 
     event = await _latest_roll_event(async_db)
     assert event.selection_method == "bandwidth"
@@ -304,12 +296,10 @@ async def test_forced_legacy_control_mode_records_legacy_method(
     monkeypatch.setenv("RECOMMENDATION_CONTROL_MODE", "legacy")
     get_recommendation_settings.cache_clear()
     try:
-        response = await auth_client.post("/api/roll/", json={"intent": "balanced"})
+        await roll_pending_thread(async_db, intent="balanced")
     finally:
         monkeypatch.delenv("RECOMMENDATION_CONTROL_MODE", raising=False)
         get_recommendation_settings.cache_clear()
-
-    assert response.status_code == 200
 
     event = await _latest_roll_event(async_db)
     assert event.selection_method == "legacy"

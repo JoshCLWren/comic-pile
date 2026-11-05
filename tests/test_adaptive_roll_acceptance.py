@@ -65,6 +65,7 @@ from comic_pile.recommendation_weighting import (
     TASTE_CATEGORY_CHARACTER,
     weight_pool,
 )
+from tests.roll_flow import roll_pending_thread
 
 pytestmark = pytest.mark.asyncio
 
@@ -901,10 +902,7 @@ class TestAC8WhyThisExplanation:
         )
         await async_db.commit()
 
-        response = await auth_client.post("/api/v1/roll/")
-        assert response.status_code == 200
-
-        data = response.json()
+        data = (await roll_pending_thread(async_db)).model_dump()
         assert "explanation" in data
         assert data["explanation"] is not None
         assert len(data["explanation"]) > 0
@@ -1030,10 +1028,7 @@ class TestCrossCuttingAdaptivePipeline:
         await _create_thread(async_db, user.id, title="Pipeline Test Thread")
         await async_db.commit()
 
-        response = await auth_client.post("/api/v1/roll/")
-        assert response.status_code == 200
-
-        data = response.json()
+        data = (await roll_pending_thread(async_db)).model_dump()
         assert "thread_id" in data
         assert "title" in data
         assert "die_size" in data
@@ -1056,10 +1051,7 @@ class TestCrossCuttingAdaptivePipeline:
             json={"bandwidth": "light", "intent": "momentum", "source": "manual"},
         )
 
-        response = await auth_client.post("/api/v1/roll/")
-        assert response.status_code == 200
-
-        data = response.json()
+        data = (await roll_pending_thread(async_db)).model_dump()
         assert "thread_id" in data
 
     @pytest.mark.asyncio

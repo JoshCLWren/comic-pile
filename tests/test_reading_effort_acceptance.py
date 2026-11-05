@@ -40,6 +40,7 @@ from app.services.reading_effort import (
     collect_classified_observations,
     compute_effort_estimate,
 )
+from tests.roll_flow import roll_pending_thread
 
 pytestmark = pytest.mark.asyncio
 
@@ -325,9 +326,8 @@ async def test_roll_records_decision_time_recommendation_context(auth_client, as
     thread = await _add_thread(async_db, user.id, "Era Candidate")
     await _confirm_series_metadata(async_db, thread, "2021-06-01")
 
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
-    body = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    body = roll_response
     assert body["thread_id"] == thread.id
 
     roll_event_result = await async_db.execute(
@@ -417,9 +417,8 @@ async def test_legacy_random_roll_selection_behavior_unchanged(auth_client, asyn
     }
 
     for _ in range(3):
-        roll_response = await auth_client.post("/api/roll/")
-        assert roll_response.status_code == 200
-        body = roll_response.json()
+        roll_response = (await roll_pending_thread(async_db)).model_dump()
+        body = roll_response
         assert set(body) == legacy_fields
         assert body["die_size"] == 6
         assert body["thread_id"] in pool_ids

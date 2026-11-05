@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Issue, Thread
 from app.models import ReadingSession
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -55,13 +56,10 @@ async def test_roll_populates_issue_id_and_number(
     thread.next_unread_issue_id = issue.id
     await async_db.commit()
 
-    # Ensure no pending roll blocks the new roll (409 guard in app/api/roll.py:66).
+    # Ensure no pending roll exists before the new roll.
     assert session.pending_thread_id is None
 
-    response = await auth_client.post("/api/v1/roll/")
-    assert response.status_code == 200
-
-    data = response.json()
+    data = (await roll_pending_thread(async_db)).model_dump()
     assert data["issue_id"] == issue.id
     assert data["issue_number"] == "3"
 
@@ -174,10 +172,7 @@ async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     except Exception:
         pass
 
-    response = await auth_client.post("/api/v1/roll/")
-    assert response.status_code == 200
-
-    data = response.json()
+    data = (await roll_pending_thread(async_db)).model_dump()
     # The roll may still have selected an issue-tracked thread if the selection
     # logic bypasses the patched randoms; in that case verify the returned
     # fields match the selected thread's state rather than asserting blindly.
