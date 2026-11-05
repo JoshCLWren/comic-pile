@@ -193,7 +193,8 @@ jobs:
           python3 .github/scripts/validate-free-model-factories.py
           git add \
             .github/free-model-factories.tsv \
-            .github/factory-expected-workers.json
+            .github/factory-expected-workers.json \
+            .github/factory-roster-snapshot.json
           if git diff --cached --quiet; then
             echo 'Apply produced no roster diff'
             exit 0
@@ -213,7 +214,8 @@ jobs:
               "## Factory TSV catalog sync",
               "",
               "This PR updates `.github/free-model-factories.tsv` (and the generated",
-              "`.github/factory-expected-workers.json` lock) so the fixed-model roster",
+              "`.github/factory-expected-workers.json` lock and",
+              "`.github/factory-roster-snapshot.json` expectation snapshot) so the fixed-model roster",
               "only for catalog-absent fixed-provider pins and NVIDIA HTTP 410 markers.",
               "",
               "OpenCode Free model membership is now dynamic. The runtime selects",

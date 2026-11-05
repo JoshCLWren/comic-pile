@@ -155,10 +155,8 @@
     "TasteSignalResponse"
   ],
   "frontend/src/types/index.ts": [
-    "BugReportResponse",
     "CheckPotentialDuplicatesRequest",
     "CheckPotentialDuplicatesResponse",
-    "CorrectionSheetExamplesResponse",
     "CreatorComparisonCoverage",
     "CreatorComparisonIssueRef",
     "CreatorComparisonItem",
@@ -193,10 +191,8 @@
     "ReaderContextResponse",
     "ReaderContextSeries",
     "RollResponse",
-    "SessionModeUpdateRequest",
     "SetCurrentIssueResponse",
-    "SnoozeCorrectionInfo",
-    "TopRatedThread"
+    "SnoozeCorrectionInfo"
   ],
   "frontend/src/types/rollBootstrap.ts": [
     "RollPrerequisiteSwitchRequest",

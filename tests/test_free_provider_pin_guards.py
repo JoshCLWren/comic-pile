@@ -29,6 +29,55 @@ def validate():
     return _load_validate_module()
 
 
+def _assert_committed_pin(
+    by_worker: dict[str, dict[str, str]],
+    lock: dict[str, list],
+    worker: str,
+    *,
+    source: str,
+    model: str,
+    minute: str | None = None,
+) -> dict[str, str] | None:
+    """Assert a live pin's identity, or a consistently-recorded retirement.
+
+    Discovery rewrites ``.github/factory-roster-snapshot.json`` and
+    ``factory-expected-workers.json`` in the same commit that retires a
+    catalog-absent fixed-provider pin. This guard accepts exactly that
+    transition so a legitimate retirement PR is green on its own head (#3802),
+    while a silent re-pin or an inconsistent lock still fails.
+
+    Returns:
+        The live roster row, or ``None`` when discovery retired the worker.
+    """
+    row = by_worker.get(worker)
+    if row is None:
+        assert source in {'nvidia', 'openrouter-free'}, (worker, source)
+        assert int(worker) not in lock['expected_workers'], worker
+        assert int(worker) in lock['retired_workers'], worker
+        assert model in lock['retired_models'], (worker, model)
+        return None
+    assert row['source'] == source, (worker, row['source'])
+    assert row['model'] == model, (worker, row['model'])
+    if minute is not None:
+        assert row['minute'] == minute, (worker, row['minute'])
+    return row
+
+
+def test_protected_source_disappearance_fails_committed_pin(validate) -> None:
+    """A protected-source pin that vanishes must not be accepted as a retirement.
+
+    Discovery only retires catalog-absent ``nvidia``/``openrouter-free`` pins.
+    A protected source (here ``z-ai``) disappearing must fail the guard rather
+    than being silently treated as a legitimate retirement (#3802 review).
+    """
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
+    by_worker = {row["worker"]: row for row in rows}
+    by_worker.pop("82", None)
+    with pytest.raises(AssertionError):
+        _assert_committed_pin(by_worker, lock, "82", source="z-ai", model="glm-4.7-flash")
+
+
 def test_opencode_free_pins_accept_free_roster_ids(validate) -> None:
     """OpenCode free lanes accept big-pickle, *-free, and muse-spark ids."""
     assert validate.opencode_model_is_free('big-pickle')
@@ -44,6 +93,7 @@ def test_openrouter_free_pins_require_free_tier_ids(validate) -> None:
     assert validate.openrouter_model_is_free('cohere/north-mini-code:free')
     assert validate.openrouter_model_is_free('openrouter/free')
     assert validate.openrouter_model_is_free('stealth/union-alpha')
+    assert validate.openrouter_model_is_free('stealth/crouton-alpha')
     assert validate.openrouter_model_is_free('qwen/qwen3.8-27b:free')
     assert not validate.openrouter_model_is_free('stealth/ox-alpha')
     assert not validate.openrouter_model_is_free('openai/gpt-4o')
@@ -75,18 +125,16 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     for row in z_ai:
         assert validate.z_ai_model_is_free(row['model']), row
     ollama = [row for row in rows if row['source'] == 'ollama-cloud']
-    assert ollama
-    for row in ollama:
-        assert validate.ollama_cloud_model_is_free(row['model']), row
+    assert not ollama  # Worker 55 retired after quota exhaustion.
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
     assert vercel == []
     assert all(row['worker'] != '72' for row in rows)
     assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
-    assert len(mistral) == 1
-    assert mistral[0]['worker'] == '48'
-    assert mistral[0]['model'] == 'codestral-latest'
-    assert validate.mistral_model_is_pinned(mistral[0]['model'])
+    assert not mistral  # Worker 48 retired after quota exhaustion.
+    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
+    assert {48, 55}.issubset(set(lock['retired_workers']))
+    assert {'codestral-latest', 'nemotron-3-nano:30b'}.issubset(set(lock['retired_models']))
 
 
 def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
@@ -201,10 +249,7 @@ def test_discovered_nvidia_410_retires_kimi_and_glm_workers(validate) -> None:
     assert "77" not in by_worker
     assert 77 in lock["retired_workers"]
     assert "moonshotai/kimi-k3" in lock["retired_models"]
-    assert "78" not in by_worker
-    assert 78 in lock["retired_workers"]
-    assert 78 not in lock["expected_workers"]
-    assert "z-ai/glm-5.3" in lock["retired_models"]
+    _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
 
 
 def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
@@ -218,16 +263,15 @@ def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
     assert 79 in lock["retired_workers"]
     assert "step-5-preview-free" in lock["retired_models"]
     assert "step-5-preview-free" not in {row["model"] for row in rows}
-    assert by_worker["80"]["source"] == "nvidia"
-    assert by_worker["80"]["model"] == "z-ai/glm-5.3-flash"
-    assert by_worker["80"]["minute"] == "40"
+    _assert_committed_pin(by_worker, lock, "80", source="nvidia", model="z-ai/glm-5.3-flash")
     assert "81" not in by_worker
     assert 81 in lock["retired_workers"]
     assert "deepseek-ai/deepseek-v4.1-flash" in lock["retired_models"]
-    assert by_worker["82"]["source"] == "z-ai"
-    assert by_worker["82"]["model"] == "glm-4.7-flash"
-    assert by_worker["82"]["minute"] == "55"
-    assert validate.z_ai_model_is_free(by_worker["82"]["model"])
+    z_ai_pin = _assert_committed_pin(
+        by_worker, lock, "82", source="z-ai", model="glm-4.7-flash"
+    )
+    if z_ai_pin is not None:
+        assert validate.z_ai_model_is_free(z_ai_pin["model"])
     # big-pickle is never grown as a first pin when the roster has none.
     assert "big-pickle" not in {row["model"] for row in rows}
     assert not any(
@@ -243,10 +287,8 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert by_worker["48"]["source"] == "mistral"
-    assert by_worker["48"]["model"] == "codestral-latest"
-    assert by_worker["55"]["source"] == "ollama-cloud"
-    assert by_worker["55"]["model"] == "nemotron-3-nano:30b"
+    assert {"48", "55"}.isdisjoint(by_worker)
+    assert {48, 55}.issubset(set(lock["retired_workers"]))
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
     assert "83" not in by_worker
@@ -254,10 +296,12 @@ def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None
     assert "cat-jam-free" in lock["retired_models"]
     assert "84" not in by_worker
     assert "85" not in by_worker
-    assert by_worker["86"]["source"] == "nvidia"
-    assert by_worker["86"]["model"] == "meta/muse-glimmer-30b"
-    assert by_worker["86"]["minute"] == "0"
-    assert by_worker["80"]["source"] == "nvidia"
+    _assert_committed_pin(
+        by_worker, lock, "86", source="nvidia", model="meta/muse-glimmer-30b"
+    )
+    _assert_committed_pin(
+        by_worker, lock, "80", source="nvidia", model="z-ai/glm-5.3-flash"
+    )
     assert "81" not in by_worker
 
 
@@ -273,8 +317,9 @@ def test_workers_68_and_69_openrouter_laguna_are_retired(validate) -> None:
     assert 69 in lock["retired_workers"]
     assert "poolside/laguna-s-2.1:free" in lock["retired_models"]
     assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
-    assert by_worker["11"]["source"] == "nvidia"
-    assert by_worker["11"]["model"] == "poolside/laguna-xs-2.1"
+    _assert_committed_pin(
+        by_worker, lock, "11", source="nvidia", model="poolside/laguna-xs-2.1"
+    )
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
 
@@ -289,10 +334,13 @@ def test_workers_94_95_retired_after_catalog_discovery(validate) -> None:
     assert "94" not in by_worker
     assert 94 in lock["retired_workers"]
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
-    assert "95" not in by_worker
-    assert 95 in lock["retired_workers"]
-    assert 95 not in lock["expected_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" in lock["retired_models"]
+    _assert_committed_pin(
+        by_worker,
+        lock,
+        "95",
+        source="nvidia",
+        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+    )
     # The OpenRouter :free Super VL id was not smoked (daily free cap), so it is not pinned.
     assert "nvidia/nemotron-3.5-super-vl:free" not in {row["model"] for row in rows}
 

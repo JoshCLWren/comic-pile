@@ -101,11 +101,16 @@ into subsequent requests. Query/programming errors stay 500, while connection,
 resource and pool failures return the sanitized Python database-unavailable 503
 envelope and `Retry-After: 30`. Credentials and dependency messages are never logged.
 
-Tests require a **disposable local PostgreSQL** connection (the Rust SQL tests use
-connection-local temporary tables and never alter application tables):
+Tests require a **disposable local PostgreSQL** connection. The native Roll
+service never creates or alters schema, so its integration tests run against the
+canonical Alembic schema in `public`, loaded from
+`tests/fixtures/schema/public_schema.sql` (a `pg_dump --schema-only` of a database
+at Alembic head — regenerate with `make roll-test-schema`). They truncate and
+reseed the application tables between cases and never hand-write them:
 
 ```sh
 export RUST_ROLL_TEST_DATABASE_URL=postgresql://localhost/native_auth_test
+# migrate the database once (or load the fixture by running any test)
 cargo test --locked --all-targets
 ```
 

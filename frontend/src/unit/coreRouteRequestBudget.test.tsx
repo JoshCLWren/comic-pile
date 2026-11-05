@@ -25,6 +25,7 @@ import { readingBoundariesApi } from '../services/api-reading-boundaries'
 import { dependencyGroupsApi } from '../services/api-dependency-groups'
 import { dependenciesApi } from '../services/api-dependencies'
 import { createAppQueryClient, queryClient as sharedQueryClient } from '../query/queryClient'
+import { resetRollBootstrapSessionState } from '../services/rollBootstrapApi'
 import { queryKeys } from '../query/queryKeys'
 import { adaptRollV2Bootstrap } from '../services/adaptRollV2Bootstrap'
 import api from '../services/api'
@@ -210,7 +211,6 @@ function RollMoveBudgetProbe() {
     navigate: budgetNavigate,
     mutations: {
       setDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
-      clearManualDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       rollMutation: { mutate: () => Promise.resolve(stubRollResponse), isPending: false },
       snoozeMutation: { mutate: () => Promise.resolve(stubSnoozeOutcome), isPending: false },
       unsnoozeMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
@@ -242,7 +242,7 @@ let queueSnoozeHandle: {
 
 /**
  * Queue row-action composition: the real queue loader, session read, excluded
- * view, and the real snooze/unsnooze hooks inside `useQueueThreadActions` —
+ * view, and the real native reroll/legacy unsnooze actions inside `useQueueThreadActions` —
  * the exact request path a snooze toggle produces from the Queue page.
  */
 function QueueSnoozeBudgetProbe() {
@@ -443,6 +443,10 @@ beforeEach(() => {
   // A per-test client keeps these budgets independent of the process-wide
   // singleton that other unit files populate.
   sharedQueryClient.clear()
+  // The singleton bootstrap service resolves the reading session once per
+  // client lifetime; without this reset a later budget would skip the cold
+  // session POST its cold-load assertion counts (#4276).
+  resetRollBootstrapSessionState()
   routeQueryClient = createAppQueryClient()
   const defaults = routeQueryClient.getDefaultOptions()
   routeQueryClient.setDefaultOptions({
@@ -666,9 +670,11 @@ describe('core route request budgets', () => {
     })
 
     // The move mutation's queue-movement invalidation refetches the active
-    // bootstrap once. The retired explicit `refetchBootstrap()` in
-    // `handleAction` used to append one more POST /v2/reading-sessions and
-    // GET /v2/roll/bootstrap per move action.
+    // bootstrap once. This probe seeds the cache instead of cold-loading, so
+    // this refresh is also the first resolution of the client-lifetime session
+    // (#4276): exactly one session POST and one bootstrap GET. The retired
+    // explicit `refetchBootstrap()` in `handleAction` used to append a second
+    // bootstrap refresh per move action.
     await waitFor(() =>
       expect(countRequests(calls, 'PATCH', `/v2/queue-entries/${poolThread.id}`)).toBe(1),
     )
@@ -680,7 +686,7 @@ describe('core route request budgets', () => {
     expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(1)
   })
 
-  it('Queue row snooze refreshes the current session exactly once (#4276)', async () => {
+  it('Queue row native reroll replaces Python snooze with one bounded refresh (#4589)', async () => {
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/threads') {
         return { threads: queueThreads, next_page_token: null, active_count: 2 }
@@ -689,7 +695,7 @@ describe('core route request budgets', () => {
         return { threads: [], next_page_token: null, active_count: 0 }
       }
       if (call.url === '/v1/sessions/current/') return session
-      if (call.url === '/v1/snooze/') return {}
+      if (call.url === '/v2/roll/offer') return { ...stubRollResponse }
       if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return rollV2BootstrapIdle
       return {}
@@ -704,21 +710,21 @@ describe('core route request budgets', () => {
     const coldLoads = calls.length
 
     await act(async () => {
-      // SAFETY: the snooze hook only reads the thread id as the expected
-      // pending id; a list-item fixture with the queue fields is a faithful double.
+      // SAFETY: the Queue action reads the thread id and title; the list-item
+      // fixture has both fields and is a faithful double.
       await queueSnoozeHandle!.toggle(queueThreads[0] as ThreadListItem, false)
     })
     await drainSettledWork()
 
-    // One snooze POST; the owning mutation refreshes session.current exactly
-    // once, and the row-action pass refreshes only the queue-side read models.
-    // The retired handler-layer `refetchSession()` plus the second
-    // `invalidateAfterQueueMutation` used to send two extra identical
-    // current-session GETs per toggle.
-    expect(countRequests(calls, 'POST', '/v1/snooze/')).toBe(1)
+    // One native offer both records the snooze and selects the next pending
+    // comic; the legacy Python session-clearing POST is never issued.
+    // The Queue action owns exactly one current-session refresh. It does not
+    // boot a separate reading session or re-fetch an unmounted Roll screen.
+    expect(countRequests(calls, 'POST', '/v2/roll/offer')).toBe(1)
+    expect(countRequests(calls, 'POST', '/v1/snooze/')).toBe(0)
     expect(countRequests(calls, 'GET', '/v1/sessions/current/')).toBe(2)
-    expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(1)
-    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(1)
+    expect(countRequests(calls, 'POST', '/v2/reading-sessions')).toBe(0)
+    expect(countRequests(calls, 'GET', '/v2/roll/bootstrap')).toBe(0)
     // One bounded queue-page refresh after the reset (cold + reconciled first page).
     expect(countRequests(calls, 'GET', '/v2/threads')).toBe(2)
     expect(countRequests(calls, 'GET', '/v1/threads/excluded/threads')).toBe(2)

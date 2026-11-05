@@ -47,7 +47,7 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await api.post<AuthTokens, { username: string; password: string }>('/v1/auth/login', {
+      const response = await api.post<AuthTokens, { username: string; password: string }>('/v2/auth/login', {
         username: username.trim(),
         password,
       })

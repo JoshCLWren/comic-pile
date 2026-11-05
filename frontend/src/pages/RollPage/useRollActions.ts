@@ -17,7 +17,6 @@ import type { RatingThread, ThreadMetadata } from './types'
 
 interface RollMutations {
   setDieMutation: { mutate: (die: number) => Promise<void>; isPending: boolean }
-  clearManualDieMutation: { mutate: () => Promise<void>; isPending: boolean }
   rollMutation: { mutate: () => Promise<RollResponse>; isPending: boolean }
   snoozeMutation: {
     mutate: (expectedPendingThreadId?: number) => Promise<SnoozeMutationOutcome>
@@ -103,7 +102,6 @@ export function useRollActions({
   } = state
   const {
     setDieMutation,
-    clearManualDieMutation,
     rollMutation,
     snoozeMutation,
     unsnoozeMutation,
@@ -241,14 +239,6 @@ export function useRollActions({
     }
   }
 
-  async function handleClearManualDie() {
-    try {
-      await clearManualDieMutation.mutate()
-    } catch (error: unknown) {
-      setErrorMessage(getApiErrorDetail(error))
-    }
-  }
-
   async function recoverPendingRollConflict() {
     const latest = await refetchBootstrap()
     const pendingId = Number(latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0)
@@ -369,7 +359,6 @@ export function useRollActions({
     performShuffle,
     handleAction,
     handleSetDie,
-    handleClearManualDie,
     recoverPendingRollConflict,
     handleRoll,
     handleKeyDown,

@@ -217,8 +217,7 @@ mod tests {
 
     #[tokio::test]
     async fn canceled_queries_discard_connections_and_query_bugs_remain_500() {
-        let url =
-            std::env::var("RUST_ROLL_TEST_DATABASE_URL").expect("disposable PostgreSQL required");
+        let url = crate::test_support::database_url().await;
         let config = Config::from_lookup(|key| match key {
             "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic".into()),

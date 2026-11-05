@@ -54,7 +54,7 @@ test.describe('RATE-001: Rating a comic', () => {
     await ratingInput.fill('3')
 
     const rateResponse = page.waitForResponse(
-      (resp) => resp.url().includes('/api/v1/rate/') && resp.request().method() === 'POST',
+      (resp) => resp.url().includes('/api/v2/issues/') && resp.request().method() === 'PATCH',
     )
     await page.locator('button[data-testid="save-and-continue"]').click()
     const response = await rateResponse

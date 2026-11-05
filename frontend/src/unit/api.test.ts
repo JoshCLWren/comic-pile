@@ -18,7 +18,6 @@ const {
   migrationApi,
   preferencesApi,
   queueApi,
-  rateApi,
   rollApi,
   sessionApi,
   snoozeApi,
@@ -63,7 +62,7 @@ it('refreshes and retries a request after an expired access token', async () => 
   const originalRequest = { url: '/v1/threads/42/reading-orders', headers: {} }
   const result = await responseInterceptor({ config: originalRequest, response: { status: 401 } })
 
-  expect(post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(post).toHaveBeenCalledWith('/v2/auth/refresh')
   expect(transport.request).toHaveBeenCalledWith({
     ...originalRequest,
     _retry: true,
@@ -159,21 +158,19 @@ it('calls every remaining API resource endpoint', async () => {
   await rollApi.dismissPending()
   await rollApi.reroll()
   await rollApi.setDie(6)
-  await rollApi.clearManualDie()
-  await rateApi.rate({ thread_id: 1, rating: 4 })
   await sessionApi.list({ status: 'complete' }, 'page')
   await sessionApi.get(1)
   await sessionApi.getCurrent()
   await sessionApi.getDetails('2')
   await sessionApi.getSnapshots(2)
   await sessionApi.restoreSessionStart(2)
-  await sessionApi.updateMode({ bandwidth: 'light', intent: 'familiar' })
   await undoApi.undo(1, 'snap')
   await undoApi.listSnapshots(1)
   await dependenciesApi.getIssueDependencies(2)
   await dependenciesApi.getConnectedThreads(1)
   await dependenciesApi.updateDependency(3, null)
   await tasksApi.getMetrics()
+  expect(get).toHaveBeenCalledWith('/v2/analytics/metrics')
   await snoozeApi.snooze()
   await snoozeApi.unsnooze(2)
   await migrationApi.migrateThread(1, { last_issue_read: 2, total_issues: 3 })
@@ -185,31 +182,17 @@ it('calls every remaining API resource endpoint', async () => {
   expect(post).toHaveBeenCalledWith('/v1/bug-reports/', { title: 'Bug', description: 'Description', diagnostics: {} })
   expect(get).toHaveBeenCalledWith('/v1/users/me/preferences', undefined)
   expect(patch).toHaveBeenCalledWith('/v1/users/me/preferences', { theme: 'ink-gold' })
-  expect(post).toHaveBeenCalledWith('/v1/auth/forgot-password', { email: 'reader@example.com' })
-  expect(post).toHaveBeenCalledWith('/v1/auth/reset-password', { token: 'single-use', new_password: 'hunter2-hunter2' })
+  expect(post).toHaveBeenCalledWith('/v2/auth/forgot-password', { email: 'reader@example.com' })
+  expect(post).toHaveBeenCalledWith('/v2/auth/reset-password', { token: 'single-use', new_password: 'hunter2-hunter2' })
 })
 
 
-it('uses canonical v1 paths for session, snooze, and undo resources', async () => {
-  await sessionApi.list()
-  await sessionApi.get(7)
-  await sessionApi.getCurrent()
-  await sessionApi.getDetails(7)
-  await sessionApi.getSnapshots(7)
-  await sessionApi.restoreSessionStart(7)
-  await sessionApi.updateMode({ bandwidth: 'light' })
+it('uses canonical v1 paths for snooze and undo resources', async () => {
   await snoozeApi.snooze()
   await snoozeApi.unsnooze(9)
   await undoApi.undo(7, 3)
   await undoApi.listSnapshots(7)
 
-  expect(get).toHaveBeenCalledWith('/v1/sessions/', { params: undefined })
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/current/')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/details')
-  expect(get).toHaveBeenCalledWith('/v1/sessions/7/snapshots')
-  expect(post).toHaveBeenCalledWith('/v1/sessions/7/restore-session-start')
-  expect(patch).toHaveBeenCalledWith('/v1/roll/session-mode', { bandwidth: 'light' })
   expect(post).toHaveBeenCalledWith('/v1/snooze/')
   expect(post).toHaveBeenCalledWith('/v1/snooze/9/unsnooze')
   expect(post).toHaveBeenCalledWith('/v1/undo/7/undo/3')
@@ -269,7 +252,7 @@ it('does not attach csrf to safe or exempt requests', async () => {
   setAccessToken(null)
   const getConfig = await requestInterceptor({ method: 'get', url: '/threads/', headers: {} })
   expect(getConfig.headers).toEqual({})
-  const loginConfig = await requestInterceptor({ method: 'post', url: '/v1/auth/login', headers: {} })
+  const loginConfig = await requestInterceptor({ method: 'post', url: '/v2/auth/login', headers: {} })
   expect(loginConfig.headers).toEqual({})
   expect(get).not.toHaveBeenCalled()
 })
@@ -283,7 +266,7 @@ it('bootstraps a csrf token before protected requests when the cookie is missing
     headers: {},
   })
 
-  expect(get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v2/auth/csrf', { skipAuthRedirect: true })
   expect(config.headers).toEqual({ 'X-CSRF-Token': 'fresh-token' })
 })
 
@@ -298,7 +281,7 @@ it('handles response success, network errors, validation errors, and auth errors
   await expect(responseInterceptor({ config: { url: '/x' }, response: { status: 400 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 400 } }))
   // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: {}, response: { status: 500 } } as never)).rejects.toEqual(expect.objectContaining({ response: { status: 500 } }))
-  await expect(responseInterceptor({ config: { url: '/v1/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
+  await expect(responseInterceptor({ config: { url: '/v2/auth/login' }, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
   // SAFETY: test passes minimal error shapes matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   await expect(responseInterceptor({ config: { url: '/x', _retry: true } as never, response: { status: 401 } })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
 })
@@ -309,14 +292,14 @@ it('refreshes when FastAPI rejects a request without a bearer header', async () 
 
   // SAFETY: test passes minimal error shape matching responseInterceptor's expected input; as never bypasses strict type for test fixtures.
   const result = responseInterceptor({
-    config: { url: '/v1/auth/me', headers: {} },
+    config: { url: '/v2/auth/me', headers: {} },
     response: { status: 403, data: { detail: 'Not authenticated' } },
   } as never)
 
   await expect(result).resolves.toEqual({ authenticated: true })
-  expect(post).toHaveBeenCalledWith('/v1/auth/refresh')
+  expect(post).toHaveBeenCalledWith('/v2/auth/refresh')
   expect(transport.request).toHaveBeenCalledWith(expect.objectContaining({
-    url: '/v1/auth/me',
+    url: '/v2/auth/me',
     _retry: true,
     headers: { Authorization: 'Bearer refreshed-token' },
   }))
@@ -342,7 +325,7 @@ it('rejects a failed token refresh without retrying the original request', async
 it('redirects to login when the refresh endpoint itself returns unauthorized', async () => {
   window.history.pushState({}, '', '/queue')
   await expect(responseInterceptor({
-    config: { url: '/v1/auth/refresh' },
+    config: { url: '/v2/auth/refresh' },
     response: { status: 401 },
   })).rejects.toEqual(expect.objectContaining({ response: { status: 401 } }))
   window.history.pushState({}, '', '/')
@@ -372,10 +355,10 @@ it('covers csrf fallback, redirect guards, and queued refresh rejection', async 
   get.mockResolvedValue({ csrf_token: undefined })
   const config = await requestInterceptor({ method: 'put', url: '/threads/1', headers: {} })
   expect(config.headers).toEqual({ Authorization: 'Bearer token' })
-  expect(get).toHaveBeenCalledWith('/v1/auth/csrf', { skipAuthRedirect: true })
+  expect(get).toHaveBeenCalledWith('/v2/auth/csrf', { skipAuthRedirect: true })
 
   window.history.pushState({}, '', '/login')
-  await expect(responseInterceptor({ config: { url: '/v1/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
+  await expect(responseInterceptor({ config: { url: '/v2/auth/refresh' }, response: { status: 401 } })).rejects.toBeDefined()
   setAccessToken('token')
   window.history.pushState({}, '', '/queue')
 

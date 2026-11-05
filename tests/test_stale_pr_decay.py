@@ -551,6 +551,52 @@ def test_reset_issue_to_unowned_respects_terminal_closed_issue(monkeypatch) -> N
     assert writes == []
 
 
+def test_get_pr_comments_flattens_slurped_pages(monkeypatch) -> None:
+    """Paginated ``--slurp`` pages are flattened into one comment list."""
+    pages = [[{"body": "first"}], [{"body": "second"}, {"body": "third"}]]
+    monkeypatch.setattr(module, "gh_json", lambda _args: pages)
+
+    assert module.get_pr_comments(42) == [
+        {"body": "first"},
+        {"body": "second"},
+        {"body": "third"},
+    ]
+
+
+def test_process_stale_prs_skips_reopened_pr_with_trusted_marker(monkeypatch) -> None:
+    """A reopened attempt carrying its original marker is not expired again."""
+    now = 1_800_000_000
+    created = datetime.fromtimestamp(now - 200_000, tz=UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    pr = make_pr(9, created=created, state="OPEN")
+    baseline = {
+        "sample_size": 50,
+        "threshold_seconds": 90_000,
+        "formula": "2x_p90_vs_mad_max",
+    }
+    marker = build_stale_expiration_marker(9, 100, 200_000, baseline)
+    closed: list[int] = []
+    monkeypatch.setattr(module, "get_staleness_baseline", lambda *_args, **_kwargs: baseline)
+    monkeypatch.setattr(
+        module,
+        "get_pr_comments",
+        lambda _number: [{"body": marker, "author_association": "OWNER"}],
+    )
+    monkeypatch.setattr(
+        module,
+        "record_stale_expiration",
+        lambda pr_number, *_args: closed.append(pr_number) or "marker",
+    )
+
+    results = module.process_stale_prs(prs=[pr], now_epoch=now)
+
+    assert results == [
+        {"pr": 9, "status": "already-expired", "age_seconds": 200_000}
+    ]
+    assert closed == []
+
+
 def test_process_stale_prs_does_not_close_manual_only_pr(monkeypatch) -> None:
     """A factory PR with the shared manual-only marker must stay open.
 

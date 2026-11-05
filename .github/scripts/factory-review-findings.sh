@@ -563,7 +563,7 @@ ${content}
 # Supply the actual linked issue, not merely the PR author's description, for
 # every independent semantic review. The controller independently re-fetches it.
 factory_issue_acceptance_mission() {
-  local pr="$1" head="$2" pr_json issue issue_json repo="$GITHUB_REPOSITORY"
+  local pr="$1" head="$2" pr_json issue non_closing issue_json repo="$GITHUB_REPOSITORY"
   [[ -n "$repo" ]] || repo="JoshCLWren/comic-pile"
   local acceptance_script=""
   if [[ -n "${TRUSTED_REVIEW_CONTROLLER:-}" ]]; then
@@ -579,12 +579,14 @@ factory_issue_acceptance_mission() {
     printf '\nISSUE ACCEPTANCE UNAVAILABLE: no linked issue; do not approve.\n'
     return 0
   fi
+  non_closing="$(printf '%s' "$pr_json" | python3 "$acceptance_script" non-closing 2>/dev/null)" || non_closing=0
+  [[ "$non_closing" == "1" ]] || non_closing=0
   issue_json="$(gh api "repos/$repo/issues/$issue" 2>/dev/null)" || issue_json=''
   if [[ -z "$issue_json" ]]; then
     printf '\nISSUE ACCEPTANCE UNAVAILABLE: issue #%s fetch failed; do not approve.\n' "$issue"
     return 0
   fi
-  if ! printf '%s' "$issue_json" | python3 "$acceptance_script" mission "$issue" "$head"; then
+  if ! printf '%s' "$issue_json" | python3 "$acceptance_script" mission "$issue" "$head" "$non_closing"; then
     printf '\nISSUE ACCEPTANCE UNAVAILABLE: rubric failed; do not approve.\n'
   fi
   return 0

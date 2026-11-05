@@ -278,6 +278,299 @@ def test_complete_diff_uses_immutable_sources_and_preserves_no_newline() -> None
     assert any(f"ref={HEAD}" in command[-1] for command in calls)
 
 
+def test_omitted_large_patch_reads_the_whole_base_file_instead_of_failing() -> None:
+    """GitHub omits the patch for oversized changes; the base file still proves them."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+    old = '{"schema": "old"}\n'
+    new = '{"schema": "new"}\n'
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "base"},
+            })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            # No `patch` field at all: this is how GitHub reports a change too
+            # large to inline.
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if f"ref={HEAD}" in endpoint:
+            return new
+        if "ref=ancestor" in endpoint:
+            return old
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    paths, diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+    assert paths == [artifact]
+    assert "-{\"schema\": \"old\"}" in diff
+    assert "+{\"schema\": \"new\"}" in diff
+    assert delivery.pr_delivers_implementation("Ship the contract", paths, diff)[0]
+
+
+def test_omitted_patch_for_an_added_file_reads_no_base_content() -> None:
+    """An added file has no base version; its diff starts from an empty file."""
+    import json
+
+    added = "app/services/new_reader.py"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "base"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": added, "status": "added", "changes": 1,
+            }]])
+        if f"ref={HEAD}" in endpoint:
+            return "VALUE = 1\n"
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    paths, diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+    assert paths == [added]
+    assert "+VALUE = 1" in diff
+    assert delivery.pr_delivers_implementation("Add the reader", paths, diff)[0]
+
+
+def test_omitted_patch_for_a_removed_file_reads_the_base_content() -> None:
+    """A removed file's history is its base content; the head contributes nothing."""
+    import json
+
+    removed = "app/services/retired_reader.py"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "base"},
+            })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": removed, "status": "removed", "changes": 1,
+            }]])
+        if "ref=ancestor" in endpoint:
+            return "VALUE = 1\n"
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    paths, diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+    assert paths == [removed]
+    assert "-VALUE = 1" in diff
+
+
+def test_unavailable_base_source_still_fails_closed() -> None:
+    """A missing base file cannot be guessed into behavioral evidence."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "base"},
+            })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if f"ref={HEAD}" in endpoint:
+            return "new\n"
+        raise RuntimeError("base content unavailable")
+
+    with pytest.raises(RuntimeError, match="source patch unavailable"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+
+def test_missing_base_commit_still_fails_closed() -> None:
+    """Without a base commit there is no immutable pre-change source to read."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({"head": {"sha": HEAD}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        return "new\n"
+
+    with pytest.raises(RuntimeError, match="source patch unavailable"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+
+def test_omitted_patch_fallback_matches_the_patch_reversal_evidence() -> None:
+    """Both reader paths reconstruct the same pre-change source for one file."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+    old = "line one\nline two\n"
+    new = "line one\nline changed\n"
+    hunk = "@@ -1,2 +1,2 @@\n line one\n-line two\n+line changed\n"
+
+    def patched_read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "base"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+                "patch": hunk,
+            }]])
+        if f"ref={HEAD}" in endpoint:
+            return new
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    def omitted_read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "base"},
+            })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if f"ref={HEAD}" in endpoint:
+            return new
+        if "ref=ancestor" in endpoint:
+            return old
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    _, patched_diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", patched_read)
+    _, omitted_diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", omitted_read)
+
+    assert patched_diff == omitted_diff
+
+
+
+def test_omitted_patch_uses_merge_base_not_advanced_main_tip() -> None:
+    """Base branch updates must never look like authored PR changes."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+    calls: list[str] = []
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        calls.append(endpoint)
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "advanced-main"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if "/compare/advanced-main..." in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if f"ref={HEAD}" in endpoint:
+            return "VALUE = 2\n"
+        if "ref=ancestor" in endpoint:
+            return "VALUE = 1\n"
+        if "ref=advanced-main" in endpoint:
+            raise AssertionError("moving main tip used instead of merge base")
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    _, diff = delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+    assert "-VALUE = 1" in diff
+    assert "+VALUE = 2" in diff
+    assert any("/compare/advanced-main..." in call for call in calls)
+    assert not any("ref=advanced-main" in call for call in calls)
+
+
+def test_omitted_patch_without_verified_merge_base_fails_closed() -> None:
+    """A missing merge-base identity cannot authorize source evidence."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "advanced-main"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {}})
+        if f"ref={HEAD}" in endpoint:
+            return "new\n"
+        raise AssertionError(f"unexpected base-file read {endpoint}")
+
+    with pytest.raises(RuntimeError, match="source patch unavailable"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+
+def test_omitted_patch_on_merged_head_fails_closed() -> None:
+    """An already-merged head cannot stand in for its original pre-change source."""
+    import json
+
+    artifact = "frontend/src/generated/openapi.json"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": HEAD}, "base": {"sha": "main-now"},
+            })
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": artifact, "status": "modified", "changes": 2,
+            }]])
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": HEAD}})
+        if f"ref={HEAD}" in endpoint:
+            return "new\n"
+        raise AssertionError(f"unexpected base-file read {endpoint}")
+
+    with pytest.raises(RuntimeError, match="source patch unavailable"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+
+
+def test_head_change_still_fails_closed_before_any_source_read() -> None:
+    """A racing head is rejected before any base content is requested."""
+    import json
+
+    reads: list[list[str]] = []
+
+    def read(args: list[str]) -> str:
+        reads.append(args)
+        if args[-1].endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": "b" * 40}, "base": {"sha": "base"},
+            })
+        raise AssertionError(f"unexpected read {args[-1]}")
+
+    with pytest.raises(RuntimeError, match="head changed"):
+        delivery.complete_pr_diff(44, HEAD, "owner/repo", read)
+    assert all("/files" not in command[-1] for command in reads)
+
+
 @pytest.mark.parametrize("closed", [False, True])
 def test_post_merge_refuses_non_delivery_and_repairs_keyword_closure(
     monkeypatch: MonkeyPatch, closed: bool,
@@ -1109,3 +1402,149 @@ def test_assignment_sign_spacing_is_not_delivery(old: str, new: str) -> None:
     assert not delivery.pr_delivers_implementation(
         "Implement configuration", [path], patch(path, [old], [new])
     )[0]
+
+
+def test_mid_file_change_in_40_line_file_counts_as_delivery() -> None:
+    """A change at line 25 of a 40-line file must count as implementation delivery.
+
+    Regression test for n=3 context regression: with n=3 the diff hunk starts at
+    line 22 (@@ -22,7 +22,7 @@) which fails _has_code_delta's complete-file
+    context requirement (must start at line 0 or 1). Full context produces
+    @@ -1,40 +1,40 @@ which passes.
+    """
+    path = "app/services/mid_file_change.py"
+    # Valid Python: a class with 20 methods (each method = 2 lines), change method 13
+    # Total lines: 1 (class) + 20*2 = 41 lines
+    old = ["class Service:"]
+    for i in range(1, 21):
+        old.append(f"    def method_{i}(self) -> int:")
+        old.append(f"        return {i}")
+    new = old.copy()
+    # Change method_13's return value (line 25 in 1-indexed: class=1, methods 1-12 = 24 lines, method_13 def=25, return=26)
+    new[26] = "        return 999"  # 0-indexed: return statement of method_13
+    assert delivery.pr_delivers_implementation(
+        "Fix mid-file behavior", [path], patch(path, old, new)
+    )[0]
+
+
+def test_multi_hunk_change_first_and_last_lines_counts_as_delivery() -> None:
+    """Edits near first and last lines of a long file must count as delivery.
+
+    With n=3 this produces two hunks (@@ -2,7 +2,7 @@ and @@ -45,6 +45,6 @@)
+    which fails _has_code_delta's single-hunk requirement. Full context produces
+    a single @@ -1,50 +1,50 @@ hunk which passes.
+    """
+    path = "app/services/multi_hunk_change.py"
+    # Valid Python: a class with 25 methods (each method = 2 lines), change method 2 and method 24
+    # Total lines: 1 (class) + 25*2 = 51 lines
+    old = ["class Service:"]
+    for i in range(1, 26):
+        old.append(f"    def method_{i}(self) -> int:")
+        old.append(f"        return {i}")
+    new = old.copy()
+    new[3] = "        return 999"    # method_2 return (0-indexed: class=0, method_1 def=1, method_1 return=2, method_2 def=3, method_2 return=4)
+    new[48] = "        return 888"   # method_24 return (near end)
+    assert delivery.pr_delivers_implementation(
+        "Fix multi-location behavior", [path], patch(path, old, new)
+    )[0]
+
+
+def test_renamed_file_through_merge_base_fallback_counts_as_delivery() -> None:
+    """A renamed file using previous_filename through the merge-base path counts as delivery.
+
+    This tests the omitted-patch fallback path for renamed files (status=renamed
+    with previous_filename) which uses _unified_file_diff with base content from
+    the merge-base commit.
+    """
+    import json
+
+    renamed_from = "app/services/old_reader.py"
+    renamed_to = "app/services/new_reader.py"
+    old_content = "OLD_VALUE = 1\n"
+    new_content = "NEW_VALUE = 2\n"
+
+    def read(args: list[str]) -> str:
+        endpoint = args[-1]
+        if endpoint.endswith("/pulls/44"):
+            return json.dumps({
+                "head": {"sha": "a" * 40}, "base": {"sha": "base"},
+            })
+        if "/compare/" in endpoint:
+            return json.dumps({"merge_base_commit": {"sha": "ancestor"}})
+        if endpoint.endswith("/files"):
+            return json.dumps([[{
+                "filename": renamed_to,
+                "status": "renamed",
+                "previous_filename": renamed_from,
+                "changes": 2,
+            }]])
+        if f"ref={'a' * 40}" in endpoint:
+            return new_content
+        if "ref=ancestor" in endpoint:
+            return old_content
+        raise AssertionError(f"unexpected read {endpoint}")
+
+    paths, diff = delivery.complete_pr_diff(44, "a" * 40, "owner/repo", read)
+
+    # Verify the diff contains the rename header and complete-file context
+    assert renamed_to in paths
+    assert f"diff --git a/{renamed_to} b/{renamed_to}" in diff
+    # Full context: single hunk starting at line 1
+    assert "@@ -1,1 +1,1 @@" in diff or "@@ -1 +1 @@" in diff
+    assert "-OLD_VALUE = 1" in diff
+    assert "+NEW_VALUE = 2" in diff
+    assert delivery.pr_delivers_implementation("Rename and fix reader", paths, diff)[0]
+
+
+def test_complete_file_context_single_hunk_starting_at_line_one() -> None:
+    """_unified_file_diff must produce a single hunk starting at line 1/0.
+
+    This assertion locks the complete-file context behavior that _has_code_delta
+    requires. Any change to _unified_file_diff that produces multiple hunks or
+    a hunk not starting at line 1 (old) / 1 (new) or 0 (old) / 1 (new) will
+    fail this test.
+    """
+    import re
+
+    # Test various file sizes and change positions
+    test_cases = [
+        # (old_lines, new_lines, description)
+        (["line 1"], ["changed line 1"], "single line change"),
+        (["line 1", "line 2"], ["line 1", "changed line 2"], "two lines, change second"),
+        ([f"line {i}" for i in range(1, 41)], [f"line {i}" if i != 25 else "changed line 25" for i in range(1, 41)], "40 lines, change at line 25"),
+        ([f"line {i}" for i in range(1, 101)], [f"line {i}" if i not in (5, 95) else f"changed line {i}" for i in range(1, 101)], "100 lines, changes at lines 5 and 95"),
+        ([], ["added line"], "empty to one line"),
+        (["removed line"], [], "one line to empty"),
+        (["line 1", "line 2"], ["line 1", "line 2", "added line 3"], "add line at end"),
+        (["line 1", "line 2", "line 3"], ["line 1", "line 2"], "remove line at end"),
+    ]
+
+    hunk_header_pattern = re.compile(r"^@@ -([01])(?:,(\d+))? \+([01])(?:,(\d+))? @@")
+
+    for old_lines, new_lines, desc in test_cases:
+        old = "\n".join(old_lines)
+        new = "\n".join(new_lines)
+        diff = delivery._unified_file_diff("test/path.py", old, new)
+
+        # Parse hunks
+        hunks = []
+        for line in diff.splitlines():
+            match = hunk_header_pattern.match(line)
+            if match:
+                old_start = int(match.group(1))
+                new_start = int(match.group(3))
+                hunks.append((old_start, new_start))
+
+        # Must have exactly one hunk
+        assert len(hunks) == 1, f"{desc}: expected 1 hunk, got {len(hunks)}: {hunks}"
+
+        # Hunk must start at line 0 or 1 for both old and new
+        old_start, new_start = hunks[0]
+        assert old_start in (0, 1), f"{desc}: old hunk starts at line {old_start}, expected 0 or 1"
+        assert new_start in (0, 1), f"{desc}: new hunk starts at line {new_start}, expected 0 or 1"
+
+        # For non-empty files, should start at line 1
+        if old_lines:
+            assert old_start == 1, f"{desc}: non-empty old file should start at line 1, got {old_start}"
+        if new_lines:
+            assert new_start == 1, f"{desc}: non-empty new file should start at line 1, got {new_start}"

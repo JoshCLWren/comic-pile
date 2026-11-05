@@ -27,11 +27,11 @@ it('propagates recovery redirect suppression into an internal token refresh', as
   transport.post.mockRejectedValueOnce(refreshError)
 
   await expect(responseInterceptor({
-    config: { url: '/v1/auth/me', skipAuthRedirect: true },
+    config: { url: '/v2/auth/me', skipAuthRedirect: true },
     response: { status: 401 },
   })).rejects.toBe(refreshError)
 
-  expect(transport.post).toHaveBeenCalledWith('/v1/auth/refresh', undefined, {
+  expect(transport.post).toHaveBeenCalledWith('/v2/auth/refresh', undefined, {
     skipAuthRedirect: true,
   })
 })
@@ -39,7 +39,7 @@ it('propagates recovery redirect suppression into an internal token refresh', as
 it('clears a stale access token when refresh itself returns 401', async () => {
   setAccessToken('stale-access-token')
   const refreshError = {
-    config: { url: '/v1/auth/refresh', skipAuthRedirect: true },
+    config: { url: '/v2/auth/refresh', skipAuthRedirect: true },
     response: { status: 401 },
   }
 
@@ -55,7 +55,7 @@ it('does not stampede refresh after a missing-cookie 401', async () => {
   transport.post.mockRejectedValue(refreshError)
 
   await expect(responseInterceptor({
-    config: { url: '/v1/auth/me', skipAuthRedirect: true },
+    config: { url: '/v2/auth/me', skipAuthRedirect: true },
     response: { status: 401 },
   })).rejects.toBe(refreshError)
   expect(getAccessToken()).toBeNull()

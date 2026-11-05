@@ -86,22 +86,6 @@ export function useResetDice(api?: RollApi) {
   }
 }
 
-export function useClearManualDie(api?: RollApi) {
-  const rollApiInstance = getRollApi(api)
-  const mutation = useMutation({
-    mutationFn: () => rollApiInstance.clearManualDie(),
-    onSuccess: async () => {
-      await invalidateAfterRollDieModeUpdate(queryClient)
-    },
-  })
-
-  return {
-    mutate: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    isError: mutation.isError,
-  }
-}
-
 export function useReroll(api?: RollApi) {
   const rollApiInstance = getRollApi(api)
   const mutation = useMutation({

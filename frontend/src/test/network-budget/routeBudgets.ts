@@ -21,13 +21,13 @@ export function budget(...rows: string[]): readonly string[] {
 
 /** Two-probe bootstrap a cookieless guest currently pays on non-login public routes. */
 export const GUEST_AUTH_PROBE = budget(
-  'GET /api/v1/auth/me x1',
-  'POST /api/v1/auth/refresh x1',
+  'GET /api/v2/auth/me x1',
+  'POST /api/v2/auth/refresh x1',
 )
 
 /** App-shell reads every authenticated layout mounts. */
 export const AUTHENTICATED_SHELL = budget(
-  'GET /api/v1/auth/me x1',
+  'GET /api/v2/auth/me x1',
   'GET /api/v1/identity-inbox?limit=1&offset=0 x1',
   'GET /api/v1/users/me/preferences x1',
 )
@@ -51,6 +51,9 @@ const PUBLIC_ENTRIES = {
   '/demo': budget(...GUEST_AUTH_PROBE, 'GET /api/v1/demo/roll x1'),
   '/': GUEST_AUTH_PROBE,
   '/unknown': GUEST_AUTH_PROBE,
+  '/rate': GUEST_AUTH_PROBE,
+  '/analytics': GUEST_AUTH_PROBE,
+  '/roll': GUEST_AUTH_PROBE,
 } satisfies Record<string, readonly string[]>
 
 const AUX_ENTRIES = {

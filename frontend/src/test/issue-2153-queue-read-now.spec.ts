@@ -58,7 +58,7 @@ test.describe('Issue #2153: Queue Read Now handoff', () => {
 
     await page.locator(SELECTORS.rate.ratingInput).fill('4')
     const rateResponse = page.waitForResponse(
-      (response) => response.url().includes('/api/v1/rate/') && response.request().method() === 'POST',
+      (response) => response.url().includes('/api/v2/issues/') && response.request().method() === 'PATCH',
     )
     await page.getByTestId('save-and-continue').click()
     const rated = await rateResponse

@@ -5,8 +5,8 @@
 //! documentation-only operation is generated from the same Rust request and
 //! response types the mounted handlers use, and the aggregate merges the
 //! existing per-domain [`utoipa::OpenApi`] documents (`QueueApi`, `ThreadsApi`,
-//! `IssueApi`) with the v2 auth, bootstrap, dice, offer, reset and
-//! reading-boundary declarations.
+//! `IssueApi`, `AnalyticsApi`) with the v2 auth, bootstrap, dice, offer, reset
+//! and reading-boundary declarations.
 //!
 //! The checked-in artifact is `native/contracts/v2-runtime.openapi.json`; see
 //! `native/contracts/README.md` for regeneration. `scripts/export_openapi_schema.py`
@@ -14,11 +14,11 @@
 
 use utoipa::OpenApi;
 
-/// The fourteen `/api/v2` operations that are declared in the auth, bootstrap,
+/// The native `/api/v2` operations that are declared in the auth, bootstrap,
 /// dice, offer, reset and reading-boundary modules.
 ///
-/// `QueueApi`, `ThreadsApi` and `IssueApi` already publish the remaining six
-/// deployed operations and are merged in [`canonical_openapi`].
+/// `QueueApi`, `ThreadsApi`, `IssueApi` and `AnalyticsApi` already publish the
+/// remaining deployed operations and are merged in [`canonical_openapi`].
 #[derive(utoipa::OpenApi)]
 #[openapi(
     info(
@@ -40,6 +40,8 @@ use utoipa::OpenApi;
         crate::dice_api::manual_die_documentation,
         crate::roll_offer::offer_documentation,
         crate::roll_reset::reset_documentation,
+        crate::roll_resources::die_state_documentation,
+        crate::roll_resources::eligible_issue_ids_documentation,
         crate::reading_boundary::reading_boundary_batch_documentation
     ),
     components(schemas(
@@ -59,6 +61,9 @@ use utoipa::OpenApi;
         crate::roll_offer::RollOfferResponse,
         crate::roll_reset::ResetDiceRequest,
         crate::roll_reset::ResetDiceResponse,
+        crate::roll_resources::RollDieStateResponse,
+        crate::roll_resources::RollLastRoll,
+        crate::roll_resources::RollEligibleIssueIdsResponse,
         crate::reading_boundary::ReadingBoundaryBatchRequest,
         crate::reading_boundary::ReadingBoundaryBatchResponseV2
     )),
@@ -88,11 +93,15 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 20] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 24] = [
+    ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
+    ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/roll/bootstrap"),
+    ("get", "/api/v2/roll/die-state"),
+    ("get", "/api/v2/roll/eligible-issue-ids"),
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
@@ -121,6 +130,8 @@ pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
+        .merge_from(crate::analytics::AnalyticsApi::openapi())
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
 }
 
 #[cfg(test)]

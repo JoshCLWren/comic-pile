@@ -20,8 +20,7 @@ function createWrapper() {
 
 const api = vi.hoisted(() => ({
   queueApi: { moveToPosition: vi.fn(), moveToFront: vi.fn(), moveToBack: vi.fn(), shuffle: vi.fn() },
-  rateApi: { rate: vi.fn() },
-  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), clearManualDie: vi.fn(), reroll: vi.fn() },
+  rollApi: { roll: vi.fn(), override: vi.fn(), dismissPending: vi.fn(), setDie: vi.fn(), reroll: vi.fn() },
   undoApi: { listSnapshots: vi.fn(), undo: vi.fn() },
   tasksApi: { getMetrics: vi.fn() },
   threadsApi: { listStale: vi.fn() },
@@ -36,7 +35,6 @@ vi.mock('../services/api-migration', () => ({ migrationApi: api.migrationApi }))
 vi.mock('../services/api-bug-reports', () => ({ bugReportsApi: api.bugReportsApi }))
 vi.mock('../services/api-threads', () => ({ threadsApi: api.threadsApi }))
 vi.mock('../services/api-roll', () => ({ rollApi: api.rollApi }))
-vi.mock('../services/api-rate', () => ({ rateApi: api.rateApi }))
 vi.mock('../services/api-queue', () => ({ queueApi: api.queueApi }))
 vi.mock('../services/api-undo', () => ({ undoApi: api.undoApi }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: api.sessionApi }))
@@ -47,7 +45,7 @@ const toast = createToastSpy()
 
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks/useRate'
-import { useClearManualDie, useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie } from '../hooks/useRoll'
+import { useDismissPending, useOverrideRoll, useReroll, useRoll, useSetDie } from '../hooks/useRoll'
 import { useSession, useSessions, useSessionDetails, useSessionSnapshots, useRestoreSessionStart } from '../hooks/useSession'
 import { useSnapshots, useUndo } from '../hooks/useUndo'
 import { useAnalytics } from '../hooks/useAnalytics'
@@ -81,7 +79,7 @@ describe('mutation hook success and failure paths', () => {
     const shuffle = renderHook(() => useShuffleQueue(), { wrapper: createWrapper() }); await act(async () => await shuffle.result.current.mutate())
     expect(front.result.current.isError).toBe(false)
     const rate = renderHook(() => useRate(), { wrapper: createWrapper() })
-    await act(async () => await rate.result.current.mutate({ thread_id: 1, rating: 4 }))
+    await act(async () => await rate.result.current.mutate({ thread_id: 1, rating: 4, issue_id: 1, source: 'roll_offer' }))
     expect(protectedApi.rate).toHaveBeenCalled()
   })
 
@@ -105,15 +103,14 @@ describe('mutation hook success and failure paths', () => {
     await act(async () => expect(shuffle.result.current.mutate()).rejects.toThrow('shuffle failed'))
     protectedApi.rate.mockRejectedValueOnce(new Error('rate failed'))
     const rate = renderHook(() => useRate(), { wrapper: createWrapper() })
-    await act(async () => expect(rate.result.current.mutate({ thread_id: 1, rating: 1 })).rejects.toThrow('rate failed'))
+    await act(async () => expect(rate.result.current.mutate({ thread_id: 1, rating: 1, issue_id: 1, source: 'roll_offer' })).rejects.toThrow('rate failed'))
   })
 
-  it('runs all roll mutations', async () => {
+  it('runs roll mutations', async () => {
     const roll = renderHook(() => useRoll(), { wrapper: createWrapper() }); await act(async () => await roll.result.current.mutate())
     const override = renderHook(() => useOverrideRoll(), { wrapper: createWrapper() }); await act(async () => await override.result.current.mutate({ thread_id: 1 }))
     const dismiss = renderHook(() => useDismissPending(), { wrapper: createWrapper() }); await act(async () => await dismiss.result.current.mutate())
     const setDie = renderHook(() => useSetDie(), { wrapper: createWrapper() }); await act(async () => await setDie.result.current.mutate(6))
-    const clearDie = renderHook(() => useClearManualDie(), { wrapper: createWrapper() }); await act(async () => await clearDie.result.current.mutate())
     const reroll = renderHook(() => useReroll(), { wrapper: createWrapper() }); await act(async () => await reroll.result.current.mutate())
     expect(roll.result.current.isError).toBe(false)
     api.rollApi.reroll.mockRejectedValueOnce(new Error('fail'))
@@ -136,9 +133,6 @@ describe('mutation hook success and failure paths', () => {
     api.rollApi.setDie.mockRejectedValueOnce(new Error('die failed'))
     const failedDie = renderHook(() => useSetDie(), { wrapper: createWrapper() })
     await act(async () => expect(failedDie.result.current.mutate(6)).rejects.toThrow('die failed'))
-    api.rollApi.clearManualDie.mockRejectedValueOnce(new Error('clear failed'))
-    const failedClear = renderHook(() => useClearManualDie(), { wrapper: createWrapper() })
-    await act(async () => expect(failedClear.result.current.mutate()).rejects.toThrow('clear failed'))
   })
 })
 

@@ -29,7 +29,7 @@ it.each([
 
   await expect(
     responseInterceptor({
-      config: { url: '/v1/auth/me', headers: {} },
+      config: { url: '/v2/auth/me', headers: {} },
       response: { status: 401 },
     }),
   ).rejects.toBe(refreshError)

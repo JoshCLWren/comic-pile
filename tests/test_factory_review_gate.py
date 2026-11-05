@@ -93,7 +93,7 @@ def wire_controller(
     monkeypatch.setattr(module, "pr_json", lambda _pr: next(payload_iter))
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
     monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- sample"})
-    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
         module, "implementation_delivery_gate",
         lambda *_args: {"decision": "pass", "reason": "fixture"},
@@ -135,6 +135,11 @@ def wire_controller(
         module,
         "post_review_comment",
         lambda **kwargs: posted.append(kwargs),
+    )
+    # Ready-path review fixtures inspect controller decisions, not label I/O.
+    # Dedicated tests below exercise the informational approval projection.
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility", lambda _pr, _head: None,
     )
 
     class Result:
@@ -1760,7 +1765,8 @@ def test_trusted_native_changes_requested_routes_to_repair_only() -> None:
     assert "types: [submitted, dismissed]" in workflow
     assert "await visibility({ github, context });" in workflow
     assert (
-        '[[ "$EVENT_NAME" == \'pull_request_review\' || '
+        '[[ "$EVENT_NAME" == \'issue_comment\' || '
+        '"$EVENT_NAME" == \'pull_request_review\' || '
         '"$EVENT_NAME" == \'pull_request_review_comment\' ]] && exit 0'
     ) in workflow
     # Review votes never feed ready or merge gates. Those remain controller-only.
@@ -2418,7 +2424,7 @@ def test_handmade_head_is_promotable_by_one_independent_review(
         lambda *_args: {"decision": "pass", "reason": "fixture"},
     )
     monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- Implement target behavior"})
-    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
     monkeypatch.setattr(module, "issue_comment_records", lambda _pr: store)
     monkeypatch.setattr(
@@ -2512,6 +2518,77 @@ def test_interactive_handoff_uses_explicit_body_issue_without_factory_branch(
     assert module.linked_issue_for_pr(1390, "local/feature") == 2380
     monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Related to #2380"})
     assert module.linked_issue_for_pr(1390, "local/feature") is None
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("Part of #4348.", 4348),
+        ("Part of #4348 and governed by #4335.", 4348),
+        ("Objective\n\nPart of #4348 and governed by #4335.\n\nDetails.", 4348),
+        ("Closes #2380.\n\nPart of #4348 and governed by #4335.", 2380),
+        ("Advances #4348. Parent: #4335.", None),
+        ("See #4348 and parent #4335.", None),
+        ("Parent: #4335.", None),
+        ("- Part of #4348.", None),
+        ("Part of #4348", None),
+        ("Related to #2380", None),
+        ("", None),
+    ],
+)
+def test_linked_issue_for_pr_resolves_only_the_canonical_part_of_line(
+    monkeypatch: MonkeyPatch, body: str, expected: int | None,
+) -> None:
+    """A manual PR's canonical non-closing line identifies its reviewable issue."""
+    module = load_review_controller()
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": body})
+    assert module.linked_issue_for_pr(1390, "local/acp-4348") == expected
+
+
+def test_linked_issue_for_pr_prefers_branch_then_closing_reference(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Existing factory-branch and GitHub closing identities outrank ``Part of``."""
+    module = load_review_controller()
+    body = "Closes #2380.\n\nPart of #4348 and governed by #4335."
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": body})
+    assert module.linked_issue_for_pr(1390, "factory/11-4353-nvidia") == 4353
+    assert module.linked_issue_for_pr(1390, "local/acp-4348") == 2380
+    monkeypatch.setattr(
+        module, "pr_json", lambda _pr: {"body": "Part of #4348 and governed by #4335."}
+    )
+    assert module.linked_issue_for_pr(1390, "factory/11-4353-nvidia") == 4353
+
+
+def test_linked_issue_mode_marks_only_canonical_part_of_as_review_only(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """``Part of`` is non-closing; branch and closing links remain closing."""
+    module = load_review_controller()
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Part of #4348.\r\n"})
+    assert module.linked_issue_mode_for_pr(1390, "local/acp-4348") == (4348, True)
+    monkeypatch.setattr(
+        module, "pr_json", lambda _pr: {"body": "Closes #2380.\nPart of #4348."}
+    )
+    assert module.linked_issue_mode_for_pr(1390, "local/acp-4348") == (2380, False)
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Part of #4348."})
+    assert module.linked_issue_mode_for_pr(1390, "factory/11-4353-nvidia") == (4353, False)
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Advances #4348."})
+    assert module.linked_issue_mode_for_pr(1390, "local/acp-4348") == (None, False)
+
+
+def test_part_of_reference_never_selects_a_merge_closure_target() -> None:
+    """Review-only ``Part of`` links must not close or complete the issue on merge."""
+    module = load_review_controller()
+    closure = module._post_merge_closure
+    assert closure.linked_issue("local/acp-4348", "Part of #4348.") is None
+    assert (
+        closure.linked_issue("local/acp-4348", "Part of #4348 and governed by #4335.")
+        is None
+    )
+    assert closure.linked_issue("local/acp-4348", "Advances #4348. Parent: #4335.") is None
+    assert closure.linked_issue("factory/11-4353-nvidia", "Part of #4348.") == 4353
+    assert closure.linked_issue("local/acp-4348", "Closes #4348.\nPart of #4335.") == 4348
 
 
 @pytest.mark.parametrize(
@@ -3345,3 +3422,111 @@ def test_declared_dependency_gate_records_one_durable_block_reason(
         in posted[0]
     )
     assert "#4008" in posted[0]
+
+
+def test_controller_projects_approval_after_authorized_ready(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only a fully authorized exact-head review can project approval."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, posted, _commands = wire_controller(
+        monkeypatch, module, [payload, payload],
+        comments=producer_contribution(),
+        mechanical=True,
+        include_diff_inspection=True,
+    )
+    projections: list[tuple[int, str, str]] = []
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility",
+        lambda number, head: projections.append(
+            (number, head, str(transitions[-1]["pr_stage"]))
+        ),
+    )
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "ready"
+    assert projections == [(1390, REVIEWED_HEAD, "factory:ready")]
+    assert posted and posted[-1]["acceptance_marker"] is not None
+
+
+def test_controller_never_projects_unverified_approval(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A failed provenance gate cannot emit the informational approved label."""
+    module = load_review_controller()
+    payload = pr_payload(worker="17", branch_worker="43")
+    transitions, _posted, _commands = wire_controller(
+        monkeypatch, module, [payload],
+        comments=producer_contribution(),
+        mechanical=True,
+    )
+    projections: list[tuple[int, str]] = []
+    monkeypatch.setattr(
+        module, "set_review_approval_visibility",
+        lambda number, head: projections.append((number, head)),
+    )
+    monkeypatch.setattr(module, "head_has_cross_model_review", lambda *_a, **_kw: False)
+    result = module.handle_review(
+        worker="17", pr_number=1390, verdict="approve",
+        reviewed_head=REVIEWED_HEAD, review_log="/tmp/model.log",
+    )
+    assert result["status"] == "cross-model-provenance-blocked"
+    assert transitions[-1]["pr_stage"] == "factory:blocked"
+    assert projections == []
+
+
+def test_controller_approval_visibility_rejects_stale_head_or_repair_stage(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only live accepted review heads can receive an informational label."""
+    module = load_review_controller()
+    writes: list[object] = []
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append((args, input_json)),
+    )
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": MOVED_HEAD},
+    )
+    module.set_review_approval_visibility(4613, REVIEWED_HEAD)
+    assert writes == []
+    monkeypatch.setattr(
+        module, "pr_json",
+        lambda _pr: {"state": "OPEN", "headRefOid": REVIEWED_HEAD},
+    )
+    for stage in ("factory:building", "factory:changes-requested"):
+        monkeypatch.setattr(
+            module, "target_json",
+            lambda _pr, stage=stage: {"body": "", "labels": [stage]},
+        )
+        module.set_review_approval_visibility(4613, REVIEWED_HEAD)
+    assert writes == []
+
+
+def test_controller_repair_transition_clears_stale_approved_label(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A later actionable repair never retains an earlier approval label."""
+    module = load_review_controller()
+    writes: list[object] = []
+    monkeypatch.setattr(
+        module, "target_json",
+        lambda _pr: {"body": "", "labels": [
+            "factory", "factory:review", "factory:unowned",
+            "factory:approved", "bug",
+        ]},
+    )
+    monkeypatch.setattr(
+        module, "run_gh",
+        lambda args, *, input_json=None: writes.append(input_json),
+    )
+    module.replace_factory_labels(
+        4613, "factory:unowned", "factory:changes-requested"
+    )
+    assert writes
+    assert "factory:approved" not in writes[0]["labels"]
+    assert "bug" in writes[0]["labels"]

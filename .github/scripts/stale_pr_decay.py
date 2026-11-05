@@ -333,11 +333,17 @@ def list_factory_prs(now_epoch: int | None = None) -> list[dict[str, Any]]:
 
 
 def get_pr_comments(pr_number: int) -> list[dict[str, Any]]:
-    """Fetch comments on a PR."""
-    return cast(list[dict[str, Any]], gh_json([
+    """Fetch and flatten every comment page on a PR.
+
+    ``--slurp`` returns one array per page. Returning that nested shape made
+    :func:`has_stale_expiration_marker` inspect lists instead of comments, so it
+    never saw an existing marker and re-expired a reopened PR on every tick.
+    """
+    pages = cast(list[list[dict[str, Any]]], gh_json([
         "api", "--paginate", "--slurp",
         f"repos/{REPO}/issues/{pr_number}/comments?per_page=100"
     ]))
+    return [comment for page in pages for comment in page]
 
 
 def get_pr_payload(pr_number: int) -> dict[str, Any] | None:

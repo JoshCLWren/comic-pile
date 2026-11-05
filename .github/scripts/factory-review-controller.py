@@ -241,6 +241,7 @@ def replace_factory_labels(number: int, owner: str, stage: str) -> None:
                 label
                 for label in current
                 if not OWNER_RE.fullmatch(label) and label not in STAGE_LABELS and label != "factory"
+                and not (label == "factory:approved" and stage in {"factory:building", "factory:changes-requested"})
             }
             labels.update({"factory", owner, stage})
             run_gh(
@@ -280,22 +281,74 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
-    """Resolve manual/local PR issue handoffs from explicit closing references.
+PART_OF_ISSUE_RE = re.compile(
+    r"(?im)^[ \t]*part[ \t]+of[ \t]+#(?P<issue>\d+)"
+    r"(?:[ \t]+and[ \t]+governed[ \t]+by[ \t]+#\d+)?\.[ \t]*\r?$"
+)
 
-    A casual #number mention is not an issue-ownership claim. Preserve the
-    canonical factory branch identity when available; otherwise use a GitHub
-    PR body with GitHub's explicit closes/fixes/resolves syntax.
+
+def explicit_part_of_issue(body: str) -> int | None:
+    """Resolve the issue named by the canonical non-closing ``Part of #N.`` line.
+
+    Only the standalone canonical line counts, including the governed form
+    ``Part of #N and governed by #M.``; it names #N as the issue this PR
+    advances while deliberately leaving closure to later delivery work.
+    Casual prose mentions such as ``Advances #N``, ``See #N``, or a bare
+    parent reference never identify an executable issue.
+
+    Args:
+        body: Complete pull-request body text.
+
+    Returns:
+        The issue number named by the canonical line, or None when absent.
+    """
+    match = PART_OF_ISSUE_RE.search(body)
+    return int(match.group("issue")) if match else None
+
+
+def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | None, bool]:
+    """Resolve a PR's issue and whether the link is review-only.
+
+    Precedence keeps every existing ownership signal authoritative: the
+    canonical factory branch identity first, then GitHub's explicit
+    closes/fixes/resolves reference, then the canonical non-closing
+    ``Part of #N.`` line. A casual #number mention is not an issue-ownership
+    claim, and ``Part of`` authorizes review only; merge-time closure still
+    follows explicit closing references alone.
+
+    Args:
+        pr_number: Pull request number.
+        branch: Pull request head branch.
+
+    Returns:
+        ``(issue, non_closing)``; ``non_closing`` is true only for a ``Part of``
+        link.
     """
     linked = linked_issue_from_branch(branch)
     if linked is not None:
-        return linked
+        return linked, False
     body = str(pr_json(pr_number).get("body") or "")
     match = re.search(
         r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
         body,
     )
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1)), False
+    issue = explicit_part_of_issue(body)
+    return issue, issue is not None
+
+
+def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
+    """Resolve a manual/local PR's executable issue for trusted semantic review.
+
+    Args:
+        pr_number: Pull request number.
+        branch: Pull request head branch.
+
+    Returns:
+        Canonical linked issue number, if any.
+    """
+    return linked_issue_mode_for_pr(pr_number, branch)[0]
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:
@@ -861,6 +914,33 @@ def post_review_comment(
         # Controller-generated metadata is a separate whole-body comment. Never
         # accept matching strings in review prose, quoted output, or PR bodies.
         run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", acceptance_marker])
+
+
+def set_review_approval_visibility(pr_number: int, head: str) -> None:
+    """Project a validated semantic approval without relying on bot comment events.
+
+    GitHub does not dispatch issue_comment workflows for comments written using
+    its GITHUB_TOKEN. This is called only after the controller has verified
+    independent review, exact-head linked-issue acceptance, cross-model
+    provenance, and every mechanical readiness gate. The label never grants
+    merge authorization or replaces any of those checks.
+    """
+    live = pr_json(pr_number)
+    if live.get("state") != "OPEN" or live.get("headRefOid") != head:
+        return
+    target = target_json(pr_number)
+    if eligibility.is_manual_only(str(target.get("body") or "")):
+        return
+    labels = labels_of(target)
+    if ("factory:building" in labels or
+            "factory:changes-requested" in labels or
+            "factory:approved" in labels):
+        return
+    run_gh(
+        ["api", "--method", "PUT", f"repos/{REPO}/issues/{pr_number}/labels",
+         "--input", "-"],
+        input_json={"labels": sorted(labels | {"factory:approved"})},
+    )
 
 
 def interpret_required_checks(
@@ -1753,7 +1833,7 @@ def handle_review(
     # only for the exact issue revision + PR head it verified.
     accepted_contract_marker: str | None = None
     if verdict == "approve":
-        issue_number = linked_issue_for_pr(pr_number, branch)
+        issue_number, non_closing = linked_issue_mode_for_pr(pr_number, branch)
         if issue_number is None:
             return return_to_review(
                 pr_number=pr_number, branch=branch, worker=worker,
@@ -1786,6 +1866,7 @@ def handle_review(
         failures = issue_acceptance.validate(
             review_acceptance_report(review_log, worker=worker),
             issue_number, reviewed_head, body, changed,
+            non_closing=non_closing,
         )
         if failures:
             return return_to_review(
@@ -2172,6 +2253,15 @@ def handle_review(
         worker=worker,
         pr_stage="factory:ready",
     )
+    # The controller has now validated independent exact-head acceptance,
+    # cross-model provenance, contributor independence, and mechanical gates.
+    # GitHub does not dispatch issue_comment workflows for GITHUB_TOKEN posts,
+    # so project informational approval in this same trusted controller run.
+    try:
+        set_review_approval_visibility(pr_number, reviewed_head)
+    except RuntimeError as exc:
+        print(f"PR #{pr_number}: approved label sync unavailable: {exc}",
+              file=sys.stderr)
     return {
         "status": "ready",
         "head": reviewed_head,

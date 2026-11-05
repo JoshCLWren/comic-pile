@@ -118,8 +118,30 @@ def report_from_text(review_text: str) -> Mapping[str, Any] | None:
     Returns:
         Parsed report, or None if ambiguous or invalid.
     """
-    lines = [line[len(PREFIX):] for line in review_text.splitlines()
-             if line.startswith(PREFIX)]
+    # OpenCode can emit assistant prose as JSONL text events instead of plain
+    # lines. Only inspect the assistant's text parts: tool results and event
+    # metadata can contain echoed examples or untrusted acceptance markers.
+    lines: list[str] = []
+    for raw_line in review_text.splitlines():
+        if raw_line.startswith(PREFIX):
+            lines.append(raw_line[len(PREFIX):])
+            continue
+        if not raw_line.startswith("{"):
+            continue
+        try:
+            event = json.loads(raw_line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "text":
+            continue
+        part = event.get("part")
+        if not isinstance(part, dict) or part.get("type") != "text":
+            continue
+        message = part.get("text")
+        if not isinstance(message, str):
+            continue
+        lines.extend(line[len(PREFIX):] for line in message.splitlines()
+                     if line.startswith(PREFIX))
     if len(lines) != 1 or len(lines[0]) > 2000000:
         return None
     try:
@@ -129,7 +151,15 @@ def report_from_text(review_text: str) -> Mapping[str, Any] | None:
     return data if isinstance(data, dict) else None
 
 
-def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str, changed_paths: Iterable[str]) -> list[str]:
+def validate(
+    report: Mapping[str, Any] | None,
+    issue: int,
+    head: str,
+    body: str,
+    changed_paths: Iterable[str],
+    *,
+    non_closing: bool = False,
+) -> list[str]:
     """Verify exact issue revision and evidence for each criterion.
 
     Args:
@@ -138,6 +168,8 @@ def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str,
         head: Reviewed PR head SHA.
         body: Fresh authoritative issue body.
         changed_paths: Paths in the current PR diff.
+        non_closing: True for a review-only ``Part of #N`` handoff, where
+            out-of-scope criteria may be reported as ``remaining``.
 
     Returns:
         Validation errors, empty only for a complete report.
@@ -165,9 +197,23 @@ def validate(report: Mapping[str, Any] | None, issue: int, head: str, body: str,
             errors.append(f"invalid/duplicate criterion {name!r}")
             continue
         seen.add(name)
-        if item.get("status") != "pass":
+        status = item.get("status")
+        allowed = {"pass", "remaining"} if non_closing else {"pass"}
+        if status not in allowed:
             errors.append(f"{name}: missing PASS evidence")
-        if item.get("file") not in changed:
+            continue
+        if status == "remaining":
+            evidence = item.get("evidence")
+            if not isinstance(evidence, str) or len(evidence.strip()) < 30:
+                errors.append(f"{name}: name the remaining work with evidence")
+            continue
+        cited_file = item.get("file")
+        # Human review citations often include exact changed-file line ranges,
+        # e.g. path.py:33-69 or path.rs:191-342,245-336. Only the pathname
+        # participates in diff membership; arbitrary suffixes still fail.
+        if isinstance(cited_file, str):
+            cited_file = re.sub(r":\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*$", "", cited_file)
+        if not isinstance(cited_file, str) or cited_file not in changed:
             errors.append(f"{name}: cite a file changed by this PR")
         evidence = item.get("evidence")
         if not isinstance(evidence, str) or len(evidence.strip()) < 30:
@@ -199,6 +245,34 @@ CLOSING_RE = re.compile(
     r"(?i)\b(?:closes?|closed|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)"
 )
 BRANCH_RE = re.compile(r"^factory/\d+-(\d+)-")
+# The canonical non-closing handoff line names the issue a PR advances without
+# claiming closure. ``\r?`` keeps CRLF PR bodies matching.
+PART_OF_RE = re.compile(
+    r"(?im)^[ \t]*part[ \t]+of[ \t]+#(?P<issue>\d+)"
+    r"(?:[ \t]+and[ \t]+governed[ \t]+by[ \t]+#\d+)?\.[ \t]*\r?$"
+)
+
+
+def linked_issue_mode(branch: str, body: str) -> tuple[int | None, bool]:
+    """Resolve a linked issue and whether the link is review-only.
+
+    Args:
+        branch: PR branch name.
+        body: PR description.
+
+    Returns:
+        ``(issue, non_closing)``. ``non_closing`` is true only when the issue
+        came from the canonical ``Part of #N.`` line, never from a branch or a
+        closing keyword.
+    """
+    match = BRANCH_RE.match(branch)
+    if match:
+        return int(match.group(1)), False
+    match = CLOSING_RE.search(body)
+    if match:
+        return int(match.group(1)), False
+    match = PART_OF_RE.search(body)
+    return (int(match.group("issue")), True) if match else (None, False)
 
 
 def linked_issue(branch: str, body: str) -> int | None:
@@ -211,30 +285,37 @@ def linked_issue(branch: str, body: str) -> int | None:
     Returns:
         Canonical linked issue number, if a supported link was found.
     """
-    match = BRANCH_RE.match(branch)
-    if match:
-        return int(match.group(1))
-    match = CLOSING_RE.search(body)
-    return int(match.group(1)) if match else None
+    return linked_issue_mode(branch, body)[0]
 
 
-def mission(issue: int, head: str, body: str) -> str:
+def mission(issue: int, head: str, body: str, non_closing: bool = False) -> str:
     """Provide all requirements and current revision to the reviewer.
 
     Args:
         issue: Linked issue number.
         head: Reviewed PR commit SHA.
         body: Exact authoritative issue body.
+        non_closing: True when the PR links the issue with ``Part of #N`` and
+            does not claim to close it.
 
     Returns:
         Review instructions and required structured report schema.
     """
     revision = digest(body)
+    if non_closing:
+        scope = (
+            " This is a review-only `Part of` handoff: it does not close the issue."
+            " Criteria this PR delivers must be `pass`; criteria outside its declared"
+            " scope must be `remaining` with concrete evidence naming the outstanding"
+            " work. Never mark in-scope work `remaining` to bypass verification."
+        )
+    else:
+        scope = " Do not approve when any requirement is missing or unverified."
     return (
         f"\nISSUE ACCEPTANCE: #{issue}, head {head}, issue digest {revision}.\n"
         "Review every numbered requirement below against the real diff and tests."
-        " Do not approve when any requirement is missing or unverified."
-        " Before FACTORY_GATE_READY output exactly one single-line JSON record"
+        + scope
+        + " Before FACTORY_GATE_READY output exactly one single-line JSON record"
         " with every criterion represented:\n"
         f'{PREFIX}{{"issue":{issue},"head":"{head}",'
         f'"issue_digest":"{revision}","items":['
@@ -258,11 +339,28 @@ if __name__ == "__main__":
             if number is None:
                 raise ValueError("PR has no supported linked issue")
             print(number)
-        elif len(sys.argv) == 4 and sys.argv[1] == "mission":
+        elif sys.argv[1:] == ["non-closing"]:
+            data = json.load(sys.stdin)
+            print(
+                "1"
+                if linked_issue_mode(
+                    str(data.get("headRefName") or ""),
+                    str(data.get("body") or ""),
+                )[1]
+                else "0"
+            )
+        elif len(sys.argv) in {4, 5} and sys.argv[1] == "mission":
             data = json.load(sys.stdin)
             if not isinstance(data.get("body"), str):
                 raise ValueError("issue body missing")
-            print(mission(int(sys.argv[2]), sys.argv[3], data["body"]))
+            print(
+                mission(
+                    int(sys.argv[2]),
+                    sys.argv[3],
+                    data["body"],
+                    non_closing=len(sys.argv) == 5 and sys.argv[4] == "1",
+                )
+            )
         else:
             raise ValueError("usage: rubric | resolve | mission ISSUE HEAD")
     except (ValueError, TypeError, KeyError) as exc:

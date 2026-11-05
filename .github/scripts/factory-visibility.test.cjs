@@ -105,7 +105,7 @@ test('canonical local worker tokens map to the local owner', () => {
 test('fixed-model worker tokens map from the roster, not a numeric ceiling', () => {
   assert.equal(ownerFor('opencode-free-model-factory-46'), 'factory:46');
   assert.equal(ownerFor('opencode-free-model-factory-51'), 'factory:51');
-  assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:74');
+  assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-75'), 'factory:75');
   assert.equal(ownerFor('opencode-free-model-factory-95'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:unowned');
@@ -136,18 +136,18 @@ test('legacy model-specific label metadata is normalized', async () => {
   const updates = [];
   const github = githubFor({
     extraDefinitions: [{
-      name: 'factory:74',
+      name: 'factory:75',
       color: '5319e7',
-      description: 'Fixed-model Factory 74: legacy model-specific description',
+      description: 'Fixed-model Factory 75: legacy model-specific description',
     }],
     updateLabel: async input => updates.push(input),
   });
 
   await reconcile({ github, context: contextFor('workflow_dispatch', {}) });
 
-  const update = updates.find(candidate => candidate.name === 'factory:74');
+  const update = updates.find(candidate => candidate.name === 'factory:75');
   assert.ok(update);
-  assert.equal(update.description, 'Current next-action owner is ComicPile Factory 74');
+  assert.equal(update.description, 'Current next-action owner is ComicPile Factory 75');
 });
 
 test('label reconciliation replaces both groups with one atomic call', async () => {
@@ -336,6 +336,112 @@ test('trusted exact-head factory PASS is labeled approved but never merge-ready'
   assert.ok(!calls[0].labels.includes('factory:ready'));
 });
 
+test('current semantic controller approval adds visibility without changing review stage', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:ready', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  const head = 'a'.repeat(40);
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+      comment: {
+        author_association: 'NONE',
+        user: { login: 'github-actions[bot]' },
+        body: '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-'
+          + head + ':reviewer-64:producer-unknown:verdict-approve -->\n\n'
+          + '### Factory semantic review, Factory 64, APPROVE',
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:ready'));
+  assert.ok(!calls[0].labels.includes('factory:ci'), 'late comment must not downgrade ready');
+});
+
+test('semantic approval cannot be spoofed by wrong head, PR, actor, or prose echo', async () => {
+  const head = 'a'.repeat(40);
+  const marker = ({ pr = 44, sha = head, verdict = 'approve' } = {}) =>
+    '<!-- comic-pile-factory-semantic-review-v1:pr-' + pr
+    + ':head-' + sha + ':reviewer-82:producer-11:verdict-' + verdict + ' -->';
+  for (const { body, association, actor } of [
+    { body: marker({ sha: 'b'.repeat(40) }), association: 'OWNER' },
+    { body: marker({ pr: 45 }), association: 'OWNER' },
+    { body: marker(), association: 'NONE', actor: 'anonymous' },
+    { body: 'Review notes\n' + marker(), association: 'OWNER' },
+    { body: marker({ verdict: 'repair' }), association: 'OWNER' },
+    { body: marker({ verdict: 'reject' }), association: 'OWNER' },
+  ]) {
+    const calls = [];
+    const github = githubFor({
+      labels: ['factory', 'factory:review', 'factory:unowned'],
+      setLabels: input => calls.push(input),
+    });
+    await reconcile({
+      github,
+      context: contextFor('issue_comment', {
+        issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+        comment: {
+          author_association: association,
+          user: { login: actor || 'JoshCLWren' },
+          body,
+        },
+      }),
+    });
+    assert.ok(calls.every(call => !call.labels.includes('factory:approved')), body);
+  }
+});
+
+test('trusted human OWNER semantic approval mints factory:approved for correct head and PR', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:review', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  const head = 'a'.repeat(40);
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-'
+          + head + ':reviewer-82:producer-unknown:verdict-approve -->\n\n'
+          + '### Factory semantic review, APPROVE',
+      },
+    }),
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(calls[0].labels.includes('factory:approved'));
+  assert.ok(calls[0].labels.includes('factory:review'));
+  assert.ok(!calls[0].labels.includes('factory:ci'), 'approval does not change review stage');
+});
+
+test('semantic review verdict is not an approval on issue-only conversations', async () => {
+  const calls = [];
+  const github = githubFor({
+    labels: ['factory', 'factory:building', 'factory:unowned'],
+    setLabels: input => calls.push(input),
+  });
+  await reconcile({
+    github,
+    context: contextFor('issue_comment', {
+      issue: { number: 44 },
+      comment: {
+        author_association: 'OWNER',
+        user: { login: 'JoshCLWren' },
+        body: '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-'
+          + 'a'.repeat(40) + ':reviewer-82:producer-11:verdict-approve -->',
+      },
+    }),
+  });
+  assert.deepEqual(calls, []);
+});
+
 test('issue comments cannot stamp a review approval onto a non-PR issue', async () => {
   const calls = [];
   const github = githubFor({
@@ -467,12 +573,12 @@ test('fixed-model progress comments use the durable fixed owner', async () => {
       comment: {
         author_association: 'OWNER',
         user: { login: 'JoshCLWren' },
-        body: '<!-- comic-pile-factory-implement-progress-v3:issue-1089:opencode-free-model-factory-74:123 -->',
+        body: '<!-- comic-pile-factory-implement-progress-v3:issue-1089:opencode-free-model-factory-75:123 -->',
       },
     }),
   });
   assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:74'));
+  assert.ok(calls[0].labels.includes('factory:75'));
   assert.ok(!calls[0].labels.includes('factory:unowned'));
 });
 
@@ -1180,7 +1286,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     draft: false,
     body: 'Refs #3131',
     head: {
-      ref: 'factory/74-3131-opencode-free-identity',
+      ref: 'factory/75-3131-opencode-free-identity',
       sha: 'c'.repeat(40),
       repo: { full_name: 'JoshCLWren/comic-pile' },
     },
@@ -1189,7 +1295,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     created_at: '2026-01-01T00:00:00Z',
     author_association: 'OWNER',
     user: { login: 'mark-cordova[bot]' },
-    body: '<!-- comic-pile-factory-implement-claim-v3:issue-3131:opencode-free-model-factory-74:1 -->',
+    body: '<!-- comic-pile-factory-implement-claim-v3:issue-3131:opencode-free-model-factory-75:1 -->',
     performed_via_github_app: { slug: 'mark-cordova' },
   };
   const workerCalls = [];
@@ -1229,7 +1335,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     }),
   });
   assert.equal(actionsCalls.length, 1);
-  assert.ok(actionsCalls[0].labels.includes('factory:74'));
+  assert.ok(actionsCalls[0].labels.includes('factory:75'));
 });
 
 test('pull_request_review trust: github-actions[bot] is trusted, worker App is not', () => {

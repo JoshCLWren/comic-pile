@@ -4,7 +4,6 @@ import Modal from '../../../components/Modal'
 import MigrationDialog from '../../../components/MigrationDialog'
 import SimpleMigrationDialog from '../../../components/SimpleMigrationDialog'
 import ShuffleQueueDialog from '../../QueuePage/ShuffleQueueDialog'
-import GlossaryLink from '../../../components/GlossaryLink'
 import { DICE_LADDER } from '../../../components/diceLadder'
 import {
   canSnoozeSeries,
@@ -106,15 +105,12 @@ interface RollModalsProps {
   onCloseOverride: () => void
   isDieModalOpen: boolean
   onCloseDieModal: () => void
-  manualDie: number | null
   currentDie: number
   onSetDie: (die: number) => Promise<boolean> | boolean
-  onClearManualDie: () => void
   onResetDice: () => Promise<boolean> | boolean
   resetDicePending: boolean
   resetDiceError: string
   setDiePending: boolean
-  clearManualDiePending: boolean
   isActionSheetOpen: boolean
   selectedThread: RollBootstrapThread | null
   /**
@@ -162,15 +158,12 @@ export function RollModals({
   onCloseOverride,
   isDieModalOpen,
   onCloseDieModal,
-  manualDie,
   currentDie,
   onSetDie,
-  onClearManualDie,
   onResetDice,
   resetDicePending,
   resetDiceError,
   setDiePending,
-  clearManualDiePending,
   isActionSheetOpen,
   selectedThread,
   pendingThreadId,
@@ -258,10 +251,8 @@ export function RollModals({
 
       <Modal isOpen={isDieModalOpen} title="Select Die" onClose={onCloseDieModal}>
         <p className="mb-3 text-xs text-stone-400">
-          {manualDie
-            ? `Manual mode is active at d${manualDie}. Choose another die or return to automatic mode.`
-            : `Automatic mode is active at d${currentDie}. Choosing a die switches to manual mode.`}
-          {' '}<GlossaryLink id="auto">What is Auto?</GlossaryLink>
+          The die is currently d{currentDie}. Choosing a die replaces it until the
+          next rating, snooze, or Reset Dice.
         </p>
         <div className="grid grid-cols-3 gap-2">
           {DICE_LADDER.map((die) => (
@@ -280,20 +271,6 @@ export function RollModals({
               d{die}
             </button>
           ))}
-          <button
-            onClick={async () => {
-              await onClearManualDie()
-              onCloseDieModal()
-            }}
-            disabled={clearManualDiePending}
-            className={`px-3 py-3 text-sm font-black rounded-lg border transition-colors ${
-              manualDie
-                ? 'bg-[var(--theme-comic-accent)]/20 border-[var(--theme-comic-accent)] text-[var(--theme-comic-accent)]'
-                : 'bg-[var(--theme-bg-panel)] border-[var(--theme-border)] hover:bg-white/10'
-            }`}
-          >
-            Auto
-          </button>
           <button
             onClick={async () => {
               if (await onResetDice()) onCloseDieModal()

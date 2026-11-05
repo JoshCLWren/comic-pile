@@ -10,7 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 function sitemapPlugin() {
   return {
     name: 'sitemap-generator',
-    async closeBundle() {
+    // Vite 8 can invoke closeBundle before writing index.html. Route SEO
+    // generation consumes the built HTML, so wait for the writeBundle hook.
+    writeBundle() {
       // Generate sitemap
       const sitemapScriptPath = path.resolve(__dirname, 'scripts', 'generate-sitemap.mjs')
       const sitemapResult = spawnSync('node', [sitemapScriptPath], {
