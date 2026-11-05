@@ -925,17 +925,14 @@ mod tests {
     /// A Roll rating fixture against the real Alembic schema, never a
     /// hand-written approximation. Hold the returned guard through assertions,
     /// since the canonical `public` schema is shared by all native tests.
-    async fn roll_offer_fixture() -> Option<(
-        tokio_postgres::Client,
-        tokio::sync::MutexGuard<'static, ()>,
-    )> {
+    async fn roll_offer_fixture(
+    ) -> Option<(tokio_postgres::Client, tokio::sync::MutexGuard<'static, ()>)> {
         let state = crate::test_support::test_state(2).await?;
         let guard = crate::test_support::reset_for_test(&state).await;
         let url = crate::test_support::database_url().await;
-        let (client, connection) =
-            tokio_postgres::connect(&url, tokio_postgres::NoTls)
-                .await
-                .expect("canonical test connection");
+        let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("canonical test connection");
         tokio::spawn(async move {
             let _ = connection.await;
         });
@@ -1475,7 +1472,6 @@ mod tests {
                 .get::<_, i64>(0),
             4
         );
-
     }
 
     #[tokio::test]
@@ -1515,7 +1511,6 @@ mod tests {
                 .get::<_, String>(0),
             "completed"
         );
-
     }
 
     #[tokio::test]
@@ -1574,7 +1569,6 @@ mod tests {
             .await
             .unwrap()
             .get::<_, bool>(0));
-
     }
 
     #[tokio::test]
@@ -1590,7 +1584,7 @@ mod tests {
                      (id,thread_id,issue_number,status,position,created_at)
                  VALUES (302,30,'2','unread',2,now());
                  UPDATE threads
-                 SET issues_remaining=2, queue_position_is_manual=true WHERE id=30"
+                 SET issues_remaining=2, queue_position_is_manual=true WHERE id=30",
             )
             .await
             .unwrap();
@@ -1658,7 +1652,6 @@ mod tests {
                 .get::<_, bool>(0),
             "completing a series clears its reader placement"
         );
-
     }
 
     #[tokio::test]
@@ -1683,7 +1676,7 @@ mod tests {
                  UPDATE threads SET queue_position=1 WHERE id=40;
                  UPDATE threads SET queue_position=2 WHERE id=10;
                  UPDATE threads SET queue_position=3 WHERE id=20;
-                 UPDATE threads SET queue_position=4 WHERE id=30;"
+                 UPDATE threads SET queue_position=4 WHERE id=30;",
             )
             .await
             .unwrap();
@@ -1729,7 +1722,6 @@ mod tests {
             queue_positions(&client, &[10, 20, 30, 40]).await,
             vec![1, 2, 3, 4]
         );
-
     }
 
     #[tokio::test]
@@ -1754,7 +1746,7 @@ mod tests {
                      WHERE id=1;
                  INSERT INTO events
                      (user_id,type,rating,die_after,thread_id)
-                     VALUES (1,'rate',4.0,12,10);"
+                     VALUES (1,'rate',4.0,12,10);",
             )
             .await
             .unwrap();
@@ -1782,7 +1774,6 @@ mod tests {
             queue_positions(&client, &[10, 20, 30, 40]).await,
             vec![1, 3, 2, 4]
         );
-
     }
 
     #[tokio::test]
@@ -1853,7 +1844,6 @@ mod tests {
         // The seeded die outcome, then two dice events and two issue events.
         assert_eq!(counts.get::<_, i64>(0), 5);
         assert_eq!(counts.get::<_, i64>(1), 2);
-
     }
 
     #[test]
