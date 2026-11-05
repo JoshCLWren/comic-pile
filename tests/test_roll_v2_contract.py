@@ -21,29 +21,50 @@ from app.schemas.roll_v2 import (
     RouteKind,
 )
 from app.schemas.thread import ThreadResponse
-from app.schemas.roll import RollBootstrapResponse
 
 
 class TestRollV2BootstrapResponse:
     """Test the v2 bootstrap response schema."""
 
-    def test_v2_response_is_superset_of_v1_fields(self):
-        """Test that all v1 bootstrap fields are preserved in v2."""
-        # Compare the real complete v1 schema, not a hand-maintained subset.
-        # This catches regressions in tags and inactive/excluded details.
-        v1_fields = set(RollBootstrapResponse.model_fields) - {'roll_pool'}
+    def test_v2_response_retains_every_retired_v1_field(self):
+        """Pin the v2 contract after the Python v1 bootstrap schema deletion.
 
-        # v2 adds these fields
-        v2_additional_fields = {'rollable', 'last_read'}
-
-        # All v1 fields should be in v2
-        model_fields = RollV2BootstrapResponse.model_fields
-        for field in v1_fields:
-            assert field in model_fields, f"v1 field {field} missing from v2"
-
-        # v2 should have the additional fields
-        for field in v2_additional_fields:
-            assert field in model_fields, f"v2 field {field} missing"
+        The v1 Python bootstrap response schema is removed by the #4350
+        cleanup, so the retained UI contract is asserted directly here rather
+        than by comparing two Python schemas. Every field the Roll screen used
+        must survive in v2, alongside the v2-only ``rollable``/``last_read``.
+        """
+        retained_v1_fields = {
+            "session_id",
+            "user_id",
+            "current_die",
+            "manual_die",
+            "pending_thread_id",
+            "last_rolled_result",
+            "session_mode",
+            "active_thread",
+            "roll_recovery",
+            "bandwidth",
+            "snoozed_threads",
+            "snoozed_count",
+            "skipped_thread_ids",
+            "skipped_threads",
+            "blocked_count",
+            "blocked_threads",
+            "stale_thread_count",
+            "stale_thread",
+            "timezone",
+            "total_threads",
+            "available_threads",
+            "excluded_count",
+            "excluded_threads",
+            "inactive_count",
+            "inactive_threads",
+        }
+        assert set(RollV2BootstrapResponse.model_fields) == retained_v1_fields | {
+            "rollable",
+            "last_read",
+        }
 
     def test_rollable_replaces_roll_pool(self):
         """Test that rollable replaces roll_pool and has correct structure."""

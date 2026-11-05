@@ -102,10 +102,11 @@ positions, counters, cached frontier, read progress, rating and activity time.
    applies exclusions before die limiting, and reads issue identities, canonical
    metadata, direct provider artwork URLs, reader stats, group routes and
    session-scoped last-read. Stored blocked/frontier flags are not authority.
-6. `RollService.load_bootstrap_thread_data` derives owner-scoped snoozed/skipped/
-   blocked/stale summaries and counts. OpenAPI models bound summary lists to 20;
-   routes are capped at three with overflow count. V2 replaces v1 `roll_pool`
-   with non-null-issue `rollable` and nullable `last_read`.
+6. The native Rust v2 handler derives owner-scoped snoozed/skipped/blocked/stale
+   summaries and counts; the retired Python `RollService.load_bootstrap_thread_data`
+   reference implementation was removed by #4350. OpenAPI models bound summary
+   lists to 20; routes are capped at three with overflow count. V2 replaces v1
+   `roll_pool` with non-null-issue `rollable` and nullable `last_read`.
 
 GET can create reading history, initialize bandwidth, capture timezone and write
 an undo snapshot. It does not rate/read an issue, roll/select a new target,

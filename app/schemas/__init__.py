@@ -71,8 +71,6 @@ _EXPORT_MODULES: dict[str, str] = {
     "RollRequest": "app.schemas.roll",
     "RollResponse": "app.schemas.roll",
     "OverrideRequest": "app.schemas.roll",
-    "RollBootstrapThread": "app.schemas.roll",
-    "RollBootstrapResponse": "app.schemas.roll",
     "ThreadExclusionReason": "app.schemas.roll",
     "SetCurrentIssueRequest": "app.schemas.roll",
     "SetCurrentIssueResponse": "app.schemas.roll",
@@ -148,8 +146,6 @@ __all__ = [
     "RecommendationDiagnosticsResponse",
     "RecommendationExplanationResponse",
     "RefreshTokenRequest",
-    "RollBootstrapResponse",
-    "RollBootstrapThread",
     "RollRequest",
     "RollResponse",
     "RollingRecommendationContext",
@@ -270,8 +266,6 @@ if TYPE_CHECKING:
     )
     from app.schemas.roll import (
         OverrideRequest,
-        RollBootstrapResponse,
-        RollBootstrapThread,
         RollRequest,
         RollResponse,
         SetCurrentIssueRequest,
