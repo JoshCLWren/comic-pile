@@ -488,7 +488,8 @@ async fn effective_roll_exclusions(
 ) -> Result<Vec<i32>, ApiError> {
     let session = tx
         .query_opt(
-            "SELECT snoozed_thread_ids, skipped_thread_ids FROM sessions
+            "SELECT COALESCE(snoozed_thread_ids::text, '[]'),
+                    COALESCE(skipped_thread_ids::text, '[]') FROM sessions
              WHERE user_id=$1 AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
             &[&user.id()],
         )
@@ -497,13 +498,13 @@ async fn effective_roll_exclusions(
     let mut excluded: Vec<i32> = Vec::new();
     let mut seen: HashSet<i32> = HashSet::new();
     if let Some(session) = session {
-        let snoozed: Option<Vec<i32>> = session.get(0);
-        let skipped: Option<Vec<i32>> = session.get(1);
-        for thread_id in snoozed
-            .unwrap_or_default()
-            .into_iter()
-            .chain(skipped.unwrap_or_default())
-        {
+        // These columns are SQLAlchemy JSON, not PostgreSQL integer arrays.
+        // Decode their stored JSON text, including null as an empty list.
+        let snoozed: Vec<i32> = serde_json::from_str(&session.get::<_, String>(0))
+            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid snoozed threads".into()))?;
+        let skipped: Vec<i32> = serde_json::from_str(&session.get::<_, String>(1))
+            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid skipped threads".into()))?;
+        for thread_id in snoozed.into_iter().chain(skipped) {
             if seen.insert(thread_id) {
                 excluded.push(thread_id);
             }
