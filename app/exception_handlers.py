@@ -11,12 +11,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import AppSettings
 from app.exceptions import DatabaseUnavailableError
-from app.services.reading_list_cycle_validator import ReadingCycleError
 from app.middleware.request_logging import (
     _safe_get_request_body,
     redact_headers,
     sanitize_for_logging,
 )
+from app.services.reading_list_cycle_validator import ReadingCycleError
 
 logger = logging.getLogger(__name__)
 
