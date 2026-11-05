@@ -23,6 +23,7 @@ export function adaptNativeV2Rate(native: IssueReadRateResponse): RateResponsePa
   } : undefined
 
   return {
+    rated_issue_read_at: issue.read_at ?? null,
     // ThreadResponse fields from native thread progress
     id: thread.thread_id,
     title: issue.thread_title,
