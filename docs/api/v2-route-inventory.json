@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
-  "updated_by_issue": 4337,
+  "updated_by_issue": 4456,
   "operations": [
     {
       "method": "GET",
