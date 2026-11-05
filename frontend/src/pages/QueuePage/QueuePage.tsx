@@ -7,6 +7,7 @@ import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hoo
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useRestoreThread, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
@@ -120,30 +121,14 @@ export default function QueuePage() {
   )
 
   const rollNudge = useRollNudge()
-
+  const rollPendingSync = useRollPendingSync({ rollBootstrap, session, refetchSession, refetchQueue: queueLoader.refetch })
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,
     // Refetch so a confirmed edit (e.g. a completed series) reconciles the Queue now (#4181).
-    onUpdated: async () => {
-      await queueLoader.refetch()
-      // Also refetch roll bootstrap to ensure pending_thread_id is up to date
-      if (rollBootstrap) {
-        queryClient.refetchQueries({
-          queryKey: ['roll', 'bootstrap'],
-        })
-      }
-    },
+    onUpdated: rollPendingSync.onUpdated,
     onReactivated: async () => {},
-    refetchSession: async () => {
-      await refetchSession()
-      // Also refetch roll bootstrap to ensure pending_thread_id is up to date
-      if (rollBootstrap) {
-        queryClient.refetchQueries({
-          queryKey: ['roll', 'bootstrap'],
-        })
-      }
-    },
+    refetchSession: rollPendingSync.onRefetchSession,
     submitCreate,
     submitEdit,
     submitReactivate,
@@ -164,12 +149,7 @@ export default function QueuePage() {
     actions,
     activeThreads,
     modals,
-    session: session ? {
-      ...session,
-      // Use the pending_thread_id from the roll bootstrap if available, as it's more reliable
-      // and properly updated after roll operations
-      pending_thread_id: rollBootstrap?.pending_thread_id ?? session.pending_thread_id,
-    } : undefined,
+    session: rollPendingSync.session,
     sortBy,
   })
 
