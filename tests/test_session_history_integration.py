@@ -12,53 +12,6 @@ from app.models import ReadingSession
 
 
 @pytest.mark.asyncio
-async def test_session_lifecycle_creates_history_events(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
-) -> None:
-    """Test that full session lifecycle creates proper history events."""
-    thread = Thread(
-        title="Test Comic",
-        format="comic",
-        issues_remaining=10,
-        queue_position=1,
-        user_id=default_user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    roll_event = Event(
-        type="roll",
-        session_id=session.id,
-        selected_thread_id=thread.id,
-        die=6,
-        result=4,
-        selection_method="random",
-    )
-    async_db.add(roll_event)
-    await async_db.commit()
-
-    rate_response = await auth_client.post(
-        "/api/v1/rate/",
-        json={"rating": 5.0, "issues_read": 1},
-    )
-    assert rate_response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event).where(Event.session_id == session.id).order_by(Event.timestamp)
-    )
-    events = result.scalars().all()
-
-    event_types = [e.type for e in events]
-    assert "roll" in event_types
-    assert "rate" in event_types
-
-
-@pytest.mark.asyncio
 async def test_undo_operation_creates_history_event(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
@@ -434,60 +387,6 @@ async def test_get_session_snapshots_endpoint(
     assert response.status_code == 200
     data = response.json()
     assert any(s["description"] == "Test snapshot" for s in data["snapshots"])
-
-
-@pytest.mark.asyncio
-async def test_rating_creates_snapshot_automatically(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
-) -> None:
-    """Test that rating operation automatically creates a snapshot."""
-    session = ReadingSession(start_die=6, user_id=default_user.id, started_at=datetime.now(UTC))
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Test Comic",
-        format="comic",
-        issues_remaining=10,
-        queue_position=1,
-        user_id=default_user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-
-    roll_event = Event(
-        type="roll",
-        session_id=session.id,
-        selected_thread_id=thread.id,
-        die=6,
-        result=4,
-        selection_method="random",
-    )
-    async_db.add(roll_event)
-    await async_db.commit()
-
-    initial_snapshots_result = await async_db.execute(
-        select(Snapshot).where(Snapshot.session_id == session.id)
-    )
-    initial_snapshots = initial_snapshots_result.scalars().all()
-
-    response = await auth_client.post(
-        "/api/v1/rate/",
-        json={"rating": 5.0, "issues_read": 1},
-    )
-    assert response.status_code == 200
-
-    final_snapshots_result = await async_db.execute(
-        select(Snapshot).where(Snapshot.session_id == session.id)
-    )
-    final_snapshots = final_snapshots_result.scalars().all()
-
-    assert len(final_snapshots) > len(initial_snapshots)
-    assert any(
-        s.description is not None and "After rating" in s.description
-        for s in final_snapshots
-    )
 
 
 @pytest.mark.asyncio

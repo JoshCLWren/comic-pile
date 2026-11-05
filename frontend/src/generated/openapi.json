@@ -12401,6 +12401,13 @@
               "null"
             ]
           },
+          "source": {
+            "description": "Source of the issue action. Omitted or \"direct\" is a manual read from a\nThread row: it never steps the die and never repositions the queue.\n\"roll_offer\" is a Roll completion: it applies the Roll rating semantics\n(die stepping, queue placement, and a link back to the originating offer\nevent) in the same transaction as the read.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "status": {
             "description": "Explicit new status. Omit to leave read state unchanged.",
             "type": [
@@ -12416,6 +12423,14 @@
       },
       "IssueReadRateResponse": {
         "properties": {
+          "die_after": {
+            "description": "Die after this rating, when source is \"roll_offer\". Null for \"direct\" source.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "final_rating": {
             "format": "double",
             "type": [
@@ -14367,237 +14382,6 @@
           "threads"
         ],
         "title": "QueueThreadListResponse",
-        "type": "object"
-      },
-      "RateRequest": {
-        "description": "Schema for rating request.",
-        "properties": {
-          "direct": {
-            "default": false,
-            "description": "Set by a Thread issue row rating (issue #3581). Roll requests keep the session-driven path even though they also send ``thread_id``.",
-            "title": "Direct",
-            "type": "boolean"
-          },
-          "finish_session": {
-            "default": false,
-            "title": "Finish Session",
-            "type": "boolean"
-          },
-          "issue_number": {
-            "anyOf": [
-              {
-                "maxLength": 50,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Issue number just read, e.g. '5' or 'Annual 1' (triggers migration if provided)",
-            "title": "Issue Number"
-          },
-          "rating": {
-            "maximum": 5.0,
-            "minimum": 0.5,
-            "title": "Rating",
-            "type": "number"
-          },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Explicit thread being rated (issue #3581). Required when ``direct`` is true; the rating is then applied to that owned thread instead of the pending Roll target.",
-            "title": "Thread Id"
-          }
-        },
-        "required": [
-          "rating"
-        ],
-        "title": "RateRequest",
-        "type": "object"
-      },
-      "RateResponse": {
-        "description": "Rate response extending ThreadResponse with roll reconciliation.\n\nSubclasses ThreadResponse so every current top-level field is preserved\nexactly, and adds ``roll_reconciliation.last_read`` for the v2 contract.\nDeclared as the FastAPI ``response_model`` so the extra field is not\nfiltered out.",
-        "properties": {
-          "blocking_reasons": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Blocking Reasons",
-            "type": "array"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "format": {
-            "title": "Format",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "is_blocked": {
-            "default": false,
-            "title": "Is Blocked",
-            "type": "boolean"
-          },
-          "is_test": {
-            "title": "Is Test",
-            "type": "boolean"
-          },
-          "issues_remaining": {
-            "title": "Issues Remaining",
-            "type": "integer"
-          },
-          "last_activity_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Activity At"
-          },
-          "last_rating": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Rating"
-          },
-          "manual_creator_credits": {
-            "items": {
-              "additionalProperties": false,
-              "properties": {
-                "name": {
-                  "type": "string"
-                },
-                "roles": {
-                  "items": {
-                    "type": "string"
-                  },
-                  "type": "array"
-                }
-              },
-              "required": [
-                "name",
-                "roles"
-              ],
-              "title": "ManualCreatorCredit",
-              "type": "object"
-            },
-            "title": "Manual Creator Credits",
-            "type": "array"
-          },
-          "next_unread_issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Unread Issue Id"
-          },
-          "next_unread_issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Next Unread Issue Number"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "queue_position": {
-            "title": "Queue Position",
-            "type": "integer"
-          },
-          "reading_progress": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reading Progress"
-          },
-          "roll_reconciliation": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RollReconciliation"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "total_issues": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total Issues"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "format",
-          "issues_remaining",
-          "queue_position",
-          "status",
-          "last_rating",
-          "last_activity_at",
-          "notes",
-          "is_test",
-          "created_at"
-        ],
-        "title": "RateResponse",
         "type": "object"
       },
       "ReactivateRequest": {
@@ -18037,67 +17821,128 @@
         "title": "ResetPasswordRequest",
         "type": "object"
       },
-      "RollLastRead": {
-        "description": "Session-scoped last read information.",
+      "RollDieStateResponse": {
+        "description": "The reader's current logical die and the approved ladder.",
         "properties": {
-          "issue_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Id"
+          "default_die": {
+            "description": "The die an explicit reset returns to.",
+            "format": "int32",
+            "type": "integer"
           },
-          "issue_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Issue Number"
+          "die": {
+            "description": "The current logical die.",
+            "format": "int32",
+            "type": "integer"
           },
-          "read_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Read At"
+          "ladder": {
+            "description": "The approved dice ladder, smallest to largest.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
           },
-          "thread_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
+          "last_roll": {
+            "oneOf": [
               {
                 "type": "null"
-              }
-            ],
-            "title": "Thread Id"
-          },
-          "thread_title": {
-            "anyOf": [
-              {
-                "type": "string"
               },
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RollLastRoll",
+                "description": "The most recent recorded roll, when the reader has rolled."
               }
-            ],
-            "title": "Thread Title"
+            ]
           }
         },
-        "title": "RollLastRead",
+        "required": [
+          "die",
+          "ladder",
+          "default_die"
+        ],
+        "type": "object"
+      },
+      "RollEligibleIssueIdsResponse": {
+        "description": "The ordered eligible issue identifiers for the current die.",
+        "properties": {
+          "die": {
+            "description": "The logical die that bounded the list.",
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_ids": {
+            "description": "The eligible issue identifiers, in queue order.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "thread_ids": {
+            "description": "The owning thread identifiers, parallel to `issue_ids`.",
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "die",
+          "issue_ids",
+          "thread_ids"
+        ],
+        "type": "object"
+      },
+      "RollLastRoll": {
+        "description": "The most recent Roll recorded for this reader.",
+        "properties": {
+          "die": {
+            "description": "The die that produced the roll.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "description": "The rolled issue.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "description": "The rolled issue number.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "description": "The recorded roll result.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rolled_at": {
+            "description": "When the roll was recorded.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "description": "The rolled thread.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "RollOfferRequest": {
@@ -18296,19 +18141,6 @@
           "changed"
         ],
         "title": "RollPrerequisiteSwitchResponse",
-        "type": "object"
-      },
-      "RollReconciliation": {
-        "description": "Roll reconciliation information for rate response.",
-        "properties": {
-          "last_read": {
-            "$ref": "#/components/schemas/RollLastRead"
-          }
-        },
-        "required": [
-          "last_read"
-        ],
-        "title": "RollReconciliation",
         "type": "object"
       },
       "RollRequest": {
@@ -30379,53 +30211,6 @@
         ]
       }
     },
-    "/api/v1/rate/": {
-      "post": {
-        "description": "Delegate rating orchestration to the rate service.",
-        "operationId": "post_rate_api_v1_rate__post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RateResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Post Rate",
-        "tags": [
-          "rate"
-        ]
-      }
-    },
     "/api/v1/reading-boundaries": {
       "post": {
         "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",
@@ -36309,6 +36094,92 @@
           }
         ],
         "summary": "Documentation-only operation for the mounted v2 manual-die command.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/die-state": {
+      "get": {
+        "description": "The published response is the actual handler DTO, so the current logical die, approved d2-d20 ladder, default die and last roll stay in the live contract.",
+        "operationId": "die_state_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollDieStateResponse"
+                }
+              }
+            },
+            "description": "Current logical die, approved ladder and last roll"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 Roll die-state read.",
+        "tags": [
+          "roll"
+        ]
+      }
+    },
+    "/api/v2/roll/eligible-issue-ids": {
+      "get": {
+        "description": "The ordered eligible issue identifiers for the current die. Temporary snoozes are passed as a query parameter and applied exactly as the offer does.",
+        "operationId": "eligible_issue_ids_documentation",
+        "parameters": [
+          {
+            "description": "Comma-separated browser-owned temporary snoozed thread identifiers",
+            "in": "query",
+            "name": "snoozed",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollEligibleIssueIdsResponse"
+                }
+              }
+            },
+            "description": "Ordered eligible issue identifiers for the current die"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid temporary snooze identifiers"
+          },
+          "500": {
+            "description": "Invalid native Roll projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 eligible-identifier read.",
         "tags": [
           "roll"
         ]

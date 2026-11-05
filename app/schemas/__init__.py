@@ -81,7 +81,6 @@ _EXPORT_MODULES: dict[str, str] = {
     "RecommendationContextCreate": "app.schemas.recommendation_context",
     "RecommendationContextResponse": "app.schemas.recommendation_context",
     "RollingRecommendationContext": "app.schemas.recommendation_context",
-    "RateRequest": "app.schemas.rate",
     "SessionResponse": "app.schemas.session",
     "SessionListResponse": "app.schemas.session",
     "SessionListItem": "app.schemas.session",
@@ -142,7 +141,6 @@ __all__ = [
     "QueueSeriesMetadata",
     "QueueThreadListItem",
     "QueueThreadListResponse",
-    "RateRequest",
     "ReactivateRequest",
     "RecentSession",
     "RecommendationContextCreate",
@@ -255,7 +253,6 @@ if TYPE_CHECKING:
         UserPreferencesPatchRequest,
         UserPreferencesResponse,
     )
-    from app.schemas.rate import RateRequest
     from app.schemas.recommendation_context import (
         RecommendationContextCreate,
         RecommendationContextResponse,

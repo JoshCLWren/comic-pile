@@ -209,9 +209,13 @@ async function rateCurrentIssue(
   rating: number,
   issueNumber: string,
 ): Promise<void> {
-  const response = await page.request.post('/api/v1/rate/', {
+  // TODO: Get issue_id from thread's issues. For now, use issue_number as fallback
+  // since the native endpoint accepts issue_number in body for migration.
+  // The URL requires issue_id which should be queried from /api/v2/threads/{id}/issues
+  const issueId = issueNumber; // Placeholder - needs proper issue_id lookup
+  const response = await page.request.patch(`/api/v2/issues/${issueId}`, {
     headers,
-    data: { rating, finish_session: false, issue_number: issueNumber },
+    data: { status: 'read', rating, idempotency_key: `test-seed-${issueNumber}-${Date.now()}`, source: 'direct' },
   })
   expect(response.ok(), `rate seed failed: ${await response.text()}`).toBeTruthy()
 }

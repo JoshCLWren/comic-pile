@@ -70,7 +70,7 @@ REQUESTY_APPROVED_MODELS = frozenset(
     }
 )
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
-OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha"})
+OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha", "stealth/crouton-alpha"})
 LOCK_SCHEMA_VERSION = 1
 # Automation-owned frozen view of the committed roster + lock. Discovery
 # rewrites it in the same commit as the TSV/lock so guard tests never need a

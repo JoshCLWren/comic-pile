@@ -174,14 +174,34 @@ fn repair_session_value(value: &mut Value) -> Vec<&'static str> {
     }
     repaired
 }
-const RESOLVE_FROM: &str = "FROM sessions s LEFT JOIN LATERAL
+/// One session-resolution rule shared by every reader of the current session.
+///
+/// Roll offer, Reset, bootstrap and the folded eligible-identifier read must
+/// agree on which session row is current: a pending offer that one caller
+/// snoozes must not be invisible to another, or a read reports a pool the next
+/// write will not draw from. Only the owner expression and the two parameter
+/// positions differ, so callers fill this template instead of restating the
+/// predicate.
+///
+/// Placeholders: `{owner}`, `{now}`, `{gap}` and the twice-used `{recency}`.
+pub(crate) const SESSION_RESOLUTION_BODY: &str = "FROM sessions s LEFT JOIN LATERAL
  (SELECT max(timestamp) AS last_event FROM events WHERE session_id = s.id) e ON true
- WHERE s.user_id = $1 AND s.ended_at IS NULL
- AND greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
- THEN s.pending_thread_updated_at END, e.last_event) >= to_timestamp($2) - make_interval(hours => $3)
+ WHERE s.user_id = {owner} AND s.ended_at IS NULL
+ AND {recency} >= to_timestamp({now}) - make_interval(hours => {gap})
  ORDER BY (s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL) DESC,
- greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL
- THEN s.pending_thread_updated_at END, e.last_event) DESC, s.started_at DESC, s.id DESC LIMIT 1";
+ {recency} DESC, s.started_at DESC, s.id DESC LIMIT 1";
+
+/// The last-activity expression: start, pending update and newest event.
+const SESSION_ACTIVITY: &str = "greatest(s.started_at, CASE WHEN s.pending_thread_id IS NOT NULL OR s.pending_issue_id IS NOT NULL THEN s.pending_thread_updated_at END, e.last_event)";
+
+/// Fill [`SESSION_RESOLUTION_BODY`] for one caller's owner source and bindings.
+pub(crate) fn session_resolution_body(owner: &str, now: &str, gap: &str) -> String {
+    SESSION_RESOLUTION_BODY
+        .replace("{recency}", SESSION_ACTIVITY)
+        .replace("{owner}", owner)
+        .replace("{now}", now)
+        .replace("{gap}", gap)
+}
 
 /// Read-only authority lookup; takes a caller-owned transaction and injected UTC clock.
 pub async fn resolve_current_session(
@@ -190,7 +210,10 @@ pub async fn resolve_current_session(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<ReadingSession>, ApiError> {
-    let sql = format!("SELECT row_to_json(s)::text {RESOLVE_FROM}");
+    let sql = format!(
+        "SELECT row_to_json(s)::text {}",
+        session_resolution_body("$1", "$2", "$3")
+    );
     tx.query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
         .await
         .map_err(session_error)?
@@ -622,7 +645,7 @@ pub(crate) async fn current_session_id(
     now: f64,
     policy: SessionPolicy,
 ) -> Result<Option<i32>, ApiError> {
-    let sql = format!("SELECT s.id {RESOLVE_FROM}");
+    let sql = format!("SELECT s.id {}", session_resolution_body("$1", "$2", "$3"));
     let row = tx
         .query_opt(&sql, &[&user.id(), &now, &policy.gap_hours])
         .await

@@ -30,12 +30,13 @@ target-resource contracts are picked up by that guard automatically.
 
 `v2-runtime.openapi.json` is the aggregate contract for **every deployed native
 `/api/v2` operation** (#4457): the eight auth endpoints, Roll bootstrap and
-reading-session initialization, the dice/offer/reset commands, the
-reading-boundaries batch, and the queue, thread and issue resources already
-published by `QueueApi`, `ThreadsApi` and `IssueApi`. It is generated only from
-Rust declarations (`comicpile_roll_service::openapi::canonical_openapi`), which
-merges the per-domain `utoipa::OpenApi` documents instead of duplicating a spec.
-Regenerate it with:
+reading-session initialization, the dice/offer/reset commands, the scoped
+`GET /api/v2/roll/die-state` and `GET /api/v2/roll/eligible-issue-ids` resources
+(#4595), the reading-boundaries batch, and the queue, thread and issue resources
+already published by `QueueApi`, `ThreadsApi` and `IssueApi`. It is generated
+only from Rust declarations (`comicpile_roll_service::openapi::canonical_openapi`),
+which merges the per-domain `utoipa::OpenApi` documents instead of duplicating a
+spec. Regenerate it with:
 
 ```sh
 cd native/roll-service

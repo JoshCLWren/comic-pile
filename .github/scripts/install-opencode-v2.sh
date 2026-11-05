@@ -17,6 +17,15 @@ mkdir -p "$HOME/.config/opencode"
 cat > "$HOME/.config/opencode/opencode.json" <<'JSON'
 {
   "$schema": "https://opencode.ai/config.json",
+  "providers": {
+    "opencode": {
+      "models": {
+        "crouton-alpha-free": {
+          "body": {"safety_identifier": "comic-pile-factory"}
+        }
+      }
+    }
+  },
   "permissions": [
     {"action": "read", "resource": "*", "effect": "allow"},
     {"action": "edit", "resource": "*", "effect": "allow"},

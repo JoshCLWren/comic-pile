@@ -22,6 +22,7 @@ pub mod reading_session;
 pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
+pub mod roll_resources;
 mod session_bandwidth;
 pub mod skip;
 pub mod threads;
@@ -234,6 +235,11 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(auth::handlers::reset_password),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v2/roll/die-state", get(roll_resources::die_state))
+        .route(
+            "/api/v2/roll/eligible-issue-ids",
+            get(roll_resources::eligible_issue_ids),
+        )
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
