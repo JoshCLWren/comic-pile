@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import AppSettings
 from app.exceptions import DatabaseUnavailableError
+from app.services.reading_list_cycle_validator import ReadingCycleError
 from app.middleware.request_logging import (
     _safe_get_request_body,
     redact_headers,
@@ -31,6 +32,46 @@ def register_exception_handlers(app: FastAPI, app_settings: AppSettings) -> None
         app_settings: Application settings used for environment-aware sanitization.
     """
     environment = app_settings.environment
+
+    @app.exception_handler(ReadingCycleError)
+    async def reading_cycle_conflict_handler(request: Request, exc: ReadingCycleError):
+        """Return an actionable conflict when persisted reading constraints disagree.
+
+        A previously accepted cycle must not become an opaque server error on
+        unrelated Thread, Queue, Session, or continuity-plan reads. Do not guess
+        an eligibility frontier or silently discard either constraint.
+        """
+        logger.warning(
+            "Stored reading constraints conflict",
+            extra={
+                "event": "reading_constraint_cycle",
+                "path": request.url.path,
+                "request_id": getattr(request.state, "request_id", None),
+                "cycle_edge_count": len(exc.edges),
+            },
+        )
+        max_edges = 32
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": {
+                    "code": "reading_list_cycle",
+                    "message": (
+                        "Your reading list and series ordering conflict. "
+                        "Review the named issues and ordering rules before retrying."
+                    ),
+                    "path": [
+                        {
+                            "source_issue_id": edge.source_issue_id,
+                            "target_issue_id": edge.target_issue_id,
+                            "origin": edge.origin,
+                        }
+                        for edge in exc.edges[:max_edges]
+                    ],
+                    "truncated": len(exc.edges) > max_edges,
+                }
+            },
+        )
 
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
