@@ -213,7 +213,6 @@ function RollMoveBudgetProbe() {
       setDieMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       rollMutation: { mutate: () => Promise.resolve(stubRollResponse), isPending: false },
       snoozeMutation: { mutate: () => Promise.resolve(stubSnoozeOutcome), isPending: false },
-      unsnoozeMutation: { mutate: () => Promise.resolve(undefined), isPending: false },
       moveToFrontMutation: {
         mutate: moveToFrontMutation.mutate,
         isPending: moveToFrontMutation.isPending,

@@ -23,7 +23,6 @@ interface RollMutations {
     isPending: boolean
     retryRefresh?: () => Promise<boolean>
   }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
   moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
@@ -104,7 +103,6 @@ export function useRollActions({
     setDieMutation,
     rollMutation,
     snoozeMutation,
-    unsnoozeMutation,
     moveToFrontMutation,
     moveToBackMutation,
     shuffleQueueMutation,
@@ -183,7 +181,9 @@ export function useRollActions({
           break
         case 'snooze': {
           if (isSnoozed) {
-            await unsnoozeMutation.mutate(selectedThread!.id)
+            // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
+            const { removeRollSnooze } = await import('../../services/api-roll')
+            removeRollSnooze(selectedThread!.id)
             await refetchBootstrap()
             break
           }

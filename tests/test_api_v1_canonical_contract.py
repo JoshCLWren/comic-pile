@@ -61,7 +61,6 @@ REQUIRED_V1_FAMILIES = frozenset(
         "releases",
         "roll",
         "sessions",
-        "snooze",
         "threads",
         "undo",
     }

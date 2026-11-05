@@ -1,7 +1,6 @@
-"""Tests for Phase 0 instrumentation: source-roll linkage and issue snapshots.
+"""Tests for Phase 0 instrumentation: issue snapshots on roll events.
 
 Covers:
-- #1686: source_roll_event_id on rate/snooze events
 - #1689: issue_id/issue_number populated on roll events
 """
 
@@ -195,117 +194,6 @@ async def test_roll_nullable_issue_fields_for_non_issue_tracked(
         return
     assert data["issue_id"] is None
     assert data["issue_number"] is None
-
-
-@pytest.mark.asyncio
-async def test_snooze_links_to_source_roll_event(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Snooze event links to the originating roll event via source_roll_event_id."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    session = ReadingSession(start_die=6, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Snooze Link Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    roll_event = Event(
-        type="roll",
-        die=6,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-    )
-    async_db.add(roll_event)
-    await async_db.commit()
-    await async_db.refresh(roll_event)
-
-    session.pending_thread_id = thread.id
-    await async_db.commit()
-
-    response = await auth_client.post("/api/v1/snooze/")
-    assert response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event)
-        .where(Event.session_id == session.id)
-        .where(Event.type == "snooze")
-        .order_by(Event.timestamp.desc())
-    )
-    snooze_event = result.scalars().first()
-    assert snooze_event is not None
-    assert snooze_event.source_roll_event_id == roll_event.id
-
-
-@pytest.mark.asyncio
-async def test_unsnooze_does_not_set_source_roll_event_id(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-) -> None:
-    """Unsnooze event does not set source_roll_event_id."""
-    from tests.conftest import get_or_create_user_async
-
-    user = await get_or_create_user_async(async_db)
-
-    session = ReadingSession(start_die=6, user_id=user.id)
-    async_db.add(session)
-    await async_db.commit()
-    await async_db.refresh(session)
-
-    thread = Thread(
-        title="Unsnooze Thread",
-        format="Comic",
-        issues_remaining=5,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    roll_event = Event(
-        type="roll",
-        die=6,
-        result=1,
-        selected_thread_id=thread.id,
-        selection_method="random",
-        session_id=session.id,
-    )
-    async_db.add(roll_event)
-    session.pending_thread_id = thread.id
-    await async_db.commit()
-
-    await auth_client.post("/api/v1/snooze/")
-
-    response = await auth_client.post(f"/api/v1/snooze/{thread.id}/unsnooze")
-    assert response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event)
-        .where(Event.session_id == session.id)
-        .where(Event.type == "unsnooze")
-        .order_by(Event.timestamp.desc())
-    )
-    unsnooze_event = result.scalars().first()
-    assert unsnooze_event is not None
-    assert unsnooze_event.source_roll_event_id is None
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 /**
  * Single source of truth for when a snooze control may be used.
  *
- * `POST /v1/snooze/` snoozes the reading session's **pending** thread, so
+ * The native Roll offer snoozes the reading session's **pending** thread, so
  * "snooze this series" is only meaningful for the series the reader currently
  * has rolled. Every snooze entry point (Queue row menu, Roll pool action sheet)
  * derives its enabled state and its disabled explanation from this module, so

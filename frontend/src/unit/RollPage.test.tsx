@@ -11,7 +11,7 @@ import {
   useRoll,
   useSetDie,
 } from '../hooks/useRoll'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { threadsApi } from '../services/api-threads'
@@ -41,7 +41,7 @@ vi.mock('../hooks/useRoll', () => ({
   useOverrideRoll: vi.fn(),
   useDismissPending: vi.fn(),
 }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueue', () => ({
   useMoveToFront: vi.fn(),
   useMoveToBack: vi.fn(),
@@ -132,8 +132,6 @@ beforeEach(() => {
   vi.mocked(useDismissPending).mockReturnValue(cast<ReturnType<typeof useDismissPending>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useSnooze; stub matches the hook's mutation surface.
   vi.mocked(useSnooze).mockReturnValue(cast<ReturnType<typeof useSnooze>>({ mutate: vi.fn(), isPending: false }))
-  // SAFETY: Test stub for useUnsnooze; safe because test harness only invokes mutate.
-  vi.mocked(useUnsnooze).mockReturnValue(cast<ReturnType<typeof useUnsnooze>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useMoveToFront; minimal shape covers the exercised mutation.
   vi.mocked(useMoveToFront).mockReturnValue(cast<ReturnType<typeof useMoveToFront>>({ mutate: vi.fn(), isPending: false }))
   // SAFETY: Test stub for useMoveToBack; cast preserves the hook's return contract for the test.

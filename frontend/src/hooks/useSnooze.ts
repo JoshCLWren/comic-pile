@@ -1,8 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollMutationDeps, SnoozeApi } from '../services/apiTypes'
+import { useQueryClient } from '@tanstack/react-query'
+import type { CacheEffectsApi, ProtectedRollMutationApi, RollBootstrapApi, RollMutationDeps } from '../services/apiTypes'
 import { invalidateCurrentSessionAfterSnooze } from '../query/cacheEffects'
-import { snoozeApi } from '../services/api-snooze'
 import { protectedRollMutationApi } from '../services/protectedRollMutationApi'
 import {
   fetchAndPublishRollBootstrap,
@@ -169,23 +168,5 @@ export function useSnooze(deps: RollMutationDeps = {}) {
     isError,
     refreshError,
     hasRefreshError: refreshError !== null,
-  }
-}
-
-export function useUnsnooze(deps: RollMutationDeps = {}) {
-  const snooze = deps.snoozeApi ?? snoozeApi
-  const invalidateSessionCache = deps.cacheEffects?.invalidateCurrentSessionAfterSnooze ?? invalidateCurrentSessionAfterSnooze
-  const queryClient = useQueryClient()
-  const mutation = useMutation({
-    mutationFn: (threadId: number) => snooze.unsnooze(threadId),
-    onSuccess: async () => {
-      await invalidateSessionCache(queryClient)
-    },
-  })
-
-  return {
-    mutate: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    isError: mutation.isError,
   }
 }

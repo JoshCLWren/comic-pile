@@ -804,6 +804,19 @@ mod tests {
         assert_eq!(stored.die, 8);
         assert_eq!(stored.result, 2);
         assert_eq!(stored.snoozed_thread_id, Some(9));
+
+        // Regression from the retired v1 snooze route tests (#283): the offer
+        // writes exactly one roll event, for the replacement, never a phantom
+        // roll for the snoozed thread.
+        let rolls = client
+            .query_one(
+                "SELECT COUNT(*), COUNT(*) FILTER (WHERE selected_thread_id=9) FROM events",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(rolls.get::<_, i64>(0), 1);
+        assert_eq!(rolls.get::<_, i64>(1), 0);
     }
 
     #[tokio::test]

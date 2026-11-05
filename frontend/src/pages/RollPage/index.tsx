@@ -11,7 +11,7 @@ import {
   useRoll,
   useSetDie,
 } from '../../hooks/useRoll'
-import { useSnooze, useUnsnooze } from '../../hooks/useSnooze'
+import { useSnooze } from '../../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue, useActiveSeriesCount } from '../../hooks/useQueue'
 import { useTasteDiscoveries } from '../../hooks/useTasteDiscoveries'
 import { useRate } from '../../hooks'
@@ -92,7 +92,6 @@ export default function RollPage() {
   const dismissPendingMutation = useDismissPending()
   const overrideMutation = useOverrideRoll()
   const snoozeMutation = useSnooze()
-  const unsnoozeMutation = useUnsnooze()
   const moveToFrontMutation = useMoveToFront()
   const moveToBackMutation = useMoveToBack()
   const shuffleQueueMutation = useShuffleQueue()
@@ -190,7 +189,6 @@ export default function RollPage() {
     snoozeMutation,
     rerollMutation: rollMutation,
     enterRatingView: rating.enterRatingView,
-    unsnoozeMutation,
     refetchBootstrap,
     onRefreshFailed: reportSnoozeRefreshFailed,
   })
@@ -204,7 +202,6 @@ export default function RollPage() {
       setDieMutation,
       rollMutation,
       snoozeMutation,
-      unsnoozeMutation,
       moveToFrontMutation,
       moveToBackMutation,
       shuffleQueueMutation,
@@ -491,7 +488,7 @@ export default function RollPage() {
               onToggleSnoozed={() => state.setSnoozedExpanded(!state.snoozedExpanded)}
 
               onShuffle={actions.handleShufflePool}
-              unsnoozeIsPending={unsnoozeMutation.isPending}
+              unsnoozeIsPending={false}
               shuffleIsPending={shuffleQueueMutation.isPending}
             />
           </div>

@@ -10,8 +10,8 @@ import {
   useShuffleQueue,
 } from '../../hooks/useQueue'
 import { useDeleteThread, useExcludeThread } from '../../hooks/useThread'
-import { useUnsnooze } from '../../hooks/useSnooze'
 import { rollApi } from '../../services/api-roll'
+import { removeRollSnooze } from '../../services/api-roll'
 import { useToast } from '../../contexts/useToast'
 import {
   invalidateAfterQueueMovement,
@@ -58,7 +58,6 @@ export interface UseQueueThreadActionsDeps {
   moveToPositionHook?: typeof useMoveToPosition
   shuffleHook?: typeof useShuffleQueue
   reroll?: typeof rollApi.reroll
-  unsnoozeHook?: typeof useUnsnooze
   toastHook?: typeof useToast
   setPending?: typeof threadsApi.setPending
 }
@@ -118,7 +117,6 @@ export function useQueueThreadActions(
     moveToPositionHook = useMoveToPosition,
     shuffleHook = useShuffleQueue,
     reroll = rollApi.reroll,
-    unsnoozeHook = useUnsnooze,
     toastHook = useToast,
     setPending = threadsApi.setPending,
   } = deps
@@ -130,7 +128,6 @@ export function useQueueThreadActions(
   const moveToBackMutation = moveToBackHook()
   const moveToPositionMutation = moveToPositionHook()
   const shuffleQueueMutation = shuffleHook()
-  const unsnoozeMutation = unsnoozeHook()
 
   const [draggedThreadId, setDraggedThreadId] = useState<number | null>(null)
   const [dragOverThreadId, setDragOverThreadId] = useState<number | null>(null)
@@ -334,14 +331,9 @@ export function useQueueThreadActions(
   const handleSnoozeToggle = useCallback(
     async (thread: ThreadListItem, isSnoozed: boolean) => {
       try {
-        const isTemporarySnooze =
-          isSnoozed && rollApi.isTemporarilySnoozed(thread.id)
         if (isSnoozed) {
-          if (isTemporarySnooze) {
-            rollApi.unsnoozeTemporary(thread.id)
-          } else {
-            await unsnoozeMutation.mutate(thread.id)
-          }
+          // Queue unsnooze is client-only: remove the thread from the browser snooze cookie
+          removeRollSnooze(thread.id)
         } else {
           // The canonical Rust offer atomically records the pending reroll
           // snooze, advances the die, and selects the replacement. The legacy
@@ -353,9 +345,7 @@ export function useQueueThreadActions(
         // Native reroll does not own a session query refresh, so Queue must
         // invalidate it here. Legacy unsnooze still refreshes that key in its
         // own hook, and must not issue a duplicate GET (#4276).
-        await invalidateAfterQueueMovement(queryClient, {
-          skipSessionCurrent: isSnoozed && !isTemporarySnooze,
-        })
+        await invalidateAfterQueueMovement(queryClient, { skipSessionCurrent: isSnoozed })
         // Snooze resets the paginated queue cache, so the row remounts; the
         // id-based restore lands on the refetched trigger (#3147).
         restoreSeriesActionsFocus(thread.id)
@@ -370,7 +360,7 @@ export function useQueueThreadActions(
         )
       }
     },
-    [reroll, unsnoozeMutation, restoreSeriesActionsFocus, showToast],
+    [reroll, restoreSeriesActionsFocus, showToast],
   )
 
   return {

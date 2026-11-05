@@ -6,7 +6,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
   useDeleteThread,
@@ -34,7 +34,7 @@ vi.mock('../hooks/useQueue', () => ({
 }))
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 
@@ -94,8 +94,6 @@ beforeEach(() => {
   vi.mocked(useSession).mockReturnValue({ data: { snoozed_threads: [] }, refetch: vi.fn() } as any)
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useSnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
-  // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
-  vi.mocked(useUnsnooze).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   // SAFETY: useBugReportRestore returns a context shape; cast to any for partial stub
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),

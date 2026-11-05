@@ -34,17 +34,11 @@ export interface CacheEffectsApi {
   invalidateCurrentSessionAfterSnooze: (client: import('@tanstack/react-query').QueryClient) => Promise<void>
 }
 
-export interface SnoozeApi {
-  snooze: () => Promise<SnoozeSessionResponse>
-  unsnooze: (threadId: number) => Promise<void>
-}
-
 /** Injectable dependencies for the Roll mutation hooks (snooze/rate). */
 export interface RollMutationDeps {
   protectedApi?: ProtectedRollMutationApi
   bootstrapApi?: RollBootstrapApi
   cacheEffects?: CacheEffectsApi
-  snoozeApi?: SnoozeApi
 }
 
 /** The subset of `dependenciesApi` used by the Roll page's batch blocker load. */
