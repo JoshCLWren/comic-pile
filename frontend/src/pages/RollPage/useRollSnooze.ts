@@ -4,6 +4,7 @@ import type { RollResponse } from '../../types'
 import type { ThreadMetadata } from './types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
+import { removeRollSnooze } from '../../services/api-roll'
 
 interface UseRollSnoozeParams {
   state: RollPageState & RollPageStateSetters
@@ -19,7 +20,6 @@ interface UseRollSnoozeParams {
     result?: number | null,
     threadMetadata?: ThreadMetadata | null,
   ) => Promise<void>
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<void> }
   refetchBootstrap: () => Promise<RollBootstrapResponse | undefined>
   /**
    * Reports that the committed snooze could not refresh authoritative Roll
@@ -42,7 +42,6 @@ export function useRollSnooze({
   snoozeMutation,
   rerollMutation,
   enterRatingView,
-  unsnoozeMutation,
   refetchBootstrap,
   onRefreshFailed,
 }: UseRollSnoozeParams) {
@@ -57,7 +56,8 @@ export function useRollSnooze({
 
   async function handleUnsnooze(threadId: number) {
     try {
-      await unsnoozeMutation.mutate(threadId)
+      // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
+      removeRollSnooze(threadId)
       await refetchBootstrap()
     } catch (error) {
       console.error('Unsnooze failed:', error)

@@ -4344,76 +4344,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roll/skip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Skip Roll
-         * @description Skip the current pending roll and advance to another eligible thread.
-         *
-         *     The skipped thread is not marked read, its read_at and ratings remain
-         *     unchanged, and dependencies are not rewritten. The skip applies only to
-         *     the current roll/session by excluding the pending thread from the
-         *     immediate candidate pool; a later session may roll it again. Blocked and
-         *     otherwise ineligible threads remain excluded via the standard pool rules.
-         *
-         *     Args:
-         *         request: FastAPI request for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         RollResponse for the newly selected thread.
-         *
-         *     Raises:
-         *         HTTPException: 409 when no pending roll exists, 400 when no
-         *             alternative threads are available.
-         */
-        post: operations["skip_roll_api_v1_roll_skip_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roll/skip/{thread_id}/unskip": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Unskip Thread
-         * @description Remove a thread from the skipped list for the current session.
-         *
-         *     Args:
-         *         thread_id: The ID of the thread to unskip.
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse containing the updated session.
-         *
-         *     Raises:
-         *         HTTPException: If no active session exists.
-         */
-        post: operations["unskip_thread_api_v1_roll_skip__thread_id__unskip_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/roll/switch-prerequisite": {
         parameters: {
             query?: never;
@@ -4655,72 +4585,6 @@ export interface paths {
         get: operations["get_session_snapshots_api_v1_sessions__session_id__snapshots_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/snooze/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Snooze Thread
-         * @description Snooze the pending thread and step the die up.
-         *
-         *     This endpoint:
-         *     1. Gets the current session (must exist with a pending_thread_id)
-         *     2. Adds the pending_thread_id to snoozed_thread_ids
-         *     3. Steps the die UP (wider pool) using dice ladder logic
-         *     4. Computes a structured bandwidth correction from the snooze evidence
-         *     5. Applies the correction to ephemeral session bandwidth state
-         *     6. Records a "snooze" event
-         *     7. Clears pending_thread_id
-         *     8. Returns the updated session with correction guidance
-         *
-         *     The snoozed thread's durable queue position is NOT changed (issue #1721).
-         *     Rating remains the authority for long-term promotion/demotion behavior.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         SessionResponse containing the updated session with snoozed_thread_ids,
-         *         cleared pending_thread_id, current die state, bandwidth state, and
-         *         structured correction guidance.
-         *
-         *     Raises:
-         *         HTTPException: If no active session exists or no pending thread to snooze.
-         */
-        post: operations["snooze_thread_api_v1_snooze__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/snooze/{thread_id}/unsnooze": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Unsnooze Thread
-         * @description Remove thread from snoozed list.
-         */
-        post: operations["unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7194,7 +7058,7 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** @description Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows. */
+        /** @description Owner-scoped thread summary shown by Roll snooze chips and rollable rows. */
         BootstrapThreadSummary: {
             format: string;
             /** Format: int32 */
@@ -15110,6 +14974,11 @@ export interface components {
             thread_id?: number | null;
         };
         RollOfferRequest: {
+            /**
+             * Format: int32
+             * @description A Queue action may only reroll the exact pending thread shown to the user.
+             */
+            expected_pending_thread_id?: number | null;
             /** @description Stable client key; retries return the original offer without re-rolling. */
             idempotency_key: string;
             /** @description Threads this browser has temporarily snoozed (cookie authority only). */
@@ -22651,57 +22520,6 @@ export interface operations {
             };
         };
     };
-    skip_roll_api_v1_roll_skip_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
-                };
-            };
-        };
-    };
-    unskip_thread_api_v1_roll_skip__thread_id__unskip_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     switch_roll_prerequisite_api_v1_roll_switch_prerequisite_post: {
         parameters: {
             query?: never;
@@ -22920,57 +22738,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SnapshotsListResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    snooze_thread_api_v1_snooze__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
-                };
-            };
-        };
-    };
-    unsnooze_thread_api_v1_snooze__thread_id__unsnooze_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
             /** @description Validation Error */

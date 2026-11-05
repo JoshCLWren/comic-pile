@@ -69,7 +69,6 @@ function renderRollSnooze(
     const snooze = useRollSnooze({
       state,
       snoozeMutation: { mutate },
-      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
       refetchBootstrap,
       onRefreshFailed,
     })
@@ -162,7 +161,6 @@ describe('useRollSnooze', () => {
     const { result } = renderHook(() => useRollSnooze({
       state: useRollPageState(),
       snoozeMutation: { mutate, retryRefresh },
-      unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
       refetchBootstrap: vi.fn().mockResolvedValue(undefined),
     }))
 
@@ -183,7 +181,6 @@ describe('useRollSnooze', () => {
         state,
         snoozeMutation: { mutate: vi.fn() },
         rerollMutation: { mutate: reroll },
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
         refetchBootstrap,
       })
       return { state, snooze }
@@ -217,7 +214,6 @@ describe('useRollSnooze', () => {
         snoozeMutation: { mutate: vi.fn() },
         rerollMutation: { mutate: reroll },
         enterRatingView,
-        unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined) },
         refetchBootstrap,
       })
       return { state, snooze }

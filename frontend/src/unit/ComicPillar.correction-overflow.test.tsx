@@ -36,6 +36,11 @@ vi.mock('../components/Modal', () => ({
     isOpen ? <div role="dialog"><h2>{title}</h2>{children}</div> : null,
 }))
 
+vi.mock('../components/ComicVineSearchDialog', () => ({
+  default: ({ isOpen }: { isOpen: boolean }) =>
+    isOpen ? <div role="dialog"><h2>ComicVine search</h2></div> : null,
+}))
+
 vi.mock('../components/IssueCorrectionDialog', () => ({
   default: ({
     isOpen,
@@ -154,7 +159,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     })
   })
 
-  it('no longer renders the correction actions as buttons under the comic title', async () => {
+  it('keeps mapping visible and collapses occasional corrections behind overflow (#4450, #3008)', async () => {
     getIssueIdentitySpy.mockResolvedValue({
       has_confirmed_identity: true,
       comicvine_issue_id: null,
@@ -166,20 +171,17 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     renderPillar()
 
     const controls = await screen.findByTestId('comic-header-controls')
-    await waitFor(() => expect(controls.textContent).toContain('Linked'))
+    await waitFor(() => expect(controls.textContent).toContain('Mapped'))
 
-    // Nothing correction-shaped is exposed as a standalone button any more.
+    // Mapping is a first-class visible action (never ellipsis-only), while the
+    // occasional correction tools stay behind the quiet overflow trigger.
+    expect(within(controls).getByRole('button', { name: /Change ComicVine mapping/i })).toBeInTheDocument()
     expect(within(controls).queryByRole('button', { name: 'Fix issue number' })).toBeNull()
-    expect(within(controls).queryByRole('button', { name: 'Wrong series?' })).toBeNull()
-    expect(within(controls).queryByRole('button', { name: 'Find ComicVine match' })).toBeNull()
     expect(within(controls).queryByRole('menuitem')).toBeNull()
 
-    // Exactly one quiet trigger remains, and it is a menu button.
-    const triggers = within(controls).getAllByRole('button')
-    expect(triggers).toHaveLength(1)
-    expect(triggers[0]).toHaveAttribute('aria-haspopup', 'menu')
-    expect(triggers[0]).toHaveAttribute('aria-label', 'Comic corrections')
-    expect(triggers[0].textContent).toContain('⋯')
+    const trigger = within(controls).getByRole('button', { name: 'Comic corrections' })
+    expect(trigger).toHaveAttribute('aria-haspopup', 'menu')
+    expect(trigger.textContent).toContain('⋯')
   })
 
   it('keeps the correction region visually quieter than the title hierarchy', async () => {
@@ -214,7 +216,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     expect(trigger.className).not.toContain('bg-[var(--theme-comic-accent)]')
 
     // The old amber "Find ComicVine match" fill is gone; nothing in the region
-    // paints a solid action surface.
+    // paints a solid primary action surface.
     expect(controls.className).not.toContain('bg-amber-500')
   })
 
@@ -230,8 +232,12 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
     renderPillar()
 
     const status = await screen.findByTestId('comic-mapping-status')
-    expect(status).toHaveAttribute('data-mapping-status', 'linked')
-    expect(status).toHaveTextContent('Linked')
+    // The identity GET resolves after the first render; wait for the mapped
+    // projection before asserting the visible status.
+    await waitFor(() =>
+      expect(status).toHaveAttribute('data-mapping-status', 'linked'),
+    )
+    expect(status).toHaveTextContent('Mapped')
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
@@ -248,7 +254,7 @@ describe('Roll correction controls move behind a quiet overflow menu (#3008)', (
 
     const status = await screen.findByTestId('comic-mapping-status')
     expect(status).toHaveAttribute('data-mapping-status', 'unlinked')
-    expect(status).toHaveTextContent('Not linked')
+    expect(status).toHaveTextContent('Not mapped')
     expect(screen.queryByRole('button', { name: 'Find ComicVine match' })).toBeNull()
   })
 

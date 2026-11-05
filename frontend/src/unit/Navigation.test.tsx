@@ -212,12 +212,12 @@ test('does not make a redundant /auth/me call after AuthProvider resolves user',
   
   // Navigation should not make its own /auth/me call; only AuthProvider does
   // AuthProvider also calls /v1/users/me/preferences via fetchAndApplyPersistedTheme,
-  // so we count only the /v1/auth/me calls.
+  // so we count only the /v2/auth/me calls.
   const authMeCalls = mockApiGet.mock.calls.filter(
-    (call) => call[0] === '/v1/auth/me',
+    (call) => call[0] === '/v2/auth/me',
   )
   expect(authMeCalls).toHaveLength(1)
-  expect(mockApiGet).toHaveBeenCalledWith('/v1/auth/me', { skipAuthRedirect: true, skipAuthRefresh: true, timeout: 15000 })
+  expect(mockApiGet).toHaveBeenCalledWith('/v2/auth/me', { skipAuthRedirect: true, skipAuthRefresh: true, timeout: 15000 })
 })
 
 test('clears authentication when AuthProvider bootstrap returns unauthorized', async () => {

@@ -1,5 +1,6 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 import type { RollResponse } from '../types'
+import { hasProperty, isNumber, isObject, isString } from '../utils/runtimeChecks'
 
 type ManualDieCommand = {
   kind: 'manual_select'
@@ -11,9 +12,12 @@ type RollOfferPayload = {
   timezone?: string
   snoozed_thread_ids: number[]
   idempotency_key: string
+  expected_pending_thread_id?: number
 }
 
 type RollOfferResponse = RollResponse & { snoozed_thread_id?: number | null }
+
+type PendingOffer = { key: string; expectedPendingThreadId?: number }
 
 const SNOOZE_COOKIE = 'comicpile_roll_snoozes'
 const PENDING_OFFER_KEY = 'comicpile:roll:pending-offer'
@@ -48,41 +52,6 @@ function nextMidnight(): Date {
   return midnight
 }
 
-/**
- * Temporary snoozes live only in this browser and expire at midnight.
- * The server treats them as exclusion hints, never as eligibility or auth.
- */
-function readRollSnoozes(): number[] {
-  try {
-    const raw = globalThis.document?.cookie
-      ?.split('; ')
-      .find((entry) => entry.startsWith(`${SNOOZE_COOKIE}=`))
-      ?.slice(SNOOZE_COOKIE.length + 1)
-    if (!raw) return []
-    const decoded = decodeURIComponent(raw)
-    if (!SNOOZE_COOKIE_PATTERN.test(decoded)) return []
-    return decoded
-      .slice(1, -1)
-      .split(',')
-      .map((value) => Number(value))
-  } catch {
-    return []
-  }
-}
-
-function writeRollSnoozes(ids: number[]): void {
-  try {
-    const bounded = Array.from(
-      new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0)),
-    ).slice(-MAX_ROLL_SNOOZES)
-    globalThis.document.cookie = `${SNOOZE_COOKIE}=${encodeURIComponent(
-      JSON.stringify(bounded),
-    )}; expires=${nextMidnight().toUTCString()}; path=/; SameSite=Lax`
-  } catch {
-    // A blocked cookie must not disable Roll; the server still snoozes pending.
-  }
-}
-
 function readPendingResetKey(): string | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(PENDING_RESET_KEY)
@@ -110,18 +79,41 @@ function clearPendingResetKey(key: string): void {
   }
 }
 
-function readPendingOfferKey(): string | null {
+function readPendingOfferKey(): PendingOffer | null {
   try {
     const raw = globalThis.sessionStorage?.getItem(PENDING_OFFER_KEY)
-    return raw && OFFER_KEY_PATTERN.test(raw) ? raw : null
+    if (!raw) return null
+    if (OFFER_KEY_PATTERN.test(raw)) return { key: raw }
+
+    try {
+      const parsed: unknown = JSON.parse(raw)
+      if (!isObject(parsed) || !hasProperty(parsed, 'key')) return null
+
+      const key = parsed.key
+      if (!isString(key) || !OFFER_KEY_PATTERN.test(key)) return null
+      if (!hasProperty(parsed, 'expectedPendingThreadId')) return { key }
+
+      const expectedPendingThreadId = parsed.expectedPendingThreadId
+      if (
+        !isNumber(expectedPendingThreadId) ||
+        !Number.isSafeInteger(expectedPendingThreadId) ||
+        expectedPendingThreadId <= 0
+      ) {
+        return null
+      }
+      return { key, expectedPendingThreadId }
+    } catch {
+      // ignore parse errors
+    }
+    return null
   } catch {
     return null
   }
 }
 
-function writePendingOfferKey(key: string): void {
+function writePendingOfferKey(pending: PendingOffer): void {
   try {
-    globalThis.sessionStorage?.setItem(PENDING_OFFER_KEY, key)
+    globalThis.sessionStorage?.setItem(PENDING_OFFER_KEY, JSON.stringify(pending))
   } catch {
     // In-memory retry safety remains for this page instance.
   }
@@ -129,7 +121,8 @@ function writePendingOfferKey(key: string): void {
 
 function clearPendingOfferKey(key: string): void {
   try {
-    if (readPendingOfferKey() === key) {
+    const pending = readPendingOfferKey()
+    if (pending?.key === key) {
       globalThis.sessionStorage?.removeItem(PENDING_OFFER_KEY)
     }
   } catch {
@@ -182,22 +175,32 @@ function clearPendingManualDie(key: string): void {
  */
 export function createRollApi(client: HttpClient) {
   let unresolvedManual: PendingManualDie | null = readPendingManualDie()
-  let unresolvedOfferKey: string | null = readPendingOfferKey()
+  let unresolvedOffer: PendingOffer | null = readPendingOfferKey()
   let unresolvedResetKey: string | null = readPendingResetKey()
 
-  const offer = async (): Promise<RollOfferResponse> => {
-    const key = unresolvedOfferKey ?? newOfferKey()
-    unresolvedOfferKey = key
-    writePendingOfferKey(key)
+  const offer = async (expectedPendingThreadId?: number): Promise<RollOfferResponse> => {
+    const existing = unresolvedOffer
+    let key: string
+    if (existing && existing.key && existing.expectedPendingThreadId === expectedPendingThreadId) {
+      key = existing.key
+    } else {
+      key = newOfferKey()
+    }
+    unresolvedOffer = { key, expectedPendingThreadId }
+    writePendingOfferKey(unresolvedOffer)
+    const payload: RollOfferPayload = {
+      timezone: browserTimeZone(),
+      snoozed_thread_ids: readRollSnoozes(),
+      idempotency_key: key,
+    }
+    if (expectedPendingThreadId !== undefined) {
+      payload.expected_pending_thread_id = expectedPendingThreadId
+    }
     const response = await client.post<RollOfferResponse, RollOfferPayload>(
       '/v2/roll/offer',
-      {
-        timezone: browserTimeZone(),
-        snoozed_thread_ids: readRollSnoozes(),
-        idempotency_key: key,
-      },
+      payload,
     )
-    if (unresolvedOfferKey === key) unresolvedOfferKey = null
+    if (unresolvedOffer?.key === key) unresolvedOffer = null
     clearPendingOfferKey(key)
     if (response.snoozed_thread_id) {
       writeRollSnoozes([...readRollSnoozes(), response.snoozed_thread_id])
@@ -206,10 +209,14 @@ export function createRollApi(client: HttpClient) {
   }
 
   return {
+    isTemporarilySnoozed: (threadId: number): boolean =>
+      readRollSnoozes().includes(threadId),
+    unsnoozeTemporary: (threadId: number): void => {
+      writeRollSnoozes(readRollSnoozes().filter((id) => id !== threadId))
+    },
     roll: offer,
     override: (data: { thread_id: number }) => client.post<RollResponse, { thread_id: number }>('/v1/roll/override', data),
     dismissPending: () => client.post<void>('/v1/roll/dismiss-pending'),
-    skip: () => client.post<RollResponse>('/v1/roll/skip'),
     reroll: offer,
     setDie: async (die: number): Promise<void> => {
       const key = unresolvedManual?.die === die ? unresolvedManual.key : newCommandKey()
@@ -237,7 +244,7 @@ export function createRollApi(client: HttpClient) {
       writeRollSnoozes([])
       // A reset discards the pre-reset intent: never replay an unanswered
       // offer or manual-die key against the fresh state.
-      unresolvedOfferKey = null
+      unresolvedOffer = null
       unresolvedManual = null
       try {
         globalThis.sessionStorage?.removeItem(PENDING_OFFER_KEY)
@@ -251,3 +258,49 @@ export function createRollApi(client: HttpClient) {
 }
 
 export const rollApi = createRollApi(defaultHttpClient())
+
+/**
+ * Read the current browser snooze cookie.
+ */
+export function readRollSnoozes(): number[] {
+  try {
+    const raw = globalThis.document?.cookie
+      ?.split('; ')
+      .find((entry) => entry.startsWith(`${SNOOZE_COOKIE}=`))
+      ?.slice(SNOOZE_COOKIE.length + 1)
+    if (!raw) return []
+    const decoded = decodeURIComponent(raw)
+    if (!SNOOZE_COOKIE_PATTERN.test(decoded)) return []
+    return decoded
+      .slice(1, -1)
+      .split(',')
+      .map((value) => Number(value))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Write the browser snooze cookie.
+ */
+export function writeRollSnoozes(ids: number[]): void {
+  try {
+    const bounded = Array.from(
+      new Set(ids.filter((id) => Number.isSafeInteger(id) && id > 0)),
+    ).slice(-MAX_ROLL_SNOOZES)
+    globalThis.document.cookie = `${SNOOZE_COOKIE}=${encodeURIComponent(
+      JSON.stringify(bounded),
+    )}; expires=${nextMidnight().toUTCString()}; path=/; SameSite=Lax`
+  } catch {
+    // A blocked cookie must not disable Roll; the server still snoozes pending.
+  }
+}
+
+/**
+ * Remove a thread ID from the browser snooze cookie.
+ */
+export function removeRollSnooze(threadId: number): void {
+  const current = readRollSnoozes()
+  const filtered = current.filter((id) => id !== threadId)
+  writeRollSnoozes(filtered)
+}

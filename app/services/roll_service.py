@@ -27,7 +27,6 @@ from app.repositories.roll_repository import (
     fetch_session_events,
     insert_recommendation_context,
     update_session_pending_thread,
-    update_session_skipped,
 )
 from app.services.queue_display import display_position
 from app.services.roll_phase_trace import RollPhaseTrace
@@ -41,7 +40,7 @@ from app.services.reading_eligibility_service import (
     get_execution_eligibility,
 )
 from app.services.bandwidth_selection import select_bandwidth_weighted
-from app.services.snooze_service import (
+from app.services.roll_exclusion import (
     derive_effective_roll_excluded_thread_ids,
     derive_cross_session_excluded_thread_ids,
 )
@@ -167,11 +166,10 @@ class RollService:
         excluded_ids: list[int],
         selection_bandwidth: str,
         selection_intent: str,
-        selection_method_override: str | None = None,
         empty_pool_detail: str = "No active threads available to roll",
         trace: RollPhaseTrace | None = None,
     ) -> _SelectionArtifacts:
-        """Run the weighted bounded-pool selection shared by roll and skip.
+        """Run the weighted bounded-pool selection for the roll endpoint.
 
         Returns a dictionary of selection artifacts without committing.
 
@@ -340,13 +338,8 @@ class RollService:
             control_mode=control_mode,
         )
 
-        # The recorded method follows the active mode; only an explicit caller
-        # override (a manual pick, a skip, a quiz correction) replaces it.
-        selection_method = (
-            selection_method_override
-            if selection_method_override is not None
-            else mode_selection_method
-        )
+        # The recorded method follows the active mode for this endpoint.
+        selection_method = mode_selection_method
 
         effort_estimate_str = (
             selected_effort_estimate.band
@@ -649,7 +642,6 @@ class RollService:
             excluded_ids=excluded_ids,
             selection_bandwidth=selection_bandwidth,
             selection_intent=selection_intent,
-            selection_method_override=None,
         )
 
         selected_thread: Thread = artifacts["selected_thread"]
@@ -705,119 +697,6 @@ class RollService:
             unread_count=unread_count,
             snoozed_count=len(snoozed_ids),
         )
-
-    async def execute_skip(self, current_user_id: int) -> RollResponse:
-        """Execute the full skip_roll flow."""
-        user_id = current_user_id
-        current_session = await get_or_create(self._db, user_id=user_id, existing_user=None)
-
-        skipped_thread_id = current_session.pending_thread_id
-        if skipped_thread_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="No pending roll to skip. Roll first.",
-            )
-
-        current_die = await get_current_die_for_session(current_session, self._db)
-        snoozed_ids = current_session.snoozed_thread_ids or []
-        existing_skipped_ids = list(current_session.skipped_thread_ids or [])
-        excluded_ids = await derive_effective_roll_excluded_thread_ids(
-            self._db,
-            user_id,
-            session_snoozed_ids=snoozed_ids,
-            session_skipped_ids=existing_skipped_ids,
-        )
-
-        artifacts = await self.select_pending_thread(
-            user_id=user_id,
-            current_session=current_session,
-            current_die=current_die,
-            excluded_ids=[*excluded_ids, skipped_thread_id],
-            selection_bandwidth=current_session.active_bandwidth or DEFAULT_BANDWIDTH,
-            selection_intent=current_session.active_intent or DEFAULT_INTENT,
-            selection_method_override="skip",
-            empty_pool_detail="No alternative threads available to skip to",
-        )
-
-        selected_thread: Thread = artifacts["selected_thread"]
-        event: Event = artifacts["event"]
-        rec_context_create: RecommendationContextCreate = artifacts["rec_context_create"]
-
-        self._db.add(event)
-        await self._db.flush()
-
-        rec_context = RecContextModel(
-            event_id=event.id,
-            schema_version=rec_context_create.schema_version,
-            intent=rec_context_create.intent,
-            intent_source=rec_context_create.intent_source,
-            intent_confidence=rec_context_create.intent_confidence,
-            bandwidth=rec_context_create.bandwidth,
-            bandwidth_source=rec_context_create.bandwidth_source,
-            bandwidth_confidence=rec_context_create.bandwidth_confidence,
-            candidate_factors=[f.model_dump() for f in rec_context_create.candidate_factors]
-            if rec_context_create.candidate_factors else None,
-            final_weight=rec_context_create.final_weight,
-            random_bypass=rec_context_create.random_bypass,
-            balanced_neutrality=rec_context_create.balanced_neutrality,
-            effort_minutes=rec_context_create.effort_minutes,
-            effort_band=rec_context_create.effort_band,
-            effort_source=rec_context_create.effort_source,
-            effort_confidence=rec_context_create.effort_confidence,
-            effort_sample_count=rec_context_create.effort_sample_count,
-        )
-        await insert_recommendation_context(self._db, rec_context)
-
-        if skipped_thread_id not in existing_skipped_ids:
-            existing_skipped_ids.append(skipped_thread_id)
-            await update_session_skipped(self._db, current_session.id, existing_skipped_ids)
-
-        now = datetime.now(UTC)
-        await update_session_pending_thread(self._db, current_session.id, selected_thread.id, now)
-
-        # Extract thread info before commit to avoid MissingGreenlet
-        queue_position = await display_position(self._db, selected_thread)
-        thread_attrs = {
-            "thread_id": selected_thread.id,
-            "title": selected_thread.title,
-            "format": normalize_format_value(selected_thread.format),
-            "queue_position": queue_position,
-            "total_issues": selected_thread.total_issues,
-            "reading_progress": selected_thread.reading_progress,
-        }
-        await self._db.commit()
-
-        selected_index: int = artifacts["selected_index"]
-        unread_count: int = artifacts["unread_count"]
-        return await self.build_roll_response(
-            thread_attrs=thread_attrs,
-            current_die=current_die,
-            selected_index=selected_index,
-            unread_count=unread_count,
-            snoozed_count=len(snoozed_ids),
-        )
-
-    async def record_skip_outcome(self, *, session_id: int, thread_id: int) -> None:
-        """Record that a session's pending thread was abandoned by a skip (#3706).
-
-        Persistence goes through ``app.repositories.roll_repository.insert_event``.
-        Callers must invoke this BEFORE adding the replacement roll event to the
-        session: both history readers resolve event order by
-        ``(timestamp, id)`` (``get_session_with_thread_safe`` and
-        ``project_decision_history``), so a skip saved after the replacement
-        roll would hide the new pending comic's rolled result and would
-        attribute the skip to the replacement roll attempt instead of the
-        original one.
-
-        Args:
-            session_id: Session where the skip happened.
-            thread_id: The pending thread that was skipped.
-        """
-        event = Event(type="rolled_but_skipped", session_id=session_id, thread_id=thread_id)
-        await insert_event(self._db, event)
-        # Flush now so this event gets the earlier timestamp and id before the
-        # replacement roll event is inserted.
-        await self._db.flush()
 
     async def execute_override(self, *, thread_id: int, current_user: User) -> RollResponse:
         """Select an owned Thread using the active eligibility authority.

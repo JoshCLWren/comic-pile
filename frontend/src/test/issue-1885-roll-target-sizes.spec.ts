@@ -66,7 +66,7 @@ function expectMinimumTargets(boxes: TargetBox[], minHeight: number): void {
 }
 
 async function getCsrfToken(page: Page, token: string | null): Promise<string> {
-  const response = await page.request.get('/api/auth/csrf', {
+  const response = await page.request.get('/api/v2/auth/csrf', {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()
@@ -235,16 +235,5 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     }))
     expect(layoutFit.scrollWidth).toBeLessThanOrEqual(layoutFit.innerWidth)
     expect(layoutFit.scrollHeight).toBeLessThanOrEqual(layoutFit.innerHeight + 8)
-
-    // Snoozing returns to the roll view where the unsnooze control is a real
-    // 28x28 target instead of a tiny strip.
-    await page.getByRole('button', { name: /^Snooze/ }).click()
-    const snoozedToggle = page.getByRole('button', { name: /Snoozed \(1\)/ })
-    await expect(snoozedToggle).toBeVisible()
-    await snoozedToggle.click()
-    expectMinimumTargets(
-      await measureVisibleBoxes(page, 'button[aria-label="Unsnooze this comic"]'),
-      WCAG_MIN_TARGET,
-    )
   })
 })

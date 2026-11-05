@@ -6,7 +6,7 @@ test('collection-excluded material stays unselected in the reviewed CBL source',
   const page = authenticatedPage
   const thread = await createThread(page, { title: 'Absolute Flash Exclusion Browser', format: 'Comics', issues_remaining: 1, total_issues: 1 })
   const token = await getAuthToken(page)
-  const csrfResponse = await page.request.get('/api/auth/csrf', { headers: { Authorization: `Bearer ${token}` } })
+  const csrfResponse = await page.request.get('/api/v2/auth/csrf', { headers: { Authorization: `Bearer ${token}` } })
   expect(csrfResponse.ok()).toBeTruthy()
   // SAFETY: only csrf_token is read from the response.
   const csrf = await csrfResponse.json() as { csrf_token: string }

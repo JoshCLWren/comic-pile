@@ -7,7 +7,7 @@ import { ToastProvider } from '../contexts/ToastProvider'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { useMoveToBack, useMoveToFront, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../hooks/useQueue'
 import { useSession } from '../hooks/useSession'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import {
   useCreateThread,
   useDeleteThread,
@@ -15,6 +15,7 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
+import { rollApi } from '../services/api-roll'
 
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -35,7 +36,7 @@ vi.mock('../hooks/useQueue', () => ({
 }))
 
 vi.mock('../hooks/useSession', () => ({ useSession: vi.fn() }))
-vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn(), useUnsnooze: vi.fn() }))
+vi.mock('../hooks/useSnooze', () => ({ useSnooze: vi.fn() }))
 vi.mock('../hooks/useQueueBlockingInfo', () => ({ useQueueBlockingInfo: vi.fn(() => ({})) }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 
@@ -44,6 +45,15 @@ vi.mock('../services/api', () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+  },
+}))
+
+vi.mock('../services/api-roll', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/api-roll')>()),
+  rollApi: {
+    reroll: vi.fn(),
+    isTemporarilySnoozed: vi.fn().mockReturnValue(false),
+    unsnoozeTemporary: vi.fn(),
   },
 }))
 
@@ -68,8 +78,6 @@ const mockedUseQueueThreads = vi.mocked(useQueueThreads) as any
 const mockedUseSession = vi.mocked(useSession) as any
 // SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
 const mockedUseSnooze = vi.mocked(useSnooze) as any
-// SAFETY: vi.mocked returns mocked type; cast to any for flexible test stubs
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 
 beforeEach(() => {
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
@@ -89,7 +97,6 @@ beforeEach(() => {
   // SAFETY: mockReturnValue accepts partial hook returns; cast to any for test flexibility
   vi.mocked(useShuffleQueue).mockReturnValue({ mutate: vi.fn(), isPending: false } as any)
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   // SAFETY: useBugReportRestore returns a context shape; cast to any for partial stub
   vi.mocked(useBugReportRestore).mockReturnValue({
     setRestoreAction: vi.fn(),
@@ -108,11 +115,11 @@ function renderQueue(): void {
   )
 }
 
-it('does not refresh session or threads when snooze fails', async () => {
+it('does not refresh session or threads when native reroll snooze fails', async () => {
   const refetchThreads = vi.fn()
   const refetchSession = vi.fn()
-  const snooze = vi.fn().mockRejectedValue({
-    response: { data: { detail: 'Snooze unavailable' } },
+  const reroll = vi.mocked(rollApi.reroll).mockRejectedValue({
+    response: { data: { detail: 'Roll unavailable' } },
   })
 
   mockedUseQueueThreads.mockReturnValue({
@@ -133,7 +140,10 @@ it('does not refresh session or threads when snooze fails', async () => {
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: refetchSession,
   })
-  mockedUseSnooze.mockReturnValue({ mutate: snooze, isPending: false })
+  mockedUseSession.mockReturnValue({
+    data: { pending_thread_id: 1, snoozed_threads: [] },
+    refetch: refetchSession,
+  })
 
   const user = userEvent.setup()
   renderQueue()
@@ -142,50 +152,9 @@ it('does not refresh session or threads when snooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
   await waitFor(() => {
-    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable', 'error')
+    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to snooze thread: Roll unavailable', 'error')
   })
-  expect(snooze).toHaveBeenCalledOnce()
-  expect(refetchSession).not.toHaveBeenCalled()
-  expect(refetchThreads).not.toHaveBeenCalled()
-})
-
-it('does not refresh session or threads when unsnooze fails', async () => {
-  const refetchThreads = vi.fn()
-  const refetchSession = vi.fn()
-  const unsnooze = vi.fn().mockRejectedValue({
-    response: { data: { detail: 'Unsnooze unavailable' } },
-  })
-
-  mockedUseQueueThreads.mockReturnValue({
-    data: [
-      {
-        id: 1,
-        title: 'Saga',
-        format: 'Comic',
-        status: 'active',
-        queue_position: 1,
-        issues_remaining: 5,
-      },
-    ],
-    isLoading: false,
-    refetch: refetchThreads,
-  })
-  mockedUseSession.mockReturnValue({
-    data: { snoozed_threads: [{ id: 1 }] },
-    refetch: refetchSession,
-  })
-  mockedUseUnsnooze.mockReturnValue({ mutate: unsnooze, isPending: false })
-
-  const user = userEvent.setup()
-  renderQueue()
-
-  await user.click(screen.getByRole('button', { name: /series actions/i }))
-  await user.click(screen.getByRole('menuitem', { name: /^unsnooze$/i }))
-
-  await waitFor(() => {
-    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to unsnooze thread: Unsnooze unavailable', 'error')
-  })
-  expect(unsnooze).toHaveBeenCalledWith(1)
+  expect(reroll).toHaveBeenCalledWith(1)
   expect(refetchSession).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
 })

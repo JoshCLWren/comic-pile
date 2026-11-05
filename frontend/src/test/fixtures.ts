@@ -40,7 +40,7 @@ type TestUser = {
 let fixtureUserCounter = 0;
 
 async function getCsrfToken(request: APIRequestContext, accessToken: string): Promise<string> {
-  const response = await request.get('/api/auth/csrf', {
+  const response = await request.get('/api/v2/auth/csrf', {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
     },
@@ -67,7 +67,7 @@ async function registerWithRetry(
 ): Promise<{ accessToken: string }> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const registerResponse = await request.post('/api/auth/register', {
+      const registerResponse = await request.post('/api/v2/auth/register', {
         data: testUser,
         timeout: 10000,
       });
@@ -76,7 +76,7 @@ async function registerWithRetry(
         const bodyText = await registerResponse.text();
 
         if (registerResponse.status() === 400 && bodyText.includes('Username already registered')) {
-          const loginResponse = await request.post('/api/auth/login', {
+          const loginResponse = await request.post('/api/v2/auth/login', {
             data: {
               username: testUser.username,
               password: testUser.password,
@@ -97,7 +97,7 @@ async function registerWithRetry(
         throw error;
       }
 
-      const loginResponse = await request.post('/api/auth/login', {
+      const loginResponse = await request.post('/api/v2/auth/login', {
         data: {
           username: testUser.username,
           password: testUser.password,
@@ -262,10 +262,8 @@ async function createThreadsForUser(
 
 function isExpectedAnonymousAuthProbe(message: string): boolean {
   const anonymousProbePaths = [
-    'api/auth/me',
-    'api/auth/refresh',
-    'api/v1/auth/me',
-    'api/v1/auth/refresh',
+    'api/v2/auth/me',
+    'api/v2/auth/refresh',
     'api/sessions/current',
     'api/threads/',
     'api/v1/dependencies/blocked',
@@ -420,7 +418,7 @@ export const test = base.extend<TestFixtures>({
     });
 
     try {
-      await request.post('/api/auth/logout', {
+      await request.post('/api/v2/auth/logout', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },
@@ -465,7 +463,7 @@ export const test = base.extend<TestFixtures>({
     // The per-test browser context owns and discards its localStorage.
     await page.goto('about:blank');
     try {
-      await request.post('/api/auth/logout', {
+      await request.post('/api/v2/auth/logout', {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
         },

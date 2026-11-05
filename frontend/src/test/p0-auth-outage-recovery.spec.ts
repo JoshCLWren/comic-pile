@@ -26,7 +26,7 @@ test.describe('Auth Outage Recovery', () => {
   }) => {
     let refreshCalls = 0
     page.on('request', request => {
-      if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/auth/refresh') refreshCalls += 1
+      if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v2/auth/refresh') refreshCalls += 1
     })
     await page.addInitScript(() => localStorage.setItem('auth_token', 'test-access-token'))
     // Step 1: Start with authenticated user
@@ -39,7 +39,7 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page.getByLabel('Desktop navigation')).toBeVisible() // Navigation indicates authenticated state
 
     // Step 2: Persistent auth/me outage (survives bounded retries)
-    mockApi.get('/v1/auth/me').as('authMe').replyAlways(503, {
+    mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, {
       message: 'Database unavailable',
       detail: 'database_unavailable',
     })
@@ -59,10 +59,10 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page).toHaveURL(/\/queue/)
 
     // Step 5: Recover — auth/me starts succeeding again
-    mockApi.get('/v1/auth/me').as('authMeRecovery').replyAlways(200, mockUser)
+    mockApi.get('/v2/auth/me').as('authMeRecovery').replyAlways(200, mockUser)
 
     const recovered = page.waitForResponse(
-      (response) => response.url().includes('/v1/auth/me') && response.status() === 200,
+      (response) => response.url().includes('/v2/auth/me') && response.status() === 200,
     )
     // A background backoff retry may already be in flight when we switch the
     // mock; either it or the explicit retry completes `recovered`.
@@ -91,7 +91,7 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page.getByLabel('Desktop navigation')).toBeVisible()
 
     // Persistent network failure for /auth/me
-    mockApi.get('/v1/auth/me').as('authMe').networkErrorAlways('Network Error')
+    mockApi.get('/v2/auth/me').as('authMe').networkErrorAlways('Network Error')
 
     // Navigate to a protected route
     await page.goto('/thread/1')
@@ -116,11 +116,11 @@ test.describe('Auth Outage Recovery', () => {
     await page.goto('/login')
 
     // Mock successful login but subsequent auth/me failure
-    mockApi.post('/v1/auth/login').as('login').reply(200, {
+    mockApi.post('/v2/auth/login').as('login').reply(200, {
       access_token: 'test-access-token',
       refresh_token: 'refresh-token',
     })
-    mockApi.get('/v1/auth/me').as('authMe').replyAlways(503, {
+    mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, {
       message: 'Service unavailable',
     })
 
@@ -128,7 +128,7 @@ test.describe('Auth Outage Recovery', () => {
     await page.fill('input[name="username"]', 'testuser')
     await page.fill('input[name="password"]', 'password123')
     const loginDone = page.waitForResponse(
-      (response) => response.url().includes('/v1/auth/login') && response.status() === 200,
+      (response) => response.url().includes('/v2/auth/login') && response.status() === 200,
     )
     await page.getByRole('button', { name: 'Sign In' }).click()
     await loginDone
@@ -156,7 +156,7 @@ test.describe('Auth Outage Recovery', () => {
     await expect(page.getByLabel('Desktop navigation')).toBeVisible()
 
     // Degrade first, then make auth/me definitively unauthorized
-    mockApi.get('/v1/auth/me').as('authMe').replyAlways(503, { message: 'Service unavailable' })
+    mockApi.get('/v2/auth/me').as('authMe').replyAlways(503, { message: 'Service unavailable' })
 
     // Navigate to protected route
     await page.goto('/queue')
@@ -167,7 +167,7 @@ test.describe('Auth Outage Recovery', () => {
 
     // Retry now hits a definitive 401: silent refresh cannot save the
     // session, so the app must transition to unauthenticated.
-    mockApi.get('/v1/auth/me').as('authMe401').replyAlways(401, { message: 'Unauthorized' })
+    mockApi.get('/v2/auth/me').as('authMe401').replyAlways(401, { message: 'Unauthorized' })
     const sawLogin = page.waitForURL('**/login')
     await page
       .getByRole('button', { name: 'Try again' })
@@ -189,7 +189,7 @@ test.describe('Auth Outage Recovery', () => {
     // resolves at domcontentloaded, before React's auth validation runs).
     await mockApi.setupAuthUser()
     const bootstrapped = page.waitForResponse(
-      (response) => response.url().includes('/v1/auth/me') && response.status() === 200,
+      (response) => response.url().includes('/v2/auth/me') && response.status() === 200,
     )
     await page.goto('/')
     await bootstrapped
@@ -197,14 +197,14 @@ test.describe('Auth Outage Recovery', () => {
     // Ladder: two 503s then success. Delay after failure N is
     // ~1s * 2^(N-1) (+10% jitter), so recovery lands around 3-4s —
     // measurably slower than a single fixed delay, well under 10s.
-    mockApi.get('/v1/auth/me').as('authMeFirst').replyOnce(503, { message: 'Service unavailable' })
-    mockApi.get('/v1/auth/me').as('authMeSecond').replyOnce(503, { message: 'Service unavailable' })
-    mockApi.get('/v1/auth/me').as('authMeRecovered').replyOnce(200, mockUser)
+    mockApi.get('/v2/auth/me').as('authMeFirst').replyOnce(503, { message: 'Service unavailable' })
+    mockApi.get('/v2/auth/me').as('authMeSecond').replyOnce(503, { message: 'Service unavailable' })
+    mockApi.get('/v2/auth/me').as('authMeRecovered').replyOnce(200, mockUser)
 
     // Navigate to protected route and wait for recovery
     const startTime = Date.now()
     const recovered = page.waitForResponse(
-      (response) => response.url().includes('/v1/auth/me') && response.status() === 200,
+      (response) => response.url().includes('/v2/auth/me') && response.status() === 200,
     )
     await page.goto('/thread/1')
     await recovered

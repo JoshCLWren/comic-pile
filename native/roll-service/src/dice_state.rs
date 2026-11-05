@@ -150,6 +150,22 @@ mod tests {
     }
 
     #[test]
+    fn repeated_snoozes_climb_then_a_good_rating_steps_down() {
+        // Ported from the retired v1 tests/test_snooze_ladder_bug.py: a native
+        // snooze (Reroll) climbs 6 -> 8 -> 10 -> 12 -> 20, holds at d20, and a
+        // 4.0 rating then steps down one rung instead of falling to a stale die.
+        let mut die = 6;
+        let mut path = vec![die];
+        for _ in 0..5 {
+            die = apply_action(die, DiceAction::Reroll).unwrap();
+            path.push(die);
+        }
+        die = apply_action(die, DiceAction::RollRating(4.0)).unwrap();
+        path.push(die);
+        assert_eq!(path, vec![6, 8, 10, 12, 20, 20, 12]);
+    }
+
+    #[test]
     fn manual_choice_is_not_pinned_direct_read_does_not_move() {
         let chosen = apply_action(6, DiceAction::ManualSelect(12)).unwrap();
         assert_eq!(chosen, 12);

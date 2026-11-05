@@ -12,7 +12,6 @@ import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../../types/rollBootstrap'
 import type { RollResponse } from '../../types'
 import type { SnoozeMutationOutcome } from '../../hooks/useSnooze'
-import type { SkipMutationOutcome } from '../../hooks/useSkip'
 import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 
@@ -24,12 +23,6 @@ interface RollMutations {
     isPending: boolean
     retryRefresh?: () => Promise<boolean>
   }
-  unsnoozeMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
-  skipMutation: {
-    mutate: (expectedPendingThreadId?: number) => Promise<SkipMutationOutcome>
-    isPending: boolean
-  }
-  unskipMutation: { mutate: (threadId: number) => Promise<void>; isPending: boolean }
   moveToFrontMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   moveToBackMutation: { mutate: (id: number) => Promise<void>; isPending: boolean }
   shuffleQueueMutation: { mutate: () => Promise<void>; isPending: boolean }
@@ -54,12 +47,6 @@ interface UseRollActionsParams {
    * visible recovery surface (a toast with a refresh-only retry).
    */
   onSnoozeRefreshFailed?: (refreshError: unknown) => void
-  /**
-   * Reports that the committed skip could not refresh authoritative Roll
-   * state. The action sheet has already closed by then, so the page owns the
-   * visible recovery surface (a toast with a refresh-only retry).
-   */
-  onSkipRefreshFailed?: (refreshError: unknown) => void
 }
 
 /**
@@ -93,7 +80,6 @@ export function useRollActions({
   refetchBootstrap,
   enterRatingView,
   onSnoozeRefreshFailed,
-  onSkipRefreshFailed,
 }: UseRollActionsParams) {
   const {
     isRolling,
@@ -117,9 +103,6 @@ export function useRollActions({
     setDieMutation,
     rollMutation,
     snoozeMutation,
-    unsnoozeMutation,
-    skipMutation,
-    unskipMutation,
     moveToFrontMutation,
     moveToBackMutation,
     shuffleQueueMutation,
@@ -198,7 +181,9 @@ export function useRollActions({
           break
         case 'snooze': {
           if (isSnoozed) {
-            await unsnoozeMutation.mutate(selectedThread!.id)
+            // Roll unsnooze is client-only: remove the thread from the browser snooze cookie
+            const { removeRollSnooze } = await import('../../services/api-roll')
+            removeRollSnooze(selectedThread!.id)
             await refetchBootstrap()
             break
           }
@@ -224,29 +209,6 @@ export function useRollActions({
           if (!outcome.refreshed) {
             if (onSnoozeRefreshFailed) {
               onSnoozeRefreshFailed(outcome.refreshError)
-            } else {
-              setErrorMessage(getApiErrorDetail(outcome.refreshError))
-            }
-          }
-          break
-        }
-        case 'skip': {
-          const isSkipped =
-            bootstrap?.skipped_thread_ids?.includes(selectedThread!.id) ?? false
-          if (isSkipped) {
-            // Unskip does not reconcile bootstrap state in its hook, so this
-            // one explicit refresh is what drops the skipped membership.
-            await unskipMutation.mutate(selectedThread!.id)
-            await refetchBootstrap()
-            break
-          }
-          // The skip mutation owns the single authoritative refresh. This
-          // handler only reports an exhausted refresh so a stale pool is never
-          // silent; it must not start a second request.
-          const outcome = await skipMutation.mutate(bootstrap?.pending_thread_id ?? undefined)
-          if (!outcome.refreshed) {
-            if (onSkipRefreshFailed) {
-              onSkipRefreshFailed(outcome.refreshError)
             } else {
               setErrorMessage(getApiErrorDetail(outcome.refreshError))
             }

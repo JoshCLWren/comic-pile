@@ -9,7 +9,6 @@ import { createDependenciesApi } from '../services/api-dependencies'
 import { createQueueApi } from '../services/api-queue'
 import { createRollApi } from '../services/api-roll'
 import { createSessionApi } from '../services/api-sessions'
-import { createSnoozeApi } from '../services/api-snooze'
 import { createThreadsApi } from '../services/api-threads'
 import { createUndoApi } from '../services/api-undo'
 
@@ -30,7 +29,6 @@ export function createApiServiceSet(client: HttpClient) {
     queueApi: createQueueApi(client),
     rollApi: createRollApi(client),
     sessionApi: createSessionApi(client),
-    snoozeApi: createSnoozeApi(client),
     tasksApi: createTasksApi(client),
     threadsApi: createThreadsApi(client),
     undoApi: createUndoApi(client),

@@ -20,7 +20,7 @@ import {
 import { useSession } from '../hooks/useSession'
 import { useQueueBlockingInfo } from '../hooks/useQueueBlockingInfo'
 import { useReadingBoundaries } from '../hooks/useReadingBoundaries'
-import { useSnooze, useUnsnooze } from '../hooks/useSnooze'
+import { useSnooze } from '../hooks/useSnooze'
 import { threadsApi } from '../services/api-threads'
 import { issueDependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
@@ -51,7 +51,6 @@ vi.mock('../hooks/useSession', () => ({
 
 vi.mock('../hooks/useSnooze', () => ({
   useSnooze: vi.fn(),
-  useUnsnooze: vi.fn(),
 }))
 
 vi.mock('../hooks/useQueueBlockingInfo', () => ({
@@ -134,8 +133,6 @@ const mockedListForThread = vi.mocked(issueDependenciesApi).listForThread as any
 const mockedThreadsApi = vi.mocked(threadsApi) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseSnooze = vi.mocked(useSnooze) as any
-// SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
-const mockedUseUnsnooze = vi.mocked(useUnsnooze) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
 const mockedUseQueueBlockingInfo = vi.mocked(useQueueBlockingInfo) as any
 // SAFETY: vi.mocked returns strict hook types; cast to any so tests can stub partial returns
@@ -222,7 +219,6 @@ beforeEach(() => {
     refetch: vi.fn(),
   })
   mockedUseSnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
-  mockedUseUnsnooze.mockReturnValue({ mutate: vi.fn(), isPending: false })
   mockedUseBugReportRestore.mockReturnValue({
     setRestoreAction: vi.fn(),
     clearRestoreAction: vi.fn(),

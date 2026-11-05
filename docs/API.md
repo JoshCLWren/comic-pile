@@ -23,7 +23,7 @@ The API uses a **partial versioning** strategy with two surfaces:
 - **`/api/*`** — the legacy surface, used by original resources. Most maintained client resources have migrated to the versioned surface.
 - **`/api/v1/*`** — the canonical versioned surface. All new client resources must be added here.
 
-Legacy paths (e.g., `/api/threads/*`, `/api/roll/*`, `/api/sessions/*`, `/api/rate/*`, `/api/snooze/*`, `/api/undo/*`) are retained as explicit, tested backwards-compatibility aliases. Maintained first-party consumers should use the `/api/v1/*` equivalents.
+Legacy paths (e.g., `/api/threads/*`, `/api/roll/*`, `/api/sessions/*`, `/api/rate/*`, `/api/undo/*`) are retained as explicit, tested backwards-compatibility aliases. Maintained first-party consumers should use the `/api/v1/*` equivalents. The snooze family (`/api/v1/snooze/*` and `/api/snooze/*`) is retired: snooze is the native `POST /api/v2/roll/offer` reroll and unsnooze is client-only via the `comicpile_roll_snoozes` cookie (#4338, #4349).
 
 **Convention for new endpoints:** add new client resources under `/api/v1/*`;
 do not introduce new bare `/api/*` routes. Non-production tooling routes

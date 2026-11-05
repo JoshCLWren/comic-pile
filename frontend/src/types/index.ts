@@ -82,7 +82,7 @@ export interface AuthUser {
   id?: number;
   username: string;
   email?: string;
-  /** Present when `/v1/auth/me` reports it; gates admin-only tag controls. */
+  /** Present when `/v2/auth/me` reports it; gates admin-only tag controls. */
   is_admin?: boolean;
 }
 
@@ -556,9 +556,7 @@ export interface SetCurrentIssueResponse {
   reading_progress: string | null;
 }
 
-export interface BugReportResponse {
-  issue_url: string
-}
+export type BugReportResponse = components['schemas']['BugReportResponse']
 
 /**
  * Reader-context response from GET /v1/issues/{issue_id}/reader-context

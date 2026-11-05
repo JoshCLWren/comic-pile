@@ -94,7 +94,6 @@ vi.mock('../hooks/useReaderContext', async (importOriginal) => {
 })
 vi.mock('../services/api-threads', () => ({ threadsApi: { setPending: spies.setPending, list: vi.fn().mockResolvedValue({ threads: [{ id: 1, title: 'Saga', format: 'Comic', status: 'active' }], next_page_token: null }) } }))
 vi.mock('../services/api-sessions', () => ({ sessionApi: {} }))
-vi.mock('../services/api-skip', () => ({ skipApi: { skip: vi.fn().mockResolvedValue(undefined), unskip: vi.fn().mockResolvedValue(undefined) } }))
 vi.mock('../services/api', () => ({ default: {} }))
 vi.mock('../services/api-dependencies', () => ({ dependenciesApi: { getConnectedThreads: relatedApi.connectedThreads, getBlockingInfo: relatedApi.blockingInfo, getBatchBlockingInfo: relatedApi.batchBlockingInfo } }))
 vi.mock('../services/api-reading-orders', () => ({ readingOrdersApi: { getForThread: relatedApi.readingOrders } }))
@@ -122,9 +121,8 @@ interface ThreadPoolMockProps {
   onShuffle: () => void
   onUnsnooze: () => void
   onToggleSnoozed: () => void
-  onToggleSkipped: () => void
 }
-vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button><button onClick={props.onToggleSkipped}>toggle skipped</button></div> }))
+vi.mock('../pages/RollPage/components/ThreadPool', () => ({ ThreadPool: (props: ThreadPoolMockProps) => <div><button onClick={() => props.onThreadClick({ id: 1, title: 'Saga', format: 'Comic' })}>thread</button><button onClick={props.onShuffle}>shuffle pool</button><button onClick={props.onUnsnooze}>unsnooze</button><button onClick={props.onToggleSnoozed}>toggle snoozed</button></div> }))
 interface RatingViewMockData {
   activeRatingThread: { title?: string; issue_number?: string | null } | null
   errorMessage: string
@@ -596,14 +594,14 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'update low rating' }))
   })
 
-  it('handles unsnooze failures without leaving the page stuck', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    spies.unsnooze.mockRejectedValueOnce(new Error('unsnooze failed'))
+  it('unsnoozes without calling the retired server mutation', async () => {
     render(<RollPage />)
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'unsnooze' }))
-    await waitFor(() => expect(spies.unsnooze).toHaveBeenCalled())
-    errorSpy.mockRestore()
+    // Roll unsnooze is client-only after #4349; the retired server mutation
+    // must never be called and the page must stay interactive.
+    expect(spies.unsnooze).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'unsnooze' })).toBeInTheDocument()
   })
 
   it('does not expose retired stale or blocked candidates as Roll actions', () => {

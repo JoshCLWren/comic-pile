@@ -7,7 +7,7 @@ see. These guards exercise the deferred registry instead:
 
 * every eager ``/api/*`` route is reachable after selecting mounts for its own
   path (the route-coverage guard promised by ``app.router_mounts``);
-* a snooze request registers only the snooze mount, not catalog/delivery;
+* the retired v1 snooze route (#4338) answers the JSON 404 without catalog/delivery;
 * ``POST /api/v1/roll/switch-prerequisite`` (composed into the dependency mount)
   answers on the first request instead of falling through to the fallback; and
 * ``import api.index`` stays inside the cold-start import budget.
@@ -159,28 +159,21 @@ def test_every_eager_api_route_is_reachable_from_its_selected_mounts() -> None:
 
 
 @pytest.mark.asyncio
-async def test_first_snooze_request_registers_only_the_snooze_mount() -> None:
-    """A cold snooze request must not import catalog or delivery."""
+async def test_retired_snooze_request_hits_json_404_without_heavy_mounts() -> None:
+    """The retired v1 snooze route (#4338) answers 404 and imports no heavy mount."""
     eager_paths = set(_route_paths(create_app(serve_frontend=False)))
-    snooze_paths = {path for path in eager_paths if request_segment(path) == "snooze"}
+    assert SNOOZE_PATH not in eager_paths
 
     app = create_app(serve_frontend=False, defer_router_imports=True)
-    cold_paths = set(_route_paths(app))
-    assert SNOOZE_PATH not in cold_paths
-
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.post(SNOOZE_PATH)
 
-    # Unauthenticated: a 401 proves the snooze route answered, not the fallback.
-    assert response.status_code == 401
-
-    loaded_paths = set(_route_paths(app)) - cold_paths - {API_FALLBACK_PATH}
-    assert loaded_paths
-    assert loaded_paths <= snooze_paths
-    assert "/api/v1/images/optimize" not in eager_paths
+    assert response.status_code == 404
+    loaded_paths = set(_route_paths(app))
+    assert SNOOZE_PATH not in loaded_paths
     for heavy_path in ("/api/v1/catalog/series", "/api/v1/delivery"):
-        assert heavy_path not in cold_paths | loaded_paths
+        assert heavy_path not in loaded_paths
 
 
 @pytest.mark.asyncio

@@ -5,9 +5,6 @@ Vercel. A production method/path needs BOTH a registration in the appropriate
 isolated native entrypoint and a method-matched vercel.json rewrite ahead of
 the Python catch-all.
 
-The two Skip handlers were already staged in the shared Rust library without
-native ingress before this guard was added. Keep them explicitly allowlisted
-until the Skip cutover PR wires them, then remove those entries.
 """
 
 from __future__ import annotations
@@ -26,12 +23,14 @@ NATIVE_INGRESSES = {
 AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
 VERCEL_CAPTURE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
 
-# Rust-only handlers already present on main, but NOT yet publicly cut over.
-# A new endpoint must not be added here as a shortcut around live verification.
-STAGED_RUST_ROUTES = frozenset(
+# Retired Roll Skip operation. Reroll (POST /api/v2/roll/offer) replaced it, so
+# no native ingress may ever publish it again.
+RETIRED_RUST_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         ("POST", "/api/v1/roll/skip"),
         ("POST", "/api/roll/skip"),
+        ("POST", "/api/v1/roll/skip/:thread_id/unskip"),
+        ("POST", "/api/roll/skip/:thread_id/unskip"),
     }
 )
 AXUM_ROUTE = re.compile(
@@ -128,7 +127,7 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
     public_service = {route for route in service if route[1].startswith("/api/")}
     assert any(path.endswith("/roll/bootstrap") for _, path in public_service)
 
-    for method, path in sorted(public_service - STAGED_RUST_ROUTES):
+    for method, path in sorted(public_service):
         owners = [
             function
             for function, routes in ingresses.items()
@@ -144,10 +143,18 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
             f"its real URL to {actual!r}, not {owners[0]!r}"
         )
 
-    for method, path in sorted(public_service & STAGED_RUST_ROUTES):
+    # A retired route must never come back: not in the Rust service, not in
+    # either native ingress, and never rewritten to a native destination.
+    for method, path in sorted(RETIRED_RUST_ROUTES):
+        assert (method, path) not in public_service, (
+            f"{method} {path} is retired; remove its Rust service route"
+        )
+        for function, routes in ingresses.items():
+            assert (method, path) not in routes, (
+                f"{method} {path} is retired; remove its {function} ingress route"
+            )
         assert _destination(vercel, method, _concrete_path(path)) not in NATIVE_INGRESSES, (
-            f"{method} {path} is now routed to Rust: remove its explicit "
-            "STAGED_RUST_ROUTES exception and verify its cutover"
+            f"{method} {path} is retired and must stay off the native ingress"
         )
 
 

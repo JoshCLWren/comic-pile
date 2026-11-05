@@ -12,7 +12,6 @@ export interface RollPageState {
   overrideThreadId: string
   overrideErrorMessage: string
   snoozedExpanded: boolean
-  skippedExpanded: boolean
   isDieModalOpen: boolean
   isSetCurrentIssueOpen: boolean
   selectedThread: RollBootstrapThread | null
@@ -28,14 +27,6 @@ export interface RollPageState {
   rating: number
   errorMessage: string
   suppressPendingAutoOpenRef: React.MutableRefObject<boolean>
-  /**
-   * Pending thread id from the last authoritative snapshot that a committed
-   * Skip already consumed while its follow-up bootstrap refresh failed.
-   * `useRollPendingSession` must ignore that id, because the snapshot on
-   * screen still names the series the reader just skipped. The guard clears
-   * itself as soon as a newer snapshot reports a different pending read.
-   */
-  ignoredPendingThreadIdRef: React.MutableRefObject<number | null>
   rollIntervalRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
   rollTimeoutRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
 }
@@ -50,7 +41,6 @@ export interface RollPageStateSetters {
   setOverrideThreadId: (value: string) => void
   setOverrideErrorMessage: (value: string) => void
   setSnoozedExpanded: (value: boolean) => void
-  setSkippedExpanded: (value: boolean) => void
   setIsDieModalOpen: (value: boolean) => void
   setIsSetCurrentIssueOpen: (value: boolean) => void
   setSelectedThread: (value: RollBootstrapThread | null) => void
@@ -76,7 +66,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [overrideErrorMessage, setOverrideErrorMessage] = useState('')
   const [snoozedExpanded, setSnoozedExpanded] = useState(false)
-  const [skippedExpanded, setSkippedExpanded] = useState(false)
   const [isDieModalOpen, setIsDieModalOpen] = useState(false)
   const [isSetCurrentIssueOpen, setIsSetCurrentIssueOpen] = useState(false)
   const [selectedThread, setSelectedThread] = useState<RollBootstrapThread | null>(null)
@@ -92,7 +81,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [errorMessage, setErrorMessage] = useState('')
 
   const suppressPendingAutoOpenRef = useRef(false)
-  const ignoredPendingThreadIdRef = useRef<number | null>(null)
   const rollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const rollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -115,8 +103,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setOverrideErrorMessage,
     snoozedExpanded,
     setSnoozedExpanded,
-    skippedExpanded,
-    setSkippedExpanded,
     isDieModalOpen,
     setIsDieModalOpen,
     isSetCurrentIssueOpen,
@@ -144,7 +130,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     errorMessage,
     setErrorMessage,
     suppressPendingAutoOpenRef,
-    ignoredPendingThreadIdRef,
     rollIntervalRef,
     rollTimeoutRef,
   }
