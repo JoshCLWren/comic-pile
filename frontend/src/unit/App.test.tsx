@@ -57,6 +57,8 @@ vi.mock('../pages/QueuePage', () => ({ default: () => <div data-testid="queue-pa
 vi.mock('../pages/HistoryPage', () => ({ default: () => <div data-testid="history-page">History</div> }))
 vi.mock('../pages/SessionPage', () => ({ default: () => <div data-testid="session-page">Session</div> }))
 vi.mock('../pages/ThreadDetailView', () => ({ default: () => <div data-testid="thread-detail-page">Thread detail</div> }))
+vi.mock('../pages/ContinuityPlansIndexPage', () => ({ default: () => <div data-testid="continuity-plans-page">Continuity plans</div> }))
+vi.mock('../pages/CrossoversPage', () => ({ default: () => <div data-testid="crossovers-page">Crossovers</div> }))
 vi.mock('../pages/HelpPage', () => ({ default: () => <div data-testid="help-page">Help</div> }))
 
 import App, { AuthProvider, AppRoutes, useAuth } from '../App'
@@ -217,6 +219,58 @@ test('redirects the retired /help route to the canonical /glossary route', async
 
   await waitFor(() => expect(screen.getByTestId('help-page')).toBeInTheDocument())
   expect(screen.getByTestId('location-path')).toHaveTextContent('/glossary')
+})
+
+test('redirects /crossovers to the continuity plans index', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  const LocationProbe = () => {
+    const location = useLocation()
+    return <div data-testid="location-path">{location.pathname}</div>
+  }
+  render(
+    <MemoryRouter initialEntries={['/crossovers']}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <NavCollapseProvider>
+              <TestAuthConsumer />
+              <LocationProbe />
+              <AppRoutes />
+            </NavCollapseProvider>
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId('continuity-plans-page')).toBeInTheDocument())
+  expect(screen.getByTestId('location-path')).toHaveTextContent('/continuity-plans')
+})
+
+test('redirects /crossovers with a group param to the events view', async () => {
+  mockApiGet.mockResolvedValue({ username: 'testuser', email: 'test@test.com' })
+  const LocationProbe = () => {
+    const location = useLocation()
+    return <div data-testid="location-path">{location.pathname}</div>
+  }
+  render(
+    <MemoryRouter initialEntries={['/crossovers?group=avengers']}>
+      <AuthProvider>
+        <BugReportRestoreProvider>
+          <ToastProvider>
+            <NavCollapseProvider>
+              <TestAuthConsumer />
+              <LocationProbe />
+              <AppRoutes />
+            </NavCollapseProvider>
+          </ToastProvider>
+        </BugReportRestoreProvider>
+      </AuthProvider>
+    </MemoryRouter>,
+  )
+
+  await waitFor(() => expect(screen.getByTestId('crossovers-page')).toBeInTheDocument())
+  expect(screen.getByTestId('location-path')).toHaveTextContent('/continuity-plans/events')
 })
 
 test('redirects legacy /threads/:id URLs to the working /thread/:id page', async () => {

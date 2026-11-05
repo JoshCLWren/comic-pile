@@ -14,10 +14,13 @@ describe('route inventory parity with App.tsx', () => {
     expect([...inventoryPaths].sort()).toEqual([...appPaths].sort())
   })
 
-  test('every 4504-owned route names an existing spec', () => {
-    const owned = AUDITED_ROUTES.filter(route => route.auditedBy === '4504')
-    expect(owned.length).toBeGreaterThan(0)
-    for (const route of owned) {
+  test('every inventoried route names an existing request-budget spec', () => {
+    // Parent #4499 requirement 6: a new routed view must not escape
+    // request-efficiency coverage. Every route — public, protected,
+    // redirect, or unknown — carries the spec that measures its requests,
+    // so adding a route to App.tsx fails here until its spec exists.
+    expect(AUDITED_ROUTES.length).toBeGreaterThan(0)
+    for (const route of AUDITED_ROUTES) {
       expect(route.spec, `${route.path} missing spec`).toBeTruthy()
       const status = specStatus(route.spec ?? '')
       expect(status.exists, `${route.path} -> ${route.spec} (${status.path})`).toBe(true)
@@ -30,16 +33,21 @@ describe('route inventory parity with App.tsx', () => {
     }
   })
 
-  test('every 4504-owned public route has a budget entry', () => {
-    for (const route of AUDITED_ROUTES.filter(r => r.auditedBy === '4504' && (r.auth === 'public' || r.auth === 'conditional' || r.auth === 'unknown' || r.auth === 'redirect'))) {
+  test('every public route has a budget entry', () => {
+    // Redirects to feature routes (/help, /threads/:id) are measured by their
+    // target's spec, not by a public budget row.
+    const publicRoutes = AUDITED_ROUTES.filter(
+      r => r.auth === 'public' || r.auth === 'conditional' || r.auth === 'unknown' || (r.auth === 'redirect' && r.redirectTo === '/'),
+    )
+    for (const route of publicRoutes) {
       // public routes use publicBudget; unknown routes map to '/unknown'
       const key = route.path === '*' ? '/unknown' : route.path
       expect(() => publicBudget(key)).not.toThrow(`Missing public budget for ${route.path}`)
     }
   })
 
-  test('every 4504-owned auxiliary route has a budget entry', () => {
-    for (const route of AUDITED_ROUTES.filter(r => r.auditedBy === '4504' && r.auth === 'protected' && ['/whats-new', '/glossary', '/help'].includes(r.path))) {
+  test('every auxiliary route has a budget entry', () => {
+    for (const route of AUDITED_ROUTES.filter(r => r.auth === 'protected' && ['/whats-new', '/glossary', '/help'].includes(r.path))) {
       expect(() => auxBudget(route.path)).not.toThrow(`Missing aux budget for ${route.path}`)
     }
   })
