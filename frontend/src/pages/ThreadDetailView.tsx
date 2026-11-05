@@ -137,6 +137,12 @@ export default function ThreadDetailView() {
 
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editForm, setEditForm] = useState<QueueFormState>(DEFAULT_CREATE_STATE)
+  // MQA-QUEUE-008 / #4356: closing a dirty Edit Series draft via the dialog
+  // close control (×, Escape, backdrop) asks whether to discard, mirroring the
+  // queue page's Edit Series dialog. Queued deferred issue edits count as
+  // unsaved changes until Save flushes them.
+  const [showDiscardPrompt, setShowDiscardPrompt] = useState(false)
+  const [hasPendingIssueEdits, setHasPendingIssueEdits] = useState(false)
   // Malformed `?issue=` values collapse to 0 (plain thread navigation) so a
   // stale or hand-edited link cannot drive pagination toward an impossible row.
   const requestedIssueId = parseRequestedIssueId(location.search)
@@ -384,6 +390,35 @@ export default function ThreadDetailView() {
     })
     setIsEditOpen(true)
   }
+
+  // Dirty check mirrors the queue page's Edit Series dialog (QueueModals):
+  // any edited draft field or queued deferred issue edit must prompt before
+  // the close control discards it.
+  const initialCredits = thread ? getManualCreatorCreditList(thread) : []
+  const editFormIsDirty =
+    thread != null &&
+    (editForm.title !== thread.title ||
+      editForm.format !== thread.format ||
+      editForm.notes !== (thread.notes ?? '') ||
+      (thread.total_issues == null &&
+        editForm.issuesRemaining !== thread.issues_remaining) ||
+      JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
+  const editHasUnsavedChanges = editFormIsDirty || hasPendingIssueEdits
+
+  const handleEditClose = () => {
+    if (editHasUnsavedChanges) {
+      setShowDiscardPrompt(true)
+      return
+    }
+    setIsEditOpen(false)
+  }
+
+  useEffect(() => {
+    if (!isEditOpen) {
+      setHasPendingIssueEdits(false)
+      setShowDiscardPrompt(false)
+    }
+  }, [isEditOpen])
 
   if (threadId === null || !thread) {
     if (threadId !== null && !thread && !threadError) {
@@ -849,9 +884,7 @@ export default function ThreadDetailView() {
       <Modal
         isOpen={isEditOpen}
         title="Edit Series"
-        onClose={() => {
-          setIsEditOpen(false)
-        }}
+        onClose={handleEditClose}
         overlayClassName="edit-modal__overlay"
       >
         <div className="space-y-4">
@@ -926,6 +959,7 @@ export default function ThreadDetailView() {
                 refetch()
               }}
               deferred={true}
+              onPendingMutationsChange={setHasPendingIssueEdits}
             />
           )}
 
@@ -937,6 +971,38 @@ export default function ThreadDetailView() {
           >
             {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
           </button>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showDiscardPrompt}
+        title="Discard changes?"
+        onClose={() => setShowDiscardPrompt(false)}
+        data-testid="discard-edit-changes-dialog"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--theme-text-muted)]">
+            Your unsaved title, format, notes, creator, or issue changes will be discarded.
+          </p>
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setShowDiscardPrompt(false)}
+              className="min-h-11 sm:min-h-9 rounded-lg border border-[var(--theme-border)] px-4 py-2 text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+            >
+              Keep editing
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowDiscardPrompt(false)
+                setIsEditOpen(false)
+              }}
+              className="min-h-11 sm:min-h-9 rounded-lg bg-[var(--theme-danger)] px-4 py-2 text-xs font-black text-white hover:bg-[var(--theme-danger-hover)] transition-colors"
+            >
+              Discard changes
+            </button>
+          </div>
         </div>
       </Modal>
 
