@@ -842,10 +842,16 @@ pub(crate) async fn persist(
     } else {
         None
     };
-    let pre_die = if pre_session.is_some() {
-        Some(dice_state::current_die(tx, user).await?)
-    } else {
-        None
+    // Mirror `get_current_die_for_session`: an explicit manual die wins over the
+    // event-derived ladder, so the undo event records the die the reader saw.
+    let pre_die = match &pre_session {
+        Some((_, state)) => Some(
+            state["manual_die"]
+                .as_i64()
+                .map(|die| die as i32)
+                .unwrap_or(dice_state::current_die(tx, user).await?),
+        ),
+        None => None,
     };
     let old_rating_row = tx
         .query_opt(
@@ -1461,19 +1467,23 @@ mod tests {
         );
         // The undo delta records the pre-action blocked flag so undo re-blocks
         // the dependent series.
-        let blocked_states: Value = serde_json::from_str(
-            &first
-                .query_one(
-                    "SELECT thread_states::text FROM snapshots
-                     WHERE session_id=1 ORDER BY id DESC LIMIT 1",
-                    &[],
-                )
-                .await
-                .unwrap()
-                .get::<_, String>(0),
-        )
-        .unwrap();
+        let blocked_snapshot = first
+            .query_one(
+                "SELECT thread_states::text, session_state::text FROM snapshots
+                 WHERE session_id=1 ORDER BY id DESC LIMIT 1",
+                &[],
+            )
+            .await
+            .unwrap();
+        let blocked_states: Value =
+            serde_json::from_str(&blocked_snapshot.get::<_, String>(0)).unwrap();
         assert_eq!(blocked_states["_blocked_changes"]["30"], true);
+        let blocked_session: Value =
+            serde_json::from_str(&blocked_snapshot.get::<_, String>(1)).unwrap();
+        assert_eq!(
+            blocked_session["current_die"], 12,
+            "the undo event must record the session manual die"
+        );
         let tx = first.transaction().await.unwrap();
         let reblocked = persist(
             &tx,
