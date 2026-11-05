@@ -202,6 +202,90 @@ function createD4Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   return geometry;
 }
 
+
+/**
+ * A real two-sided coin: circular faces, raised shoulders and a thick rim.
+ * Both numbered faces use the same texture atlas as the other dice. No d6
+ * fallback, no extra numbers, and no additional WebGL scene or dependencies.
+ */
+function createD2Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
+  const { cols, rows, uvInset } = atlasInfo
+  const verts: number[] = []
+  const uvs: number[] = []
+  const inds: number[] = []
+  const segments = 64
+  const faceRadius = 0.86
+  const rimRadius = 0.96
+  const faceZ = 0.15
+  const rimZ = 0.075
+  const tile1 = getUVForNumber(1, cols, rows, uvInset)
+  // Sample the plain background in a corner of tile 1 for the metallic edge.
+  const edgeUv: Vector2Tuple = [
+    tile1.u0 + (tile1.u1 - tile1.u0) * 0.08,
+    tile1.v0 + (tile1.v1 - tile1.v0) * 0.08,
+  ]
+
+  function point(radius: number, z: number, angle: number): Vector3Tuple {
+    return [radius * Math.cos(angle), radius * Math.sin(angle), z]
+  }
+
+  function faceUv(number: 1 | 2, x: number, y: number): Vector2Tuple {
+    const tile = getUVForNumber(number, cols, rows, uvInset)
+    // Face 2 is viewed after an X-axis half-turn. Invert the local Y UV so
+    // the numeral is upright on landing, rather than upside down.
+    return [
+      (tile.u0 + tile.u1) / 2 + x * (tile.u1 - tile.u0) * 0.5,
+      (tile.v0 + tile.v1) / 2 + (number === 2 ? -y : y) * (tile.v1 - tile.v0) * 0.5,
+    ]
+  }
+
+  function edgeQuad(a: Vector3Tuple, b: Vector3Tuple, c: Vector3Tuple, d: Vector3Tuple) {
+    addTriangle(verts, uvs, inds, a, b, c, edgeUv, edgeUv, edgeUv)
+    addTriangle(verts, uvs, inds, a, c, d, edgeUv, edgeUv, edgeUv)
+  }
+
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * 2 * Math.PI
+    const b = ((i + 1) / segments) * 2 * Math.PI
+    const frontA = point(faceRadius, faceZ, a)
+    const frontB = point(faceRadius, faceZ, b)
+    const backA = point(faceRadius, -faceZ, a)
+    const backB = point(faceRadius, -faceZ, b)
+    const outerFrontA = point(rimRadius, rimZ, a)
+    const outerFrontB = point(rimRadius, rimZ, b)
+    const outerBackA = point(rimRadius, -rimZ, a)
+    const outerBackB = point(rimRadius, -rimZ, b)
+
+    // The only two numbered faces, with opposite outward normals.
+    addTriangle(
+      verts, uvs, inds,
+      [0, 0, faceZ], frontA, frontB,
+      faceUv(1, 0, 0),
+      faceUv(1, frontA[0], frontA[1]),
+      faceUv(1, frontB[0], frontB[1]),
+    )
+    addTriangle(
+      verts, uvs, inds,
+      [0, 0, -faceZ], backB, backA,
+      faceUv(2, 0, 0),
+      faceUv(2, backB[0], backB[1]),
+      faceUv(2, backA[0], backA[1]),
+    )
+
+    // Raised shoulders join the broad faces to the narrower, flat rim.
+    edgeQuad(frontA, outerFrontA, outerFrontB, frontB)
+    edgeQuad(outerFrontA, outerBackA, outerBackB, outerFrontB)
+    edgeQuad(outerBackA, backA, backB, outerBackB)
+  }
+
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(verts), 3))
+  geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2))
+  geometry.setIndex(new THREE.BufferAttribute(new Uint16Array(inds), 1))
+  geometry.computeVertexNormals()
+  return geometry
+}
+
 function createD6Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   const { cols, rows, uvInset } = atlasInfo;
   const verts: number[] = []
@@ -713,6 +797,8 @@ function createD100Geometry(atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
 
 function buildGeometry(sides: number, atlasInfo: DiceTextureAtlas): THREE.BufferGeometry {
   switch (sides) {
+    case 2:
+      return createD2Geometry(atlasInfo);
     case 4:
       return createD4Geometry(atlasInfo);
     case 6:
@@ -996,8 +1082,8 @@ export default function Dice3D({
     const material = new THREE.MeshStandardMaterial({
       map: atlasInfo.texture,
       color,
-      metalness: 0.15,
-      roughness: 0.4
+      metalness: sides === 2 ? 0.65 : 0.15,
+      roughness: sides === 2 ? 0.25 : 0.4
     });
 
     const mesh = new THREE.Mesh(geometry, material);
@@ -1030,9 +1116,10 @@ export default function Dice3D({
         }
         isStable = true;
       } else if (rolling) {
-        meshRef.current.rotation.x += 0.2;
-        meshRef.current.rotation.y += 0.25;
-        meshRef.current.rotation.z += 0.15;
+        // A d2 flips end-over-end. Polyhedral dice keep their tumble.
+        meshRef.current.rotation.x += sides === 2 ? 0.35 : 0.2;
+        meshRef.current.rotation.y += sides === 2 ? 0 : 0.25;
+        meshRef.current.rotation.z += sides === 2 ? 0 : 0.15;
       } else if (targetRotationRef.current) {
         const { x, y, z } = targetRotationRef.current;
         const dx = x - meshRef.current.rotation.x;
@@ -1051,7 +1138,8 @@ export default function Dice3D({
           isStable = true;
         }
       } else if (!freeze) {
-        meshRef.current.rotation.y += 0.008;
+        // Keep an idle coin face legible instead of rotating it edge-on.
+        if (sides !== 2) meshRef.current.rotation.y += 0.008;
       } else {
         isStable = true;
       }
@@ -1084,11 +1172,14 @@ export default function Dice3D({
       }
     };
     // Restart loop when isRolling changes so the new loop definitely sees current ref.
-  }, [freeze, lockMotion, isRolling]);
+  }, [freeze, lockMotion, isRolling, sides]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {
-      const nextRotation = getFaceRotation(value, numberNormalsRef.current)
+      // Keep d2 strictly binary and settle on an upright face after a flip.
+      const nextRotation = sides === 2
+        ? { x: value === 2 ? Math.PI : 0, y: 0, z: 0 }
+        : getFaceRotation(value, numberNormalsRef.current)
       if (lockMotion) {
         meshRef.current.rotation.set(nextRotation.x, nextRotation.y, nextRotation.z)
         targetRotationRef.current = null
