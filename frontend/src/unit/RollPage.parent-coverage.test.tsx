@@ -596,14 +596,14 @@ describe('RollPage parent handlers', () => {
     await user.click(screen.getByRole('button', { name: 'update low rating' }))
   })
 
-  it('handles unsnooze failures without leaving the page stuck', async () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    spies.unsnooze.mockRejectedValueOnce(new Error('unsnooze failed'))
+  it('unsnoozes without calling the retired server mutation', async () => {
     render(<RollPage />)
 
     await userEvent.setup().click(screen.getByRole('button', { name: 'unsnooze' }))
-    await waitFor(() => expect(spies.unsnooze).toHaveBeenCalled())
-    errorSpy.mockRestore()
+    // Roll unsnooze is client-only after #4349; the retired server mutation
+    // must never be called and the page must stay interactive.
+    expect(spies.unsnooze).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'unsnooze' })).toBeInTheDocument()
   })
 
   it('does not expose retired stale or blocked candidates as Roll actions', () => {

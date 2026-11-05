@@ -64,6 +64,7 @@ test.describe('SNOOZE-001: Snooze and unsnooze', () => {
         && response.status() === 200,
     )
     await page.getByTestId('rating-secondary-actions').getByRole('button', { name: /snooze/i }).click()
+    // SAFETY: the response is the native offer handler's JSON for this test request.
     const body = (await (await offer).json()) as { thread_id: number; snoozed_thread_id: number | null }
     expect(body.snoozed_thread_id).toBe(snoozed.id)
     expect(body.thread_id).not.toBe(snoozed.id)
@@ -211,7 +212,7 @@ async function cookieSnoozes(page: Page): Promise<number[]> {
   if (!cookie) return []
   try {
     const parsed: unknown = JSON.parse(decodeURIComponent(cookie.value))
-    return Array.isArray(parsed) ? parsed.filter((id): id is number => typeof id === 'number') : []
+    return Array.isArray(parsed) ? parsed.filter((id): id is number => Number.isSafeInteger(id)) : []
   } catch {
     return []
   }
