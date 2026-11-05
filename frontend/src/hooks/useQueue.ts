@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
@@ -134,13 +134,26 @@ export function useQueueThreads(
     selectPage: (page) => page.threads,
   })
 
-  // Trigger a refetch when navigating to the same queue route to update stale data.
-  // This handles the already-open-tab leg of MQA-QUEUE-010 where a rename or
-  // completion leaves the Queue row showing old title/state until a fresh search.
+  // Trigger a refetch when navigating back to the queue route to update stale
+  // data. This handles the already-open-tab leg of MQA-QUEUE-010 where a rename
+  // or completion leaves the Queue row showing old title/state until a fresh
+  // search. Never call refetch during render: that re-renders, refetches, and
+  // repeats indefinitely.
   const isQueueRoute = location.pathname === '/queue'
-  if (isQueueRoute) {
-    query.refetch()
-  }
+  const lastQueueLocationKey = useRef<string | null>(null)
+  const refetchQueue = query.refetch
+  useEffect(() => {
+    if (!isQueueRoute) return
+    // The initial mount is already fetched by useInfiniteQuery.
+    if (lastQueueLocationKey.current === null) {
+      lastQueueLocationKey.current = location.key
+      return
+    }
+    if (lastQueueLocationKey.current !== location.key) {
+      lastQueueLocationKey.current = location.key
+      void refetchQueue()
+    }
+  }, [isQueueRoute, location.key, refetchQueue])
 
   const hasData = query.pages.length > 0
   const data = hasData ? query.items : null
