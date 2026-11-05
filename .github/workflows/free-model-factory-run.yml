@@ -749,6 +749,19 @@ jobs:
           fi
           echo "Verified zero-price Vercel AI Gateway model: ${MODEL}"
 
+      - name: Wait for exact model in OpenCode catalog
+        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
+        shell: bash
+        env:
+          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+        run: |
+          set -Eeuo pipefail
+          # Fresh runners can initially expose only OpenCode's older bundled catalog.
+          if ! bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL"; then
+            printf 'control_plane_failure\tOpenCode catalog not ready for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+            exit 1
+          fi
+
       - name: Probe pinned NVIDIA model before OpenCode smoke
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia'
         shell: bash
@@ -853,8 +866,6 @@ jobs:
           set -Eeuo pipefail
           before="$(git status --porcelain)"
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
-          # Fresh runners can initially expose only OpenCode's older bundled catalog.
-          bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL"
           smoke_prompt='Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.'
           if [[ "$RUNTIME_MODEL" == 'opencode/crouton-alpha-free' ]]; then
             # An answer alone is not proof the agent can execute coding tools.
