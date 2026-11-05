@@ -610,7 +610,7 @@ mod tests {
         assert!(READ_SQL.contains("JOIN me ON me.user_id=t.user_id"));
         assert!(READ_SQL.contains("ON CONFLICT (external_identity_id) DO UPDATE"));
         assert!(READ_SQL.contains("WHERE f.needs_repair"));
-        assert!(READ_SQL.contains("FOR UPDATE SKIP LOCKED") == false);
+        assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
     #[test]
