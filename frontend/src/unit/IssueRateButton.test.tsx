@@ -7,7 +7,7 @@ import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutation
 import { applyRatedThreadCache } from '../query/cacheEffects'
 import { queryClient } from '../query/queryClient'
 import { nativeRollMutationApi } from '../services/nativeRollMutationApi'
-import type { Issue, Thread } from '../types'
+import type { Issue, RateResponsePayload, Thread } from '../types'
 
 vi.mock('../services/nativeRollMutationApi', () => ({
   nativeRollMutationApi: { rate: vi.fn() },
@@ -61,7 +61,7 @@ describe('IssueRateButton', () => {
   })
 
   it('rates the row directly and reconciles the issue and thread cache', async () => {
-    const ratedThread: Thread = {
+    const ratedThread: RateResponsePayload = {
       ...thread,
       issues_remaining: 1,
       next_unread_issue_id: 12,
