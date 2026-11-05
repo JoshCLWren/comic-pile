@@ -857,13 +857,95 @@ jobs:
           echo "NVIDIA probe succeeded for ${MODEL}"
 
       - name: Smoke exact pinned model through OpenCode
+        id: smoke
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
           DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
           RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
+          WORKER: ${{ steps.lane.outputs.worker }}
+          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
         run: |
           set -Eeuo pipefail
+          # Dynamic catalog workers retry distinct, proven-free models within this job.
+          # Pinned DeepSeek and other provider lanes retain their existing smoke.
+          if [[ "${SOURCE:-}" == opencode-free && "${DEEPSEEK_MODE:-}" == normal ]]; then
+            [[ -z "$(git status --porcelain)" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
+            catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
+            comments="$RUNNER_TEMP/factory-opencode-attempt-comments.json"
+            attempted=()
+            while :; do
+              model="${RUNTIME_MODEL#opencode/}"
+              echo "Smoke candidate: $RUNTIME_MODEL"
+              prompt='Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.'
+              marker_file="$RUNNER_TEMP/crouton-tool-smoke-marker"
+              rm -f "$marker_file"
+              if [[ "$model" == crouton-alpha-free ]]; then
+                if [[ -n "${EXISTING_OPENCODE_KEY:-}" ]]; then
+                  echo "::add-mask::$EXISTING_OPENCODE_KEY"
+                  export OPENCODE_API_KEY="$EXISTING_OPENCODE_KEY"
+                else
+                  unset OPENCODE_API_KEY
+                fi
+                prompt="Use the bash tool to run exactly: printf 'FIXED_MODEL_OPENCODE_OK' > '$marker_file'. After it succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK."
+              else
+                unset OPENCODE_API_KEY
+              fi
+              set +e
+              timeout --signal=TERM --kill-after=10s 180s \
+                opencode run --standalone -m "$RUNTIME_MODEL" --agent build "$prompt" \
+                > "$RUNNER_TEMP/fixed-model-smoke.log" 2>&1
+              status=$?
+              set -e
+              cat "$RUNNER_TEMP/fixed-model-smoke.log"
+              outcome="$RUNNER_TEMP/factory-discovery-outcome"
+              rm -f "$outcome"
+              python3 .github/scripts/factory_live_opencode.py \
+                --smoke-log "$RUNNER_TEMP/fixed-model-smoke.log" \
+                --runtime-model "$RUNTIME_MODEL" --outcome-file "$outcome"
+              if [[ -f "$outcome" ]] && grep -Eq '^(model_unavailable|provider_quota)' "$outcome"; then
+                # Keep model-specific evidence even if the next candidate succeeds.
+                IFS=$'\t' read -r kind detail < "$outcome"
+                now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                type=factory-model-unavailable
+                [[ "$kind" == provider_quota ]] && type=factory-provider-quota
+                gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+                  -f body="<!-- ${type}:v1 run=${GITHUB_RUN_ID} -->
+                  Worker: opencode-free-model-factory-${WORKER}
+                  Model: ${model}
+                  Source: opencode-free
+                  Attempt outcome: ${kind}
+                  Detail: ${detail}
+                  Updated: ${now}
+                  Run: ${GITHUB_RUN_ID}" >/dev/null
+                attempted+=("$model")
+                exclusions=()
+                for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
+                if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
+                  --catalog "$catalog" --comments "$comments" --worker "$WORKER" \
+                  --rotation "${GITHUB_RUN_NUMBER:-0}" "${exclusions[@]}")"; then
+                  echo "::error::All eligible zero-cost OpenCode models exhausted after ${#attempted[@]} smoke failures"
+                  exit 1
+                fi
+                RUNTIME_MODEL="$(jq -r '.runtime_model' <<< "$selected")"
+                continue
+              fi
+              (( status == 0 )) || exit "$status"
+              grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log" || {
+                echo 'Smoke did not return required marker' >&2; exit 1;
+              }
+              if [[ "$model" == crouton-alpha-free ]] && \
+                [[ "$(cat "$marker_file" 2>/dev/null || true)" != FIXED_MODEL_OPENCODE_OK ]]; then
+                echo 'Crouton did not invoke shell tool' >&2; exit 1
+              fi
+              [[ -z "$(git status --porcelain)" ]] || { echo 'Smoke modified worktree' >&2; exit 1; }
+              echo "model=$model" >> "$GITHUB_OUTPUT"
+              echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
+              echo "Dynamic OpenCode smoke succeeded: $RUNTIME_MODEL"
+              exit 0
+            done
+          fi
           before="$(git status --porcelain)"
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
           smoke_prompt='Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.'
@@ -1033,8 +1115,8 @@ jobs:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
@@ -1052,7 +1134,7 @@ jobs:
         if: always() && vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
@@ -1097,7 +1179,7 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
