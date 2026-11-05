@@ -5,15 +5,15 @@ set -Eeuo pipefail
 model="${1:?exact provider/model selector required}"
 binary="${OPENCODE_BIN:-opencode}"
 deadline=$((SECONDS + 45))
-while (( SECONDS < deadline )); do
+while ((SECONDS < deadline)); do
   remaining=$((deadline - SECONDS))
   request_timeout=$((remaining < 10 ? remaining : 10))
   if catalog="$(timeout --signal=TERM --kill-after=1s "${request_timeout}s" \
-    "$binary" models --standalone)" && grep -Fxq -- "$model" <<< "$catalog"; then
+    "$binary" models --standalone)" && grep -Fxq -- "$model" <<<"$catalog"; then
     printf 'OpenCode catalog ready for %s\n' "$model"
     exit 0
   fi
-  if (( SECONDS < deadline )); then
+  if ((SECONDS < deadline)); then
     echo "Waiting for OpenCode catalog to include $model" >&2
     sleep 1
   fi
