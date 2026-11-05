@@ -61,10 +61,15 @@ export function IssueRateButton({
       // without a page refresh (Greptile P1).
       const nextSnapshot = applyIssueReadStatus(latestSnapshot.current, issue.id, {
         status: 'read',
-        read_at: thread.last_activity_at,
+        read_at: thread.rated_issue_read_at ?? issue.read_at,
         issues_remaining: thread.issues_remaining,
         next_unread_issue_id: thread.next_unread_issue_id ?? null,
-        next_unread_issue_number: thread.next_unread_issue_number ?? null,
+        next_unread_issue_number: thread.next_unread_issue_number ??
+          (thread.next_unread_issue_id === latestSnapshot.current.thread.next_unread_issue_id
+            ? latestSnapshot.current.thread.next_unread_issue_number ?? null
+            : latestSnapshot.current.issues.find(
+                (next) => next.id === thread.next_unread_issue_id,
+              )?.issue_number ?? null),
       })
       latestSnapshot.current = nextSnapshot
       onSnapshotChange(nextSnapshot)
