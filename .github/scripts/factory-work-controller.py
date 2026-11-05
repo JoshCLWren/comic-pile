@@ -23,7 +23,7 @@ from factory_capacity_policy import (
 )
 from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, is_manual_only, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, stage_of)
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
-from stale_pr_decay import StalePRGuard
+from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
 from factory_source_budget import budget_block_reason
@@ -1607,7 +1607,10 @@ def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
     This integrates the adaptive stale-PR decay guard into the controller.
     """
     guard = StalePRGuard()
-    prs = list_prs()
+    # The staleness baseline is defined by the rolling population of *merged*
+    # Factory PRs. Passing only open PRs made every baseline empty, forced the
+    # 24h cold-start fallback, and expired active attempts older than a day.
+    prs = list_factory_prs()
     baseline = guard.get_baseline(prs)
     results = guard.process_stale_prs(prs=prs, dry_run=dry_run)
     expired = [r for r in results if r.get("status") == "expired"]

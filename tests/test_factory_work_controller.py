@@ -35,6 +35,32 @@ def controller() -> types.ModuleType:
     return module
 
 
+def test_stale_check_uses_merged_history_for_baseline(controller, monkeypatch) -> None:
+    """The staleness baseline must include merged history, not only open PRs."""
+    merged = {"number": 1, "state": "MERGED"}
+    opened = {"number": 2, "state": "OPEN"}
+    seen: dict[str, object] = {}
+
+    class Guard:
+        def get_baseline(self, prs: list[dict[str, Any]]) -> dict[str, Any]:
+            seen["baseline"] = prs
+            return {"threshold_seconds": 123_000, "sample_size": 100}
+
+        def process_stale_prs(
+            self, prs: list[dict[str, Any]] | None = None, dry_run: bool = False
+        ) -> list[dict[str, Any]]:
+            seen["process"] = prs
+            return []
+
+    monkeypatch.setattr(controller, "StalePRGuard", lambda: Guard())
+    monkeypatch.setattr(controller, "list_factory_prs", lambda: [merged, opened])
+
+    report = controller.check_stale_prs()
+
+    assert report["baseline"] == {"threshold_seconds": 123_000, "sample_size": 100}
+    assert seen == {"baseline": [merged, opened], "process": [merged, opened]}
+
+
 def issue(
     number: int,
     *labels: str,
