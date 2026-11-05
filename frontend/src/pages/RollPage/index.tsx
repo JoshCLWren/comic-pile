@@ -455,7 +455,7 @@ export default function RollPage() {
                   onKeyDown={actions.handleKeyDown}
                   role="button"
                   tabIndex={0}
-                  aria-label="Roll the dice"
+                  aria-label={displayDie === 2 ? "Flip the coin" : "Roll the dice"}
                   className={`dice-state-${state.diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
                   style={{ width: '200px', height: '200px' }}
                   data-testid="main-die-3d"
@@ -463,7 +463,7 @@ export default function RollPage() {
                   <div className="w-full h-full main-die-optical-center">
                     <LazyDice3D
                       sides={displayDie}
-                      value={state.rolledResult || 1}
+                      value={Math.max(1, Math.min(state.rolledResult ?? 1, displayDie))}
                       isRolling={state.isRolling}
                       showValue={false}
                       color={0xffffff}
