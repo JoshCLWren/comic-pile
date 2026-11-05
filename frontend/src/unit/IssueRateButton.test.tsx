@@ -67,6 +67,9 @@ describe('IssueRateButton', () => {
       next_unread_issue_id: 12,
       next_unread_issue_number: '3',
       last_rating: 4,
+      // The native PATCH returns this issue timestamp; Thread.last_activity_at
+      // is not authoritative for when the issue was marked read.
+      rated_issue_read_at: '2026-11-04T18:30:00Z',
     }
     vi.mocked(nativeRollMutationApi.rate).mockResolvedValue(ratedThread)
     const onSnapshotChange = vi.fn()
@@ -92,7 +95,7 @@ describe('IssueRateButton', () => {
     })
     expect(applyRatedThreadCache).toHaveBeenCalledWith(queryClient, ratedThread)
     expect(onSnapshotChange).toHaveBeenCalledWith({
-      issues: [{ ...issue, status: 'read', read_at: '2026-08-03T18:30:00Z' }],
+      issues: [{ ...issue, status: 'read', read_at: '2026-11-04T18:30:00Z' }],
       thread: {
         ...thread,
         issues_remaining: 1,
