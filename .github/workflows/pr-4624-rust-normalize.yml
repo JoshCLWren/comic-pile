@@ -24,6 +24,8 @@ jobs:
           cargo metadata --manifest-path Cargo.toml --format-version 1 > /dev/null
           cargo fmt --manifest-path native/roll-service/Cargo.toml --all
           cargo fmt --manifest-path Cargo.toml --all
+          # Keep the checked-in native v2 contract in sync with added Rust routes.
+          cargo run --locked --manifest-path native/roll-service/Cargo.toml --example v2_openapi > native/contracts/v2-runtime.openapi.json
           git diff --stat
       - name: Commit normalized sources to this PR branch
         run: |
