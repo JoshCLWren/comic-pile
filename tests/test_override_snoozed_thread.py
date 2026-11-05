@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ReadingSession
 from app.models import Thread
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -47,9 +48,8 @@ async def test_override_snoozed_thread_keeps_it_snoozed(
     await async_db.refresh(session)
 
     # Roll using API to set pending thread
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    roll_data = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    roll_data = roll_response
     rolled_thread_id = roll_data["thread_id"]
 
     # Snooze the rolled thread (thread1)

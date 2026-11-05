@@ -83,6 +83,7 @@ from comic_pile.recommendation_weighting import (
     weight_candidate,
     weight_pool,
 )
+from tests.roll_flow import roll_pending_thread
 
 # ---------------------------------------------------------------------------
 # Shared signal builders and numeric helpers
@@ -676,9 +677,8 @@ async def test_persisted_context_matches_chooser_factors_and_weights(
     await async_db.refresh(cold)
     assert hot.id is not None and cold.id is not None
 
-    roll_response = await auth_client.post("/api/roll/")
-    assert roll_response.status_code == 200
-    roll_data = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    roll_data = roll_response
     selected_thread_id = roll_data["thread_id"]
     assert selected_thread_id in (hot.id, cold.id)
 

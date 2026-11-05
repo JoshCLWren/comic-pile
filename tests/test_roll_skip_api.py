@@ -3,15 +3,17 @@
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
-async def test_skip_advances_to_different_result(auth_client: AsyncClient, sample_data: dict) -> None:
+async def test_skip_advances_to_different_result(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """POST /roll/skip advances pending to a different eligible thread."""
     _ = sample_data
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    first_thread_id = roll_response.json()["thread_id"]
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    first_thread_id = roll_response["thread_id"]
 
     skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 200
@@ -67,11 +69,10 @@ async def test_skip_leaves_skipped_issue_history_unchanged(auth_client: AsyncCli
     await async_db.refresh(thread_a)
     await async_db.refresh(issue_a)
 
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    skipped_thread_id = roll_response.json()["thread_id"]
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    skipped_thread_id = roll_response["thread_id"]
     # Capture skipped issue state
-    skipped_issue_id = roll_response.json().get("issue_id")
+    skipped_issue_id = roll_response.get("issue_id")
     if skipped_issue_id:
         before_issue = await async_db.get(Issue, skipped_issue_id)
         assert before_issue is not None
@@ -128,8 +129,7 @@ async def test_skip_no_alternative_returns_400(auth_client: AsyncClient, async_d
     async_db.add(thread)
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
+    await roll_pending_thread(async_db)
 
     skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 400
@@ -150,8 +150,7 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
     async_db.add_all([t1, t2, t3])
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
+    await roll_pending_thread(async_db)
 
     # Skip enough times that blocked would be candidate if not filtered; ensure never returns blocked
     for _ in range(3):
@@ -162,18 +161,18 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
             break
         # If no alternative, dismissed path not needed
         await auth_client.post("/api/v1/roll/dismiss-pending")
-        roll_response = await auth_client.post("/api/v1/roll/")
-        assert roll_response.status_code == 200
+        await roll_pending_thread(async_db)
 
 
 @pytest.mark.asyncio
-async def test_skip_records_skipped_event(auth_client: AsyncClient, sample_data: dict) -> None:
+async def test_skip_records_skipped_event(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
     """Skip records a rolled_but_skipped event for the ORIGINAL thread (issue #3706)."""
     _ = sample_data
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    original_thread_id = roll_response.json()["thread_id"]
-    original_title = roll_response.json()["title"]
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    original_thread_id = roll_response["thread_id"]
+    original_title = roll_response["title"]
 
     skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 200
@@ -218,9 +217,8 @@ async def test_skip_event_precedes_replacement_roll(
     )
 
     _ = sample_data
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    original_thread_id = roll_response.json()["thread_id"]
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    original_thread_id = roll_response["thread_id"]
 
     skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 200

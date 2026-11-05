@@ -23,6 +23,7 @@ from app.services.reading_effort import (
     RECOMMENDATION_CONTEXT_ALGORITHM_VERSION_KEY,
     RECOMMENDATION_CONTEXT_CONTROL_MODE_KEY,
 )
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -43,8 +44,7 @@ async def test_roll_persists_rolling_recommendation_context(
     async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
+    await roll_pending_thread(async_db)
 
     result = await async_db.execute(
         select(Event)
@@ -90,9 +90,7 @@ async def test_roll_bounded_candidate_ids_match_pool(
     async_db.add_all(threads)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
-    data = response.json()
+    data = (await roll_pending_thread(async_db)).model_dump()
 
     result = await async_db.execute(
         select(Event)
@@ -129,7 +127,7 @@ async def test_override_roll_records_override_selection_method(
     await async_db.commit()
 
     # Roll once to create a pending thread
-    await auth_client.post("/api/roll/")
+    await roll_pending_thread(async_db)
 
     override_response = await auth_client.post(
         "/api/roll/override", json={"thread_id": thread.id}
@@ -169,8 +167,7 @@ async def test_rolling_recommendation_context_validates_against_schema(
     async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
+    await roll_pending_thread(async_db)
 
     result = await async_db.execute(
         select(Event)
@@ -207,8 +204,7 @@ async def test_rolling_recommendation_context_bounded_payload_size(
     async_db.add(thread)
     await async_db.commit()
 
-    response = await auth_client.post("/api/roll/")
-    assert response.status_code == 200
+    await roll_pending_thread(async_db)
 
     result = await async_db.execute(
         select(Event)
@@ -257,13 +253,10 @@ async def test_legacy_control_mode_roll_records_forced_legacy_snapshot(
     monkeypatch.setenv("RECOMMENDATION_CONTROL_MODE", "legacy")
     get_recommendation_settings.cache_clear()
     try:
-        response = await auth_client.post(
-            "/api/roll/", json={"bandwidth": "deep", "intent": "momentum"}
-        )
+        await roll_pending_thread(async_db, bandwidth="deep", intent="momentum")
     finally:
         monkeypatch.delenv("RECOMMENDATION_CONTROL_MODE", raising=False)
         get_recommendation_settings.cache_clear()
-    assert response.status_code == 200
 
     result = await async_db.execute(
         select(Event)

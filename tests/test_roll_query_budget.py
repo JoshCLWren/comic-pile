@@ -1,16 +1,17 @@
-"""Route-level SQL budget regression for ``POST /api/v1/roll/`` (issue #1255).
+"""SQL budget regression for the Roll selection flow (issue #1255).
 
 The production HAR behind the reopened issue recorded 84 database queries for
 one successful roll because ``RollService.select_pending_thread`` and the
 light/deep bandwidth path each resolved reading effort once per die candidate.
-This regression pins the whole request, including authentication and response
-assembly, to a hard statement budget and proves the count does not grow with
-the bounded die pool.
+This regression pins one selection, including recommendation persistence and
+response assembly, to a hard statement budget and proves the count does not grow
+with the bounded die pool.
 
-The test drives the real HTTP route against the database-backed test engine and
-counts every statement through SQLAlchemy's ``before_cursor_execute`` hook. It
-intentionally does not mock service calls: a future per-candidate query loop
-must show up as extra statements here.
+The test drives the retained ``RollService`` flow against the database-backed
+test engine (``POST /api/v1/roll/`` was retired in #4336) and counts every
+statement through SQLAlchemy's ``before_cursor_execute`` hook. It intentionally
+does not mock service calls: a future per-candidate query loop must show up as
+extra statements here.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -22,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, ExternalIdentity, Issue, ReadingSession, Thread, User
 from app.models.external_identity import IssueExternalIdentityMapping, ThreadExternalSeriesMapping
+from tests.roll_flow import roll_pending_thread
 
 #: Hard ceiling for one representative successful roll, including auth,
 #: selection, recommendation persistence, and response assembly. The issue's
@@ -183,13 +185,13 @@ async def _seed_library(
 
 
 async def _capture_roll_statements(
-    client: AsyncClient,
+    db: AsyncSession,
     db_engine: AsyncEngine,
     *,
     bandwidth: str,
     intent: str,
 ) -> list[str]:
-    """Return every SQL statement issued by one successful roll request."""
+    """Return every SQL statement issued by one successful roll selection."""
     statements: list[str] = []
 
     def _record(conn, cursor, statement, parameters, context, executemany):
@@ -197,13 +199,9 @@ async def _capture_roll_statements(
 
     event.listen(db_engine.sync_engine, "before_cursor_execute", _record)
     try:
-        response = await client.post(
-            "/api/v1/roll/",
-            json={"bandwidth": bandwidth, "intent": intent},
-        )
+        await roll_pending_thread(db, bandwidth=bandwidth, intent=intent)
     finally:
         event.remove(db_engine.sync_engine, "before_cursor_execute", _record)
-    assert response.status_code == 200, response.text
     return statements
 
 
@@ -231,7 +229,7 @@ async def test_roll_statement_count_is_bounded_and_pool_independent(
 
         for mode, selection in ROLL_MODES.items():
             statements = await _capture_roll_statements(
-                auth_client,
+                async_db,
                 db_engine,
                 bandwidth=selection["bandwidth"],
                 intent=selection["intent"],
@@ -250,57 +248,7 @@ async def test_roll_statement_count_is_bounded_and_pool_independent(
 
 
 @pytest.mark.asyncio
-async def test_roll_emits_one_sql_vs_non_sql_stage_breakdown(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """Successful Roll records complete stage evidence with no user data."""
-    import logging
-
-    await _seed_library(async_db, default_user, size=6)
-    # Production's default log threshold is WARNING. This must still emit.
-    with caplog.at_level(logging.WARNING, logger="app.api.roll"):
-        response = await auth_client.post(
-            "/api/v1/roll/",
-            json={"bandwidth": "balanced", "intent": "balanced"},
-        )
-    assert response.status_code == 200, response.text
-    messages = [
-        record.getMessage()
-        for record in caplog.records
-        if record.name == "app.api.roll"
-        and record.getMessage().startswith("roll.phase_timing")
-    ]
-    assert len(messages) == 1
-    assert any(record.levelno == logging.WARNING and record.getMessage() == messages[0]
-               for record in caplog.records)
-    summary = messages[0]
-    for field in (
-        "total_ms=",
-        "sql_ms=",
-        "non_sql_wall_ms=",
-        "queries=",
-        "session:",
-        "die_exclusions:",
-        "eligibility:",
-        "candidate_pool:",
-        "effort_estimates:",
-        "weighting:",
-        "selection_artifacts:",
-        "event_flush:",
-        "commit:",
-        "response:",
-    ):
-        assert field in summary
-    assert "user_id=" not in summary
-    assert "thread_id=" not in summary
-
-
-@pytest.mark.asyncio
 async def test_forced_legacy_roll_stays_within_budget(
-    auth_client: AsyncClient,
     async_db: AsyncSession,
     db_engine: AsyncEngine,
     default_user: User,
@@ -315,7 +263,7 @@ async def test_forced_legacy_roll_stays_within_budget(
     get_recommendation_settings.cache_clear()
     try:
         statements = await _capture_roll_statements(
-            auth_client,
+            async_db,
             db_engine,
             bandwidth="balanced",
             intent="balanced",

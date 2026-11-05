@@ -1,12 +1,14 @@
 """Tests for snooze API endpoints."""
 
 import pytest
+from fastapi import HTTPException
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
 from app.models import ReadingSession
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -188,10 +190,7 @@ async def test_snooze_excludes_from_roll(
     assert snooze_response.status_code == 200
 
     # Roll again - should only get thread2
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-
-    roll_data = roll_response.json()
+    roll_data = (await roll_pending_thread(async_db)).model_dump()
     assert roll_data["thread_id"] == thread2.id
     assert roll_data["title"] == "Thread Two"
 
@@ -257,8 +256,7 @@ async def test_snooze_duplicate_thread(
     assert response1.status_code == 200
 
     # Roll again (will get thread2)
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
+    await roll_pending_thread(async_db)
 
     # Manually set pending_thread_id back to the already-snoozed thread
     # (simulating an override select)
@@ -341,9 +339,10 @@ async def test_snooze_all_threads(
     assert thread.id in snooze_data["snoozed_thread_ids"]
 
     # Now try to roll - should fail with no threads available
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 400
-    assert "No active threads" in roll_response.json()["detail"]
+    with pytest.raises(HTTPException) as exc_info:
+        await roll_pending_thread(async_db)
+    assert exc_info.value.status_code == 400
+    assert "No active threads" in str(exc_info.value.detail)
 
 
 @pytest.mark.asyncio

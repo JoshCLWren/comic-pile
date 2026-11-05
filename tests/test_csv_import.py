@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Thread, User
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -295,8 +296,8 @@ Thread 5,Comic,2"""
     assert import_data["imported"] == 5
 
     # Create 2 sessions
-    await auth_client.post("/api/v1/roll/")
-    await auth_client.post("/api/v1/roll/")
+    await roll_pending_thread(async_db)
+    await roll_pending_thread(async_db)
 
     response = await auth_client.get("/api/admin/export/json/")
     assert response.status_code == 200

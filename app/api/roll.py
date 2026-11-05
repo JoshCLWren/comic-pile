@@ -35,7 +35,6 @@ from comic_pile.reading_session import get_current_die_for_session, get_or_creat
 router = APIRouter(tags=["roll"])
 
 
-
 @router.post("/dismiss-pending", status_code=status.HTTP_204_NO_CONTENT)
 async def dismiss_pending_roll(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -47,7 +46,6 @@ async def dismiss_pending_roll(
         current_user: The authenticated user making the request.
         db: SQLAlchemy session for database operations.
     """
-    from app.services.roll_service import RollService
     service = RollService(db)
     await service.execute_dismiss_pending(current_user.id)
 

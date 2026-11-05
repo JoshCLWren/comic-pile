@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread, User
 from app.models import ReadingSession
+from tests.roll_flow import roll_pending_thread
 
 
 # ---------------------------------------------------------------------------
@@ -167,9 +168,8 @@ class TestAC2SessionExclusion:
         assert resp.status_code == 200
         assert threads[0].id in resp.json()["snoozed_thread_ids"]
 
-        roll_resp = await auth_client.post("/api/v1/roll/")
-        assert roll_resp.status_code == 200
-        assert roll_resp.json()["thread_id"] == threads[1].id
+        roll_resp = (await roll_pending_thread(async_db)).model_dump()
+        assert roll_resp["thread_id"] == threads[1].id
 
     @pytest.mark.asyncio
     async def test_snoozed_thread_returns_after_session_end(

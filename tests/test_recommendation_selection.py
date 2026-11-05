@@ -26,6 +26,7 @@ from comic_pile.recommendation_selection import (
     resolve_selection_mode,
     select_from_pool,
 )
+from tests.roll_flow import roll_pending_thread
 
 POOL_SIZES = [1, 4, 6, 8, 20, 100]
 
@@ -458,12 +459,9 @@ async def test_roll_with_random_intent_records_bypass_without_behavior_change(
     auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """A random-intent roll stays uniform and records an unweighted roll event."""
-    response = await auth_client.post(
-        "/api/roll/", json={"bandwidth": "deep", "intent": "random"}
-    )
-    assert response.status_code == 200
-
-    data = response.json()
+    data = (
+        await roll_pending_thread(async_db, bandwidth="deep", intent="random")
+    ).model_dump()
     assert data["die_size"] == 8
     assert 1 <= data["result"] <= data["die_size"]
     thread_ids = [thread.id for thread in sample_data["threads"] if thread.status == "active"]
@@ -480,14 +478,13 @@ async def test_roll_with_random_intent_records_bypass_without_behavior_change(
 
 @pytest.mark.asyncio
 async def test_roll_balanced_body_stays_neutral(
-    auth_client: AsyncClient, sample_data: dict
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
 ) -> None:
     """An explicit balanced roll body returns the unchanged legacy response shape."""
-    response = await auth_client.post(
-        "/api/roll/", json={"bandwidth": "balanced", "intent": "balanced"}
-    )
-    assert response.status_code == 200
-    assert set(response.json()) >= {
+    data = (
+        await roll_pending_thread(async_db, bandwidth="balanced", intent="balanced")
+    ).model_dump()
+    assert set(data) >= {
         "thread_id",
         "title",
         "format",
@@ -510,8 +507,7 @@ async def test_roll_light_body_records_bandwidth_event(
     records the bandwidth path rather than flipping to "random" (#3762).
     """
     _ = sample_data
-    response = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
-    assert response.status_code == 200
+    await roll_pending_thread(async_db, bandwidth="light")
 
     event_result = await async_db.execute(
         select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
@@ -526,16 +522,3 @@ async def test_roll_light_body_records_bandwidth_event(
     )
     roll_context = context_result.scalar_one()
     assert roll_context.random_bypass is True
-
-
-@pytest.mark.asyncio
-async def test_roll_rejects_unknown_context_values(auth_client: AsyncClient) -> None:
-    """Unknown intent/bandwidth values and unknown fields are rejected with 422."""
-    bad_intent = await auth_client.post("/api/roll/", json={"intent": "cheat"})
-    assert bad_intent.status_code == 422
-
-    bad_bandwidth = await auth_client.post("/api/roll/", json={"bandwidth": 3})
-    assert bad_bandwidth.status_code == 422
-
-    unknown_field = await auth_client.post("/api/roll/", json={"flavor": "vanilla"})
-    assert unknown_field.status_code == 422

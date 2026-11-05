@@ -38,12 +38,3 @@ async def test_collection_routes_are_absent_from_openapi(auth_client: AsyncClien
     paths = response.json()["paths"]
     assert not any(path.startswith("/api/v1/collections") for path in paths)
 
-
-@pytest.mark.asyncio
-async def test_roll_request_rejects_retired_collection_id_body(
-    auth_client: AsyncClient,
-) -> None:
-    """A roll body carrying a retired collection_id fails closed with 422."""
-    response = await auth_client.post("/api/v1/roll/", json={"collection_id": 4})
-
-    assert response.status_code == 422

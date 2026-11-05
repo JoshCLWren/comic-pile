@@ -225,16 +225,6 @@
         "title": "AnalyticsMetricsResponse",
         "type": "object"
       },
-      "Bandwidth": {
-        "description": "Reading-bandwidth vocabulary from the personalized-Roll roadmap.",
-        "enum": [
-          "light",
-          "balanced",
-          "deep"
-        ],
-        "title": "Bandwidth",
-        "type": "string"
-      },
       "BatchBlockingExplanationRequest": {
         "description": "Schema for batch blocking-info request.",
         "properties": {
@@ -11651,18 +11641,6 @@
         "title": "InsertReadingOrderItemResponse",
         "type": "object"
       },
-      "Intent": {
-        "description": "Reading-intent vocabulary from the personalized-Roll roadmap.",
-        "enum": [
-          "balanced",
-          "momentum",
-          "familiar",
-          "explore",
-          "random"
-        ],
-        "title": "Intent",
-        "type": "string"
-      },
       "IssueAttachRequest": {
         "description": "Schema for attaching an issue to a thread.",
         "properties": {
@@ -18346,34 +18324,6 @@
           "changed"
         ],
         "title": "RollPrerequisiteSwitchResponse",
-        "type": "object"
-      },
-      "RollRequest": {
-        "additionalProperties": false,
-        "description": "Schema for roll request.\n\nOptional reading-mode context may be supplied for telemetry and for the\nselection control path. Both fields are neutral-by-default: absent values\nresolve to ``balanced`` and never change legacy unweighted selection.",
-        "properties": {
-          "bandwidth": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Bandwidth"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "intent": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Intent"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "title": "RollRequest",
         "type": "object"
       },
       "RollResponse": {
@@ -31860,53 +31810,6 @@
           "dependencies",
           "dependencies",
           "releases"
-        ]
-      }
-    },
-    "/api/v1/roll/": {
-      "post": {
-        "description": "Roll dice to select a thread.\n\nArgs:\n    roll_request: The roll request.\n    request: FastAPI request object for rate limiting.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    RollResponse with selected thread and die result.\n\nRaises:\n    HTTPException: If no active threads available.",
-        "operationId": "roll_dice_api_v1_roll__post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RollRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RollResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Roll Dice",
-        "tags": [
-          "roll",
-          "roll"
         ]
       }
     },

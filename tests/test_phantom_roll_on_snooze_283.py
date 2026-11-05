@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
 from app.models import ReadingSession
+from tests.roll_flow import roll_pending_thread
 
 
 @pytest.mark.asyncio
@@ -49,9 +50,8 @@ async def test_snooze_does_not_create_roll_event(
     await async_db.refresh(thread)
 
     # Roll the dice - this creates a "roll" event
-    roll_response = await auth_client.post("/api/v1/roll/")
-    assert roll_response.status_code == 200
-    roll_data = roll_response.json()
+    roll_response = (await roll_pending_thread(async_db)).model_dump()
+    roll_data = roll_response
     assert roll_data["thread_id"] == thread.id
 
     # Verify we have exactly 1 roll event

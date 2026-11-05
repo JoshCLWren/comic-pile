@@ -24,6 +24,7 @@ from app.services.reading_effort import (
     build_recommendation_context,
     neutral_estimate,
 )
+from tests.roll_flow import roll_pending_thread
 
 
 async def _add_thread(
@@ -124,9 +125,7 @@ async def test_light_bandwidth_json_records_weights(
     await _add_observed_effort(async_db, heavy, minutes=45.0, count=3)
     await async_db.commit()
 
-    resp = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
-    assert resp.status_code == 200
-    data = resp.json()
+    data = (await roll_pending_thread(async_db, bandwidth="light")).model_dump()
 
     ev = (
         await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
@@ -179,8 +178,7 @@ async def test_deep_bandwidth_json_records_weights(
     await _add_observed_effort(async_db, heavy, minutes=45.0, count=3)
     await async_db.commit()
 
-    resp = await auth_client.post("/api/roll/", json={"bandwidth": "deep"})
-    assert resp.status_code == 200
+    await roll_pending_thread(async_db, bandwidth="deep")
     ev = (
         await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
     ).scalar_one()
@@ -208,8 +206,7 @@ async def test_balanced_json_shows_neutral_bypass(
     await _add_observed_effort(async_db, b, minutes=45.0, count=3)
     await async_db.commit()
 
-    resp = await auth_client.post("/api/roll/", json={"bandwidth": "balanced"})
-    assert resp.status_code == 200
+    await roll_pending_thread(async_db, bandwidth="balanced")
     ev = (
         await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
     ).scalar_one()
@@ -239,8 +236,7 @@ async def test_unknown_effort_json_stays_neutral(
     await _add_thread(async_db, default_user, "Unknown B", queue_position=2)
     await async_db.commit()
 
-    resp = await auth_client.post("/api/roll/", json={"bandwidth": "light"})
-    assert resp.status_code == 200
+    await roll_pending_thread(async_db, bandwidth="light")
     ev = (
         await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
     ).scalar_one()
@@ -264,8 +260,7 @@ async def test_random_intent_json_shows_bypass(
     await _add_observed_effort(async_db, heavy, minutes=45.0, count=3)
     await async_db.commit()
 
-    resp = await auth_client.post("/api/roll/", json={"bandwidth": "light", "intent": "random"})
-    assert resp.status_code == 200
+    await roll_pending_thread(async_db, bandwidth="light", intent="random")
     ev = (
         await async_db.execute(select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1))
     ).scalar_one()
