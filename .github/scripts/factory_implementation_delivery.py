@@ -321,11 +321,6 @@ def _file_patches(diff_text: str) -> dict[str, str]:
     for line in diff_text.splitlines():
         header = PATCH_HEADER.match(line)
         if header:
-            if current:
-                # Append to existing patches for this file, skipping duplicate headers
-                for header_line in [f"--- a/{current}", f"+++ b/{current}"]:
-                    if header_line not in patches[current]:
-                        patches[current].append(header_line)
             current = header.group(2)
             if current not in patches:
                 patches[current] = [line]
