@@ -23,3 +23,4 @@
 91	orcarouter	z-ai/glm-5.3-flash-free	5	dispatcher	OrcaRouter GLM 5.3 Flash Free
 92	requesty	nvidia/nemotron-3-ultra-550b-a55b	35	dispatcher	Requesty Nemotron 3 Ultra
 93	requesty	nvidia/nemotron-3-super-120b-a12b	45	dispatcher	Requesty Nemotron 3 Super
+96	openrouter-free	stealth/crouton-alpha	50	dispatcher	OpenRouter Crouton Alpha Free
