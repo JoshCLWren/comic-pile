@@ -118,6 +118,11 @@ SWEEP_MAX_AGE_HOURS = 26
 def linked_issue(branch: str, body: str | None) -> int | None:
     """Resolve the issue a delivered PR closes.
 
+    Only explicit closing keywords and the canonical factory branch shape
+    select a closure target. A non-closing review handoff such as
+    ``Part of #N.`` deliberately keeps #N open, so it never closes or
+    completes anything here.
+
     Args:
         branch: The PR head branch name; factory branches usually encode the issue.
         body: The PR body text, or None when unavailable.
@@ -1176,6 +1181,18 @@ class FactoryPostMergeClosureTests(unittest.TestCase):
         """Use the closing keyword when the branch encodes nothing."""
         self.assertEqual(linked_issue("phase/some-work", "Closes #42."), 42)
         self.assertEqual(linked_issue("phase/some-work", "Fixes #7\nResolves #8"), 7)
+
+    def test_non_closing_part_of_reference_never_closes(self) -> None:
+        """A review-only ``Part of #N.`` link is not a merge closure target."""
+        self.assertIsNone(linked_issue("local/acp-4348", "Part of #4348."))
+        self.assertIsNone(
+            linked_issue("local/acp-4348", "Part of #4348 and governed by #4335.")
+        )
+        self.assertIsNone(linked_issue("local/acp-4348", "Advances #4348. Parent: #4335."))
+        self.assertEqual(linked_issue("factory/11-4353-work", "Part of #4348."), 4353)
+        self.assertEqual(
+            linked_issue("local/acp-4348", "Closes #4348.\nPart of #4335."), 4348
+        )
 
     def test_unlinkable_pr_returns_none(self) -> None:
         """Return None without branch shape or a closing keyword."""
