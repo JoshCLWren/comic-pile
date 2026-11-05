@@ -1548,3 +1548,55 @@ def test_complete_file_context_single_hunk_starting_at_line_one() -> None:
             assert old_start == 1, f"{desc}: non-empty old file should start at line 1, got {old_start}"
         if new_lines:
             assert new_start == 1, f"{desc}: non-empty new file should start at line 1, got {new_start}"
+
+def test_multi_commit_diff_preserves_earlier_behavior_changes():
+    """A PR with multiple commits must preserve earlier behavioral changes.
+
+    When using commit-by-commit diffs (from `gh pr diff --patch`), earlier
+    commits' behavioral changes should not be hidden by later commits'
+    comment-only modifications in the same file.
+    """
+    # Simulate a diff with multiple sections for the same file
+    # Commit 1: behavior change (color value)
+    # Commit 2: comment-only change
+    multi_commit_diff = (
+        'diff --git a/app/constants.py b/app/constants.py\n'
+        'index 1234567..abcdefg 100644\n'
+        '--- a/app/constants.py\n'
+        '+++ b/app/constants.py\n'
+        '@@ -1,5 +1,5 @@\n'
+        ' TAG_COLOR_PALETTE = {\n'
+        '-    "red": "#DC2626",\n'
+        '+    "red": "#FF0000",\n'
+        '     "orange": "#F97316",\n'
+        ' }\n'
+        'diff --git a/app/constants.py b/app/constants.py\n'
+        'index abcdefg..1234567 100644\n'
+        '--- a/app/constants.py\n'
+        '+++ b/app/constants.py\n'
+        '@@ -3,4 +3,4 @@ TAG_COLOR_PALETTE = {\n'
+        '     "orange": "#F97316",\n'
+        '-    "green": "#22C55E"\n'
+        '+    "green": "#22C55E"  # updated comment\n'
+        ' }\n'
+    )
+
+    # _file_patches should concatenate all sections, not just keep the last one
+    patches = delivery._file_patches(multi_commit_diff)
+    assert 'app/constants.py' in patches
+    patch_content = patches['app/constants.py']
+    
+    # The combined patch should contain both the color change and the comment change
+    assert '"red": "#FF0000"' in patch_content, "Behavior change from commit 1 should be preserved"
+    assert '"green": "#22C55E"' in patch_content, "Code from both commits should be present"
+    
+    # Now verify that pr_delivers_implementation correctly detects the behavioral change
+    full_diff = delivery._unified_file_diff(
+        'app/constants.py',
+        'TAG_COLOR_PALETTE = {\n    "red": "#DC2626",\n    "orange": "#F97316",\n    "green": "#22C55E"\n}\n',
+        'TAG_COLOR_PALETTE = {\n    "red": "#FF0000",\n    "orange": "#F97316",\n    "green": "#22C55E"  # updated comment\n}\n'
+    )
+    result = delivery.pr_delivers_implementation(
+        'Fix color and update comment', ['app/constants.py'], full_diff
+    )
+    assert result[0], f"Should detect behavioral change: {result[1]}"

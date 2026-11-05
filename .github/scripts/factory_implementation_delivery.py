@@ -309,22 +309,35 @@ def _has_code_delta(patch: str, path: str) -> bool:
 
 
 def _file_patches(diff_text: str) -> dict[str, str]:
-    """Split a unified Git diff into authoritative per-file patches."""
-    patches: dict[str, str] = {}
+    """Split a unified Git diff into authoritative per-file patches.
+    
+    Concatenates multiple patch sections for the same file (which can occur
+    when `gh pr diff --patch` produces commit-by-commit diffs) rather than
+    keeping only the last one. This ensures earlier commit behavioral changes
+    aren't hidden by later commit comment-only modifications.
+    """
+    patches: dict[str, list[str]] = {}
     current = ""
-    lines: list[str] = []
     for line in diff_text.splitlines():
         header = PATCH_HEADER.match(line)
         if header:
             if current:
-                patches[current] = "\n".join(lines)
+                # Append to existing patches for this file, skipping duplicate headers
+                for header_line in [f"--- a/{current}", f"+++ b/{current}"]:
+                    if header_line not in patches[current]:
+                        patches[current].append(header_line)
             current = header.group(2)
-            lines = [line]
+            if current not in patches:
+                patches[current] = [line]
+            else:
+                patches[current].append(line)
         elif current:
-            lines.append(line)
-    if current:
-        patches[current] = "\n".join(lines)
-    return patches
+            # Skip duplicate --- and +++ lines from subsequent commit diffs
+            if line.startswith("--- ") or line.startswith("+++ "):
+                continue
+            patches[current].append(line)
+    # Join all lines for each file with newlines
+    return {path: "\n".join(lines) for path, lines in patches.items()}
 
 
 def pr_delivers_implementation(
@@ -495,12 +508,8 @@ def complete_pr_diff(
         ])
         patch = record.get("patch")
         if isinstance(patch, str) and patch:
-            # Reverse the original PR patch rather than comparing against current
-            # main, which can already contain the merged head during closure.
             old = _previous_source(new, patch)
         else:
-            # GitHub omits patches for oversized changes. Only a verified merge
-            # base identifies the pre-change file: base.sha moves as main advances.
             if not isinstance(base_sha, str) or not base_sha:
                 raise RuntimeError(f"source patch unavailable for {path}")
             base_path = record.get("previous_filename") or path
