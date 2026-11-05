@@ -4,7 +4,9 @@
 > `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
 > in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
 > handler: the v1/legacy aliases were removed by #4397, and #4350 removed the
-> dead Python v1 read model and the unused Python v2 response DTO. The `v1`
+> dead Python v1 read model and the unused Python v2 response DTO. The Python
+> v2 projection and parity services and repositories remain test/script-only
+> tooling. The `v1`
 > directory in `tests/fixtures/roll-v2/v1/` is a
 > golden-fixture revision, **not** the public API v1 route. Do not change the URL
 > or treat one endpoint as the implementation of another.

@@ -6,9 +6,11 @@ Production must distinguish calls to the three Roll bootstrap surfaces:
 - ``/api/v1/roll/bootstrap`` — retired canonical v1 alias (``v1``);
 - ``/api/v2/roll/bootstrap`` — the live v2 projection (``v2``).
 
-Both Python bootstrap GET handlers were removed by #4397, and #4350 removed the
-last Python read model. The retired aliases now reach the Python catch-all
-while v2 GET is served by the native Rust function. All three stay classified
+Both Python bootstrap GET handlers were removed by #4397, and #4350 removed
+the dead Python v1 read model plus the unused Python v2 response DTO. The Python
+v2 projection and parity services and repositories remain test/script-only
+tooling. The retired aliases now reach the Python catch-all while v2 GET is
+served by the native Rust function. All three stay classified
 on purpose: a hit on a retired path is the residual-consumer evidence behind
 the zero-web-origin deletion gate (#2718/#3040), and a hit on the v2 path
 inside this middleware means that request was routed to Python instead of the
