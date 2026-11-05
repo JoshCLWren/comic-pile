@@ -1,4 +1,5 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { useInfiniteCollection } from '../pagination'
@@ -99,6 +100,7 @@ export function queueThreadsQueryOptions(
      * first page arrives.
      */
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: 'always',
   }
 }
 
@@ -111,6 +113,9 @@ export function queueThreadsQueryOptions(
  * never by automatic traversal. Changing `searchTerm` or `sort` changes the
  * query key, which resets the loader to the first compatible page.
  *
+ * Same-route navigation triggers a refetch to keep an already-open Queue tab
+ * fresh when series are renamed or threads completed (MQA-QUEUE-010).
+ *
  * @param searchTerm - Retained search filter; empty string means no filter.
  * @param sort - Retained sort order; drives the server-side deterministic cursor.
  * @param threadsList - Injectable lazy thread-list loader (defaults to the real service).
@@ -120,12 +125,35 @@ export function useQueueThreads(
   sort: QueueSortBy = 'position',
   threadsList: Pick<typeof threadsApi, 'list'> = threadsApi,
 ) {
+  const location = useLocation()
   const query = useInfiniteCollection<ThreadListItem, ThreadListResponse>({
     ...queueThreadsQueryOptions(searchTerm, sort, threadsList),
     retry: false,
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: 'always',
     selectPage: (page) => page.threads,
   })
+
+  // Trigger a refetch when navigating back to the queue route to update stale
+  // data. This handles the already-open-tab leg of MQA-QUEUE-010 where a rename
+  // or completion leaves the Queue row showing old title/state until a fresh
+  // search. Never call refetch during render: that re-renders, refetches, and
+  // repeats indefinitely.
+  const isQueueRoute = location.pathname === '/queue'
+  const lastQueueLocationKey = useRef<string | null>(null)
+  const refetchQueue = query.refetch
+  useEffect(() => {
+    if (!isQueueRoute) return
+    // The initial mount is already fetched by useInfiniteQuery.
+    if (lastQueueLocationKey.current === null) {
+      lastQueueLocationKey.current = location.key
+      return
+    }
+    if (lastQueueLocationKey.current !== location.key) {
+      lastQueueLocationKey.current = location.key
+      void refetchQueue()
+    }
+  }, [isQueueRoute, location.key, refetchQueue])
 
   const hasData = query.pages.length > 0
   const data = hasData ? query.items : null
