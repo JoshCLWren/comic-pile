@@ -155,7 +155,6 @@
     "TasteSignalResponse"
   ],
   "frontend/src/types/index.ts": [
-    "BugReportResponse",
     "CheckPotentialDuplicatesRequest",
     "CheckPotentialDuplicatesResponse",
     "CreatorComparisonCoverage",
