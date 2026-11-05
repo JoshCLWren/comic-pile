@@ -6415,6 +6415,22 @@ export interface paths {
         patch: operations["issue_read_rate_documentation"];
         trace?: never;
     };
+    "/api/v2/issues/{issue_id}/comicvine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["issue_intelligence_docs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/queue-entries/{thread_id}": {
         parameters: {
             query?: never;
@@ -8436,6 +8452,16 @@ export interface components {
             /** User Id */
             user_id: number;
         };
+        /** @description Owner-scoped local representations of a related ComicVine issue. */
+        ComicPileMatch: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
         /**
          * ComicVineComicPileMatch
          * @description One user-owned ComicPile representation of an external issue.
@@ -9156,6 +9182,13 @@ export interface components {
              * @description True when legacy events are mixed into the range
              */
             partial_coverage: boolean;
+        };
+        /** @description An issue's credited creator with stable provider identity and merged roles. */
+        Creator: {
+            /** Format: int64 */
+            creator_id?: number | null;
+            name: string;
+            roles: string[];
         };
         /**
          * CreatorComparisonCoverage
@@ -12638,6 +12671,25 @@ export interface components {
             /** Thread Title */
             thread_title: string;
         };
+        /** @description Wire parity with Python's ComicVineIssueIntelligence. */
+        IssueIntelligence: {
+            comicvine_issue_id: string;
+            comicvine_url?: string | null;
+            cover_date?: string | null;
+            creators: components["schemas"]["Creator"][];
+            description?: string | null;
+            image_url?: string | null;
+            issue_number?: string | null;
+            metadata_status: string;
+            name?: string | null;
+            /** Format: int64 */
+            refresh_retry_after_seconds?: number | null;
+            /** Format: int64 */
+            series_id?: number | null;
+            series_name?: string | null;
+            store_date?: string | null;
+            story_arcs: components["schemas"]["StoryArc"][];
+        };
         /**
          * IssueListResponse
          * @description Schema for paginated issue list response.
@@ -14821,6 +14873,16 @@ export interface components {
             password: string;
             username: string;
         };
+        /** @description Related issue derived from a confirmed explicit story-arc relationship. */
+        RelatedIssue: {
+            comicpile_matches: components["schemas"]["ComicPileMatch"][];
+            comicvine_issue_id: string;
+            comicvine_url?: string | null;
+            cover_date?: string | null;
+            issue_number?: string | null;
+            name?: string | null;
+            series_name?: string | null;
+        };
         /**
          * ReleaseListResponse
          * @description Paginated published releases for What's New.
@@ -15899,6 +15961,16 @@ export interface components {
             thread_id: number;
             /** Volume Id */
             volume_id: number;
+        };
+        /** @description A provider story arc with bounded related issues and a correct total. */
+        StoryArc: {
+            /** Format: int32 */
+            comicvine_arc_id: number;
+            comicvine_url?: string | null;
+            name: string;
+            related_issues: components["schemas"]["RelatedIssue"][];
+            /** Format: int32 */
+            total_related_count?: number | null;
         };
         /**
          * SyncReport
@@ -25125,6 +25197,43 @@ export interface operations {
             };
             /** @description Invalid status, rating or idempotency key */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_intelligence_docs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owner-scoped ComicPile issue id */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored ComicVine intelligence, or null without a mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                };
+            };
+            /** @description Invalid or revoked access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is not owned by the reader */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
