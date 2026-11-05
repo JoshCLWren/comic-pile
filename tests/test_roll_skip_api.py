@@ -1,7 +1,6 @@
 """Tests for roll skip endpoint."""
 
 import pytest
-import secrets
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,17 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 async def test_skip_advances_to_different_result(auth_client: AsyncClient, sample_data: dict) -> None:
     """POST /roll/skip advances pending to a different eligible thread."""
     _ = sample_data
-    roll_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     first_thread_id = roll_response.json()["thread_id"]
 
-    skip_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 200
     data = skip_response.json()
     assert data["thread_id"] != first_thread_id
@@ -74,10 +67,7 @@ async def test_skip_leaves_skipped_issue_history_unchanged(auth_client: AsyncCli
     await async_db.refresh(thread_a)
     await async_db.refresh(issue_a)
 
-    roll_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     skipped_thread_id = roll_response.json()["thread_id"]
     # Capture skipped issue state
@@ -95,10 +85,7 @@ async def test_skip_leaves_skipped_issue_history_unchanged(auth_client: AsyncCli
     assert before_thread is not None
     before_rating = before_thread.last_rating
 
-    skip_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 200
 
     # Verify skipped thread unchanged
@@ -117,7 +104,6 @@ async def test_skip_without_pending_returns_409(auth_client: AsyncClient, sample
     _ = sample_data
     # Ensure no pending
     await auth_client.post("/api/v1/roll/dismiss-pending")
-    # Skip endpoint requires a pending roll
     response = await auth_client.post("/api/v1/roll/skip")
     assert response.status_code == 409
     assert "No pending roll" in response.json()["detail"]
@@ -142,16 +128,10 @@ async def test_skip_no_alternative_returns_400(auth_client: AsyncClient, async_d
     async_db.add(thread)
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
 
-    skip_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    skip_response = await auth_client.post("/api/v1/roll/skip")
     assert skip_response.status_code == 400
     assert "No alternative" in skip_response.json()["detail"]
 
@@ -170,10 +150,7 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
     async_db.add_all([t1, t2, t3])
     await async_db.commit()
 
-    roll_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
 
     # Skip enough times that blocked would be candidate if not filtered; ensure never returns blocked
@@ -193,10 +170,7 @@ async def test_skip_respects_blocked_governance(auth_client: AsyncClient, async_
 async def test_skip_records_skipped_event(auth_client: AsyncClient, sample_data: dict) -> None:
     """Skip records a rolled_but_skipped event for the ORIGINAL thread (issue #3706)."""
     _ = sample_data
-    roll_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     original_thread_id = roll_response.json()["thread_id"]
     original_title = roll_response.json()["title"]
@@ -244,10 +218,7 @@ async def test_skip_event_precedes_replacement_roll(
     )
 
     _ = sample_data
-    roll_response = await auth_client.post("/api/v2/roll/offer", json={
-        "idempotency_key": secrets.token_urlsafe(16),
-        "snoozed_thread_ids": []
-    })
+    roll_response = await auth_client.post("/api/v1/roll/")
     assert roll_response.status_code == 200
     original_thread_id = roll_response.json()["thread_id"]
 
