@@ -2,8 +2,9 @@
 
 Deterministic route-wide HTTP request budgets for public and auxiliary views.
 Owned by task #4504 under parent #4499. Feature-route budgets are owned by
-peer worker #4503; this namespace only owns public/auth/auxiliary flow and the
-shared harness contract.
+the per-domain specs listed in `routeInventory.ts`; the inventory guard
+covers every route, so no routed view can escape request-efficiency
+coverage.
 
 ## What it measures
 
@@ -41,9 +42,12 @@ Query keys and values are sorted, so parameter order never changes a budget.
 
 1. Add its `<Route path="...">` to `frontend/src/App.tsx`.
 2. Add the same path to `AUDITED_ROUTES` in `routeInventory.ts` with its auth
-   class and owning spec (or the peer worker identity).
-3. Add its exact cold-mount rows to `routeBudgets.ts` and a focused spec.
-4. The parity test fails until the inventory and budget exist.
+   class and the spec that measures its requests (`spec`, relative to
+   `frontend/src/`).
+3. Add its exact cold-mount rows to `routeBudgets.ts` and a focused spec when
+   the route is public/auxiliary; feature routes point at their domain budget
+   spec.
+4. The parity test fails until the inventory row and its spec exist.
 
 ## Conventions
 

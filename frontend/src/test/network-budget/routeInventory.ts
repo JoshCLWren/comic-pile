@@ -17,51 +17,51 @@ export interface AuditedRoute {
   auth: RouteAuth
   /** Target for redirect-only routes. */
   redirectTo?: string
-  /** Spec that measures this route's requests, or the owning worker when not ours. */
-  auditedBy: string
-  /** Path of the owning spec when `auditedBy` names this harness. */
+  /** Spec that measures this route's requests, relative to `frontend/src/`. */
   spec?: string
 }
 
 /**
  * Canonical audited route inventory.
  *
- * Every `<Route path="...">` in `App.tsx` must appear exactly once. Public and
- * auxiliary routes are owned by task #4504; feature routes are owned by peer
- * worker #4503 and are listed so a newly added route cannot escape review.
+ * Every `<Route path="...">` in `App.tsx` must appear exactly once, and every
+ * entry must name the spec that measures its requests. A newly added route
+ * therefore cannot enter the app without request-efficiency coverage: the
+ * parity test fails until both the inventory row and its spec exist
+ * (parent #4499 requirement 6).
  */
 export const AUDITED_ROUTES: AuditedRoute[] = [
-  { path: '/login', auth: 'public', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/register', auth: 'public', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/forgot-password', auth: 'public', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/reset-password', auth: 'public', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/demo', auth: 'public', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/rate', auth: 'redirect', redirectTo: '/', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/analytics', auth: 'redirect', redirectTo: '/', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/roll', auth: 'redirect', redirectTo: '/', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/', auth: 'conditional', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
-  { path: '/queue', auth: 'protected', auditedBy: '4503' },
-  { path: '/thread/:id', auth: 'protected', auditedBy: '4503' },
-  { path: '/threads/:id', auth: 'redirect', redirectTo: '/thread/:id', auditedBy: '4503' },
-  { path: '/creators/compare', auth: 'protected', auditedBy: '4503' },
-  { path: '/creators/:creatorKey', auth: 'protected', auditedBy: '4503' },
-  { path: '/history', auth: 'protected', auditedBy: '4503' },
-  { path: '/sessions/:id', auth: 'protected', auditedBy: '4503' },
-  { path: '/creators', auth: 'protected', auditedBy: '4503' },
-  { path: '/crossovers', auth: 'protected', auditedBy: '4503' },
-  { path: '/crossovers/:group', auth: 'protected', auditedBy: '4503' },
-  { path: '/continuity-plans', auth: 'protected', auditedBy: '4503' },
-  { path: '/continuity-plans/new', auth: 'protected', auditedBy: '4503' },
-  { path: '/continuity-plans/events', auth: 'protected', auditedBy: '4503' },
-  { path: '/continuity-plans/:id/edit', auth: 'protected', auditedBy: '4503' },
-  { path: '/continuity-plans/:id', auth: 'protected', auditedBy: '4503' },
-  { path: '/reading-lists/:id', auth: 'protected', auditedBy: '4503' },
-  { path: '/cbl-sources', auth: 'protected', auditedBy: '4503' },
-  { path: '/whats-new', auth: 'protected', auditedBy: '4504', spec: 'auxiliaryRoutes.network.test.tsx' },
-  { path: '/glossary', auth: 'protected', auditedBy: '4504', spec: 'auxiliaryRoutes.network.test.tsx' },
-  { path: '/help', auth: 'redirect', redirectTo: '/glossary', auditedBy: '4504', spec: 'auxiliaryRoutes.network.test.tsx' },
-  { path: '/identity-inbox', auth: 'protected', auditedBy: '4503' },
-  { path: '*', auth: 'unknown', auditedBy: '4504', spec: 'publicRoutes.network.test.tsx' },
+  { path: '/login', auth: 'public', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/register', auth: 'public', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/forgot-password', auth: 'public', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/reset-password', auth: 'public', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/demo', auth: 'public', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/rate', auth: 'redirect', redirectTo: '/', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/analytics', auth: 'redirect', redirectTo: '/', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/roll', auth: 'redirect', redirectTo: '/', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/', auth: 'conditional', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
+  { path: '/queue', auth: 'protected', spec: 'unit/coreRouteRequestBudget.test.tsx' },
+  { path: '/thread/:id', auth: 'protected', spec: 'unit/ThreadDetailView.request-budget.test.tsx' },
+  { path: '/threads/:id', auth: 'redirect', redirectTo: '/thread/:id', spec: 'unit/App.test.tsx' },
+  { path: '/creators/compare', auth: 'protected', spec: 'unit/creatorDiscoveryRequestBudget.test.tsx' },
+  { path: '/creators/:creatorKey', auth: 'protected', spec: 'unit/creatorDiscoveryRequestBudget.test.tsx' },
+  { path: '/history', auth: 'protected', spec: 'unit/coreRouteRequestBudget.test.tsx' },
+  { path: '/sessions/:id', auth: 'protected', spec: 'unit/coreRouteRequestBudget.test.tsx' },
+  { path: '/creators', auth: 'protected', spec: 'unit/creatorDiscoveryRequestBudget.test.tsx' },
+  { path: '/crossovers', auth: 'protected', spec: 'unit/App.test.tsx' },
+  { path: '/crossovers/:group', auth: 'protected', spec: 'unit/creatorDiscoveryRequestBudget.test.tsx' },
+  { path: '/continuity-plans', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/continuity-plans/new', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/continuity-plans/events', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/continuity-plans/:id/edit', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/continuity-plans/:id', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/reading-lists/:id', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '/cbl-sources', auth: 'protected', spec: 'unit/creatorDiscoveryRequestBudget.test.tsx' },
+  { path: '/whats-new', auth: 'protected', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
+  { path: '/glossary', auth: 'protected', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
+  { path: '/help', auth: 'redirect', redirectTo: '/glossary', spec: 'test/network-budget/auxiliaryRoutes.network.test.tsx' },
+  { path: '/identity-inbox', auth: 'protected', spec: 'unit/continuityIdentityRequestBudget.test.tsx' },
+  { path: '*', auth: 'unknown', spec: 'test/network-budget/publicRoutes.network.test.tsx' },
 ]
 
 /**
@@ -94,12 +94,12 @@ export function readAppRoutePaths(): string[] {
 }
 
 /**
- * Resolve an audited spec path next to this module.
+ * Resolve an audited spec path relative to `frontend/src/`.
  *
- * @param spec - Spec filename from {@link AUDITED_ROUTES}.
+ * @param spec - Spec path from {@link AUDITED_ROUTES}.
  * @returns Absolute path and whether it exists.
  */
 export function specStatus(spec: string): SpecStatus {
-  const path = resolve(process.cwd(), 'src/test/network-budget', spec)
+  const path = resolve(process.cwd(), 'src', spec)
   return { path, exists: existsSync(path) }
 }
