@@ -70,11 +70,9 @@ vi.mock('../services/api-tags', async (importOriginal) => {
 
 import { ComicPillar } from '../pages/RollPage/components/ComicPillar'
 
-/** #3008: correction actions now live in the quiet overflow menu. */
-async function openCorrectionAction(name: string): Promise<HTMLElement> {
-  const trigger = await screen.findByRole('button', { name: 'Comic corrections' })
-  fireEvent.click(trigger)
-  return screen.findByRole('menuitem', { name })
+/** Issue #4450: mapping is a visible control; cover refresh flows use Change mapping. */
+async function openReplaceMapping(): Promise<HTMLElement> {
+  return screen.findByRole('button', { name: /Change ComicVine mapping/i })
 }
 
 const mockSeries = {
@@ -199,8 +197,8 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     const cachedBefore = queryClient.getQueryData(queryKeys.comicVine.issueIntelligence(77)) as { image_url: string } | undefined
     expect(cachedBefore?.image_url).toBe('https://images.example/old-cover.jpg')
 
-    // trigger replace flow via Wrong series?
-    fireEvent.click(await openCorrectionAction('Wrong series?'))
+    // trigger replace flow via Change mapping (visible, first-class action)
+    fireEvent.click(await openReplaceMapping())
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
@@ -250,7 +248,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     render(<ComicPillar activeRatingThread={confirmedThread} onRefreshThread={vi.fn()} />)
     await screen.findByAltText('')
 
-    fireEvent.click(await openCorrectionAction('Wrong series?'))
+    fireEvent.click(await openReplaceMapping())
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
@@ -292,7 +290,7 @@ describe('ComicPillar cover refresh after ComicVine correction', () => {
     await screen.findByAltText('')
 
     // trigger correction
-    fireEvent.click(await openCorrectionAction('Wrong series?'))
+    fireEvent.click(await openReplaceMapping())
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     fireEvent.change(screen.getByPlaceholderText('Search series title or paste a ComicVine URL'), {
       target: { value: 'Stormwatch' },
