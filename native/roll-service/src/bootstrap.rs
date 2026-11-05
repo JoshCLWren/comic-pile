@@ -41,7 +41,7 @@ pub struct BootstrapTag {
     pub extra: HashMap<String, Value>,
 }
 
-/// Owner-scoped thread summary shown by Roll snooze/skip chips and rollable rows.
+/// Owner-scoped thread summary shown by Roll snooze chips and rollable rows.
 #[derive(Clone, Debug, Serialize, utoipa::ToSchema)]
 pub struct BootstrapThreadSummary {
     pub id: i32,

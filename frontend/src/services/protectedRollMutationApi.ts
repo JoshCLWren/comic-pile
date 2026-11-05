@@ -24,8 +24,6 @@ export function createProtectedRollMutationApi(client: HttpClient) {
     rate,
     snooze: (): Promise<SnoozeSessionResponse> =>
       client.post<SnoozeSessionResponse>('/v1/snooze/', undefined, RECOVERY_CONFIG),
-    skip: (): Promise<RollResponse> =>
-      client.post<RollResponse>('/v1/roll/skip', undefined, RECOVERY_CONFIG),
     bootstrap: async (): Promise<RollBootstrapResponse> =>
       adaptRollV2Bootstrap(
         await client.get<RollV2BootstrapResponse>('/v2/roll/bootstrap', RECOVERY_CONFIG),

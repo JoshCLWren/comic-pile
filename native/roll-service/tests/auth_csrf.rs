@@ -64,7 +64,7 @@ async fn protected_native_mutations_require_a_matching_double_submit_pair() {
         "/api/v2/reading-sessions",
         "/api/v2/issues/cards",
         "/api/v2/queue-orders",
-        "/api/v1/roll/skip",
+        "/api/v2/roll/offer",
         "/api/v1/auth/logout",
     ] {
         for (cookie, header_value) in [

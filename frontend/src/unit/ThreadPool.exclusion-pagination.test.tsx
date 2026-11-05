@@ -13,16 +13,11 @@ const baseProps: PoolProps = {
   selectedThreadId: null,
   snoozedThreads: [],
   snoozedExpanded: false,
-  skippedThreads: [],
-  skippedExpanded: false,
   onThreadClick: vi.fn(),
   onUnsnooze: vi.fn(),
-  onUnskip: vi.fn(),
   onToggleSnoozed: vi.fn(),
-  onToggleSkipped: vi.fn(),
   onShuffle: vi.fn(),
   unsnoozeIsPending: false,
-  unskipIsPending: false,
   shuffleIsPending: false,
 }
 

@@ -57,7 +57,7 @@ async def _run_command(env: dict[str, str]) -> dict[str, object]:
 async def _skip_pool_ids(db: AsyncSession, user_id: int) -> set[int]:
     """Return the ids the native Skip pool would consider for one owner.
 
-    Mirrors the eligibility gate in `native/roll-service/src/skip.rs`
+    Mirrors the eligibility gate in `native/roll-service/src/roll_exclusions.rs`
     (`POOL_SQL`): active, reader-visible queue position, and the persisted
     derived `is_blocked` flag. Session snooze/skip exclusions are not involved
     because this fixture has no session history.

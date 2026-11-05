@@ -47,7 +47,6 @@ function renderRatingView({ currentDie, rating, predictedDie }: { currentDie: nu
           rateIsPending: false,
           snoozeIsPending: false,
           dismissIsPending: false,
-          skipIsPending: false,
           manualDie: null,
           onUpdateRating: callbacks.onUpdateRating,
           onSubmitRating: callbacks.onSubmitRating,

@@ -85,7 +85,7 @@ function afterMacrotask<T>(value: T): Promise<T> {
 function makeApis() {
   return {
     bootstrapApi: { get: vi.fn(), switchPrerequisite: vi.fn() },
-    protectedApi: { rate: vi.fn(), snooze: vi.fn(), skip: vi.fn(), bootstrap: vi.fn() },
+    protectedApi: { rate: vi.fn(), snooze: vi.fn(), bootstrap: vi.fn() },
     cacheEffects: {
       applyRatedThreadCache: vi.fn(),
       invalidateCurrentSessionAfterSnooze: vi.fn().mockResolvedValue(undefined),
@@ -132,8 +132,6 @@ function renderSnoozeFlow(apis: Apis) {
         rollMutation: { mutate: vi.fn(), isPending: false },
         snoozeMutation,
         unsnoozeMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
-        skipMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
-        unskipMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         moveToFrontMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         moveToBackMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
         shuffleQueueMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
