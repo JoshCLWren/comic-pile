@@ -556,9 +556,7 @@ export interface SetCurrentIssueResponse {
   reading_progress: string | null;
 }
 
-export interface BugReportResponse {
-  issue_url: string
-}
+export type BugReportResponse = components['schemas']['BugReportResponse']
 
 /**
  * Reader-context response from GET /v1/issues/{issue_id}/reader-context
