@@ -315,6 +315,55 @@ async def detect_circular_dependency(
     return False
 
 
+async def find_dependency_cycle_path(
+    source_id: int,
+    target_id: int,
+    dependency_type: str,
+    db: AsyncSession,
+) -> list[int] | None:
+    """Return list of issue ids forming a cycle if adding source->target creates one.
+
+    The returned path is the existing chain from target_id to source_id
+    (exclusive of the proposed edge), so the caller can render
+    source -> target -> ... -> source.
+
+    Returns None if no cycle would be created.
+    """
+    if source_id == target_id:
+        return [source_id]
+
+    if dependency_type != "issue":
+        return None
+
+    result = await db.execute(select(Dependency.source_issue_id, Dependency.target_issue_id))
+    adjacency: dict[int, set[int]] = defaultdict(set)
+    for src, tgt in result.all():
+        if src is None or tgt is None:
+            continue
+        adjacency[src].add(tgt)
+
+    queue = deque([target_id])
+    visited: dict[int, int | None] = {target_id: None}
+
+    while queue:
+        node = queue.popleft()
+        if node == source_id:
+            # reconstruct path target -> ... -> source
+            path: list[int] = []
+            cur = node
+            while cur is not None:
+                path.append(cur)
+                cur = visited[cur]
+            path.reverse()
+            return path
+        for neighbor in adjacency.get(node, []):
+            if neighbor not in visited:
+                visited[neighbor] = node
+                queue.append(neighbor)
+
+    return None
+
+
 async def get_dependency_order_conflicts(
     thread_id: int,
     user_id: int,
