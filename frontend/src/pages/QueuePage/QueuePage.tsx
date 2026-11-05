@@ -6,6 +6,7 @@ import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
 import { useExcludedThreads, useMoveToPosition, useQueueThreads, useRestoreThread, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
+import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
@@ -58,6 +59,7 @@ export default function QueuePage() {
   // open run keeps reading the cursor so the batch covers the whole queue.
   const bulkMapping = useQueueBulkMapping(queueLoader)
   const { data: session, refetch: refetchSession } = useSession()
+  const { data: rollBootstrap } = useRollBootstrap()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const reactivateMutation = useReactivateThread()
@@ -123,10 +125,24 @@ export default function QueuePage() {
     threads,
     onCreated: rollNudge.onCreated,
     // Refetch so a confirmed edit (e.g. a completed series) reconciles the Queue now (#4181).
-    onUpdated: queueLoader.refetch,
+    onUpdated: async () => {
+      await queueLoader.refetch()
+      // Also refetch roll bootstrap to ensure pending_thread_id is up to date
+      if (rollBootstrap) {
+        queryClient.refetchQueries({
+          queryKey: ['roll', 'bootstrap'],
+        })
+      }
+    },
     onReactivated: async () => {},
     refetchSession: async () => {
       await refetchSession()
+      // Also refetch roll bootstrap to ensure pending_thread_id is up to date
+      if (rollBootstrap) {
+        queryClient.refetchQueries({
+          queryKey: ['roll', 'bootstrap'],
+        })
+      }
     },
     submitCreate,
     submitEdit,
@@ -148,7 +164,12 @@ export default function QueuePage() {
     actions,
     activeThreads,
     modals,
-    session,
+    session: session ? {
+      ...session,
+      // Use the pending_thread_id from the roll bootstrap if available, as it's more reliable
+      // and properly updated after roll operations
+      pending_thread_id: rollBootstrap?.pending_thread_id ?? session.pending_thread_id,
+    } : undefined,
     sortBy,
   })
 
