@@ -93,7 +93,7 @@ def wire_controller(
     monkeypatch.setattr(module, "pr_json", lambda _pr: next(payload_iter))
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
     monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- sample"})
-    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(
         module, "implementation_delivery_gate",
         lambda *_args: {"decision": "pass", "reason": "fixture"},
@@ -2424,7 +2424,7 @@ def test_handmade_head_is_promotable_by_one_independent_review(
         lambda *_args: {"decision": "pass", "reason": "fixture"},
     )
     monkeypatch.setattr(module, "target_json", lambda _number: {"state": "open", "body": "## Scope\n- Implement target behavior"})
-    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args: [])
+    monkeypatch.setattr(module.issue_acceptance, "validate", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(module, "target_owned_by_worker", lambda _number, _worker: True)
     monkeypatch.setattr(module, "issue_comment_records", lambda _pr: store)
     monkeypatch.setattr(
@@ -2558,6 +2558,23 @@ def test_linked_issue_for_pr_prefers_branch_then_closing_reference(
         module, "pr_json", lambda _pr: {"body": "Part of #4348 and governed by #4335."}
     )
     assert module.linked_issue_for_pr(1390, "factory/11-4353-nvidia") == 4353
+
+
+def test_linked_issue_mode_marks_only_canonical_part_of_as_review_only(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """``Part of`` is non-closing; branch and closing links remain closing."""
+    module = load_review_controller()
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Part of #4348.\r\n"})
+    assert module.linked_issue_mode_for_pr(1390, "local/acp-4348") == (4348, True)
+    monkeypatch.setattr(
+        module, "pr_json", lambda _pr: {"body": "Closes #2380.\nPart of #4348."}
+    )
+    assert module.linked_issue_mode_for_pr(1390, "local/acp-4348") == (2380, False)
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Part of #4348."})
+    assert module.linked_issue_mode_for_pr(1390, "factory/11-4353-nvidia") == (4353, False)
+    monkeypatch.setattr(module, "pr_json", lambda _pr: {"body": "Advances #4348."})
+    assert module.linked_issue_mode_for_pr(1390, "local/acp-4348") == (None, False)
 
 
 def test_part_of_reference_never_selects_a_merge_closure_target() -> None:

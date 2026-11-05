@@ -145,6 +145,39 @@ def test_supported_link_spellings_have_same_issue_identity():
     assert acceptance.linked_issue("factory/54-4010-cbl", "Closes #999") == 4010
 
 
+def test_part_of_link_is_review_only_and_crlf_safe():
+    assert acceptance.linked_issue_mode(
+        "local/acp-4348", "Part of #4348.\r\n"
+    ) == (4348, True)
+    assert acceptance.linked_issue_mode(
+        "local/acp-4348", "Part of #4348 and governed by #4335."
+    ) == (4348, True)
+    assert acceptance.linked_issue_mode(
+        "local/acp-4348", "Closes #4010.\nPart of #4348."
+    ) == (4010, False)
+    assert acceptance.linked_issue_mode(
+        "factory/54-4010-cbl", "Part of #4348."
+    ) == (4010, False)
+    assert acceptance.linked_issue_mode("local/x", "Advances #4348.") == (None, False)
+    assert acceptance.linked_issue_mode("local/x", "- Part of #4348.") == (None, False)
+
+
+def test_non_closing_acceptance_allows_remaining_but_closing_does_not():
+    report = complete_report()
+    report["items"][2] = {
+        "id": "A3",
+        "status": "remaining",
+        "evidence": (
+            "Production proof and cleanup remain on the linked issue after this "
+            "review-only handoff."
+        ),
+    }
+    assert any("missing PASS evidence" in error for error in errors(report))
+    assert acceptance.validate(
+        report, 4010, HEAD, ISSUE, (FILE,), non_closing=True
+    ) == []
+
+
 def test_large_report_parses_without_truncating_criterion_evidence():
     import json
     report = complete_report()
