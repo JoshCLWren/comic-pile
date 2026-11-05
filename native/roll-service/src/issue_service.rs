@@ -500,10 +500,20 @@ async fn effective_roll_exclusions(
     if let Some(session) = session {
         // These columns are SQLAlchemy JSON, not PostgreSQL integer arrays.
         // Decode their stored JSON text, including null as an empty list.
-        let snoozed: Vec<i32> = serde_json::from_str(&session.get::<_, String>(0))
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid snoozed threads".into()))?;
-        let skipped: Vec<i32> = serde_json::from_str(&session.get::<_, String>(1))
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid skipped threads".into()))?;
+        let snoozed: Vec<i32> =
+            serde_json::from_str(&session.get::<_, String>(0)).map_err(|_| {
+                ApiError(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Invalid snoozed threads".into(),
+                )
+            })?;
+        let skipped: Vec<i32> =
+            serde_json::from_str(&session.get::<_, String>(1)).map_err(|_| {
+                ApiError(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Invalid skipped threads".into(),
+                )
+            })?;
         for thread_id in snoozed.into_iter().chain(skipped) {
             if seen.insert(thread_id) {
                 excluded.push(thread_id);
