@@ -36,6 +36,8 @@ def test_selected_smoked_model_is_used_for_actual_factory_session() -> None:
     assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in workflow
     assert 'FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}' in workflow
     assert 'FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
+    terminal = workflow.split('      - name: Report terminal heartbeat', 1)[1]
+    assert 'MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}' in terminal
 
 
 def test_selector_supports_per_run_exclusion() -> None:
