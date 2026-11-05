@@ -1172,7 +1172,7 @@ export default function Dice3D({
       }
     };
     // Restart loop when isRolling changes so the new loop definitely sees current ref.
-  }, [freeze, lockMotion, isRolling]);
+  }, [freeze, lockMotion, isRolling, sides]);
 
   useEffect(() => {
     if (!isRolling && meshRef.current) {
