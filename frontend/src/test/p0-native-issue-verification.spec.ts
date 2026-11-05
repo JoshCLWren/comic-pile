@@ -190,7 +190,9 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(response.headers()['x-comicpile-api-runtime']).toBe('rust')
   })
 
-  test('verified retry key prevents duplicate events', async ({ authenticatedPage }) => {
+  test('verified same rating resubmission uses a fresh idempotency key', async ({
+    authenticatedPage,
+  }) => {
     const page = authenticatedPage
 
     await createThread(page, {
@@ -221,19 +223,18 @@ test.describe('P0-NATIVE-ISSUE: Rust native issue endpoint verification', () => 
     expect(responseBody1.read_event_created).toBe(true)
     expect(responseBody1.rating_event_created).toBe(true)
 
-    // Wait a moment and submit the same rating again
-    // The idempotency key is stored in the client and reused for retries
-    // The same payload with the same key should return replayed=true
-    await page.waitForTimeout(500)
+    // Submit the same rating again. The client clears its in-flight intent once
+    // the first response confirms, so a second UI submission is a fresh intent
+    // with a fresh idempotency key - not a replay of the first.
     await ratingInput.fill('5')
 
     const { response: response2 } = await waitForNativePatchResponse(page)
 
     expect(await response2.ok()).toBeTruthy()
     const responseBody2 = (await response2.json()) as Record<string, unknown>
-    expect(responseBody2.replayed).toBe(true)
-    expect(responseBody2.read_event_created).toBe(false) // No new read event
-    expect(responseBody2.rating_event_created).toBe(false) // No new rating event
+    expect(responseBody2.replayed).toBe(false)
+    expect(responseBody2.read_event_created).toBe(true)
+    expect(responseBody2.rating_event_created).toBe(true)
   })
 
   test('verified OpenAPI schema compliance for IssueReadRateResponse', async ({
