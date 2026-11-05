@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
-  "updated_by_issue": 4337,
+  "updated_by_issue": 4456,
   "operations": [
     {
       "method": "GET",
@@ -19,7 +19,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api.ts"
+      ]
     },
     {
       "method": "GET",
@@ -118,7 +120,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-auth.ts",
+        "frontend/src/services/api.ts"
+      ]
     },
     {
       "method": "POST",
@@ -126,7 +131,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api.ts"
+      ]
     },
     {
       "method": "POST",
@@ -142,7 +149,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api.ts"
+      ]
     },
     {
       "method": "POST",
@@ -150,7 +159,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api.ts"
+      ]
     },
     {
       "method": "POST",
@@ -158,7 +169,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [
+        "frontend/src/services/api-auth.ts",
+        "frontend/src/services/api.ts"
+      ]
     },
     {
       "method": "POST",

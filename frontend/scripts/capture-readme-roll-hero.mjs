@@ -51,7 +51,7 @@ try {
     deviceScaleFactor: 2,
   })
 
-  const login = await page.request.post(new URL('/api/v1/auth/login', target).toString(), {
+  const login = await page.request.post(new URL('/api/v2/auth/login', target).toString(), {
     data: { username, password },
   })
   if (!login.ok()) {

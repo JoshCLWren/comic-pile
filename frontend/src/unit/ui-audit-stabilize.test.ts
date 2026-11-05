@@ -9,7 +9,7 @@ describe('UI audit fixture stabilization', () => {
   it('normalizes the generated username without mutating the server payload', () => {
     const payload = { id: 17, username: 'auth_threads_1788100000000_1_9912', email: 'reader@example.com' }
 
-    const stabilized = stabilizeAuditApiPayload('/api/v1/auth/me', payload)
+    const stabilized = stabilizeAuditApiPayload('/api/v2/auth/me', payload)
 
     expect(stabilized).toEqual({ ...payload, username: AUDIT_FIXED_USERNAME })
     expect(payload.username).toBe('auth_threads_1788100000000_1_9912')

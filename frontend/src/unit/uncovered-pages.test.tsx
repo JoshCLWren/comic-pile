@@ -120,7 +120,7 @@ describe('LoginPage', () => {
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     expect(screen.queryByText('Password must be at least 6 characters')).not.toBeInTheDocument()
     await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith('/v1/auth/login', {
+      expect(api.post).toHaveBeenCalledWith('/v2/auth/login', {
         username: 'legacy',
         password: 'abc',
       }),
@@ -141,7 +141,7 @@ describe('LoginPage', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 
-  it('logs in successfully through the canonical v1 endpoint and reports API errors', async () => {
+  it('logs in successfully through the canonical v2 endpoint and reports API errors', async () => {
     api.post.mockResolvedValueOnce({ access_token: 'token' })
     auth.login.mockResolvedValueOnce(undefined)
     renderRoute(<LoginPage />)
@@ -149,7 +149,7 @@ describe('LoginPage', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
-    expect(api.post).toHaveBeenCalledWith('/v1/auth/login', { username: 'reader', password: 'password' })
+    expect(api.post).toHaveBeenCalledWith('/v2/auth/login', { username: 'reader', password: 'password' })
 
     api.post.mockRejectedValueOnce(new Error('network'))
     fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }).closest('form')!)
@@ -197,7 +197,7 @@ describe('RegisterPage', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 
-  it('registers successfully through the canonical v1 endpoint and reports a generic API failure', async () => {
+  it('registers successfully through the canonical v2 endpoint and reports a generic API failure', async () => {
     api.post.mockResolvedValueOnce({ access_token: 'token' })
     auth.login.mockResolvedValueOnce(undefined)
     renderRoute(<RegisterPage />)
@@ -206,7 +206,7 @@ describe('RegisterPage', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password' } })
     fireEvent.submit(screen.getByRole('button', { name: 'Create Account' }).closest('form')!)
     await waitFor(() => expect(auth.login).toHaveBeenCalledWith('token'))
-    expect(api.post).toHaveBeenCalledWith('/v1/auth/register', {
+    expect(api.post).toHaveBeenCalledWith('/v2/auth/register', {
       username: 'reader',
       email: 'reader@example.com',
       password: 'password',

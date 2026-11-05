@@ -15,6 +15,7 @@ import {
   useUpdateThread,
 } from '../hooks/useThread'
 import QueuePage from '../pages/QueuePage'
+import { rollApi } from '../services/api-roll'
 
 vi.mock('../hooks/useThread', () => ({
   useExcludeThread: vi.fn(() => ({ mutate: vi.fn(), isPending: false, isError: false })),
@@ -44,6 +45,14 @@ vi.mock('../services/api', () => ({
   dependenciesApi: {
     listBlockedThreadIds: vi.fn().mockResolvedValue([]),
     getBlockingInfo: vi.fn().mockResolvedValue({ blocking_reasons: [] }),
+  },
+}))
+
+vi.mock('../services/api-roll', () => ({
+  rollApi: {
+    reroll: vi.fn(),
+    isTemporarilySnoozed: vi.fn().mockReturnValue(false),
+    unsnoozeTemporary: vi.fn(),
   },
 }))
 
@@ -108,11 +117,11 @@ function renderQueue(): void {
   )
 }
 
-it('does not refresh session or threads when snooze fails', async () => {
+it('does not refresh session or threads when native reroll snooze fails', async () => {
   const refetchThreads = vi.fn()
   const refetchSession = vi.fn()
-  const snooze = vi.fn().mockRejectedValue({
-    response: { data: { detail: 'Snooze unavailable' } },
+  const reroll = vi.mocked(rollApi.reroll).mockRejectedValue({
+    response: { data: { detail: 'Roll unavailable' } },
   })
 
   mockedUseQueueThreads.mockReturnValue({
@@ -133,7 +142,10 @@ it('does not refresh session or threads when snooze fails', async () => {
     data: { pending_thread_id: 1, snoozed_threads: [] },
     refetch: refetchSession,
   })
-  mockedUseSnooze.mockReturnValue({ mutate: snooze, isPending: false })
+  mockedUseSession.mockReturnValue({
+    data: { pending_thread_id: 1, snoozed_threads: [] },
+    refetch: refetchSession,
+  })
 
   const user = userEvent.setup()
   renderQueue()
@@ -142,9 +154,9 @@ it('does not refresh session or threads when snooze fails', async () => {
   await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
   await waitFor(() => {
-    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to snooze thread: Snooze unavailable', 'error')
+    expect(toastMocks.showToast).toHaveBeenCalledWith('Failed to snooze thread: Roll unavailable', 'error')
   })
-  expect(snooze).toHaveBeenCalledOnce()
+  expect(reroll).toHaveBeenCalledWith(1)
   expect(refetchSession).not.toHaveBeenCalled()
   expect(refetchThreads).not.toHaveBeenCalled()
 })

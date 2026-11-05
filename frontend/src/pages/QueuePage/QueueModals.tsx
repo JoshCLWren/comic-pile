@@ -331,8 +331,7 @@ export function QueueModals({
     (editForm.title !== editingThread.title ||
       editForm.format !== editingThread.format ||
       editForm.notes !== (editingThread.notes ?? '') ||
-      (editingThread.total_issues == null &&
-        editForm.issuesRemaining !== editingThread.issues_remaining) ||
+      editForm.issuesRemaining !== editingThread.issues_remaining ||
       JSON.stringify(editForm.manualCreatorCredits) !== JSON.stringify(initialCredits))
   const editHasUnsavedChanges = editFormIsDirty || hasPendingIssueEdits
 

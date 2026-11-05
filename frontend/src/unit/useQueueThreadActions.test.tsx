@@ -55,7 +55,7 @@ function buildDeps(overrides: Partial<UseQueueThreadActionsDeps> = {}): UseQueue
     moveToBackHook: () => mutationStubs(),
     moveToPositionHook: () => mutationStubs(),
     shuffleHook: () => mutationStubs(),
-    snoozeHook: () => mutationStubs(),
+    reroll: vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' }),
     unsnoozeHook: () => mutationStubs(),
     toastHook: () => ({ showToast: toastSpy, removeToast: vi.fn(), toasts: [] }),
     setPending,
@@ -88,6 +88,7 @@ function wrapper({ children }: { children: ReactNode }) {
 beforeEach(() => {
   vi.clearAllMocks()
   sharedQueryClient.clear()
+  globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT'
 })
 
 describe('useQueueThreadActions', () => {
@@ -266,52 +267,125 @@ describe('useQueueThreadActions', () => {
     )
   })
 
-  it('delegates snooze vs unsnooze based on the current snoozed state', async () => {
-    const snooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false, retryRefresh: vi.fn().mockResolvedValue(true), refreshError: null, hasRefreshError: false }
+  it('routes Queue snooze and unsnooze through native temporary roll state (#4589)', async () => {
+    const reroll = vi.fn().mockImplementation(async () => {
+      globalThis.document.cookie = 'comicpile_roll_snoozes=%5B4%5D; path=/; SameSite=Lax'
+      return { thread_id: 5, title: 'Next Comic' }
+    })
     const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
-    const navigateToRoll = vi.fn()
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
-          {
-            navigateToRoll,
-            restoreSeriesActionsFocus: vi.fn(),
-          },
-          buildDeps({ snoozeHook: () => snooze, unsnoozeHook: () => unsnooze }),
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          buildDeps({ reroll, unsnoozeHook: () => unsnooze }),
+        ),
+      { wrapper },
+    )
+
+    await result.current.handleSnoozeToggle(makeThread({ id: 4, title: 'Pending Comic' }), false)
+    expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
+    expect(unsnooze.mutate).not.toHaveBeenCalled()
+    expect(toastSpy).toHaveBeenCalledWith(
+      'Snoozed "Pending Comic" and rolled "Next Comic". Open Roll to read it.',
+      'success',
+    )
+
+    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
+    expect(unsnooze.mutate).not.toHaveBeenCalled()
+    expect(globalThis.document.cookie).not.toContain('%5B4%5D')
+    expect(reroll).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps legacy unsnooze for session snoozes outside the native cookie', async () => {
+    const unsnooze = { mutate: vi.fn().mockResolvedValue(undefined), isPending: false, isError: false }
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          buildDeps({ unsnoozeHook: () => unsnooze }),
+        ),
+      { wrapper },
+    )
+
+    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
+
+    expect(unsnooze.mutate).toHaveBeenCalledExactlyOnceWith(4)
+  })
+
+  it('refreshes current session once after native Queue reroll (#4589)', async () => {
+    // Unlike legacy snooze, Rust reroll does not refresh the session query.
+    sharedQueryClient.setQueryData(queryKeys.session.current(), {
+      id: 1,
+      pending_thread_id: 4,
+    })
+    const reroll = vi.fn().mockResolvedValue({ thread_id: 5, title: 'Next Comic' })
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          buildDeps({ reroll }),
         ),
       { wrapper },
     )
 
     await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
-    expect(snooze.mutate).toHaveBeenCalledWith(4)
 
-    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
-    expect(unsnooze.mutate).toHaveBeenCalledWith(4)
+    expect(reroll).toHaveBeenCalledExactlyOnceWith(4)
+    expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(true)
   })
 
-  it('refreshes queue read models but leaves the session refresh to the owning snooze mutation', async () => {
-    // The queue-row snooze passes the real cache effects, so the seed proves
-    // which key the row-action pass touches: the queue pages reset (still the
-    // row-action pass's job) while `session.current` stays un-invalidated —
-    // the real `useSnooze`/`useUnsnooze` mutation refreshed it inside its own
-    // success path, and a second invalidation re-ran that settled fetch.
+  it('reconciles Queue and session state after a stale-pending reroll conflict (#4589)', async () => {
     sharedQueryClient.setQueryData(queryKeys.session.current(), {
       id: 1,
-      snoozed_threads: [],
+      pending_thread_id: 4,
+    })
+    sharedQueryClient.setQueryData(queryKeys.roll.bootstrap(), {
+      session_id: 1,
+      pending_thread_id: 4,
+      roll_pool: [],
+    })
+    const reroll = vi.fn().mockRejectedValue({
+      response: {
+        status: 409,
+        data: { detail: 'Pending roll changed; refresh Queue before snoozing' },
+      },
     })
     const { result } = renderHook(
       () =>
         useQueueThreadActions(
-          {
-            navigateToRoll: vi.fn(),
-            restoreSeriesActionsFocus: vi.fn(),
-          },
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
+          buildDeps({ reroll }),
+        ),
+      { wrapper },
+    )
+
+    await act(async () => {
+      await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
+    })
+
+    expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(true)
+    expect(sharedQueryClient.getQueryState(queryKeys.roll.bootstrap())?.isInvalidated).toBe(true)
+    expect(toastSpy).toHaveBeenCalledWith(
+      'Failed to snooze thread: Pending roll changed; refresh Queue before snoozing',
+      'error',
+    )
+  })
+
+  it('does not repeat the owning legacy unsnooze session refresh (#4276)', async () => {
+    sharedQueryClient.setQueryData(queryKeys.session.current(), {
+      id: 1,
+      snoozed_threads: [{ id: 4, title: 'Pending Comic' }],
+    })
+    const { result } = renderHook(
+      () =>
+        useQueueThreadActions(
+          { navigateToRoll: vi.fn(), restoreSeriesActionsFocus: vi.fn() },
           buildDeps(),
         ),
       { wrapper },
     )
 
-    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), false)
+    await result.current.handleSnoozeToggle(makeThread({ id: 4 }), true)
 
     expect(sharedQueryClient.getQueryState(queryKeys.session.current())?.isInvalidated).toBe(false)
   })

@@ -25,6 +25,7 @@ import { useToast } from '../contexts/useToast'
 import { threadsApi } from '../services/api-threads'
 import { dependenciesApi } from '../services/api-dependencies'
 import { issuesApi } from '../services/api-issues'
+import { rollApi } from '../services/api-roll'
 import type { ThreadListItem } from '../types'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
@@ -88,6 +89,14 @@ vi.mock('../services/api-issues', () => ({
     bulkMarkRead: vi.fn().mockResolvedValue(undefined),
     bulkMarkUnread: vi.fn().mockResolvedValue(undefined),
     migrateThread: vi.fn().mockResolvedValue({}),
+  },
+}))
+
+vi.mock('../services/api-roll', () => ({
+  rollApi: {
+    reroll: vi.fn(),
+    isTemporarilySnoozed: vi.fn().mockReturnValue(false),
+    unsnoozeTemporary: vi.fn(),
   },
 }))
 
@@ -274,10 +283,28 @@ beforeEach(() => {
 describe('Visible action Snooze/Unsnooze', () => {
   const mockSnoozeMutation = { mutate: vi.fn(), isPending: false }
   const mockUnsnoozeMutation = { mutate: vi.fn(), isPending: false }
+  const mockReroll = vi.mocked(rollApi.reroll)
 
   beforeEach(() => {
     mockSnoozeMutation.mutate.mockReset()
     mockUnsnoozeMutation.mutate.mockReset()
+    mockReroll.mockReset().mockResolvedValue({
+      thread_id: 2,
+      title: 'Next comic',
+      format: 'Comic',
+      issues_remaining: 4,
+      queue_position: 2,
+      die_size: 8,
+      result: 2,
+      offset: 0,
+      snoozed_count: 1,
+      issue_id: null,
+      issue_number: null,
+      next_issue_id: null,
+      next_issue_number: null,
+      total_issues: 4,
+      reading_progress: null,
+    })
     mockedUseSnooze.mockReturnValue(mockSnoozeMutation)
     mockedUseUnsnooze.mockReturnValue(mockUnsnoozeMutation)
   })
@@ -302,7 +329,7 @@ describe('Visible action Snooze/Unsnooze', () => {
     expect(screen.getByRole('menuitem', { name: /delete series/i })).toBeInTheDocument()
   })
 
-  it('calls snooze mutation when the pending comic Snooze action is clicked', async () => {
+  it('uses native reroll when the pending comic Snooze action is clicked', async () => {
     mockedUseSession.mockReturnValue({
       data: { snoozed_threads: [], skipped_thread_ids: [], skipped_threads: [], pending_thread_id: 1 },
       refetch: vi.fn(),
@@ -321,7 +348,8 @@ describe('Visible action Snooze/Unsnooze', () => {
     await user.click(snoozeButtons[0])
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
-    expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
+    expect(mockReroll).toHaveBeenCalledWith(1)
+    expect(mockSnoozeMutation.mutate).not.toHaveBeenCalled()
     expect(mockUnsnoozeMutation.mutate).not.toHaveBeenCalled()
   })
 
@@ -411,10 +439,9 @@ describe('Visible action Snooze/Unsnooze', () => {
     await user.click(screen.getByRole('menuitem', { name: /^snooze$/i }))
 
     await waitFor(() => {
-      expect(mockSnoozeMutation.mutate).toHaveBeenCalledWith(1)
+      expect(mockReroll).toHaveBeenCalledWith(1)
     })
-    // The snooze mutation owns the `session.current` refresh itself, so the
-    // row-action pass must not issue a second session fetch (#4276).
+    // Queue owns one session refresh after its native reroll (#4589).
     expect(mockRefetchSession).not.toHaveBeenCalled()
     expect(mockRefetch).not.toHaveBeenCalled()
   })

@@ -281,22 +281,74 @@ def linked_issue_from_branch(branch: str | None) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
-    """Resolve manual/local PR issue handoffs from explicit closing references.
+PART_OF_ISSUE_RE = re.compile(
+    r"(?im)^[ \t]*part[ \t]+of[ \t]+#(?P<issue>\d+)"
+    r"(?:[ \t]+and[ \t]+governed[ \t]+by[ \t]+#\d+)?\.[ \t]*\r?$"
+)
 
-    A casual #number mention is not an issue-ownership claim. Preserve the
-    canonical factory branch identity when available; otherwise use a GitHub
-    PR body with GitHub's explicit closes/fixes/resolves syntax.
+
+def explicit_part_of_issue(body: str) -> int | None:
+    """Resolve the issue named by the canonical non-closing ``Part of #N.`` line.
+
+    Only the standalone canonical line counts, including the governed form
+    ``Part of #N and governed by #M.``; it names #N as the issue this PR
+    advances while deliberately leaving closure to later delivery work.
+    Casual prose mentions such as ``Advances #N``, ``See #N``, or a bare
+    parent reference never identify an executable issue.
+
+    Args:
+        body: Complete pull-request body text.
+
+    Returns:
+        The issue number named by the canonical line, or None when absent.
+    """
+    match = PART_OF_ISSUE_RE.search(body)
+    return int(match.group("issue")) if match else None
+
+
+def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | None, bool]:
+    """Resolve a PR's issue and whether the link is review-only.
+
+    Precedence keeps every existing ownership signal authoritative: the
+    canonical factory branch identity first, then GitHub's explicit
+    closes/fixes/resolves reference, then the canonical non-closing
+    ``Part of #N.`` line. A casual #number mention is not an issue-ownership
+    claim, and ``Part of`` authorizes review only; merge-time closure still
+    follows explicit closing references alone.
+
+    Args:
+        pr_number: Pull request number.
+        branch: Pull request head branch.
+
+    Returns:
+        ``(issue, non_closing)``; ``non_closing`` is true only for a ``Part of``
+        link.
     """
     linked = linked_issue_from_branch(branch)
     if linked is not None:
-        return linked
+        return linked, False
     body = str(pr_json(pr_number).get("body") or "")
     match = re.search(
         r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
         body,
     )
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1)), False
+    issue = explicit_part_of_issue(body)
+    return issue, issue is not None
+
+
+def linked_issue_for_pr(pr_number: int, branch: str | None) -> int | None:
+    """Resolve a manual/local PR's executable issue for trusted semantic review.
+
+    Args:
+        pr_number: Pull request number.
+        branch: Pull request head branch.
+
+    Returns:
+        Canonical linked issue number, if any.
+    """
+    return linked_issue_mode_for_pr(pr_number, branch)[0]
 
 
 def flatten_pages(value: object | None) -> list[dict[str, Any]]:
@@ -1781,7 +1833,7 @@ def handle_review(
     # only for the exact issue revision + PR head it verified.
     accepted_contract_marker: str | None = None
     if verdict == "approve":
-        issue_number = linked_issue_for_pr(pr_number, branch)
+        issue_number, non_closing = linked_issue_mode_for_pr(pr_number, branch)
         if issue_number is None:
             return return_to_review(
                 pr_number=pr_number, branch=branch, worker=worker,
@@ -1814,6 +1866,7 @@ def handle_review(
         failures = issue_acceptance.validate(
             review_acceptance_report(review_log, worker=worker),
             issue_number, reviewed_head, body, changed,
+            non_closing=non_closing,
         )
         if failures:
             return return_to_review(

@@ -7,7 +7,7 @@ for (const viewport of [{ width: 1280, height: 900 }, { width: 390, height: 844 
     const suffix = `${Date.now()}${viewport.width}`
     await registerUser(page, { username: `cycle${suffix}`, email: `cycle${suffix}@example.com`, password: 'CycleTest123!' })
     const token = await getAuthToken(page)
-    const csrfResponse = await page.request.get('/api/auth/csrf', { headers: { Authorization: `Bearer ${token}` } })
+    const csrfResponse = await page.request.get('/api/v2/auth/csrf', { headers: { Authorization: `Bearer ${token}` } })
     expect(csrfResponse.ok()).toBeTruthy()
     // SAFETY: the auth endpoint supplies the CSRF token for these local fixture writes.
     const csrf = await csrfResponse.json() as { csrf_token: string }
