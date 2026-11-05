@@ -6,6 +6,7 @@ import { useSelectReadingIssue } from '../hooks/useSelectReadingIssue'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import { getApiErrorDetail } from '../utils/apiError'
 import { IssueTagRowChips } from './Tags/IssueTagRowChips'
+import ComicIssueMappingAction from './ComicIssueMappingAction'
 
 /**
  * Select the exact issue offered by a reading order into the existing pending
@@ -50,8 +51,8 @@ export function ReadNowIssueButton({ issueId, threadId, label = 'Read now', prim
 }
 
 /** Issue-level progress and queue actions shared by Reading Plans and Reading Lists. */
-export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, available }: {
-  issueId: number; threadId: number; issueNumber: string; isRead: boolean; available: boolean
+export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, available, seriesTitle }: {
+  issueId: number; threadId: number; issueNumber: string; isRead: boolean; available: boolean; seriesTitle?: string
 }) {
   const progress = useReaderProgress(issueId, isRead)
   const moveToFront = useMoveToFront()
@@ -99,6 +100,14 @@ export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, ava
             {progress.isPending ? 'Saving…' : isRead ? 'Mark unread' : 'Mark read'}
           </button>
         )}
+        {/* Mapping is optional for manual reading (#4450): it never disables
+            Read now / Mark read, even while unmapped or offline. */}
+        <ComicIssueMappingAction
+          issueId={issueId}
+          threadTitle={seriesTitle ?? ''}
+          issueNumber={issueNumber}
+          compact
+        />
       </div>
       {moveError && <p role="alert" className="text-sm text-[var(--theme-error)]">{moveError}</p>}
       {progress.isError && <p role="alert" className="text-sm text-[var(--theme-danger)]">Unable to update this issue. Try again.</p>}
