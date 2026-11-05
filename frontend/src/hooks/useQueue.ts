@@ -99,6 +99,7 @@ export function queueThreadsQueryOptions(
      * first page arrives.
      */
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: 'always',
   }
 }
 
@@ -124,6 +125,7 @@ export function useQueueThreads(
     ...queueThreadsQueryOptions(searchTerm, sort, threadsList),
     retry: false,
     placeholderData: keepPreviousData,
+    refetchOnWindowFocus: 'always',
     selectPage: (page) => page.threads,
   })
 

@@ -37,6 +37,8 @@ export interface InfiniteCollectionSpec<TItem, TPage, TToken = PageToken> {
   retry?: boolean | number
   /** Placeholder data policy such as `keepPreviousData` (mirrors `useInfiniteQuery`). */
   placeholderData?: InfiniteData<TPage, TToken> | PlaceholderDataFunction<InfiniteData<TPage, TToken>, Error, InfiniteData<TPage, TToken>, readonly unknown[]> | typeof keepPreviousData
+  /** Refetch on window focus policy (mirrors `useInfiniteQuery`). */
+  refetchOnWindowFocus?: boolean | 'always'
 }
 
 /** Semantic state exposed by the canonical paginator. */
@@ -94,6 +96,7 @@ export function useInfiniteCollection<TItem, TPage, TToken = PageToken>(
     enabled: spec.enabled,
     retry: spec.retry,
     placeholderData: spec.placeholderData,
+    refetchOnWindowFocus: spec.refetchOnWindowFocus,
   })
 
   const pages = query.data?.pages ?? []
