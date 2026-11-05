@@ -820,13 +820,16 @@ pub(crate) async fn persist(
     )
     .await
     .map_err(db::query_error)?;
-    // Q17: retire the pending Roll selection only when this exact issue was the
-    // selected one. Reading a different manual issue must leave the offer alone.
+    // Q17: retire the pending Roll selection when its exact pinned issue is read.
+    // Legacy manual picks can pin only the thread, without an issue identity;
+    // completing an issue from that same thread must retire that pending pick,
+    // while a read from another thread must leave it alone.
     tx.execute(
         "UPDATE sessions SET pending_thread_id=NULL, pending_issue_id=NULL,
              pending_thread_updated_at=NULL
-         WHERE user_id=$1 AND pending_issue_id=$2 AND ended_at IS NULL",
-        &[&user.id(), &issue_id],
+         WHERE user_id=$1 AND ended_at IS NULL
+           AND (pending_issue_id=$2 OR (pending_issue_id IS NULL AND pending_thread_id=$3))",
+        &[&user.id(), &issue_id, &thread_id],
     )
     .await
     .map_err(db::query_error)?;
@@ -967,8 +970,8 @@ mod tests {
                           WHEN 40 THEN 401 WHEN 60 THEN 601 END
                     WHERE id IN (10,20,30,40,60);
                    INSERT INTO sessions
-                       (id, user_id, pending_thread_id, pending_issue_id, started_at)
-                   VALUES (1,1,10,101,'2026-10-01T00:00:00Z');
+                       (id, user_id, pending_thread_id, pending_issue_id, started_at, start_die)
+                   VALUES (1,1,10,101,'2026-10-01T00:00:00Z',6);
                    INSERT INTO dependencies
                        (id,source_issue_id,target_issue_id,origin,created_at)
                    VALUES (1,102,401,'reader',now());
@@ -1844,6 +1847,39 @@ mod tests {
         // The seeded die outcome, then two dice events and two issue events.
         assert_eq!(counts.get::<_, i64>(0), 5);
         assert_eq!(counts.get::<_, i64>(1), 2);
+    }
+
+    #[tokio::test]
+    async fn roll_offer_rating_clears_a_thread_only_manual_pending_pick() {
+        let Some((mut client, _db_guard)) = roll_offer_fixture().await else {
+            return;
+        };
+        // The legacy manual-picker route can pin a series without pinning its
+        // issue. Its successful read must not resurrect the same pending pick.
+        client
+            .execute("UPDATE sessions SET pending_issue_id=NULL WHERE id=1", &[])
+            .await
+            .unwrap();
+        let tx = client.transaction().await.unwrap();
+        let rated = persist(
+            &tx,
+            AuthenticatedUser::for_test(1),
+            101,
+            &roll_offer(Some(4.0), "roll-offer-manual-pending-1"),
+        )
+        .await
+        .unwrap();
+        tx.commit().await.unwrap();
+        assert!(rated.read_event_created);
+        let pending = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(pending.get::<_, Option<i32>>(0), None);
+        assert_eq!(pending.get::<_, Option<i32>>(1), None);
     }
 
     #[test]
