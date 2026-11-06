@@ -14385,8 +14385,8 @@ export interface components {
                 [key: string]: number[];
             } | null;
             /**
-             * @description Accepted for wire compatibility with the create form. Creation has no
-             *     predecessor changes to confirm; updates remain on the Python path.
+             * @description Creation has no predecessor changes to confirm; only update accepts
+             *     them. A present value is rejected exactly like the Python create path.
              */
             confirmed_predecessor_changes?: unknown;
             description?: string | null;

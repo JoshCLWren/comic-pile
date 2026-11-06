@@ -16717,7 +16717,7 @@
             ]
           },
           "confirmed_predecessor_changes": {
-            "description": "Accepted for wire compatibility with the create form. Creation has no\npredecessor changes to confirm; updates remain on the Python path."
+            "description": "Creation has no predecessor changes to confirm; only update accepts\nthem. A present value is rejected exactly like the Python create path."
           },
           "description": {
             "type": [
