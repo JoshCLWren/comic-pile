@@ -7,9 +7,7 @@
 //! prerequisite or plan dangling is refused with the owning names.
 
 use crate::{
-    auth::AuthenticatedUser,
-    db, option_inputs,
-    reading_constraints::{ValidatedReadingInputs, ValidationError},
+    auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
     ApiError, AppState,
 };
 use axum::{
@@ -121,59 +119,6 @@ pub fn delete_issue_documentation() {}
 #[allow(dead_code)]
 pub fn issue_order_documentation() {}
 
-fn invalid_graph(error: ValidationError, inputs: &option_inputs::OptionInputs) -> ApiError {
-    match error {
-        ValidationError::Cycle { edges, .. } => {
-            let titles: BTreeMap<i32, &str> = inputs
-                .core
-                .threads
-                .iter()
-                .map(|thread| (thread.id, thread.title.as_str()))
-                .collect();
-            let numbers: BTreeMap<i32, String> = inputs
-                .core
-                .issues
-                .iter()
-                .map(|issue| {
-                    (
-                        issue.id,
-                        format!(
-                            "{} #{}",
-                            titles.get(&issue.thread_id).copied().unwrap_or("Series"),
-                            issue.issue_number
-                        ),
-                    )
-                })
-                .collect();
-            let path = edges
-                .iter()
-                .map(|edge| {
-                    format!(
-                        "{} --[{}]--> {}",
-                        numbers
-                            .get(&edge.source_issue_id)
-                            .cloned()
-                            .unwrap_or_else(|| format!("Issue {}", edge.source_issue_id)),
-                        edge.origin,
-                        numbers
-                            .get(&edge.target_issue_id)
-                            .cloned()
-                            .unwrap_or_else(|| format!("Issue {}", edge.target_issue_id)),
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" -> ");
-            ApiError(
-                StatusCode::CONFLICT,
-                format!("Reading constraint cycle: {path}. Nothing was changed."),
-            )
-        }
-        ValidationError::InvalidSnapshot { message } => {
-            ApiError(StatusCode::UNPROCESSABLE_ENTITY, message)
-        }
-    }
-}
-
 fn names(inputs: &option_inputs::OptionInputs) -> BTreeMap<i32, String> {
     inputs
         .lists
@@ -186,7 +131,7 @@ async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Resul
     let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
     let names = names(&inputs);
     ValidatedReadingInputs::new(inputs.clone(), &names)
-        .map_err(|error| invalid_graph(error, &inputs))?;
+        .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
     Ok(())
 }
 

@@ -22,8 +22,8 @@ describe('customCBLApi', () => {
     await expect(customCBLApi.list()).resolves.toEqual(lists)
     await expect(customCBLApi.get(9)).resolves.toEqual(detail)
 
-    expect(client.get).toHaveBeenNthCalledWith(1, '/v1/custom-cbls')
-    expect(client.get).toHaveBeenNthCalledWith(2, '/v1/custom-cbls/9')
+    expect(client.get).toHaveBeenNthCalledWith(1, '/v2/reading-lists')
+    expect(client.get).toHaveBeenNthCalledWith(2, '/v2/reading-lists/9')
   })
 
   it('creates, updates, and deletes an exact ordered list', async () => {
@@ -52,7 +52,7 @@ describe('customCBLApi', () => {
 
     expect(client.post).toHaveBeenCalledWith('/v1/custom-cbls', payload)
     expect(client.put).toHaveBeenCalledWith('/v1/custom-cbls/9', payload)
-    expect(client.delete).toHaveBeenCalledWith('/v1/custom-cbls/9')
+    expect(client.delete).toHaveBeenCalledWith('/v2/reading-lists/9')
   })
 
   it('searches canonical issues with the requested limit', async () => {

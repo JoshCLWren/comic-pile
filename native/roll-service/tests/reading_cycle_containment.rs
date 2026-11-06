@@ -49,12 +49,16 @@ async fn database() -> Option<(Arc<AppState>, tokio::sync::MutexGuard<'static, (
 }
 
 async fn register(state: &Arc<AppState>, username: &str) -> (String, String, i32) {
+    use std::sync::atomic::{AtomicU16, Ordering};
+    static NEXT_IP: AtomicU16 = AtomicU16::new(1);
+    let ip = NEXT_IP.fetch_add(1, Ordering::Relaxed);
     let response = router(state.clone())
         .oneshot(
             Request::builder()
                 .method("POST")
                 .uri("/api/v2/auth/register")
                 .header(header::CONTENT_TYPE, "application/json")
+                .header("x-forwarded-for", format!("198.51.100.{ip}"))
                 .body(Body::from(
                     json!({
                         "username": username,
@@ -957,4 +961,95 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .unwrap()
         .get(0);
     assert_eq!(still_read, "read");
+}
+
+#[tokio::test]
+async fn reading_list_resources_contain_cycles_and_reject_cyclic_creation() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "reading-list-owner").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (_other_token, _other_csrf, _other) = register(&state, "reading-list-other").await;
+
+    let broken_labels: Vec<&str> = fixture::BPRD_BROKEN_NUMERIC_ORDER
+        .iter()
+        .map(|number| Box::leak(number.to_string().into_boxed_str()) as &str)
+        .collect();
+    let (_bprd, ids) =
+        seed_thread(&state, owner, "B.P.R.D.: Hell on Earth", 1, &broken_labels).await;
+    let list = seed_list(
+        &state,
+        owner,
+        "Mignolaverse — Julix Comics (Unread)",
+        "strict",
+        &bprd_list_order(&ids),
+    )
+    .await;
+
+    let (status, lists) = send(&state, auth, "GET", "/api/v2/reading-lists", None).await;
+    assert_eq!(status, StatusCode::OK, "{lists}");
+    assert!(lists
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|row| row["id"] == list));
+
+    let (status, detail) = send(
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/reading-lists/{list}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{detail}");
+    assert_eq!(detail["mode"], "strict");
+    assert_eq!(detail["entries"].as_array().unwrap().len(), 2);
+
+    let (status, reader) = send(
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/reading-lists/{list}/reader"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader}");
+    assert_eq!(reader["execution_mode"], "option_e");
+    assert!(reader["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|entry| entry["availability"] != "legacy"));
+
+    // Creating another projection that closes the same cycle is rejected and
+    // leaves the existing list count unchanged.
+    let (status, rejected) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-lists",
+        Some(json!({
+            "name": "Rejected cycle list",
+            "mode": "strict",
+            "issue_ids": [ids["142"], ids["130"]]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{rejected}");
+    assert!(rejected["detail"]
+        .as_str()
+        .unwrap()
+        .contains("Nothing was changed"));
+    let conn = state.pool.get().await.unwrap();
+    let count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM custom_cbl_lists WHERE user_id=$1",
+            &[&owner],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 1);
 }

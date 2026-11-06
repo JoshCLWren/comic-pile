@@ -13436,6 +13436,93 @@
         ],
         "type": "object"
       },
+      "NativeReadingListEntryIntent": {
+        "properties": {
+          "gate": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gate"
+        ],
+        "type": "object"
+      },
+      "NativeReadingListReaderEntry": {
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "explanation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
+              }
+            ]
+          },
+          "gate": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids",
+          "availability"
+        ],
+        "type": "object"
+      },
       "NativeRecentSession": {
         "description": "Summary of one recent reading session.",
         "properties": {
@@ -16155,6 +16242,172 @@
         ],
         "type": "object"
       },
+      "ReadingList": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListEntry"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "mode",
+          "issue_count",
+          "created_at",
+          "updated_at",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "ReadingListBlockerExplanation": {
+        "properties": {
+          "blocking_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListDependency"
+            },
+            "type": "array"
+          },
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "is_blocked",
+          "blocking_reasons",
+          "blocking_dependencies"
+        ],
+        "type": "object"
+      },
+      "ReadingListDependency": {
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "label"
+        ],
+        "type": "object"
+      },
+      "ReadingListEntry": {
+        "properties": {
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids"
+        ],
+        "type": "object"
+      },
       "ReadingListEntryIntent": {
         "description": "Explicit positional intent for one stable member Issue.",
         "properties": {
@@ -16226,6 +16479,37 @@
           "after_issue_names"
         ],
         "title": "ReadingListPredecessorChange",
+        "type": "object"
+      },
+      "ReadingListReader": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingListReaderEntry"
+            },
+            "type": "array"
+          },
+          "execution_mode": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "name",
+          "mode",
+          "execution_mode",
+          "entries"
+        ],
         "type": "object"
       },
       "ReadingListReaderEntry": {
@@ -16365,6 +16649,113 @@
           "execution_mode"
         ],
         "title": "ReadingListReaderResponse",
+        "type": "object"
+      },
+      "ReadingListSummary": {
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mode",
+          "issue_count",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ReadingListWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "checkpoint_targets": {
+            "additionalProperties": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entry_intents": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NativeReadingListEntryIntent"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "issue_ids"
+        ],
         "type": "object"
       },
       "ReadingModeResponse": {
@@ -36517,6 +36908,220 @@
         "summary": "Documentation-only operation for the mounted graph repair action.",
         "tags": [
           "reading-graph"
+        ]
+      }
+    },
+    "/api/v2/reading-lists": {
+      "get": {
+        "description": "Owner-scoped compact Reading List rows ordered by name.",
+        "operationId": "list_reading_lists_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingListSummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Owned Reading Lists"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the Reading List collection.",
+        "tags": [
+          "reading-lists"
+        ]
+      },
+      "post": {
+        "operationId": "create_reading_list_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingListWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            },
+            "description": "Created Reading List"
+          },
+          "400": {
+            "description": "Invalid list metadata or membership"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Projected reading graph would cycle; nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for Reading List creation.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}": {
+      "delete": {
+        "operationId": "delete_reading_list_documentation",
+        "parameters": [
+          {
+            "description": "Owned Reading List identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reading List deleted; entries cascade"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for Reading List deletion.",
+        "tags": [
+          "reading-lists"
+        ]
+      },
+      "get": {
+        "operationId": "get_reading_list_documentation",
+        "parameters": [
+          {
+            "description": "Owned Reading List identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            },
+            "description": "Reading List with ordered entries"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for one Reading List.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/reader": {
+      "get": {
+        "operationId": "read_reading_list_documentation",
+        "parameters": [
+          {
+            "description": "Owned Reading List identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListReader"
+                }
+              }
+            },
+            "description": "Reader with canonical availability"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the live Reading List reader.",
+        "tags": [
+          "reading-lists"
         ]
       }
     },

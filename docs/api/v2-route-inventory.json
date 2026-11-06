@@ -198,6 +198,56 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/v2/reading-lists",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/reader",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v2/reading-sessions",
       "runtime": "native-rust",

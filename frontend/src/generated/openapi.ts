@@ -6379,6 +6379,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/reading-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the Reading List collection.
+         * @description Owner-scoped compact Reading List rows ordered by name.
+         */
+        get: operations["list_reading_lists_documentation"];
+        put?: never;
+        /** Documentation-only operation for Reading List creation. */
+        post: operations["create_reading_list_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-lists/{list_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for one Reading List. */
+        get: operations["get_reading_list_documentation"];
+        put?: never;
+        post?: never;
+        /** Documentation-only operation for Reading List deletion. */
+        delete: operations["delete_reading_list_documentation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-lists/{list_id}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the live Reading List reader. */
+        get: operations["read_reading_list_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/reading-sessions": {
         parameters: {
             query?: never;
@@ -12980,6 +13036,29 @@ export interface components {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
         };
+        NativeReadingListEntryIntent: {
+            gate: string;
+            skipped?: boolean;
+        };
+        NativeReadingListReaderEntry: {
+            availability: string;
+            checkpoint_target_issue_ids: number[];
+            explanation?: null | components["schemas"]["ReadingListBlockerExplanation"];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
         /** @description Summary of one recent reading session. */
         NativeRecentSession: {
             ended_at?: string | null;
@@ -14136,6 +14215,51 @@ export interface components {
             thread_id: number;
             title: string;
         };
+        ReadingList: {
+            created_at: string;
+            description?: string | null;
+            entries: components["schemas"]["ReadingListEntry"][];
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        ReadingListBlockerExplanation: {
+            blocking_dependencies: components["schemas"]["ReadingListDependency"][];
+            blocking_reasons: string[];
+            is_blocked: boolean;
+        };
+        ReadingListDependency: {
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number: string;
+            label: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        ReadingListEntry: {
+            checkpoint_target_issue_ids: number[];
+            gate: string;
+            /** Format: int32 */
+            id: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            position: number;
+            series_name: string;
+            skipped: boolean;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
         /**
          * ReadingListEntryIntent
          * @description Explicit positional intent for one stable member Issue.
@@ -14170,6 +14294,14 @@ export interface components {
             issue_id: number;
             /** Issue Name */
             issue_name: string;
+        };
+        ReadingListReader: {
+            entries: components["schemas"]["NativeReadingListReaderEntry"][];
+            execution_mode: string;
+            /** Format: int32 */
+            list_id: number;
+            mode: string;
+            name: string;
         };
         /**
          * ReadingListReaderEntry
@@ -14235,6 +14367,29 @@ export interface components {
              */
             mode: "strict" | "loose";
             /** Name */
+            name: string;
+        };
+        ReadingListSummary: {
+            description?: string | null;
+            /** Format: int32 */
+            id: number;
+            /** Format: int32 */
+            issue_count: number;
+            mode: string;
+            name: string;
+            updated_at: string;
+        };
+        ReadingListWrite: {
+            checkpoint_issue_ids?: number[] | null;
+            checkpoint_targets?: {
+                [key: string]: number[];
+            } | null;
+            description?: string | null;
+            entry_intents?: {
+                [key: string]: components["schemas"]["NativeReadingListEntryIntent"];
+            } | null;
+            issue_ids: number[];
+            mode?: string | null;
             name: string;
         };
         /**
@@ -25463,6 +25618,222 @@ export interface operations {
             };
             /** @description Invalid reading snapshot */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_reading_lists_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owned Reading Lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListSummary"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingListWrite"];
+            };
+        };
+        responses: {
+            /** @description Created Reading List */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingList"];
+                };
+            };
+            /** @description Invalid list metadata or membership */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Projected reading graph would cycle; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading List with ordered entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingList"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reading List deleted; entries cascade */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    read_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reader with canonical availability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingListReader"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

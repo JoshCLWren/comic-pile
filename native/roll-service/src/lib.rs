@@ -22,6 +22,7 @@ pub mod reading_constraints;
 pub mod reading_eligibility;
 pub mod reading_graph;
 pub mod reading_inputs;
+pub mod reading_list;
 pub mod reading_session;
 pub mod roll_exclusions;
 pub mod roll_offer;
@@ -279,6 +280,18 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
+        .route(
+            "/api/v2/reading-lists",
+            get(reading_list::list_reading_lists).post(reading_list::create_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}",
+            get(reading_list::get_reading_list).delete(reading_list::delete_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/reader",
+            get(reading_list::read_reading_list),
+        )
         .route("/api/v2/reading-graph", get(reading_graph::reading_graph))
         .route("/api/v2/reading-graph/repairs", post(reading_graph::repair))
         .route("/api/v2/analytics/metrics", get(analytics::metrics))

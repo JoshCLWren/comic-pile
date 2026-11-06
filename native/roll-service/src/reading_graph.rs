@@ -11,7 +11,10 @@
 //! actions that remove only the selected constraint. A repair never deletes an
 //! Issue, read state, rating, history event, or another reader's row.
 
-use crate::{auth::AuthenticatedUser, db, option_inputs, option_inputs::OptionInputs, AppState};
+use crate::{
+    auth::AuthenticatedUser, db, option_inputs, option_inputs::OptionInputs,
+    reading_constraints::ValidationError, ApiError, AppState,
+};
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -158,6 +161,62 @@ pub struct ReadingGraphRepairResponse {
     pub status_after: String,
     pub removed: String,
     pub graph: ReadingGraphResponse,
+}
+
+pub(crate) fn cycle_conflict(
+    error: ValidationError,
+    inputs: &option_inputs::OptionInputs,
+) -> ApiError {
+    match error {
+        ValidationError::Cycle { edges, .. } => {
+            let titles: BTreeMap<i32, &str> = inputs
+                .core
+                .threads
+                .iter()
+                .map(|thread| (thread.id, thread.title.as_str()))
+                .collect();
+            let numbers: BTreeMap<i32, String> = inputs
+                .core
+                .issues
+                .iter()
+                .map(|issue| {
+                    (
+                        issue.id,
+                        format!(
+                            "{} #{}",
+                            titles.get(&issue.thread_id).copied().unwrap_or("Series"),
+                            issue.issue_number
+                        ),
+                    )
+                })
+                .collect();
+            let path = edges
+                .iter()
+                .map(|edge| {
+                    format!(
+                        "{} --[{}]--> {}",
+                        numbers
+                            .get(&edge.source_issue_id)
+                            .cloned()
+                            .unwrap_or_else(|| format!("Issue {}", edge.source_issue_id)),
+                        edge.origin,
+                        numbers
+                            .get(&edge.target_issue_id)
+                            .cloned()
+                            .unwrap_or_else(|| format!("Issue {}", edge.target_issue_id)),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(" -> ");
+            ApiError(
+                StatusCode::CONFLICT,
+                format!("Reading constraint cycle: {path}. Nothing was changed."),
+            )
+        }
+        ValidationError::InvalidSnapshot { message } => {
+            ApiError(StatusCode::UNPROCESSABLE_ENTITY, message)
+        }
+    }
 }
 
 fn issue_lookup(

@@ -47,7 +47,12 @@ use utoipa::OpenApi;
         crate::reading_graph::repair_documentation,
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
-        crate::issue_mutation::issue_order_documentation
+        crate::issue_mutation::issue_order_documentation,
+        crate::reading_list::list_reading_lists_documentation,
+        crate::reading_list::get_reading_list_documentation,
+        crate::reading_list::create_reading_list_documentation,
+        crate::reading_list::delete_reading_list_documentation,
+        crate::reading_list::read_reading_list_documentation
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -83,7 +88,16 @@ use utoipa::OpenApi;
         crate::issue_mutation::CreateIssuesRequest,
         crate::issue_mutation::IssueMutationItem,
         crate::issue_mutation::IssueListResponse,
-        crate::issue_mutation::IssueOrderRequest
+        crate::issue_mutation::IssueOrderRequest,
+        crate::reading_list::ReadingListEntryIntent,
+        crate::reading_list::ReadingListEntry,
+        crate::reading_list::ReadingListSummary,
+        crate::reading_list::ReadingList,
+        crate::reading_list::ReadingListDependency,
+        crate::reading_list::ReadingListBlockerExplanation,
+        crate::reading_list::ReadingListReaderEntry,
+        crate::reading_list::ReadingListReader,
+        crate::reading_list::ReadingListWrite
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -111,14 +125,18 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 29] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 34] = [
     ("delete", "/api/v2/issues/{issue_id}"),
+    ("delete", "/api/v2/reading-lists/{list_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
     ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/reading-graph"),
+    ("get", "/api/v2/reading-lists"),
+    ("get", "/api/v2/reading-lists/{list_id}"),
+    ("get", "/api/v2/reading-lists/{list_id}/reader"),
     ("get", "/api/v2/roll/bootstrap"),
     ("get", "/api/v2/roll/die-state"),
     ("get", "/api/v2/roll/eligible-issue-ids"),
@@ -135,6 +153,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 29] = [
     ("post", "/api/v2/queue-orders"),
     ("post", "/api/v2/reading-boundaries"),
     ("post", "/api/v2/reading-graph/repairs"),
+    ("post", "/api/v2/reading-lists"),
     ("post", "/api/v2/reading-sessions"),
     ("post", "/api/v2/roll/dice-command"),
     ("post", "/api/v2/roll/offer"),
