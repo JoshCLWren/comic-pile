@@ -324,8 +324,8 @@ def _file_patches(diff_text: str) -> dict[str, str]:
             current = header.group(2)
             if current not in patches:
                 patches[current] = [line]
-            else:
-                patches[current].append(line)
+            # else: do not append duplicate header line for same file;
+            # _has_code_delta determines code changes without adding headers after a hunk
         elif current:
             # Skip duplicate --- and +++ lines from subsequent commit diffs
             if line.startswith("--- ") or line.startswith("+++ "):
