@@ -54,7 +54,8 @@ use utoipa::OpenApi;
         crate::reading_list::delete_reading_list_documentation,
         crate::reading_list::read_reading_list_documentation,
         crate::reading_plan_recovery::preview_documentation,
-        crate::reading_plan_recovery::relink_documentation
+        crate::reading_plan_recovery::relink_documentation,
+        crate::reading_plan_reader::read_documentation
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -104,7 +105,15 @@ use utoipa::OpenApi;
         crate::reading_plan_recovery::RecoveryCandidate,
         crate::reading_plan_recovery::PlanRecoveryPreview,
         crate::reading_plan_recovery::PlanRelinkRequest,
-        crate::reading_plan_recovery::PlanRelinkResult
+        crate::reading_plan_recovery::PlanRelinkResult,
+        crate::reading_plan_reader::PlanReaderBlocker,
+        crate::reading_plan_reader::PlanReaderIssue,
+        crate::reading_plan_reader::PlanReaderLane,
+        crate::reading_plan_reader::PlanReaderProgress,
+        crate::reading_plan_reader::PlanReaderSource,
+        crate::reading_plan_reader::PlanReleaseSourceStatus,
+        crate::reading_plan_reader::PlanReleaseCandidate,
+        crate::reading_plan_reader::PlanReaderResponse
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -132,13 +141,14 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 36] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 37] = [
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
     ("get", "/api/v2/continuity-plans/{plan_id}/recovery"),
+    ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
     ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/reading-graph"),
