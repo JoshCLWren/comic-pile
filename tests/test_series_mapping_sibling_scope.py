@@ -185,11 +185,20 @@ def _approvable_row_ids(rows: list[dict[str, object]]) -> list[str]:
     Returns:
         Bulk-safe row ids that belong to a locally owned issue.
     """
-    return sorted(
+    def _numeric_key(row_id: str) -> int:
+        # row_id format is "issue:{numeric_id}"
+        try:
+            return int(str(row_id).split(":", 1)[1])
+        except ValueError:
+            # fallback to lexical order for non-numeric ids
+            return 0
+
+    ids = [
         str(row["row_id"])
         for row in rows
         if row.get("classification") == "safe_exact_match" and row.get("thread_id")
-    )
+    ]
+    return sorted(ids, key=_numeric_key)
 
 
 class TestSiblingScopePreview:
@@ -902,3 +911,24 @@ class TestHydrationDeadlineRelationship:
             )
         ).scalars().all()
         assert len(confirmed) == len(issues) - 1
+
+
+class TestApprovableRowIdsNumericOrdering:
+    """Regression guard for numeric ordering of approvable row ids."""
+
+    def test_numeric_sorting_crosses_1000(self) -> None:
+        """Approvals must sort numerically, not lexicographically, across the 1000 boundary."""
+        rows = [
+            {"row_id": "issue:1000", "classification": "safe_exact_match", "thread_id": 1},
+            {"row_id": "issue:993", "classification": "safe_exact_match", "thread_id": 1},
+            {"row_id": "issue:1001", "classification": "safe_exact_match", "thread_id": 1},
+            {"row_id": "issue:2", "classification": "safe_exact_match", "thread_id": 1},
+            {"row_id": "issue:10", "classification": "safe_exact_match", "thread_id": 1},
+            # Not approvable - wrong classification
+            {"row_id": "issue:999", "classification": "needs_review", "thread_id": 1},
+            # Not approvable - no thread
+            {"row_id": "issue:5", "classification": "safe_exact_match", "thread_id": None},
+        ]
+        result = _approvable_row_ids(rows)
+        expected = ["issue:2", "issue:10", "issue:993", "issue:1000", "issue:1001"]
+        assert result == expected
