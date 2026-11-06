@@ -52,6 +52,7 @@ use utoipa::OpenApi;
         crate::reading_list::get_reading_list_documentation,
         crate::reading_list::create_reading_list_documentation,
         crate::reading_list::delete_reading_list_documentation,
+        crate::reading_list::update_reading_list_documentation,
         crate::reading_list::read_reading_list_documentation,
         crate::reading_plan_recovery::preview_documentation,
         crate::reading_plan_recovery::relink_documentation,
@@ -101,6 +102,7 @@ use utoipa::OpenApi;
         crate::reading_list::ReadingListReaderEntry,
         crate::reading_list::ReadingListReader,
         crate::reading_list::ReadingListWrite,
+        crate::reading_list::ReadingListPredecessorChange,
         crate::reading_plan_recovery::RecoveryStep,
         crate::reading_plan_recovery::RecoveryCandidate,
         crate::reading_plan_recovery::PlanRecoveryPreview,
@@ -141,7 +143,7 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 37] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 38] = [
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
     ("get", "/api/v2/analytics/metrics"),
@@ -178,6 +180,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 37] = [
     ("post", "/api/v2/roll/offer"),
     ("post", "/api/v2/roll/reset"),
     ("post", "/api/v2/threads/{thread_id}/issues"),
+    ("put", "/api/v2/reading-lists/{list_id}"),
     ("put", "/api/v2/threads/{thread_id}/issue-order"),
 ];
 
