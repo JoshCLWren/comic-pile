@@ -149,6 +149,7 @@ factory_merge_with_canonical_gates() {
   fi
   FACTORY_MERGE_STATE='merged'
 
+  printf '[factory-merge] Executing post-merge closure for PR #%s using %s\n' "$pr" "$closure_script" >&2
   closure_output="$(python3 "$closure_script" --pr "$pr" 2>&1)" || closure_status=$?
   # The closure module prints its decision on the last non-empty line; error
   # output can be multi-line.

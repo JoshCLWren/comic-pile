@@ -196,7 +196,10 @@ def test_deny_decision_does_not_merge(tmp_path: Path) -> None:
     )
     assert fields["status"] == "1"
     assert fields["decision"] == "deny"
+    assert fields["reason"] == "linkage reversal: #4027 with open declared dependencies"
+    assert fields["state"] == "denied"
     assert _merge_calls(fields["calls"]) == []
+    assert _closure_calls(fields["calls"]) == []
 
 
 @pytest.mark.parametrize(
@@ -456,11 +459,24 @@ def test_worker_call_site_gate_denial_releases_without_merging(tmp_path: Path) -
     assert _merge_calls(calls) == []
     assert _closure_calls(calls) == []
     assert [call for call in calls if call.startswith("release ")] == [
-        f"release {PR} factory/87-4081-opencode-free factory:review gate-denied"
+        f"release {PR} factory/87-4081-opencode-free factory:review gate-denied: all exact-head mechanical gates passed"
     ]
     assert any("decision=retry" in call for call in calls if call.startswith("log "))
     # Pending CI reaches this branch on every attempt; the released lease must
     # not let choose_unowned_pr hand the same unchanged PR back in this session.
+    assert f"skip {PR}" in calls
+
+
+def test_worker_call_site_deny_decision_releases_as_blocked_before_merge(tmp_path: Path) -> None:
+    """A deny decision releases the PR as factory:blocked so it won't get repeated work."""
+    calls, _ = _run_call_site(tmp_path, FAKE_GATE_DECISION="deny", FAKE_GATE_REASON="linkage reversal: #4027")
+    assert _merge_calls(calls) == []
+    assert _closure_calls(calls) == []
+    assert [call for call in calls if call.startswith("release ")] == [
+        f"release {PR} factory/87-4081-opencode-free factory:blocked gate-denied: linkage reversal: #4027"
+    ]
+    assert any("decision=deny" in call for call in calls if call.startswith("log "))
+    # A denied PR must be blocked to prevent the session from handing it straight back.
     assert f"skip {PR}" in calls
 
 
