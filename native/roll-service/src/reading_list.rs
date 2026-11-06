@@ -532,6 +532,36 @@ async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Resul
     Ok(())
 }
 
+/// An authoritative Reading List must not be removed while an owned Plan
+/// still points to its immutable identity. A same-name replacement is not a
+/// substitute: this would otherwise strand a Plan with HTTP 409 forever.
+/// Reuse this preflight in graph repairs, not just the normal DELETE route.
+pub(crate) async fn ensure_list_unlinked(
+    tx: &Transaction<'_>,
+    user_id: i32,
+    list_id: i32,
+) -> Result<(), ApiError> {
+    let raw_source_path = format!("custom-cbl:{list_id}");
+    let linked_plan = tx.query_opt(
+        "SELECT p.id, p.name FROM reading_plan_sources s
+         JOIN continuity_plans p ON p.id=s.plan_id
+         WHERE p.user_id=$1 AND (s.custom_cbl_list_id=$2 OR s.raw_source_path=$3)
+         ORDER BY p.id LIMIT 1",
+        &[&user_id, &list_id, &raw_source_path],
+    ).await.map_err(db::query_error)?;
+    if let Some(row) = linked_plan {
+        let plan_id: i32 = row.get(0);
+        let plan_name: String = row.get(1);
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            format!(
+                "Reading List is authoritative for Reading Plan \"{plan_name}\" (#{plan_id}). Relink that plan before deleting the list; nothing was changed."
+            ),
+        ));
+    }
+    Ok(())
+}
+
 /// `DELETE /api/v2/reading-lists/{list_id}`
 pub async fn delete_reading_list(
     State(state): State<Arc<AppState>>,
@@ -546,6 +576,7 @@ pub async fn delete_reading_list(
         .await
         .map_err(db::query_error)?;
     lock_reader(&tx, user.id()).await?;
+    ensure_list_unlinked(&tx, user.id(), list_id).await?;
     let deleted = tx
         .execute(
             "DELETE FROM custom_cbl_lists WHERE id=$1 AND user_id=$2",
