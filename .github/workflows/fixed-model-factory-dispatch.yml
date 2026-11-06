@@ -55,9 +55,10 @@ permissions:
 
 concurrency:
   group: fixed-model-factory-dispatch
-  # Every roster run creates its successor, so pending watchdog, recovery, and
-  # chain ticks must coalesce into one next run instead of multiplying chains.
-  queue: single
+  # The release and completion controllers share this lease-writer group.
+  # Preserve their pending jobs instead of letting roster ticks evict them.
+  # Serialization still permits exactly one assignment writer at a time.
+  queue: max
   cancel-in-progress: false
 
 jobs:
