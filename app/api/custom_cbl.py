@@ -31,7 +31,6 @@ from app.services.reading_overlap_decisions import (
 from app.services.custom_cbl import (
     apply_custom_cbl_for_user,
     create_custom_cbl_for_user,
-    delete_custom_cbl_for_user,
     export_custom_cbl_for_user,
     get_custom_cbl_response,
     list_custom_cbl_responses,
@@ -123,21 +122,6 @@ async def update_custom_cbl(
         entry_intents=payload.entry_intents,
         confirmed_predecessor_changes=payload.confirmed_predecessor_changes,
     )
-
-
-@router.delete("/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_custom_cbl(
-    list_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> Response:
-    """Delete one user-owned custom CBL without touching its comics or Reading Plans."""
-    await delete_custom_cbl_for_user(
-        db,
-        user_id=current_user.id,
-        list_id=list_id,
-    )
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{list_id}/export")
