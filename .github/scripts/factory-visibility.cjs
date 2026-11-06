@@ -1110,7 +1110,6 @@ async function reconcile({ github, context }) {
 
   const payloadBody = context.payload.pull_request?.body ?? context.payload.issue?.body ?? '';
   if (hasManualOnlyDirective(payloadBody)) return;
-  await ensureLabels(github, context);
 
   if (context.eventName === 'issue_comment') {
     const number = context.payload.issue.number;
@@ -1126,6 +1125,7 @@ async function reconcile({ github, context }) {
       if (!live || markerHead !== live.head?.sha) return;
     }
 
+    await ensureLabels(github, context);
     const currentOwner = [...current].find(isOwnerLabel) || null;
     const currentStage = STAGE_LABELS.find(label => current.has(label));
     const preserveAdvancedPrStage = Boolean(context.payload.issue.pull_request)
@@ -1139,6 +1139,8 @@ async function reconcile({ github, context }) {
     });
     return;
   }
+
+  await ensureLabels(github, context);
 
   if (context.eventName === 'pull_request_review_comment') {
     // A thread reply (including Greptile pushback on an answered finding) can
