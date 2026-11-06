@@ -123,7 +123,7 @@ export function ReadingPlanRecovery({
       </details>
       <p>
         Choose an existing Reading List as the new authority, or{' '}
-        <Link className="underline" to="/reading-lists">create a Reading List</Link>{' '}
+        <Link className="underline" to="/continuity-plans/new">open the Plan authoring UI</Link>{' '}
         with the issues and order you want. This does not recover deleted issues automatically.
       </p>
       <label className="block space-y-2">
@@ -163,7 +163,7 @@ export function ReadingPlanRecovery({
           <button
             type="button"
             disabled={!acknowledged || apply.isPending}
-            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 font-bold text-black disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 font-bold text-[var(--theme-primary-action-text)] disabled:opacity-50"
             onClick={() => void apply.mutate({
               listId: selected.list_id,
               planUpdatedAt: preview.plan_updated_at,
@@ -173,7 +173,7 @@ export function ReadingPlanRecovery({
             {apply.isPending ? 'Relinking…' : `Relink to ${selected.name}`}
           </button>
           {apply.isError && (
-            <p role="alert" className="text-[var(--theme-danger)]">
+            <p role="alert" className="text-[var(--theme-error)]">
               {apply.error.message}. Refresh the preview before retrying.
               <button
                 type="button"
