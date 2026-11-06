@@ -41,3 +41,23 @@ def test_incident_writer_groups_are_not_independent() -> None:
 
     assert "group: factory-completion-drain" not in completion
     assert "group: fixed-model-capacity-refill-${{ github.event.workflow_run.id || github.run_id }}" not in refill
+
+
+def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> None:
+    """All writers must opt into FIFO queuing; a single-mode entrant evicts waiters."""
+    # Regression: migration-lane release runs were cancelled repeatedly while
+    # dispatcher and completion work arrived in the same shared group.
+    writers = (
+        "fixed-model-factory-dispatch.yml",
+        "fixed-model-factory-capacity-refill.yml",
+        "factory-completion-drain.yml",
+        "factory-migration-lane-release.yml",
+        "free-model-factory-dispatch.yml",
+    )
+    for filename in writers:
+        workflow = (WORKFLOWS / filename).read_text(encoding="utf-8")
+        concurrency = workflow.split("concurrency:", 1)[1].split("\njobs:", 1)[0]
+        assert ASSIGNMENT_GROUP in concurrency, filename
+        assert "queue: max" in concurrency, filename
+        assert "cancel-in-progress: false" in concurrency, filename
+        assert "queue: single" not in concurrency, filename
