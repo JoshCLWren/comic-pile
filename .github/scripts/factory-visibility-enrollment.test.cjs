@@ -353,6 +353,21 @@ test('only trusted current-head review verdicts recover a missing stage', async 
   assert.ok(writes[0].labels.includes('factory:ci'));
 });
 
+test('enrollment ignores trusted review-marker examples embedded in prose', async () => {
+  const comment = body => ({
+    body, author_association: 'OWNER', created_at: '2026-09-20T00:00:00Z',
+  });
+  for (const body of [
+    `Review example <!-- comic-pile-factory-review-v2:${sha}:changes-required -->`,
+    `Documentation:\n<!-- comic-pile-factory-review-v2:${sha}:changes-required -->`,
+    `<!-- comic-pile-factory-review-v2:${sha}:changes-required:extra -->`,
+  ]) {
+    const { writes } = await run({ comments: [comment(body)] });
+    assert.ok(writes[0].labels.includes('factory:review'), body);
+    assert.ok(!writes[0].labels.includes('factory:changes-requested'), body);
+  }
+});
+
 test('current-head changes-required verdict requests repair', async () => {
   const { writes } = await run({ comments: [{
     body: `<!-- comic-pile-factory-review-v2:${sha}:changes-required -->`,
