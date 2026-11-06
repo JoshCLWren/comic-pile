@@ -68,10 +68,26 @@ fn candidate_diff(
 ) -> (Vec<RecoveryStep>, Vec<RecoveryStep>, bool) {
     let old: BTreeSet<i32> = retained.iter().map(|step| step.issue_id).collect();
     let new: BTreeSet<i32> = steps.iter().map(|step| step.issue_id).collect();
-    let added = steps.iter().filter(|step| !old.contains(&step.issue_id)).cloned().collect();
-    let removed = retained.iter().filter(|step| !new.contains(&step.issue_id)).cloned().collect();
-    let old_common: Vec<i32> = retained.iter().filter(|step| new.contains(&step.issue_id)).map(|step| step.issue_id).collect();
-    let new_common: Vec<i32> = steps.iter().filter(|step| old.contains(&step.issue_id)).map(|step| step.issue_id).collect();
+    let added = steps
+        .iter()
+        .filter(|step| !old.contains(&step.issue_id))
+        .cloned()
+        .collect();
+    let removed = retained
+        .iter()
+        .filter(|step| !new.contains(&step.issue_id))
+        .cloned()
+        .collect();
+    let old_common: Vec<i32> = retained
+        .iter()
+        .filter(|step| new.contains(&step.issue_id))
+        .map(|step| step.issue_id)
+        .collect();
+    let new_common: Vec<i32> = steps
+        .iter()
+        .filter(|step| old.contains(&step.issue_id))
+        .map(|step| step.issue_id)
+        .collect();
     (added, removed, old_common != new_common)
 }
 
@@ -84,19 +100,27 @@ pub async fn preview(
     Path(plan_id): Path<i32>,
 ) -> Result<Json<PlanRecoveryPreview>, ApiError> {
     let conn = db::checkout(&state).await?;
-    let plan = conn.query_opt(
-        "SELECT name, updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2",
-        &[&plan_id, &user.id()],
-    ).await.map_err(db::query_error)?.ok_or_else(|| {
-        ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string())
-    })?;
-    let source_rows = conn.query(
-        "SELECT DISTINCT s.custom_cbl_list_id FROM reading_plan_sources s
+    let plan = conn
+        .query_opt(
+            "SELECT name, updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
+    let source_rows = conn
+        .query(
+            "SELECT DISTINCT s.custom_cbl_list_id FROM reading_plan_sources s
          JOIN custom_cbl_lists l ON l.id=s.custom_cbl_list_id AND l.user_id=$2
          WHERE s.plan_id=$1",
-        &[&plan_id, &user.id()],
-    ).await.map_err(db::query_error)?;
-    let linked_ids: Vec<i32> = source_rows.iter().filter_map(|row| row.get::<_, Option<i32>>(0)).collect();
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let linked_ids: Vec<i32> = source_rows
+        .iter()
+        .filter_map(|row| row.get::<_, Option<i32>>(0))
+        .collect();
 
     let saved = conn.query(
         "SELECT r.issue_id, COALESCE(NULLIF(r.label,''), t.title || ' #' || i.issue_number, 'Issue #' || r.issue_id::text)
@@ -106,13 +130,17 @@ pub async fn preview(
          WHERE r.plan_id=$1 ORDER BY r.display_position, r.occurrence_id",
         &[&plan_id, &user.id()],
     ).await.map_err(db::query_error)?;
-    let retained_steps: Vec<RecoveryStep> = saved.iter().map(|row| RecoveryStep {
-        issue_id: row.get(0),
-        label: row.get(1),
-    }).collect();
+    let retained_steps: Vec<RecoveryStep> = saved
+        .iter()
+        .map(|row| RecoveryStep {
+            issue_id: row.get(0),
+            label: row.get(1),
+        })
+        .collect();
 
-    let lists = conn.query(
-        "SELECT l.id, l.name, l.mode, l.updated_at::text,
+    let lists = conn
+        .query(
+            "SELECT l.id, l.name, l.mode, l.updated_at::text,
                 COALESCE(jsonb_agg(jsonb_build_object(
                     'issue_id',e.issue_id,'label',t.title || ' #' || i.issue_number)
                     ORDER BY e.position,e.id)
@@ -123,14 +151,20 @@ pub async fn preview(
          LEFT JOIN threads t ON t.id=i.thread_id AND t.user_id=l.user_id
          WHERE l.user_id=$1
          GROUP BY l.id ORDER BY lower(l.name),l.id",
-        &[&user.id()],
-    ).await.map_err(db::query_error)?;
+            &[&user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
 
     let mut candidates = Vec::with_capacity(lists.len());
     for row in lists {
         let steps_text: String = row.get(4);
-        let steps: Vec<RecoveryStep> = serde_json::from_str(&steps_text)
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid Reading List snapshot".to_string()))?;
+        let steps: Vec<RecoveryStep> = serde_json::from_str(&steps_text).map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid Reading List snapshot".to_string(),
+            )
+        })?;
         let (added_steps, removed_steps, order_changed) = candidate_diff(&retained_steps, &steps);
         candidates.push(RecoveryCandidate {
             list_id: row.get(0),
@@ -147,8 +181,19 @@ pub async fn preview(
         plan_id,
         plan_name: plan.get(0),
         plan_updated_at: plan.get(1),
-        status: if linked_ids.len() == 1 { "linked" } else if linked_ids.is_empty() { "orphaned" } else { "ambiguous" }.to_string(),
-        linked_list_id: if linked_ids.len() == 1 { Some(linked_ids[0]) } else { None },
+        status: if linked_ids.len() == 1 {
+            "linked"
+        } else if linked_ids.is_empty() {
+            "orphaned"
+        } else {
+            "ambiguous"
+        }
+        .to_string(),
+        linked_list_id: if linked_ids.len() == 1 {
+            Some(linked_ids[0])
+        } else {
+            None
+        },
         retained_steps,
         candidates,
     }))
@@ -165,50 +210,89 @@ pub async fn relink(
     Json(request): Json<PlanRelinkRequest>,
 ) -> Result<Json<PlanRelinkResult>, ApiError> {
     if !request.confirm {
-        return Err(ApiError(StatusCode::BAD_REQUEST, "Preview and confirm the Reading List before relinking".to_string()));
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            "Preview and confirm the Reading List before relinking".to_string(),
+        ));
     }
     let mut conn = db::checkout(&state).await?;
-    let tx = conn.build_transaction().start().await.map_err(db::query_error)?;
-    tx.execute("SELECT pg_advisory_xact_lock($1,$2)", &[&QUEUE_LOCK_NAMESPACE, &user.id()])
-        .await.map_err(db::query_error)?;
-    let plan = tx.query_opt(
-        "SELECT updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE",
-        &[&plan_id, &user.id()],
-    ).await.map_err(db::query_error)?.ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
+    let tx = conn
+        .build_transaction()
+        .start()
+        .await
+        .map_err(db::query_error)?;
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1,$2)",
+        &[&QUEUE_LOCK_NAMESPACE, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?;
+    let plan = tx
+        .query_opt(
+            "SELECT updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
     let updated_at: String = plan.get(0);
     if updated_at != request.expected_plan_updated_at {
-        return Err(ApiError(StatusCode::CONFLICT, "Reading Plan changed; refresh the repair preview".to_string()));
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading Plan changed; refresh the repair preview".to_string(),
+        ));
     }
-    let list = tx.query_opt(
-        "SELECT updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE",
-        &[&request.list_id, &user.id()],
-    ).await.map_err(db::query_error)?.ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".to_string()))?;
+    let list = tx
+        .query_opt(
+            "SELECT updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            &[&request.list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".to_string()))?;
     let list_updated_at: String = list.get(0);
     if list_updated_at != request.expected_list_updated_at {
-        return Err(ApiError(StatusCode::CONFLICT, "Reading List changed; refresh the repair preview".to_string()));
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading List changed; refresh the repair preview".to_string(),
+        ));
     }
-    let source_rows = tx.query(
-        "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
-        &[&plan_id],
-    ).await.map_err(db::query_error)?;
-    let linked: BTreeSet<i32> = source_rows.iter()
+    let source_rows = tx
+        .query(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let linked: BTreeSet<i32> = source_rows
+        .iter()
         .filter_map(|row| row.get::<_, Option<i32>>(0))
         .collect();
     if !linked.is_empty() {
         if linked.len() == 1 && linked.contains(&request.list_id) {
             tx.rollback().await.map_err(db::query_error)?;
-            return Ok(Json(PlanRelinkResult { plan_id, list_id: request.list_id, status: "already_linked".to_string() }));
+            return Ok(Json(PlanRelinkResult {
+                plan_id,
+                list_id: request.list_id,
+                status: "already_linked".to_string(),
+            }));
         }
-        return Err(ApiError(StatusCode::CONFLICT, "Reading Plan is already linked to another authoritative Reading List".to_string()));
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading Plan is already linked to another authoritative Reading List".to_string(),
+        ));
     }
 
     let source_path = format!("custom-cbl:{}", request.list_id);
     // A legacy deleted source may retain the exact path with a NULL FK.
-    let existing = tx.execute(
-        "UPDATE reading_plan_sources SET custom_cbl_list_id=$1
+    let existing = tx
+        .execute(
+            "UPDATE reading_plan_sources SET custom_cbl_list_id=$1
          WHERE plan_id=$2 AND raw_source_path=$3 AND custom_cbl_list_id IS NULL",
-        &[&request.list_id, &plan_id, &source_path],
-    ).await.map_err(db::query_error)?;
+            &[&request.list_id, &plan_id, &source_path],
+        )
+        .await
+        .map_err(db::query_error)?;
     if existing == 0 {
         tx.execute(
             "INSERT INTO reading_plan_sources (plan_id,raw_source_path,custom_cbl_list_id,recorded_at)
@@ -217,7 +301,11 @@ pub async fn relink(
         ).await.map_err(db::query_error)?;
     }
     tx.commit().await.map_err(db::query_error)?;
-    Ok(Json(PlanRelinkResult { plan_id, list_id: request.list_id, status: "relinked".to_string() }))
+    Ok(Json(PlanRelinkResult {
+        plan_id,
+        list_id: request.list_id,
+        status: "relinked".to_string(),
+    }))
 }
 
 #[utoipa::path(
@@ -259,13 +347,25 @@ mod tests {
     #[test]
     fn preview_reports_changed_membership_without_replacing_identity() {
         let original = vec![
-            RecoveryStep { issue_id: 101, label: "Superman #1".into() },
-            RecoveryStep { issue_id: 103, label: "Superman #3".into() },
-            RecoveryStep { issue_id: 201, label: "Batman #1".into() },
+            RecoveryStep {
+                issue_id: 101,
+                label: "Superman #1".into(),
+            },
+            RecoveryStep {
+                issue_id: 103,
+                label: "Superman #3".into(),
+            },
+            RecoveryStep {
+                issue_id: 201,
+                label: "Batman #1".into(),
+            },
         ];
         let candidate = vec![
             original[0].clone(),
-            RecoveryStep { issue_id: 302, label: "Superman #2 (replacement)".into() },
+            RecoveryStep {
+                issue_id: 302,
+                label: "Superman #2 (replacement)".into(),
+            },
             original[2].clone(),
             original[1].clone(),
         ];
