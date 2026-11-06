@@ -296,6 +296,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/reading-lists/{list_id}",
+            put(reading_list::update_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}",
             delete(reading_list::delete_reading_list),
         )
         .route(
