@@ -281,7 +281,7 @@ export function createContinuityPlansApi(client: HttpClient) {
     get: (planId: number) =>
       client.get<ContinuityPlan>(`/v1/continuity-plans/${planId}`),
     getReader: (planId: number) =>
-      client.get<ReadingPlanReaderView>(`/v1/continuity-plans/${planId}/reader`),
+      client.get<ReadingPlanReaderView>(`/v2/continuity-plans/${planId}/reader`),
     listReleaseSources: (planId: number) =>
       client.get<ReadingPlanReleaseSourceStatus[]>(
         `/v1/continuity-plans/${planId}/release-sources/reader`,
