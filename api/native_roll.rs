@@ -186,6 +186,10 @@ fn app() -> Router {
         )
         .route("/api/v2/issues/{issue_id}", delete(native_dispatch))
         .route(
+            "/api/v2/continuity-plans/{plan_id}/reader",
+            get(native_dispatch),
+        )
+        .route(
             "/api/v2/continuity-plans/{plan_id}/recovery",
             get(native_dispatch).post(native_dispatch),
         )
