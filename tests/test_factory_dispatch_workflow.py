@@ -73,7 +73,7 @@ def test_roster_chain_is_serialized_and_keeps_hourly_watchdog() -> None:
 
     assert "queue: max" in workflow
     assert "cancel-in-progress: false" in workflow
-    assert "queue: single" not in workflow
+    assert "queue: single" in workflow  # duplicate roster ingress coalesces
     assert "- cron: '7 * * * *'" in workflow
     assert "Self-perpetuate roster cadence" in workflow
     assert "inputs.mode == 'roster'" in workflow
