@@ -6213,6 +6213,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/continuity-plans/{plan_id}/reader": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["read_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/continuity-plans/{plan_id}/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["preview_documentation"];
+        put?: never;
+        post: operations["relink_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/issues/cards": {
         parameters: {
             query?: never;
@@ -6409,7 +6441,7 @@ export interface paths {
         };
         /** Documentation-only operation for one Reading List. */
         get: operations["get_reading_list_documentation"];
-        put?: never;
+        put: operations["update_reading_list_documentation"];
         post?: never;
         /** Documentation-only operation for Reading List deletion. */
         delete: operations["delete_reading_list_documentation"];
@@ -13040,6 +13072,15 @@ export interface components {
             gate: string;
             skipped?: boolean;
         };
+        NativeReadingListPredecessorChange: {
+            after_issue_ids: number[];
+            after_issue_names: string[];
+            before_issue_ids: number[];
+            before_issue_names: string[];
+            /** Format: int32 */
+            issue_id: number;
+            issue_name: string;
+        };
         NativeReadingListReaderEntry: {
             availability: string;
             checkpoint_target_issue_ids: number[];
@@ -13345,6 +13386,131 @@ export interface components {
              * @description Total number of metrics
              */
             count: number;
+        };
+        PlanReaderBlocker: {
+            explanation: string;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        PlanReaderIssue: {
+            availability: string;
+            blockers: components["schemas"]["PlanReaderBlocker"][];
+            /** Format: int32 */
+            display_position: number;
+            is_checkpoint: boolean;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            lane_id: string;
+            occurrence_id: string;
+            source_paths: string[];
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        PlanReaderLane: {
+            id: string;
+            issues: components["schemas"]["PlanReaderIssue"][];
+            name: string;
+            /** Format: int32 */
+            order: number;
+        };
+        PlanReaderProgress: {
+            read_issues: number;
+            total_issues: number;
+        };
+        PlanReaderResponse: {
+            available_now: components["schemas"]["PlanReaderIssue"][];
+            blocked_next: components["schemas"]["PlanReaderIssue"][];
+            execution_mode: string;
+            lanes: components["schemas"]["PlanReaderLane"][];
+            name: string;
+            ordering_mode: string;
+            /** Format: int32 */
+            plan_id: number;
+            progress: components["schemas"]["PlanReaderProgress"];
+            release_candidates: components["schemas"]["PlanReleaseCandidate"][];
+            release_sources: components["schemas"]["PlanReleaseSourceStatus"][];
+            sources: components["schemas"]["PlanReaderSource"][];
+        };
+        PlanReaderSource: {
+            adopted_at?: string | null;
+            content_hash?: string | null;
+            display_name?: string | null;
+            /** Format: int32 */
+            id: number;
+            raw_source_path: string;
+            recorded_at: string;
+            repository?: string | null;
+            revision_sha?: string | null;
+            source_path?: string | null;
+        };
+        PlanRecoveryPreview: {
+            candidates: components["schemas"]["RecoveryCandidate"][];
+            /** Format: int32 */
+            linked_list_id?: number | null;
+            /** Format: int32 */
+            plan_id: number;
+            plan_name: string;
+            plan_updated_at: string;
+            retained_steps: components["schemas"]["RecoveryStep"][];
+            /** @description A linked plan is not eligible for destructive association changes. */
+            status: string;
+        };
+        PlanReleaseCandidate: {
+            enableable: boolean;
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            followed: boolean;
+            mapping_state: string;
+            mapping_status?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id?: string | null;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+        };
+        PlanReleaseSourceStatus: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            last_synced_at?: string | null;
+            /** Format: int32 */
+            provider_issue_count?: number | null;
+            provider_publisher?: string | null;
+            /** Format: int32 */
+            provider_start_year?: number | null;
+            provider_title?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        PlanRelinkRequest: {
+            /** @description Explicit confirmation of the candidate's membership and order differences. */
+            confirm: boolean;
+            expected_list_updated_at: string;
+            expected_plan_updated_at: string;
+            /** Format: int32 */
+            list_id: number;
+        };
+        PlanRelinkResult: {
+            /** Format: int32 */
+            list_id: number;
+            /** Format: int32 */
+            plan_id: number;
+            status: string;
         };
         /**
          * @description Why the Roll pool has no in-play faces.
@@ -15032,6 +15198,22 @@ export interface components {
             event_id: number;
             /** Factors */
             factors: components["schemas"]["ExplainableFactorResponse"][];
+        };
+        RecoveryCandidate: {
+            added_steps: components["schemas"]["RecoveryStep"][];
+            /** Format: int32 */
+            list_id: number;
+            list_updated_at: string;
+            mode: string;
+            name: string;
+            order_changed: boolean;
+            removed_steps: components["schemas"]["RecoveryStep"][];
+            steps: components["schemas"]["RecoveryStep"][];
+        };
+        RecoveryStep: {
+            /** Format: int32 */
+            issue_id: number;
+            label: string;
         };
         /**
          * RefreshTokenRequest
@@ -25157,6 +25339,142 @@ export interface operations {
             };
         };
     };
+    read_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading Plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Option E plan projected from its authoritative Reading List */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanReaderResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading Plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan missing its authoritative Reading List */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading Plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Owner-scoped recovery preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRecoveryPreview"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    relink_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading Plan identifier */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanRelinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Relinked or idempotently already linked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRelinkResult"];
+                };
+            };
+            /** @description Confirmation required */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan or list not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale preview or different authoritative list */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_cards_documentation: {
         parameters: {
             query?: never;
@@ -25760,6 +26078,61 @@ export interface operations {
             };
             /** @description Database temporarily unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_reading_list_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Reading List identifier */
+                list_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingListWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated owner-scoped Reading List */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingList"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading List not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Predecessor changes must be acknowledged */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid Issue or checkpoint */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
