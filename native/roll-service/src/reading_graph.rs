@@ -560,7 +560,7 @@ async fn delete_owned(
             )
             .await
             .map_err(db::query_error)?
-        },
+        }
         ReadingGraphRepairAction::DeletePrerequisite { prerequisite_id } => tx
             .execute(
                 "DELETE FROM dependencies d
