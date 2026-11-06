@@ -191,7 +191,11 @@ fn app() -> Router {
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/recovery",
-            get(native_dispatch).post(native_dispatch),
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/recovery",
+            post(native_dispatch),
         )
         .route("/api/v2/reading-lists", get(native_dispatch))
         .route("/api/v2/reading-lists", post(native_dispatch))
