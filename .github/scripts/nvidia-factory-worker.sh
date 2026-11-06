@@ -390,6 +390,7 @@ stage_trusted_review_controller() {
     # Pin model identity to trusted main, never to the adopted PR checkout.
     cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
     cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+    cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
     export TRUSTED_REVIEW_CONTROLLER

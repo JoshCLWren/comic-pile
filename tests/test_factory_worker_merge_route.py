@@ -614,7 +614,9 @@ def test_legacy_worker_merges_and_closes_through_trusted_policy(
     ]
     assert len(_closure_calls(calls)) == 1
     assert not [c for c in calls if c.startswith("gh issue close")]
-    assert f"skip {PR}" not in calls
+    assert not [c for c in calls if c.startswith("release ")]
+    assert any("post-merge closure closed" in c for c in calls if c.startswith("log "))
+    assert calls[-1] == "skip "
 
 
 @LEGACY_WORKERS
