@@ -16,6 +16,7 @@ permissions:
 # Serialize this event-driven reconciliation with dispatch and capacity refill.
 concurrency:
   group: fixed-model-factory-dispatch
+  queue: max
   cancel-in-progress: false
 
 jobs:
