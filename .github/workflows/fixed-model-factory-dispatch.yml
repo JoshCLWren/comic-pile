@@ -53,16 +53,19 @@ permissions:
   issues: write
   pull-requests: write
 
+# Coalesce duplicate ingress events for this workflow only. The job-level
+# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch
-  # The release and completion controllers share this lease-writer group.
-  # Preserve their pending jobs instead of letting roster ticks evict them.
-  # Serialization still permits exactly one assignment writer at a time.
-  queue: max
+  group: fixed-model-factory-dispatch-ingress
+  queue: single
   cancel-in-progress: false
 
 jobs:
   dispatch:
+    concurrency:
+      group: fixed-model-factory-dispatch
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       actions: write
