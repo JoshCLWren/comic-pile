@@ -878,13 +878,25 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .get(0);
     assert!(prior_exists);
 
-    // Preview is side-effect free, then applying the repair restores the graph.
+    // A graph repair must not bypass the same source identity guard as list DELETE.
+    let (status, refused) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(json!({"action": "delete_list", "list_id": list_a, "confirm": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+
+    // Repair the specific constraint instead of orphaning the plan. The
+    // Batman #2 -> Superman #2 edge belongs to this entry of list B.
     let (status, preview) = send(
         &state,
         auth,
         "POST",
         "/api/v2/reading-graph/repairs",
-        Some(json!({"action": "delete_list", "list_id": list_a})),
+        Some(json!({"action": "delete_list_entry", "list_id": list_b, "issue_id": su["2"]})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{preview}");
@@ -896,13 +908,13 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         auth,
         "POST",
         "/api/v2/reading-graph/repairs",
-        Some(json!({"action": "delete_list", "list_id": list_a, "confirm": true})),
+        Some(json!({"action": "delete_list_entry", "list_id": list_b, "issue_id": su["2"], "confirm": true})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{applied}");
     assert_eq!(applied["status_after"], "ok");
 
-    // Prior plan provenance is retained but the deleted source link is cleared.
+    // All original Plan source identities remain intact.
     let prior_source: Option<i32> = conn
         .query_one(
             "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
@@ -912,8 +924,7 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .unwrap()
         .get(0);
     assert_eq!(prior_source, Some(list_b));
-    // A surviving plan linked to the repaired list keeps its provenance row but
-    // loses only the deleted list association (ON DELETE SET NULL).
+    // The plan is not orphaned by removing a single cyclic constraint.
     let linked_source: Option<i32> = conn
         .query_one(
             "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
@@ -922,7 +933,7 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(linked_source, None);
+    assert_eq!(linked_source, Some(list_a));
     let linked_plan_exists: bool = conn
         .query_one(
             "SELECT EXISTS(SELECT 1 FROM continuity_plans WHERE id=$1)",
