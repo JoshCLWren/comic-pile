@@ -185,6 +185,10 @@ fn app() -> Router {
             put(native_dispatch),
         )
         .route("/api/v2/issues/{issue_id}", delete(native_dispatch))
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/recovery",
+            get(native_dispatch).post(native_dispatch),
+        )
         .route("/api/v2/reading-lists", get(native_dispatch))
         .route("/api/v2/reading-lists", post(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", get(native_dispatch))
