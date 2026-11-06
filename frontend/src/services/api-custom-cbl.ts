@@ -105,7 +105,7 @@ export function createCustomCBLApi(client: HttpClient) {
     get: (listId: number) => client.get<CustomCBL>(`/v2/reading-lists/${listId}`),
     create: (payload: CustomCBLWrite) => client.post<CustomCBL>('/v2/reading-lists', payload),
     update: (listId: number, payload: CustomCBLWrite) =>
-      client.put<CustomCBL>(`/v1/custom-cbls/${listId}`, payload),
+      client.put<CustomCBL>(`/v2/reading-lists/${listId}`, payload),
     delete: (listId: number) => client.delete<void>(`/v2/reading-lists/${listId}`),
     searchIssues: (query: string, limit = 30) =>
       client.get<CustomCBLIssueSearchResult[]>('/v1/custom-cbls/issue-search', {

@@ -138,7 +138,7 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
   }
   if (method !== 'GET') return undefined
   if (path === '/api/v1/continuity-plans/') return []
-  if (/^\/api\/v1\/continuity-plans\/\d+\/reader$/.test(path)) {
+  if (/^\/api\/v2\/continuity-plans\/\d+\/reader$/.test(path)) {
     return planReader(Number(path.split('/')[4]))
   }
   if (/^\/api\/v1\/continuity-plans\/\d+$/.test(path)) {
@@ -194,7 +194,7 @@ const GET = (path: string, params: Record<string, string | number> = {}) =>
 const CONTINUITY_INDEX = GET('/api/v1/continuity-plans/')
 const THREADS_PAGE = GET('/api/v2/threads', { page_size: 100 })
 const DEPENDENCY_GROUPS = GET('/api/v1/reading-order-groups/')
-const PLAN_READER = GET('/api/v1/continuity-plans/7/reader')
+const PLAN_READER = GET('/api/v2/continuity-plans/7/reader')
 const PLAN_DETAIL = GET('/api/v1/continuity-plans/7')
 const PLAN_TAGS = GET('/api/v1/tags/effective/plan/7/')
 const TAGS_CATALOG = GET('/api/v1/tags/')

@@ -878,13 +878,25 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .get(0);
     assert!(prior_exists);
 
-    // Preview is side-effect free, then applying the repair restores the graph.
+    // A graph repair must not bypass the same source identity guard as list DELETE.
+    let (status, refused) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(json!({"action": "delete_list", "list_id": list_a, "confirm": true})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{refused}");
+
+    // Repair the specific constraint instead of orphaning the plan. The
+    // Batman #2 -> Superman #2 edge belongs to this entry of list B.
     let (status, preview) = send(
         &state,
         auth,
         "POST",
         "/api/v2/reading-graph/repairs",
-        Some(json!({"action": "delete_list", "list_id": list_a})),
+        Some(json!({"action": "delete_list_entry", "list_id": list_b, "issue_id": su["2"]})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{preview}");
@@ -896,13 +908,13 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         auth,
         "POST",
         "/api/v2/reading-graph/repairs",
-        Some(json!({"action": "delete_list", "list_id": list_a, "confirm": true})),
+        Some(json!({"action": "delete_list_entry", "list_id": list_b, "issue_id": su["2"], "confirm": true})),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{applied}");
     assert_eq!(applied["status_after"], "ok");
 
-    // Prior plan provenance is retained but the deleted source link is cleared.
+    // All original Plan source identities remain intact.
     let prior_source: Option<i32> = conn
         .query_one(
             "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
@@ -912,8 +924,7 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .unwrap()
         .get(0);
     assert_eq!(prior_source, Some(list_b));
-    // A surviving plan linked to the repaired list keeps its provenance row but
-    // loses only the deleted list association (ON DELETE SET NULL).
+    // The plan is not orphaned by removing a single cyclic constraint.
     let linked_source: Option<i32> = conn
         .query_one(
             "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
@@ -922,7 +933,7 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .await
         .unwrap()
         .get(0);
-    assert_eq!(linked_source, None);
+    assert_eq!(linked_source, Some(list_a));
     let linked_plan_exists: bool = conn
         .query_one(
             "SELECT EXISTS(SELECT 1 FROM continuity_plans WHERE id=$1)",
@@ -943,7 +954,10 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .map(|value| value.as_i64().unwrap() as i32)
         .collect();
     assert!(eligible_ids.contains(&unrelated_ids["1"]));
-    assert!(eligible_ids.contains(&ba["1"]));
+    // List A was deliberately retained as the linked Plan's authority.
+    // Batman #1 is still correctly gated by the unread Superman entries,
+    // unlike an unrelated Thread which must remain Roll-eligible.
+    assert!(!eligible_ids.contains(&ba["1"]));
 
     // Legitimate history is intact after recovery.
     let history_exists: bool = conn
@@ -1084,4 +1098,331 @@ async fn reading_list_create_rejects_predecessor_confirmation_like_python() {
         .unwrap()
         .get(0);
     assert_eq!(count, 0);
+}
+
+#[tokio::test]
+async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "orphan-plan-a").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _other) = register(&state, "orphan-other").await;
+    let other_auth = (other_token.as_str(), other_csrf.as_str());
+
+    let (superman, su) = seed_thread(&state, owner, "Superman", 1, &["1", "2", "3", "4"]).await;
+    let (_batman, ba) = seed_thread(&state, owner, "Batman", 2, &["1", "2"]).await;
+    let original_two = su["2"];
+    let history = mark_read_and_rate(&state, owner, original_two, Some(4.5)).await;
+    let conn = state.pool.get().await.unwrap();
+
+    // The real failure was a physical deletion, not a renamed list. The
+    // original Superman #2 PK disappears and a same-number issue is allocated.
+    conn.execute("DELETE FROM issues WHERE id=$1", &[&original_two])
+        .await
+        .unwrap();
+    let replacement_two: i32 = conn
+        .query_one(
+            "INSERT INTO issues (thread_id,issue_number,status,created_at,position)
+         VALUES ($1,'2','unread',NOW(),2) RETURNING id",
+            &[&superman],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_ne!(original_two, replacement_two);
+
+    // Exact Plan A shape: four surviving historical memberships and NO
+    // reading_plan_sources row. This recreates the legacy list-delete cleanup
+    // rather than assuming ON DELETE SET NULL always preserved source rows.
+    let retained = [su["1"], su["3"], ba["1"], ba["2"]];
+    let plan_a: i32 = conn
+        .query_one(
+            "INSERT INTO continuity_plans
+           (user_id,name,ordering_mode,nodes_json,lanes_json,created_at,updated_at)
+         VALUES ($1,'QA Destructive A','strict_sequential','[]'::json,'[]'::json,NOW(),NOW())
+         RETURNING id",
+            &[&owner],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    for (position, issue_id) in retained.iter().enumerate() {
+        let label = ["Superman #1", "Superman #3", "Batman #1", "Batman #2"][position];
+        conn.execute(
+            "INSERT INTO reading_plan_issues
+              (plan_id,occurrence_id,issue_id,lane_id,display_position,label,is_checkpoint)
+             VALUES ($1,$2,$3,'main',$4,$5,false)",
+            &[
+                &plan_a,
+                &format!("issue-{issue_id}"),
+                issue_id,
+                &(position as i32),
+                &label,
+            ],
+        )
+        .await
+        .unwrap();
+    }
+
+    let list_b = seed_list(
+        &state,
+        owner,
+        "QA Destructive B - Tab2",
+        "strict",
+        &[su["1"], replacement_two, su["4"], ba["1"], ba["2"]],
+    )
+    .await;
+    let plan_b = seed_plan(&state, owner, "QA Destructive B", list_b).await;
+    let (status, b_reader) = send(
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/reading-lists/{list_b}/reader"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{b_reader}");
+    assert_eq!(b_reader["entries"].as_array().unwrap().len(), 5);
+
+    let endpoint = format!("/api/v2/continuity-plans/{plan_a}/recovery");
+    let (status, foreign) = send(&state, other_auth, "GET", &endpoint, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign}");
+    let (status, preview) = send(&state, auth, "GET", &endpoint, None).await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    assert_eq!(preview["status"], "orphaned");
+    assert_eq!(preview["retained_steps"].as_array().unwrap().len(), 4);
+    let candidate = preview["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["list_id"] == list_b)
+        .unwrap();
+    assert_eq!(candidate["added_steps"].as_array().unwrap().len(), 2);
+    assert_eq!(candidate["added_steps"][0]["issue_id"], replacement_two);
+    assert_eq!(candidate["removed_steps"].as_array().unwrap().len(), 1);
+    assert_eq!(candidate["removed_steps"][0]["issue_id"], su["3"]);
+    assert_eq!(candidate["order_changed"], false);
+
+    let request = json!({
+        "list_id": list_b,
+        "expected_plan_updated_at": preview["plan_updated_at"],
+        "expected_list_updated_at": candidate["list_updated_at"],
+        "confirm": true
+    });
+    let (status, refused) =
+        send(&state, other_auth, "POST", &endpoint, Some(request.clone())).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{refused}");
+    let (status, missing_confirmation) = send(
+        &state,
+        auth,
+        "POST",
+        &endpoint,
+        Some(
+            json!({"list_id":list_b,"expected_plan_updated_at":preview["plan_updated_at"],
+            "expected_list_updated_at":candidate["list_updated_at"],"confirm":false}),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{missing_confirmation}");
+
+    // Read-only preview and cross-owner failures never mutate the source.
+    let prior_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_a],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(prior_count, 0);
+
+    let (status, applied) = send(&state, auth, "POST", &endpoint, Some(request.clone())).await;
+    assert_eq!(status, StatusCode::OK, "{applied}");
+    assert_eq!(applied["status"], "relinked");
+    let (status, retried) = send(&state, auth, "POST", &endpoint, Some(request)).await;
+    assert_eq!(status, StatusCode::OK, "{retried}");
+    assert_eq!(retried["status"], "already_linked");
+
+    // A linked Plan cannot be silently stranded by ordinary DELETE either.
+    let (status, blocked_delete) = send(
+        &state,
+        auth,
+        "DELETE",
+        &format!("/api/v2/reading-lists/{list_b}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{blocked_delete}");
+    assert!(blocked_delete["detail"]
+        .as_str()
+        .unwrap()
+        .contains("Reading Plan"));
+
+    let source: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_a],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(source, list_b);
+    let source_count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_a],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(source_count, 1);
+    let plan_b_source: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_b],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(plan_b_source, list_b);
+    let saved: Vec<i32> = conn
+        .query(
+            "SELECT issue_id FROM reading_plan_issues WHERE plan_id=$1 ORDER BY display_position",
+            &[&plan_a],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(saved, retained.to_vec());
+    let list_order: Vec<i32> = conn
+        .query(
+            "SELECT issue_id FROM custom_cbl_entries WHERE list_id=$1 ORDER BY position",
+            &[&list_b],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(
+        list_order,
+        vec![su["1"], replacement_two, su["4"], ba["1"], ba["2"]]
+    );
+    let event: (String, Option<f64>) = {
+        let row = conn
+            .query_one("SELECT type,rating FROM events WHERE id=$1", &[&history])
+            .await
+            .unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert_eq!(event, ("rate".to_string(), Some(4.5)));
+}
+
+#[tokio::test]
+async fn list_update_requires_exact_predecessor_review_and_preserves_plan_reference() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "relink-list-update").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _) = register(&state, "relink-list-update-foreign").await;
+    let other = (other_token.as_str(), other_csrf.as_str());
+
+    let (_superman, su) = seed_thread(&state, owner, "Superman", 1, &["1"]).await;
+    let (_batman, ba) = seed_thread(&state, owner, "Batman", 2, &["1"]).await;
+    let list_id = seed_list(
+        &state,
+        owner,
+        "Reading List under Plan A",
+        "strict",
+        &[su["1"], ba["1"]],
+    )
+    .await;
+    let plan_id = seed_plan(&state, owner, "Plan A", list_id).await;
+    let event_id = mark_read_and_rate(&state, owner, su["1"], Some(4.0)).await;
+    let path = format!("/api/v2/reading-lists/{list_id}");
+    let before = json!({
+        "name": "Reading List under Plan A",
+        "mode": "strict",
+        "issue_ids": [ba["1"], su["1"]],
+    });
+
+    // A second owner cannot use the v2 editor to mutate this list.
+    let (status, foreign) = send(&state, other, "PUT", &path, Some(before.clone())).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign}");
+    let (status, needs_ack) = send(&state, auth, "PUT", &path, Some(before.clone())).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{needs_ack}");
+    assert_eq!(
+        needs_ack["detail"]["code"],
+        "reading_list_predecessor_confirmation_required"
+    );
+    let confirmation = needs_ack["detail"]["predecessor_changes"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(confirmation.len(), 2);
+
+    // A rejected attempt cannot reorder entries or change the saved source.
+    let (status, unchanged) = send(&state, auth, "GET", &path, None).await;
+    assert_eq!(status, StatusCode::OK, "{unchanged}");
+    assert_eq!(unchanged["entries"][0]["issue_id"], su["1"]);
+    let (status, saved_reader) = send(
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{saved_reader}");
+    assert_eq!(saved_reader["lanes"][0]["issues"][0]["issue_id"], su["1"]);
+
+    let (status, edited) = send(
+        &state,
+        auth,
+        "PUT",
+        &path,
+        Some(json!({
+            "name": "Reading List under Plan A",
+            "mode": "strict",
+            "issue_ids": [ba["1"], su["1"]],
+            "confirmed_predecessor_changes": confirmation
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["entries"][0]["issue_id"], ba["1"]);
+    let (status, reader_after) = send(
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{reader_after}");
+    assert_eq!(reader_after["lanes"][0]["issues"][0]["issue_id"], ba["1"]);
+
+    let conn = state.pool.get().await.unwrap();
+    let linked_list: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(linked_list, list_id);
+    let history_preserved: bool = conn
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM events WHERE id=$1 AND issue_id=$2)",
+            &[&event_id, &su["1"]],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert!(history_preserved);
 }

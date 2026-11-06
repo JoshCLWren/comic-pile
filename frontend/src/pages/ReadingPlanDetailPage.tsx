@@ -1,5 +1,6 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
 import { ReaderIssueActions, ReadNowIssueButton } from '../components/ReaderIssueActions'
+import { ReadingPlanRecovery } from '../components/ReadingPlanRecovery'
 import { useState } from 'react'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -200,6 +201,7 @@ export default function ReadingPlanDetailPage() {
         >
           Try again
         </button>
+        <ReadingPlanRecovery planId={planId} onRecovered={() => void readerQuery.refetch()} />
       </div>
     )
   }

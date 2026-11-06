@@ -371,6 +371,21 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v2/continuity-plans/[0-9]+/reader$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/continuity-plans/[0-9]+/recovery$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/reading-lists$",
       "methods": [
         "GET",
@@ -382,7 +397,8 @@
       "src": "^/api/v2/reading-lists/[0-9]+$",
       "methods": [
         "GET",
-        "DELETE"
+        "DELETE",
+        "PUT"
       ],
       "dest": "/api/native_roll.rs"
     },

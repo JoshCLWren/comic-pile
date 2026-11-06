@@ -23,6 +23,8 @@ pub mod reading_eligibility;
 pub mod reading_graph;
 pub mod reading_inputs;
 pub mod reading_list;
+pub mod reading_plan_reader;
+pub mod reading_plan_recovery;
 pub mod reading_session;
 pub mod roll_exclusions;
 pub mod roll_offer;
@@ -294,11 +296,27 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/reading-lists/{list_id}",
+            put(reading_list::update_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}",
             delete(reading_list::delete_reading_list),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/reader",
+            get(reading_plan_reader::read),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/recovery",
+            get(reading_plan_recovery::preview),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/recovery",
+            post(reading_plan_recovery::relink),
         )
         .route("/api/v2/reading-graph", get(reading_graph::reading_graph))
         .route("/api/v2/reading-graph/repairs", post(reading_graph::repair))

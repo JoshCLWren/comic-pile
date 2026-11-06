@@ -177,6 +177,22 @@ export interface OfferRequest {
 
 export type OfferResponse = components['schemas']['RollOfferResponse']
 
+export interface PreviewRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type PreviewResponse = components['schemas']['PlanRecoveryPreview']
+
+export interface ReadRequest {
+  path: {
+    plan_id: number
+  }
+}
+
+export type ReadResponse = components['schemas']['PlanReaderResponse']
+
 export interface ReadReadingListRequest {
   path: {
     list_id: number
@@ -205,6 +221,15 @@ export interface RegisterRequest {
 
 export type RegisterResponse = components['schemas']['NativeTokenResponse']
 
+export interface RelinkRequest {
+  path: {
+    plan_id: number
+  }
+  body: components['schemas']['PlanRelinkRequest']
+}
+
+export type RelinkResponse = components['schemas']['PlanRelinkResult']
+
 export interface RepairRequest {
   body: components['schemas']['ReadingGraphRepairRequest']
 }
@@ -232,6 +257,15 @@ export interface UpdateQueueEntryRequest {
 
 export type UpdateQueueEntryResponse = components['schemas']['QueueEntryResponse']
 
+export interface UpdateReadingListRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['ReadingListWrite']
+}
+
+export type UpdateReadingListResponse = components['schemas']['ReadingList']
+
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
@@ -258,15 +292,19 @@ export interface NativeV2Client {
   me(): Promise<MeResponse>
   metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
+  preview(args: PreviewRequest): Promise<PreviewResponse>
+  read(args: ReadRequest): Promise<ReadResponse>
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
+  relink(args: RelinkRequest): Promise<RelinkResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
+  updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
 }
 
 export function createNativeV2Client(client: HttpClient): NativeV2Client {
@@ -398,6 +436,16 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    preview(args: PreviewRequest) {
+      return client.get<PreviewResponse>(
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+      )
+    },
+    read(args: ReadRequest) {
+      return client.get<ReadResponse>(
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reader`,
+      )
+    },
     readReadingList(args: ReadReadingListRequest) {
       return client.get<ReadReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reader`,
@@ -424,6 +472,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    relink(args: RelinkRequest) {
+      return client.post<RelinkResponse, RelinkRequest['body']>(
+        `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
+        args.body,
+      )
+    },
     repair(args: RepairRequest) {
       return client.post<RepairResponse, RepairRequest['body']>(
         "/v2/reading-graph/repairs",
@@ -445,6 +499,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     updateQueueEntry(args: UpdateQueueEntryRequest) {
       return client.patch<UpdateQueueEntryResponse, UpdateQueueEntryRequest['body']>(
         `/v2/queue-entries/${encodeURIComponent(String(args.path.thread_id))}`,
+        args.body,
+      )
+    },
+    updateReadingList(args: UpdateReadingListRequest) {
+      return client.put<UpdateReadingListResponse, UpdateReadingListRequest['body']>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
         args.body,
       )
     },

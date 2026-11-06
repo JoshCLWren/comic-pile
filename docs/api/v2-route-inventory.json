@@ -92,12 +92,34 @@
       ]
     },
     {
-      "method": "POST",
-      "path": "/api/v2/issues/cards",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
       "runtime": "native-rust",
       "status": "target",
-      "owning_issue": 4443,
-      "consumers": []
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
     },
     {
       "method": "DELETE",
@@ -130,6 +152,14 @@
       "consumers": [
         "frontend/src/services/api-comicvine.ts"
       ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issues/cards",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4443,
+      "consumers": []
     },
     {
       "method": "GET",
@@ -229,6 +259,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "PUT",
       "path": "/api/v2/reading-lists/{list_id}",
       "runtime": "native-rust",
       "status": "target",

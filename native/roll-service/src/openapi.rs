@@ -52,7 +52,11 @@ use utoipa::OpenApi;
         crate::reading_list::get_reading_list_documentation,
         crate::reading_list::create_reading_list_documentation,
         crate::reading_list::delete_reading_list_documentation,
-        crate::reading_list::read_reading_list_documentation
+        crate::reading_list::update_reading_list_documentation,
+        crate::reading_list::read_reading_list_documentation,
+        crate::reading_plan_recovery::preview_documentation,
+        crate::reading_plan_recovery::relink_documentation,
+        crate::reading_plan_reader::read_documentation
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -97,7 +101,21 @@ use utoipa::OpenApi;
         crate::reading_list::ReadingListBlockerExplanation,
         crate::reading_list::ReadingListReaderEntry,
         crate::reading_list::ReadingListReader,
-        crate::reading_list::ReadingListWrite
+        crate::reading_list::ReadingListWrite,
+        crate::reading_list::ReadingListPredecessorChange,
+        crate::reading_plan_recovery::RecoveryStep,
+        crate::reading_plan_recovery::RecoveryCandidate,
+        crate::reading_plan_recovery::PlanRecoveryPreview,
+        crate::reading_plan_recovery::PlanRelinkRequest,
+        crate::reading_plan_recovery::PlanRelinkResult,
+        crate::reading_plan_reader::PlanReaderBlocker,
+        crate::reading_plan_reader::PlanReaderIssue,
+        crate::reading_plan_reader::PlanReaderLane,
+        crate::reading_plan_reader::PlanReaderProgress,
+        crate::reading_plan_reader::PlanReaderSource,
+        crate::reading_plan_reader::PlanReleaseSourceStatus,
+        crate::reading_plan_reader::PlanReleaseCandidate,
+        crate::reading_plan_reader::PlanReaderResponse
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -125,12 +143,14 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 34] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 38] = [
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
+    ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
+    ("get", "/api/v2/continuity-plans/{plan_id}/recovery"),
     ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
     ("get", "/api/v2/reading-graph"),
@@ -149,6 +169,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 34] = [
     ("post", "/api/v2/auth/refresh"),
     ("post", "/api/v2/auth/register"),
     ("post", "/api/v2/auth/reset-password"),
+    ("post", "/api/v2/continuity-plans/{plan_id}/recovery"),
     ("post", "/api/v2/issues/cards"),
     ("post", "/api/v2/queue-orders"),
     ("post", "/api/v2/reading-boundaries"),
@@ -159,6 +180,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 34] = [
     ("post", "/api/v2/roll/offer"),
     ("post", "/api/v2/roll/reset"),
     ("post", "/api/v2/threads/{thread_id}/issues"),
+    ("put", "/api/v2/reading-lists/{list_id}"),
     ("put", "/api/v2/threads/{thread_id}/issue-order"),
 ];
 

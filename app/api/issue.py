@@ -377,30 +377,6 @@ async def reorder_issues(
     await db.commit()
 
 
-@router.delete("/issues/{issue_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_issue(
-    issue_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> None:
-    """Delete one issue, compact later positions, and update thread issue metadata.
-
-    Args:
-        issue_id: The issue ID to delete.
-        current_user: The authenticated user requesting the deletion.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        None. The response is HTTP 204 on success.
-
-    Raises:
-        HTTPException: If the issue does not exist or is not owned by the user.
-    """
-    await issue_service.delete_issue(db, issue_id, current_user.id)
-
-    await db.commit()
-
-
 @router.post("/issues/{issue_id}:markRead", status_code=status.HTTP_204_NO_CONTENT)
 async def mark_issue_read(
     issue_id: int,

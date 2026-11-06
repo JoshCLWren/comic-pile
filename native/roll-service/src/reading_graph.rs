@@ -552,13 +552,15 @@ async fn delete_owned(
     action: &ReadingGraphRepairAction,
 ) -> Result<u64, crate::ApiError> {
     let removed = match action {
-        ReadingGraphRepairAction::DeleteList { list_id } => tx
-            .execute(
+        ReadingGraphRepairAction::DeleteList { list_id } => {
+            crate::reading_list::ensure_list_unlinked(tx, user_id, *list_id).await?;
+            tx.execute(
                 "DELETE FROM custom_cbl_lists WHERE id=$1 AND user_id=$2",
                 &[list_id, &user_id],
             )
             .await
-            .map_err(db::query_error)?,
+            .map_err(db::query_error)?
+        }
         ReadingGraphRepairAction::DeletePrerequisite { prerequisite_id } => tx
             .execute(
                 "DELETE FROM dependencies d
