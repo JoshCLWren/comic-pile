@@ -56,13 +56,13 @@ const TEST_CASES = [
   },
   {
     name: 'Legacy verdict PASS moves to CI',
-    body: '<!-- comic-pile-factory-review-v1:sha123:pass -->',
+    body: '<!-- comic-pile-factory-review-v1:' + 'a'.repeat(40) + ':pass -->',
     trusted: true,
     expectedStage: 'factory:ci',
   },
   {
     name: 'Legacy verdict CHANGES-REQUIRED moves to changes-requested',
-    body: '<!-- comic-pile-factory-review-v1:sha123:changes-required -->',
+    body: '<!-- comic-pile-factory-review-v1:' + 'a'.repeat(40) + ':changes-required -->',
     trusted: true,
     expectedStage: 'factory:changes-requested',
   },
