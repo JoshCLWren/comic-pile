@@ -316,7 +316,7 @@ pub(crate) fn option_e_enabled() -> bool {
 /// This variant checks out its own pooled connection, so the read path resolves
 /// it only after releasing its row-read connection. The reposition path
 /// evaluates inside its locked write transaction through
-/// [`crate::option_inputs::load_validated_in_transaction`] instead.
+/// [`crate::option_inputs::load_validated_contained_in_transaction`] instead.
 async fn eligible_thread_ids(
     state: &AppState,
     user: AuthenticatedUser,
@@ -324,7 +324,7 @@ async fn eligible_thread_ids(
     if !option_e_enabled() {
         return Ok(None);
     }
-    let validated = crate::option_inputs::load_option_inputs(state, user).await?;
+    let validated = crate::option_inputs::load_option_inputs_contained(state, user).await?;
     Ok(Some(evaluated_eligible_ids(&validated)?))
 }
 
@@ -547,7 +547,8 @@ async fn reposition(
     // pool checkout while this request holds its write connection.
     let eligible = if option_e_enabled() {
         let validated =
-            crate::option_inputs::load_validated_in_transaction(&transaction, user).await?;
+            crate::option_inputs::load_validated_contained_in_transaction(&transaction, user)
+                .await?;
         Some(evaluated_eligible_ids(&validated)?)
     } else {
         None

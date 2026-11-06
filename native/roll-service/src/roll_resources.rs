@@ -348,7 +348,7 @@ fn select_eligible(
     pending_thread_id: Option<i32>,
     snoozed: &HashSet<i32>,
 ) -> Result<RollEligibleIssueIdsResponse, ApiError> {
-    let validated = option_inputs::validated(inputs)?;
+    let validated = option_inputs::validated_contained(inputs)?;
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,

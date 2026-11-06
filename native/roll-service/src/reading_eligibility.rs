@@ -239,6 +239,50 @@ pub fn evaluate(
         );
     }
 
+    // A persisted cycle is isolated to its own Threads. Healthy Threads above
+    // keep their normal frontiers; affected Threads are blocked with the exact
+    // cyclic Issues so Queue/Roll can name a repair instead of returning 500.
+    if let Some(problem) = validated.graph_problem() {
+        for thread in &inputs.core.threads {
+            if thread.status != "active" || !problem.affected_thread_ids.contains(&thread.id) {
+                continue;
+            }
+            let mut cyclic_here: Vec<i32> = problem
+                .cyclic_issue_ids
+                .iter()
+                .filter(|issue_id| issue_thread.get(issue_id) == Some(&thread.id))
+                .copied()
+                .collect();
+            cyclic_here.sort_unstable();
+            let next_issue_id = inputs
+                .core
+                .issues
+                .iter()
+                .filter(|issue| {
+                    issue.thread_id == thread.id && problem.cyclic_issue_ids.contains(&issue.id)
+                })
+                .min_by_key(|issue| (issue.position, issue.id))
+                .map(|issue| issue.id);
+            result.insert(
+                thread.id,
+                ThreadEligibility {
+                    thread_id: thread.id,
+                    next_issue_id,
+                    eligible: false,
+                    blockers: vec![Blocker {
+                        kind: "reading_cycle".to_string(),
+                        list_id: None,
+                        waiting_on_issue_ids: cyclic_here,
+                        prerequisite_id: None,
+                        gate_issue_id: None,
+                        origin: None,
+                        provenance: vec![],
+                    }],
+                },
+            );
+        }
+    }
+
     Ok(result)
 }
 
@@ -349,5 +393,55 @@ mod tests {
         assert_eq!(result[&2].blockers.len(), 1);
         assert_eq!(result[&2].blockers[0].kind, "prerequisite");
         assert!(result[&2].blockers[0].waiting_on_issue_ids.contains(&11));
+    }
+
+    #[test]
+    fn contained_cycle_blocks_only_the_affected_thread() {
+        let mut inputs = test_inputs();
+        inputs.core.threads.push(ReadingThread {
+            id: 3,
+            status: "active".to_string(),
+            title: "Unaffected series".to_string(),
+        });
+        inputs.core.issues.push(ReadingIssue {
+            id: 30,
+            thread_id: 3,
+            position: 1,
+            status: "unread".to_string(),
+            issue_number: "1".to_string(),
+        });
+        inputs.core.stored.push(StoredThreadEligibility {
+            thread_id: 3,
+            next_issue_id: None,
+            is_blocked: false,
+            queue_position: 3,
+        });
+        // Series order 10 -> 11 conflicts with a strict list that puts 11 first.
+        inputs.lists.push(crate::option_inputs::ReadingList {
+            list_id: 1,
+            mode: "strict".to_string(),
+            name: "Curated".to_string(),
+            entries: vec![
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 11,
+                    gate: "none".to_string(),
+                    skipped: false,
+                },
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 10,
+                    gate: "none".to_string(),
+                    skipped: false,
+                },
+            ],
+            overlap_decisions: vec![],
+        });
+        let validated = ValidatedReadingInputs::contained(inputs, &BTreeMap::new()).unwrap();
+        let result = evaluate(&validated).unwrap();
+        assert!(!result[&1].eligible);
+        assert_eq!(result[&1].blockers[0].kind, "reading_cycle");
+        assert!(result[&1].blockers[0].waiting_on_issue_ids.contains(&10));
+        // The unrelated series keeps its normal live frontier.
+        assert!(result[&3].eligible);
+        assert_eq!(result[&3].next_issue_id, Some(30));
     }
 }

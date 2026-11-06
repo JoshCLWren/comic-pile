@@ -649,13 +649,265 @@ pub fn pool_reason(inputs: &OptionInputs, candidates: &[EligibleFrontier]) -> Po
     PoolReason::AllCompleted
 }
 
+/// One concrete cycle, with the edges that close it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct GraphCycle {
+    pub message: String,
+    pub edges: Vec<ConstraintEdge>,
+}
+
+/// A persisted cyclic subgraph, isolated from the rest of the reader's graph.
+///
+/// Read paths use this to keep healthy Threads usable while naming the exact
+/// written constraints that must be repaired. It is never produced by a write
+/// path: authoring still rejects the complete graph before commit.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct GraphProblem {
+    pub cycles: Vec<GraphCycle>,
+    /// Every stored edge internal to a cyclic component, used to offer repairs.
+    pub affected_edges: Vec<ConstraintEdge>,
+    pub cyclic_issue_ids: BTreeSet<i32>,
+    pub affected_thread_ids: BTreeSet<i32>,
+    pub affected_list_ids: BTreeSet<i32>,
+}
+impl GraphProblem {
+    /// Reader-facing summary suitable for a containment error response.
+    pub fn summary(&self) -> String {
+        self.cycles
+            .first()
+            .map(|cycle| cycle.message.clone())
+            .unwrap_or_else(|| "Reading constraint cycle".to_string())
+    }
+}
+
+/// Strongly connected components, including single-node self-loops.
+fn cyclic_components(issue_ids: &BTreeSet<i32>, edges: &BTreeSet<ConstraintEdge>) -> Vec<Vec<i32>> {
+    let mut adjacency: BTreeMap<i32, Vec<i32>> = issue_ids.iter().map(|id| (*id, vec![])).collect();
+    let mut reverse: BTreeMap<i32, Vec<i32>> = issue_ids.iter().map(|id| (*id, vec![])).collect();
+    let mut self_loops = HashSet::new();
+    for edge in edges {
+        if edge.source_issue_id == edge.target_issue_id {
+            self_loops.insert(edge.source_issue_id);
+            continue;
+        }
+        adjacency
+            .entry(edge.source_issue_id)
+            .or_default()
+            .push(edge.target_issue_id);
+        reverse
+            .entry(edge.target_issue_id)
+            .or_default()
+            .push(edge.source_issue_id);
+    }
+
+    let mut visited = HashSet::new();
+    let mut finish: Vec<i32> = Vec::with_capacity(issue_ids.len());
+    for &start in issue_ids {
+        if !visited.insert(start) {
+            continue;
+        }
+        let mut stack = vec![(start, false)];
+        while let Some((node, post)) = stack.pop() {
+            if post {
+                finish.push(node);
+                continue;
+            }
+            stack.push((node, true));
+            for &next in adjacency.get(&node).into_iter().flatten().rev() {
+                if visited.insert(next) {
+                    stack.push((next, false));
+                }
+            }
+        }
+    }
+
+    let mut assigned = HashSet::new();
+    let mut components = vec![];
+    for &start in finish.iter().rev() {
+        if !assigned.insert(start) {
+            continue;
+        }
+        let mut component = vec![];
+        let mut stack = vec![start];
+        while let Some(node) = stack.pop() {
+            component.push(node);
+            for &next in reverse.get(&node).into_iter().flatten() {
+                if assigned.insert(next) {
+                    stack.push(next);
+                }
+            }
+        }
+        let cyclic = component.len() > 1 || self_loops.contains(&start);
+        if cyclic {
+            components.push(component);
+        }
+    }
+    components
+}
+
+/// Find one concrete cycle through `start` inside its strongly connected component.
+fn cycle_path(
+    start: i32,
+    component: &HashSet<i32>,
+    by_source: &BTreeMap<i32, Vec<ConstraintEdge>>,
+) -> Option<Vec<ConstraintEdge>> {
+    let mut visited = HashSet::from([start]);
+    let mut path: Vec<ConstraintEdge> = vec![];
+    let mut stack: Vec<(i32, usize)> = vec![(start, 0)];
+    while let Some((node, index)) = stack.last_mut() {
+        let outgoing = by_source.get(node).map(Vec::as_slice).unwrap_or(&[]);
+        let Some(edge) = outgoing.get(*index) else {
+            stack.pop();
+            if !path.is_empty() {
+                path.pop();
+            }
+            continue;
+        };
+        *index += 1;
+        if !component.contains(&edge.target_issue_id) {
+            continue;
+        }
+        if edge.target_issue_id == start {
+            let mut cycle = path.clone();
+            cycle.push(edge.clone());
+            return Some(cycle);
+        }
+        if visited.insert(edge.target_issue_id) {
+            path.push(edge.clone());
+            stack.push((edge.target_issue_id, 0));
+        }
+    }
+    None
+}
+
+fn cycle_message(edges: &[ConstraintEdge]) -> String {
+    let description = edges
+        .iter()
+        .map(|edge| {
+            format!(
+                "Issue {} --[{}]--> Issue {}",
+                edge.source_issue_id, edge.origin, edge.target_issue_id
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" -> ");
+    format!("Reading constraint cycle: {description}")
+}
+
+fn analyze_cycles(
+    snapshot: &Snapshot,
+    edges: &BTreeSet<ConstraintEdge>,
+) -> (GraphProblem, BTreeSet<i32>) {
+    let issue_ids: BTreeSet<i32> = snapshot.issues.iter().map(|issue| issue.issue_id).collect();
+    let mut by_source: BTreeMap<i32, Vec<ConstraintEdge>> = BTreeMap::new();
+    for edge in edges {
+        by_source
+            .entry(edge.source_issue_id)
+            .or_default()
+            .push(edge.clone());
+    }
+    let thread_by_issue: HashMap<i32, i32> = snapshot
+        .issues
+        .iter()
+        .map(|issue| (issue.issue_id, issue.thread_id))
+        .collect();
+    let mut problem = GraphProblem::default();
+    for component in cyclic_components(&issue_ids, edges) {
+        let members: HashSet<i32> = component.iter().copied().collect();
+        let start = component.iter().copied().min().unwrap_or_default();
+        for edge in edges {
+            if members.contains(&edge.source_issue_id) && members.contains(&edge.target_issue_id) {
+                problem.affected_edges.push(edge.clone());
+                if let Some(list_id) = edge.list_id {
+                    problem.affected_list_ids.insert(list_id);
+                }
+            }
+        }
+        let cycle = cycle_path(start, &members, &by_source)
+            .or_else(|| {
+                edges
+                    .iter()
+                    .find(|edge| {
+                        edge.source_issue_id == edge.target_issue_id
+                            && members.contains(&edge.source_issue_id)
+                    })
+                    .map(|edge| vec![edge.clone()])
+            })
+            .unwrap_or_default();
+        for issue_id in &component {
+            problem.cyclic_issue_ids.insert(*issue_id);
+            if let Some(thread_id) = thread_by_issue.get(issue_id) {
+                problem.affected_thread_ids.insert(*thread_id);
+            }
+        }
+        for edge in &cycle {
+            if let Some(list_id) = edge.list_id {
+                problem.affected_list_ids.insert(list_id);
+            }
+        }
+        if !cycle.is_empty() {
+            problem.cycles.push(GraphCycle {
+                message: cycle_message(&cycle),
+                edges: cycle,
+            });
+        }
+    }
+    problem
+        .cycles
+        .sort_by(|left, right| left.message.cmp(&right.message));
+    let cyclic = problem.cyclic_issue_ids.clone();
+    (problem, cyclic)
+}
+
+fn topological_order(
+    snapshot: &Snapshot,
+    edges: &BTreeSet<ConstraintEdge>,
+    excluded: &BTreeSet<i32>,
+) -> Option<Vec<i32>> {
+    let mut adjacency: BTreeMap<i32, Vec<&ConstraintEdge>> = snapshot
+        .issues
+        .iter()
+        .filter(|issue| !excluded.contains(&issue.issue_id))
+        .map(|issue| (issue.issue_id, vec![]))
+        .collect();
+    let mut indegree: BTreeMap<i32, usize> = adjacency.keys().map(|id| (*id, 0)).collect();
+    for edge in edges {
+        if excluded.contains(&edge.source_issue_id) || excluded.contains(&edge.target_issue_id) {
+            continue;
+        }
+        adjacency.get_mut(&edge.source_issue_id)?.push(edge);
+        *indegree.get_mut(&edge.target_issue_id)? += 1;
+    }
+    let mut ready: BinaryHeap<_> = indegree
+        .iter()
+        .filter(|(_, degree)| **degree == 0)
+        .map(|(&id, _)| Reverse(id))
+        .collect();
+    let mut ordered = Vec::with_capacity(adjacency.len());
+    while let Some(Reverse(id)) = ready.pop() {
+        ordered.push(id);
+        for edge in &adjacency[&id] {
+            let degree = indegree.get_mut(&edge.target_issue_id)?;
+            *degree -= 1;
+            if *degree == 0 {
+                ready.push(Reverse(edge.target_issue_id));
+            }
+        }
+    }
+    (ordered.len() == adjacency.len()).then_some(ordered)
+}
+
 /// Only this type may be consumed by future native eligible-candidate projection.
 /// Private fields prevent raw/incomplete loader data from masquerading as validated.
 pub struct ValidatedReadingInputs {
     inputs: OptionInputs,
     topological_order: Vec<i32>,
+    edges: BTreeSet<ConstraintEdge>,
+    graph_problem: Option<GraphProblem>,
+    cyclic_issue_ids: BTreeSet<i32>,
 }
 impl ValidatedReadingInputs {
+    /// Strict authoring validation: any cycle rejects the complete write.
     pub fn new(
         inputs: OptionInputs,
         names: &BTreeMap<i32, String>,
@@ -663,10 +915,41 @@ impl ValidatedReadingInputs {
         inputs
             .require_resolved()
             .map_err(|_| invalid("Unresolved reading reference"))?;
-        let topological_order = validate(&Snapshot::from_inputs(&inputs, names))?;
+        let snapshot = Snapshot::from_inputs(&inputs, names);
+        let topological_order = validate(&snapshot)?;
+        let edges = constraint_edges(&snapshot)?;
         Ok(Self {
             inputs,
             topological_order,
+            edges,
+            graph_problem: None,
+            cyclic_issue_ids: BTreeSet::new(),
+        })
+    }
+
+    /// Read-path containment: isolate cyclic components instead of failing a whole request.
+    ///
+    /// The returned structure reports the exact cycle and excludes only the
+    /// cyclic Issues from eligibility. Writes must still use [`Self::new`].
+    pub fn contained(
+        inputs: OptionInputs,
+        names: &BTreeMap<i32, String>,
+    ) -> Result<Self, ValidationError> {
+        inputs
+            .require_resolved()
+            .map_err(|_| invalid("Unresolved reading reference"))?;
+        let snapshot = Snapshot::from_inputs(&inputs, names);
+        let edges = constraint_edges(&snapshot)?;
+        let (problem, cyclic) = analyze_cycles(&snapshot, &edges);
+        let topological_order = topological_order(&snapshot, &edges, &cyclic)
+            .ok_or_else(|| invalid("Reading graph containment failed"))?;
+        let graph_problem = (!problem.cycles.is_empty()).then_some(problem);
+        Ok(Self {
+            inputs,
+            topological_order,
+            edges,
+            graph_problem,
+            cyclic_issue_ids: cyclic,
         })
     }
     pub fn inputs(&self) -> &OptionInputs {
@@ -675,10 +958,14 @@ impl ValidatedReadingInputs {
     pub fn topological_order(&self) -> &[i32] {
         &self.topological_order
     }
+    pub fn graph_problem(&self) -> Option<&GraphProblem> {
+        self.graph_problem.as_ref()
+    }
     /// Return all currently unsatisfied incoming edges, including for a
     /// pending thread held behind prerequisites. Preserve original provenance.
+    /// Edges touching a cyclic component are excluded so one corrupt subgraph
+    /// cannot block healthy Threads.
     pub fn unsatisfied_edges(&self) -> Result<Vec<ConstraintEdge>, ValidationError> {
-        let snapshot = Snapshot::from_inputs(&self.inputs, &BTreeMap::new());
         let incomplete: HashSet<i32> = self
             .inputs
             .core
@@ -689,9 +976,15 @@ impl ValidatedReadingInputs {
             })
             .map(|issue| issue.id)
             .collect();
-        Ok(constraint_edges(&snapshot)?
-            .into_iter()
-            .filter(|edge| incomplete.contains(&edge.source_issue_id))
+        Ok(self
+            .edges
+            .iter()
+            .filter(|edge| {
+                !self.cyclic_issue_ids.contains(&edge.source_issue_id)
+                    && !self.cyclic_issue_ids.contains(&edge.target_issue_id)
+                    && incomplete.contains(&edge.source_issue_id)
+            })
+            .cloned()
             .collect())
     }
 
@@ -699,8 +992,7 @@ impl ValidatedReadingInputs {
     /// the validated dependency graph and issue statuses are authoritative.
     /// Exactly one next unread issue per active queue thread can be eligible.
     pub fn eligible_frontiers(&self) -> Result<Vec<EligibleFrontier>, ValidationError> {
-        let snapshot = Snapshot::from_inputs(&self.inputs, &BTreeMap::new());
-        let edges = constraint_edges(&snapshot)?;
+        let edges = self.unsatisfied_edges()?;
         let excluded = &self.inputs.excluded_issue_ids;
         let incomplete: HashSet<i32> = self
             .inputs
@@ -718,7 +1010,10 @@ impl ValidatedReadingInputs {
 
         let mut next_unread: BTreeMap<i32, (i32, i32)> = BTreeMap::new();
         for issue in &self.inputs.core.issues {
-            if issue.status != "unread" || excluded.contains(&issue.id) {
+            if issue.status != "unread"
+                || excluded.contains(&issue.id)
+                || self.cyclic_issue_ids.contains(&issue.id)
+            {
                 continue;
             }
             let key = (issue.position, issue.id);
@@ -742,6 +1037,11 @@ impl ValidatedReadingInputs {
             .stored
             .iter()
             .filter(|stored| active.contains(&stored.thread_id) && stored.queue_position >= 1)
+            .filter(|stored| {
+                self.graph_problem
+                    .as_ref()
+                    .is_none_or(|problem| !problem.affected_thread_ids.contains(&stored.thread_id))
+            })
             .filter_map(|stored| {
                 let (_, issue_id) = next_unread.get(&stored.thread_id)?;
                 (!blocked.contains(issue_id)).then_some(EligibleFrontier {
@@ -834,6 +1134,7 @@ mod tests {
                 source.lists.push(ReadingList {
                     list_id: 44,
                     mode: "strict".into(),
+                    name: "Curated".into(),
                     entries: vec![
                         ReadingEntry {
                             issue_id: 13,
@@ -883,6 +1184,7 @@ mod tests {
         cyclic.lists.push(ReadingList {
             list_id: 9,
             mode: "strict".into(),
+            name: "Curated".into(),
             entries: vec![
                 ReadingEntry {
                     issue_id: 13,
@@ -1022,5 +1324,301 @@ mod tests {
             provenance: vec![],
         });
         assert_eq!(reason(blocked), PoolReason::AllBlocked);
+    }
+
+    fn graph_inputs() -> OptionInputs {
+        OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![
+                    ReadingThread {
+                        id: 8,
+                        status: "active".into(),
+                        title: "B.P.R.D.: Hell on Earth — Wasteland".into(),
+                    },
+                    ReadingThread {
+                        id: 9,
+                        status: "active".into(),
+                        title: "Healthy series".into(),
+                    },
+                ],
+                issues: vec![
+                    ReadingIssue {
+                        id: 11,
+                        thread_id: 8,
+                        position: 1,
+                        status: "unread".into(),
+                        issue_number: "130".into(),
+                    },
+                    ReadingIssue {
+                        id: 12,
+                        thread_id: 8,
+                        position: 2,
+                        status: "unread".into(),
+                        issue_number: "139".into(),
+                    },
+                    ReadingIssue {
+                        id: 13,
+                        thread_id: 8,
+                        position: 3,
+                        status: "unread".into(),
+                        issue_number: "140".into(),
+                    },
+                    ReadingIssue {
+                        id: 14,
+                        thread_id: 8,
+                        position: 4,
+                        status: "unread".into(),
+                        issue_number: "142".into(),
+                    },
+                    ReadingIssue {
+                        id: 21,
+                        thread_id: 9,
+                        position: 1,
+                        status: "unread".into(),
+                        issue_number: "1".into(),
+                    },
+                ],
+                stored: vec![
+                    StoredThreadEligibility {
+                        thread_id: 8,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 1,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 9,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 2,
+                    },
+                ],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![ReadingList {
+                list_id: 7,
+                mode: "strict".into(),
+                name: "Julix Comics (Unread)".into(),
+                entries: vec![
+                    ReadingEntry {
+                        issue_id: 14,
+                        gate: "none".into(),
+                        skipped: false,
+                    },
+                    ReadingEntry {
+                        issue_id: 11,
+                        gate: "none".into(),
+                        skipped: false,
+                    },
+                ],
+                overlap_decisions: vec![],
+            }],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        }
+    }
+
+    fn muse_inputs() -> OptionInputs {
+        OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![
+                    ReadingThread {
+                        id: 1,
+                        status: "active".into(),
+                        title: "Superman".into(),
+                    },
+                    ReadingThread {
+                        id: 2,
+                        status: "active".into(),
+                        title: "Batman".into(),
+                    },
+                    ReadingThread {
+                        id: 3,
+                        status: "active".into(),
+                        title: "Unaffected".into(),
+                    },
+                ],
+                issues: vec![
+                    ReadingIssue {
+                        id: 101,
+                        thread_id: 1,
+                        position: 1,
+                        status: "unread".into(),
+                        issue_number: "1".into(),
+                    },
+                    ReadingIssue {
+                        id: 102,
+                        thread_id: 1,
+                        position: 2,
+                        status: "unread".into(),
+                        issue_number: "2".into(),
+                    },
+                    ReadingIssue {
+                        id: 201,
+                        thread_id: 2,
+                        position: 1,
+                        status: "unread".into(),
+                        issue_number: "1".into(),
+                    },
+                    ReadingIssue {
+                        id: 202,
+                        thread_id: 2,
+                        position: 2,
+                        status: "unread".into(),
+                        issue_number: "2".into(),
+                    },
+                    ReadingIssue {
+                        id: 301,
+                        thread_id: 3,
+                        position: 1,
+                        status: "unread".into(),
+                        issue_number: "1".into(),
+                    },
+                ],
+                stored: vec![
+                    StoredThreadEligibility {
+                        thread_id: 1,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 1,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 2,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 2,
+                    },
+                    StoredThreadEligibility {
+                        thread_id: 3,
+                        next_issue_id: None,
+                        is_blocked: false,
+                        queue_position: 3,
+                    },
+                ],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![
+                ReadingList {
+                    list_id: 1,
+                    mode: "strict".into(),
+                    name: "List One".into(),
+                    entries: vec![
+                        ReadingEntry {
+                            issue_id: 102,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                        ReadingEntry {
+                            issue_id: 201,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                    ],
+                    overlap_decisions: vec![],
+                },
+                ReadingList {
+                    list_id: 2,
+                    mode: "strict".into(),
+                    name: "List Two".into(),
+                    entries: vec![
+                        ReadingEntry {
+                            issue_id: 202,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                        ReadingEntry {
+                            issue_id: 101,
+                            gate: "none".into(),
+                            skipped: false,
+                        },
+                    ],
+                    overlap_decisions: vec![],
+                },
+            ],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        }
+    }
+
+    #[test]
+    fn bp_rd_cycle_is_isolated_and_strict_authoring_still_rejects_it() {
+        let names = BTreeMap::from([(7, "Julix Comics (Unread)".to_string())]);
+        let error = ValidatedReadingInputs::new(graph_inputs(), &names)
+            .err()
+            .expect("authoring must reject the cycle");
+        let ValidationError::Cycle { message, edges } = error else {
+            panic!("expected a cycle")
+        };
+        assert!(message.contains("list Julix Comics (Unread) strict order"));
+        assert_eq!(edges.len(), 4);
+
+        let contained = ValidatedReadingInputs::contained(graph_inputs(), &names).unwrap();
+        let problem = contained.graph_problem().expect("cycle is reported");
+        assert_eq!(problem.cyclic_issue_ids, BTreeSet::from([11, 12, 13, 14]));
+        assert_eq!(problem.affected_thread_ids, BTreeSet::from([8]));
+        assert_eq!(problem.affected_list_ids, BTreeSet::from([7]));
+        assert!(problem
+            .summary()
+            .contains("Issue 14 --[list Julix Comics (Unread) strict order]--> Issue 11"));
+        // The unrelated Thread remains rollable; only the cyclic component is withheld.
+        let frontiers = contained.eligible_frontiers().unwrap();
+        assert_eq!(frontiers.len(), 1);
+        assert_eq!(frontiers[0].thread_id, 9);
+        assert_eq!(frontiers[0].issue_id, 21);
+    }
+
+    #[test]
+    fn muse_two_list_two_series_cycle_does_not_stop_unaffected_readers() {
+        let contained = ValidatedReadingInputs::contained(muse_inputs(), &BTreeMap::new()).unwrap();
+        let problem = contained.graph_problem().expect("cycle is reported");
+        assert_eq!(problem.affected_thread_ids, BTreeSet::from([1, 2]));
+        assert_eq!(problem.affected_list_ids, BTreeSet::from([1, 2]));
+        let frontiers = contained.eligible_frontiers().unwrap();
+        assert_eq!(frontiers.len(), 1);
+        assert_eq!(frontiers[0].thread_id, 3);
+        assert_eq!(frontiers[0].issue_id, 301);
+    }
+
+    #[test]
+    fn legacy_strict_read_projection_would_return_500_for_the_incident_fixtures() {
+        // The former read mapping used `validated`, which turns either exact
+        // fixture into a global 500. The containment endpoints are what keep
+        // Roll/Queue/History alive; this pins the failure mode the fixtures
+        // reproduce without mocking the validator.
+        for fixture in [graph_inputs(), muse_inputs()] {
+            let error = crate::option_inputs::validated(fixture)
+                .err()
+                .expect("the incident fixture must be cyclic");
+            assert_eq!(error.0, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[test]
+    fn healthy_graph_has_no_problem_and_is_not_filtered() {
+        let mut source = graph_inputs();
+        // Keep the strict order and the series order consistent.
+        source.lists[0].entries = vec![
+            ReadingEntry {
+                issue_id: 11,
+                gate: "none".into(),
+                skipped: false,
+            },
+            ReadingEntry {
+                issue_id: 14,
+                gate: "none".into(),
+                skipped: false,
+            },
+        ];
+        let contained = ValidatedReadingInputs::contained(source, &BTreeMap::new()).unwrap();
+        assert!(contained.graph_problem().is_none());
+        let frontiers = contained.eligible_frontiers().unwrap();
+        assert_eq!(
+            frontiers
+                .iter()
+                .map(|frontier| frontier.issue_id)
+                .collect::<Vec<_>>(),
+            vec![11, 21]
+        );
     }
 }

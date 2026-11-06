@@ -31,6 +31,15 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface CreateIssuesRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['CreateIssuesRequest']
+}
+
+export type CreateIssuesResponse = components['schemas']['NativeIssueListResponse']
+
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
@@ -38,6 +47,14 @@ export interface CreateQueueOrderRequest {
 export type CreateQueueOrderResponse = components['schemas']['QueueOrderResponse']
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
+
+export interface DeleteIssueRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type DeleteIssueResponse = void
 
 export type DieStateResponse = components['schemas']['RollDieStateResponse']
 
@@ -82,6 +99,15 @@ export interface IssueIntelligenceDocsRequest {
 }
 
 export type IssueIntelligenceDocsResponse = null | components['schemas']['IssueIntelligence']
+
+export interface IssueOrderRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['IssueOrderRequest']
+}
+
+export type IssueOrderResponse = void
 
 export interface IssueReadRateRequest {
   path: {
@@ -133,6 +159,8 @@ export interface ReadingBoundaryBatchRequest {
 
 export type ReadingBoundaryBatchResponse = components['schemas']['NativeReadingBoundaryBatchResponseV2']
 
+export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
+
 export interface RefreshRequest {
   body?: null | components['schemas']['NativeRefreshTokenRequest']
 }
@@ -144,6 +172,12 @@ export interface RegisterRequest {
 }
 
 export type RegisterResponse = components['schemas']['NativeTokenResponse']
+
+export interface RepairRequest {
+  body: components['schemas']['ReadingGraphRepairRequest']
+}
+
+export type RepairResponse = components['schemas']['ReadingGraphRepairResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
@@ -168,8 +202,10 @@ export type UpdateQueueEntryResponse = components['schemas']['QueueEntryResponse
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   csrf(): Promise<CsrfResponse>
+  deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
   dieState(): Promise<DieStateResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
@@ -177,6 +213,7 @@ export interface NativeV2Client {
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
+  issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -186,8 +223,10 @@ export interface NativeV2Client {
   metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
+  readingGraph(): Promise<ReadingGraphResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
+  repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
@@ -201,6 +240,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    createIssues(args: CreateIssuesRequest) {
+      return client.post<CreateIssuesResponse, CreateIssuesRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        args.body,
+      )
+    },
     createQueueOrder(args: CreateQueueOrderRequest) {
       return client.post<CreateQueueOrderResponse, CreateQueueOrderRequest['body']>(
         "/v2/queue-orders",
@@ -209,6 +254,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
+    },
+    deleteIssue(args: DeleteIssueRequest) {
+      return client.delete<DeleteIssueResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
     },
     dieState() {
       return client.get<DieStateResponse>("/v2/roll/die-state")
@@ -245,6 +295,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     issueIntelligenceDocs(args: IssueIntelligenceDocsRequest) {
       return client.get<IssueIntelligenceDocsResponse>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/comicvine`,
+      )
+    },
+    issueOrder(args: IssueOrderRequest) {
+      return client.put<IssueOrderResponse, IssueOrderRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-order`,
+        args.body,
       )
     },
     issueReadRate(args: IssueReadRateRequest) {
@@ -292,6 +348,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    readingGraph() {
+      return client.get<ReadingGraphResponse>("/v2/reading-graph")
+    },
     refresh(args: RefreshRequest = {}) {
       return client.post<RefreshResponse, RefreshRequest['body']>(
         "/v2/auth/refresh",
@@ -301,6 +360,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     register(args: RegisterRequest) {
       return client.post<RegisterResponse, RegisterRequest['body']>(
         "/v2/auth/register",
+        args.body,
+      )
+    },
+    repair(args: RepairRequest) {
+      return client.post<RepairResponse, RepairRequest['body']>(
+        "/v2/reading-graph/repairs",
         args.body,
       )
     },

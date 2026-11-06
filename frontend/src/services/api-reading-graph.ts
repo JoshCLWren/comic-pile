@@ -141,3 +141,87 @@ export function createReadingGraphApi(client: HttpClient) {
 }
 
 export const readingGraphApi = createReadingGraphApi(defaultHttpClient())
+
+/** One issue endpoint named in a graph problem. */
+export interface ReadingGraphProblemIssue {
+  issue_id: number
+  issue_number: string
+  thread_id: number
+  series_title: string
+}
+
+/** One stored requirement that participates in a cycle. */
+export interface ReadingGraphProblemEdge {
+  source: ReadingGraphProblemIssue
+  target: ReadingGraphProblemIssue
+  origin: string
+  kind: string
+  list_id: number | null
+  list_name: string | null
+  prerequisite_id: number | null
+}
+
+/** One cycle with its concrete edge path. */
+export interface ReadingGraphProblemCycle {
+  message: string
+  edges: ReadingGraphProblemEdge[]
+}
+
+/** One owner-scoped repair offered by the server. */
+export interface ReadingGraphRepairOption {
+  action: 'delete_list' | 'delete_list_entry' | 'delete_prerequisite'
+  label: string
+  detail: string
+  list_id: number | null
+  issue_id: number | null
+  prerequisite_id: number | null
+}
+
+/** Complete owner-scoped graph state. */
+export interface ReadingGraphResponse {
+  status: 'ok' | 'cycle' | 'invalid'
+  cycles: ReadingGraphProblemCycle[]
+  cyclic_issue_ids: number[]
+  affected_lists: { list_id: number; name: string; mode: string }[]
+  affected_threads: { thread_id: number; title: string }[]
+  repairs: ReadingGraphRepairOption[]
+  unresolved_reference_count: number
+}
+
+/** Preview or apply exactly one owner-scoped repair. */
+export interface ReadingGraphRepairRequest {
+  action: ReadingGraphRepairOption['action']
+  list_id?: number | null
+  issue_id?: number | null
+  prerequisite_id?: number | null
+  confirm?: boolean
+}
+
+export interface ReadingGraphRepairResponse {
+  applied: boolean
+  status_before: string
+  status_after: string
+  removed: string
+  graph: ReadingGraphResponse
+}
+
+export function createReadingGraphProblemApi(client: HttpClient) {
+  return {
+    /**
+     * Read the canonical owner-scoped graph, including any persisted cycle.
+     *
+     * @returns The graph status, cycle paths, and safe repair options.
+     */
+    getGraph: () => client.get<ReadingGraphResponse>('/v2/reading-graph'),
+    /**
+     * Preview (default) or apply one constraint repair.
+     *
+     * @param request - The selected server-offered repair.
+     * @returns The remaining graph and whether the repair was applied.
+     */
+    repair: (request: ReadingGraphRepairRequest) =>
+      client.post<ReadingGraphRepairResponse>('/v2/reading-graph/repairs', request),
+  }
+}
+
+export const readingGraphProblemApi = createReadingGraphProblemApi(defaultHttpClient())

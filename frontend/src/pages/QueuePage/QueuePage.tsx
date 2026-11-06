@@ -16,6 +16,7 @@ import ExcludedThreadsSection from './ExcludedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueBoundaryNotice } from './QueueBoundaryNotice'
+import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
 import RemoveThreadDialog from './RemoveThreadDialog'
@@ -218,6 +219,8 @@ export default function QueuePage() {
         )}
 
         <QueueBoundaryNotice isError={boundaryError} onRetry={retryBoundaries} />
+
+        <ReadingGraphProblemCard />
 
         <QueueList
           activeThreads={activeThreads}

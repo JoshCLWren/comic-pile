@@ -6240,7 +6240,11 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Documentation-only operation for the mounted issue delete resource.
+         * @description Delete one owned Issue only when no Reading List, prerequisite, plan or reading-history row references it. A referenced Issue is refused before any write with the owning names.
+         */
+        delete: operations["delete_issue_documentation"];
         options?: never;
         head?: never;
         /** Documentation-only operation used to emit the generated PATCH contract. */
@@ -6329,6 +6333,46 @@ export interface paths {
         get: operations["get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted reading-graph read.
+         * @description Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin.
+         */
+        get: operations["reading_graph_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-graph/repairs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the mounted graph repair action.
+         * @description Preview (default) or apply exactly one owner-scoped constraint repair. Deleting a list, list entry or reader prerequisite removes only that effective constraint and preserves Issues, reads, ratings and history.
+         */
+        post: operations["repair_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6477,6 +6521,46 @@ export interface paths {
         get: operations["list_threads_documentation"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/issue-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Documentation-only operation for the mounted issue-order resource.
+         * @description Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.
+         */
+        put: operations["issue_order_documentation"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/threads/{thread_id}/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the mounted issue-create resource.
+         * @description Create issue labels atomically. Natural numeric placement never re-sorts previously persisted issues; a non-monotonic series appends without changing existing relative order. The complete reading graph is validated before commit.
+         */
+        post: operations["create_issues_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9008,6 +9092,17 @@ export interface components {
              * @description True when legacy events are mixed into the range
              */
             partial_coverage: boolean;
+        };
+        CreateIssuesRequest: {
+            /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
+            append_to_end?: boolean;
+            /**
+             * Format: int32
+             * @description Explicit anchor. Omit for natural placement.
+             */
+            insert_after_issue_id?: number | null;
+            /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
+            issue_range: string;
         };
         /** @description An issue's credited creator with stable provider identity and merged roles. */
         Creator: {
@@ -12535,6 +12630,17 @@ export interface components {
              */
             after_issue_id: number | null;
         };
+        IssueMutationItem: {
+            /** Format: int32 */
+            id: number;
+            issue_number: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+        };
+        IssueOrderRequest: {
+            issue_ids: number[];
+        };
         /**
          * IssueOrderValidationResponse
          * @description Schema for reporting in-thread dependency ordering conflicts.
@@ -12827,6 +12933,14 @@ export interface components {
         /** @description Request body for an enumeration-safe password-recovery email. */
         NativeForgotPasswordRequest: {
             email: string;
+        };
+        NativeIssueListResponse: {
+            issues: components["schemas"]["IssueMutationItem"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int32 */
+            total_count: number;
         };
         /** @description Safe acknowledgement returned whether or not an account exists. */
         NativePasswordResetResponse: {
@@ -13812,6 +13926,11 @@ export interface components {
             /** Waiting Issue Ids */
             waiting_issue_ids?: number[];
         };
+        /** @description One cycle with its concrete edge path. */
+        ReadingGraphCycle: {
+            edges: components["schemas"]["ReadingGraphEdge"][];
+            message: string;
+        };
         /**
          * ReadingGraphCycleError
          * @description A cycle or invalid relationship rejected before any write.
@@ -13821,6 +13940,27 @@ export interface components {
             code: string;
             /** Message */
             message: string;
+        };
+        /** @description One stored requirement that participates in a cycle. */
+        ReadingGraphEdge: {
+            kind: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            list_name?: string | null;
+            origin: string;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+            source: components["schemas"]["ReadingGraphIssue"];
+            target: components["schemas"]["ReadingGraphIssue"];
+        };
+        /** @description One issue endpoint as a reader sees it, never a bare database identifier. */
+        ReadingGraphIssue: {
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            series_title: string;
+            /** Format: int32 */
+            thread_id: number;
         };
         /**
          * ReadingGraphIssueReference
@@ -13837,6 +13977,13 @@ export interface components {
             issue_number: string;
             /** Series Name */
             series_name: string;
+        };
+        /** @description One affected Reading List. */
+        ReadingGraphList: {
+            /** Format: int32 */
+            list_id: number;
+            mode: string;
+            name: string;
         };
         /**
          * ReadingGraphOverlap
@@ -13905,6 +14052,47 @@ export interface components {
             /** Target List Id */
             target_list_id?: number | null;
         };
+        /** @description One owner-scoped repair the reader can preview and apply. */
+        ReadingGraphRepairOption: {
+            action: string;
+            detail: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            label: string;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+        };
+        /** @description Flat wire request so a preview never depends on tagged-enum deserialization. */
+        ReadingGraphRepairRequest: {
+            action: string;
+            /** @description Preview by default. A repair applies only when this is explicitly true. */
+            confirm?: boolean;
+            /** Format: int32 */
+            issue_id?: number | null;
+            /** Format: int32 */
+            list_id?: number | null;
+            /** Format: int32 */
+            prerequisite_id?: number | null;
+        };
+        ReadingGraphRepairResponse: {
+            applied: boolean;
+            graph: components["schemas"]["ReadingGraphResponse"];
+            removed: string;
+            status_after: string;
+            status_before: string;
+        };
+        /** @description Complete graph state. `status` is `ok`, `cycle`, or `invalid`. */
+        ReadingGraphResponse: {
+            affected_lists: components["schemas"]["ReadingGraphList"][];
+            affected_threads: components["schemas"]["ReadingGraphThread"][];
+            cycles: components["schemas"]["ReadingGraphCycle"][];
+            cyclic_issue_ids: number[];
+            repairs: components["schemas"]["ReadingGraphRepairOption"][];
+            status: string;
+            unresolved_reference_count: number;
+        };
         /**
          * ReadingGraphSeriesNode
          * @description One series node with its prospective eligibility totals.
@@ -13941,6 +14129,12 @@ export interface components {
             series_name: string;
             /** Year */
             year?: number | null;
+        };
+        /** @description One affected Thread. */
+        ReadingGraphThread: {
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
         };
         /**
          * ReadingListEntryIntent
@@ -24834,6 +25028,55 @@ export interface operations {
             };
         };
     };
+    delete_issue_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Issue identifier */
+                issue_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Issue deleted and positions compacted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue is referenced; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     issue_read_rate_documentation: {
         parameters: {
             query?: never;
@@ -25131,6 +25374,106 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    reading_graph_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Graph status, cycles and safe repair options */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingGraphResponse"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid reading snapshot */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    repair_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadingGraphRepairRequest"];
+            };
+        };
+        responses: {
+            /** @description Repair preview or applied result with the remaining graph */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingGraphRepairResponse"];
+                };
+            };
+            /** @description Invalid repair request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Constraint not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid reading snapshot */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -25514,6 +25857,135 @@ export interface operations {
             };
             /** @description Invalid bounds or retired collection_id */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    issue_order_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueOrderRequest"];
+            };
+        };
+        responses: {
+            /** @description Issue order replaced */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description issue_ids must contain every thread issue exactly once */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Projected reading graph would cycle; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_issues_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Owned Thread identifier */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateIssuesRequest"];
+            };
+        };
+        responses: {
+            /** @description Created issues */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeIssueListResponse"];
+                };
+            };
+            /** @description Invalid issue range or no new issues */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Projected reading graph would cycle; nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid reading snapshot */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

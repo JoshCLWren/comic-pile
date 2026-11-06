@@ -372,6 +372,48 @@
       }
     },
     "/api/v2/issues/{issue_id}": {
+      "delete": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the mounted issue delete resource.",
+        "description": "Delete one owned Issue only when no Reading List, prerequisite, plan or reading-history row references it. A referenced Issue is refused before any write with the owning names.",
+        "operationId": "delete_issue_documentation",
+        "parameters": [
+          {
+            "name": "issue_id",
+            "in": "path",
+            "description": "Owned Issue identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue deleted and positions compacted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Issue is referenced; nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
       "patch": {
         "tags": [
           "issues"
@@ -665,6 +707,94 @@
           },
           "422": {
             "description": "Batch must contain between 1 and 200 thread ids"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-graph": {
+      "get": {
+        "tags": [
+          "reading-graph"
+        ],
+        "summary": "Documentation-only operation for the mounted reading-graph read.",
+        "description": "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin.",
+        "operationId": "reading_graph_documentation",
+        "responses": {
+          "200": {
+            "description": "Graph status, cycles and safe repair options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid reading snapshot"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/reading-graph/repairs": {
+      "post": {
+        "tags": [
+          "reading-graph"
+        ],
+        "summary": "Documentation-only operation for the mounted graph repair action.",
+        "description": "Preview (default) or apply exactly one owner-scoped constraint repair. Deleting a list, list entry or reader prerequisite removes only that effective constraint and preserves Issues, reads, ratings and history.",
+        "operationId": "repair_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingGraphRepairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Repair preview or applied result with the remaining graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphRepairResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid repair request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Constraint not found"
+          },
+          "500": {
+            "description": "Invalid reading snapshot"
           },
           "503": {
             "description": "Database temporarily unavailable"
@@ -1064,6 +1194,130 @@
           },
           "422": {
             "description": "Invalid bounds or retired collection_id"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/issue-order": {
+      "put": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the mounted issue-order resource.",
+        "description": "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
+        "operationId": "issue_order_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Issue order replaced"
+          },
+          "400": {
+            "description": "issue_ids must contain every thread issue exactly once"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "409": {
+            "description": "Projected reading graph would cycle; nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/issues": {
+      "post": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the mounted issue-create resource.",
+        "description": "Create issue labels atomically. Natural numeric placement never re-sorts previously persisted issues; a non-monotonic series appends without changing existing relative order. The complete reading graph is validated before commit.",
+        "operationId": "create_issues_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned Thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIssuesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created issues",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid issue range or no new issues"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "409": {
+            "description": "Projected reading graph would cycle; nothing was changed"
+          },
+          "422": {
+            "description": "Invalid reading snapshot"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -1950,6 +2204,31 @@
           }
         }
       },
+      "CreateIssuesRequest": {
+        "type": "object",
+        "required": [
+          "issue_range"
+        ],
+        "properties": {
+          "append_to_end": {
+            "type": "boolean",
+            "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor."
+          },
+          "insert_after_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Explicit anchor. Omit for natural placement."
+          },
+          "issue_range": {
+            "type": "string",
+            "description": "Reader-facing range, e.g. `1-3, 5` or `Annual 1`."
+          }
+        },
+        "additionalProperties": false
+      },
       "Creator": {
         "type": "object",
         "description": "An issue's credited creator with stable provider identity and merged roles.",
@@ -2235,6 +2514,77 @@
             }
           }
         }
+      },
+      "IssueListResponse": {
+        "type": "object",
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueMutationItem"
+            }
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "IssueMutationItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "thread_id",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "IssueOrderRequest": {
+        "type": "object",
+        "required": [
+          "issue_ids"
+        ],
+        "properties": {
+          "issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        },
+        "additionalProperties": false
       },
       "IssueReadRateRequest": {
         "type": "object",
@@ -2608,6 +2958,292 @@
           },
           "issue": {
             "$ref": "#/components/schemas/BoundaryIssue"
+          }
+        }
+      },
+      "ReadingGraphCycle": {
+        "type": "object",
+        "description": "One cycle with its concrete edge path.",
+        "required": [
+          "message",
+          "edges"
+        ],
+        "properties": {
+          "edges": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphEdge"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphEdge": {
+        "type": "object",
+        "description": "One stored requirement that participates in a cycle.",
+        "required": [
+          "source",
+          "target",
+          "origin",
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "list_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "type": "string"
+          },
+          "prerequisite_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ReadingGraphIssue"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ReadingGraphIssue"
+          }
+        }
+      },
+      "ReadingGraphIssue": {
+        "type": "object",
+        "description": "One issue endpoint as a reader sees it, never a bare database identifier.",
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "series_title"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_title": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingGraphList": {
+        "type": "object",
+        "description": "One affected Reading List.",
+        "required": [
+          "list_id",
+          "name",
+          "mode"
+        ],
+        "properties": {
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphRepairOption": {
+        "type": "object",
+        "description": "One owner-scoped repair the reader can preview and apply.",
+        "required": [
+          "action",
+          "label",
+          "detail"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "prerequisite_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "ReadingGraphRepairRequest": {
+        "type": "object",
+        "description": "Flat wire request so a preview never depends on tagged-enum deserialization.",
+        "required": [
+          "action"
+        ],
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "confirm": {
+            "type": "boolean",
+            "description": "Preview by default. A repair applies only when this is explicitly true."
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "list_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "prerequisite_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReadingGraphRepairResponse": {
+        "type": "object",
+        "required": [
+          "applied",
+          "status_before",
+          "status_after",
+          "removed",
+          "graph"
+        ],
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/ReadingGraphResponse"
+          },
+          "removed": {
+            "type": "string"
+          },
+          "status_after": {
+            "type": "string"
+          },
+          "status_before": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadingGraphResponse": {
+        "type": "object",
+        "description": "Complete graph state. `status` is `ok`, `cycle`, or `invalid`.",
+        "required": [
+          "status",
+          "cycles",
+          "cyclic_issue_ids",
+          "affected_lists",
+          "affected_threads",
+          "repairs",
+          "unresolved_reference_count"
+        ],
+        "properties": {
+          "affected_lists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphList"
+            }
+          },
+          "affected_threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphThread"
+            }
+          },
+          "cycles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphCycle"
+            }
+          },
+          "cyclic_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "repairs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphRepairOption"
+            }
+          },
+          "status": {
+            "type": "string"
+          },
+          "unresolved_reference_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "ReadingGraphThread": {
+        "type": "object",
+        "description": "One affected Thread.",
+        "required": [
+          "thread_id",
+          "title"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
           }
         }
       },

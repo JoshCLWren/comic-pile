@@ -22,9 +22,9 @@ describe('issuesApi', () => {
     await issuesApi.create(1, '9', { insert_after_issue_id: null })
     expect(client.get).toHaveBeenNthCalledWith(1, '/v1/threads/1/issues', { params: undefined })
     expect(client.get).toHaveBeenNthCalledWith(2, '/v1/threads/1/issues', { params: { status: 'read', page_size: 10, page_token: 'next' } })
-    expect(client.post).toHaveBeenNthCalledWith(1, '/v1/threads/1/issues', { issue_range: '1-5' })
-    expect(client.post).toHaveBeenNthCalledWith(2, '/v1/threads/1/issues', { issue_range: '6-8', insert_after_issue_id: 4 })
-    expect(client.post).toHaveBeenNthCalledWith(3, '/v1/threads/1/issues', { issue_range: '9', insert_after_issue_id: null })
+    expect(client.post).toHaveBeenNthCalledWith(1, '/v2/threads/1/issues', { issue_range: '1-5' })
+    expect(client.post).toHaveBeenNthCalledWith(2, '/v2/threads/1/issues', { issue_range: '6-8', insert_after_issue_id: 4 })
+    expect(client.post).toHaveBeenNthCalledWith(3, '/v2/threads/1/issues', { issue_range: '9', append_to_end: true })
   })
 
   it('calls issue mutations and migration endpoints', async () => {
@@ -39,8 +39,8 @@ describe('issuesApi', () => {
     expect(client.post).toHaveBeenCalledWith('/v1/issues/2:markRead')
     expect(client.post).toHaveBeenCalledWith('/v1/issues/2:markUnread')
     expect(client.post).toHaveBeenCalledWith('/v1/issues/2:move', { after_issue_id: null })
-    expect(client.post).toHaveBeenCalledWith('/v1/threads/3/issues:reorder', { issue_ids: [1, 2] })
-    expect(client.delete).toHaveBeenCalledWith('/v1/issues/4')
+    expect(client.put).toHaveBeenCalledWith('/v2/threads/3/issue-order', { issue_ids: [1, 2] })
+    expect(client.delete).toHaveBeenCalledWith('/v2/issues/4')
     expect(client.post).toHaveBeenCalledWith('/v1/threads/5:migrateToIssues', { last_issue_read: 2, total_issues: 10 })
   })
 })

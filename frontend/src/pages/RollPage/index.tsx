@@ -42,6 +42,7 @@ import { RollModals } from './components/RollModals'
 import { RollCta } from './components/RollCta'
 import { TasteDiscoveryCard } from './components/TasteDiscoveryCard'
 import ReadingModeLauncher from '../../components/ReadingModeLauncher'
+import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
 
 /**
  * Route entry for the Roll page. The component composes the focused retained
@@ -395,6 +396,10 @@ export default function RollPage() {
       />
 
       <ReadingModeLauncher />
+
+      <div className="px-4 md:px-6 pt-4">
+        <ReadingGraphProblemCard />
+      </div>
 
       <div className="flex-1 flex flex-col min-h-0">
         {/* Rating mode is a page-level composition, not one giant generic

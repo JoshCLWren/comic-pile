@@ -18,25 +18,26 @@ use std::{
 use tokio_postgres::{IsolationLevel, Transaction};
 use unicode_casefold::UnicodeCaseFold;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ReadingEntry {
     pub issue_id: i32,
     pub gate: String,
     pub skipped: bool,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OverlapDecision {
     pub continuing_volume_id: String,
     pub waiting_volume_id: String,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ReadingList {
     pub list_id: i32,
     pub mode: String,
+    pub name: String,
     pub entries: Vec<ReadingEntry>,
     pub overlap_decisions: Vec<OverlapDecision>,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Prerequisite {
     pub prerequisite_id: i32,
     pub source_issue_id: i32,
@@ -44,12 +45,12 @@ pub struct Prerequisite {
     pub origin: String,
     pub provenance: Vec<String>,
 }
-#[derive(Debug, Serialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct UnresolvedReference {
     pub kind: &'static str,
     pub object_id: i32,
 }
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct OptionInputs {
     pub core: CoreReadingInputs,
     pub thread_volumes: BTreeMap<i32, String>,
@@ -136,7 +137,7 @@ owned_issues AS MATERIALIZED (
     FROM issues i JOIN owned_threads t ON t.id = i.thread_id
 ),
 owned_lists AS (
-    SELECT id, mode FROM custom_cbl_lists WHERE user_id = (SELECT user_id FROM me)
+    SELECT id, mode, name FROM custom_cbl_lists WHERE user_id = (SELECT user_id FROM me)
 ),
 owned_entries AS (
     SELECT e.id, e.list_id, e.issue_id, e.gate, e.skipped, e.position
@@ -261,6 +262,7 @@ struct IssueRow {
 struct ListRow {
     id: i32,
     mode: String,
+    name: String,
 }
 #[derive(Debug, Deserialize)]
 struct EntryRow {
@@ -373,6 +375,7 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
             ReadingList {
                 list_id: row.id,
                 mode: row.mode,
+                name: row.name,
                 entries: vec![],
                 overlap_decisions: vec![],
             },
@@ -544,8 +547,9 @@ pub async fn load_option_diagnostics(
 pub(crate) fn validated(
     inputs: OptionInputs,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
-    crate::reading_constraints::ValidatedReadingInputs::new(inputs, &BTreeMap::new()).map_err(
-        |error| match error {
+    let names = list_names(&inputs);
+    crate::reading_constraints::ValidatedReadingInputs::new(inputs, &names).map_err(|error| {
+        match error {
             crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Reading constraint cycle".to_string(),
@@ -554,8 +558,35 @@ pub(crate) fn validated(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Unresolved reading reference".to_string(),
             ),
-        },
-    )
+        }
+    })
+}
+
+fn list_names(inputs: &OptionInputs) -> BTreeMap<i32, String> {
+    inputs
+        .lists
+        .iter()
+        .map(|list| (list.list_id, list.name.clone()))
+        .collect()
+}
+
+/// Validate for a read path: isolate cyclic components instead of failing the request.
+pub(crate) fn validated_contained(
+    inputs: OptionInputs,
+) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
+    let names = list_names(&inputs);
+    crate::reading_constraints::ValidatedReadingInputs::contained(inputs, &names).map_err(|error| {
+        match error {
+            crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Reading constraint cycle".to_string(),
+            ),
+            crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Unresolved reading reference".to_string(),
+            ),
+        }
+    })
 }
 
 /// Load execution inputs, failing closed on missing or foreign constraint endpoints.
@@ -566,18 +597,28 @@ pub async fn load_option_inputs(
     validated(load_option_diagnostics(state, user).await?)
 }
 
-/// Load and validate execution inputs on an already-borrowed transaction.
-///
-/// Same loader SQL, validation and error mapping as [`load_option_inputs`], but
-/// without a second pool checkout and without leaving the caller's transaction.
-/// The queue reposition path uses this after taking its queue advisory lock, so
-/// Option E grouping is evaluated inside the serialized write transaction rather
-/// than from a separate snapshot.
-pub(crate) async fn load_validated_in_transaction(
+/// Load read-path inputs, containing an existing cycle to its own subgraph.
+pub async fn load_option_inputs_contained(
+    state: &AppState,
+    user: AuthenticatedUser,
+) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
+    validated_contained(load_option_diagnostics(state, user).await?)
+}
+
+/// Load read-path inputs inside an existing transaction, containing any cycle.
+pub(crate) async fn load_validated_contained_in_transaction(
     transaction: &Transaction<'_>,
     user: AuthenticatedUser,
 ) -> Result<crate::reading_constraints::ValidatedReadingInputs, ApiError> {
-    validated(load_transaction(transaction, user).await?)
+    validated_contained(load_transaction(transaction, user).await?)
+}
+
+/// Load raw inputs inside an existing write transaction for a pre-commit preflight.
+pub(crate) async fn load_inputs_in_transaction(
+    transaction: &Transaction<'_>,
+    user: AuthenticatedUser,
+) -> Result<OptionInputs, ApiError> {
+    load_transaction(transaction, user).await
 }
 
 #[cfg(test)]
@@ -608,6 +649,7 @@ mod tests {
         inputs.lists.push(ReadingList {
             list_id: 10,
             mode: "strict".into(),
+            name: "First".into(),
             entries: vec![],
             overlap_decisions: vec![decision("comicvine:12", "comicvine:12")],
         });
@@ -623,6 +665,7 @@ mod tests {
         inputs.lists.push(ReadingList {
             list_id: 11,
             mode: "strict".into(),
+            name: "Second".into(),
             entries: vec![],
             overlap_decisions: vec![decision("comicvine:12", "comicvine:13")],
         });
@@ -665,7 +708,7 @@ mod tests {
                 {"id": 20, "thread_id": 2, "position": 1, "status": "unread",
                  "issue_number": "1"}
             ],
-            "lists": [{"id": 50, "mode": "strict"}, {"id": 51, "mode": "loose"}],
+            "lists": [{"id": 50, "mode": "strict", "name": "First"}, {"id": 51, "mode": "loose", "name": "Second"}],
             "entries": [
                 {"id": 100, "list_id": 50, "issue_id": 10,
                  "gate": "after_previous", "skipped": false},

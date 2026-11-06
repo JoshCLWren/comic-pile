@@ -42,7 +42,12 @@ use utoipa::OpenApi;
         crate::roll_reset::reset_documentation,
         crate::roll_resources::die_state_documentation,
         crate::roll_resources::eligible_issue_ids_documentation,
-        crate::reading_boundary::reading_boundary_batch_documentation
+        crate::reading_boundary::reading_boundary_batch_documentation,
+        crate::reading_graph::reading_graph_documentation,
+        crate::reading_graph::repair_documentation,
+        crate::issue_mutation::create_issues_documentation,
+        crate::issue_mutation::delete_issue_documentation,
+        crate::issue_mutation::issue_order_documentation
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -65,7 +70,20 @@ use utoipa::OpenApi;
         crate::roll_resources::RollLastRoll,
         crate::roll_resources::RollEligibleIssueIdsResponse,
         crate::reading_boundary::ReadingBoundaryBatchRequest,
-        crate::reading_boundary::ReadingBoundaryBatchResponseV2
+        crate::reading_boundary::ReadingBoundaryBatchResponseV2,
+        crate::reading_graph::ReadingGraphIssue,
+        crate::reading_graph::ReadingGraphEdge,
+        crate::reading_graph::ReadingGraphCycle,
+        crate::reading_graph::ReadingGraphList,
+        crate::reading_graph::ReadingGraphThread,
+        crate::reading_graph::ReadingGraphRepairOption,
+        crate::reading_graph::ReadingGraphResponse,
+        crate::reading_graph::ReadingGraphRepairRequest,
+        crate::reading_graph::ReadingGraphRepairResponse,
+        crate::issue_mutation::CreateIssuesRequest,
+        crate::issue_mutation::IssueMutationItem,
+        crate::issue_mutation::IssueListResponse,
+        crate::issue_mutation::IssueOrderRequest
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -93,12 +111,14 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 24] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 29] = [
+    ("delete", "/api/v2/issues/{issue_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
     ("get", "/api/v2/issues/{issue_id}/comicvine"),
     ("get", "/api/v2/queue-entries/{thread_id}"),
+    ("get", "/api/v2/reading-graph"),
     ("get", "/api/v2/roll/bootstrap"),
     ("get", "/api/v2/roll/die-state"),
     ("get", "/api/v2/roll/eligible-issue-ids"),
@@ -114,10 +134,13 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 24] = [
     ("post", "/api/v2/issues/cards"),
     ("post", "/api/v2/queue-orders"),
     ("post", "/api/v2/reading-boundaries"),
+    ("post", "/api/v2/reading-graph/repairs"),
     ("post", "/api/v2/reading-sessions"),
     ("post", "/api/v2/roll/dice-command"),
     ("post", "/api/v2/roll/offer"),
     ("post", "/api/v2/roll/reset"),
+    ("post", "/api/v2/threads/{thread_id}/issues"),
+    ("put", "/api/v2/threads/{thread_id}/issue-order"),
 ];
 
 /// Merge every native v2 domain document into one canonical contract.

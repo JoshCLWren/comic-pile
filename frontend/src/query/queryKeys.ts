@@ -351,6 +351,7 @@ export const queryKeys = {
    */
   readingGraph: {
     all: ['readingGraph'] as const,
+    status: () => ['readingGraph', 'status'] as const,
     preview: (
       sourceListId: number,
       includedPositions: number[],
