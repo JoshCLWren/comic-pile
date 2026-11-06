@@ -954,7 +954,10 @@ async fn evening_four_edge_cycle_is_repairable_and_two_owners_stay_isolated() {
         .map(|value| value.as_i64().unwrap() as i32)
         .collect();
     assert!(eligible_ids.contains(&unrelated_ids["1"]));
-    assert!(eligible_ids.contains(&ba["1"]));
+    // List A was deliberately retained as the linked Plan's authority.
+    // Batman #1 is still correctly gated by the unread Superman entries,
+    // unlike an unrelated Thread which must remain Roll-eligible.
+    assert!(!eligible_ids.contains(&ba["1"]));
 
     // Legitimate history is intact after recovery.
     let history_exists: bool = conn
