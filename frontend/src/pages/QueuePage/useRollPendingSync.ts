@@ -24,9 +24,12 @@ export function useRollPendingSync({
 }: UseRollPendingSyncParams): UseRollPendingSyncResult {
   const syncedSession = useMemo(() => {
     if (!session) return undefined
-    return rollBootstrap
-      ? { ...session, pending_thread_id: rollBootstrap.pending_thread_id }
-      : session
+    // Bootstrap is authoritative when it exists, including when pending_thread_id is null.
+    // Fall back to session.pending_thread_id only when bootstrap data is absent.
+    if (rollBootstrap !== null) {
+      return { ...session, pending_thread_id: rollBootstrap.pending_thread_id }
+    }
+    return session
   }, [session, rollBootstrap])
 
   const onUpdated = useCallback(async () => {
