@@ -539,7 +539,7 @@ async fn eligible_thread_ids(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
 ) -> Result<Vec<i32>, ApiError> {
-    let validated = option_inputs::load_validated_in_transaction(tx, user).await?;
+    let validated = option_inputs::load_validated_contained_in_transaction(tx, user).await?;
     let mut ids: Vec<i32> = queue::evaluated_eligible_ids(&validated)?
         .into_iter()
         .collect();

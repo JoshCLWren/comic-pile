@@ -6,13 +6,13 @@ use serde::Serialize;
 use std::{collections::HashMap, time::Instant};
 use tokio_postgres::{IsolationLevel, Transaction};
 
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReadingThread {
     pub id: i32,
     pub status: String,
     pub title: String,
 }
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReadingIssue {
     pub id: i32,
     pub thread_id: i32,
@@ -20,14 +20,14 @@ pub struct ReadingIssue {
     pub status: String,
     pub issue_number: String,
 }
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct StoredThreadEligibility {
     pub thread_id: i32,
     pub next_issue_id: Option<i32>,
     pub is_blocked: bool,
     pub queue_position: i32,
 }
-#[derive(Debug, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CoreReadingInputs {
     pub threads: Vec<ReadingThread>,
     pub issues: Vec<ReadingIssue>,

@@ -11,6 +11,7 @@ pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
 pub mod issue_handler;
+pub mod issue_mutation;
 pub mod issue_service;
 pub mod openapi;
 pub mod option_inputs;
@@ -19,7 +20,9 @@ pub mod reading_blocker_projection;
 pub mod reading_boundary;
 pub mod reading_constraints;
 pub mod reading_eligibility;
+pub mod reading_graph;
 pub mod reading_inputs;
+pub mod reading_list;
 pub mod reading_session;
 pub mod roll_exclusions;
 pub mod roll_offer;
@@ -40,7 +43,7 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post, put},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
@@ -277,6 +280,28 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
+        .route(
+            "/api/v2/reading-lists",
+            get(reading_list::list_reading_lists),
+        )
+        .route(
+            "/api/v2/reading-lists",
+            post(reading_list::create_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}",
+            get(reading_list::get_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}",
+            delete(reading_list::delete_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}/reader",
+            get(reading_list::read_reading_list),
+        )
+        .route("/api/v2/reading-graph", get(reading_graph::reading_graph))
+        .route("/api/v2/reading-graph/repairs", post(reading_graph::repair))
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
@@ -294,7 +319,19 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/issues/{issue_id}",
             patch(issue_handler::read_rate_issue),
         )
+        .route(
+            "/api/v2/issues/{issue_id}",
+            delete(issue_mutation::delete_issue),
+        )
         .route("/api/v2/issues/cards", post(issue_handler::issue_cards))
+        .route(
+            "/api/v2/threads/{thread_id}/issues",
+            post(issue_mutation::create_issues),
+        )
+        .route(
+            "/api/v2/threads/{thread_id}/issue-order",
+            put(issue_mutation::reorder_issues),
+        )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

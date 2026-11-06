@@ -328,13 +328,24 @@ pub async fn offer(
     .await?;
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
-    let validated = option_inputs::load_option_inputs(&state, user).await?;
+    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
             "Invalid reading constraints".to_string(),
         )
     })?;
+    if candidates.is_empty() {
+        if let Some(problem) = validated.graph_problem() {
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                format!(
+                    "No healthy series remain while a reading constraint cycle exists. {} Open Reading Graph to repair.",
+                    problem.summary()
+                ),
+            ));
+        }
+    }
 
     let mut pending = crate::dice_api::Pending::new(db::checkout(&state).await?);
     let tx = pending

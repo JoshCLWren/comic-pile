@@ -24,97 +24,6 @@
       ]
     },
     {
-      "method": "GET",
-      "path": "/api/v2/auth/me",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4459,
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/issues/{issue_id}/comicvine",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4623,
-      "consumers": [
-        "frontend/src/services/api-comicvine.ts"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/queue-entries/{thread_id}",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335,
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/reading-boundaries/{thread_id}",
-      "runtime": "python-fastapi",
-      "status": "transitional",
-      "owning_issue": 4335,
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/roll/bootstrap",
-      "runtime": "native-rust",
-      "status": "transitional",
-      "owning_issue": 4335,
-      "consumers": [
-        "frontend/src/services/rollBootstrapApi.ts",
-        "frontend/src/services/protectedRollMutationApi.ts"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/roll/die-state",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4595,
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/roll/eligible-issue-ids",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4595,
-      "consumers": []
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/threads",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4342,
-      "consumers": [
-        "frontend/src/services/api-threads.ts"
-      ]
-    },
-    {
-      "method": "PATCH",
-      "path": "/api/v2/issues/{issue_id}",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4443,
-      "consumers": [
-        "frontend/src/services/nativeRollMutationApi.ts"
-      ]
-    },
-    {
-      "method": "PATCH",
-      "path": "/api/v2/queue-entries/{thread_id}",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4335,
-      "consumers": [
-        "frontend/src/services/api-queue.ts"
-      ]
-    },
-    {
       "method": "POST",
       "path": "/api/v2/auth/forgot-password",
       "runtime": "native-rust",
@@ -138,6 +47,14 @@
     {
       "method": "POST",
       "path": "/api/v2/auth/logout",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4459,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/auth/me",
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
@@ -183,6 +100,56 @@
       "consumers": []
     },
     {
+      "method": "DELETE",
+      "path": "/api/v2/issues/{issue_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/nativeRollMutationApi.ts"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/issues/{issue_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4443,
+      "consumers": [
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/comicvine",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4623,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": []
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/api-queue.ts"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v2/queue-orders",
       "runtime": "native-rust",
@@ -203,6 +170,84 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/v2/reading-boundaries/{thread_id}",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-graph",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-graph/repairs",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-reading-graph.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/reader",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-custom-cbl.ts"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v2/reading-sessions",
       "runtime": "native-rust",
@@ -210,6 +255,17 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/bootstrap",
+      "runtime": "native-rust",
+      "status": "transitional",
+      "owning_issue": 4335,
+      "consumers": [
+        "frontend/src/services/rollBootstrapApi.ts",
+        "frontend/src/services/protectedRollMutationApi.ts"
       ]
     },
     {
@@ -221,6 +277,22 @@
       "consumers": [
         "frontend/src/services/api-roll.ts"
       ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/die-state",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4595,
+      "consumers": []
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/eligible-issue-ids",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4595,
+      "consumers": []
     },
     {
       "method": "POST",
@@ -240,6 +312,36 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/threads",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4342,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/threads/{thread_id}/issue-order",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}/issues",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
       ]
     }
   ],

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { ReadingGraphProblemCard } from './ReadingGraphProblemCard'
 import { Link } from 'react-router-dom'
 import { customCBLApi } from '../services/api-custom-cbl'
 import { queryKeys } from '../query/queryKeys'
@@ -21,6 +22,7 @@ export function ReadingListReader({ listId, backTo }: { listId: number; backTo?:
   if (query.isError) return <div role="alert"><p>Unable to load this Reading List.</p><button type="button" onClick={() => void query.refetch()}>Retry list</button></div>
   const view = query.data
   return <section aria-label={`Read ${view.name}`} className="space-y-3">
+    <ReadingGraphProblemCard />
     <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>
     {view.execution_mode === 'legacy' && <p className="text-sm text-[var(--theme-text-muted)]">Reading List execution is not active yet. Saved modes and gates do not change current Roll availability.</p>}
     <CblReadingListFinder

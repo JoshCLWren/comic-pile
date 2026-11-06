@@ -100,13 +100,13 @@ export interface CustomCBLApplyResult extends ContinuityPlan {
  */
 export function createCustomCBLApi(client: HttpClient) {
   return {
-    getReader: (listId: number) => client.get<ReadingListReader>(`/v1/custom-cbls/${listId}/reader`),
-    list: () => client.get<CustomCBLListItem[]>('/v1/custom-cbls'),
-    get: (listId: number) => client.get<CustomCBL>(`/v1/custom-cbls/${listId}`),
-    create: (payload: CustomCBLWrite) => client.post<CustomCBL>('/v1/custom-cbls', payload),
+    getReader: (listId: number) => client.get<ReadingListReader>(`/v2/reading-lists/${listId}/reader`),
+    list: () => client.get<CustomCBLListItem[]>('/v2/reading-lists'),
+    get: (listId: number) => client.get<CustomCBL>(`/v2/reading-lists/${listId}`),
+    create: (payload: CustomCBLWrite) => client.post<CustomCBL>('/v2/reading-lists', payload),
     update: (listId: number, payload: CustomCBLWrite) =>
       client.put<CustomCBL>(`/v1/custom-cbls/${listId}`, payload),
-    delete: (listId: number) => client.delete<void>(`/v1/custom-cbls/${listId}`),
+    delete: (listId: number) => client.delete<void>(`/v2/reading-lists/${listId}`),
     searchIssues: (query: string, limit = 30) =>
       client.get<CustomCBLIssueSearchResult[]>('/v1/custom-cbls/issue-search', {
         params: { q: query, limit },

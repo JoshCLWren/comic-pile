@@ -906,3 +906,13 @@ async function invalidateReadingEligibility(client: QueryClient, includeAuthorin
 export async function invalidateAfterReaderProgress(client: QueryClient): Promise<void> {
   await invalidateReadingEligibility(client, true)
 }
+
+/** Refresh every surface whose eligibility changed after an owner repair. */
+export async function invalidateAfterReadingGraphRepair(
+  client: QueryClient,
+): Promise<void> {
+  await Promise.all([
+    client.invalidateQueries({ queryKey: queryKeys.readingGraph.all }),
+    invalidateReadingEligibility(client, true),
+  ])
+}

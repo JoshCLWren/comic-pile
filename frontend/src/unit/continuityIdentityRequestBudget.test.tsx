@@ -151,10 +151,10 @@ function responseFor(method: string, path: string, query: CanonicalQuery) {
     return { threads: [], next_page_token: null, total: 0 }
   }
   if (path === '/api/v1/reading-order-groups/') return []
-  if (path === '/api/v1/custom-cbls') {
+  if (path === '/api/v2/reading-lists') {
     return [{ id: 7, name: 'List Seven', description: null, mode: 'strict', issue_count: 0, updated_at: '2026-08-12T00:00:00Z' }]
   }
-  if (/^\/api\/v1\/custom-cbls\/\d+$/.test(path)) {
+  if (/^\/api\/v2\/reading-lists\/\d+$/.test(path)) {
     return {
       id: Number(path.split('/')[4]),
       name: 'List Seven',
@@ -198,8 +198,8 @@ const PLAN_READER = GET('/api/v1/continuity-plans/7/reader')
 const PLAN_DETAIL = GET('/api/v1/continuity-plans/7')
 const PLAN_TAGS = GET('/api/v1/tags/effective/plan/7/')
 const TAGS_CATALOG = GET('/api/v1/tags/')
-const CUSTOM_LISTS = GET('/api/v1/custom-cbls')
-const CUSTOM_LIST_SEVEN = GET('/api/v1/custom-cbls/7')
+const CUSTOM_LISTS = GET('/api/v2/reading-lists')
+const CUSTOM_LIST_SEVEN = GET('/api/v2/reading-lists/7')
 const INBOX_FIRST_PAGE = GET('/api/v1/identity-inbox', { offset: 0, limit: 20 })
 const INBOX_SECOND_PAGE = GET('/api/v1/identity-inbox', { offset: 20, limit: 20 })
 const INBOX_STATUS_PROBE = GET('/api/v1/identity-inbox', { offset: 0, limit: 1 })

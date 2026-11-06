@@ -16,6 +16,7 @@ import ExcludedThreadsSection from './ExcludedThreadsSection'
 import { QueueControls } from './QueueControls'
 import { QueueList } from './QueueList'
 import { QueueBoundaryNotice } from './QueueBoundaryNotice'
+import { ReadingGraphProblemCard } from '../../components/ReadingGraphProblemCard'
 import { QueueModals } from './QueueModals'
 import DeleteThreadDialog from './DeleteThreadDialog'
 import RemoveThreadDialog from './RemoveThreadDialog'
@@ -187,7 +188,6 @@ export default function QueuePage() {
   if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
-
   return (
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
@@ -218,6 +218,7 @@ export default function QueuePage() {
         )}
 
         <QueueBoundaryNotice isError={boundaryError} onRetry={retryBoundaries} />
+        <ReadingGraphProblemCard />
 
         <QueueList
           activeThreads={activeThreads}

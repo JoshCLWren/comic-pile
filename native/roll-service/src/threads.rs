@@ -276,7 +276,7 @@ pub async fn list_threads(
     let mut preauthenticated = None;
     if option_e {
         let user = crate::auth::authenticate_claims(&state, &claims).await?;
-        let validated = option_inputs::load_option_inputs(&state, user).await?;
+        let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
         option_e_state = Some(OptionEProjection::build(&validated)?);
         preauthenticated = Some(user.id());
     }
@@ -685,6 +685,27 @@ impl OptionEProjection {
         for (thread_id, gates) in &self.gates {
             let mut thread_reasons = Vec::new();
             for gate in gates {
+                if gate.kind == "reading_cycle" {
+                    let names: Vec<String> = gate
+                        .issue_ids
+                        .iter()
+                        .filter_map(|issue_id| {
+                            Some(format!(
+                                "{} #{}",
+                                self.thread_titles.get(self.issue_threads.get(issue_id)?)?,
+                                self.issue_numbers.get(issue_id)?
+                            ))
+                        })
+                        .take(3)
+                        .collect();
+                    let detail = if names.is_empty() {
+                        "Reading constraint cycle".to_string()
+                    } else {
+                        format!("Reading constraint cycle involving {}", names.join(", "))
+                    };
+                    thread_reasons.push(format!("{detail}. Open Reading Graph to repair."));
+                    continue;
+                }
                 let origin = blocker_origin(gate, &list_names);
                 for issue_id in &gate.issue_ids {
                     let label = match (

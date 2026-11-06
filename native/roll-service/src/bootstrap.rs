@@ -965,7 +965,7 @@ pub async fn bootstrap_v2(
         SessionPolicy::default(),
     )
     .await?;
-    let validated = option_inputs::load_option_inputs(&state, user).await?;
+    let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let session = &active.session;
     let candidates = validated.eligible_frontiers().map_err(|_| {
         ApiError(

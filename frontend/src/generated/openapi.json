@@ -5542,6 +5542,31 @@
         "title": "CoverageInfo",
         "type": "object"
       },
+      "CreateIssuesRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "append_to_end": {
+            "description": "Explicit \"At the end\" choice. Distinct from an omitted anchor.",
+            "type": "boolean"
+          },
+          "insert_after_issue_id": {
+            "description": "Explicit anchor. Omit for natural placement.",
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_range": {
+            "description": "Reader-facing range, e.g. `1-3, 5` or `Annual 1`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_range"
+        ],
+        "type": "object"
+      },
       "Creator": {
         "description": "An issue's credited creator with stable provider identity and merged roles.",
         "properties": {
@@ -12495,6 +12520,47 @@
         "title": "IssueMoveRequest",
         "type": "object"
       },
+      "IssueMutationItem": {
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "thread_id",
+          "issue_number",
+          "status"
+        ],
+        "type": "object"
+      },
+      "IssueOrderRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_ids"
+        ],
+        "type": "object"
+      },
       "IssueOrderValidationResponse": {
         "description": "Schema for reporting in-thread dependency ordering conflicts.",
         "properties": {
@@ -13176,6 +13242,36 @@
         ],
         "type": "object"
       },
+      "NativeIssueListResponse": {
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/IssueMutationItem"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "page_size": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "type": "object"
+      },
       "NativePasswordResetResponse": {
         "description": "Safe acknowledgement returned whether or not an account exists.",
         "properties": {
@@ -13337,6 +13433,93 @@
         },
         "required": [
           "issue"
+        ],
+        "type": "object"
+      },
+      "NativeReadingListEntryIntent": {
+        "properties": {
+          "gate": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gate"
+        ],
+        "type": "object"
+      },
+      "NativeReadingListReaderEntry": {
+        "properties": {
+          "availability": {
+            "type": "string"
+          },
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "explanation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ReadingListBlockerExplanation"
+              }
+            ]
+          },
+          "gate": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids",
+          "availability"
         ],
         "type": "object"
       },
@@ -15424,6 +15607,25 @@
         "title": "ReadingGraphChoiceEffect",
         "type": "object"
       },
+      "ReadingGraphCycle": {
+        "description": "One cycle with its concrete edge path.",
+        "properties": {
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphEdge"
+            },
+            "type": "array"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "message",
+          "edges"
+        ],
+        "type": "object"
+      },
       "ReadingGraphCycleError": {
         "description": "A cycle or invalid relationship rejected before any write.",
         "properties": {
@@ -15441,6 +15643,76 @@
           "message"
         ],
         "title": "ReadingGraphCycleError",
+        "type": "object"
+      },
+      "ReadingGraphEdge": {
+        "description": "One stored requirement that participates in a cycle.",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "list_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "origin": {
+            "type": "string"
+          },
+          "prerequisite_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source": {
+            "$ref": "#/components/schemas/ReadingGraphIssue"
+          },
+          "target": {
+            "$ref": "#/components/schemas/ReadingGraphIssue"
+          }
+        },
+        "required": [
+          "source",
+          "target",
+          "origin",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "ReadingGraphIssue": {
+        "description": "One issue endpoint as a reader sees it, never a bare database identifier.",
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_title": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue_id",
+          "issue_number",
+          "thread_id",
+          "series_title"
+        ],
         "type": "object"
       },
       "ReadingGraphIssueReference": {
@@ -15483,6 +15755,27 @@
           "issue_number"
         ],
         "title": "ReadingGraphIssueReference",
+        "type": "object"
+      },
+      "ReadingGraphList": {
+        "description": "One affected Reading List.",
+        "properties": {
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "name",
+          "mode"
+        ],
         "type": "object"
       },
       "ReadingGraphOverlap": {
@@ -15670,6 +15963,165 @@
         "title": "ReadingGraphPreviewRequest",
         "type": "object"
       },
+      "ReadingGraphRepairOption": {
+        "description": "One owner-scoped repair the reader can preview and apply.",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "prerequisite_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action",
+          "label",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "ReadingGraphRepairRequest": {
+        "additionalProperties": false,
+        "description": "Flat wire request so a preview never depends on tagged-enum deserialization.",
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "confirm": {
+            "description": "Preview by default. A repair applies only when this is explicitly true.",
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "list_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "prerequisite_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "ReadingGraphRepairResponse": {
+        "properties": {
+          "applied": {
+            "type": "boolean"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/ReadingGraphResponse"
+          },
+          "removed": {
+            "type": "string"
+          },
+          "status_after": {
+            "type": "string"
+          },
+          "status_before": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "applied",
+          "status_before",
+          "status_after",
+          "removed",
+          "graph"
+        ],
+        "type": "object"
+      },
+      "ReadingGraphResponse": {
+        "description": "Complete graph state. `status` is `ok`, `cycle`, or `invalid`.",
+        "properties": {
+          "affected_lists": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphList"
+            },
+            "type": "array"
+          },
+          "affected_threads": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphThread"
+            },
+            "type": "array"
+          },
+          "cycles": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphCycle"
+            },
+            "type": "array"
+          },
+          "cyclic_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "repairs": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingGraphRepairOption"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          },
+          "unresolved_reference_count": {
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "cycles",
+          "cyclic_issue_ids",
+          "affected_lists",
+          "affected_threads",
+          "repairs",
+          "unresolved_reference_count"
+        ],
+        "type": "object"
+      },
       "ReadingGraphSeriesNode": {
         "description": "One series node with its prospective eligibility totals.",
         "properties": {
@@ -15773,6 +16225,189 @@
         "title": "ReadingGraphSeriesReference",
         "type": "object"
       },
+      "ReadingGraphThread": {
+        "description": "One affected Thread.",
+        "properties": {
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "title"
+        ],
+        "type": "object"
+      },
+      "ReadingList": {
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListEntry"
+            },
+            "type": "array"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "name",
+          "mode",
+          "issue_count",
+          "created_at",
+          "updated_at",
+          "entries"
+        ],
+        "type": "object"
+      },
+      "ReadingListBlockerExplanation": {
+        "properties": {
+          "blocking_dependencies": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingListDependency"
+            },
+            "type": "array"
+          },
+          "blocking_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "is_blocked": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "is_blocked",
+          "blocking_reasons",
+          "blocking_dependencies"
+        ],
+        "type": "object"
+      },
+      "ReadingListDependency": {
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "label"
+        ],
+        "type": "object"
+      },
+      "ReadingListEntry": {
+        "properties": {
+          "checkpoint_target_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "gate": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_checkpoint": {
+            "type": "boolean"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "skipped": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "position",
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status",
+          "is_checkpoint",
+          "gate",
+          "skipped",
+          "checkpoint_target_issue_ids"
+        ],
+        "type": "object"
+      },
       "ReadingListEntryIntent": {
         "description": "Explicit positional intent for one stable member Issue.",
         "properties": {
@@ -15844,6 +16479,37 @@
           "after_issue_names"
         ],
         "title": "ReadingListPredecessorChange",
+        "type": "object"
+      },
+      "ReadingListReader": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/NativeReadingListReaderEntry"
+            },
+            "type": "array"
+          },
+          "execution_mode": {
+            "type": "string"
+          },
+          "list_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "list_id",
+          "name",
+          "mode",
+          "execution_mode",
+          "entries"
+        ],
         "type": "object"
       },
       "ReadingListReaderEntry": {
@@ -15983,6 +16649,116 @@
           "execution_mode"
         ],
         "title": "ReadingListReaderResponse",
+        "type": "object"
+      },
+      "ReadingListSummary": {
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "mode",
+          "issue_count",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "ReadingListWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "checkpoint_targets": {
+            "additionalProperties": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "confirmed_predecessor_changes": {
+            "description": "Creation has no predecessor changes to confirm; only update accepts\nthem. A present value is rejected exactly like the Python create path."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "entry_intents": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NativeReadingListEntryIntent"
+            },
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "issue_ids"
+        ],
         "type": "object"
       },
       "ReadingModeResponse": {
@@ -35654,6 +36430,48 @@
       }
     },
     "/api/v2/issues/{issue_id}": {
+      "delete": {
+        "description": "Delete one owned Issue only when no Reading List, prerequisite, plan or reading-history row references it. A referenced Issue is refused before any write with the owning names.",
+        "operationId": "delete_issue_documentation",
+        "parameters": [
+          {
+            "description": "Owned Issue identifier",
+            "in": "path",
+            "name": "issue_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Issue deleted and positions compacted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Issue is referenced; nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted issue delete resource.",
+        "tags": [
+          "issues"
+        ]
+      },
       "patch": {
         "operationId": "issue_read_rate_documentation",
         "parameters": [
@@ -36005,6 +36823,308 @@
         "tags": [
           "reading-boundaries-v2",
           "reading-boundaries-v2"
+        ]
+      }
+    },
+    "/api/v2/reading-graph": {
+      "get": {
+        "description": "Owner-scoped projection of the complete Option E graph. A persisted cycle is isolated to its affected Threads and Reading Lists; every cycle edge names its series, issue and stored origin.",
+        "operationId": "reading_graph_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphResponse"
+                }
+              }
+            },
+            "description": "Graph status, cycles and safe repair options"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid reading snapshot"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted reading-graph read.",
+        "tags": [
+          "reading-graph"
+        ]
+      }
+    },
+    "/api/v2/reading-graph/repairs": {
+      "post": {
+        "description": "Preview (default) or apply exactly one owner-scoped constraint repair. Deleting a list, list entry or reader prerequisite removes only that effective constraint and preserves Issues, reads, ratings and history.",
+        "operationId": "repair_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingGraphRepairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingGraphRepairResponse"
+                }
+              }
+            },
+            "description": "Repair preview or applied result with the remaining graph"
+          },
+          "400": {
+            "description": "Invalid repair request"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Constraint not found"
+          },
+          "500": {
+            "description": "Invalid reading snapshot"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted graph repair action.",
+        "tags": [
+          "reading-graph"
+        ]
+      }
+    },
+    "/api/v2/reading-lists": {
+      "get": {
+        "description": "Owner-scoped compact Reading List rows ordered by name.",
+        "operationId": "list_reading_lists_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingListSummary"
+                  },
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Owned Reading Lists"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the Reading List collection.",
+        "tags": [
+          "reading-lists"
+        ]
+      },
+      "post": {
+        "operationId": "create_reading_list_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingListWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            },
+            "description": "Created Reading List"
+          },
+          "400": {
+            "description": "Invalid list metadata or membership"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "409": {
+            "description": "Projected reading graph would cycle; nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for Reading List creation.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}": {
+      "delete": {
+        "operationId": "delete_reading_list_documentation",
+        "parameters": [
+          {
+            "description": "Owned Reading List identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Reading List deleted; entries cascade"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for Reading List deletion.",
+        "tags": [
+          "reading-lists"
+        ]
+      },
+      "get": {
+        "operationId": "get_reading_list_documentation",
+        "parameters": [
+          {
+            "description": "Owned Reading List identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            },
+            "description": "Reading List with ordered entries"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for one Reading List.",
+        "tags": [
+          "reading-lists"
+        ]
+      }
+    },
+    "/api/v2/reading-lists/{list_id}/reader": {
+      "get": {
+        "operationId": "read_reading_list_documentation",
+        "parameters": [
+          {
+            "description": "Owned Reading List identifier",
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListReader"
+                }
+              }
+            },
+            "description": "Reader with canonical availability"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Reading List not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the live Reading List reader.",
+        "tags": [
+          "reading-lists"
         ]
       }
     },
@@ -36401,6 +37521,130 @@
         "summary": "Documentation-only operation used to emit the generated OpenAPI contract.",
         "tags": [
           "threads"
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/issue-order": {
+      "put": {
+        "description": "Replace the complete issue order atomically. The projected Option E graph is validated before commit, so a manual reorder cannot introduce a strict-list/series-order cycle.",
+        "operationId": "issue_order_documentation",
+        "parameters": [
+          {
+            "description": "Owned Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueOrderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Issue order replaced"
+          },
+          "400": {
+            "description": "issue_ids must contain every thread issue exactly once"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "409": {
+            "description": "Projected reading graph would cycle; nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted issue-order resource.",
+        "tags": [
+          "issues"
+        ]
+      }
+    },
+    "/api/v2/threads/{thread_id}/issues": {
+      "post": {
+        "description": "Create issue labels atomically. Natural numeric placement never re-sorts previously persisted issues; a non-monotonic series appends without changing existing relative order. The complete reading graph is validated before commit.",
+        "operationId": "create_issues_documentation",
+        "parameters": [
+          {
+            "description": "Owned Thread identifier",
+            "in": "path",
+            "name": "thread_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateIssuesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeIssueListResponse"
+                }
+              }
+            },
+            "description": "Created issues"
+          },
+          "400": {
+            "description": "Invalid issue range or no new issues"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "409": {
+            "description": "Projected reading graph would cycle; nothing was changed"
+          },
+          "422": {
+            "description": "Invalid reading snapshot"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted issue-create resource.",
+        "tags": [
+          "issues"
         ]
       }
     },

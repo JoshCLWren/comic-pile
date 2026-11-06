@@ -31,13 +31,44 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface CreateIssuesRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['CreateIssuesRequest']
+}
+
+export type CreateIssuesResponse = components['schemas']['NativeIssueListResponse']
+
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
 
 export type CreateQueueOrderResponse = components['schemas']['QueueOrderResponse']
 
+export interface CreateReadingListRequest {
+  body: components['schemas']['ReadingListWrite']
+}
+
+export type CreateReadingListResponse = components['schemas']['ReadingList']
+
 export type CsrfResponse = components['schemas']['CsrfResponse']
+
+export interface DeleteIssueRequest {
+  path: {
+    issue_id: number
+  }
+}
+
+export type DeleteIssueResponse = void
+
+export interface DeleteReadingListRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type DeleteReadingListResponse = void
 
 export type DieStateResponse = components['schemas']['RollDieStateResponse']
 
@@ -63,6 +94,14 @@ export interface GetQueueEntryRequest {
 
 export type GetQueueEntryResponse = components['schemas']['QueueEntryResponse']
 
+export interface GetReadingListRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type GetReadingListResponse = components['schemas']['ReadingList']
+
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
 }
@@ -83,6 +122,15 @@ export interface IssueIntelligenceDocsRequest {
 
 export type IssueIntelligenceDocsResponse = null | components['schemas']['IssueIntelligence']
 
+export interface IssueOrderRequest {
+  path: {
+    thread_id: number
+  }
+  body: components['schemas']['IssueOrderRequest']
+}
+
+export type IssueOrderResponse = void
+
 export interface IssueReadRateRequest {
   path: {
     issue_id: number
@@ -91,6 +139,8 @@ export interface IssueReadRateRequest {
 }
 
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+
+export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
 export interface ListThreadsRequest {
   query?: {
@@ -127,11 +177,21 @@ export interface OfferRequest {
 
 export type OfferResponse = components['schemas']['RollOfferResponse']
 
+export interface ReadReadingListRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type ReadReadingListResponse = components['schemas']['ReadingListReader']
+
 export interface ReadingBoundaryBatchRequest {
   body: components['schemas']['NativeReadingBoundaryBatchRequest']
 }
 
 export type ReadingBoundaryBatchResponse = components['schemas']['NativeReadingBoundaryBatchResponseV2']
+
+export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
 export interface RefreshRequest {
   body?: null | components['schemas']['NativeRefreshTokenRequest']
@@ -144,6 +204,12 @@ export interface RegisterRequest {
 }
 
 export type RegisterResponse = components['schemas']['NativeTokenResponse']
+
+export interface RepairRequest {
+  body: components['schemas']['ReadingGraphRepairRequest']
+}
+
+export type RepairResponse = components['schemas']['ReadingGraphRepairResponse']
 
 export interface ResetRequest {
   body: components['schemas']['ResetDiceRequest']
@@ -168,16 +234,23 @@ export type UpdateQueueEntryResponse = components['schemas']['QueueEntryResponse
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
+  createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   csrf(): Promise<CsrfResponse>
+  deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
+  deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   dieState(): Promise<DieStateResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
+  getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
+  issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
+  listReadingLists(): Promise<ListReadingListsResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
@@ -185,9 +258,12 @@ export interface NativeV2Client {
   me(): Promise<MeResponse>
   metrics(): Promise<MetricsResponse>
   offer(args: OfferRequest): Promise<OfferResponse>
+  readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
+  readingGraph(): Promise<ReadingGraphResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
+  repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
@@ -201,14 +277,36 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    createIssues(args: CreateIssuesRequest) {
+      return client.post<CreateIssuesResponse, CreateIssuesRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        args.body,
+      )
+    },
     createQueueOrder(args: CreateQueueOrderRequest) {
       return client.post<CreateQueueOrderResponse, CreateQueueOrderRequest['body']>(
         "/v2/queue-orders",
         args.body,
       )
     },
+    createReadingList(args: CreateReadingListRequest) {
+      return client.post<CreateReadingListResponse, CreateReadingListRequest['body']>(
+        "/v2/reading-lists",
+        args.body,
+      )
+    },
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
+    },
+    deleteIssue(args: DeleteIssueRequest) {
+      return client.delete<DeleteIssueResponse>(
+        `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
+    },
+    deleteReadingList(args: DeleteReadingListRequest) {
+      return client.delete<DeleteReadingListResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
+      )
     },
     dieState() {
       return client.get<DieStateResponse>("/v2/roll/die-state")
@@ -230,6 +328,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/queue-entries/${encodeURIComponent(String(args.path.thread_id))}`,
       )
     },
+    getReadingList(args: GetReadingListRequest) {
+      return client.get<GetReadingListResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
+      )
+    },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(
         "/v2/reading-sessions",
@@ -247,11 +350,20 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}/comicvine`,
       )
     },
+    issueOrder(args: IssueOrderRequest) {
+      return client.put<IssueOrderResponse, IssueOrderRequest['body']>(
+        `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-order`,
+        args.body,
+      )
+    },
     issueReadRate(args: IssueReadRateRequest) {
       return client.patch<IssueReadRateResponse, IssueReadRateRequest['body']>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
         args.body,
       )
+    },
+    listReadingLists() {
+      return client.get<ListReadingListsResponse>("/v2/reading-lists")
     },
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(
@@ -286,11 +398,19 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    readReadingList(args: ReadReadingListRequest) {
+      return client.get<ReadReadingListResponse>(
+        `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}/reader`,
+      )
+    },
     readingBoundaryBatch(args: ReadingBoundaryBatchRequest) {
       return client.post<ReadingBoundaryBatchResponse, ReadingBoundaryBatchRequest['body']>(
         "/v2/reading-boundaries",
         args.body,
       )
+    },
+    readingGraph() {
+      return client.get<ReadingGraphResponse>("/v2/reading-graph")
     },
     refresh(args: RefreshRequest = {}) {
       return client.post<RefreshResponse, RefreshRequest['body']>(
@@ -301,6 +421,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     register(args: RegisterRequest) {
       return client.post<RegisterResponse, RegisterRequest['body']>(
         "/v2/auth/register",
+        args.body,
+      )
+    },
+    repair(args: RepairRequest) {
+      return client.post<RepairResponse, RepairRequest['body']>(
+        "/v2/reading-graph/repairs",
         args.body,
       )
     },

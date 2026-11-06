@@ -13,6 +13,7 @@
  * guidance is unavailable.
  */
 
+import type { components } from '../generated/openapi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /** Exact Comic Vine series/volume identity plus its reader-facing label parts. */
@@ -141,3 +142,32 @@ export function createReadingGraphApi(client: HttpClient) {
 }
 
 export const readingGraphApi = createReadingGraphApi(defaultHttpClient())
+
+export type ReadingGraphProblemIssue = components['schemas']['ReadingGraphIssue']
+export type ReadingGraphProblemEdge = components['schemas']['ReadingGraphEdge']
+export type ReadingGraphProblemCycle = components['schemas']['ReadingGraphCycle']
+export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
+export type ReadingGraphRepairOption = components['schemas']['ReadingGraphRepairOption']
+export type ReadingGraphRepairRequest = components['schemas']['ReadingGraphRepairRequest']
+export type ReadingGraphRepairResponse = components['schemas']['ReadingGraphRepairResponse']
+
+export function createReadingGraphProblemApi(client: HttpClient) {
+  return {
+    /**
+     * Read the canonical owner-scoped graph, including any persisted cycle.
+     *
+     * @returns The graph status, cycle paths, and safe repair options.
+     */
+    getGraph: () => client.get<ReadingGraphResponse>('/v2/reading-graph'),
+    /**
+     * Preview (default) or apply one constraint repair.
+     *
+     * @param request - The selected server-offered repair.
+     * @returns The remaining graph and whether the repair was applied.
+     */
+    repair: (request: ReadingGraphRepairRequest) =>
+      client.post<ReadingGraphRepairResponse>('/v2/reading-graph/repairs', request),
+  }
+}
+
+export const readingGraphProblemApi = createReadingGraphProblemApi(defaultHttpClient())

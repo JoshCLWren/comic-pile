@@ -686,7 +686,7 @@ async fn get_reading_boundary_explanations(
         ));
     }
 
-    let validated = option_inputs::load_option_inputs(state, user).await?;
+    let validated = option_inputs::load_option_inputs_contained(state, user).await?;
     let snapshot = build_eligibility_snapshot(&validated, &labels, &requested)?;
 
     let mut threads = HashMap::new();

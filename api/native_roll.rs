@@ -4,7 +4,7 @@ use axum::{
     extract::Request,
     http::{Extensions, HeaderValue, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post, put},
     Json, Router,
 };
 use comicpile_roll_service::{
@@ -177,6 +177,22 @@ fn app() -> Router {
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
+        .route("/api/v2/reading-graph", get(native_dispatch))
+        .route("/api/v2/reading-graph/repairs", post(native_dispatch))
+        .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
+        .route(
+            "/api/v2/threads/{thread_id}/issue-order",
+            put(native_dispatch),
+        )
+        .route("/api/v2/issues/{issue_id}", delete(native_dispatch))
+        .route("/api/v2/reading-lists", get(native_dispatch))
+        .route("/api/v2/reading-lists", post(native_dispatch))
+        .route("/api/v2/reading-lists/{list_id}", get(native_dispatch))
+        .route("/api/v2/reading-lists/{list_id}", delete(native_dispatch))
+        .route(
+            "/api/v2/reading-lists/{list_id}/reader",
+            get(native_dispatch),
+        )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))

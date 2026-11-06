@@ -36,7 +36,8 @@ export interface SetCurrentIssueResponse {
 
 interface CreateIssuesPayload {
   issue_range: string
-  insert_after_issue_id?: number | null
+  insert_after_issue_id?: number
+  append_to_end?: boolean
 }
 
 /** Query parameters accepted by the thread issue list endpoint. */
@@ -95,10 +96,15 @@ export function createIssuesApi(client: HttpClient) {
       }
 
       if (options && 'insert_after_issue_id' in options) {
-        payload.insert_after_issue_id = options.insert_after_issue_id ?? null
+        if (options.insert_after_issue_id === null) {
+          // Explicit "At the end" is distinct from an omitted natural anchor.
+          payload.append_to_end = true
+        } else {
+          payload.insert_after_issue_id = options.insert_after_issue_id
+        }
       }
 
-      return client.post(`/v1/threads/${threadId}/issues`, payload)
+      return client.post(`/v2/threads/${threadId}/issues`, payload)
     },
 
     /**
@@ -153,7 +159,7 @@ export function createIssuesApi(client: HttpClient) {
      * @param issueIds - Full ordered list of issue IDs
      */
     reorder: async (threadId: number, issueIds: number[]): Promise<void> => {
-      await client.post<void, { issue_ids: number[] }>(`/v1/threads/${threadId}/issues:reorder`, {
+      await client.put<void, { issue_ids: number[] }>(`/v2/threads/${threadId}/issue-order`, {
         issue_ids: issueIds,
       })
     },
@@ -163,7 +169,7 @@ export function createIssuesApi(client: HttpClient) {
      * @param issueId - The issue ID to delete
      */
     delete: async (issueId: number): Promise<void> => {
-      await client.delete<void>(`/v1/issues/${issueId}`)
+      await client.delete<void>(`/v2/issues/${issueId}`)
     },
 
     /**
