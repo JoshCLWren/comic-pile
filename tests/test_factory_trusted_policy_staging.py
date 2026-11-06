@@ -56,6 +56,47 @@ def test_dependency_merge_gate_modules_are_staged_from_trusted_main() -> None:
         staging = content.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
         for dep in (
             ".github/scripts/factory_post_merge_closure.py",
+            ".github/scripts/factory_implementation_delivery.py",
             "scripts/factory_eligibility.py",
         ):
             assert f"cp {dep} " in staging, (name, dep)
+
+
+def test_staged_review_controller_starts_without_source_checkout(tmp_path: Path) -> None:
+    """The staged review controller must load its implementation-delivery helper.
+
+    Regression for #4104 (Greptile PR #4050, 6 open P1s): before #4050 the
+    trusted staging copied the controller without
+    ``factory_implementation_delivery.py``, so the staged controller died at
+    import with ``ModuleNotFoundError`` and no factory command could start.
+    Copy exactly the bundle both worker wrappers stage and prove the staged
+    controller starts in isolation from the source checkout.
+    """
+    staged = tmp_path / "trusted"
+    staged.mkdir()
+    bundle = (
+        ".github/scripts/factory-review-controller.py",
+        ".github/scripts/factory_review_policy.py",
+        ".github/scripts/factory_issue_acceptance.py",
+        ".github/scripts/factory_implementation_delivery.py",
+        ".github/scripts/factory_post_merge_closure.py",
+        ".github/scripts/factory_roster.py",
+        ".github/scripts/factory_work_policy.py",
+        ".github/scripts/factory_fork_control.py",
+        "scripts/factory_eligibility.py",
+        ".github/free-model-factories.tsv",
+    )
+    for relative in bundle:
+        shutil.copy2(ROOT / relative, staged / Path(relative).name)
+
+    result = subprocess.run(
+        [sys.executable, "-I", str(staged / "factory-review-controller.py"), "--help"],
+        cwd=tmp_path,
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "review" in result.stdout
+    assert "gates" in result.stdout
