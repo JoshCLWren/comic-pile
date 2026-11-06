@@ -4,7 +4,7 @@ import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
-import { useExcludedThreads, useMoveToPosition, useQueueThreads, useRestoreThread, useShuffleQueue } from '../../hooks/useQueue'
+import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
 import { useRollPendingSync } from './useRollPendingSync'
@@ -26,6 +26,7 @@ import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
 import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueListLoading } from './useQueueListLoading'
+import { useQueueRestore } from './useQueueRestore'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -68,22 +69,7 @@ export default function QueuePage() {
   const shuffleQueueMutation = useShuffleQueue()
   // Excluded rows have a separate bounded read because the active queue omits them.
   const { threads: excludedThreads } = useExcludedThreads(true)
-  const restoreMutation = useRestoreThread()
-  const [restoreError, setRestoreError] = useState<string | null>(null)
-
-  const handleRestore = useCallback(
-    async (threadId: number) => {
-      setRestoreError(null)
-      try {
-        await restoreMutation.mutate(threadId)
-      } catch {
-        setRestoreError(
-          'Could not restore that series to the queue. Check your connection and try again.',
-        )
-      }
-    },
-    [restoreMutation],
-  )
+  const { handleRestore, restoreError, isRestoring } = useQueueRestore()
 
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
@@ -239,7 +225,7 @@ export default function QueuePage() {
 
         <ExcludedThreadsSection
           threads={excludedThreads}
-          isRestoring={restoreMutation.isPending}
+          isRestoring={isRestoring}
           error={restoreError}
           onRestore={handleRestore}
         />
