@@ -2083,11 +2083,7 @@ export interface paths {
          */
         put: operations["update_custom_cbl_api_v1_custom_cbls__list_id__put"];
         post?: never;
-        /**
-         * Delete Custom Cbl
-         * @description Delete one user-owned custom CBL without touching its comics or Reading Plans.
-         */
-        delete: operations["delete_custom_cbl_api_v1_custom_cbls__list_id__delete"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3212,22 +3208,7 @@ export interface paths {
         get: operations["get_issue_api_v1_issues__issue_id__get"];
         put?: never;
         post?: never;
-        /**
-         * Delete Issue
-         * @description Delete one issue, compact later positions, and update thread issue metadata.
-         *
-         *     Args:
-         *         issue_id: The issue ID to delete.
-         *         current_user: The authenticated user requesting the deletion.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         None. The response is HTTP 204 on success.
-         *
-         *     Raises:
-         *         HTTPException: If the issue does not exist or is not owned by the user.
-         */
-        delete: operations["delete_issue_api_v1_issues__issue_id__delete"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -19996,35 +19977,6 @@ export interface operations {
             };
         };
     };
-    delete_custom_cbl_api_v1_custom_cbls__list_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                list_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     export_custom_cbl_api_v1_custom_cbls__list_id__export_get: {
         parameters: {
             query?: never;
@@ -21430,35 +21382,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["IssueResponse"];
                 };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_issue_api_v1_issues__issue_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                issue_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             /** @description Validation Error */
             422: {
