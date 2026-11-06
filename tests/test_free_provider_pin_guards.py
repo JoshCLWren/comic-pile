@@ -115,6 +115,40 @@ def test_protected_source_disappearance_fails_committed_pin(validate) -> None:
         _assert_committed_pin(by_worker, lock, "82", source="z-ai", model="glm-4.7-flash")
 
 
+def test_roster_snapshot_guard_detects_stale_pins(validate, tmp_path: Path) -> None:
+    """A stale or altered snapshot cannot pass the pre-commit roster validator."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    lock_path = Path('.github/factory-expected-workers.json')
+    snapshot_path = Path('.github/factory-roster-snapshot.json')
+    validate.assert_roster_snapshot_matches(
+        rows, lock_path=lock_path, snapshot_path=snapshot_path
+    )
+
+    snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    snapshot['pins'][0]['model'] = 'unexpected-model'
+    stale_path = tmp_path / 'stale-snapshot.json'
+    stale_path.write_text(json.dumps(snapshot), encoding='utf-8')
+    with pytest.raises(AssertionError, match='snapshot is stale'):
+        validate.assert_roster_snapshot_matches(
+            rows, lock_path=lock_path, snapshot_path=stale_path
+        )
+
+
+def test_roster_snapshot_guard_detects_stale_lock(validate, tmp_path: Path) -> None:
+    """An altered expected-worker lock cannot be excused by the snapshot."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
+    lock['expected_workers'].remove(int(rows[0]['worker']))
+    stale_lock_path = tmp_path / 'stale-lock.json'
+    stale_lock_path.write_text(json.dumps(lock), encoding='utf-8')
+    with pytest.raises(AssertionError, match='expected-worker lock'):
+        validate.assert_roster_snapshot_matches(
+            rows,
+            lock_path=stale_lock_path,
+            snapshot_path=Path('.github/factory-roster-snapshot.json'),
+        )
+
+
 def test_opencode_free_pins_accept_free_roster_ids(validate) -> None:
     """OpenCode free lanes accept big-pickle, *-free, and muse-spark ids."""
     assert validate.opencode_model_is_free('big-pickle')
