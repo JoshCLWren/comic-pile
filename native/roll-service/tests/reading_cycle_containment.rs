@@ -1317,3 +1317,83 @@ async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
     };
     assert_eq!(event, ("rate".to_string(), Some(4.5)));
 }
+
+#[tokio::test]
+async fn list_update_requires_exact_predecessor_review_and_preserves_plan_reference() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "relink-list-update").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _) = register(&state, "relink-list-update-foreign").await;
+    let other = (other_token.as_str(), other_csrf.as_str());
+
+    let (_superman, su) = seed_thread(&state, owner, "Superman", 1, &["1"]).await;
+    let (_batman, ba) = seed_thread(&state, owner, "Batman", 2, &["1"]).await;
+    let list_id = seed_list(
+        &state, owner, "Reading List under Plan A", "strict", &[su["1"], ba["1"]],
+    ).await;
+    let plan_id = seed_plan(&state, owner, "Plan A", list_id).await;
+    let event_id = mark_read_and_rate(&state, owner, su["1"], Some(4.0)).await;
+    let path = format!("/api/v2/reading-lists/{list_id}");
+    let before = json!({
+        "name": "Reading List under Plan A",
+        "mode": "strict",
+        "issue_ids": [ba["1"], su["1"]],
+    });
+
+    // A second owner cannot use the v2 editor to mutate this list.
+    let (status, foreign) = send(&state, other, "PUT", &path, Some(before.clone())).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign}");
+    let (status, needs_ack) = send(&state, auth, "PUT", &path, Some(before.clone())).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{needs_ack}");
+    assert_eq!(
+        needs_ack["detail"]["code"],
+        "reading_list_predecessor_confirmation_required"
+    );
+    let confirmation = needs_ack["detail"]["predecessor_changes"]
+        .as_array().unwrap().clone();
+    assert_eq!(confirmation.len(), 2);
+
+    // A rejected attempt cannot reorder entries or change the saved source.
+    let (status, unchanged) = send(&state, auth, "GET", &path, None).await;
+    assert_eq!(status, StatusCode::OK, "{unchanged}");
+    assert_eq!(unchanged["entries"][0]["issue_id"], su["1"]);
+    let (status, saved_reader) = send(
+        &state, auth, "GET", &format!("/api/v2/continuity-plans/{plan_id}/reader"), None,
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{saved_reader}");
+    assert_eq!(saved_reader["lanes"][0]["issues"][0]["issue_id"], su["1"]);
+
+    let (status, edited) = send(
+        &state,
+        auth,
+        "PUT",
+        &path,
+        Some(json!({
+            "name": "Reading List under Plan A",
+            "mode": "strict",
+            "issue_ids": [ba["1"], su["1"]],
+            "confirmed_predecessor_changes": confirmation
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{edited}");
+    assert_eq!(edited["entries"][0]["issue_id"], ba["1"]);
+    let (status, reader_after) = send(
+        &state, auth, "GET", &format!("/api/v2/continuity-plans/{plan_id}/reader"), None,
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{reader_after}");
+    assert_eq!(reader_after["lanes"][0]["issues"][0]["issue_id"], ba["1"]);
+
+    let conn = state.pool.get().await.unwrap();
+    let linked_list: i32 = conn.query_one(
+        "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+        &[&plan_id],
+    ).await.unwrap().get(0);
+    assert_eq!(linked_list, list_id);
+    let history_preserved: bool = conn.query_one(
+        "SELECT EXISTS(SELECT 1 FROM events WHERE id=$1 AND issue_id=$2)",
+        &[&event_id, &su["1"]],
+    ).await.unwrap().get(0);
+    assert!(history_preserved);
+}
