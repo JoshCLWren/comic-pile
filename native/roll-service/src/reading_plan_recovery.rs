@@ -383,7 +383,11 @@ mod tests {
             return;
         };
         let _db_guard = crate::test_support::reset_for_test(&state).await;
-        let conn = state.pool.get().await.expect("disposable Postgres connection");
+        let conn = state
+            .pool
+            .get()
+            .await
+            .expect("disposable Postgres connection");
         conn.batch_execute(
             "INSERT INTO users (id, username)
              VALUES (1,'plan-recovery-owner'),(2,'plan-recovery-other');
@@ -454,7 +458,10 @@ mod tests {
             .await
             .unwrap()
             .get(0);
-        assert_eq!(count, 1, "idempotent replay must never duplicate provenance");
+        assert_eq!(
+            count, 1,
+            "idempotent replay must never duplicate provenance"
+        );
 
         let foreign = relink(
             State(state.clone()),
@@ -473,6 +480,9 @@ mod tests {
             .await
             .unwrap()
             .get(0);
-        assert_eq!(count_after, 1, "foreign attempt must leave provenance intact");
+        assert_eq!(
+            count_after, 1,
+            "foreign attempt must leave provenance intact"
+        );
     }
 }
