@@ -542,13 +542,16 @@ pub(crate) async fn ensure_list_unlinked(
     list_id: i32,
 ) -> Result<(), ApiError> {
     let raw_source_path = format!("custom-cbl:{list_id}");
-    let linked_plan = tx.query_opt(
-        "SELECT p.id, p.name FROM reading_plan_sources s
+    let linked_plan = tx
+        .query_opt(
+            "SELECT p.id, p.name FROM reading_plan_sources s
          JOIN continuity_plans p ON p.id=s.plan_id
          WHERE p.user_id=$1 AND (s.custom_cbl_list_id=$2 OR s.raw_source_path=$3)
          ORDER BY p.id LIMIT 1",
-        &[&user_id, &list_id, &raw_source_path],
-    ).await.map_err(db::query_error)?;
+            &[&user_id, &list_id, &raw_source_path],
+        )
+        .await
+        .map_err(db::query_error)?;
     if let Some(row) = linked_plan {
         let plan_id: i32 = row.get(0);
         let plan_name: String = row.get(1);
