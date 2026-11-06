@@ -174,7 +174,9 @@ async def test_gate_removal_preserves_stable_prerequisite_and_read_state(
     assert legacy.status_code == 200
     assert legacy.json()["entries"][1]["skipped"] is True
     assert all(e["status"] == "unread" for e in legacy.json()["entries"])
-    assert (await auth_client.delete(url)).status_code == 204
+    # The legacy Python DELETE route is retired after the native Rust v2
+    # cutover. A Python-only deletion could orphan an authoritative Plan.
+    assert (await auth_client.delete(url)).status_code == 405
     async_db.expire_all()
     persisted = await async_db.get(Dependency, requirement_id)
     assert persisted is not None
