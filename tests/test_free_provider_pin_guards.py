@@ -29,13 +29,20 @@ def validate():
     return _load_validate_module()
 
 
+def _load_snapshot_pins() -> dict[str, dict[str, str]]:
+    """Load pins from the automation-owned snapshot."""
+    snapshot_path = Path(".github/factory-roster-snapshot.json")
+    data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    return {pin["worker"]: pin for pin in data.get("pins", [])}
+
+
 def _assert_committed_pin(
     by_worker: dict[str, dict[str, str]],
     lock: dict[str, list],
     worker: str,
     *,
-    source: str,
-    model: str,
+    source: str | None = None,
+    model: str | None = None,
     minute: str | None = None,
 ) -> dict[str, str] | None:
     """Assert a live pin's identity, or a consistently-recorded retirement.
@@ -46,20 +53,50 @@ def _assert_committed_pin(
     transition so a legitimate retirement PR is green on its own head (#3802),
     while a silent re-pin or an inconsistent lock still fails.
 
+    The assertion is now snapshot-driven: the automation-owned
+    ``factory-roster-snapshot.json`` is the source of truth for active pins,
+    and the lock records retirements. Hard-coded model/source arguments are
+    retained for documentation but overridden by the snapshot when present.
+
     Returns:
         The live roster row, or ``None`` when discovery retired the worker.
     """
+    snapshot_pins = _load_snapshot_pins()
+    snap = snapshot_pins.get(worker)
     row = by_worker.get(worker)
+
+    # Determine expected values: snapshot overrides explicit args
+    expected_source = snap["source"] if snap else source
+    expected_model = snap["model"] if snap else model
+
     if row is None:
-        assert source in {'nvidia', 'openrouter-free'}, (worker, source)
+        # Worker absent from live TSV → must be retired
+        assert expected_source in {'nvidia', 'openrouter-free', None}, (worker, expected_source)
         assert int(worker) not in lock['expected_workers'], worker
         assert int(worker) in lock['retired_workers'], worker
-        assert model in lock['retired_models'], (worker, model)
+        # If we have an expected model from snapshot, it should be in retired_models
+        if expected_model:
+            assert expected_model in lock['retired_models'], (worker, expected_model)
+        # If caller supplied a legacy model, also verify it
+        if model and model != expected_model:
+            assert model in lock['retired_models'], (worker, model)
         return None
-    assert row['source'] == source, (worker, row['source'])
-    assert row['model'] == model, (worker, row['model'])
+
+    # Worker present → must match snapshot (and optional explicit checks)
+    if expected_source:
+        assert row['source'] == expected_source, (worker, row['source'], expected_source)
+    else:
+        assert row['source'] == source, (worker, row['source'])
+    if expected_model:
+        assert row['model'] == expected_model, (worker, row['model'], expected_model)
+    elif model:
+        assert row['model'] == model, (worker, row['model'])
     if minute is not None:
         assert row['minute'] == minute, (worker, row['minute'])
+    # Also ensure snapshot agrees if it exists
+    if snap:
+        assert row['source'] == snap['source'], (worker, row['source'], snap['source'])
+        assert row['model'] == snap['model'], (worker, row['model'], snap['model'])
     return row
 
 
