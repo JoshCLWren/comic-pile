@@ -91,7 +91,10 @@ describe('orphaned Reading Plan recovery', () => {
     await user.selectOptions(screen.getByLabelText('Reading List to relink'), '1000109')
     expect(screen.getByText('Newly authoritative issues (1):')).toBeInTheDocument()
     expect(screen.getByText('Saved Plan issues absent from this list (1):')).toBeInTheDocument()
-    expect(screen.getByText(/issue ID 1121328/)).toBeInTheDocument()
+    // The replacement appears in both the change summary and the complete proposed order.
+    expect(screen.getAllByText(/issue ID 1121328/)).toHaveLength(2)
+    // The omitted saved issue is still visible in the original Plan and the removal diff.
+    expect(screen.getAllByText(/issue ID 1121031/)).toHaveLength(2)
     const apply = screen.getByRole('button', { name: 'Relink to QA Destructive B - Tab2' })
     expect(apply).toBeDisabled()
     await user.click(screen.getByRole('checkbox'))
