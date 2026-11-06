@@ -22,6 +22,7 @@ permissions:
 # worker cannot be leased by two writers from the same stale idle snapshot.
 concurrency:
   group: fixed-model-factory-dispatch
+  queue: max
   cancel-in-progress: false
 
 jobs:
