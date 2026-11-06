@@ -160,6 +160,26 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/v2/reading-boundaries",
       "runtime": "native-rust",
