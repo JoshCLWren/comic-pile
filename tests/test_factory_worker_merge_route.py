@@ -456,7 +456,7 @@ def test_worker_call_site_gate_denial_releases_without_merging(tmp_path: Path) -
     assert _merge_calls(calls) == []
     assert _closure_calls(calls) == []
     assert [call for call in calls if call.startswith("release ")] == [
-        f"release {PR} factory/87-4081-opencode-free factory:review gate-denied"
+        f"release {PR} factory/87-4081-opencode-free factory:review gate-denied: all exact-head mechanical gates passed"
     ]
     assert any("decision=retry" in call for call in calls if call.startswith("log "))
     # Pending CI reaches this branch on every attempt; the released lease must

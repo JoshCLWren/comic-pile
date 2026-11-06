@@ -1040,8 +1040,8 @@ while (( $(remaining) > 480 )); do
           # again in the same session, and the released lease lets
           # choose_unowned_pr hand it straight back. Record it in SKIP_PRS so
           # the session spends its budget on other targets instead.
-          local reason="gate-denied: ${FACTORY_MERGE_GATE_REASON:-no reason}"
-          local stage='factory:review'
+          reason="gate-denied: ${FACTORY_MERGE_GATE_REASON:-no reason}"
+          stage='factory:review'
           if [[ "$FACTORY_MERGE_GATE_DECISION" == 'deny' ]]; then
             stage='factory:blocked'
           fi
