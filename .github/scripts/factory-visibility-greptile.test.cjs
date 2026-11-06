@@ -618,7 +618,7 @@ test('reconciler workflow routes review and PR-body edit events in a per-PR grou
   assert.match(workflow, /types:\s*\[opened, reopened, ready_for_review, synchronize, closed, unlabeled, edited\]/);
   assert.match(workflow, /format\('factory-greptile-routing-pr-\{0\}', github\.event\.pull_request\.number\)/);
   assert.match(workflow, /pull_request_review_comment:\s*\n\s*types:\s*\[created\]/);
-  assert.match(workflow, /github\\.event_name == 'pull_request_review'\\s*\\|\\|\\s*github\\.event_name == 'pull_request_review_comment'\\s*\\|\\|\\s*\\(github\\.event_name == 'pull_request_target' && github\\.event\\.action == 'edited'\\)/);
+  assert.match(workflow, /github\.event_name == 'pull_request_review'\s*\|\|\s*github\.event_name == 'pull_request_review_comment'\s*\|\|\s*\(github\.event_name == 'pull_request_target' && github\.event\.action == 'edited'\)/);
   assert.match(workflow, /\|\| 'factory-issue-pr-state-reconciler' \}\}\n\s*cancel-in-progress: false/);
   assert.match(workflow, /"\$EVENT_ACTION" == 'edited' \]\] && exit 0/);
 });
