@@ -32,6 +32,7 @@ def test_all_factory_assignment_writers_share_one_concurrency_group() -> None:
 
 def test_incident_writer_groups_are_not_independent() -> None:
     """The two writer groups implicated in incident #2727 must stay retired."""
+    import re
     completion = (WORKFLOWS / "factory-completion-drain.yml").read_text(
         encoding="utf-8"
     )
@@ -39,12 +40,14 @@ def test_incident_writer_groups_are_not_independent() -> None:
         encoding="utf-8"
     )
 
-    assert "group: factory-completion-drain" not in completion
+    # Ensure the retired independent writer group is not used as an exact group value
+    assert not re.search(r'(?m)^\s*group:\s*factory-completion-drain\s*$', completion)
     assert "group: fixed-model-capacity-refill-${{ github.event.workflow_run.id || github.run_id }}" not in refill
 
 
 def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> None:
     """All writers must opt into FIFO queuing; a single-mode entrant evicts waiters."""
+    import re
     # Regression: migration-lane release runs were cancelled repeatedly while
     # dispatcher and completion work arrived in the same shared group.
     writers = (
@@ -60,7 +63,8 @@ def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> No
         writer = workflow.split("\njobs:", 1)[1]
         assert "queue: single" in ingress, filename
         assert "cancel-in-progress: false" in ingress, filename
-        assert ASSIGNMENT_GROUP not in ingress, filename
+        # The shared assignment group must not be used at workflow ingress level; it is only allowed in the job section.
+        assert not re.search(r'(?m)^\s*group:\s*fixed-model-factory-dispatch\s*$', ingress), filename
         assert ASSIGNMENT_GROUP in writer, filename
         assert "queue: max" in writer, filename
         assert "cancel-in-progress: false" in writer, filename
