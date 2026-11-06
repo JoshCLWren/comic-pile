@@ -188,7 +188,6 @@ export default function QueuePage() {
   if (isPending && !threads?.length) {
     return <LoadingSpinner fullScreen />
   }
-
   return (
     <PositionMenuProvider>
       <div className="space-y-6 md:space-y-10 pb-[calc(10rem_+_env(safe-area-inset-bottom))] md:pb-10">
@@ -219,7 +218,6 @@ export default function QueuePage() {
         )}
 
         <QueueBoundaryNotice isError={boundaryError} onRetry={retryBoundaries} />
-
         <ReadingGraphProblemCard />
 
         <QueueList

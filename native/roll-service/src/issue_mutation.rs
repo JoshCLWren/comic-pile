@@ -382,20 +382,16 @@ pub async fn create_issues(
             (left_value, &left.1).cmp(&(right_value, &right.1))
         });
         let mut positions = vec![];
-        let mut next_position = 1;
-        for (id, _number, _) in &merged {
+        for (next_position, (id, _number, _)) in (1..).zip(merged.iter()) {
             if *id != 0 {
                 positions.push((*id, next_position));
             }
-            next_position += 1;
         }
         reseat_positions(&tx, thread_id, &positions).await?;
-        let mut position = 1;
-        for (id, number, _) in &merged {
+        for (position, (id, number, _)) in (1..).zip(merged.iter()) {
             if *id == 0 {
                 created.push(insert_issue(&tx, thread_id, number, position).await?);
             }
-            position += 1;
         }
     }
 

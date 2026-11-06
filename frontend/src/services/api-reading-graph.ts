@@ -13,6 +13,7 @@
  * guidance is unavailable.
  */
 
+import type { components } from '../generated/openapi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
 /** Exact Comic Vine series/volume identity plus its reader-facing label parts. */
@@ -142,68 +143,13 @@ export function createReadingGraphApi(client: HttpClient) {
 
 export const readingGraphApi = createReadingGraphApi(defaultHttpClient())
 
-/** One issue endpoint named in a graph problem. */
-export interface ReadingGraphProblemIssue {
-  issue_id: number
-  issue_number: string
-  thread_id: number
-  series_title: string
-}
-
-/** One stored requirement that participates in a cycle. */
-export interface ReadingGraphProblemEdge {
-  source: ReadingGraphProblemIssue
-  target: ReadingGraphProblemIssue
-  origin: string
-  kind: string
-  list_id: number | null
-  list_name: string | null
-  prerequisite_id: number | null
-}
-
-/** One cycle with its concrete edge path. */
-export interface ReadingGraphProblemCycle {
-  message: string
-  edges: ReadingGraphProblemEdge[]
-}
-
-/** One owner-scoped repair offered by the server. */
-export interface ReadingGraphRepairOption {
-  action: 'delete_list' | 'delete_list_entry' | 'delete_prerequisite'
-  label: string
-  detail: string
-  list_id: number | null
-  issue_id: number | null
-  prerequisite_id: number | null
-}
-
-/** Complete owner-scoped graph state. */
-export interface ReadingGraphResponse {
-  status: 'ok' | 'cycle' | 'invalid'
-  cycles: ReadingGraphProblemCycle[]
-  cyclic_issue_ids: number[]
-  affected_lists: { list_id: number; name: string; mode: string }[]
-  affected_threads: { thread_id: number; title: string }[]
-  repairs: ReadingGraphRepairOption[]
-  unresolved_reference_count: number
-}
-
-/** Preview or apply exactly one owner-scoped repair. */
-export interface ReadingGraphRepairRequest {
-  action: ReadingGraphRepairOption['action']
-  list_id?: number | null
-  issue_id?: number | null
-  prerequisite_id?: number | null
-  confirm?: boolean
-}
-
-export interface ReadingGraphRepairResponse {
-  applied: boolean
-  status_before: string
-  status_after: string
-  removed: string
-  graph: ReadingGraphResponse
-}
+export type ReadingGraphProblemIssue = components['schemas']['ReadingGraphIssue']
+export type ReadingGraphProblemEdge = components['schemas']['ReadingGraphEdge']
+export type ReadingGraphProblemCycle = components['schemas']['ReadingGraphCycle']
+export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
+export type ReadingGraphRepairOption = components['schemas']['ReadingGraphRepairOption']
+export type ReadingGraphRepairRequest = components['schemas']['ReadingGraphRepairRequest']
+export type ReadingGraphRepairResponse = components['schemas']['ReadingGraphRepairResponse']
 
 export function createReadingGraphProblemApi(client: HttpClient) {
   return {

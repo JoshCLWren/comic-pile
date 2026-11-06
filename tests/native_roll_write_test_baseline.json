@@ -1,8 +1,17 @@
 {
   "description": "Frozen, shrink-only exemptions for native Roll POST handlers that predate the write-path test rule. Add a test that calls the handler or its persist_<handler> writer before changing an entry.",
-  "allowed_modules": ["dice_api", "dismiss_pending"],
+  "allowed_modules": [
+    "dice_api",
+    "dismiss_pending",
+    "issue_mutation",
+    "reading_graph",
+    "reading_list"
+  ],
   "modules": {
     "dice_api": "Delegates the write to dice_mutation::execute_standalone, whose disposable-Postgres tests cover the event insert and idempotency.",
-    "dismiss_pending": "Legacy pending bridge handler. Add an endpoint-level DB test before its next behavioral change."
+    "dismiss_pending": "Legacy pending bridge handler. Add an endpoint-level DB test before its next behavioral change.",
+    "issue_mutation": "Handler-level write coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves atomic rollback and order preservation.",
+    "reading_graph": "Handler-level repair coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves preview/apply and owner isolation.",
+    "reading_list": "Handler-level create/delete coverage lives in tests/reading_cycle_containment.rs against the canonical Alembic schema; the same file proves cyclic creation rollback and list resources on a corrupt graph."
   }
 }

@@ -43,7 +43,7 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post, put},
     Json, Router,
 };
 use config::{Config, ConfigError, JwtSecret};
@@ -282,11 +282,19 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/threads", get(threads::list_threads))
         .route(
             "/api/v2/reading-lists",
-            get(reading_list::list_reading_lists).post(reading_list::create_reading_list),
+            get(reading_list::list_reading_lists),
+        )
+        .route(
+            "/api/v2/reading-lists",
+            post(reading_list::create_reading_list),
         )
         .route(
             "/api/v2/reading-lists/{list_id}",
-            get(reading_list::get_reading_list).delete(reading_list::delete_reading_list),
+            get(reading_list::get_reading_list),
+        )
+        .route(
+            "/api/v2/reading-lists/{list_id}",
+            delete(reading_list::delete_reading_list),
         )
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
@@ -309,7 +317,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/issues/{issue_id}",
-            patch(issue_handler::read_rate_issue).delete(issue_mutation::delete_issue),
+            patch(issue_handler::read_rate_issue),
+        )
+        .route(
+            "/api/v2/issues/{issue_id}",
+            delete(issue_mutation::delete_issue),
         )
         .route("/api/v2/issues/cards", post(issue_handler::issue_cards))
         .route(
@@ -318,7 +330,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/threads/{thread_id}/issue-order",
-            axum::routing::put(issue_mutation::reorder_issues),
+            put(issue_mutation::reorder_issues),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
