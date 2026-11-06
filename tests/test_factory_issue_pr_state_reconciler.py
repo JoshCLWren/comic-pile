@@ -435,3 +435,28 @@ def test_trusted_review_comment_events_route_to_visibility_without_issue_sweep()
     assert controller.index('pr_stage="factory:ready",') < controller.index(
         "set_review_approval_visibility(pr_number, reviewed_head)"
     )
+
+
+def test_untrusted_review_comment_is_rejected_before_write_steps() -> None:
+    """Comment-triggered reconciliation must authenticate its actor at the job gate."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    start = workflow.index("  reconcile:\n")
+    stop = workflow.index("      - name: Checkout trusted reconciliation implementation", start)
+    gate = workflow[start:stop]
+    assert "github.event.issue.pull_request" in gate
+    assert "github.event.comment.author_association" in gate
+    assert "github.event.comment.user.login == 'github-actions[bot]'" in gate
+    assert "github.event.comment.performed_via_github_app.slug == 'github-actions'" in gate
+    assert "factory-untrusted-comment-run-{0}" in workflow
+    assert "github.run_id" in workflow
+    assert "cancel-in-progress: false" in workflow
+
+
+def test_trusted_review_comments_remain_serialized_with_issue_reconciliation() -> None:
+    """Trust gating must not open a second label-writer concurrency lane."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    concurrency = workflow.split("concurrency:", 1)[1].split("\njobs:", 1)[0]
+    assert "'factory-issue-pr-state-reconciler'" in concurrency
+    assert "factory-greptile-routing-pr-{0}" in concurrency
+    assert "factory-untrusted-comment-run-{0}" in concurrency
+    assert "github.event_name == 'issue_comment'" in concurrency
