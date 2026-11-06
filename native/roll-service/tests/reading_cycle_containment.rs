@@ -1096,3 +1096,142 @@ async fn reading_list_create_rejects_predecessor_confirmation_like_python() {
         .get(0);
     assert_eq!(count, 0);
 }
+
+#[tokio::test]
+async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "orphan-plan-a").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _other) = register(&state, "orphan-other").await;
+    let other_auth = (other_token.as_str(), other_csrf.as_str());
+
+    let (superman, su) = seed_thread(&state, owner, "Superman", 1, &["1", "2", "3", "4"]).await;
+    let (_batman, ba) = seed_thread(&state, owner, "Batman", 2, &["1", "2"]).await;
+    let original_two = su["2"];
+    let history = mark_read_and_rate(&state, owner, original_two, Some(4.5)).await;
+    let conn = state.pool.get().await.unwrap();
+
+    // The real failure was a physical deletion, not a renamed list. The
+    // original Superman #2 PK disappears and a same-number issue is allocated.
+    conn.execute("DELETE FROM issues WHERE id=$1", &[&original_two]).await.unwrap();
+    let replacement_two: i32 = conn.query_one(
+        "INSERT INTO issues (thread_id,issue_number,status,created_at,position)
+         VALUES ($1,'2','unread',NOW(),2) RETURNING id",
+        &[&superman],
+    ).await.unwrap().get(0);
+    assert_ne!(original_two, replacement_two);
+
+    // Exact Plan A shape: four surviving historical memberships and NO
+    // reading_plan_sources row. This recreates the legacy list-delete cleanup
+    // rather than assuming ON DELETE SET NULL always preserved source rows.
+    let retained = [su["1"], su["3"], ba["1"], ba["2"]];
+    let plan_a: i32 = conn.query_one(
+        "INSERT INTO continuity_plans
+           (user_id,name,ordering_mode,nodes_json,lanes_json,created_at,updated_at)
+         VALUES ($1,'QA Destructive A','strict_sequential','[]'::json,'[]'::json,NOW(),NOW())
+         RETURNING id",
+        &[&owner],
+    ).await.unwrap().get(0);
+    for (position, issue_id) in retained.iter().enumerate() {
+        let label = ["Superman #1", "Superman #3", "Batman #1", "Batman #2"][position];
+        conn.execute(
+            "INSERT INTO reading_plan_issues
+              (plan_id,occurrence_id,issue_id,lane_id,display_position,label,is_checkpoint)
+             VALUES ($1,$2,$3,'main',$4,$5,false)",
+            &[&plan_a, &format!("issue-{issue_id}"), issue_id, &(position as i32), &label],
+        ).await.unwrap();
+    }
+
+    let list_b = seed_list(
+        &state, owner, "QA Destructive B - Tab2", "strict",
+        &[su["1"], replacement_two, su["3"], ba["1"], ba["2"]],
+    ).await;
+    let plan_b = seed_plan(&state, owner, "QA Destructive B", list_b).await;
+    let (status, b_reader) = send(
+        &state, auth, "GET", &format!("/api/v2/reading-lists/{list_b}/reader"), None,
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{b_reader}");
+    assert_eq!(b_reader["entries"].as_array().unwrap().len(), 5);
+
+    let endpoint = format!("/api/v2/continuity-plans/{plan_a}/recovery");
+    let (status, foreign) = send(&state, other_auth, "GET", &endpoint, None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{foreign}");
+    let (status, preview) = send(&state, auth, "GET", &endpoint, None).await;
+    assert_eq!(status, StatusCode::OK, "{preview}");
+    assert_eq!(preview["status"], "orphaned");
+    assert_eq!(preview["retained_steps"].as_array().unwrap().len(), 4);
+    let candidate = preview["candidates"].as_array().unwrap()
+        .iter().find(|item| item["list_id"] == list_b).unwrap();
+    assert_eq!(candidate["added_steps"].as_array().unwrap().len(), 1);
+    assert_eq!(candidate["added_steps"][0]["issue_id"], replacement_two);
+    assert!(candidate["removed_steps"].as_array().unwrap().is_empty());
+    assert_eq!(candidate["order_changed"], false);
+
+    let request = json!({
+        "list_id": list_b,
+        "expected_plan_updated_at": preview["plan_updated_at"],
+        "expected_list_updated_at": candidate["list_updated_at"],
+        "confirm": true
+    });
+    let (status, refused) = send(&state, other_auth, "POST", &endpoint, Some(request.clone())).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{refused}");
+    let (status, missing_confirmation) = send(
+        &state, auth, "POST", &endpoint,
+        Some(json!({"list_id":list_b,"expected_plan_updated_at":preview["plan_updated_at"],
+            "expected_list_updated_at":candidate["list_updated_at"],"confirm":false})),
+    ).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{missing_confirmation}");
+
+    // Read-only preview and cross-owner failures never mutate the source.
+    let prior_count: i64 = conn.query_one(
+        "SELECT count(*) FROM reading_plan_sources WHERE plan_id=$1", &[&plan_a],
+    ).await.unwrap().get(0);
+    assert_eq!(prior_count, 0);
+
+    let (status, applied) = send(&state, auth, "POST", &endpoint, Some(request.clone())).await;
+    assert_eq!(status, StatusCode::OK, "{applied}");
+    assert_eq!(applied["status"], "relinked");
+    let (status, retried) = send(&state, auth, "POST", &endpoint, Some(request)).await;
+    assert_eq!(status, StatusCode::OK, "{retried}");
+    assert_eq!(retried["status"], "already_linked");
+
+    // A linked Plan cannot be silently stranded by ordinary DELETE either.
+    let (status, blocked_delete) = send(
+        &state, auth, "DELETE", &format!("/api/v2/reading-lists/{list_b}"), None,
+    ).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{blocked_delete}");
+    assert!(blocked_delete["detail"].as_str().unwrap().contains("Reading Plan"));
+
+    let source: i32 = conn.query_one(
+        "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+        &[&plan_a],
+    ).await.unwrap().get(0);
+    assert_eq!(source, list_b);
+    let source_count: i64 = conn.query_one(
+        "SELECT count(*) FROM reading_plan_sources WHERE plan_id=$1",
+        &[&plan_a],
+    ).await.unwrap().get(0);
+    assert_eq!(source_count, 1);
+    let plan_b_source: i32 = conn.query_one(
+        "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+        &[&plan_b],
+    ).await.unwrap().get(0);
+    assert_eq!(plan_b_source, list_b);
+    let saved: Vec<i32> = conn.query(
+        "SELECT issue_id FROM reading_plan_issues WHERE plan_id=$1 ORDER BY display_position",
+        &[&plan_a],
+    ).await.unwrap().iter().map(|row| row.get(0)).collect();
+    assert_eq!(saved, retained);
+    let list_order: Vec<i32> = conn.query(
+        "SELECT issue_id FROM custom_cbl_entries WHERE list_id=$1 ORDER BY position",
+        &[&list_b],
+    ).await.unwrap().iter().map(|row| row.get(0)).collect();
+    assert_eq!(list_order, vec![su["1"], replacement_two, su["3"], ba["1"], ba["2"]]);
+    let event: (String, Option<f64>) = {
+        let row = conn.query_one("SELECT type,rating FROM events WHERE id=$1", &[&history]).await.unwrap();
+        (row.get(0), row.get(1))
+    };
+    assert_eq!(event, ("rate".to_string(), Some(4.5)));
+}
