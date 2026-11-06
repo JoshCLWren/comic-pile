@@ -743,19 +743,49 @@ function durablePrOwner(current) {
   return null;
 }
 
-function stageFrom(body) {
-  if (/comic-pile-factory-needs-human-v\d+:/.test(body)) return 'factory:blocked';
-  if (/comic-pile-factory-ready-v\d+:/.test(body)) return 'factory:ready';
-  if (/comic-pile-factory-review-v\d+:[^:\s>]+:changes-required/.test(body)) {
-    return 'factory:changes-requested';
+// Only a complete marker on the first line may change factory labels.  Never
+// infer a stage from prose, code fences, or a partial example (#4616).
+function parseFactoryComment(body) {
+  const firstLine = String(body || '').split(/\r?\n/, 1)[0];
+  const semanticVerdict = firstLine.match(
+    /^<!-- comic-pile-factory-semantic-review-v1:pr-(\d+):head-([a-f0-9]{40}):reviewer-(\d+):producer-(\d+|unknown):verdict-(approve|repair|reject|obsolete|duplicate|superseded|delivered) -->$/,
+  );
+  const legacyVerdict = firstLine.match(
+    /^<!-- comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required) -->$/,
+  );
+  const claim = firstLine.match(
+    /^<!-- comic-pile-factory-(needs-human|ready|review-claim|implement-claim|implement-progress|fix-claim|fix-progress|claim-released)-v\d+:([a-zA-Z0-9:._=/-]+) -->$/,
+  );
+  if (!semanticVerdict && !legacyVerdict && !claim) return null;
+
+  const kind = claim?.[1] || null;
+  if (claim) {
+    const fields = claim[2].split(':');
+    const hasWorkerEpoch = fields.length >= 3 && fields[1].length > 0 && /^\d+$/.test(fields[2]);
+    if ((kind === 'implement-claim' || kind === 'implement-progress')
+        && (!hasWorkerEpoch || !/^issue-\d+$/.test(fields[0]))) return null;
+    if ((kind === 'fix-claim' || kind === 'fix-progress' || kind === 'review-claim')
+        && !hasWorkerEpoch) return null;
+    if (kind === 'claim-released'
+        && (!hasWorkerEpoch || !/^(?:issue|pr)-\d+$/.test(fields[0]))) return null;
   }
-  if (/comic-pile-factory-review-v\d+:[^:\s>]+:pass/.test(body)) return 'factory:ci';
-  if (/comic-pile-factory-review-claim-v\d+:/.test(body)) return 'factory:review';
-  if (
-    /comic-pile-factory-implement-(?:claim|progress)-v\d+:/.test(body)
-    || /comic-pile-factory-fix-(?:claim|progress)-v\d+:/.test(body)
-  ) return 'factory:building';
-  return null;
+
+  let stage = null;
+  if (kind === 'needs-human') stage = 'factory:blocked';
+  if (kind === 'ready') stage = 'factory:ready';
+  if (kind === 'review-claim') stage = 'factory:review';
+  if (kind === 'implement-claim' || kind === 'implement-progress'
+      || kind === 'fix-claim' || kind === 'fix-progress') stage = 'factory:building';
+  if (legacyVerdict) stage = legacyVerdict[2] === 'pass'
+    ? 'factory:ci' : 'factory:changes-requested';
+
+  return {
+    stage,
+    semanticVerdict,
+    legacyVerdict,
+    released: kind === 'claim-released',
+    worker: claim ? workerFrom(firstLine) : null,
+  };
 }
 
 function rateLimitDelay(error, now = Date.now()) {
@@ -1073,35 +1103,21 @@ async function reconcileMissingPrLabels({ github, context }) {
 }
 
 async function reconcile({ github, context }) {
-  await ensureLabels(github, context);
+  const comment = context.eventName === 'issue_comment' ? context.payload.comment : null;
+  const marker = comment && trusted(comment) ? parseFactoryComment(comment.body) : null;
+  // Reject before ensureLabels(), which may write labels to the repository.
+  if (context.eventName === 'issue_comment' && !marker) return;
 
   const payloadBody = context.payload.pull_request?.body ?? context.payload.issue?.body ?? '';
   if (hasManualOnlyDirective(payloadBody)) return;
+  await ensureLabels(github, context);
 
   if (context.eventName === 'issue_comment') {
-    const comment = context.payload.comment;
-    const body = comment?.body || '';
-    if (!body.includes('comic-pile-factory-')) return;
-    if (!trusted(comment)) return;
-
     const number = context.payload.issue.number;
     const current = await currentLabels(github, context, number);
-    const released = /comic-pile-factory-claim-released-v\d+:/.test(body);
-    const worker = workerFrom(body);
-    const currentOwner = [...current].find(isOwnerLabel) || null;
-    const currentStage = STAGE_LABELS.find(label => current.has(label));
-    const requestedStage = stageFrom(body);
-    // The trusted controller now writes semantic-review-v1 markers. Legacy
-    // review-v2 markers are still supported for historical workflows.
-    // Only a matching PR + exact live head can affect approval visibility.
-    // Neither format supplies merge authority or a GitHub APPROVED review.
-    const firstLine = body.split(/\r?\n/, 1)[0];
-    const semanticVerdict = firstLine.match(
-      /^<!-- comic-pile-factory-semantic-review-v1:pr-(\d+):head-([a-f0-9]{40}):reviewer-(\d+):producer-(\d+|unknown):verdict-(approve|repair|reject|obsolete|duplicate|superseded|delivered) -->$/,
-    );
-    const legacyVerdict = body.match(
-      /<!-- comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required) -->/,
-    );
+    const { released, worker, stage: requestedStage, semanticVerdict, legacyVerdict } = marker;
+    // Exact-head checks apply to all review verdicts, not to documentation
+    // that merely contains something resembling a review marker.
     if (semanticVerdict || legacyVerdict) {
       if (!context.payload.issue.pull_request) return;
       if (semanticVerdict && Number(semanticVerdict[1]) !== number) return;
@@ -1109,10 +1125,12 @@ async function reconcile({ github, context }) {
       const markerHead = semanticVerdict ? semanticVerdict[2] : legacyVerdict[1];
       if (!live || markerHead !== live.head?.sha) return;
     }
+
+    const currentOwner = [...current].find(isOwnerLabel) || null;
+    const currentStage = STAGE_LABELS.find(label => current.has(label));
     const preserveAdvancedPrStage = Boolean(context.payload.issue.pull_request)
       && requestedStage === 'factory:building'
       && ADVANCED_PR_STAGES.has(currentStage);
-
     await reconcileLabels(github, context, number, {
       owner: released ? 'factory:unowned' : worker ? ownerFor(worker) : currentOwner,
       stage: preserveAdvancedPrStage ? currentStage : requestedStage || currentStage,
