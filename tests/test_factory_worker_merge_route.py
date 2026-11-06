@@ -189,6 +189,7 @@ def test_retry_decision_exit_zero_does_not_merge(tmp_path: Path) -> None:
 
 
 def test_deny_decision_does_not_merge(tmp_path: Path) -> None:
+    """A deny decision never enters the merge route."""
     fields = _run_route(
         tmp_path,
         FAKE_GATE_DECISION="deny",
@@ -363,6 +364,7 @@ def test_blocked_closure_leaves_issue_open_and_never_marks_done(tmp_path: Path) 
 
 
 def test_unknown_or_failed_closure_is_reported_as_error(tmp_path: Path) -> None:
+    """Unknown or failed closure outcomes remain errors, not acceptance."""
     for index, overrides in enumerate(
         (
             {"FAKE_CLOSURE_ERROR": "1"},
@@ -380,6 +382,7 @@ def test_unknown_or_failed_closure_is_reported_as_error(tmp_path: Path) -> None:
 
 
 def test_merge_command_failure_does_not_run_closure(tmp_path: Path) -> None:
+    """A failed exact-head merge never invokes issue closure."""
     fields = _run_route(tmp_path, FAKE_MERGE_EXIT="1")
     assert fields["status"] == "2"
     assert fields["state"] == "merge-failed"
@@ -452,6 +455,7 @@ def test_primitives_call_site_runs_the_canonical_route_and_never_raw_closes() ->
 
 
 def test_worker_call_site_gate_denial_releases_without_merging(tmp_path: Path) -> None:
+    """A denied worker PR is released and skipped instead of retried inline."""
     calls, _ = _run_call_site(tmp_path, FAKE_GATE_DECISION="retry")
     assert _merge_calls(calls) == []
     assert _closure_calls(calls) == []
@@ -465,6 +469,7 @@ def test_worker_call_site_gate_denial_releases_without_merging(tmp_path: Path) -
 
 
 def test_worker_call_site_merges_then_closes_through_trusted_policy(tmp_path: Path) -> None:
+    """The worker merges through exact-head gates and trusted closure."""
     calls, _ = _run_call_site(tmp_path)
     assert _merge_calls(calls) == [
         f"gh pr merge {PR} --merge --match-head-commit {HEAD} --delete-branch"
@@ -477,6 +482,7 @@ def test_worker_call_site_merges_then_closes_through_trusted_policy(tmp_path: Pa
 
 
 def test_worker_call_site_blocked_closure_does_not_report_acceptance(tmp_path: Path) -> None:
+    """A blocked closure leaves its issue open and never reports acceptance."""
     calls, _ = _run_call_site(tmp_path, FAKE_CLOSURE_OUTCOME="open-dependency: #4016")
     assert len(_merge_calls(calls)) == 1
     assert any("issue left open" in call for call in calls if call.startswith("log "))
