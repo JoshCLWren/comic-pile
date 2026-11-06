@@ -1167,7 +1167,7 @@ async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
         owner,
         "QA Destructive B - Tab2",
         "strict",
-        &[su["1"], replacement_two, su["3"], ba["1"], ba["2"]],
+        &[su["1"], replacement_two, su["4"], ba["1"], ba["2"]],
     )
     .await;
     let plan_b = seed_plan(&state, owner, "QA Destructive B", list_b).await;
@@ -1195,9 +1195,10 @@ async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
         .iter()
         .find(|item| item["list_id"] == list_b)
         .unwrap();
-    assert_eq!(candidate["added_steps"].as_array().unwrap().len(), 1);
+    assert_eq!(candidate["added_steps"].as_array().unwrap().len(), 2);
     assert_eq!(candidate["added_steps"][0]["issue_id"], replacement_two);
-    assert!(candidate["removed_steps"].as_array().unwrap().is_empty());
+    assert_eq!(candidate["removed_steps"].as_array().unwrap().len(), 1);
+    assert_eq!(candidate["removed_steps"][0]["issue_id"], su["3"]);
     assert_eq!(candidate["order_changed"], false);
 
     let request = json!({
@@ -1292,7 +1293,7 @@ async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
         .iter()
         .map(|row| row.get(0))
         .collect();
-    assert_eq!(saved, retained);
+    assert_eq!(saved, retained.to_vec());
     let list_order: Vec<i32> = conn
         .query(
             "SELECT issue_id FROM custom_cbl_entries WHERE list_id=$1 ORDER BY position",
@@ -1305,7 +1306,7 @@ async fn plan_a_orphan_recovery_preserves_history_and_plan_b_authority() {
         .collect();
     assert_eq!(
         list_order,
-        vec![su["1"], replacement_two, su["3"], ba["1"], ba["2"]]
+        vec![su["1"], replacement_two, su["4"], ba["1"], ba["2"]]
     );
     let event: (String, Option<f64>) = {
         let row = conn
