@@ -39,6 +39,7 @@ describe('useRollPendingSync', () => {
 
     const { result } = renderHook(() =>
       useRollPendingSync({
+        // SAFETY: undefined bootstrap simulates absent data for this test
         rollBootstrap: undefined as any,
         session: mockSession,
         refetchSession: mockRefetchSession(),
@@ -64,6 +65,7 @@ describe('useRollPendingSync', () => {
       manual_die: null,
       pending_thread_id: 99,
       last_rolled_result: 3,
+      // SAFETY: 'manual' is a valid session mode for test data
       session_mode: 'manual' as any,
       active_thread: null,
       roll_pool: [],
@@ -106,6 +108,7 @@ describe('useRollPendingSync', () => {
       manual_die: null,
       pending_thread_id: null, // Bootstrap reports no pending thread after dismissal
       last_rolled_result: null,
+      // SAFETY: 'manual' is a valid session mode for test data
       session_mode: 'manual' as any,
       active_thread: null,
       roll_pool: [],
@@ -139,6 +142,7 @@ describe('useRollPendingSync', () => {
       manual_die: null,
       pending_thread_id: 99,
       last_rolled_result: 3,
+      // SAFETY: 'manual' is a valid session mode for test data
       session_mode: 'manual' as any,
       active_thread: null,
       roll_pool: [],
