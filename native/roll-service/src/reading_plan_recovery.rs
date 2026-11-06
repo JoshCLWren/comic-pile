@@ -374,4 +374,105 @@ mod tests {
         assert!(removed.is_empty());
         assert!(reordered);
     }
+
+    /// Exercise the mounted Rust write handler against the canonical Alembic
+    /// schema. A replay must not duplicate source provenance or alter the Plan.
+    #[tokio::test]
+    async fn relink_writes_owned_source_once_and_rejects_other_owner() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _db_guard = crate::test_support::reset_for_test(&state).await;
+        let conn = state.pool.get().await.expect("disposable Postgres connection");
+        conn.batch_execute(
+            "INSERT INTO users (id, username)
+             VALUES (1,'plan-recovery-owner'),(2,'plan-recovery-other');
+             INSERT INTO continuity_plans
+               (id,user_id,name,ordering_mode,nodes_json,lanes_json,created_at,updated_at)
+             VALUES (101,1,'Orphaned Plan A','strict_sequential',
+                     '[]'::json,'[]'::json,NOW(),NOW());
+             INSERT INTO custom_cbl_lists
+               (id,user_id,name,mode,created_at,updated_at)
+             VALUES (201,1,'Chosen authoritative Reading List','strict',NOW(),NOW());",
+        )
+        .await
+        .expect("canonical Plan A and candidate list fixtures");
+        let plan_updated_at: String = conn
+            .query_one(
+                "SELECT updated_at::text FROM continuity_plans WHERE id=101",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        let list_updated_at: String = conn
+            .query_one(
+                "SELECT updated_at::text FROM custom_cbl_lists WHERE id=201",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+
+        let request = || PlanRelinkRequest {
+            list_id: 201,
+            expected_plan_updated_at: plan_updated_at.clone(),
+            expected_list_updated_at: list_updated_at.clone(),
+            confirm: true,
+        };
+        let (first, second) = (
+            relink(
+                State(state.clone()),
+                AuthenticatedUser::for_test(1),
+                Path(101),
+                Json(request()),
+            )
+            .await
+            .expect("owned first relink")
+            .0,
+            relink(
+                State(state.clone()),
+                AuthenticatedUser::for_test(1),
+                Path(101),
+                Json(request()),
+            )
+            .await
+            .expect("idempotent relink replay")
+            .0,
+        );
+        assert_eq!(first.status, "relinked");
+        assert_eq!(second.status, "already_linked");
+        assert_eq!(first.list_id, 201);
+        assert_eq!(second.list_id, 201);
+
+        let count: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM reading_plan_sources
+                 WHERE plan_id=101 AND custom_cbl_list_id=201",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(count, 1, "idempotent replay must never duplicate provenance");
+
+        let foreign = relink(
+            State(state.clone()),
+            AuthenticatedUser::for_test(2),
+            Path(101),
+            Json(request()),
+        )
+        .await
+        .expect_err("another owner cannot relink Plan A");
+        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
+        let count_after: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM reading_plan_sources WHERE plan_id=101",
+                &[],
+            )
+            .await
+            .unwrap()
+            .get(0);
+        assert_eq!(count_after, 1, "foreign attempt must leave provenance intact");
+    }
 }
