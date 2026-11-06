@@ -409,7 +409,7 @@ owner's newest die-changing event, so it survives navigation and applies to
 every later roll. `POST /api/v2/roll/reset` returns the die to d6 and clears
 the browser's temporary snoozes and the pending roll.
 
-The v1 `POST /api/v1/roll/set-die` and `POST /api/v1/roll/clear-manual-die`
+The v1 `POST /api/v1/roll/clear-manual-die`
 routes were retired (#4352, #4353): nothing pins a manual die any more, so
 there is no automatic ladder to resume.
 
