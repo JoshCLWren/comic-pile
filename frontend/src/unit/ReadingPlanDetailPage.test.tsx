@@ -41,6 +41,30 @@ vi.mock('../services/api-tags', () => ({
   },
 }))
 
+const { patchIssueSpy, fetchCardsSpy } = vi.hoisted(() => ({
+  patchIssueSpy: vi.fn(),
+  fetchCardsSpy: vi.fn(),
+}))
+
+vi.mock('../services/issueCardsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/issueCardsApi')>()
+  return { ...actual, issueCardsApi: { fetchCards: fetchCardsSpy, patchIssue: patchIssueSpy } }
+})
+
+vi.mock('../services/api-comicvine', () => ({
+  comicVineApi: {
+    searchSeries: vi.fn().mockResolvedValue({ results: [] }),
+    getSeriesIssues: vi.fn().mockResolvedValue({ comicvine_volume_id: 42, series_name: '', issues: [] }),
+    getIssueIntelligence: vi.fn().mockResolvedValue(null),
+    getIssueIdentity: vi.fn().mockResolvedValue({
+      issue_id: 95, thread_id: 4, thread_title: 'X-Men',
+      has_confirmed_identity: false, comicvine_issue_id: null,
+      confirmed_mappings: [], candidate_mappings: [], has_unresolved: false,
+    }),
+    confirmIdentity: vi.fn(), replaceIdentity: vi.fn(), removeIdentity: vi.fn(), refreshMetadata: vi.fn(),
+  },
+}))
+
 vi.mock('../components/ReadingPlanAddMaterial', () => ({
   default: () => <div data-testid="add-from-cbl">Add from CBL</div>,
 }))
@@ -211,6 +235,16 @@ beforeEach(() => {
   mockGetReader.mockResolvedValue(readerView)
   mockSetPending.mockResolvedValue(cast<Awaited<ReturnType<typeof threadsApi.setPending>>>({ thread_id: 4, issue_id: 95 }))
   mockMoveToFront.mockResolvedValue(cast<Awaited<ReturnType<typeof queueApi.moveToFront>>>(undefined))
+  fetchCardsSpy.mockResolvedValue([])
+  patchIssueSpy.mockImplementation(async (issueId: number) => ({
+    issue: {
+      issue_id: issueId, thread_id: 4, thread_title: 'X-Men', issue_number: '95',
+      status: 'read', read_at: '2026-10-01T00:00:00.000Z', rating: 3.5,
+      has_confirmed_identity: false, mapping_state: 'unmapped', comicvine_issue_id: null, cover_image_url: null,
+    },
+    thread: { thread_id: 4, status: 'active', issues_remaining: 5, next_unread_issue_id: null, reading_progress: null, last_rating: 3.5 },
+    read_event_created: true, rating_event_created: true, replayed: false, final_rating: 3.5, die_after: null,
+  }))
   mockPlanTags.mockResolvedValue({
     target_type: 'ContinuityPlan',
     target_id: 12,
@@ -221,11 +255,15 @@ beforeEach(() => {
 
 describe('ReadingPlanDetailPage', () => {
 
-  it('starts the exact eligible issue from the header in Roll, without marking it read', async () => {
-    renderPage()
+  it('opens the exact eligible issue from the header as a direct read, without navigating to Roll or marking it read', async () => {
+    const { container } = renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
-    await waitFor(() => expect(mockSetPending).toHaveBeenCalledWith(4, 95))
-    expect(await screen.findByText('Roll screen')).toBeInTheDocument()
+    // The featured direct-read experience opens in place on the plan.
+    expect(await within(container.querySelector('[data-variant="featured"]') as HTMLElement).findByRole('button', { name: 'Read now' })).toBeEnabled()
+    expect(mockSetPending).not.toHaveBeenCalled()
+    expect(patchIssueSpy).not.toHaveBeenCalled()
+    expect(screen.queryByText('Roll screen')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
     expect(mockMoveToFront).not.toHaveBeenCalled()
   })
 

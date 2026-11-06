@@ -23,6 +23,7 @@ import {
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
@@ -510,6 +511,10 @@ export default function CustomCBLBuilder({
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  // One bounded batch for the visible entry page — cover, stored rating and
+  // mapping state without one request per row (#4444).
+  const visibleCardsQuery = useIssueCards(visibleEntries.map(({ entry }) => entry.issue_id))
+  const visibleCardsByIssue = indexIssueCards(visibleCardsQuery.data)
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
@@ -923,6 +928,7 @@ export default function CustomCBLBuilder({
                     onSkip={() => toggleSkipped(entry.issue_id)}
                     onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
                     onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
+                    card={visibleCardsByIssue.get(entry.issue_id) ?? null}
                   />
                 ))}
               </ol>

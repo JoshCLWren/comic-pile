@@ -841,7 +841,7 @@ it('shows deep-link notice when issue param references a missing issue', async (
     next_page_token: null, total_count: 2, page_size: 100,
   } as never)
   renderPage()
-  await waitFor(() => expect(screen.getByText('Saga')).toBeInTheDocument())
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Saga' })).toBeInTheDocument())
   await waitFor(() => expect(screen.getByText("That issue isn't in this thread.")).toBeInTheDocument())
 })
 
