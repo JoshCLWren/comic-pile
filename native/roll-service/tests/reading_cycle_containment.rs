@@ -1053,3 +1053,35 @@ async fn reading_list_resources_contain_cycles_and_reject_cyclic_creation() {
         .get(0);
     assert_eq!(count, 1);
 }
+
+#[tokio::test]
+async fn reading_list_create_rejects_predecessor_confirmation_like_python() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "reading-list-confirmation").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (status, rejected) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/reading-lists",
+        Some(json!({
+            "name": "Confirmed create",
+            "issue_ids": [],
+            "confirmed_predecessor_changes": []
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{rejected}");
+    let conn = state.pool.get().await.unwrap();
+    let count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM custom_cbl_lists WHERE user_id=$1",
+            &[&owner],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 0);
+}

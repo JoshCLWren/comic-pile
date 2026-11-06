@@ -122,8 +122,8 @@ pub struct ReadingListWrite {
     pub checkpoint_issue_ids: Option<Vec<i32>>,
     #[serde(default)]
     pub checkpoint_targets: Option<BTreeMap<i32, Vec<i32>>>,
-    /// Accepted for wire compatibility with the create form. Creation has no
-    /// predecessor changes to confirm; updates remain on the Python path.
+    /// Creation has no predecessor changes to confirm; only update accepts
+    /// them. A present value is rejected exactly like the Python create path.
     #[serde(default)]
     pub confirmed_predecessor_changes: Option<serde_json::Value>,
 }
@@ -402,6 +402,12 @@ pub async fn create_reading_list(
     user: AuthenticatedUser,
     Json(request): Json<ReadingListWrite>,
 ) -> Result<(StatusCode, Json<ReadingList>), ApiError> {
+    if request.confirmed_predecessor_changes.is_some() {
+        return Err(ApiError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "reading_list_confirmation_put_only".to_string(),
+        ));
+    }
     let name = validate_name(&request.name)?;
     let mode = validate_mode(request.mode.as_deref())?;
     let mut conn = db::checkout(&state).await?;
