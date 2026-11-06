@@ -312,7 +312,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/recovery",
-            get(reading_plan_recovery::preview).post(reading_plan_recovery::relink),
+            get(reading_plan_recovery::preview),
+        )
+        .route(
+            "/api/v2/continuity-plans/{plan_id}/recovery",
+            post(reading_plan_recovery::relink),
         )
         .route("/api/v2/reading-graph", get(reading_graph::reading_graph))
         .route("/api/v2/reading-graph/repairs", post(reading_graph::repair))
