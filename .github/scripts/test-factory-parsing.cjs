@@ -67,7 +67,7 @@ const TEST_CASES = [
     expectedStage: 'factory:changes-requested',
   },
   {
-    name: 'Untrusted actor is rejected by trusted()',
+    name: 'Untrusted actor is rejected, only marker parsing',
     body: '<!-- comic-pile-factory-ready-v1:pr-123 -->',
     trusted: false,
     expectedStage: 'factory:ready', // parseFactoryComment doesn't check trust
