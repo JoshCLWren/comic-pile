@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from 'react'
 import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 import type { SessionCurrent } from '../../types'
+import type { SessionRefetch } from '../../hooks/useSession'
 import { queryClient } from '../../query/queryClient'
 
 interface UseRollPendingSyncParams {
   rollBootstrap: RollBootstrapResponse | null
   session: SessionCurrent | null | undefined
-  refetchSession: () => Promise<unknown>
+  refetchSession: SessionRefetch
   refetchQueue: () => Promise<void>
 }
 
