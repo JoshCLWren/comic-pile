@@ -565,7 +565,6 @@ pub(crate) async fn ensure_list_unlinked(
     Ok(())
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadingListPredecessorChange {
     pub issue_id: i32,
@@ -576,10 +575,7 @@ pub struct ReadingListPredecessorChange {
     pub after_issue_names: Vec<String>,
 }
 
-fn stored_requirements(
-    mode: &str,
-    entries: &[ReadingListEntry],
-) -> BTreeMap<i32, Vec<i32>> {
+fn stored_requirements(mode: &str, entries: &[ReadingListEntry]) -> BTreeMap<i32, Vec<i32>> {
     let mut results = BTreeMap::new();
     let mut earlier = Vec::<i32>::new();
     let mut hold = BTreeSet::<i32>::new();
@@ -598,7 +594,11 @@ fn stored_requirements(
         }
         results.insert(
             entry.issue_id,
-            earlier.iter().copied().filter(|id| sources.contains(id)).collect(),
+            earlier
+                .iter()
+                .copied()
+                .filter(|id| sources.contains(id))
+                .collect(),
         );
         earlier.push(entry.issue_id);
         if entry.gate == "hold" {
@@ -614,22 +614,29 @@ fn predecessor_changes(
     labels: &BTreeMap<i32, String>,
 ) -> Vec<ReadingListPredecessorChange> {
     let ids: BTreeSet<i32> = before.keys().chain(after.keys()).copied().collect();
-    ids.into_iter().filter_map(|issue_id| {
-        let old = before.get(&issue_id).cloned().unwrap_or_default();
-        let new = after.get(&issue_id).cloned().unwrap_or_default();
-        if old == new {
-            return None;
-        }
-        let name = |id: &i32| labels.get(id).cloned().unwrap_or_else(|| format!("Issue #{id}"));
-        Some(ReadingListPredecessorChange {
-            issue_id,
-            issue_name: name(&issue_id),
-            before_issue_names: old.iter().map(&name).collect(),
-            after_issue_names: new.iter().map(&name).collect(),
-            before_issue_ids: old,
-            after_issue_ids: new,
+    ids.into_iter()
+        .filter_map(|issue_id| {
+            let old = before.get(&issue_id).cloned().unwrap_or_default();
+            let new = after.get(&issue_id).cloned().unwrap_or_default();
+            if old == new {
+                return None;
+            }
+            let name = |id: &i32| {
+                labels
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| format!("Issue #{id}"))
+            };
+            Some(ReadingListPredecessorChange {
+                issue_id,
+                issue_name: name(&issue_id),
+                before_issue_names: old.iter().map(&name).collect(),
+                after_issue_names: new.iter().map(&name).collect(),
+                before_issue_ids: old,
+                after_issue_ids: new,
+            })
         })
-    }).collect()
+        .collect()
 }
 
 fn confirmed_changes_match(
@@ -665,67 +672,112 @@ pub async fn update_reading_list(
 
     let name = validate_name(&request.name)?;
     let mut conn = db::checkout(&state).await?;
-    let tx = conn.build_transaction()
+    let tx = conn
+        .build_transaction()
         .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
-        .start().await.map_err(db::query_error)?;
+        .start()
+        .await
+        .map_err(db::query_error)?;
     lock_reader(&tx, user.id()).await?;
-    let row = tx.query_opt(
-        "SELECT name,description,mode,created_at::text FROM custom_cbl_lists
+    let row = tx
+        .query_opt(
+            "SELECT name,description,mode,created_at::text FROM custom_cbl_lists
          WHERE id=$1 AND user_id=$2 FOR UPDATE",
-        &[&list_id, &user.id()],
-    ).await.map_err(db::query_error)?.ok_or_else(|| ApiError(
-        StatusCode::NOT_FOUND, "Reading List not found".to_string(),
-    ))?;
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".to_string()))?;
     let current_mode: String = row.get(2);
     let mode = validate_mode(request.mode.as_deref().or(Some(&current_mode)))?;
     let old_entries = load_entries(&tx, list_id).await?;
     let old_requirements = stored_requirements(&current_mode, &old_entries);
-    let old_by_issue: BTreeMap<i32, ReadingListEntry> =
-        old_entries.iter().cloned().map(|entry| (entry.issue_id, entry)).collect();
+    let old_by_issue: BTreeMap<i32, ReadingListEntry> = old_entries
+        .iter()
+        .cloned()
+        .map(|entry| (entry.issue_id, entry))
+        .collect();
 
     let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
     if unique.len() != request.issue_ids.len() {
-        return Err(ApiError(StatusCode::BAD_REQUEST, "issue_ids must be unique".into()));
+        return Err(ApiError(
+            StatusCode::BAD_REQUEST,
+            "issue_ids must be unique".into(),
+        ));
     }
     let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
     if owned != unique {
         return Err(ApiError(StatusCode::NOT_FOUND, "Issue not found".into()));
     }
-    let checkpoints: BTreeSet<i32> = request.checkpoint_issue_ids
-        .as_ref().map(|ids| ids.iter().copied().collect())
-        .unwrap_or_else(|| old_entries.iter().filter(|entry| entry.is_checkpoint)
-            .map(|entry| entry.issue_id).collect());
+    let checkpoints: BTreeSet<i32> = request
+        .checkpoint_issue_ids
+        .as_ref()
+        .map(|ids| ids.iter().copied().collect())
+        .unwrap_or_else(|| {
+            old_entries
+                .iter()
+                .filter(|entry| entry.is_checkpoint)
+                .map(|entry| entry.issue_id)
+                .collect()
+        });
     if !checkpoints.is_subset(&unique) {
-        return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY,
-            "custom_cbl_invalid_checkpoint_targets".to_string()));
+        return Err(ApiError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "custom_cbl_invalid_checkpoint_targets".to_string(),
+        ));
     }
     tx.execute(
         "UPDATE custom_cbl_lists
          SET name=$3,description=$4,mode=$5,updated_at=NOW()
          WHERE id=$1 AND user_id=$2",
         &[&list_id, &user.id(), &name, &request.description, &mode],
-    ).await.map_err(db::query_error)?;
-    tx.execute("DELETE FROM custom_cbl_entries WHERE list_id=$1", &[&list_id])
-        .await.map_err(db::query_error)?;
+    )
+    .await
+    .map_err(db::query_error)?;
+    tx.execute(
+        "DELETE FROM custom_cbl_entries WHERE list_id=$1",
+        &[&list_id],
+    )
+    .await
+    .map_err(db::query_error)?;
 
     for (position, issue_id) in request.issue_ids.iter().enumerate() {
         let old = old_by_issue.get(issue_id);
-        let intent = request.entry_intents.as_ref().and_then(|intents| intents.get(issue_id));
-        let gate = intent.map(|entry| entry.gate.as_str())
-            .or_else(|| old.map(|entry| entry.gate.as_str())).unwrap_or("none");
+        let intent = request
+            .entry_intents
+            .as_ref()
+            .and_then(|intents| intents.get(issue_id));
+        let gate = intent
+            .map(|entry| entry.gate.as_str())
+            .or_else(|| old.map(|entry| entry.gate.as_str()))
+            .unwrap_or("none");
         if !matches!(gate, "none" | "hold" | "after_previous") {
             return Err(ApiError(StatusCode::BAD_REQUEST, "Invalid gate".into()));
         }
-        let skipped = intent.map(|entry| entry.skipped).or_else(|| old.map(|entry| entry.skipped))
+        let skipped = intent
+            .map(|entry| entry.skipped)
+            .or_else(|| old.map(|entry| entry.skipped))
             .unwrap_or(false);
         let targets: Vec<i32> = match request.checkpoint_targets.as_ref() {
             Some(requested) => requested.get(issue_id).cloned().unwrap_or_default(),
             None => {
                 if checkpoints.contains(issue_id) {
-                    old.map(|entry| entry.checkpoint_target_issue_ids.iter().copied()
-                        .filter(|target| unique.contains(target)).collect())
-                        .unwrap_or_else(|| request.issue_ids.get(position + 1)
-                            .copied().into_iter().collect())
+                    old.map(|entry| {
+                        entry
+                            .checkpoint_target_issue_ids
+                            .iter()
+                            .copied()
+                            .filter(|target| unique.contains(target))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| {
+                        request
+                            .issue_ids
+                            .get(position + 1)
+                            .copied()
+                            .into_iter()
+                            .collect()
+                    })
                 } else {
                     vec![]
                 }
@@ -737,11 +789,17 @@ pub async fn update_reading_list(
             || valid.contains(issue_id)
             || (!checkpoints.contains(issue_id) && !targets.is_empty())
         {
-            return Err(ApiError(StatusCode::UNPROCESSABLE_ENTITY,
-                "custom_cbl_invalid_checkpoint_targets".to_string()));
+            return Err(ApiError(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "custom_cbl_invalid_checkpoint_targets".to_string(),
+            ));
         }
-        let targets_json = serde_json::to_string(&targets)
-            .map_err(|_| ApiError(StatusCode::INTERNAL_SERVER_ERROR, "Invalid checkpoint".into()))?;
+        let targets_json = serde_json::to_string(&targets).map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid checkpoint".into(),
+            )
+        })?;
         tx.execute(
             "INSERT INTO custom_cbl_entries
              (list_id,issue_id,position,created_at,is_checkpoint,checkpoint_target_issue_ids,gate,skipped)
@@ -754,41 +812,67 @@ pub async fn update_reading_list(
     graph_preflight(&tx, user).await?;
     let entries = load_entries(&tx, list_id).await?;
     let new_requirements = stored_requirements(&mode, &entries);
-    let labels: BTreeMap<i32, String> = old_entries.iter().chain(entries.iter())
-        .map(|entry| (entry.issue_id, format!("{} #{}",entry.series_name,entry.issue_number)))
+    let labels: BTreeMap<i32, String> = old_entries
+        .iter()
+        .chain(entries.iter())
+        .map(|entry| {
+            (
+                entry.issue_id,
+                format!("{} #{}", entry.series_name, entry.issue_number),
+            )
+        })
         .collect();
     let changes = predecessor_changes(&old_requirements, &new_requirements, &labels);
-    let confirmation: Vec<ReadingListPredecessorChange> =
-        request.confirmed_predecessor_changes.as_ref().map_or(
-            Ok(Vec::new()),
-            |value| serde_json::from_value(value.clone()).map_err(|_| ApiError(
-                StatusCode::UNPROCESSABLE_ENTITY, "Invalid predecessor confirmation".into(),
-            )),
-        )?;
+    let confirmation: Vec<ReadingListPredecessorChange> = request
+        .confirmed_predecessor_changes
+        .as_ref()
+        .map_or(Ok(Vec::new()), |value| {
+            serde_json::from_value(value.clone()).map_err(|_| {
+                ApiError(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    "Invalid predecessor confirmation".into(),
+                )
+            })
+        })?;
     if !changes.is_empty() && !confirmed_changes_match(&changes, &confirmation) {
-        return Ok((StatusCode::CONFLICT, Json(serde_json::json!({
-            "detail": {
-                "code": "reading_list_predecessor_confirmation_required",
-                "predecessor_changes": changes
-            }
-        }))).into_response());
+        return Ok((
+            StatusCode::CONFLICT,
+            Json(serde_json::json!({
+                "detail": {
+                    "code": "reading_list_predecessor_confirmation_required",
+                    "predecessor_changes": changes
+                }
+            })),
+        )
+            .into_response());
     }
 
     let list = list_from_row(
-        (list_id, name, request.description, mode, row.get(3), String::new(),
-         entries.len() as i32),
-        user.id(), entries,
+        (
+            list_id,
+            name,
+            request.description,
+            mode,
+            row.get(3),
+            String::new(),
+            entries.len() as i32,
+        ),
+        user.id(),
+        entries,
     );
-    let mut json = serde_json::to_value(&list).map_err(|_| ApiError(
-        StatusCode::INTERNAL_SERVER_ERROR, "Reading List serialization failed".into()
-    ))?;
+    let mut json = serde_json::to_value(&list).map_err(|_| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Reading List serialization failed".into(),
+        )
+    })?;
     json["predecessor_changes"] = serde_json::to_value(&changes).unwrap_or_default();
     json["warnings"] = serde_json::json!([]);
     tx.commit().await.map_err(db::query_error)?;
     // The metadata timestamp is selected after commit so clients get the
     // actual persisted optimistic token rather than a manufactured clock.
     let conn = db::checkout(&state).await?;
-    if let Some(row) = load_list(&conn,list_id,user.id()).await? {
+    if let Some(row) = load_list(&conn, list_id, user.id()).await? {
         json["updated_at"] = serde_json::json!(row.5);
     }
     Ok((StatusCode::OK, Json(json)).into_response())
