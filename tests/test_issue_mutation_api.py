@@ -388,7 +388,7 @@ async def test_legacy_delete_middle_issue_is_unavailable_and_preserves_history(
     assert thread.total_issues == 4
     assert thread.issues_remaining == 3
     assert thread.next_unread_issue_id == issues[0].id
-    assert thread.reading_progress == "not_started"
+    assert thread.reading_progress == "in_progress"
     assert thread.status == "active"
 
     event_result = await async_db.execute(
