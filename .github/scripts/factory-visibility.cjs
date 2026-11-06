@@ -759,15 +759,22 @@ function parseFactoryComment(body) {
   if (!semanticVerdict && !legacyVerdict && !claim) return null;
 
   const kind = claim?.[1] || null;
-  if (claim) {
+  if (kind && kind !== 'ready' && kind !== 'needs-human') {
     const fields = claim[2].split(':');
-    const hasWorkerEpoch = fields.length >= 3 && fields[1].length > 0 && /^\d+$/.test(fields[2]);
+    // A valid claim marker must have exactly the required number of fields for its kind.
+    // [0]: Target (issue-N or pr-N), [1]: Worker ID, [2]: Epoch.
+    if (fields.length !== 3) return null;
+    const hasWorkerEpoch = fields[1].length > 0 && /^\d+$/.test(fields[2]);
     if ((kind === 'implement-claim' || kind === 'implement-progress')
         && (!hasWorkerEpoch || !/^issue-\d+$/.test(fields[0]))) return null;
     if ((kind === 'fix-claim' || kind === 'fix-progress' || kind === 'review-claim')
         && !hasWorkerEpoch) return null;
     if (kind === 'claim-released'
         && (!hasWorkerEpoch || !/^(?:issue|pr)-\d+$/.test(fields[0]))) return null;
+  } else if (kind === 'ready' || kind === 'needs-human') {
+    // Ready/needs-human markers must have exactly one field (e.g. pr-123).
+    const fields = claim[2].split(':');
+    if (fields.length !== 1) return null;
   }
 
   let stage = null;
@@ -1264,4 +1271,5 @@ module.exports._test = {
   restRequestCounts,
   clearRestRequestLog,
   currentLabels,
+  parseFactoryComment,
 };
