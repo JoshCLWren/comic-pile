@@ -26,7 +26,7 @@ export function useRollPendingSync({
     if (!session) return undefined
     // Bootstrap is authoritative when it exists, including when pending_thread_id is null.
     // Fall back to session.pending_thread_id only when bootstrap data is absent.
-    if (rollBootstrap !== null) {
+    if (rollBootstrap != null) {
       return { ...session, pending_thread_id: rollBootstrap.pending_thread_id }
     }
     return session
