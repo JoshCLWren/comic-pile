@@ -497,3 +497,147 @@ def test_worker_call_site_merge_failure_does_not_repeat_the_same_pr(tmp_path: Pa
         f"release {PR} factory/87-4081-opencode-free factory:review merge-failed"
     ]
     assert f"skip {PR}" in calls
+
+
+NVIDIA_WORKER = SCRIPTS / "nvidia-factory-worker.sh"
+OMNIROUTE_WORKER = SCRIPTS / "omniroute-factory-worker.sh"
+LEGACY_WORKERS = pytest.mark.parametrize(
+    "worker_path", [NVIDIA_WORKER, OMNIROUTE_WORKER], ids=["nvidia", "omniroute"]
+)
+
+
+def _legacy_worker_merge_block(worker_path: Path) -> str:
+    """Extract the real merge call site from a legacy worker script."""
+    source = worker_path.read_text(encoding="utf-8")
+    start = source.index('  current="$(git rev-parse HEAD)"')
+    end = source.index("  if (( transient_failure == 1 )); then", start)
+    return source[start:end]
+
+
+def _run_legacy_call_site(
+    tmp_path: Path, worker_path: Path, **env_overrides: str
+) -> tuple[list[str], str]:
+    """Execute one legacy worker's real merge block with fakes and stubs."""
+    _, env = _fixture(tmp_path)
+    env.update(env_overrides)
+    branch_suffix = worker_path.stem.split("-")[0]
+    worker = "legacy" + str(os.getpid())
+    worker_log = Path("/tmp") / f"opencode-factory-{worker}.log"
+    worker_log.write_text("FACTORY_GATE_READY\n", encoding="utf-8")
+    block = _legacy_worker_merge_block(worker_path).replace(
+        'current="$(git rev-parse HEAD)"', 'current="$EXPECTED_HEAD"', 1
+    )
+    script = f"""
+set -Eeuo pipefail
+source {shlex.quote(str(LIBRARY))}
+NUMBER={PR}
+BRANCH=factory/87-4081-{branch_suffix}
+WORKER={worker}
+MODEL=test-model
+CALL_SIGN=test-sign
+EXPECTED_HEAD={HEAD}
+transient_failure=0
+
+log() {{ printf 'log %s\\n' "$*" >> "$CALL_LOG"; }}
+release_pr_and_issue() {{ printf 'release %s\\n' "$*" >> "$CALL_LOG"; }}
+factory_dispatch_production_deploy() {{ printf 'dispatch %s\\n' "$*" >> "$CALL_LOG"; }}
+SKIP_PRS=()
+run_once=0
+while (( run_once == 0 )); do
+  run_once=1
+{block}
+done
+printf 'after-block\\n' >> "$CALL_LOG"
+printf 'skip %s\\n' "${{SKIP_PRS[*]:-}}" >> "$CALL_LOG"
+"""
+    try:
+        result = subprocess.run(
+            ["bash", "-c", script],
+            cwd=tmp_path,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+    finally:
+        worker_log.unlink(missing_ok=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    return _calls(tmp_path), result.stdout
+
+
+@LEGACY_WORKERS
+def test_legacy_worker_routes_through_canonical_gates(
+    tmp_path: Path, worker_path: Path
+) -> None:
+    """Legacy workers use the canonical route, never a raw merge plus close."""
+    block = _legacy_worker_merge_block(worker_path)
+    assert "factory_merge_with_canonical_gates" in block
+    assert "gh issue close" not in block
+    assert "gh pr merge" not in block
+    assert "machine_merge_gates_pass" not in block
+    assert "release_pr_and_issue" in block
+    assert "SKIP_PRS+=$NUMBER" not in block or "SKIP_PRS+=(\"$NUMBER\")" in block
+
+
+@LEGACY_WORKERS
+def test_legacy_worker_gate_denial_releases_and_skips(
+    tmp_path: Path, worker_path: Path
+) -> None:
+    """A retry/deny decision releases the PR and issue instead of looping."""
+    calls, _ = _run_legacy_call_site(
+        tmp_path, worker_path, FAKE_GATE_DECISION="retry"
+    )
+    assert _merge_calls(calls) == []
+    assert _closure_calls(calls) == []
+    branch_suffix = worker_path.stem.split("-")[0]
+    assert [c for c in calls if c.startswith("release ")] == [
+        f"release {PR} factory/87-4081-{branch_suffix} factory:review gate-denied"
+    ]
+    assert f"skip {PR}" in calls
+
+
+@LEGACY_WORKERS
+def test_legacy_worker_merges_and_closes_through_trusted_policy(
+    tmp_path: Path, worker_path: Path
+) -> None:
+    """Passing gates merge once and close through the trusted closure policy."""
+    calls, _ = _run_legacy_call_site(tmp_path, worker_path)
+    assert _merge_calls(calls) == [
+        f"gh pr merge {PR} --merge --match-head-commit {HEAD} --delete-branch"
+    ]
+    assert len(_closure_calls(calls)) == 1
+    assert not [c for c in calls if c.startswith("gh issue close")]
+    assert f"skip {PR}" not in calls
+
+
+@LEGACY_WORKERS
+def test_legacy_worker_blocked_closure_does_not_report_acceptance(
+    tmp_path: Path, worker_path: Path
+) -> None:
+    """A blocked closure is logged as left-open, never as accepted or closed."""
+    calls, _ = _run_legacy_call_site(
+        tmp_path, worker_path, FAKE_CLOSURE_OUTCOME="open-dependency: #4016"
+    )
+    assert len(_merge_calls(calls)) == 1
+    assert any(
+        "issue left open" in c for c in calls if c.startswith("log ")
+    )
+    assert not [c for c in calls if c.startswith("gh issue close")]
+    assert not [c for c in calls if "ralph-status:done" in c]
+    assert f"skip {PR}" in calls
+
+
+@LEGACY_WORKERS
+def test_legacy_worker_merge_failure_releases_and_skips(
+    tmp_path: Path, worker_path: Path
+) -> None:
+    """A failed merge releases the lease instead of keeping the PR reserved."""
+    calls, _ = _run_legacy_call_site(tmp_path, worker_path, FAKE_MERGE_EXIT="1")
+    assert _merge_calls(calls)
+    assert _closure_calls(calls) == []
+    branch_suffix = worker_path.stem.split("-")[0]
+    assert [c for c in calls if c.startswith("release ")] == [
+        f"release {PR} factory/87-4081-{branch_suffix} factory:review merge-failed"
+    ]
+    assert f"skip {PR}" in calls
