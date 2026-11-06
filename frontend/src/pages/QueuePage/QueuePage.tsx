@@ -4,8 +4,10 @@ import { useRollNudge } from './useRollNudge'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import { useInfiniteScroll } from '../../hooks/useInfiniteScroll'
 import { useCreateThread, useReactivateThread, useUpdateThread } from '../../hooks/useThread'
-import { useExcludedThreads, useMoveToPosition, useQueueThreads, useRestoreThread, useShuffleQueue } from '../../hooks/useQueue'
+import { useExcludedThreads, useMoveToPosition, useQueueThreads, useShuffleQueue } from '../../hooks/useQueue'
 import { useSession } from '../../hooks/useSession'
+import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollPendingSync } from './useRollPendingSync'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterIssueEdit, invalidateAfterQueueMutation } from '../../query/cacheEffects'
 import { queryClient } from '../../query/queryClient'
@@ -25,6 +27,7 @@ import QueueBulkMapSeriesDialog from '../../components/QueueBulkMapSeriesDialog'
 import { useQueueBulkMapping } from './useQueueBulkMapping'
 import { useQueueFilters, type QueueSortBy } from './useQueueFilters'
 import { useQueueListLoading } from './useQueueListLoading'
+import { useQueueRestore } from './useQueueRestore'
 import { useQueueThreadActions } from './useQueueThreadActions'
 import { useQueueThreadCards } from './useQueueThreadCards'
 import { useQueueModals as useQueueModalsHook } from './useQueueModals'
@@ -59,6 +62,7 @@ export default function QueuePage() {
   // open run keeps reading the cursor so the batch covers the whole queue.
   const bulkMapping = useQueueBulkMapping(queueLoader)
   const { data: session, refetch: refetchSession } = useSession()
+  const { data: rollBootstrap } = useRollBootstrap()
   const createMutation = useCreateThread()
   const updateMutation = useUpdateThread()
   const reactivateMutation = useReactivateThread()
@@ -66,22 +70,7 @@ export default function QueuePage() {
   const shuffleQueueMutation = useShuffleQueue()
   // Excluded rows have a separate bounded read because the active queue omits them.
   const { threads: excludedThreads } = useExcludedThreads(true)
-  const restoreMutation = useRestoreThread()
-  const [restoreError, setRestoreError] = useState<string | null>(null)
-
-  const handleRestore = useCallback(
-    async (threadId: number) => {
-      setRestoreError(null)
-      try {
-        await restoreMutation.mutate(threadId)
-      } catch {
-        setRestoreError(
-          'Could not restore that series to the queue. Check your connection and try again.',
-        )
-      }
-    },
-    [restoreMutation],
-  )
+  const { handleRestore, restoreError, isRestoring } = useQueueRestore()
 
   const { activeThreads, completedThreads, filteredThreads } = useQueueFilters(
     threads,
@@ -119,16 +108,14 @@ export default function QueuePage() {
   )
 
   const rollNudge = useRollNudge()
-
+  const rollPendingSync = useRollPendingSync({ rollBootstrap, session, refetchSession, refetchQueue: queueLoader.refetch })
   const modals = useQueueModalsHook({
     threads,
     onCreated: rollNudge.onCreated,
     // Refetch so a confirmed edit (e.g. a completed series) reconciles the Queue now (#4181).
-    onUpdated: queueLoader.refetch,
+    onUpdated: rollPendingSync.onUpdated,
     onReactivated: async () => {},
-    refetchSession: async () => {
-      await refetchSession()
-    },
+    refetchSession: rollPendingSync.onRefetchSession,
     submitCreate,
     submitEdit,
     submitReactivate,
@@ -149,7 +136,7 @@ export default function QueuePage() {
     actions,
     activeThreads,
     modals,
-    session,
+    session: rollPendingSync.session,
     sortBy,
   })
 
@@ -239,7 +226,7 @@ export default function QueuePage() {
 
         <ExcludedThreadsSection
           threads={excludedThreads}
-          isRestoring={restoreMutation.isPending}
+          isRestoring={isRestoring}
           error={restoreError}
           onRestore={handleRestore}
         />
