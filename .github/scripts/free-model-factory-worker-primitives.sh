@@ -140,7 +140,15 @@ release_target() {
       stage="$fallback_stage"
       ;;
     *)
-      stage="$(current_stage "$number" "$fallback_stage")"
+      if [[ "$fallback_stage" == 'factory:blocked' ]]; then
+        # A gate denial (deny decision) is not a stage-preservation case: the
+        # caller truthfully downgraded the PR to factory:blocked so it does
+        # not get repeated work. current_stage would preserve the stale live
+        # stage label, silently discarding the denial.
+        stage="$fallback_stage"
+      else
+        stage="$(current_stage "$number" "$fallback_stage")"
+      fi
       ;;
   esac
   epoch="$(date +%s)"

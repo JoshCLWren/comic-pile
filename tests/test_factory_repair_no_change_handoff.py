@@ -108,14 +108,51 @@ def test_review_no_diff_retry_exhaustion_keeps_review_not_blocked() -> None:
 
 
 def test_primitives_do_not_rewrite_no_diff_exhaustion_as_blocked() -> None:
-    """Release accounting stays in markers; factory:blocked remains a genuine blocker."""
+    """Release accounting stays in markers; no-diff exhaustion never becomes blocked."""
     text = PRIMITIVES.read_text(encoding="utf-8")
+    # The only literal blocked assignment in the primitives is the
+    # gate-denial call site; release_target forces blocked only by passing
+    # through the caller-selected fallback stage (covered functionally below).
+    assert text.count("stage='factory:blocked'") == 1
     assert "quarantining" not in text
-    assert "stage='factory:blocked'" not in text
     assert "comic-pile-factory-claim-released-v3" in text
     assert "no-persisted-change-handoff" in text
     assert "pr_no_diff_generation_fields" in text
     assert "sha=" in text
+
+
+def test_gate_denied_release_forces_blocked_over_stale_live_stage() -> None:
+    """A deny decision must downgrade to factory:blocked even when the PR still
+    carries a stale factory:review (or factory:ci) label."""
+    assert (
+        release_stage(
+            "gate-denied: linkage reversal: #4027",
+            "factory:blocked",
+            current_stage="factory:review",
+        )
+        == "factory:blocked"
+    )
+    assert (
+        release_stage(
+            "gate-denied: linkage reversal: #4027",
+            "factory:blocked",
+            current_stage="factory:ci",
+        )
+        == "factory:blocked"
+    )
+
+
+def test_gate_retry_release_still_preserves_live_stage() -> None:
+    """A retry (not deny) gate refusal keeps the truthful live stage; only a
+    deny decision forces factory:blocked."""
+    assert (
+        release_stage(
+            "gate-denied: required checks are not terminal: IN_PROGRESS",
+            "factory:review",
+            current_stage="factory:ci",
+        )
+        == "factory:ci"
+    )
 
 
 def _run_release_script(script: str, *, check: bool = True) -> subprocess.CompletedProcess[str]:
