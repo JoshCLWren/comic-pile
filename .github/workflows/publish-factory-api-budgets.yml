@@ -1,10 +1,11 @@
 name: Publish Factory API Budgets
 
 on:
-  schedule:
-    # ComicPile owns its own scheduled automation. Rotisserie stays portable.
-    # Deliberately offset from the hourly :17 quota observation.
-    - cron: '10 * * * *'
+  # Publish only after the private authenticated sample artifact is finalized.
+  # Cron at :10 raced the :17 observer and repeatedly published stale data.
+  workflow_run:
+    workflows: ['Factory API Quota Observation']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -18,7 +19,14 @@ jobs:
   publish:
     # Disabled until dedicated observability App permissions and secrets exist.
     # Do not generate hourly failure noise before the integration is provisioned.
-    if: github.ref == 'refs/heads/main' && vars.FACTORY_OBSERVABILITY_ENABLED == 'true'
+    if: >-
+      vars.FACTORY_OBSERVABILITY_ENABLED == 'true' &&
+      (
+        (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+        (github.event_name == 'workflow_run' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.head_branch == 'main')
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
