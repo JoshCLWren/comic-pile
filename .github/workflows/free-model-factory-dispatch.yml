@@ -15,7 +15,8 @@ permissions:
 
 concurrency:
   group: fixed-model-factory-dispatch
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  queue: max
+  cancel-in-progress: false
 
 jobs:
   dispatch:
