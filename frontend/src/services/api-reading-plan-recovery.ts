@@ -1,43 +1,12 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
-export interface RecoveryStep {
-  issue_id: number
-  label: string
-}
+import type { components } from '../generated/openapi'
 
-export interface RecoveryCandidate {
-  list_id: number
-  name: string
-  mode: 'strict' | 'loose'
-  list_updated_at: string
-  steps: RecoveryStep[]
-  added_steps: RecoveryStep[]
-  removed_steps: RecoveryStep[]
-  order_changed: boolean
-}
-
-export interface PlanRecoveryPreview {
-  plan_id: number
-  plan_name: string
-  plan_updated_at: string
-  status: 'orphaned' | 'linked' | 'ambiguous'
-  linked_list_id: number | null
-  retained_steps: RecoveryStep[]
-  candidates: RecoveryCandidate[]
-}
-
-export interface PlanRelinkRequest {
-  list_id: number
-  expected_plan_updated_at: string
-  expected_list_updated_at: string
-  confirm: true
-}
-
-export interface PlanRelinkResult {
-  plan_id: number
-  list_id: number
-  status: 'relinked' | 'already_linked'
-}
+export type RecoveryStep = components['schemas']['RecoveryStep']
+export type RecoveryCandidate = components['schemas']['RecoveryCandidate']
+export type PlanRecoveryPreview = components['schemas']['PlanRecoveryPreview']
+export type PlanRelinkRequest = components['schemas']['PlanRelinkRequest']
+export type PlanRelinkResult = components['schemas']['PlanRelinkResult']
 
 /** Repair is owner-scoped and opt-in: no name-based automatic matching. */
 export function createReadingPlanRecoveryApi(client: HttpClient) {
