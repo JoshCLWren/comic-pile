@@ -28138,47 +28138,6 @@
       }
     },
     "/api/v1/custom-cbls/{list_id}": {
-      "delete": {
-        "description": "Delete one user-owned custom CBL without touching its comics or Reading Plans.",
-        "operationId": "delete_custom_cbl_api_v1_custom_cbls__list_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "list_id",
-            "required": true,
-            "schema": {
-              "title": "List Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Custom Cbl",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "custom-cbls"
-        ]
-      },
       "get": {
         "description": "Return one owned custom CBL.",
         "operationId": "get_custom_cbl_api_v1_custom_cbls__list_id__get",
@@ -30711,46 +30670,6 @@
       }
     },
     "/api/v1/issues/{issue_id}": {
-      "delete": {
-        "description": "Delete one issue, compact later positions, and update thread issue metadata.\n\nArgs:\n    issue_id: The issue ID to delete.\n    current_user: The authenticated user requesting the deletion.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    None. The response is HTTP 204 on success.\n\nRaises:\n    HTTPException: If the issue does not exist or is not owned by the user.",
-        "operationId": "delete_issue_api_v1_issues__issue_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "issue_id",
-            "required": true,
-            "schema": {
-              "title": "Issue Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Issue",
-        "tags": [
-          "issues",
-          "issues"
-        ]
-      },
       "get": {
         "description": "Get a single issue by ID.\n\nArgs:\n    issue_id: The issue ID to retrieve.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    IssueResponse with issue details.\n\nRaises:\n    HTTPException: If issue not found.",
         "operationId": "get_issue_api_v1_issues__issue_id__get",
