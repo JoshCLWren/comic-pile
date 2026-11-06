@@ -1,1 +1,0 @@
-Factory resume packet. All findings from PR #4050 have been reconciled against current main and are fixed or no longer applicable.
