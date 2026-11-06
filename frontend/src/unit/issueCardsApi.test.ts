@@ -28,6 +28,7 @@ beforeEach(() => {
 
 describe('issueCardsApi', () => {
   it('fetches one bounded batch for a visible set of ids', async () => {
+    // SAFETY: the mock resolves the exact IssueCardsResponse shape the client consumes.
     client.post.mockResolvedValue({ items: [CARD(11), CARD(12)] } as components['schemas']['IssueCardsResponse'])
 
     const cards = await api.fetchCards([11, 12])
@@ -38,6 +39,7 @@ describe('issueCardsApi', () => {
   })
 
   it('chunks lists beyond the server bound instead of one request per row', async () => {
+    // SAFETY: the mock resolves the exact IssueCardsResponse shape the client consumes.
     client.post.mockResolvedValue({ items: [] } as components['schemas']['IssueCardsResponse'])
     const ids = Array.from({ length: 250 }, (_, index) => index + 1)
 
@@ -45,7 +47,9 @@ describe('issueCardsApi', () => {
 
     expect(cards).toEqual([])
     expect(client.post).toHaveBeenCalledTimes(2)
+    // SAFETY: the mocked post records the request body as its second argument.
     const firstCall = client.post.mock.calls[0][1] as components['schemas']['IssueCardsRequest']
+    // SAFETY: the mocked post records the request body as its second argument.
     const secondCall = client.post.mock.calls[1][1] as components['schemas']['IssueCardsRequest']
     expect(firstCall.issue_ids).toHaveLength(200)
     expect(secondCall.issue_ids).toHaveLength(50)

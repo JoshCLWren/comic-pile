@@ -946,6 +946,7 @@ export async function applyIssueCardMutation(
   const progress = response.thread
   const mergeProgress = (cached: Thread | undefined): Thread | undefined => {
     if (!cached) return undefined
+    // SAFETY: the native direct-read response always returns a valid Thread status string.
     return {
       ...cached,
       issues_remaining: progress.issues_remaining,

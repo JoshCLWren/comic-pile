@@ -119,6 +119,7 @@ beforeEach(() => {
 describe('ComicIssueCard', () => {
   it('passes the exact provider CDN URL through as img src (no ComicPile endpoint)', () => {
     renderCard()
+    // SAFETY: getByAltText returns the cover img element for the rendered card.
     const img = screen.getByAltText('Cover for Hellboy in Hell #3') as HTMLImageElement
     expect(img.getAttribute('src')).toBe(PROVIDER_URL)
     expect(img.src).toContain('comicvine.gamespot.com')
@@ -132,9 +133,18 @@ describe('ComicIssueCard', () => {
     expect(screen.getByTestId('comic-mapping-map')).toBeTruthy()
   })
 
+  it('offers Add to ComicPile for a provider-only entry instead of mapping controls', () => {
+    const onAddToLibrary = vi.fn()
+    renderCard({ isOwned: false, onAddToLibrary })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to ComicPile' }))
+    expect(onAddToLibrary).toHaveBeenCalledTimes(1)
+    expect(screen.queryByTestId('comic-mapping-map')).toBeNull()
+  })
+
   it('keeps a blocked issue actionable: advisory only, never a disabled Read now', () => {
     renderCard({ advisory: 'Normally follows B.P.R.D.' })
     expect(screen.getByTestId('comic-issue-availability')).toHaveTextContent('Normally follows B.P.R.D.')
+    // SAFETY: getByRole returns the Read now button element.
     const readNow = screen.getByRole('button', { name: 'Read now' }) as HTMLButtonElement
     expect(readNow.disabled).toBe(false)
     expect(screen.getByRole('button', { name: 'Rate / Mark read' })).toBeTruthy()
@@ -146,6 +156,7 @@ describe('ComicIssueCard', () => {
     expect(patchIssueSpy).not.toHaveBeenCalled()
     expect(screen.getByText('Rate Hellboy in Hell #3')).toBeTruthy()
     const slider = screen.getByRole('slider')
+    // SAFETY: the slider role is rendered as an input element.
     expect((slider as HTMLInputElement).value).toBe('3.5')
 
     // The manual editor must not promise Roll-only die/queue effects.
@@ -164,6 +175,7 @@ describe('ComicIssueCard', () => {
     renderCard()
     fireEvent.click(screen.getByRole('button', { name: 'Read now' }))
     fireEvent.change(screen.getByRole('slider'), { target: { value: '4.5' } })
+    // SAFETY: the slider role is rendered as an input element.
     expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('4.5')
     fireEvent.click(screen.getByRole('button', { name: 'Mark read & save' }))
     await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledTimes(1))
@@ -184,11 +196,13 @@ describe('ComicIssueCard', () => {
     expect(screen.getByText(/Rated 4\.5/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Edit rating' }))
     expect(patchIssueSpy).not.toHaveBeenCalled()
+    // SAFETY: the slider role is rendered as an input element.
     expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('4.5')
     fireEvent.change(screen.getByRole('slider'), { target: { value: '5' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save rating' }))
     await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledTimes(1))
     expect(patchIssueSpy).toHaveBeenCalledWith(77, expect.objectContaining({ rating: 5 }))
+    // SAFETY: the mocked patchIssue records the direct mutation body as its second argument.
     const body = patchIssueSpy.mock.calls[0][1] as { status?: string }
     expect(body.status).toBeUndefined()
   })

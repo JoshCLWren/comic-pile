@@ -259,6 +259,7 @@ describe('ReadingPlanDetailPage', () => {
     const { container } = renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
     // The featured direct-read experience opens in place on the plan.
+    // SAFETY: the featured card container is rendered in place by the header action.
     expect(await within(container.querySelector('[data-variant="featured"]') as HTMLElement).findByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(mockSetPending).not.toHaveBeenCalled()
     expect(patchIssueSpy).not.toHaveBeenCalled()
@@ -277,21 +278,26 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
-  it('does not offer direct selection or queue movement on blocked or upcoming issues', async () => {
+  it('offers manual direct read on blocked or upcoming issues without queue movement', async () => {
     renderPage()
     const blocked = await screen.findByTestId('blocked-next')
-    expect(within(blocked).queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    // #4444: blocked issues keep manual Read now; only queue movement stays unavailable.
+    expect(within(blocked).getByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(within(blocked).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Show 1 upcoming issues' }))
     const upcoming = screen.getByTestId('upcoming-material')
-    expect(within(upcoming).queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    expect(within(upcoming).getByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(within(upcoming).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   })
 
-  it('shows a stale-frontier error and stays on the plan instead of opening the wrong issue', async () => {
-    mockSetPending.mockRejectedValue(new Error('This issue is no longer next and available. Refresh the reading plan and try again.'))
-    renderPage()
+  it('surfaces a direct-read save failure in the featured card and stays on the plan', async () => {
+    patchIssueSpy.mockRejectedValueOnce(new Error('This issue is no longer next and available. Refresh the reading plan and try again.'))
+    const { container } = renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
+    const featured = await container.querySelector('[data-variant="featured"]')
+    // SAFETY: the featured card container is rendered in place by the header action.
+    fireEvent.click(await within(featured as HTMLElement).findByRole('button', { name: 'Read now' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mark read & save' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('This issue is no longer next')
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
