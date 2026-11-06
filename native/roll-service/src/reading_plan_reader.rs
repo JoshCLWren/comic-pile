@@ -4,10 +4,12 @@
 //! Historic plan membership and provenance are never projected as authority.
 //! Reads share the exact Rust Reading List evaluation used by Roll and Queue.
 
-use crate::{
-    auth::AuthenticatedUser, db, reading_list, ApiError, AppState,
+use crate::{auth::AuthenticatedUser, db, reading_list, ApiError, AppState};
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
 };
-use axum::{extract::{Path, State}, http::StatusCode, Json};
 use serde::Serialize;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -111,19 +113,27 @@ pub struct PlanReaderResponse {
 }
 
 fn str_meta(meta: &Value, key: &str) -> Option<String> {
-    meta.get(key).and_then(Value::as_str).map(str::trim)
-        .filter(|value| !value.is_empty()).map(str::to_string)
+    meta.get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 fn number_meta(meta: &Value, keys: &[&str]) -> Option<i32> {
-    keys.iter().find_map(|key| meta.get(*key).and_then(|value| {
-        value.as_i64().or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
-    })).and_then(|number| i32::try_from(number).ok())
+    keys.iter()
+        .find_map(|key| {
+            meta.get(*key).and_then(|value| {
+                value
+                    .as_i64()
+                    .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
+            })
+        })
+        .and_then(|number| i32::try_from(number).ok())
 }
 fn display_meta(meta: &Value) -> (Option<String>, Option<String>, Option<i32>, Option<i32>) {
     let title = str_meta(meta, "name").or_else(|| str_meta(meta, "title"));
-    let publisher = str_meta(meta, "publisher").or_else(|| {
-        meta.get("publisher").and_then(|p| str_meta(p, "name"))
-    });
+    let publisher = str_meta(meta, "publisher")
+        .or_else(|| meta.get("publisher").and_then(|p| str_meta(p, "name")));
     let year = number_meta(meta, &["start_year"]);
     let count = number_meta(meta, &["count_of_issues", "issue_count"]);
     (title, publisher, year, count)
@@ -139,23 +149,28 @@ pub async fn read(
     Path(plan_id): Path<i32>,
 ) -> Result<Json<PlanReaderResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
-    let plan = conn.query_opt(
-        "SELECT p.name FROM continuity_plans p WHERE p.id=$1 AND p.user_id=$2",
-        &[&plan_id, &user.id()],
-    ).await.map_err(db::query_error)?.ok_or_else(|| {
-        ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string())
-    })?;
+    let plan = conn
+        .query_opt(
+            "SELECT p.name FROM continuity_plans p WHERE p.id=$1 AND p.user_id=$2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
     let plan_name: String = plan.get(0);
 
-    let source_rows = conn.query(
-        "SELECT s.id,s.raw_source_path,s.repository,s.source_path,s.revision_sha,
+    let source_rows = conn
+        .query(
+            "SELECT s.id,s.raw_source_path,s.repository,s.source_path,s.revision_sha,
                 s.content_hash,s.adopted_at::text,s.recorded_at::text,
                 s.custom_cbl_list_id,l.name
          FROM reading_plan_sources s
          LEFT JOIN custom_cbl_lists l ON l.id=s.custom_cbl_list_id AND l.user_id=$2
          WHERE s.plan_id=$1 ORDER BY s.id",
-        &[&plan_id, &user.id()],
-    ).await.map_err(db::query_error)?;
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
     let mut source_list_ids = BTreeSet::new();
     let mut sources = Vec::new();
     for row in source_rows {
@@ -183,7 +198,8 @@ pub async fn read(
                 "Reading Plan has no linked authoritative Reading List. Open recovery to relink."
             } else {
                 "Ambiguous Reading List association. No Plan membership was changed."
-            }.to_string(),
+            }
+            .to_string(),
         ));
     }
     let list_id = *source_list_ids.iter().next().unwrap();
@@ -191,23 +207,30 @@ pub async fn read(
 
     // The list reader is the actual authoritative Option E read evaluator.
     // Never run an independent projection that can diverge from Roll/Queue.
-    let list = reading_list::read_reading_list(
-        State(state.clone()), user, Path(list_id)
-    ).await?.0;
+    let list = reading_list::read_reading_list(State(state.clone()), user, Path(list_id))
+        .await?
+        .0;
     let path = format!("custom-cbl:{list_id}");
     let mut steps = Vec::new();
     for entry in list.entries {
-        let blockers = entry.explanation.as_ref().map_or_else(Vec::new, |explanation| {
-            explanation.blocking_dependencies.iter().filter_map(|dep| {
-                dep.issue_id.map(|issue_id| PlanReaderBlocker {
-                    issue_id,
-                    thread_id: dep.thread_id,
-                    thread_title: dep.thread_title.clone(),
-                    issue_number: dep.issue_number.clone(),
-                    explanation: dep.label.clone(),
-                })
-            }).collect()
-        });
+        let blockers = entry
+            .explanation
+            .as_ref()
+            .map_or_else(Vec::new, |explanation| {
+                explanation
+                    .blocking_dependencies
+                    .iter()
+                    .filter_map(|dep| {
+                        dep.issue_id.map(|issue_id| PlanReaderBlocker {
+                            issue_id,
+                            thread_id: dep.thread_id,
+                            thread_title: dep.thread_title.clone(),
+                            issue_number: dep.issue_number.clone(),
+                            explanation: dep.label.clone(),
+                        })
+                    })
+                    .collect()
+            });
         steps.push(PlanReaderIssue {
             occurrence_id: format!("reading-list:{list_id}:{}", entry.issue_id),
             issue_id: entry.issue_id,
@@ -225,14 +248,17 @@ pub async fn read(
     }
 
     let conn = db::checkout(&state).await?;
-    let follow_rows = conn.query(
-        "SELECT r.id,r.thread_id,r.external_identity_id,e.external_id,
+    let follow_rows = conn
+        .query(
+            "SELECT r.id,r.thread_id,r.external_identity_id,e.external_id,
                 e.metadata_json::text,r.enabled,r.last_synced_at::text
          FROM reading_plan_release_sources r
          JOIN external_identities e ON e.id=r.external_identity_id
          WHERE r.plan_id=$1 ORDER BY r.created_at,r.id",
-        &[&plan_id],
-    ).await.map_err(db::query_error)?;
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
     let mut release_sources = Vec::new();
     for row in follow_rows {
         let raw: String = row.get(4);
@@ -250,8 +276,9 @@ pub async fn read(
             last_synced_at: row.get(6),
         });
     }
-    let candidate_rows = conn.query(
-        "WITH plan_threads AS (
+    let candidate_rows = conn
+        .query(
+            "WITH plan_threads AS (
              SELECT DISTINCT i.thread_id
              FROM reading_plan_issues r JOIN issues i ON i.id=r.issue_id
              WHERE r.plan_id=$1
@@ -272,12 +299,16 @@ pub async fn read(
              AND e.provider='comicvine' AND e.entity_type='series'
          WHERE m.id IS NULL OR e.id IS NOT NULL
          ORDER BY t.id,m.id",
-        &[&plan_id, &user.id()],
-    ).await.map_err(db::query_error)?;
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
     let mut candidates = Vec::new();
-    let confirmed_threads: BTreeSet<i32> = candidate_rows.iter().filter(|row| {
-        row.get::<_, Option<String>>(2).as_deref() == Some("confirmed")
-    }).map(|row| row.get(0)).collect();
+    let confirmed_threads: BTreeSet<i32> = candidate_rows
+        .iter()
+        .filter(|row| row.get::<_, Option<String>>(2).as_deref() == Some("confirmed"))
+        .map(|row| row.get(0))
+        .collect();
     for row in candidate_rows {
         let thread_id: i32 = row.get(0);
         let title: String = row.get(1);
@@ -321,13 +352,26 @@ pub async fn read(
         total_issues: steps.len(),
         read_issues: steps.iter().filter(|step| step.status == "read").count(),
     };
-    let available_now = steps.iter().filter(|step| step.availability == "available").cloned().collect();
-    let blocked_next = steps.iter().filter(|step| step.availability == "blocked").cloned().collect();
+    let available_now = steps
+        .iter()
+        .filter(|step| step.availability == "available")
+        .cloned()
+        .collect();
+    let blocked_next = steps
+        .iter()
+        .filter(|step| step.availability == "blocked")
+        .cloned()
+        .collect();
     Ok(Json(PlanReaderResponse {
         execution_mode: "option_e".to_string(),
         plan_id,
         name: plan_name,
-        ordering_mode: if list.mode == "strict" { "strict_sequential" } else { "informational" }.to_string(),
+        ordering_mode: if list.mode == "strict" {
+            "strict_sequential"
+        } else {
+            "informational"
+        }
+        .to_string(),
         progress,
         available_now,
         blocked_next,
