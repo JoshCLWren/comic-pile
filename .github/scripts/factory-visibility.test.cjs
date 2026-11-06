@@ -395,6 +395,76 @@ test('semantic approval cannot be spoofed by wrong head, PR, actor, or prose ech
   }
 });
 
+test('documentation, fenced, partial, and malformed markers never change labels', async () => {
+  const head = 'a'.repeat(40);
+  const validReview = `<!-- comic-pile-factory-review-v2:${head}:changes-required -->`;
+  const cases = [
+    `Review policy example: ${validReview}`,
+    `Documenting a marker:\n${validReview}`,
+    ```\`\`\`text\n${validReview}\n\`\`\```,
+    '<!-- comic-pile-factory-review-v2:SHA:changes-required -->',
+    `<!-- comic-pile-factory-review-v2:${head}:changes-required:extra -->`,
+    `<!-- comic-pile-factory-review-v2:${head}:changes-required --> extra`,
+    '<!-- comic-pile-factory-fix-progress-v3:abc:local:missing-epoch -->',
+    '<!-- comic-pile-factory-ready-v1: -->',
+    '<!-- comic-pile-factory-semantic-review-v1:pr-44:head-SHA:reviewer-82:producer-11:verdict-repair -->',
+  ];
+  for (const body of cases) {
+    const calls = [];
+    const github = githubFor({
+      labels: ['factory', 'factory:approved', 'factory:ready', 'factory:unowned'],
+      setLabels: input => calls.push(input),
+      createLabel: input => calls.push(input),
+      updateLabel: input => calls.push(input),
+    });
+    await reconcile({
+      github,
+      context: contextFor('issue_comment', {
+        issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+        comment: { author_association: 'OWNER', user: { login: 'JoshCLWren' }, body },
+      }),
+    });
+    assert.deepEqual(calls, [], `unexpected label write for ${JSON.stringify(body)}`);
+  }
+});
+
+test('stale-head and untrusted complete markers do not write labels', async () => {
+  for (const comment of [
+    {
+      author_association: 'OWNER',
+      user: { login: 'JoshCLWren' },
+      body: `<!-- comic-pile-factory-review-v2:${'b'.repeat(40)}:changes-required -->`,
+    },
+    {
+      author_association: 'NONE',
+      user: { login: 'untrusted' },
+      body: `<!-- comic-pile-factory-review-v2:${'a'.repeat(40)}:changes-required -->`,
+    },
+    {
+      author_association: 'OWNER',
+      user: { login: 'app-user' },
+      performed_via_github_app: { slug: 'untrusted-app' },
+      body: `<!-- comic-pile-factory-review-v2:${'a'.repeat(40)}:changes-required -->`,
+    },
+  ]) {
+    const calls = [];
+    const github = githubFor({
+      labels: ['factory', 'factory:approved', 'factory:ready', 'factory:unowned'],
+      setLabels: input => calls.push(input),
+      createLabel: input => calls.push(input),
+      updateLabel: input => calls.push(input),
+    });
+    await reconcile({
+      github,
+      context: contextFor('issue_comment', {
+        issue: { number: 44, pull_request: { url: 'https://api.github.test/pulls/44' } },
+        comment,
+      }),
+    });
+    assert.deepEqual(calls, [], `unexpected write for ${comment.user.login}`);
+  }
+});
+
 test('trusted human OWNER semantic approval mints factory:approved for correct head and PR', async () => {
   const calls = [];
   const github = githubFor({
