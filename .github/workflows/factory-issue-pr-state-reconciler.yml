@@ -44,14 +44,45 @@ permissions:
 # newer pending run may still replace an older pending one; that is safe
 # because routing is recomputed from live PR state, never from the payload.
 concurrency:
-  group: ${{ (github.event_name == 'pull_request_review' || github.event_name == 'pull_request_review_comment' || (github.event_name == 'pull_request_target' && github.event.action == 'edited')) && format('factory-greptile-routing-pr-{0}', github.event.pull_request.number) || 'factory-issue-pr-state-reconciler' }}
+  # Invalid/untrusted comment floods must not occupy the queue shared with
+  # trusted PR/issue reconciliation. They are skipped by the job guard below.
+  group: >-
+    ${{
+      github.event_name == 'issue_comment' &&
+      !(
+        (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+         github.event.comment.user.login == 'github-actions[bot]') &&
+        (!github.event.comment.performed_via_github_app ||
+         github.event.comment.performed_via_github_app.slug == 'github-actions')
+      ) &&
+      format('factory-untrusted-comment-run-{0}', github.run_id) ||
+      (
+        (github.event_name == 'pull_request_review' ||
+         github.event_name == 'pull_request_review_comment' ||
+         (github.event_name == 'pull_request_target' && github.event.action == 'edited')) &&
+        format('factory-greptile-routing-pr-{0}', github.event.pull_request.number) ||
+        'factory-issue-pr-state-reconciler'
+      )
+    }}
   cancel-in-progress: false
 
 jobs:
   reconcile:
     # Ignore ordinary discussion. Only an exact review-marker event needs
     # this workflow; the handler rechecks trust, PR identity and live head.
-    if: ${{ github.event_name != 'issue_comment' || (github.event.issue.pull_request && (contains(github.event.comment.body, 'comic-pile-factory-semantic-review-v1:') || contains(github.event.comment.body, 'comic-pile-factory-review-v2:'))) }}
+    if: >-
+      ${{
+        github.event_name != 'issue_comment' ||
+        (
+          github.event.issue.pull_request &&
+          (contains(github.event.comment.body, 'comic-pile-factory-semantic-review-v1:') ||
+           contains(github.event.comment.body, 'comic-pile-factory-review-v2:')) &&
+          (contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) ||
+           github.event.comment.user.login == 'github-actions[bot]') &&
+          (!github.event.comment.performed_via_github_app ||
+           github.event.comment.performed_via_github_app.slug == 'github-actions')
+        )
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
