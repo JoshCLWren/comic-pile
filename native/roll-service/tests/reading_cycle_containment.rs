@@ -1331,8 +1331,13 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
     let (_superman, su) = seed_thread(&state, owner, "Superman", 1, &["1"]).await;
     let (_batman, ba) = seed_thread(&state, owner, "Batman", 2, &["1"]).await;
     let list_id = seed_list(
-        &state, owner, "Reading List under Plan A", "strict", &[su["1"], ba["1"]],
-    ).await;
+        &state,
+        owner,
+        "Reading List under Plan A",
+        "strict",
+        &[su["1"], ba["1"]],
+    )
+    .await;
     let plan_id = seed_plan(&state, owner, "Plan A", list_id).await;
     let event_id = mark_read_and_rate(&state, owner, su["1"], Some(4.0)).await;
     let path = format!("/api/v2/reading-lists/{list_id}");
@@ -1352,7 +1357,9 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
         "reading_list_predecessor_confirmation_required"
     );
     let confirmation = needs_ack["detail"]["predecessor_changes"]
-        .as_array().unwrap().clone();
+        .as_array()
+        .unwrap()
+        .clone();
     assert_eq!(confirmation.len(), 2);
 
     // A rejected attempt cannot reorder entries or change the saved source.
@@ -1360,8 +1367,13 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
     assert_eq!(status, StatusCode::OK, "{unchanged}");
     assert_eq!(unchanged["entries"][0]["issue_id"], su["1"]);
     let (status, saved_reader) = send(
-        &state, auth, "GET", &format!("/api/v2/continuity-plans/{plan_id}/reader"), None,
-    ).await;
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{saved_reader}");
     assert_eq!(saved_reader["lanes"][0]["issues"][0]["issue_id"], su["1"]);
 
@@ -1376,24 +1388,38 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
             "issue_ids": [ba["1"], su["1"]],
             "confirmed_predecessor_changes": confirmation
         })),
-    ).await;
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{edited}");
     assert_eq!(edited["entries"][0]["issue_id"], ba["1"]);
     let (status, reader_after) = send(
-        &state, auth, "GET", &format!("/api/v2/continuity-plans/{plan_id}/reader"), None,
-    ).await;
+        &state,
+        auth,
+        "GET",
+        &format!("/api/v2/continuity-plans/{plan_id}/reader"),
+        None,
+    )
+    .await;
     assert_eq!(status, StatusCode::OK, "{reader_after}");
     assert_eq!(reader_after["lanes"][0]["issues"][0]["issue_id"], ba["1"]);
 
     let conn = state.pool.get().await.unwrap();
-    let linked_list: i32 = conn.query_one(
-        "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
-        &[&plan_id],
-    ).await.unwrap().get(0);
+    let linked_list: i32 = conn
+        .query_one(
+            "SELECT custom_cbl_list_id FROM reading_plan_sources WHERE plan_id=$1",
+            &[&plan_id],
+        )
+        .await
+        .unwrap()
+        .get(0);
     assert_eq!(linked_list, list_id);
-    let history_preserved: bool = conn.query_one(
-        "SELECT EXISTS(SELECT 1 FROM events WHERE id=$1 AND issue_id=$2)",
-        &[&event_id, &su["1"]],
-    ).await.unwrap().get(0);
+    let history_preserved: bool = conn
+        .query_one(
+            "SELECT EXISTS(SELECT 1 FROM events WHERE id=$1 AND issue_id=$2)",
+            &[&event_id, &su["1"]],
+        )
+        .await
+        .unwrap()
+        .get(0);
     assert!(history_preserved);
 }
