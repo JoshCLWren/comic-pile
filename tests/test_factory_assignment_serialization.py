@@ -56,8 +56,11 @@ def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> No
     )
     for filename in writers:
         workflow = (WORKFLOWS / filename).read_text(encoding="utf-8")
-        concurrency = workflow.split("concurrency:", 1)[1].split("\njobs:", 1)[0]
-        assert ASSIGNMENT_GROUP in concurrency, filename
-        assert "queue: max" in concurrency, filename
-        assert "cancel-in-progress: false" in concurrency, filename
-        assert "queue: single" not in concurrency, filename
+        ingress = workflow.split("concurrency:", 1)[1].split("\njobs:", 1)[0]
+        writer = workflow.split("\njobs:", 1)[1]
+        assert "queue: single" in ingress, filename
+        assert "cancel-in-progress: false" in ingress, filename
+        assert ASSIGNMENT_GROUP not in ingress, filename
+        assert ASSIGNMENT_GROUP in writer, filename
+        assert "queue: max" in writer, filename
+        assert "cancel-in-progress: false" in writer, filename
