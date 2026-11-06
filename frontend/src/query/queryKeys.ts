@@ -312,6 +312,7 @@ export const queryKeys = {
     list: () => ['readingPlans', 'list'] as const,
     detail: (planId: number) => ['readingPlans', 'detail', planId] as const,
     reader: (planId: number) => ['readingPlans', 'reader', planId] as const,
+    recovery: (planId: number) => ['readingPlans', 'recovery', planId] as const,
     releaseSources: (planId: number) =>
       ['readingPlans', 'release-sources', planId] as const,
   },

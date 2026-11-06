@@ -6,6 +6,13 @@ import {
   type ContinuityPlan,
   type ContinuityPlanWrite,
 } from '../services/api-continuity-plans'
+import {
+  readingPlanRecoveryApi,
+  type RecoveryCandidate,
+  type RecoveryStep,
+  type PlanRelinkRequest,
+  type PlanRelinkResult,
+} from '../services/api-reading-plan-recovery'
 
 export interface SaveReadingPlanApi {
   create: (payload: ContinuityPlanWrite) => Promise<ContinuityPlan>
@@ -50,6 +57,30 @@ export function useSaveReadingPlan(planId: number | null, deps: SaveReadingPlanD
         : api.create(payload),
     onSuccess: async (plan) => {
       await applyCommittedReadingPlanUpdate(client, plan)
+    },
+  })
+}
+
+export function useReadingPlanRecoveryPreview(planId: number | null) {
+  return useQuery({
+    queryKey: planId ? queryKeys.readingPlans.recovery(planId) : [],
+    queryFn: () => readingPlanRecoveryApi.preview(planId!),
+    enabled: planId != null,
+  })
+}
+
+export function useRelinkReadingPlan(planId: number | null, onRecovered?: () => void) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: async (request: PlanRelinkRequest) =>
+      readingPlanRecoveryApi.relink(planId!, request),
+    onSuccess: async () => {
+      // Invalidate both the recovery preview and the reader view after successful relink
+      await Promise.all([
+        client.invalidateQueries({ queryKey: queryKeys.readingPlans.recovery(planId!) }),
+        client.invalidateQueries({ queryKey: queryKeys.readingPlans.reader(planId!) }),
+      ])
+      onRecovered?.()
     },
   })
 }

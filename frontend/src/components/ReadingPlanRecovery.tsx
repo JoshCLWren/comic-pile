@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  readingPlanRecoveryApi,
   type RecoveryCandidate,
   type RecoveryStep,
 } from '../services/api-reading-plan-recovery'
+import { useReadingPlanRecoveryPreview, useRelinkReadingPlan } from '../hooks/useReadingPlans'
 
 function StepNames({ steps }: { steps: RecoveryStep[] }) {
   return (
@@ -68,29 +67,8 @@ export function ReadingPlanRecovery({
 }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
-  const client = useQueryClient()
-  const recovery = useQuery({
-    queryKey: ['reading-plan-recovery', planId],
-    queryFn: () => readingPlanRecoveryApi.preview(planId),
-  })
-  // The API's relink method is a two-argument function, so invoke it through
-  // a one-argument mutation wrapper to keep the current plan ID explicit.
-  const apply = useMutation({
-    mutationFn: async ({ listId, planUpdatedAt, listUpdatedAt }: {
-      listId: number
-      planUpdatedAt: string
-      listUpdatedAt: string
-    }) => readingPlanRecoveryApi.relink(planId, {
-      list_id: listId,
-      expected_plan_updated_at: planUpdatedAt,
-      expected_list_updated_at: listUpdatedAt,
-      confirm: true,
-    }),
-    onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ['reading-plan-recovery', planId] })
-      onRecovered()
-    },
-  })
+  const recovery = useReadingPlanRecoveryPreview(planId)
+  const apply = useRelinkReadingPlan(planId, onRecovered)
 
   if (recovery.isPending) return <p role="status">Checking Reading Plan references…</p>
   if (recovery.isError || !recovery.data) {
@@ -165,9 +143,10 @@ export function ReadingPlanRecovery({
             disabled={!acknowledged || apply.isPending}
             className="min-h-11 rounded-xl bg-[var(--theme-primary-action)] px-4 font-bold text-[var(--theme-primary-action-text)] disabled:opacity-50"
             onClick={() => void apply.mutate({
-              listId: selected.list_id,
-              planUpdatedAt: preview.plan_updated_at,
-              listUpdatedAt: selected.list_updated_at,
+              list_id: selected.list_id,
+              expected_plan_updated_at: preview.plan_updated_at,
+              expected_list_updated_at: selected.list_updated_at,
+              confirm: true,
             })}
           >
             {apply.isPending ? 'Relinking…' : `Relink to ${selected.name}`}
