@@ -443,6 +443,23 @@ fn project(
     }
 }
 
+fn repair_target_exists(inputs: &OptionInputs, action: &ReadingGraphRepairAction) -> bool {
+    match action {
+        ReadingGraphRepairAction::DeleteList { list_id } => {
+            inputs.lists.iter().any(|list| list.list_id == *list_id)
+        }
+        ReadingGraphRepairAction::DeletePrerequisite { prerequisite_id } => inputs
+            .prerequisites
+            .iter()
+            .any(|prerequisite| prerequisite.prerequisite_id == *prerequisite_id),
+        ReadingGraphRepairAction::DeleteListEntry { list_id, issue_id } => inputs
+            .lists
+            .iter()
+            .find(|list| list.list_id == *list_id)
+            .is_some_and(|list| list.entries.iter().any(|entry| entry.issue_id == *issue_id)),
+    }
+}
+
 fn repair_is_offered(
     options: &[ReadingGraphRepairOption],
     action: &ReadingGraphRepairAction,
@@ -602,6 +619,12 @@ pub async fn repair(
         "ok"
     };
     let action = request.action()?;
+    if !repair_target_exists(&inputs, &action) {
+        return Err(crate::ApiError(
+            StatusCode::NOT_FOUND,
+            "Constraint not found".to_string(),
+        ));
+    }
     if !repair_is_offered(&allowed, &action) {
         return Err(crate::ApiError(
             StatusCode::UNPROCESSABLE_ENTITY,
