@@ -50,7 +50,7 @@ describe('customCBLApi', () => {
     await expect(customCBLApi.update(9, payload)).resolves.toEqual(response)
     await expect(customCBLApi.delete(9)).resolves.toBeUndefined()
 
-    expect(client.post).toHaveBeenCalledWith('/v1/custom-cbls', payload)
+    expect(client.post).toHaveBeenCalledWith('/v2/reading-lists', payload)
     expect(client.put).toHaveBeenCalledWith('/v1/custom-cbls/9', payload)
     expect(client.delete).toHaveBeenCalledWith('/v2/reading-lists/9')
   })

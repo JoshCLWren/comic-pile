@@ -179,10 +179,7 @@ fn app() -> Router {
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
-        .route(
-            "/api/v2/threads/{thread_id}/issues",
-            post(native_dispatch),
-        )
+        .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
         .route(
             "/api/v2/threads/{thread_id}/issue-order",
             put(native_dispatch),

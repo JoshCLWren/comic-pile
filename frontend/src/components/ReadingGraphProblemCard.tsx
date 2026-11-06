@@ -155,9 +155,9 @@ export function ReadingGraphProblemCard() {
               List to resolve the conflict.
             </p>
           ) : (
-            problem.repairs.map((repair) => (
+            problem.repairs.map((repair, index) => (
               <RepairButton
-                key={`${repair.action}-${repair.list_id ?? repair.prerequisite_id ?? repair.issue_id}`}
+                key={`${repair.action}-${repair.list_id ?? repair.prerequisite_id ?? repair.issue_id}-${index}`}
                 repair={repair}
                 busy={busy}
                 onSelect={() => {

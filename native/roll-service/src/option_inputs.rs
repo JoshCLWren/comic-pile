@@ -33,6 +33,9 @@ pub struct OverlapDecision {
 pub struct ReadingList {
     pub list_id: i32,
     pub mode: String,
+    /// Internal diagnostics only. The Python parity/debug projection does not
+    /// serialize list titles, so keep this out of the shared wire shape.
+    #[serde(skip_serializing)]
     pub name: String,
     pub entries: Vec<ReadingEntry>,
     pub overlap_decisions: Vec<OverlapDecision>,

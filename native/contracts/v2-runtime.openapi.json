@@ -3814,6 +3814,9 @@
               "format": "int32"
             }
           },
+          "confirmed_predecessor_changes": {
+            "description": "Accepted for wire compatibility with the create form. Creation has no\npredecessor changes to confirm; updates remain on the Python path."
+          },
           "description": {
             "type": [
               "string",

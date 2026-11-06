@@ -443,6 +443,26 @@ fn project(
     }
 }
 
+fn repair_is_offered(
+    options: &[ReadingGraphRepairOption],
+    action: &ReadingGraphRepairAction,
+) -> bool {
+    options.iter().any(|option| match action {
+        ReadingGraphRepairAction::DeleteList { list_id } => {
+            option.action == "delete_list" && option.list_id == Some(*list_id)
+        }
+        ReadingGraphRepairAction::DeletePrerequisite { prerequisite_id } => {
+            option.action == "delete_prerequisite"
+                && option.prerequisite_id == Some(*prerequisite_id)
+        }
+        ReadingGraphRepairAction::DeleteListEntry { list_id, issue_id } => {
+            option.action == "delete_list_entry"
+                && option.list_id == Some(*list_id)
+                && option.issue_id == Some(*issue_id)
+        }
+    })
+}
+
 fn invalid_response(inputs: &OptionInputs) -> ReadingGraphResponse {
     ReadingGraphResponse {
         status: "invalid".to_string(),
@@ -560,6 +580,12 @@ pub async fn repair(
 ) -> Result<Json<ReadingGraphRepairResponse>, crate::ApiError> {
     let inputs = option_inputs::load_option_diagnostics(&state, user).await?;
     if !inputs.unresolved.is_empty() {
+        if request.confirm {
+            return Err(crate::ApiError(
+                StatusCode::CONFLICT,
+                "Resolve the missing reading reference before applying a repair".to_string(),
+            ));
+        }
         return Ok(Json(ReadingGraphRepairResponse {
             applied: false,
             status_before: "invalid".to_string(),
@@ -569,12 +595,19 @@ pub async fn repair(
         }));
     }
     let validated = option_inputs::validated_contained(inputs.clone())?;
+    let allowed = project(&inputs, &validated).repairs;
     let status_before = if validated.graph_problem().is_some() {
         "cycle"
     } else {
         "ok"
     };
     let action = request.action()?;
+    if !repair_is_offered(&allowed, &action) {
+        return Err(crate::ApiError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "Repair is not applicable to the current reading graph".to_string(),
+        ));
+    }
     let mut projected = inputs;
     let removed = remove_from_inputs(&mut projected, &action)
         .map_err(|detail| crate::ApiError(StatusCode::NOT_FOUND, detail.to_string()))?;
@@ -587,6 +620,12 @@ pub async fn repair(
             .start()
             .await
             .map_err(db::query_error)?;
+        tx.execute(
+            "SELECT pg_advisory_xact_lock($1,$2)",
+            &[&699001, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
         let deleted = delete_owned(&tx, user.id(), &action).await?;
         if deleted == 0 {
             tx.rollback().await.map_err(db::query_error)?;
@@ -598,9 +637,26 @@ pub async fn repair(
         tx.commit().await.map_err(db::query_error)?;
     }
 
+    if request.confirm {
+        // Re-read after commit so the response is the persisted graph, not the
+        // pre-transaction snapshot with an in-memory deletion applied.
+        let fresh = option_inputs::load_option_diagnostics(&state, user).await?;
+        let after = option_inputs::validated_contained(fresh)?;
+        return Ok(Json(ReadingGraphRepairResponse {
+            applied: true,
+            status_before: status_before.to_string(),
+            status_after: if after.graph_problem().is_some() {
+                "cycle".to_string()
+            } else {
+                "ok".to_string()
+            },
+            removed,
+            graph: project(after.inputs(), &after),
+        }));
+    }
     let after = option_inputs::validated_contained(projected)?;
     Ok(Json(ReadingGraphRepairResponse {
-        applied: request.confirm,
+        applied: false,
         status_before: status_before.to_string(),
         status_after: if after.graph_problem().is_some() {
             "cycle".to_string()

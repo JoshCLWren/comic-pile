@@ -14384,6 +14384,11 @@ export interface components {
             checkpoint_targets?: {
                 [key: string]: number[];
             } | null;
+            /**
+             * @description Accepted for wire compatibility with the create form. Creation has no
+             *     predecessor changes to confirm; updates remain on the Python path.
+             */
+            confirmed_predecessor_changes?: unknown;
             description?: string | null;
             entry_intents?: {
                 [key: string]: components["schemas"]["NativeReadingListEntryIntent"];

@@ -122,6 +122,10 @@ pub struct ReadingListWrite {
     pub checkpoint_issue_ids: Option<Vec<i32>>,
     #[serde(default)]
     pub checkpoint_targets: Option<BTreeMap<i32, Vec<i32>>>,
+    /// Accepted for wire compatibility with the create form. Creation has no
+    /// predecessor changes to confirm; updates remain on the Python path.
+    #[serde(default)]
+    pub confirmed_predecessor_changes: Option<serde_json::Value>,
 }
 
 /// Documentation-only operation for the Reading List collection.

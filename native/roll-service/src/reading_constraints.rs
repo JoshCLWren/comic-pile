@@ -703,7 +703,7 @@ fn cyclic_components(issue_ids: &BTreeSet<i32>, edges: &BTreeSet<ConstraintEdge>
     let mut visited = HashSet::new();
     let mut finish: Vec<i32> = Vec::with_capacity(issue_ids.len());
     for &start in issue_ids {
-        if !visited.insert(start) {
+        if visited.contains(&start) {
             continue;
         }
         let mut stack = vec![(start, false)];
@@ -712,9 +712,12 @@ fn cyclic_components(issue_ids: &BTreeSet<i32>, edges: &BTreeSet<ConstraintEdge>
                 finish.push(node);
                 continue;
             }
+            if !visited.insert(node) {
+                continue;
+            }
             stack.push((node, true));
             for &next in adjacency.get(&node).into_iter().flatten().rev() {
-                if visited.insert(next) {
+                if !visited.contains(&next) {
                     stack.push((next, false));
                 }
             }
@@ -940,17 +943,31 @@ impl ValidatedReadingInputs {
             .map_err(|_| invalid("Unresolved reading reference"))?;
         let snapshot = Snapshot::from_inputs(&inputs, names);
         let edges = constraint_edges(&snapshot)?;
-        let (problem, cyclic) = analyze_cycles(&snapshot, &edges);
-        let topological_order = topological_order(&snapshot, &edges, &cyclic)
-            .ok_or_else(|| invalid("Reading graph containment failed"))?;
-        let graph_problem = (!problem.cycles.is_empty()).then_some(problem);
-        Ok(Self {
-            inputs,
-            topological_order,
-            edges,
-            graph_problem,
-            cyclic_issue_ids: cyclic,
-        })
+        // Acyclic data must be byte-for-byte identical to the strict result.
+        // Only run cycle analysis after the canonical validator reports one.
+        match validate(&snapshot) {
+            Ok(topological_order) => Ok(Self {
+                inputs,
+                topological_order,
+                edges,
+                graph_problem: None,
+                cyclic_issue_ids: BTreeSet::new(),
+            }),
+            Err(ValidationError::Cycle { .. }) => {
+                let (problem, cyclic) = analyze_cycles(&snapshot, &edges);
+                let topological_order = topological_order(&snapshot, &edges, &cyclic)
+                    .ok_or_else(|| invalid("Reading graph containment failed"))?;
+                let graph_problem = (!problem.cycles.is_empty()).then_some(problem);
+                Ok(Self {
+                    inputs,
+                    topological_order,
+                    edges,
+                    graph_problem,
+                    cyclic_issue_ids: cyclic,
+                })
+            }
+            Err(other) => Err(other),
+        }
     }
     pub fn inputs(&self) -> &OptionInputs {
         &self.inputs
@@ -980,8 +997,11 @@ impl ValidatedReadingInputs {
             .edges
             .iter()
             .filter(|edge| {
-                !self.cyclic_issue_ids.contains(&edge.source_issue_id)
-                    && !self.cyclic_issue_ids.contains(&edge.target_issue_id)
+                // A cyclic source stays unread until repair, so its explicit
+                // prerequisite/ordering edge must keep blocking a healthy
+                // target. Only edges wholly inside the cyclic component are
+                // neutralized.
+                !self.cyclic_issue_ids.contains(&edge.target_issue_id)
                     && incomplete.contains(&edge.source_issue_id)
             })
             .cloned()
@@ -1592,6 +1612,107 @@ mod tests {
                 .expect("the incident fixture must be cyclic");
             assert_eq!(error.0, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
         }
+    }
+
+    fn skip_inputs(read: &[i32], list_entries: &[i32]) -> OptionInputs {
+        OptionInputs {
+            core: CoreReadingInputs {
+                threads: vec![ReadingThread {
+                    id: 1,
+                    status: "active".into(),
+                    title: "Series".into(),
+                }],
+                issues: (1..=5)
+                    .map(|id| ReadingIssue {
+                        id,
+                        thread_id: 1,
+                        position: id,
+                        status: if read.contains(&id) { "read" } else { "unread" }.into(),
+                        issue_number: id.to_string(),
+                    })
+                    .collect(),
+                stored: vec![StoredThreadEligibility {
+                    thread_id: 1,
+                    next_issue_id: None,
+                    is_blocked: false,
+                    queue_position: 1,
+                }],
+            },
+            thread_volumes: BTreeMap::new(),
+            lists: vec![ReadingList {
+                list_id: 9,
+                mode: "strict".into(),
+                name: "Sparse list".into(),
+                entries: list_entries
+                    .iter()
+                    .map(|issue_id| ReadingEntry {
+                        issue_id: *issue_id,
+                        gate: "none".into(),
+                        skipped: false,
+                    })
+                    .collect(),
+                overlap_decisions: vec![],
+            }],
+            prerequisites: vec![],
+            excluded_issue_ids: BTreeSet::new(),
+            unresolved: vec![],
+        }
+    }
+
+    #[test]
+    fn strict_list_skipping_issues_never_hides_a_healthy_frontier() {
+        // Series #1..#5 with a strict list containing only #1 and #5. After #1
+        // is read the frontier is #2, not "no available issue".
+        let contained =
+            ValidatedReadingInputs::contained(skip_inputs(&[1], &[1, 5]), &BTreeMap::new())
+                .unwrap();
+        assert!(contained.graph_problem().is_none());
+        let frontiers = contained.eligible_frontiers().unwrap();
+        assert_eq!(
+            frontiers
+                .iter()
+                .map(|frontier| frontier.issue_id)
+                .collect::<Vec<_>>(),
+            vec![2]
+        );
+    }
+
+    #[test]
+    fn strict_list_with_an_earlier_gap_offers_the_next_unread_in_series_order() {
+        // #1 and #2 are read; a list edge #2 -> #4 must not skip #3.
+        let contained =
+            ValidatedReadingInputs::contained(skip_inputs(&[1, 2], &[2, 4]), &BTreeMap::new())
+                .unwrap();
+        assert!(contained.graph_problem().is_none());
+        let frontiers = contained.eligible_frontiers().unwrap();
+        assert_eq!(
+            frontiers
+                .iter()
+                .map(|frontier| frontier.issue_id)
+                .collect::<Vec<_>>(),
+            vec![3]
+        );
+    }
+
+    #[test]
+    fn prerequisite_from_a_cyclic_source_still_blocks_a_healthy_target() {
+        let mut source = graph_inputs();
+        source.prerequisites.push(OptionPrerequisite {
+            prerequisite_id: 77,
+            source_issue_id: 11,
+            target_issue_id: 21,
+            origin: "reader".into(),
+            provenance: vec![],
+        });
+        let contained = ValidatedReadingInputs::contained(source, &BTreeMap::new()).unwrap();
+        assert!(contained.graph_problem().is_some());
+        // Issue 11 is unread inside the cycle, so its explicit prerequisite
+        // must keep the healthy target blocked rather than silently dropping it.
+        assert!(contained
+            .eligible_frontiers()
+            .unwrap()
+            .iter()
+            .all(|frontier| frontier.issue_id != 21));
     }
 
     #[test]
