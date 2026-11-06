@@ -401,7 +401,7 @@ test('documentation, fenced, partial, and malformed markers never change labels'
   const cases = [
     `Review policy example: ${validReview}`,
     `Documenting a marker:\n${validReview}`,
-    ```\`\`\`text\n${validReview}\n\`\`\```,
+    '```text\n' + validReview + '\n```',
     '<!-- comic-pile-factory-review-v2:SHA:changes-required -->',
     `<!-- comic-pile-factory-review-v2:${head}:changes-required:extra -->`,
     `<!-- comic-pile-factory-review-v2:${head}:changes-required --> extra`,
