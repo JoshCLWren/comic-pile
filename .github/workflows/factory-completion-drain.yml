@@ -23,13 +23,19 @@ permissions:
 # This workflow directly claims factory work through the completion controller.
 # Serialize it with every other assignment writer so two controllers cannot
 # observe the same worker idle and lease unrelated targets to it concurrently.
+# Coalesce duplicate ingress events for this workflow only. The job-level
+# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch
-  queue: max
+  group: factory-completion-drain-ingress
+  queue: single
   cancel-in-progress: false
 
 jobs:
   drain:
+    concurrency:
+      group: fixed-model-factory-dispatch
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
