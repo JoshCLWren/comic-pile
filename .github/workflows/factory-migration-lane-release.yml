@@ -14,13 +14,19 @@ permissions:
   pull-requests: read
 
 # Serialize this event-driven reconciliation with dispatch and capacity refill.
+# Coalesce duplicate ingress events for this workflow only. The job-level
+# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch
-  queue: max
+  group: ${{ github.event_name == 'pull_request_target' && format('factory-migration-release-pr-{0}', github.event.pull_request.number) || 'factory-migration-release-manual' }}
+  queue: single
   cancel-in-progress: false
 
 jobs:
   release-waiter:
+    concurrency:
+      group: fixed-model-factory-dispatch
+      queue: max
+      cancel-in-progress: false
     if: |
       github.event_name == 'workflow_dispatch' ||
       github.event.action == 'closed' ||
