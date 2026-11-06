@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
@@ -123,17 +123,17 @@ describe('orphaned Reading Plan recovery', () => {
 
   it('does not invent a repair for linked, ambiguous, or unavailable plans', async () => {
     previewApi.mockResolvedValueOnce({ ...preview, status: 'linked', linked_list_id: 1000109 })
-    const first = renderRecovery()
+    renderRecovery()
     await waitFor(() => expect(previewApi).toHaveBeenCalled())
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument())
     expect(screen.queryByRole('heading', { name: 'Recover this Reading Plan' })).not.toBeInTheDocument()
-    first.client.clear()
+    cleanup()
 
     // Each render has its own query cache and never attempts a mutation.
     previewApi.mockResolvedValueOnce({ ...preview, status: 'ambiguous' })
-    const ambiguous = renderRecovery()
+    renderRecovery()
     expect(await screen.findByRole('alert')).toHaveTextContent('multiple authoritative sources')
-    ambiguous.client.clear()
+    cleanup()
     previewApi.mockRejectedValueOnce(new Error('preview unavailable'))
     renderRecovery()
     expect(await screen.findByText('The repair preview is unavailable. No changes were made.')).toBeInTheDocument()
