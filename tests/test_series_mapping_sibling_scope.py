@@ -186,10 +186,23 @@ def _approvable_row_ids(rows: list[dict[str, object]]) -> list[str]:
         Bulk-safe row ids that belong to a locally owned issue.
     """
     return sorted(
-        str(row["row_id"])
-        for row in rows
-        if row.get("classification") == "safe_exact_match" and row.get("thread_id")
+        (
+            str(row["row_id"])
+            for row in rows
+            if row.get("classification") == "safe_exact_match" and row.get("thread_id")
+        ),
+        key=lambda row_id: int(row_id.removeprefix("issue:")),
     )
+
+
+def test_approvable_row_ids_sort_issue_ids_numerically() -> None:
+    """Keep four-digit issue IDs in numeric order for deterministic assertions."""
+    rows: list[dict[str, object]] = [
+        {"row_id": "issue:1000", "classification": "safe_exact_match", "thread_id": 2},
+        {"row_id": "issue:993", "classification": "safe_exact_match", "thread_id": 2},
+    ]
+
+    assert _approvable_row_ids(rows) == ["issue:993", "issue:1000"]
 
 
 class TestSiblingScopePreview:
