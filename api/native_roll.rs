@@ -197,6 +197,7 @@ fn app() -> Router {
         .route("/api/v2/reading-lists", post(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", get(native_dispatch))
         .route("/api/v2/reading-lists/{list_id}", delete(native_dispatch))
+        .route("/api/v2/reading-lists/{list_id}", put(native_dispatch))
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
             get(native_dispatch),
