@@ -1080,12 +1080,12 @@ async function reconcileMissingPrLabels({ github, context }) {
         (left, right) => new Date(right.created_at) - new Date(left.created_at),
       )) {
         if (!trusted(comment)) continue;
-        const match = (comment.body || '').match(
-          /comic-pile-factory-review-v\d+:([a-f0-9]{40}):(pass|changes-required)/,
-        );
-        if (match?.[1] !== pr.head.sha) continue;
-        stage = match[2] === 'pass' ? 'factory:ci' : 'factory:changes-requested';
-        approved = match[2] === 'pass';
+        // Enrollment is another label writer: it must use the same complete
+        // first-line, exact-head parser as comment-triggered reconciliation.
+        const verdict = parseFactoryComment(comment.body)?.legacyVerdict;
+        if (!verdict || verdict[1] !== pr.head.sha) continue;
+        stage = verdict[2] === 'pass' ? 'factory:ci' : 'factory:changes-requested';
+        approved = verdict[2] === 'pass';
         break;
       }
     }
