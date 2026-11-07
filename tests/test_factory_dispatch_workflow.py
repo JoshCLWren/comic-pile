@@ -143,8 +143,8 @@ def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     chain_step = workflow.split("Self-perpetuate roster cadence", 1)[1]
-    assert "steps.dispatch_workers.outputs.dispatched_count" in chain_step
-    assert "steps.dispatch_workers.outputs.dispatch_failed" in chain_step
+    assert "needs.dispatch.outputs.dispatched_count" in chain_step
+    assert "needs.dispatch.outputs.dispatch_failed" in chain_step
     assert '[[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]' in chain_step
     assert '[[ "$dispatched_count" == "0" && "$dispatch_failed" == "false" ]]' in chain_step
     assert "Trustworthy zero-work tick: ending bounded roster session" in chain_step
