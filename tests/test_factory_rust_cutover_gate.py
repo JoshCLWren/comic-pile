@@ -174,3 +174,29 @@ def test_controller_explanation_reports_rust_cutover_deferral(monkeypatch) -> No
     assert report["eligible"] is False
     assert report["dynamic_gates"]["rust_cutover_allowed"] is False
     assert any("Rust cutover #4335" in text for text in report["reasons"])
+
+
+def test_deferred_pr_backlog_does_not_saturate_rust_issue_intake(monkeypatch) -> None:
+    """Old deferred reviews cannot starve currently executable Rust migrations."""
+    monkeypatch.setattr(policy, "FACTORY_REVIEW_BACKLOG_LIMIT", 2)
+    epic = issue(4335, "epic")
+    rust = issue(4346, "rust")
+    deferred = [issue(3507, body="Depends on #4335"), issue(4516)]
+    prs = [pr(4704, 3507), pr(4700, 4516)]
+    assert numbers([epic, rust, *deferred], prs) == {("issue", 4346)}
+    # Normal backpressure still applies once the epic has closed.
+    assert numbers([rust, *deferred], prs) == {("pr", 4700), ("pr", 4704)}
+
+
+def test_deferred_active_pr_lease_does_not_exhaust_rust_wip(monkeypatch) -> None:
+    """A deferred non-Rust review lease must not count against Rust WIP."""
+    monkeypatch.setattr(policy, "FACTORY_PR_WIP_LIMIT", 1)
+    epic = issue(4335, "epic")
+    rust = issue(4346, "rust")
+    old = issue(3507, body="Depends on #4335")
+    old_pr = pr(4704, 3507)
+    old_pr["labels"] = [
+        {"name": "factory"}, {"name": "factory:45"},
+        {"name": "factory:review"},
+    ]
+    assert numbers([epic, rust, old], [old_pr]) == {("issue", 4346)}
