@@ -29,6 +29,13 @@ def validate():
     return _load_validate_module()
 
 
+def _load_snapshot_pins() -> dict[str, dict[str, str]]:
+    """Load pins from the automation-owned snapshot."""
+    snapshot_path = Path(".github/factory-roster-snapshot.json")
+    data = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    return {pin["worker"]: pin for pin in data.get("pins", [])}
+
+
 def _assert_committed_pin(
     by_worker: dict[str, dict[str, str]],
     lock: dict[str, list],
@@ -38,17 +45,14 @@ def _assert_committed_pin(
     model: str,
     minute: str | None = None,
 ) -> dict[str, str] | None:
-    """Assert a live pin's identity, or a consistently-recorded retirement.
+    """Accept a recorded catalog retirement, never an unexplained disappearance.
 
-    Discovery rewrites ``.github/factory-roster-snapshot.json`` and
-    ``factory-expected-workers.json`` in the same commit that retires a
-    catalog-absent fixed-provider pin. This guard accepts exactly that
-    transition so a legitimate retirement PR is green on its own head (#3802),
-    while a silent re-pin or an inconsistent lock still fails.
-
-    Returns:
-        The live roster row, or ``None`` when discovery retired the worker.
+    For live workers, the automation-owned snapshot is authoritative so
+    catalog-driven pin changes do not require hand-editing these assertions.
+    Retired workers must still have an allowed original source and a durable
+    worker/model retirement entry in the lock (#3802).
     """
+    snapshot_pin = _load_snapshot_pins().get(worker)
     row = by_worker.get(worker)
     if row is None:
         assert source in {'nvidia', 'openrouter-free'}, (worker, source)
@@ -56,8 +60,11 @@ def _assert_committed_pin(
         assert int(worker) in lock['retired_workers'], worker
         assert model in lock['retired_models'], (worker, model)
         return None
-    assert row['source'] == source, (worker, row['source'])
-    assert row['model'] == model, (worker, row['model'])
+
+    expected_source = snapshot_pin['source'] if snapshot_pin else source
+    expected_model = snapshot_pin['model'] if snapshot_pin else model
+    assert row['source'] == expected_source, (worker, row['source'], expected_source)
+    assert row['model'] == expected_model, (worker, row['model'], expected_model)
     if minute is not None:
         assert row['minute'] == minute, (worker, row['minute'])
     return row
@@ -76,6 +83,57 @@ def test_protected_source_disappearance_fails_committed_pin(validate) -> None:
     by_worker.pop("82", None)
     with pytest.raises(AssertionError):
         _assert_committed_pin(by_worker, lock, "82", source="z-ai", model="glm-4.7-flash")
+
+
+def test_committed_guard_rejects_unexpected_live_model_drift(validate) -> None:
+    """A live worker silently repinned without refreshing the snapshot fails."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    pin = next(row for row in rows if row['source'] == 'nvidia')
+    by_worker = {row['worker']: row for row in rows}
+    by_worker[pin['worker']] = {**pin, 'model': 'unapproved-model'}
+    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
+    with pytest.raises(AssertionError):
+        _assert_committed_pin(
+            by_worker,
+            lock,
+            pin['worker'],
+            source=pin['source'],
+            model=pin['model'],
+        )
+
+
+def test_roster_snapshot_guard_detects_stale_pins(validate, tmp_path: Path) -> None:
+    """A stale or altered snapshot cannot pass the pre-commit roster validator."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    lock_path = Path('.github/factory-expected-workers.json')
+    snapshot_path = Path('.github/factory-roster-snapshot.json')
+    validate.assert_roster_snapshot_matches(
+        rows, lock_path=lock_path, snapshot_path=snapshot_path
+    )
+
+    snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    snapshot['pins'][0]['model'] = 'unexpected-model'
+    stale_path = tmp_path / 'stale-snapshot.json'
+    stale_path.write_text(json.dumps(snapshot), encoding='utf-8')
+    with pytest.raises(AssertionError, match='snapshot is stale'):
+        validate.assert_roster_snapshot_matches(
+            rows, lock_path=lock_path, snapshot_path=stale_path
+        )
+
+
+def test_roster_snapshot_guard_detects_stale_lock(validate, tmp_path: Path) -> None:
+    """An altered expected-worker lock cannot be excused by the snapshot."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
+    lock['expected_workers'].remove(int(rows[0]['worker']))
+    stale_lock_path = tmp_path / 'stale-lock.json'
+    stale_lock_path.write_text(json.dumps(lock), encoding='utf-8')
+    with pytest.raises(AssertionError, match='expected-worker lock'):
+        validate.assert_roster_snapshot_matches(
+            rows,
+            lock_path=stale_lock_path,
+            snapshot_path=Path('.github/factory-roster-snapshot.json'),
+        )
 
 
 def test_opencode_free_pins_accept_free_roster_ids(validate) -> None:

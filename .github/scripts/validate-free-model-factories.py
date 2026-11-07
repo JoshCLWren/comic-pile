@@ -101,6 +101,29 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
             )
 
 
+def assert_roster_snapshot_matches(
+    rows: list[dict[str, str]],
+    *,
+    lock_path: Path,
+    snapshot_path: Path,
+) -> None:
+    """Reject a stale or tampered roster snapshot before committing a retirement.
+
+    Discovery generates the snapshot from the TSV and lock, but the normal
+    validator must also check their agreement on the generated PR head.
+    """
+    lock = _ROSTER.load_roster_lock(lock_path)
+    assert set(lock['expected_workers']) == _ROSTER.roster_worker_ids(rows), (
+        'factory expected-worker lock does not match the roster'
+    )
+    expected = _ROSTER.build_roster_snapshot(rows, lock)
+    actual = _ROSTER.load_roster_snapshot(snapshot_path)
+    assert actual == expected, (
+        'factory roster snapshot is stale or disagrees with the roster/lock; '
+        'regenerate it with factory_model_retirement.py snapshot'
+    )
+
+
 def main() -> None:
     """Validate roster, runtime, lease, assignment, and discovery invariants."""
     rows = load_roster_rows(MANIFEST)
@@ -112,6 +135,11 @@ def main() -> None:
     assert set(workers) == EXPECTED_WORKERS
     assert len(workers) == len(set(workers)), 'duplicate worker IDs'
     assert_free_provider_pins(rows)
+    assert_roster_snapshot_matches(
+        rows,
+        lock_path=Path('.github/factory-expected-workers.json'),
+        snapshot_path=Path('.github/factory-roster-snapshot.json'),
+    )
 
     kilo = [row for row in rows if row['source'] == 'kilo-auto']
     assert len(kilo) == 1 and kilo[0]['worker'] == '46'
