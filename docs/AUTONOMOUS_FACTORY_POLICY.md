@@ -139,8 +139,11 @@ Factory ownership is a connection-pool lock around the next action, not a perman
   claim alive forever. Do not use the issue's `createdAt` as a lease clock,
   because long-standing issues can be freshly claimed. Unreadable/malformed
   GitHub update metadata cannot prove inactivity and must not cause a guess.
-  A live worker must persist a meaningful progress update before its lease
-  window expires, not just keep working in a private checkout.
+  An issue and its canonical PR sharing the same owner count as one active
+  lease: GitHub progress on either target keeps both sides alive. This matters
+  for local PR repairs such as #4615 / #4709. A live worker must persist a
+  meaningful progress update before its lease window expires, not just keep
+  working in a private checkout.
 - Expiration is a **lease release**, not a decision that the underlying task
   is complete: blocked issues remain blocked; an in-review PR keeps its
   next-action stage. Never overwrite a freshly changed owner during cleanup.
