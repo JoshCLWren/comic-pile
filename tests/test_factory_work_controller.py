@@ -7,6 +7,7 @@ import json
 import subprocess
 import sys
 import types
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock
@@ -1798,3 +1799,266 @@ def test_replace_factory_labels_writes_ordinary_pr(
         "factory:review",
         "factory:unowned",
     ]
+
+
+def _lease_timestamp(epoch: int) -> str:
+    """Return a deterministic GitHub update timestamp."""
+    return datetime.fromtimestamp(epoch, tz=UTC).isoformat()
+
+
+def _local_lease_item(number: int, updated: int, *extra: str) -> dict[str, Any]:
+    """Model a locally owned GitHub issue or PR."""
+    return {
+        "number": number,
+        "state": "OPEN",
+        "updatedAt": _lease_timestamp(updated),
+        "labels": [
+            {"name": name}
+            for name in ("factory", "factory:local", *extra)
+        ],
+    }
+
+
+def _lease_reconcile_setup(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    issues: list[dict[str, Any]],
+    prs: list[dict[str, Any]] | None = None,
+    *,
+    markers: dict[int, int] | None = None,
+    live: dict[int, dict[str, Any]] | None = None,
+    workers: set[int] | None = None,
+) -> list[dict[str, Any]]:
+    """Capture only actual label writes made during reconciliation."""
+    targets = {
+        int(row["number"]): row for row in [*issues, *(prs or [])]
+    }
+    writes: list[dict[str, Any]] = []
+    monkeypatch.setattr(controller, "list_issues", lambda: issues)
+    monkeypatch.setattr(controller, "list_prs", lambda: prs or [])
+    monkeypatch.setattr(
+        controller, "active_fixed_workers", lambda: (workers or set(), set())
+    )
+    monkeypatch.setattr(
+        controller,
+        "latest_lease_activity_epoch",
+        lambda number: (markers or {}).get(number),
+    )
+    monkeypatch.setattr(
+        controller,
+        "target_json",
+        lambda number: {
+            **(live or {}).get(number, targets[number]),
+            "updated_at": (live or {}).get(number, targets[number]).get(
+                "updated_at",
+                (live or {}).get(number, targets[number]).get("updatedAt"),
+            ),
+        },
+    )
+
+    def record_write(
+        args: list[str], *, input_json: object | None = None, check: bool = True
+    ) -> str:
+        assert input_json is not None
+        assert isinstance(input_json, dict)
+        writes.append({"args": args, "labels": input_json["labels"]})
+        return "{}"
+
+    monkeypatch.setattr(controller, "run_gh", record_write)
+    return writes
+
+
+def test_reconcile_expires_old_local_claim_without_trusted_marker(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No marker must not immortalize an abandoned implementation lease."""
+    now = 2_000_000_000
+    issue_row = _local_lease_item(
+        4684, now - 7200, "factory:building", "ralph-status:in-progress"
+    )
+    writes = _lease_reconcile_setup(controller, monkeypatch, [issue_row])
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4684]
+    assert len(writes) == 1
+    assert "factory:unowned" in writes[0]["labels"]
+    assert "factory:local" not in writes[0]["labels"]
+    assert "factory:building" not in writes[0]["labels"]
+    assert "ralph-status:pending" in writes[0]["labels"]
+    assert "ralph-status:in-progress" not in writes[0]["labels"]
+
+
+def test_reconcile_preserves_current_local_implementation_and_pr_repair(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Protect Copilot's #4625 and the #4615 / PR #4709 local repair."""
+    now = 2_000_000_000
+    issues = [
+        _local_lease_item(4625, now - 120, "factory:building"),
+        _local_lease_item(4615, now - 240, "factory:building"),
+    ]
+    prs = [_local_lease_item(4709, now - 60, "factory:building")]
+    writes = _lease_reconcile_setup(controller, monkeypatch, issues, prs)
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+def test_reconcile_uses_latest_trusted_marker_when_more_recent_than_update(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fresh trusted progress record protects a legitimately active lease."""
+    now = 2_000_000_000
+    item = _local_lease_item(4625, now - 7200, "factory:building")
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [item], markers={4625: now - 120}
+    )
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+def test_reconcile_keeps_blocked_issue_blocked_after_releasing_old_owner(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Blocked work loses ownership, not its product blocker."""
+    now = 2_000_000_000
+    item = _local_lease_item(3679, now - 7200, "ralph-status:blocked")
+    writes = _lease_reconcile_setup(controller, monkeypatch, [item])
+    assert controller.reconcile_stale_leases(now_epoch=now) == [3679]
+    assert "factory:unowned" in writes[0]["labels"]
+    assert "factory:blocked" in writes[0]["labels"]
+    assert "ralph-status:blocked" in writes[0]["labels"]
+
+
+@pytest.mark.parametrize(
+    ("live_labels", "live_updated"),
+    [
+        (("factory", "factory:local", "factory:building"), -120),
+        (("factory", "factory:62", "factory:building"), -7200),
+    ],
+)
+def test_reconcile_does_not_steal_a_refreshed_or_reassigned_lease(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    live_labels: tuple[str, ...],
+    live_updated: int,
+) -> None:
+    """Recheck GitHub after snapshot selection, before the label write."""
+    now = 2_000_000_000
+    item = _local_lease_item(4684, now - 7200, "factory:building")
+    live = {
+        4684: {
+            "number": 4684,
+            "state": "open",
+            "updated_at": _lease_timestamp(now + live_updated),
+            "labels": [{"name": label} for label in live_labels],
+        }
+    }
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [item], live=live
+    )
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+def test_reconcile_expires_inactive_fixed_lease_without_marker_but_not_active_run(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An inactive fixed owner is bounded by last update; live runs still win."""
+    now = 2_000_000_000
+    item = {
+        **_local_lease_item(4450, now - 3600, "factory:building"),
+        "labels": [
+            {"name": "factory"},
+            {"name": "factory:62"},
+            {"name": "factory:building"},
+        ],
+    }
+    writes = _lease_reconcile_setup(controller, monkeypatch, [item])
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4450]
+    assert len(writes) == 1
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [item], workers={62}
+    )
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+def test_future_marker_does_not_immortalize_old_local_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Malformed future markers must not prevent inactivity expiration."""
+    now = 2_000_000_000
+    item = _local_lease_item(4344, now - 7200, "factory:building")
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [item], markers={4344: now + 86400}
+    )
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4344]
+    assert len(writes) == 1
+
+
+def test_reconcile_does_not_guess_when_github_update_time_is_missing(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An absent updatedAt must not be replaced with ancient issue creation."""
+    now = 2_000_000_000
+    item = _local_lease_item(4549, now - 7200, "factory:building")
+    item.pop("updatedAt")
+    item["createdAt"] = _lease_timestamp(now - 365 * 86400)
+    writes = _lease_reconcile_setup(controller, monkeypatch, [item])
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+@pytest.mark.parametrize("fresh_side", ["issue", "pr"])
+def test_canonical_pr_and_issue_share_local_lease_activity(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    fresh_side: str,
+) -> None:
+    """A local PR repair stays owned when progress appears on either side."""
+    now = 2_000_000_000
+    issue_updated = now - 90 if fresh_side == "issue" else now - 7200
+    pr_updated = now - 90 if fresh_side == "pr" else now - 7200
+    issue_row = _local_lease_item(4615, issue_updated, "factory:building")
+    pr_row = _local_lease_item(4709, pr_updated, "factory:building")
+    pr_row["body"] = "Closes #4615"
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [issue_row], [pr_row]
+    )
+    assert controller.paired_owned_targets([issue_row], [pr_row]) == {
+        4615: 4709,
+        4709: 4615,
+    }
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+def test_expired_canonical_local_pair_releases_both_leases(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once both issue and PR are inactive they must not hold each other forever."""
+    now = 2_000_000_000
+    issue_row = _local_lease_item(4615, now - 7200, "factory:building")
+    pr_row = _local_lease_item(4709, now - 7200, "factory:review")
+    pr_row["body"] = "Closes #4615"
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [issue_row], [pr_row]
+    )
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4615, 4709]
+    assert len(writes) == 2
+    assert "factory:unowned" in writes[1]["labels"]
+    assert "factory:review" in writes[1]["labels"]
+
+
+def test_unrelated_pr_activity_cannot_extend_an_inactive_issue_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a canonical PR with the same owner may extend the issue lease."""
+    now = 2_000_000_000
+    issue_row = _local_lease_item(4549, now - 7200, "factory:building")
+    unrelated = _local_lease_item(4709, now - 10, "factory:review")
+    unrelated["body"] = "Closes #4615"
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [issue_row], [unrelated]
+    )
+    assert controller.paired_owned_targets([issue_row], [unrelated]) == {}
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4549]
+    assert len(writes) == 1

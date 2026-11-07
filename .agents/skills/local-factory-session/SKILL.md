@@ -72,6 +72,15 @@ issue/PR in, so review fleet machinery can recognize and pick up the work.
 
 ## Issue and PR lifecycle
 
+**Keep the local lease alive only while working.** The controller automatically
+releases `factory:local` after 60 minutes without GitHub-recorded activity,
+even when local tooling did not post a trusted claim marker. During longer
+sessions, persist a concise, truthful issue/PR progress comment or update
+within that window (ideally every 45 minutes). A local git commit or editor
+activity that never reaches GitHub is not lease activity. Re-read the live
+labels before pushing or updating them; if another worker now owns the target,
+do not steal it back.
+
 1. Claim with an atomic full label-set replacement (`gh api -X PUT .../issues/N/labels` with
    the complete set — never sequential add/remove): issue gets `ralph-status:in-progress`,
    `factory`, `factory:building`, one owner. Follow the `github-issue-kanban` skill and

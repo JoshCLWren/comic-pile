@@ -131,6 +131,22 @@ A substantive implementation PR changes product behavior, correctness, performan
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
+- **Inactivity is bounded.** A local `factory:local` lease expires after 60
+  minutes without GitHub-recorded target activity; a numbered fixed-model lease
+  uses a 15-minute TTL when there is no active workflow run. The controller
+  considers trusted lease markers and the target's `updatedAt` timestamp,
+  so missing or untrusted marker comments cannot keep an otherwise inactive
+  claim alive forever. Do not use the issue's `createdAt` as a lease clock,
+  because long-standing issues can be freshly claimed. Unreadable/malformed
+  GitHub update metadata cannot prove inactivity and must not cause a guess.
+  An issue and its canonical PR sharing the same owner count as one active
+  lease: GitHub progress on either target keeps both sides alive. This matters
+  for local PR repairs such as #4615 / #4709. A live worker must persist a
+  meaningful progress update before its lease window expires, not just keep
+  working in a private checkout.
+- Expiration is a **lease release**, not a decision that the underlying task
+  is complete: blocked issues remain blocked; an in-review PR keeps its
+  next-action stage. Never overwrite a freshly changed owner during cleanup.
 - Cross-worker takeover and merge are allowed after the prior lease is released.
 - A factory that creates or advances a PR releases active ownership when its implementation attempt ends, including while CI or review is pending.
 - Provider failure, timeout, no useful persisted change, or another stable handoff state releases the lease so another worker can try later. Review independence is based on factory identity and exact-head provenance, not on requiring a different model; OmniRoute may route both workers through the same upstream model.
@@ -350,9 +366,11 @@ Rules:
   A stage rewrite derived from trusted PR history never replaces an active owner
   lease: the final label writer applies the shared lease policy to the same live
   issue read that builds its replacement label set, preserving `factory:local`
-  while its local-lease TTL is fresh or its activity is unknown and treating
-  numbered owners as controller-owned because only the controller resolves
-  active fixed-worker/run evidence. GitHub's label replacement has no
+  while its last GitHub update is within the 60-minute local TTL (or no usable
+  time evidence is available). Stale local claims are recoverable even when
+  their original claim/progress comments were missing or untrusted; numbered
+  owners remain controller-owned because only the controller resolves active
+  fixed-worker/run evidence. GitHub's label replacement has no
   compare-and-swap, so a claim landing in the final read-to-write interval
   remains a residual race.
 - A contributor PR, Josh-authored manual PR, or local factory PR follows the same review,
