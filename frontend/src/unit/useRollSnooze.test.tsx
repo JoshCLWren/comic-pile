@@ -244,6 +244,8 @@ describe('useRollSnooze', () => {
     expect(result.current.state.isRatingView).toBe(true)
     expect(result.current.state.selectedThreadId).toBe(9)
     expect(result.current.state.activeRatingThread?.id).toBe(9)
+    // Stale bootstrap cannot restore the snoozed pending thread over it.
+    expect(result.current.state.suppressPendingAutoOpenRef.current).toBe(true)
     // But the refresh failure should still be reported
     expect(onRefreshFailed).toHaveBeenCalledWith(refreshFailure)
   })

@@ -47,6 +47,7 @@ export function useRollSnooze({
   onRefreshFailed,
 }: UseRollSnoozeParams) {
   const {
+    suppressPendingAutoOpenRef,
     setIsRolling,
     setIsRatingView,
     setRolledResult,
@@ -134,6 +135,12 @@ export function useRollSnooze({
           last_rolled_result: outcome.response.result,
         }
         await enterRatingView(outcome.response.thread_id, outcome.response.result, threadMetadata)
+        if (!outcome.refreshed) {
+          // The bootstrap still names the snoozed thread as pending.
+          // Suppress pending auto-open so stale data cannot restore the
+          // old pending thread over the replacement just entered.
+          suppressPendingAutoOpenRef.current = true
+        }
       } else {
         setIsRatingView(false)
         setRolledResult(null)

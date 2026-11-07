@@ -206,13 +206,7 @@ export function useRollActions({
           // The mutation owns the single authoritative refresh; this handler
           // only reports its outcome so a stale pool is never silent.
           const outcome = await snoozeMutation.mutate(selectedThread!.id)
-          if (!outcome.refreshed) {
-            if (onSnoozeRefreshFailed) {
-              onSnoozeRefreshFailed(outcome.refreshError)
-            } else {
-              setErrorMessage(getApiErrorDetail(outcome.refreshError))
-            }
-          } else if (outcome.response?.thread_id != null) {
+          if (outcome.response?.thread_id != null) {
             // The Rust offer recorded the snooze and selected a replacement in the
             // same transaction. Keep the rating view open for it instead of
             // silently closing a pending session.
@@ -231,6 +225,19 @@ export function useRollActions({
               last_rolled_result: outcome.response.result,
             }
             enterRatingView(outcome.response.thread_id, outcome.response.result, threadMetadata)
+            if (!outcome.refreshed) {
+              // The bootstrap still names the snoozed thread as pending.
+              // Suppress pending auto-open so stale data cannot restore the
+              // old pending thread over the replacement just entered.
+              suppressPendingAutoOpenRef.current = true
+            }
+          }
+          if (!outcome.refreshed) {
+            if (onSnoozeRefreshFailed) {
+              onSnoozeRefreshFailed(outcome.refreshError)
+            } else {
+              setErrorMessage(getApiErrorDetail(outcome.refreshError))
+            }
           }
           break
         }
