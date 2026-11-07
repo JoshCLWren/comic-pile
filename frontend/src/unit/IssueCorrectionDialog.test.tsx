@@ -1,4 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { issueCardsApi } from '../services/issueCardsApi'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import IssueCorrectionDialog, {
@@ -213,4 +215,60 @@ describe('IssueCorrectionDialog', () => {
     fireEvent.click(screen.getByText('Fix Issue Number'))
     expect(onClose).not.toHaveBeenCalled()
   })
+  it('refuses to guess which owned issue is selected when issue numbers are duplicated', async () => {
+    list.mockResolvedValue(listResponse([
+      issue({ id: 10, issue_number: '1', status: 'unread' }),
+      issue({ id: 11, issue_number: '1', status: 'read' }),
+    ]))
+    renderDialog()
+    await screen.findByLabelText(/what issue are you currently on/i)
+    expect(screen.queryByTestId('issue-card-trigger-10')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('issue-card-trigger-11')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update' })).toBeEnabled()
+  })
+
+  it('keeps an exact issue direct read independent of the correction form and refreshes on commit', async () => {
+    const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
+    const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+    fetchCards.mockResolvedValue([{
+      issue_id: 10, thread_id: 42, thread_title: 'Test Comic', issue_number: 'Annual 1',
+      status: 'unread', rating: null, mapping_state: 'unmapped',
+      has_confirmed_identity: false,
+    }])
+    patchIssue.mockResolvedValue({
+      issue: {
+        issue_id: 10, thread_id: 42, thread_title: 'Test Comic', issue_number: 'Annual 1',
+        status: 'read', rating: 3.5, mapping_state: 'unmapped',
+        has_confirmed_identity: false,
+      },
+      thread: { thread_id: 42, issues_remaining: 1, status: 'active' },
+      read_event_created: true, rating_event_created: true, replayed: false,
+    })
+    list.mockResolvedValue(listResponse([issue({ id: 10, issue_number: 'Annual 1' })]))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    const onSuccess = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <QueryClientProvider client={client}>
+        <IssueCorrectionDialog
+          isOpen threadId={42} currentIssueNumber="Annual 1" totalIssues={1}
+          threadTitle="Test Comic" onSuccess={onSuccess} onClose={onClose} issuesApi={issuesApi}
+        />
+      </QueryClientProvider>,
+    )
+    const action = await screen.findByRole('button', { name: 'Reading and mapping actions for Test Comic #Annual 1' })
+    expect(fetchCards).not.toHaveBeenCalled()
+    await userEvent.click(action)
+    await screen.findByRole('button', { name: 'Read now' })
+    await userEvent.click(screen.getByRole('button', { name: 'Read now' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark read & save' }))
+    await waitFor(() => expect(patchIssue).toHaveBeenCalledWith(10, expect.objectContaining({ status: 'read', rating: 3.5 })))
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledOnce())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+    expect(list).toHaveBeenCalledTimes(2)
+    fetchCards.mockRestore()
+    patchIssue.mockRestore()
+  })
+
 })

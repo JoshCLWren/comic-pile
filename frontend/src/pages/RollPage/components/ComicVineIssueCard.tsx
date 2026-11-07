@@ -4,6 +4,8 @@ import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
 import ImageWithLoading from '../../../components/ImageWithLoading'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
 import { CreatorName } from './CreatorName'
 
 interface ComicVineIssueCardProps {
@@ -24,6 +26,10 @@ function formatDate(value: string | null): string | null {
 
 export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
   const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
+  const matchedCards = useIssueCards(metadata?.story_arcs.flatMap((arc) =>
+    arc.related_issues.flatMap((issue) => issue.comicpile_matches.map((match) => match.issue_id)),
+  ) ?? [], { enabled: !isLoading })
+  const cardsByIssue = indexIssueCards(matchedCards.data)
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [expandedArcs, setExpandedArcs] = useState<Set<number>>(new Set())
   const [addDialogOpen, setAddDialogOpen] = useState(false)
@@ -54,7 +60,8 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
       seriesName,
       issueNumber,
       comicvineIssueId,
-      imageUrl: metadata?.image_url ?? null,
+      // The current Roll comic's cover cannot represent a related, unowned issue.
+      imageUrl: null,
       anchorBeforeThreadId,
       anchorAfterThreadId,
     })
@@ -180,9 +187,15 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                         </div>
                       </div>
                       {issue.comicpile_matches.map((match) => (
-                        <p key={match.issue_id} className="text-[9px] text-stone-500 mt-1">
-                          {match.thread_title} #{match.issue_number} · {match.status}
-                        </p>
+                        <CompactIssueCardTrigger
+                          key={match.issue_id}
+                          issueId={match.issue_id}
+                          card={cardsByIssue.get(match.issue_id)}
+                          threadTitle={match.thread_title}
+                          issueNumber={match.issue_number}
+                          status={match.status}
+                          hideTitle={issue.comicpile_matches.length === 1}
+                        />
                       ))}
                     </div>
                   )
