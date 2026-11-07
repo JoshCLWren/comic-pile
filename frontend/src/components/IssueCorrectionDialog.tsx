@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
 import type { Issue, IssueListResponse } from '../types'
@@ -56,8 +55,6 @@ export default function IssueCorrectionDialog({
   // must be disambiguated by the correction UI rather than guessing artwork.
   const matchingIssues = allIssues.filter((issue) => issue.issue_number === selectedIssueNumber.trim())
   const selectedOwnedIssue = matchingIssues.length === 1 ? matchingIssues[0] : null
-  const cardQuery = useIssueCards(selectedOwnedIssue ? [selectedOwnedIssue.id] : [], { enabled: isOpen && !isLoadingIssues })
-  const cardsByIssue = indexIssueCards(cardQuery.data)
 
   const loadAllIssues = useCallback(async () => {
     const loadedIssues: Issue[] = []
@@ -278,7 +275,6 @@ export default function IssueCorrectionDialog({
               <div className="mt-3">
                 <CompactIssueCardTrigger
                   issueId={selectedOwnedIssue.id}
-                  card={cardsByIssue.get(selectedOwnedIssue.id)}
                   threadTitle={threadTitle}
                   issueNumber={selectedOwnedIssue.issue_number}
                   status={selectedOwnedIssue.status === 'read' ? 'read' : 'unread'}
