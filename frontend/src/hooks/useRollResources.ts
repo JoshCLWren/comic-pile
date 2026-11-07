@@ -79,7 +79,13 @@ export function useRollResourceSnapshot(
     isPending,
     isError,
     refetch: async () => {
-      await Promise.all([dieState.refetch(), eligible.refetch(), cards.refetch()])
+      await Promise.all([
+        dieState.refetch(),
+        eligible.refetch(),
+        // `refetch` ignores the query's `enabled` flag, and the Rust cards
+        // route rejects an empty batch, so an empty pool must not refetch it.
+        issueIds.length > 0 ? cards.refetch() : Promise.resolve(),
+      ])
     },
   }
 }

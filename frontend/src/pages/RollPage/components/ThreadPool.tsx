@@ -198,6 +198,8 @@ export function ThreadPool({
             const routeLabels = (thread.route_labels ?? []).filter(Boolean)
             const tags = thread.tags ?? []
             const tagNames = tags.map((tag) => tag.name)
+            const cardIssueNumber = thread.issue_id != null ? cardIssueById.get(thread.issue_id) : undefined
+            const issueNumber = thread.issue_number ?? cardIssueNumber
             return (
               <div
                 key={thread.id}
@@ -210,7 +212,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}. Open series actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}. Open series actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
@@ -220,7 +222,7 @@ export function ThreadPool({
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
                   <p className="truncate text-xs text-stone-400">
-                    {(thread.issue_number ?? (thread.issue_id != null ? cardIssueById.get(thread.issue_id) : undefined)) ? `#${thread.issue_number ?? cardIssueById.get(thread.issue_id as number)}` : 'Next unread issue'}
+                    {issueNumber ? `#${issueNumber}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   <ThreadTagChips

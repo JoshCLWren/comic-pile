@@ -96,11 +96,43 @@ describe('ThreadPool eligible mappings', () => {
         <ThreadPool
           {...baseProps}
           pool={[{ id: 1, title: 'Card comic', format: 'Comic', issue_id: 55 }]}
-          issueCards={{ items: [{ issue_id: 55, issue_number: '7' }] } as never}
+          issueCards={{
+            items: [{
+              issue_id: 55,
+              thread_id: 1,
+              thread_title: 'Card comic',
+              issue_number: '7',
+              status: 'unread',
+              has_confirmed_identity: false,
+              mapping_state: 'unmapped',
+            }],
+          }}
         />
       </MemoryRouter>,
     )
     expect(screen.getByText('#7')).toBeVisible()
+  })
+
+  it('carries the route overflow count on the face cue', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{
+            id: 7,
+            title: 'Amazing Adventures',
+            format: 'ongoing',
+            issue_number: '12',
+            route_labels: ['Secret War', 'Civil War', 'Secret Invasion'],
+            overflow_routes_count: 3,
+          }]}
+        />
+      </MemoryRouter>,
+    )
+
+    const routeCue = screen.getByText(/Connected to: Secret War · Civil War · Secret Invasion · \+3 more/i)
+    expect(routeCue).toBeVisible()
+    expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War · Secret Invasion · +3 more')
   })
 
   it('omits eligible mappings while rating', () => {

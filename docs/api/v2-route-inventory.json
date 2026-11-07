@@ -159,7 +159,7 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4443,
-      "consumers": []
+      "consumers": ["frontend/src/services/rollResourcesApi.ts"]
     },
     {
       "method": "GET",
@@ -324,7 +324,7 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4595,
-      "consumers": []
+      "consumers": ["frontend/src/services/rollResourcesApi.ts"]
     },
     {
       "method": "GET",
@@ -332,7 +332,7 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4595,
-      "consumers": []
+      "consumers": ["frontend/src/services/rollResourcesApi.ts"]
     },
     {
       "method": "POST",
