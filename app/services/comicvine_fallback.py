@@ -82,6 +82,8 @@ def metadata_needs_hydration(
         True when deep metadata is missing or older than the refresh window.
     """
     metadata = identity.metadata_json
+    if not isinstance(metadata, dict):
+        return True
     raw_payload = metadata.get("raw_provider_payload")
     if not isinstance(raw_payload, dict):
         return True
@@ -107,6 +109,8 @@ def metadata_needs_hydration(
 
 def _comicvine_issue_id(external_id: str) -> int | None:
     """Parse a stored ComicVine issue identity without guessing from ComicPile metadata."""
+    if not isinstance(external_id, str):
+        return None
     normalized = external_id.removeprefix("4000-").strip()
     return int(normalized) if normalized.isdigit() else None
 
@@ -146,6 +150,7 @@ async def refresh_issue_metadata(identity_id: int) -> bool:
             "comicvine_fallback_inline_failed identity_id=%s error=%s",
             identity_id,
             type(exc).__name__,
+            exc_info=True,
         )
         return False
 
@@ -279,6 +284,7 @@ async def _run_issue_hydration(identity_id: int) -> bool:
             "comicvine_fallback_db_unavailable identity_id=%s error=%s",
             identity_id,
             type(exc).__name__,
+            exc_info=True,
         )
         return False
 
