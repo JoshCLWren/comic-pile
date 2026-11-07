@@ -17,7 +17,6 @@ import { useThreadIssueCreators } from '../hooks/useThreadIssueCreators'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import {
   applyEditedThreadToQueuePages,
-  applyIssueReadSnapshotToCache,
   invalidateAfterDependencyChange,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -45,7 +44,6 @@ import {
   TAG_EDITOR_THREAD,
   tagEditorSearch,
 } from '../components/Tags/sourceNavigation'
-import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 function IssueCreator({
   creators,
@@ -334,10 +332,6 @@ export default function ThreadDetailView() {
     if (thread && thread.total_issues !== null && nextPageToken) {
       void issuesQuery.fetchNextPage()
     }
-  }
-
-  function handleIssueSnapshotChange(snapshot: IssueMutationSnapshot) {
-    applyIssueReadSnapshotToCache(client, snapshot)
   }
 
   const handleEditSubmit = async (event: FormEvent) => {
