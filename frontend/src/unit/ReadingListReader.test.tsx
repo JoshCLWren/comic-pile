@@ -244,3 +244,27 @@ it('shows a single bounded card-load failure and restores issue-specific covers 
     'src', 'https://comicvine.gamespot.com/issue-20.jpg',
   )
 })
+
+it('does not guess an issue ID or fetch an issue cover for thread-only prerequisites', async () => {
+  vi.mocked(customCBLApi.getReader).mockResolvedValue({
+    ...view,
+    entries: (view.entries ?? []).map((entry) => entry.issue_id !== 20 ? entry : {
+      ...entry,
+      explanation: {
+        ...entry.explanation,
+        is_blocked: true,
+        blocking_reasons: [],
+        blocking_dependencies: [
+          { thread_id: 3, thread_title: 'Starman', issue_number: '55', label: 'Reader prerequisite: Starman #55' },
+          { issue_id: 10, thread_id: 1, thread_title: 'The Dead Remembered', issue_number: '2', label: 'Strict order: The Dead Remembered #2' },
+        ],
+      },
+    }),
+  })
+  mount()
+  expect(await screen.findByText('Julix · Strict order')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/3')
+  expect(screen.queryByRole('button', { name: 'Reading and mapping actions for Starman #55' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Reading and mapping actions for The Dead Remembered #2' })).toBeEnabled()
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20]))
+})
