@@ -121,14 +121,13 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
       }, 0)
 
       queryClient.setQueryData(queryKeys.roll.bootstrap(), reconciled)
-      // A reconciled bootstrap is authoritative. The scoped pool and card
-      // batch are derived from the same state, so a rating that changes the
-      // current issue must not leave them serving the pre-rating view.
+      // A reconciled bootstrap is authoritative. The eligible pool is derived
+      // from the same state, so a rating that changes the current issue must
+      // not leave it serving the pre-rating view. Refreshing the pool also
+      // changes the card batch key, so cards follow without a second stale
+      // batch fetch against the pre-rating ids.
       void queryClient.invalidateQueries({
         queryKey: queryKeys.roll.eligibleIssueIdsAll(),
-      })
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.roll.issueCardsAll(),
       })
     }
 

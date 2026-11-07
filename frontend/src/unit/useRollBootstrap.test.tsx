@@ -242,7 +242,7 @@ describe('useRollBootstrap', () => {
     expect(localStorage.getItem('comic_pile_last_session_id_1')).toBe('1')
   })
 
-  it('refreshes derived scoped Roll resources after a reconciled bootstrap (#4719)', async () => {
+  it('refreshes the derived eligible pool after a reconciled bootstrap (#4719)', async () => {
     mockedBootstrap.mockResolvedValue(bootstrapResponse)
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     renderBootstrap()
@@ -258,7 +258,9 @@ describe('useRollBootstrap', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
-    expect(invalidateQueries).toHaveBeenCalledWith({
+    // The new eligible ids change the card batch key; invalidating the old
+    // batch here would issue one wasted POST against the pre-rating ids.
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.roll.issueCardsAll(),
     })
   })
