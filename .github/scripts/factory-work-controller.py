@@ -445,6 +445,9 @@ def assign_candidate(
                 expected_action = action
                 if source == 'manual':
                     expected_action = completion_action_for(candidate.stage, candidate.conflicted)
+                    if action == 'ci-repair' and not required_checks_failed(number):
+                        release_verified_claims(claimed)
+                        return False
                 if expected_action is not None and live_action != expected_action:
                     print(
                         f'[factory-controller] Expected action {expected_action} no longer matches '
@@ -470,7 +473,7 @@ def assign_candidate(
                 selected_pr = candidate.kind == 'pr' and number == candidate.number
                 lease_kwargs: dict[str, str] = {}
                 if selected_pr and action:
-                    lease_kwargs = {'action': action, 'source': 'jev'}
+                    lease_kwargs = {'action': action, 'source': source or 'jev'}
                     if expected_head:
                         lease_kwargs['head'] = expected_head
                 elif source:
@@ -1072,7 +1075,13 @@ def assign(
             'implement' if selected.kind == 'issue'
             else completion_action_for(selected.stage, selected.conflicted)
         )
-        if eligible_action is None or requested_action not in ('advance', eligible_action):
+        ci_override = (
+            requested_action == 'ci-repair' and eligible_action == 'review-findings'
+            and required_checks_failed(selected.number)
+        )
+        if not ci_override and (
+            eligible_action is None or requested_action not in ('advance', eligible_action)
+        ):
             raise RuntimeError(f'Requested action is unavailable. Current action: {eligible_action or "none"}.')
         if not candidate_is_live_executable(selected):
             raise RuntimeError('The selected target is blocked or still waiting on checks.')
@@ -1168,7 +1177,12 @@ def assign(
                 head = next(str(pr.get('headRefOid') or '') for pr in prs if pr['number'] == candidate.number)
                 if not re.fullmatch(r'[0-9a-f]{40}', head):
                     continue
-                if assign_candidate(candidate, worker, expected_head=head, source='manual'):
+                if ci_override:
+                    if assign_candidate(
+                        candidate, worker, action='ci-repair', expected_head=head, source='manual'
+                    ):
+                        return candidate
+                elif assign_candidate(candidate, worker, expected_head=head, source='manual'):
                     return candidate
                 continue
             if assign_candidate(candidate, worker, source='manual'):
@@ -1699,7 +1713,11 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
             # A timed-out POST can already have queued the worker. Keep its lease
             # so another manual request cannot start duplicate work.
             raise RuntimeError('Could not confirm worker dispatch. Check Actions before retrying.') from None
-        return {'action': selected, 'kind': candidate.kind, 'number': candidate.number}
+        return {
+            'action': selected if action == 'advance' else action,
+            'kind': candidate.kind,
+            'number': candidate.number,
+        }
     raise RuntimeError('No eligible action or available independent worker. Check current stage, leases, and factory capacity.')
 
 

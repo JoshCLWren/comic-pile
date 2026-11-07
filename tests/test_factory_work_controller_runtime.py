@@ -918,3 +918,10 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
         controller.assign("17", target=("issue", issue_number), requested_action="ci-repair")
     assert controller.assign("17", target=("issue", issue_number)) == candidate
     assert claims == [(candidate, "17", {"expected_head": head, "source": "manual"})]
+    feedback = controller.replace(candidate, stage="factory:changes-requested")
+    monkeypatch.setattr(controller, "build_candidates", lambda *args, **kwargs: [feedback])
+    monkeypatch.setattr(controller, "required_checks_failed", lambda number: number == pr_number)
+    assert controller.assign("17", target=("issue", issue_number), requested_action="ci-repair") == feedback
+    assert claims[-1] == (
+        feedback, "17", {"action": "ci-repair", "expected_head": head, "source": "manual"},
+    )
