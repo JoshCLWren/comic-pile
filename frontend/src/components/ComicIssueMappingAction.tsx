@@ -93,7 +93,7 @@ export default function ComicIssueMappingAction({
             ? 'Mapping status unavailable'
             : 'Not mapped'
 
-  const isResolvedMapping = !isBatchLoading && !isBatchError && !mapping.isError
+  const isResolvedMapping = !isBatchLoading && !isBatchError
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2" data-testid="comic-mapping-action">

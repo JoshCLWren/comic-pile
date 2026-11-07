@@ -129,7 +129,8 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts",
-        "frontend/src/services/nativeRollMutationApi.ts"
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/services/issueCardsApi.ts"
       ]
     },
     {

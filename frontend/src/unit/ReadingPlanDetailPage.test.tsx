@@ -259,6 +259,9 @@ describe('ReadingPlanDetailPage', () => {
     const { container } = renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
     // The featured direct-read experience opens in place on the plan.
+    // The card loads asynchronously (ReaderIssueActions gates on the batch
+    // query), so wait for the featured container before querying it.
+    await waitFor(() => expect(container.querySelector('[data-variant="featured"]')).not.toBeNull())
     // SAFETY: the featured card container is rendered in place by the header action.
     expect(await within(container.querySelector('[data-variant="featured"]') as HTMLElement).findByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(mockSetPending).not.toHaveBeenCalled()
@@ -298,7 +301,9 @@ describe('ReadingPlanDetailPage', () => {
     patchIssueSpy.mockRejectedValueOnce(new Error('This issue is no longer next and available. Refresh the reading plan and try again.'))
     const { container } = renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
-    const featured = await container.querySelector('[data-variant="featured"]')
+    // The featured card loads asynchronously; wait for it before querying.
+    await waitFor(() => expect(container.querySelector('[data-variant="featured"]')).not.toBeNull())
+    const featured = container.querySelector('[data-variant="featured"]')
     // SAFETY: the featured card container is rendered in place by the header action.
     fireEvent.click(await within(featured as HTMLElement).findByRole('button', { name: 'Read now' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Mark read & save' }))
