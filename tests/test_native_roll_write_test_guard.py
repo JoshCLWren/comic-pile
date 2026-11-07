@@ -31,9 +31,11 @@ WRITE_ROUTE_RE = re.compile(
 )
 # A write-path test is database-backed when it reaches the disposable database.
 # `test_support` is the canonical accessor and the raw env var is the legacy /
-# skip-guard spelling, so accept either.
+# skip-guard spelling, so accept either.  ``RUST_ROLL_PARITY_DATABASE_URL`` is
+# the restricted DML-role DSN used by the canonical-schema parity suite.
 DB_TEST_MARKERS = (
     "RUST_ROLL_TEST_DATABASE_URL",
+    "RUST_ROLL_PARITY_DATABASE_URL",
     "test_support::database_url",
     "test_support::test_state",
     "test_support::reset_for_test",
@@ -244,12 +246,24 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
             "against the canonical schema"
         )
         parity_source = parity.read_text(encoding="utf-8")
-        assert any(marker in parity_source for marker in DB_TEST_MARKERS), (
-            f"{parity.name} must run against the disposable PostgreSQL database "
-            "(RUST_ROLL_TEST_DATABASE_URL or a test_support accessor)"
+        conftest = parity_root / "conftest.py"
+        conftest_source = conftest.read_text(encoding="utf-8") if conftest.is_file() else ""
+        combined_source = parity_source + conftest_source
+        assert any(marker in combined_source for marker in DB_TEST_MARKERS), (
+            f"{parity.name} must run against the canonical PostgreSQL database "
+            "(RUST_ROLL_PARITY_DATABASE_URL, RUST_ROLL_TEST_DATABASE_URL, or a "
+            "test_support accessor) — either directly or via a conftest.py fixture"
         )
-        assert "Base.metadata.create_all" in parity_source, (
-            f"{parity.name} must build the canonical app schema"
+        # Accept either the per-file Base.metadata.create_all pattern (legacy) or
+        # the canonical-schema conftest autouse fixture (reset_canonical_schema),
+        # which serializes tests and rebuilds the schema via TRUNCATE + sequence reset.
+        schema_proven = "Base.metadata.create_all" in combined_source or (
+            "reset_canonical_schema" in conftest_source
+        )
+        assert schema_proven, (
+            f"{parity.name} must use the canonical app schema — either call "
+            "Base.metadata.create_all directly, or rely on the parity conftest "
+            "reset_canonical_schema autouse fixture"
         )
 
 
