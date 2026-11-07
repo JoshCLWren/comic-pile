@@ -2005,3 +2005,60 @@ def test_reconcile_does_not_guess_when_github_update_time_is_missing(
     writes = _lease_reconcile_setup(controller, monkeypatch, [item])
     assert controller.reconcile_stale_leases(now_epoch=now) == []
     assert writes == []
+
+
+@pytest.mark.parametrize("fresh_side", ["issue", "pr"])
+def test_canonical_pr_and_issue_share_local_lease_activity(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    fresh_side: str,
+) -> None:
+    """A local PR repair stays owned when progress appears on either side."""
+    now = 2_000_000_000
+    issue_updated = now - 90 if fresh_side == "issue" else now - 7200
+    pr_updated = now - 90 if fresh_side == "pr" else now - 7200
+    issue_row = _local_lease_item(4615, issue_updated, "factory:building")
+    pr_row = _local_lease_item(4709, pr_updated, "factory:building")
+    pr_row["body"] = "Closes #4615"
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [issue_row], [pr_row]
+    )
+    assert controller.paired_owned_targets([issue_row], [pr_row]) == {
+        4615: 4709,
+        4709: 4615,
+    }
+    assert controller.reconcile_stale_leases(now_epoch=now) == []
+    assert writes == []
+
+
+def test_expired_canonical_local_pair_releases_both_leases(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Once both issue and PR are inactive they must not hold each other forever."""
+    now = 2_000_000_000
+    issue_row = _local_lease_item(4615, now - 7200, "factory:building")
+    pr_row = _local_lease_item(4709, now - 7200, "factory:review")
+    pr_row["body"] = "Closes #4615"
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [issue_row], [pr_row]
+    )
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4615, 4709]
+    assert len(writes) == 2
+    assert "factory:unowned" in writes[1]["labels"]
+    assert "factory:review" in writes[1]["labels"]
+
+
+def test_unrelated_pr_activity_cannot_extend_an_inactive_issue_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a canonical PR with the same owner may extend the issue lease."""
+    now = 2_000_000_000
+    issue_row = _local_lease_item(4549, now - 7200, "factory:building")
+    unrelated = _local_lease_item(4709, now - 10, "factory:review")
+    unrelated["body"] = "Closes #4615"
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [issue_row], [unrelated]
+    )
+    assert controller.paired_owned_targets([issue_row], [unrelated]) == {}
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4549]
+    assert len(writes) == 1
