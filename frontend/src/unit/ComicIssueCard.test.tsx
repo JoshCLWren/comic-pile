@@ -139,6 +139,9 @@ describe('ComicIssueCard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add to ComicPile' }))
     expect(onAddToLibrary).toHaveBeenCalledTimes(1)
     expect(screen.queryByTestId('comic-mapping-map')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Read now' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Rate / Mark read' })).toBeNull()
+    expect(patchIssueSpy).not.toHaveBeenCalled()
   })
 
   it('keeps a blocked issue actionable: advisory only, never a disabled Read now', () => {
@@ -215,7 +218,7 @@ describe('ComicIssueCard', () => {
     expect(patchIssueSpy).toHaveBeenCalledWith(77, expect.objectContaining({ status: 'unread' }))
   })
 
-  it('shows retry without duplicating the request when the save fails', async () => {
+  it('reuses the idempotency key when retrying an ambiguous failed save', async () => {
     patchIssueSpy.mockRejectedValueOnce(new Error('Network error. Please check your connection.'))
     renderCard()
     fireEvent.click(screen.getByRole('button', { name: 'Read now' }))
@@ -223,6 +226,38 @@ describe('ComicIssueCard', () => {
     expect(await screen.findByRole('alert')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledTimes(2))
+    expect(patchIssueSpy.mock.calls[0][1].idempotencyKey).toMatch(/^direct-/)
+    expect(patchIssueSpy.mock.calls[1][1].idempotencyKey).toBe(patchIssueSpy.mock.calls[0][1].idempotencyKey)
+  })
+
+  it('keeps slider descriptions unique when multiple issue cards are edited', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <ComicIssueCard issueId={77} card={UNREAD_CARD} threadTitle="Hellboy in Hell" issueNumber="3" status="unread" />
+        <ComicIssueCard issueId={78} card={{ ...UNREAD_CARD, issue_id: 78, issue_number: '4' }} threadTitle="Hellboy in Hell" issueNumber="4" status="unread" />
+      </QueryClientProvider>,
+    )
+    for (const button of screen.getAllByRole('button', { name: 'Read now' })) fireEvent.click(button)
+    const sliders = screen.getAllByRole('slider') as HTMLInputElement[]
+    expect(sliders).toHaveLength(2)
+    expect(sliders[0].id).not.toBe(sliders[1].id)
+    expect(sliders[0].getAttribute('aria-describedby')).not.toBe(sliders[1].getAttribute('aria-describedby'))
+    for (const slider of sliders) {
+      expect(document.getElementById(slider.getAttribute('aria-describedby') ?? '')).not.toBeNull()
+    }
+  })
+
+  it('keeps reading actions usable if mapping is hidden', () => {
+    renderCard({ showMapping: false, advisory: 'Normally follows an unread issue.' })
+    expect(screen.getByRole('button', { name: 'Read now' })).not.toBeDisabled()
+    expect(screen.queryByTestId('comic-mapping-action')).toBeNull()
+  })
+
+  it('renders a compact placeholder without a cover or a provider identity', () => {
+    renderCard({ card: null, variant: 'compact', threadTitle: 'An Annual', issueNumber: 'Annual 1', showMapping: false })
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute('aria-label', 'No cover for An Annual #Annual 1')
+    expect(screen.getByRole('button', { name: 'Read now' })).not.toBeDisabled()
   })
 
   it('does not fetch the per-issue identity GET when the batch supplies mapping state', () => {

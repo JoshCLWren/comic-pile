@@ -175,14 +175,25 @@ export default function ReadingPlanDetailPage() {
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const readerQuery = useReadingPlanReader(planId)
-  // One bounded batch for every issue this plan renders — never one request per row.
+  // Hydrate only rendered rows. Expanding a section fetches newly visible ids.
+  // Hidden 400+ issue lanes must not trigger large initial batches.
   const planView = readerQuery.data
   const planCardsQuery = useIssueCards(
     planView
       ? [
           ...planView.available_now.map((issue) => issue.issue_id),
-          ...planView.blocked_next.map((issue) => issue.issue_id),
-          ...planView.lanes.flatMap((lane) => lane.issues.map((issue) => issue.issue_id)),
+          ...planView.blocked_next.slice(0, visibleBlockedCount).map((issue) => issue.issue_id),
+          ...(showUpcoming
+            ? planView.lanes.flatMap((lane) => lane.issues)
+                .filter((issue) => issue.availability === 'later')
+                .slice(0, visibleUpcomingCount)
+                .map((issue) => issue.issue_id)
+            : []),
+          ...(showReadingOrder
+            ? planView.lanes.flatMap((lane) => lane.issues)
+                .slice(0, visibleOrderCount)
+                .map((issue) => issue.issue_id)
+            : []),
         ]
       : [],
     { enabled: readerQuery.isSuccess },

@@ -894,6 +894,8 @@ export async function invalidateAfterTagMutation(
 async function invalidateReadingEligibility(client: QueryClient, includeAuthoringLists = false): Promise<void> {
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
+    // Legacy read/unread actions change the shared card status too.
+    client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
     client.invalidateQueries({ queryKey: queryKeys.queue.all }),
     client.invalidateQueries({ queryKey: queryKeys.roll.all }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),

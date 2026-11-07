@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { applyIssueCardMutation } from '../query/cacheEffects'
 import {
@@ -29,7 +29,9 @@ export function useComicIssueActions(
 ) {
   const client = useQueryClient()
   const onMutatedRef = useRef(options?.onMutated)
-  onMutatedRef.current = options?.onMutated
+  useLayoutEffect(() => {
+    onMutatedRef.current = options?.onMutated
+  }, [options?.onMutated])
   // One in-flight intent per card; kept across the await so Cancel-then-retry
   // reuses the key while a different payload starts a fresh intent.
   const unresolvedRef = useRef<{ status?: 'read' | 'unread'; rating?: number; key: string } | null>(null)

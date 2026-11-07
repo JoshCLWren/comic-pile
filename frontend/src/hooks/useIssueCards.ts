@@ -20,6 +20,9 @@ export function useIssueCards(issueIds: number[], options?: { enabled?: boolean 
     queryFn: () => issueCardsApi.fetchCards(normalized),
     enabled: (options?.enabled ?? true) && normalized.length > 0,
     staleTime: 30_000,
+    // Preserve cached cards for matching canonical ids while an expanded batch loads.
+    // Consumers index by issue_id, so old rows cannot masquerade as new issues.
+    placeholderData: (previousCards) => previousCards,
   })
 }
 

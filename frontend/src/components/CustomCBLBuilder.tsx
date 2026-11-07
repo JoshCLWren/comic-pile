@@ -929,6 +929,14 @@ export default function CustomCBLBuilder({
                     onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
                     onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
                     card={visibleCardsByIssue.get(entry.issue_id) ?? null}
+                    onIssueMutated={(response) => {
+                      // Global reading progress must not reseed unsaved gates/order/skips.
+                      setEntries((current) => current.map((item) =>
+                        item.issue_id === response.issue.issue_id
+                          ? { ...item, status: response.issue.status }
+                          : item,
+                      ))
+                    }}
                   />
                 ))}
               </ol>

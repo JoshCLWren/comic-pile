@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import ImageWithLoading from './ImageWithLoading'
 import ComicIssueMappingAction from './ComicIssueMappingAction'
@@ -238,6 +238,7 @@ export function ComicIssueCard({
   isOwned = true,
 }: ComicIssueCardProps) {
   const queryClient = useQueryClient()
+  const ratingControlId = useId()
   const actions = useComicIssueActions(issueId, { onMutated })
   const [editor, setEditor] = useState<{ mode: 'read' | 'edit'; draftRating: number } | null>(null)
 
@@ -315,7 +316,7 @@ export function ComicIssueCard({
 
       {!editor ? (
         <div className="mt-2 flex flex-wrap items-start gap-1" data-testid="comic-issue-actions">
-          {resolvedStatus !== 'read' ? (
+          {!isOwned ? null : resolvedStatus !== 'read' ? (
             <>
               <button
                 type="button"
@@ -375,6 +376,8 @@ export function ComicIssueCard({
           </p>
           <div className="flex items-center gap-3">
             <ComicIssueRatingSlider
+              inputId={`${ratingControlId}-input`}
+              valueId={`${ratingControlId}-value`}
               value={editor.draftRating}
               onChange={(raw) => {
                 const draftRating = Number(raw)

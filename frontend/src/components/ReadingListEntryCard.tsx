@@ -2,7 +2,7 @@ import type { Ref } from 'react'
 import type { CustomCBLEntry, ReadingListGate, ReadingListMode } from '../services/api-custom-cbl'
 import { ComicIssueCard } from './ComicIssueCard'
 import { useIssueCards } from '../hooks/useIssueCards'
-import type { IssueCard } from '../services/issueCardsApi'
+import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
 
@@ -66,13 +66,14 @@ interface Props {
   onMoveToPosition: () => void
   /** Batched owner-scoped projection; enriches cover/rating/mapping when present. */
   card?: IssueCard | null
+  onIssueMutated?: (response: IssueReadRateResponse) => void
 }
 
 /** A legible full-title card on phones, with per-issue settings revealed on demand. */
 export default function ReadingListEntryCard({
   entry, index, entryCount, isNextUnread, cardRef, mode, waitingOn, nameOf, expanded,
   moveDestination, disabled, onCheckpoint, onMoveEarlier, onMoveLater,
-  onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition, card,
+  onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition, card, onIssueMutated,
 }: Props) {
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
@@ -163,6 +164,7 @@ export default function ReadingListEntryCard({
                         issueNumber={entry.issue_number}
                         status={entry.status === 'read' ? 'read' : 'unread'}
                         variant="compact"
+                        onMutated={onIssueMutated}
                       />
                     </li>
   )
