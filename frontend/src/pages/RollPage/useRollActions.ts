@@ -224,7 +224,10 @@ export function useRollActions({
               next_issue_number: outcome.response.next_issue_number,
               last_rolled_result: outcome.response.result,
             }
+            // Ensure we always enter the rating view for the replacement offer,
+            // independently of whether the bootstrap refresh succeeded.
             enterRatingView(outcome.response.thread_id, outcome.response.result, threadMetadata)
+
             if (!outcome.refreshed) {
               // The bootstrap still names the snoozed thread as pending.
               // Suppress pending auto-open so stale data cannot restore the
