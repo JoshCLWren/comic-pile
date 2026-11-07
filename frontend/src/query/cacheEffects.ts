@@ -840,6 +840,13 @@ export async function invalidateAfterRollDieModeUpdate(
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     }),
+    // The Roll header now reads its selected die from the scoped resource, so a
+    // die command must refresh that query too or the header keeps showing the
+    // die the reader just replaced until the query's stale window elapses.
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
       exact: true,
