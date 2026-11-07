@@ -224,6 +224,7 @@ def replace_factory_labels(
     *,
     expected_owner: str | None = None,
     inactive_before_epoch: int | None = None,
+    observed_at_epoch: int | None = None,
 ) -> bool:
     """Atomically reconcile one target to exactly one owner and workflow stage.
 
@@ -246,7 +247,8 @@ def replace_factory_labels(
             return False
         if str(target.get("state") or "OPEN").upper() != "OPEN":
             return False
-        updated = last_github_update_epoch(target, now_epoch=int(time.time()))
+        checked_at = int(time.time()) if observed_at_epoch is None else observed_at_epoch
+        updated = last_github_update_epoch(target, now_epoch=checked_at)
         if (
             inactive_before_epoch is None
             or updated is None
@@ -952,6 +954,7 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
             'factory:unowned',
             expected_owner=owner,
             inactive_before_epoch=now_epoch - ttl,
+            observed_at_epoch=now_epoch,
         ):
             continue
         released.append(number)
