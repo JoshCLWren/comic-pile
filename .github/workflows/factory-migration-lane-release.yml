@@ -14,10 +14,12 @@ permissions:
   pull-requests: read
 
 # Serialize this event-driven reconciliation with dispatch and capacity refill.
+# Relevant label and lifecycle events must not be evicted by unrelated
+# label churn on the same PR. Only replace wakeups that reconcile the same state.
 # Coalesce duplicate ingress events for this workflow only. The job-level
 # shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: ${{ github.event_name == 'pull_request_target' && format('factory-migration-release-pr-{0}', github.event.pull_request.number) || 'factory-migration-release-manual' }}
+  group: ${{ github.event_name == 'pull_request_target' && format('factory-migration-release-pr-{0}-{1}', github.event.pull_request.number, (github.event.action == 'closed' || github.event.action == 'converted_to_draft' || contains(fromJSON('["factory:ready","factory:ci","factory:review","factory:changes-requested","factory:blocked","factory:migration-wait"]'), github.event.label.name)) && 'reconcile' || 'other') || 'factory-migration-release-manual' }}
   queue: single
   cancel-in-progress: false
 
