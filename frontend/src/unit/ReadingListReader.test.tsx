@@ -270,9 +270,9 @@ it('does not guess an issue ID or fetch an issue cover for thread-only prerequis
 })
 
 it('renders a safe empty list when a stale reader response omits entries', async () => {
-  // SAFETY: simulate an older or malformed server response explicitly, while
-  // keeping the test fixture fully typed elsewhere.
-  const missingEntries = { ...view, entries: undefined } as unknown as ReaderView
+  // Preserve the generated response type while modeling a stale server
+  // payload that omitted `entries`. Do not weaken the runtime boundary.
+  const missingEntries = Object.assign({}, view, { entries: undefined })
   vi.mocked(customCBLApi.getReader).mockResolvedValue(missingEntries)
   mount()
   expect(await screen.findByText('This Reading List is empty.')).toBeVisible()
