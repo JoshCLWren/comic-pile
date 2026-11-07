@@ -133,6 +133,9 @@ describe('ThreadPool eligible mappings', () => {
     const routeCue = screen.getByText(/Connected to: Secret War · Civil War · Secret Invasion · \+3 more/i)
     expect(routeCue).toBeVisible()
     expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War · Secret Invasion · +3 more')
+    expect(screen.getByRole('button', { name: /Die face 1:/i })).toHaveAccessibleName(
+      /3 more connected routes/i,
+    )
   })
 
   it('omits eligible mappings while rating', () => {

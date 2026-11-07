@@ -50,7 +50,9 @@ describe('useRollResourceSnapshot', () => {
   it('does not refetch an empty card batch', async () => {
     const fake = api([])
     const { result } = renderHook(() => useRollResourceSnapshot([], fake), { wrapper: wrapper() })
-    await waitFor(() => expect(result.current.eligibleIssueIds?.issue_ids).toEqual([]))
+    await waitFor(() =>
+      expect(result.current.eligibleIssueIds).toEqual({ die: 20, issue_ids: [], thread_ids: [] }),
+    )
 
     await act(async () => {
       await result.current.refetch()
