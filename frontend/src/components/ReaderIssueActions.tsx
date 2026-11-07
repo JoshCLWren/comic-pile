@@ -64,6 +64,10 @@ export function ReadNowIssueButton({
               Retry
             </button>
           </div>
+        ) : cards.isPending ? (
+          <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+            Loading issue card…
+          </p>
         ) : (
           <ComicIssueCard
             issueId={issueId}
