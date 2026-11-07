@@ -48,7 +48,7 @@ for (const count of [1, 25]) {
           session_mode: 'warm', active_thread: pending ? thread(pending) : null,
           bandwidth: null, pool_reason: 'ready', last_read: null,
           snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [], skipped_threads: [],
-          rollable: ids.map(id => ({ thread: thread(id), issue: { id: id * 10, number: '1' }, routes: [] })),
+          rollable: ids.map(id => ({ thread: thread(id), issue: { id: id * 10, number: '1' }, routes: [], overflow_routes_count: 0 })),
         } })
       }
       if (path.includes('/tags')) return route.fulfill({ json: { tags: [], direct_tags: [], effective_tags: [] } })

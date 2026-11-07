@@ -428,7 +428,7 @@ jobs:
             --dump-header "$header_file" \
             --write-out '%{http_code}' \
             --output "$body_file" \
-            https://comic-pile.vercel.app/api/v1/auth/login)"
+            https://comic-pile.vercel.app/api/v2/auth/login)"
           detail="$(jq -r '.detail // ""' "$body_file")"
           runtime="$(awk 'BEGIN{IGNORECASE=1} /^x-comicpile-api-runtime:/ {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
           if [[ "$status" != "401" || "$detail" != "Incorrect username or password" ]]; then

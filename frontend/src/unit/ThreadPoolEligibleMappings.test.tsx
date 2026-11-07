@@ -58,6 +58,86 @@ describe('ThreadPool eligible mappings', () => {
     ).toBeTruthy()
   })
 
+  it('reorders the pool to scoped eligible thread ids when provided', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[
+            { id: 1, title: 'First comic', format: 'Comic' },
+            { id: 2, title: 'Second comic', format: 'Comic' },
+          ]}
+          eligibleThreadIds={[2, 1]}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('button', { name: /Die face 1: Second comic/i })).toBeVisible()
+    expect(screen.getByRole('button', { name: /Die face 2: First comic/i })).toBeVisible()
+  })
+
+  it('honors an explicitly empty scoped eligible pool rather than stale bootstrap faces', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 1, title: 'No longer eligible', format: 'Comic' }]}
+          eligibleThreadIds={[]}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('0 in play')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Die face 1:/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('No longer eligible')).not.toBeInTheDocument()
+  })
+
+  it('falls back to scoped issue cards for the issue number when bootstrap omits it', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 1, title: 'Card comic', format: 'Comic', issue_id: 55 }]}
+          issueCards={{
+            items: [{
+              issue_id: 55,
+              thread_id: 1,
+              thread_title: 'Card comic',
+              issue_number: '7',
+              status: 'unread',
+              has_confirmed_identity: false,
+              mapping_state: 'unmapped',
+            }],
+          }}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('#7')).toBeVisible()
+  })
+
+  it('carries the route overflow count on the face cue', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{
+            id: 7,
+            title: 'Amazing Adventures',
+            format: 'ongoing',
+            issue_number: '12',
+            route_labels: ['Secret War', 'Civil War', 'Secret Invasion'],
+            overflow_routes_count: 3,
+          }]}
+        />
+      </MemoryRouter>,
+    )
+
+    const routeCue = screen.getByText(/Connected to: Secret War · Civil War · Secret Invasion · \+3 more/i)
+    expect(routeCue).toBeVisible()
+    expect(routeCue.textContent).toBe('Connected to: Secret War · Civil War · Secret Invasion · +3 more')
+    expect(screen.getByRole('button', { name: /Die face 1:/i })).toHaveAccessibleName(
+      /3 more connected routes/i,
+    )
+  })
+
   it('omits eligible mappings while rating', () => {
     render(
       <MemoryRouter>

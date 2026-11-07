@@ -8,7 +8,7 @@ This module provides common functions for interacting with the Comic Pile API:
 - Reading order management and verification
 
 Environment Variables:
-    COMIC_PILE_API_BASE: API base URL (default: https://app-production-72b9.up.railway.app)
+    COMIC_PILE_API_BASE: API base URL (default: https://comic-pile.vercel.app)
     COMIC_PILE_USERNAME: Your username (for individual scripts)
     COMIC_PILE_PASSWORD: Your password (for individual scripts)
 """
@@ -19,7 +19,7 @@ from typing import NamedTuple, TypedDict
 import requests
 
 API_BASE = os.environ.get(
-    "COMIC_PILE_API_BASE", "https://app-production-72b9.up.railway.app"
+    "COMIC_PILE_API_BASE", "https://comic-pile.vercel.app"
 ).rstrip("/")
 REQUESTS_TIMEOUT = 30
 
@@ -51,7 +51,7 @@ def login(username: str, password: str) -> str:
         Bearer token for API authentication
     """
     response = requests.post(
-        f"{API_BASE}/api/auth/login",
+        f"{API_BASE}/api/v2/auth/login",
         json={"username": username, "password": password},
         timeout=REQUESTS_TIMEOUT,
     )

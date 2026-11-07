@@ -198,7 +198,20 @@ def test_expired_zombie_allows_unrelated_stale_lease_reclamation(
         raise AssertionError(joined)
 
     monkeypatch.setattr(controller, "gh_json", fake_gh_json)
-    monkeypatch.setattr(controller, "owned_targets", lambda: [(701, "factory:13")])
+    # Reconciliation reads live issue/PR snapshots before evaluating lease age.
+    monkeypatch.setattr(
+        controller,
+        "list_issues",
+        lambda: [
+            {
+                "number": 701,
+                "state": "OPEN",
+                "updatedAt": github_time(now - controller.FIXED_LEASE_TTL_SECONDS - 1),
+                "labels": [{"name": "factory:13"}],
+            }
+        ],
+    )
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
     monkeypatch.setattr(
         controller,
         "latest_lease_activity_epoch",
@@ -208,7 +221,7 @@ def test_expired_zombie_allows_unrelated_stale_lease_reclamation(
     monkeypatch.setattr(
         controller,
         "replace_factory_labels",
-        lambda number, owner, stage=None: writes.append((number, owner)),
+        lambda number, owner, stage=None, **kwargs: (writes.append((number, owner)) or True),
     )
 
     assert controller.reconcile_stale_leases(now_epoch=now) == [701]
@@ -245,7 +258,20 @@ def test_known_active_worker_lease_remains_protected(
         raise AssertionError(joined)
 
     monkeypatch.setattr(controller, "gh_json", fake_gh_json)
-    monkeypatch.setattr(controller, "owned_targets", lambda: [(701, "factory:13")])
+    # Reconciliation reads live issue/PR snapshots before evaluating lease age.
+    monkeypatch.setattr(
+        controller,
+        "list_issues",
+        lambda: [
+            {
+                "number": 701,
+                "state": "OPEN",
+                "updatedAt": github_time(now - controller.FIXED_LEASE_TTL_SECONDS - 1),
+                "labels": [{"name": "factory:13"}],
+            }
+        ],
+    )
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
     monkeypatch.setattr(
         controller,
         "latest_lease_activity_epoch",
@@ -255,7 +281,7 @@ def test_known_active_worker_lease_remains_protected(
     monkeypatch.setattr(
         controller,
         "replace_factory_labels",
-        lambda number, owner, stage=None: writes.append((number, owner)),
+        lambda number, owner, stage=None, **kwargs: (writes.append((number, owner)) or True),
     )
 
     assert controller.reconcile_stale_leases(now_epoch=now) == []

@@ -495,3 +495,12 @@ def test_next_task_explain_reports_an_eligible_issue() -> None:
 
     assert report["eligible"] is True
     assert report["selector"] == "next_task"
+    # Ralph eligibility never implies approval for fixed-model dispatch.
+    assert report["not_evaluated"] == [
+        "canonical open-PR suppression (controller-only gate)",
+        "Rotisserie issue-intake authorization (fixed-model only)",
+        "rolling no-diff retry budget (fixed-model only)",
+        "worker WIP, review-backlog, quota, and capacity (fixed-model dispatch gates)",
+        "live GitHub dependency blockers (controller-only gate)",
+        "lease liveness and worker-specific strike-retry exclusion (assignment-time gates)",
+    ]

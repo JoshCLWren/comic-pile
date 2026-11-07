@@ -54,7 +54,7 @@ async def test_two_clients_for_one_user_refresh_independently(
 
 
 def test_frontend_does_not_use_legacy_auth_surface() -> None:
-    """Maintained frontend code must use only the canonical /v1/auth family.
+    """Maintained frontend code must use the canonical auth family.
 
     Returns:
         None: Assertion fails if legacy /auth/ routes are found in maintained code.
