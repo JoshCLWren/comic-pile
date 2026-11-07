@@ -21,7 +21,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, is_manual_only, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, pr_cutover_allowed, stage_of)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, LOCAL_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, is_manual_only, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, pr_cutover_allowed, stage_of)
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
@@ -196,7 +196,35 @@ def completion_action_for(stage: str | None, conflicted: bool) -> str | None:
     }.get(stage or '')
 
 
-def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> None:
+def last_github_update_epoch(item: dict[str, Any], *, now_epoch: int) -> int | None:
+    """Return GitHub's latest target update, never the creation age.
+
+    Local integrations do not always emit trusted lease markers. GitHub still
+    advances updatedAt/updated_at when a claim, comment, or progress edit is
+    persisted, so old claims have a bounded inactivity period without making
+    missing or untrusted markers into permanent leases.
+    """
+    raw = item.get("updatedAt") or item.get("updated_at")
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        timestamp = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if timestamp.tzinfo is None:
+        return None
+    epoch = int(timestamp.timestamp())
+    return epoch if 0 < epoch <= now_epoch else None
+
+
+def replace_factory_labels(
+    number: int,
+    owner: str,
+    stage: str | None = None,
+    *,
+    expected_owner: str | None = None,
+    inactive_before_epoch: int | None = None,
+) -> bool:
     """Atomically reconcile one target to exactly one owner and workflow stage.
 
     The repository policy requires a single full label-set replacement rather
@@ -211,6 +239,20 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
     ):
         raise RuntimeError('dispatcher authorization failed: mutation blocked for non-dispatcher workflow')
     target = target_json(number)
+    if expected_owner is not None:
+        # Stale cleanup must not overwrite a new local claim or fresh progress
+        # that arrived between the queue snapshot and the label mutation.
+        if owner_of(labels_of(target)) != expected_owner:
+            return False
+        if str(target.get("state") or "OPEN").upper() != "OPEN":
+            return False
+        updated = last_github_update_epoch(target, now_epoch=int(time.time()))
+        if (
+            inactive_before_epoch is None
+            or updated is None
+            or updated > inactive_before_epoch
+        ):
+            return False
     # Shared write choke point: never add, repair, or re-apply factory labels
     # on a manual-only hold. Leftover factory* labels stay for humans.
     if is_manual_only(target.get("body")):
@@ -218,7 +260,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
             f"[factory-controller] skip factory label write on #{number}: manual-only",
             file=sys.stderr,
         )
-        return
+        return False
     current = [label['name'] for label in target.get('labels', [])]
     
     # Normalize state based on global policy
@@ -242,6 +284,7 @@ def replace_factory_labels(number: int, owner: str, stage: str | None=None) -> N
         labels.append('ralph-status:pending')
     
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
+    return True
 
 
 def issue_has_open_blocker(number: int) -> bool:
@@ -848,8 +891,13 @@ def reconcile_contradictory_labels(
     return repaired
 
 
-def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
-    """Release only leases whose inactivity and age are both provable."""
+def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
+    """Expire inactive leases even when trusted progress markers are absent.
+
+    GitHub updatedAt is the conservative liveness fallback for local sessions
+    (and inactive fixed workers). Recheck the live owner and update time in the
+    label writer to avoid taking over a newly refreshed lease.
+    """
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
     active_result = active_fixed_workers()
     if isinstance(active_result, tuple):
@@ -857,18 +905,60 @@ def reconcile_stale_leases(now_epoch: int | None=None) -> list[int]:
     else:
         active, unresolved_runs = active_result, set()
     if unresolved_runs:
-        print('[factory-controller] retaining fixed leases because active run identity is unresolved: ' + ', '.join(sorted(unresolved_runs)), file=sys.stderr)
+        print(
+            '[factory-controller] retaining fixed leases because active run identity is unresolved: '
+            + ', '.join(sorted(unresolved_runs)),
+            file=sys.stderr,
+        )
+    issue_items, pr_items = list_issues(), list_prs()
+    targets = {
+        int(item["number"]): item
+        for item in [*issue_items, *pr_items]
+    }
     released: list[int] = []
-    for number, owner in owned_targets():
+    for number, owner in owned_targets(issue_items, pr_items):
         fixed_owner = FIXED_OWNER_RE.fullmatch(owner)
-        if fixed_owner and (unresolved_runs or int(fixed_owner.group('worker')) in active):
+        if fixed_owner and (unresolved_runs or int(fixed_owner.group("worker")) in active):
             continue
-        activity = latest_lease_activity_epoch(number)
-        if not lease_is_stale(owner, active_fixed_workers=active, has_unresolved_active_runs=bool(unresolved_runs), latest_activity_epoch=activity, now_epoch=now_epoch):
+        marker_epoch = latest_lease_activity_epoch(number)
+        # A malformed future timestamp cannot extend ownership indefinitely.
+        if marker_epoch is not None and marker_epoch > now_epoch:
+            marker_epoch = None
+        updated_epoch = last_github_update_epoch(targets[number], now_epoch=now_epoch)
+        if updated_epoch is None:
+            # A partial list response must not turn an old *issue creation*
+            # timestamp into evidence that a freshly claimed lease is stale.
+            try:
+                updated_epoch = last_github_update_epoch(
+                    target_json(number), now_epoch=now_epoch
+                )
+            except RuntimeError:
+                updated_epoch = None
+        observed = [
+            epoch for epoch in (marker_epoch, updated_epoch) if epoch is not None
+        ]
+        last_activity = max(observed) if observed else None
+        if not lease_is_stale(
+            owner,
+            active_fixed_workers=active,
+            has_unresolved_active_runs=bool(unresolved_runs),
+            latest_activity_epoch=last_activity,
+            now_epoch=now_epoch,
+        ):
             continue
-        replace_factory_labels(number, 'factory:unowned')
+        ttl = FIXED_LEASE_TTL_SECONDS if fixed_owner else LOCAL_LEASE_TTL_SECONDS
+        if not replace_factory_labels(
+            number,
+            'factory:unowned',
+            expected_owner=owner,
+            inactive_before_epoch=now_epoch - ttl,
+        ):
+            continue
         released.append(number)
-        print(f'[factory-controller] released stale {owner} lease on #{number}', file=sys.stderr)
+        print(
+            f'[factory-controller] released stale {owner} lease on #{number}',
+            file=sys.stderr,
+        )
     return released
 
 
