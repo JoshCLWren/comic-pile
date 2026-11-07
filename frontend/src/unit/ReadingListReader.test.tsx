@@ -268,3 +268,15 @@ it('does not guess an issue ID or fetch an issue cover for thread-only prerequis
   expect(screen.getByRole('button', { name: 'Reading and mapping actions for The Dead Remembered #2' })).toBeEnabled()
   await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20]))
 })
+
+it('renders a safe empty list when a stale reader response omits entries', async () => {
+  // SAFETY: simulate an older or malformed server response explicitly, while
+  // keeping the test fixture fully typed elsewhere.
+  const missingEntries = { ...view, entries: undefined } as unknown as ReaderView
+  vi.mocked(customCBLApi.getReader).mockResolvedValue(missingEntries)
+  mount()
+  expect(await screen.findByText('This Reading List is empty.')).toBeVisible()
+  expect(screen.getByText('Julix · Strict order')).toBeVisible()
+  expect(fetchCards).not.toHaveBeenCalled()
+  expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
+})
