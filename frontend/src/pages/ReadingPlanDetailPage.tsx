@@ -358,7 +358,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.available_now.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
             ))}
           </ul>
         )}
@@ -376,7 +376,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.blocked_next.slice(0, visibleBlockedCount).map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
             ))}
           </ul>
         )}
@@ -414,7 +414,7 @@ export default function ReadingPlanDetailPage() {
           {showUpcoming && (
             <ul className="mt-3 space-y-2">
               {upcoming.slice(0, visibleUpcomingCount).map((issue) => (
-                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
+                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
               ))}
             </ul>
           )}
@@ -536,7 +536,7 @@ export default function ReadingPlanDetailPage() {
                 ) : (
                   <ul className="space-y-2">
                     {lane.issues.map((issue) => (
-                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
+                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
                     ))}
                   </ul>
                 )}

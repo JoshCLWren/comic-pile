@@ -108,7 +108,7 @@ export function ReadNowIssueButton({
 export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, available, availability, seriesTitle, card }: {
   issueId: number; threadId: number; issueNumber: string; isRead: boolean; available: boolean; availability?: string; seriesTitle?: string; card?: IssueCard | null
 }) {
-  const fallbackCards = useIssueCards([issueId], { enabled: card == null })
+  const fallbackCards = useIssueCards([issueId], { enabled: card === undefined })
   const resolvedCard = card ?? fallbackCards.data?.[0] ?? null
   const moveToFront = useMoveToFront()
   const [moveError, setMoveError] = useState<string | null>(null)
