@@ -22,7 +22,8 @@ export function useIssueCards(issueIds: number[], options?: { enabled?: boolean 
     staleTime: 30_000,
     // Preserve cached cards for matching canonical ids while an expanded batch loads.
     // Consumers index by issue_id, so old rows cannot masquerade as new issues.
-    placeholderData: (previousCards) => previousCards,
+    placeholderData: (previousCards) =>
+      previousCards?.filter((card) => normalized.includes(card.issue_id)) ?? [],
   })
 }
 
