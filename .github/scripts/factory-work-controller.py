@@ -21,7 +21,7 @@ from factory_capacity_policy import (
     omniroute_enabled,
     remaining_omniroute_free_entry_slots,
 )
-from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, is_manual_only, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, stage_of)
+from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FACTORY_NO_DIFF_RETRY_RESET_SECONDS, FACTORY_PR_WIP_LIMIT, FACTORY_REVIEW_BACKLOG_LIMIT, FIXED_LEASE_TTL_SECONDS, FIXED_OWNER_RE, NoDiffAttempt, NON_EXECUTABLE_ISSUES, OWNER_RE, REQUIRED_CHECK_FAILURE_STATES, STAGE_LABELS, STAGE_PRECEDENCE, Candidate, build_candidates, comment_is_trusted, eligibility, env_positive_int, factory_pr_wip_count, factory_review_backlog_count, is_manual_only, item_is_unowned, issue_bypasses_wip_limit, issue_explicitly_closed_by_pr, labels_of, lease_is_stale, linked_issue_from_branch, linked_issue_from_pr, order_candidates_for_worker, owner_of, parse_no_diff_attempts_from_comments, plan_distinct_assignments, pr_suppresses_issue_candidate, pr_cutover_allowed, stage_of)
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
@@ -112,6 +112,16 @@ def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, An
                 ["git", "rev-parse", "HEAD"], check=True, capture_output=True, text=True
             ).stdout.strip().lower()
         now = int(time.time())
+        open_numbers = {
+            int(issue["number"]) for issue in issues
+            if str(issue.get("state") or "OPEN").upper() == "OPEN"
+        }
+        issue_map = {int(issue["number"]): issue for issue in issues}
+        cutover_open = eligibility.RUST_CUTOVER_EPIC in open_numbers
+        eligible_prs = [
+            pr for pr in prs
+            if pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
+        ]
         snapshot = graph_snapshot(
             {
                 "schema_version": 1,
@@ -119,7 +129,7 @@ def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, An
                 "revision": revision,
                 "captured_at": now,
                 "issues": issues,
-                "pull_requests": prs,
+                "pull_requests": eligible_prs,
             }
         )
         with tempfile.TemporaryDirectory(prefix="comic-pile-rotisserie-intake-") as directory:
@@ -140,9 +150,9 @@ def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, An
                     os.environ.get("FACTORY_ROTISSERIE_COMMAND", "rotisserie"),
                     "--config", str(config_path), "decide", "--snapshot", str(snapshot_path),
                     "--revision", revision, "--at", str(now),
-                    "--completion-backlog", str(factory_review_backlog_count(prs)),
+                    "--completion-backlog", str(factory_review_backlog_count(eligible_prs)),
                     "--backlog-limit", str(FACTORY_REVIEW_BACKLOG_LIMIT),
-                    "--active-changes", str(factory_pr_wip_count(prs)),
+                    "--active-changes", str(factory_pr_wip_count(eligible_prs)),
                     "--wip-limit", str(FACTORY_PR_WIP_LIMIT),
                 ],
                 check=True,
@@ -938,13 +948,28 @@ def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]
     reconcile_stale_leases(now_epoch=now_epoch)
     issues = list_issues()
     prs = list_prs()
+    issue_map = {int(issue['number']): issue for issue in issues}
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in issue_map
+    eligible_prs = [
+        pr for pr in prs
+        if pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
+    ]
     from factory_work_policy import factory_review_backlog_count
-    backlog = factory_review_backlog_count(prs)
+    backlog = factory_review_backlog_count(eligible_prs)
     snapshot = omniroute_free_entry_capacity()
     from factory_capacity_policy import completion_worker_target, FleetDemand
     demand = FleetDemand(
-        completion=sum(1 for pr in prs if pr.get('state') == 'OPEN' and not pr.get('isDraft')),
-        production=len(issues),
+        completion=sum(
+            1 for pr in eligible_prs
+            if pr.get('state') == 'OPEN' and not pr.get('isDraft')
+        ),
+        production=sum(
+            1 for issue in issues
+            if eligibility.rust_cutover_work_allowed(
+                labels_of(issue), str(issue.get('body') or ''),
+                cutover_open=cutover_open,
+            )
+        ),
         idle_workers=0,
     )
     target = completion_worker_target(demand)
@@ -1599,8 +1624,16 @@ def explain_issue(
         for pr in pr_rows
         if linked_issue_from_pr(pr) == number and pr_suppresses_issue_candidate(pr, issue_map)
     )
-    pr_wip = factory_pr_wip_count(pr_rows)
-    review_backlog = factory_review_backlog_count(pr_rows)
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in {
+        int(row['number']) for row in issue_rows
+        if str(row.get('state') or 'OPEN').upper() == 'OPEN'
+    }
+    active_pr_rows = [
+        pr for pr in pr_rows
+        if pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
+    ]
+    pr_wip = factory_pr_wip_count(active_pr_rows)
+    review_backlog = factory_review_backlog_count(active_pr_rows)
     gates: dict[str, Any] = {
         'factory_pr_wip': pr_wip,
         'factory_pr_wip_limit': FACTORY_PR_WIP_LIMIT,
@@ -1621,10 +1654,17 @@ def explain_issue(
         gates['worker_specific_note'] = (
             'strike-retry producer exclusion is per worker and evaluated at assignment'
         )
+    cutover_allowed = eligibility.rust_cutover_work_allowed(
+        labels_of(payload), str(payload.get('body') or ''),
+        cutover_open=cutover_open,
+    )
+    gates['rust_cutover_allowed'] = cutover_allowed
     report: dict[str, Any] = {
         'issue': number,
-        'eligible': verdict.eligible,
-        'reasons': list(verdict.reasons),
+        'eligible': verdict.eligible and cutover_allowed,
+        'reasons': list(verdict.reasons) + (
+            [] if cutover_allowed else ['Rust cutover #4335 is still open']
+        ),
         'labels': sorted(labels_of(payload)),
         'open_canonical_prs': owning_prs,
         'dynamic_gates': gates,

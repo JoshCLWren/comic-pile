@@ -234,6 +234,28 @@ def parse_declared_dependencies(body: str | None) -> set[int]:
     return parse_inline_depends_on_numbers(text) | parse_heading_dependency_numbers(text)
 
 
+RUST_CUTOVER_EPIC = 4335
+RUST_CUTOVER_EXECUTION_LABELS = frozenset({"rust", "main-breakage"})
+
+
+def rust_cutover_work_allowed(
+    labels: Iterable[str], body: str | None, *, cutover_open: bool
+) -> bool:
+    """Admit only explicit Rust-cutover work while the cutover epic is open.
+
+    Issue bodies declaring a prerequisite on the epic always wait, even if a
+    stale Rust label remains. New unrelated tickets without an explicit
+    dependency also wait by default; an allowed Rust ticket must carry the
+    existing ``rust`` label. A main-breakage incident may unblock production.
+    After the epic closes, normal factory eligibility applies unchanged.
+    """
+    if not cutover_open:
+        return True
+    if RUST_CUTOVER_EPIC in parse_declared_dependencies(body):
+        return False
+    return bool(set(labels) & RUST_CUTOVER_EXECUTION_LABELS)
+
+
 def owner_of(labels: Iterable[str]) -> str | None:
     """Return the active factory owner represented by a label set."""
     owners = [label for label in labels if FACTORY_OWNER_RE.fullmatch(label)]

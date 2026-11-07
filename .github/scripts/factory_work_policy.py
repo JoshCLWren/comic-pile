@@ -618,6 +618,35 @@ def body_depends_on_unresolved(body: str, open_numbers: set[int]) -> bool:
     return bool(parse_depends_on_numbers(body) & open_numbers)
 
 
+def pr_cutover_allowed(
+    pr: dict[str, Any],
+    issue_map: Mapping[int, dict[str, Any]],
+    *,
+    cutover_open: bool,
+) -> bool:
+    """Keep all PR lifecycle and capacity gates on the same cutover boundary."""
+    if not cutover_open:
+        return True
+    delivered = {
+        number for number in (
+            linked_issue_from_pr(pr), issue_explicitly_closed_by_pr(pr)
+        ) if number is not None
+    }
+    if delivered:
+        return all(
+            number in issue_map
+            and eligibility.rust_cutover_work_allowed(
+                labels_of(issue_map[number]),
+                str(issue_map[number].get('body') or ''),
+                cutover_open=True,
+            )
+            for number in delivered
+        )
+    return eligibility.rust_cutover_work_allowed(
+        labels_of(pr), str(pr.get('body') or ''), cutover_open=True
+    )
+
+
 def build_candidates(
     issues: list[dict[str, Any]],
     prs: list[dict[str, Any]],
@@ -647,16 +676,28 @@ def build_candidates(
         if (linked := linked_issue_from_pr(pr)) is not None
         and pr_suppresses_issue_candidate(pr, issue_map)
     }
-    pr_wip_full = factory_pr_wip_count(prs) >= FACTORY_PR_WIP_LIMIT
-    review_backlog_full = factory_review_backlog_count(prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
     open_numbers = {
         int(issue['number'])
         for issue in issues
         if str(issue.get('state') or 'OPEN').upper() == 'OPEN'
     }
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in open_numbers
+    allowed_prs = [
+        pr for pr in prs
+        if pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
+    ]
+    # Deferred PRs do not consume the Rust lane's review or active WIP budget.
+    pr_wip_full = factory_pr_wip_count(allowed_prs) >= FACTORY_PR_WIP_LIMIT
+    review_backlog_full = (
+        factory_review_backlog_count(allowed_prs) >= FACTORY_REVIEW_BACKLOG_LIMIT
+    )
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])
+        if not eligibility.rust_cutover_work_allowed(
+            labels_of(issue), str(issue.get('body') or ''), cutover_open=cutover_open
+        ):
+            continue
         if not issue_is_static_candidate(
             issue,
             suppressing_pr_issues,
@@ -689,7 +730,7 @@ def build_candidates(
                 stage=stage_of(labels),
             )
         )
-    for pr in prs:
+    for pr in allowed_prs:
         pr_number = int(pr['number'])
         pr_labels = labels_of(pr)
         if attempt_records is not None:
