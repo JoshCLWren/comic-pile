@@ -3,7 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
-import { useRollDieState, useRollEligibleIssueIds } from '../hooks/useRollResources'
+import {
+  useRollDieState,
+  useRollEligibleIssueIds,
+  useRollIssueCards,
+} from '../hooks/useRollResources'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
@@ -38,6 +42,7 @@ vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
 vi.mock('../hooks/useRollResources', () => ({
   useRollDieState: vi.fn(),
   useRollEligibleIssueIds: vi.fn(),
+  useRollIssueCards: vi.fn(),
 }))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
@@ -86,6 +91,7 @@ vi.mock('../services/api', async (importOriginal) => {
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
 // SAFETY: Same mock-shape widening for the scoped resource hooks; safe because the test only reads their return objects.
 const mockedUseRollEligibleIssueIds = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollEligibleIssueIds))
+const mockedUseRollIssueCards = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollIssueCards))
 const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDieState))
 // SAFETY: Same mock-shape widening for the restore hook; safe because the test only reads the mocked return object.
 const mockedUseBugReportRestore = cast<ReturnType<typeof vi.fn>>(vi.mocked(useBugReportRestore))
@@ -121,6 +127,7 @@ beforeEach(() => {
   writeRollSnoozes([])
   mockedUseRollDieState.mockReturnValue({ data: undefined })
   mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
+  mockedUseRollIssueCards.mockReturnValue({ data: undefined })
   mockedUseRollBootstrap.mockReturnValue({
     data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
@@ -178,6 +185,48 @@ it('renders the scoped eligible order and passes browser snoozes to the resource
   expect(screen.getByLabelText(/1 in play, 1 mapped result/i)).toBeInTheDocument()
   expect(screen.getByText('X-Men')).toBeInTheDocument()
   expect(screen.queryByText('Saga')).not.toBeInTheDocument()
+})
+
+it('requests one scoped card batch and prefers its title and issue number (#4719)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      roll_pool: [{
+        id: 1,
+        title: 'Bootstrap title',
+        format: 'Comic',
+        issue_id: 11,
+        issue_number: '1',
+      }],
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 6, issue_ids: [11], thread_ids: [1] },
+  })
+  mockedUseRollIssueCards.mockReturnValue({
+    data: {
+      items: [{
+        issue_id: 11,
+        thread_id: 1,
+        thread_title: 'Canonical card title',
+        issue_number: '9',
+        status: 'unread',
+        has_confirmed_identity: true,
+        mapping_state: 'confirmed',
+      }],
+    },
+  })
+
+  renderRollPage()
+
+  expect(mockedUseRollIssueCards).toHaveBeenCalledWith([11])
+  expect(screen.getByText('Canonical card title')).toBeInTheDocument()
+  expect(screen.getByText('#9')).toBeInTheDocument()
+  expect(screen.queryByText('Bootstrap title')).not.toBeInTheDocument()
 })
 
 it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {

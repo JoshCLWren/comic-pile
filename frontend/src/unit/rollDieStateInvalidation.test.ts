@@ -32,6 +32,14 @@ it('refreshes every scoped eligible-pool variant after a die command (#4719)', a
   })
 })
 
+it('refreshes every scoped issue-card batch after a die command (#4719)', async () => {
+  await invalidateAfterRollDieModeUpdate(queryClient)
+
+  expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.roll.issueCardsAll(),
+  })
+})
+
 it('keeps refreshing bootstrap and the current session with the scoped die', async () => {
   await invalidateAfterRollDieModeUpdate(queryClient)
 

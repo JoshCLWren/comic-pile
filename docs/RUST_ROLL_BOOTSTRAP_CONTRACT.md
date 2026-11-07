@@ -231,12 +231,14 @@ Bootstrap remains authoritative for session/pending/recovery, pool
 data, die size, and the 3D die model until those surfaces migrate. The
 callers in `frontend/src/hooks/useRollResources.ts` are now mounted
 incrementally: `RollPage` calls `useRollDieState` and passes the scoped
-value to `RollHeader`, and calls `useRollEligibleIssueIds` with the
-browser snooze cookie and passes `thread_ids` to `ThreadPool`, so a cold
-Roll load is one session POST, one bootstrap GET, one die-state GET, and
-one eligible-ids GET. `coreRouteRequestBudget.test.tsx` pins that budget.
-`useRollIssueCards` and the composed `useRollResourceSnapshot` remain
-unwired, so they add no production requests yet.
+value to `RollHeader`, calls `useRollEligibleIssueIds` with the
+browser snooze cookie and passes `thread_ids` to `ThreadPool`, and calls
+`useRollIssueCards` for that visible eligible batch, so a cold Roll load
+is one session POST, one bootstrap GET, one die-state GET, one
+eligible-ids GET and one bounded issue-cards POST.
+`coreRouteRequestBudget.test.tsx` pins that budget. The composed
+`useRollResourceSnapshot` remains unwired and adds no production request
+of its own.
 
 Migrate in this order, one surface per reviewable change:
 
@@ -252,10 +254,11 @@ Migrate in this order, one surface per reviewable change:
    value and bootstrap `rollable` as the fallback pool. Bootstrap still
    supplies each face's title, format, issue identity and routes until
    the issue-card surface migrates.
-3. Issue cards — visible card enrichment from
+3. Issue cards — **mounted** as visible card enrichment from
    `POST /v2/issues/cards` (one bounded batch in first-request
-   order, `items`), replacing the fields bootstrap already carries
-   without adding a second per-issue fetch.
+   order, `items`), replacing the title and issue number bootstrap
+   already carries without adding a second per-issue fetch. Bootstrap
+   remains the fallback while the batch settles or fails.
 
 Only after all three surfaces settle on scoped resources with green
 exact-head CI and independent review should the legacy Rust v2

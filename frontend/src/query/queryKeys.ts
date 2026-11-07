@@ -180,6 +180,11 @@ export const queryKeys = {
     issueCards: (issueIds: readonly number[]) =>
       ['roll', 'issue-cards', [...new Set(issueIds)]] as const,
     /**
+     * Prefix of every scoped issue-card batch. The visible batch changes with
+     * the eligible pool, so invalidation must span every exact id list.
+     */
+    issueCardsAll: () => ['roll', 'issue-cards'] as const,
+    /**
      * Canonical session-scoped last-read cache (issue #2720). A successful
      * rate seeds it synchronously from the mutation response's
      * `roll_reconciliation.last_read` — before the authoritative bootstrap

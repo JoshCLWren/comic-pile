@@ -170,6 +170,9 @@ export async function applyUpdatedThreadCache(
     client.invalidateQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
   ])
 }
 
@@ -239,6 +242,9 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
     client.invalidateQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
   ])
 }
@@ -261,6 +267,9 @@ export async function resetRollBootstrapAfterManualSelection(
     }),
     client.resetQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.resetQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
     }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
@@ -306,6 +315,9 @@ export async function invalidateAfterQueueMovement(
     }),
     client.invalidateQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
     }),
     // Exclude/restore move a series across the active-queue boundary without
     // deleting it (#3807), so the excluded library view is a fourth surface
@@ -698,6 +710,7 @@ export async function invalidateSessionRecoveryCache(
     client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
   ])
@@ -864,6 +877,9 @@ export async function invalidateAfterRollDieModeUpdate(
     // change it without changing the snooze list.
     client.invalidateQueries({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
     }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),

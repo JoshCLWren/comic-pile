@@ -494,7 +494,10 @@ describe('core route request budgets', () => {
         return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
       }
       if (call.url === '/v2/roll/eligible-issue-ids') {
-        return { die: 20, issue_ids: [], thread_ids: [] }
+        return { die: 20, issue_ids: [401], thread_ids: [44] }
+      }
+      if (call.url === '/v2/issues/cards') {
+        return { items: [] }
       }
       return {}
     })
@@ -505,17 +508,18 @@ describe('core route request budgets', () => {
     await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
     await drainSettledWork()
 
-    // #4719 scoped surfaces: the die header and eligible pool are real
-    // production reads, so the cold Roll load is one session POST, one
-    // bootstrap GET, one die-state GET, and one eligible-ids GET. Surface
-    // rendering is covered by the component tests; this budget proves the page
-    // mounts both queries exactly once.
+    // #4719 scoped surfaces: the die header, eligible pool and visible card
+    // batch are real production reads, so the cold Roll load is one session
+    // POST, one bootstrap GET, one die-state GET, one eligible-ids GET, and
+    // one bounded cards POST. Surface rendering is covered by component tests;
+    // this budget proves the page mounts each query exactly once.
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
     expect(requestCounts(calls)).toEqual({
       'POST /v2/reading-sessions': 1,
       [`GET /v2/roll/bootstrap${timezone ? `?timezone=${timezone}` : ''}`]: 1,
       'GET /v2/roll/die-state': 1,
       'GET /v2/roll/eligible-issue-ids': 1,
+      'POST /v2/issues/cards': 1,
     })
     const bootstrapCall = calls.find((call) => call.url === '/v2/roll/bootstrap')
     expect(bootstrapCall?.params?.timezone).toBe(

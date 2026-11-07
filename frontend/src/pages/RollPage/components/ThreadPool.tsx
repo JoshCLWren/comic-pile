@@ -49,7 +49,7 @@ export function ThreadPool({
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
-  const cardIssueById = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card.issue_number]))
+  const cardByIssueId = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card]))
   // An explicitly empty scoped result means zero eligible faces, not a bootstrap fallback.
   const displayPool = eligibleThreadIds != null
     ? [...pool].sort((a, b) => {
@@ -198,8 +198,11 @@ export function ThreadPool({
             const routeLabels = (thread.route_labels ?? []).filter(Boolean)
             const tags = thread.tags ?? []
             const tagNames = tags.map((tag) => tag.name)
-            const cardIssueNumber = thread.issue_id != null ? cardIssueById.get(thread.issue_id) : undefined
-            const issueNumber = thread.issue_number ?? cardIssueNumber
+            // The scoped card is authoritative for the identity it carries
+            // (#4719); bootstrap remains the fallback while cards settle.
+            const card = thread.issue_id != null ? cardByIssueId.get(thread.issue_id) : undefined
+            const displayTitle = card?.thread_title ?? thread.title
+            const issueNumber = card?.issue_number ?? thread.issue_number
             return (
               <div
                 key={thread.id}
@@ -212,7 +215,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${(thread.overflow_routes_count ?? 0) > 0 ? `, ${thread.overflow_routes_count} more connected routes` : ''}. Open series actions.`}
+                aria-label={`Die face ${index + 1}: ${displayTitle}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${(thread.overflow_routes_count ?? 0) > 0 ? `, ${thread.overflow_routes_count} more connected routes` : ''}. Open series actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
@@ -220,14 +223,14 @@ export function ThreadPool({
                   {index + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
+                  <p className="font-bold text-stone-200 truncate text-sm">{displayTitle}</p>
                   <p className="truncate text-xs text-stone-400">
                     {issueNumber ? `#${issueNumber}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   <ThreadTagChips
                     tags={tags}
-                    label={`Tags for ${thread.title}`}
+                    label={`Tags for ${displayTitle}`}
                     className="mt-1"
                   />
                   {routeLabels.length || (thread.overflow_routes_count ?? 0) > 0 ? (

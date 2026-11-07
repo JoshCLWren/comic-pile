@@ -11,8 +11,9 @@ ingress in `api/native_roll.rs` / `native/roll-service/src`.
   which resolves the reading session with `POST /v2/reading-sessions` and then
   reads the projection with `GET /v2/roll/bootstrap` (both Rust,
   `api/native_roll.rs` routes). Since #4719, the page also reads the scoped
-  `GET /v2/roll/die-state` and `GET /v2/roll/eligible-issue-ids` (with the
-  browser snooze cookie as `snoozed`); the issue-card resource remains unwired.
+  `GET /v2/roll/die-state`, `GET /v2/roll/eligible-issue-ids` (with the
+  browser snooze cookie as `snoozed`), and one bounded
+  `POST /v2/issues/cards` for that visible eligible batch.
 - Read/Rate → next Roll: `useRate` (`frontend/src/hooks/useRate.ts`) commits the
   rating, then calls `fetchAndPublishRollBootstrap`
   (`frontend/src/hooks/rollMutationReconciliation.ts`), which fetches the same
@@ -42,7 +43,7 @@ ownership stay server-side; the client never sends a user id.
 
 | Scenario | Before | After |
 | --- | --- | --- |
-| Cold Roll load | `POST /v2/reading-sessions` + `GET /v2/roll/bootstrap` | same two calls, plus `GET /v2/roll/die-state` and `GET /v2/roll/eligible-issue-ids` after the #4719 scoped-surface mounts |
+| Cold Roll load | `POST /v2/reading-sessions` + `GET /v2/roll/bootstrap` | same two calls, plus `GET /v2/roll/die-state`, `GET /v2/roll/eligible-issue-ids` and one bounded `POST /v2/issues/cards` after the #4719 scoped-surface mounts |
 | Bootstrap refetch (retry probe, post-mutation reconciliation, undo refresh, Roll re-entry) | `POST /v2/reading-sessions` + `GET /v2/roll/bootstrap` | `GET /v2/roll/bootstrap` only |
 | Session gap lapsed / different reader | `POST` + 404 `GET` | `POST` + 404 `GET` + one `POST` + one `GET` (bounded recovery) |
 | Cold Queue load | 6 batched reads (list, excluded, session, boundaries, legacy blocking, crossovers) | unchanged (see "Not in this change") |

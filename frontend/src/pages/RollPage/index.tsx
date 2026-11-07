@@ -3,7 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
-import { useRollDieState, useRollEligibleIssueIds } from '../../hooks/useRollResources'
+import {
+  useRollDieState,
+  useRollEligibleIssueIds,
+  useRollIssueCards,
+} from '../../hooks/useRollResources'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useResetDice,
@@ -81,6 +85,13 @@ export default function RollPage() {
   // each face's display metadata and the fallback while this query settles.
   const browserSnoozedThreadIds = readRollSnoozes()
   const { data: scopedEligibleIssueIds } = useRollEligibleIssueIds(browserSnoozedThreadIds)
+
+  // Issue-card surface migration (#4719): enrich the visible eligible batch
+  // from one bounded scoped read. Cards are authoritative for the fields they
+  // carry; bootstrap remains the fallback while this query settles or fails.
+  const { data: scopedIssueCards } = useRollIssueCards(
+    scopedEligibleIssueIds?.issue_ids ?? [],
+  )
 
   // The committed rate response seeds this cache, so the idle strip renders
   // the saved rating and updated stats without a second GET (#2720).
@@ -504,6 +515,7 @@ export default function RollPage() {
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
               eligibleThreadIds={scopedEligibleIssueIds?.thread_ids ?? null}
+              issueCards={scopedIssueCards ?? null}
               snoozedExpanded={state.snoozedExpanded}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}
