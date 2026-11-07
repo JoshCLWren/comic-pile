@@ -116,7 +116,10 @@ async fn dice_command_and_reset_issue_one_db_command_each() {
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["die_after"], 12);
-    assert_eq!(body["die_before"], 20, "event-derived die from manual_die event");
+    assert_eq!(
+        body["die_before"], 20,
+        "event-derived die from manual_die event"
+    );
     assert_eq!(body["replayed"], false);
     assert_eq!(
         DB_COMMANDS_ISSUED.load(Ordering::Relaxed) - before,
@@ -203,13 +206,14 @@ async fn dice_command_and_reset_issue_one_db_command_each() {
     );
     let connection = state.pool.get().await.unwrap();
     let pending = connection
-        .query_one(
-            "SELECT pending_thread_id FROM sessions WHERE id=1",
-            &[],
-        )
+        .query_one("SELECT pending_thread_id FROM sessions WHERE id=1", &[])
         .await
         .unwrap();
-    assert_eq!(pending.get::<_, i32>(0), 10, "replay must preserve newer pending");
+    assert_eq!(
+        pending.get::<_, i32>(0),
+        10,
+        "replay must preserve newer pending"
+    );
     drop(connection);
 
     // Revoked token: auth folded into the single statement still rejects.

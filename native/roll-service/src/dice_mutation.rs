@@ -12,7 +12,7 @@ use crate::{
     auth::{validate_folded_auth, AuthenticatedUser, FoldedAuthRow, VerifiedAccessClaims},
     db,
     dice_state::{self, DiceAction},
-    AppState, ApiError,
+    ApiError, AppState,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -530,11 +530,8 @@ pub async fn execute_reset_single(
     })
     .to_string();
     // Reset always lands on d6, so $5 is the post-command die.
-    let session_body = crate::reading_session::session_resolution_body(
-        "(SELECT user_id FROM me)",
-        "$7",
-        "$8",
-    );
+    let session_body =
+        crate::reading_session::session_resolution_body("(SELECT user_id FROM me)", "$7", "$8");
     let sql = format!(
         "WITH {SINGLE_AUTH_CTES},
 current_session AS MATERIALIZED (
