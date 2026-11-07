@@ -1,5 +1,5 @@
 import { beforeEach, expect, it } from 'vitest'
-import { createRollApi } from '../services/api-roll'
+import { addRollSnooze, createRollApi, readRollSnoozes } from '../services/api-roll'
 import { createHttpClientStub } from './httpClientStub'
 
 const client = createHttpClientStub()
@@ -59,6 +59,14 @@ it('does not reuse an unanswered Queue offer key for a different pending comic',
     '/v2/roll/offer',
     expect.objectContaining({ idempotency_key: previousKey }),
   )
+})
+
+it('adds a low-rating snooze while preserving existing temporary snoozes', () => {
+  globalThis.document.cookie = 'comicpile_roll_snoozes=%5B42%5D; path=/; SameSite=Lax'
+
+  addRollSnooze(7)
+
+  expect(readRollSnoozes()).toEqual([42, 7])
 })
 
 it('discards a pending offer key whose stored thread intent is malformed', async () => {

@@ -27,7 +27,7 @@ const mockedApplyRatedThreadCache = vi.mocked(applyRatedThreadCache)
 const thread: Thread = { id: 1, title: 'Saga', format: 'issue', issues_remaining: 3, total_issues: 10, queue_position: 2, status: 'active', is_blocked: false, blocking_reasons: [], last_activity_at: null, last_rating: null, notes: null, is_test: false, created_at: '2026-08-03T00:00:00Z' }
 const bootstrapState = (pendingThreadId: number | null, currentDie: RollBootstrapResponse['current_die'] = 8): RollBootstrapResponse => ({ session_id: 1, user_id: 1, current_die: currentDie, manual_die: null, pending_thread_id: pendingThreadId, last_rolled_result: pendingThreadId === null ? null : 1, session_mode: { active_bandwidth: null, predicted_bandwidth: null, bandwidth_confidence: null, bandwidth_source: null, bandwidth_version: null, active_intent: null, predicted_intent: null, intent_confidence: null, intent_source: null, intent_version: null, session_mode_correction_guidance: null }, active_thread: null, roll_pool: [], snoozed_threads: [], snoozed_count: 0, skipped_thread_ids: [], skipped_threads: [] })
 
-beforeEach(() => { vi.clearAllMocks(); mockedProtectedApi.rate.mockResolvedValue(thread); mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null)); mockedApplyRatedThreadCache.mockResolvedValue() })
+beforeEach(() => { vi.clearAllMocks(); mockedProtectedApi.rate.mockResolvedValue(thread); mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null)); mockedApplyRatedThreadCache.mockResolvedValue(); globalThis.document.cookie = 'comicpile_roll_snoozes=; expires=Thu, 01 Jan 1970 00:00:00 GMT' })
 
 it('submits ratings, applies the authoritative thread cache, and publishes Roll state', async () => {
   const reconciled = vi.fn(); window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, reconciled)
@@ -64,7 +64,8 @@ it('shares one in-flight request across repeated submissions', async () => {
 
 it('reconciles a committed rating after the delayed response crosses the client timeout', async () => {
   vi.useFakeTimers(); const timeout = Object.assign(new Error('timeout of 10000ms exceeded'), { code: 'ECONNABORTED' }); mockedProtectedApi.rate.mockImplementation(() => new Promise((_, reject) => { setTimeout(() => reject(timeout), 10_000) })); mockedRollBootstrapApi.get.mockResolvedValue(bootstrapState(null, 10));
-  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 3, issue_id: 1, source: 'roll_offer' }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1); expect(result.current.isError).toBe(false); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
+  // SAFETY: fake timers only; the hook's delayed reconciliation is awaited below.
+  try { const { result } = renderHook(() => useRate(), { wrapper }); const payload: RatePayload = { thread_id: 1, rating: 3, issue_id: 1, source: 'roll_offer' }; let firstRequest: Promise<unknown> | undefined; let secondRequest: Promise<unknown> | undefined; act(() => { firstRequest = result.current.mutate(payload); secondRequest = result.current.mutate(payload) }); expect(mockedProtectedApi.rate).toHaveBeenCalledTimes(1); expect(result.current.isPending).toBe(true); await act(async () => { await vi.advanceTimersByTimeAsync(10_000); await Promise.all([firstRequest, secondRequest]) }); expect(mockedApplyRatedThreadCache).not.toHaveBeenCalled(); expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(2); expect(globalThis.document.cookie).toContain('%5B1%5D'); expect(result.current.isError).toBe(false); expect(result.current.isPending).toBe(false) } finally { vi.useRealTimers() }
 })
 
 it('surfaces a delayed timeout when authoritative state still has the same pending thread', async () => {
@@ -85,4 +86,30 @@ it('marks ordinary rating failures as errors and rethrows them', async () => {
   act(() => { request = result.current.mutate({ thread_id: 1, rating: 2, issue_id: 1, source: 'roll_offer' }) })
   await act(async () => { await expect(request).rejects.toBe(failure) })
   expect(result.current.isError).toBe(true); expect(result.current.isPending).toBe(false)
+})
+
+it('temporarily snoozes a below-threshold Roll rating so it leaves the next pool (#4699)', async () => {
+  const { result } = renderHook(() => useRate(), { wrapper })
+  await act(async () => { await result.current.mutate({ thread_id: 1, rating: 0.5, issue_id: 1, source: 'roll_offer' }) })
+  expect(globalThis.document.cookie).toContain('%5B1%5D')
+  expect(mockedRollBootstrapApi.get).toHaveBeenCalledTimes(1)
+})
+
+it('does not snooze at or above the rating threshold', async () => {
+  const { result } = renderHook(() => useRate(), { wrapper })
+  await act(async () => { await result.current.mutate({ thread_id: 1, rating: 4, issue_id: 1, source: 'roll_offer' }) })
+  expect(globalThis.document.cookie).not.toContain('comicpile_roll_snoozes=%5B')
+})
+
+it('does not snooze a manual direct rating even when below threshold', async () => {
+  const { result } = renderHook(() => useRate(), { wrapper })
+  await act(async () => { await result.current.mutate({ thread_id: 1, rating: 0.5, issue_id: 1, source: 'direct' }) })
+  expect(globalThis.document.cookie).not.toContain('comicpile_roll_snoozes=%5B')
+})
+
+it('does not snooze a finished series, which already leaves the pool', async () => {
+  mockedProtectedApi.rate.mockResolvedValue({ ...thread, issues_remaining: 0, status: 'completed' })
+  const { result } = renderHook(() => useRate(), { wrapper })
+  await act(async () => { await result.current.mutate({ thread_id: 1, rating: 0.5, issue_id: 1, source: 'roll_offer' }) })
+  expect(globalThis.document.cookie).not.toContain('comicpile_roll_snoozes=%5B')
 })
