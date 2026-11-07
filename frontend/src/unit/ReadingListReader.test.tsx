@@ -26,6 +26,14 @@ const view: ReaderView = {
   ],
 }
 function cardFor(issueId: number): IssueCard {
+  if (issueId === 30) {
+    return {
+      issue_id: 30, thread_id: 3, thread_title: 'Starman', issue_number: '55',
+      status: 'unread', rating: null, mapping_state: 'confirmed',
+      has_confirmed_identity: true,
+      cover_image_url: 'https://comicvine.gamespot.com/starman-55.jpg',
+    }
+  }
   const entry = view.entries?.find((row) => row.issue_id === issueId) ?? view.entries?.[0]
   if (!entry) throw new Error('Missing fixture')
   return { issue_id: issueId, thread_id: entry.thread_id, thread_title: entry.series_name,
@@ -73,7 +81,7 @@ it('shows every blocker, exact issue links and list-local skip while keeping blo
   expect(screen.getAllByRole('button', { name: 'Rate / Mark read' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Move to front' })).toHaveLength(1)
-  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20]))
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20, 30]))
 })
 
 it('marks the exact offered issue and refreshes the reader plus other eligibility surfaces', async () => {
@@ -221,14 +229,15 @@ it('shows a single bounded card-load failure and restores issue-specific covers 
   fetchCards.mockRejectedValueOnce(new Error('metadata offline')).mockResolvedValueOnce([
     { ...cardFor(10), cover_image_url: 'https://comicvine.gamespot.com/issue-10.jpg', rating: 4 },
     { ...cardFor(20), cover_image_url: 'https://comicvine.gamespot.com/issue-20.jpg' },
+    cardFor(30),
   ])
   mount()
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load issue cards.')
-  expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20])
+  expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20, 30])
   expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   await userEvent.click(screen.getByRole('button', { name: 'Retry cards' }))
   await waitFor(() => expect(fetchCards).toHaveBeenCalledTimes(2))
-  expect(await screen.findByRole('img', { name: 'Cover for The Dead Remembered #2' })).toHaveAttribute(
+  expect(await within(firstCard().getByTestId('comic-issue-cover')).findByRole('img', { name: 'Cover for The Dead Remembered #2' })).toHaveAttribute(
     'src', 'https://comicvine.gamespot.com/issue-10.jpg',
   )
   expect(screen.getByRole('img', { name: 'Cover for King of Fear #1' })).toHaveAttribute(
