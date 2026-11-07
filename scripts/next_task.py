@@ -314,11 +314,17 @@ def explain_issue(
         open_numbers=open_numbers,
         require_ralph_labels=True,
     )
+    cutover_allowed = eligibility.rust_cutover_work_allowed(
+        _labels(issue), issue.get("body"),
+        cutover_open=eligibility.RUST_CUTOVER_EPIC in open_numbers,
+    )
     return {
         "issue": number,
         "selector": "next_task",
-        "eligible": verdict.eligible,
-        "reasons": list(verdict.reasons),
+        "eligible": verdict.eligible and cutover_allowed,
+        "reasons": list(verdict.reasons) + (
+            [] if cutover_allowed else ["Rust cutover #4335 is still open"]
+        ),
         "labels": sorted(_labels(issue)),
         "not_evaluated": [
             "canonical open-PR suppression (controller-only gate)",
