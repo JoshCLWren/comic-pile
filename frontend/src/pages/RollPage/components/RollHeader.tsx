@@ -10,6 +10,7 @@ import {
   ROLL_WORKSPACE_TRACKS,
 } from '../workspaceLayout'
 import { ReadingModeControl } from './ReadingModeControl'
+import type { DieStateResponse } from '../../../generated/nativeV2Client'
 
 interface RollHeaderProps {
   bootstrap: RollBootstrapResponse
@@ -24,6 +25,7 @@ interface RollHeaderProps {
   onOpenOverride: () => void
   onOpenDieModal: () => void
   onBackToQueue?: () => void
+  dieState?: DieStateResponse | null
 }
 
 /**
@@ -61,7 +63,9 @@ export function RollHeader({
   onOpenOverride,
   onOpenDieModal,
   onBackToQueue,
+  dieState,
 }: RollHeaderProps) {
+  const effectiveDie = dieState?.die ?? currentDie
   const rawMode = bootstrap.session_mode
   const sessionMode: SessionModeState | null | undefined = rawMode
     ? {
@@ -90,7 +94,7 @@ export function RollHeader({
         </span>
       ) : (
         <>
-          {snoozedThreads.length > 0 && currentDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
+          {snoozedThreads.length > 0 && effectiveDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
             <div className="mt-1 flex items-center gap-2">
               <span className="text-[9px] uppercase tracking-wider text-stone-500">
                 pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
@@ -163,7 +167,7 @@ export function RollHeader({
                 aria-label="Die sizes"
               >
                 {DICE_LADDER.map((die) => {
-                  const selected = die === currentDie
+                  const selected = die === effectiveDie
                   return (
                     <button
                       key={die}
@@ -185,10 +189,10 @@ export function RollHeader({
                   type="button"
                   onClick={onOpenDieModal}
                   aria-haspopup="dialog"
-                  aria-label={`Current die d${currentDie}`}
+                  aria-label={`Current die d${effectiveDie}`}
                   className="min-h-11 rounded-xl border border-transparent bg-[var(--theme-primary-action)] px-3 py-1 text-stone-900 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
                 >
-                  <span className="block text-[11px] font-black">d{currentDie}</span>
+                  <span className="block text-[11px] font-black">d{effectiveDie}</span>
                 </button>
               </div>
               <div className="hidden items-center gap-2 md:flex">
@@ -212,7 +216,7 @@ export function RollHeader({
                     </GlossaryLink>
                   </Tooltip>
                   <span id="header-die-label" className="block text-[10px] font-black text-[var(--theme-comic-accent)]">
-                    d{currentDie}
+                    d{effectiveDie}
                   </span>
                 </div>
               </div>
