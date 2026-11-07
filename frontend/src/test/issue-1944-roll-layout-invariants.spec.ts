@@ -183,15 +183,14 @@ async function rateCurrentIssue(
   page: Page,
   headers: Record<string, string>,
   rating: number,
-  issueNumber: string,
+  issueId: number,
 ): Promise<void> {
-  // Use the test endpoint to seed a rate for the current issue
-  const response = await page.request.patch(`/api/v2/issues/${issueNumber}`, {
+  const response = await page.request.patch(`/api/v2/issues/${issueId}`, {
     headers,
     data: {
       status: 'read',
       rating,
-      idempotency_key: `test-seed-${issueNumber}-${Date.now()}`,
+      idempotency_key: `test-seed-${issueId}-${Date.now()}`,
       source: 'direct',
     },
   })
@@ -225,7 +224,6 @@ async function navigateRatingView(page: Page): Promise<void> {
  */
 async function openReadingContextCard(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Show context' }).click()
-  await page.waitForTimeout(200)
 }
 
 async function readGeometry(page: Page): Promise<LayoutGeometry> {
@@ -543,9 +541,10 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     await seedThreadIdentity(page, headers, thread.id, 'Historyverse', 612002)
 
     // Rate three issues to build meaningful recent-history data.
-    for (let issueNumber = 1; issueNumber <= 3; issueNumber += 1) {
+    const issueIds = await listIssues(page, thread.id)
+    for (const issueId of issueIds.slice(0, 3)) {
       await setPending(page, thread.id)
-      await rateCurrentIssue(page, headers, 4.0, String(issueNumber))
+      await rateCurrentIssue(page, headers, 4.0, issueId)
     }
 
     await openRatingView(page, thread.id)

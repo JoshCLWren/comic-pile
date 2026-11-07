@@ -102,7 +102,6 @@ async function openRatingView(page: Page, threadId: number): Promise<void> {
  */
 async function openReadingContextCard(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Show context' }).click()
-  await page.waitForTimeout(200)
 }
 
 test.describe('Roll pointer target sizes (#1885)', () => {

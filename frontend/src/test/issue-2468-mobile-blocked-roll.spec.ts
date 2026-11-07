@@ -242,7 +242,6 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
     // the Group A pillar port; this test's Group B fix is the set-pending
     // ordering the Dependency evaluator requires.)
     await page.getByRole('button', { name: 'Show context' }).click()
-    await page.waitForTimeout(200)
 
     // The blocked roll recovery card shows the thread title and prerequisites
     await expect(page.getByLabel('Blocked roll recovery')).toBeVisible({ timeout: 15000 })
