@@ -11,7 +11,7 @@ vi.mock('../components/ComicIssueMappingAction', () => ({
     issueId, initialIdentity, fetchEnabled, isOwned, compact, onAddToLibrary, onMapped,
   }: {
     issueId: number | null
-    initialIdentity?: { thread_title: string; has_unresolved: boolean; comicvine_issue_id: number | null }
+    initialIdentity?: { thread_title: string; has_unresolved: boolean; comicvine_issue_id: string | null }
     fetchEnabled: boolean
     isOwned: boolean
     compact: boolean
@@ -261,7 +261,7 @@ describe('shared comic mapping integration', () => {
     render(
       <ComicIssueCard
         issueId={75}
-        card={{ ...card, mapping_state: 'confirmed', has_confirmed_identity: true, comicvine_issue_id: 987 }}
+        card={{ ...card, mapping_state: 'confirmed', has_confirmed_identity: true, comicvine_issue_id: '987' }}
         threadTitle="Old title"
         issueNumber="1"
         status="read"
