@@ -80,31 +80,39 @@ Work on the selected issue unless the user names another. Selection semantics
   tie-broken by **lowest issue number — i.e. the oldest claimable task wins within a
   priority band**.
 
-**The scheduled GitHub Action factories run this same selection on every dispatch tick, so
-the top candidate is exactly what they race for. A local session is a peer worker: once any
-worker holds a lease, peers take the next eligible item (`docs/AUTONOMOUS_FACTORY_POLICY.md`).
-Never take leased work, never race a dispatcher, never overwrite another worker's claim.**
+**Local/Ralph selection is different from scheduled fixed-model dispatch.**
+`scripts/next_task.py` checks the Ralph pending queue; the scheduled factories use
+`.github/scripts/factory-work-controller.py` and additionally enforce Rotisserie
+intake authorization, rolling no-diff retry limits, PR ownership, backpressure,
+and worker-specific limits. An issue can be locally Ralph-eligible while remote
+dispatch is blocked. A missing local `rotisserie` executable or exhausted
+*remote* no-diff budget is not by itself a veto on the local start workflow.
+The local session must still honor current ownership, open PRs, dependencies,
+and the Rust cutover rule. Never overwrite another worker's claim.**
 
-Before claiming, run both contention checks on the candidate:
+Before claiming, verify the candidate against **live** GitHub state:
 
-1. **Labels** — proceed only if factory labels are exactly `factory` + `factory:unowned` (or
-   absent). Any `factory:<n>` owner (other than `factory:unowned`) or any stage label
-   (`factory:building` / `factory:review` / `factory:ci` / `factory:ready` /
-   `factory:changes-requested` / `factory:blocked` / `factory:migration-wait`) means leased →
-   skip.
-2. **Claim markers** — the newest lease marker in the issue comments must be a *release*
-   (`factory-claim-released-v*`), or there must be no markers at all. Newest being
-   `factory-controller-claim-v*`, `factory-implement-claim-v*`, or an unreleased
-   `factory-resume:v1` means leased → skip:
+1. **Owner and stage labels**: re-read the issue labels. An active
+   `factory:local` or `factory:<n>` owner is a real lease: skip. Only proceed
+   with new implementation when the issue has no active owner, is pending,
+   and has no in-flight workflow stage. `factory:review`, `factory:ci`,
+   `factory:changes-requested`, `factory:ready` and similar stages can
+   denote an existing PR handoff even when paired with `factory:unowned`:
+   do not restart implementation against them.
+2. **Existing canonical PR**: inspect any open PR linked to the issue
+   (closing reference or canonical branch), not just a text search hit.
+   If one owns the implementation, advance that PR instead of starting
+   another issue branch.
+3. **Comments are audit history, not leases**: old controller claim/release
+   comments and `factory-resume:v1` packets never independently reserve an
+   issue. Do not require the latest historical marker to be a release when
+   current labels are unowned. If comments and current labels appear to
+   conflict, re-read the live issue/PR state and use the controller's
+   reconciliation path for genuinely contradictory or stale leases; do
+   not forge a release comment or overwrite another owner's labels.
 
-   ```bash
-   gh api "repos/JoshCLWren/comic-pile/issues/<n>/comments?per_page=100" --jq \
-     '[.[] | select(.body | test("factory-(controller-claim|implement-claim|claim-released)-v|factory-resume:v")) | "\(.created_at)  \(.body | split("\n")[0])"] | .[-4:]'
-   ```
-
-3. **Open factory PR** — `gh pr list --state open --search "<n>"` for a factory PR already
-   advancing the issue → skip.
-
+These checks avoid duplicate work without importing the remote-only
+Rotisserie and retry gates into a local factory start.
 If the top candidate is contended, walk the ordered candidate list (same claimability +
 ordering rules, already excluding factory-owned issues) and take the first uncontended one.
 When the user asks for the *oldest* claimable work specifically (the low-contention tail the
@@ -152,18 +160,19 @@ issue, create a linked issue instead of widening scope.
 
    Target set: the issue's existing unrelated labels (priority, `quality-control`,
    `infrastructure`, etc.) + `ralph-status:in-progress` + `factory` + `factory:building` +
-   exactly one owner (`factory:local` for a local session). Fetch current labels first
-   (`gh issue view <n> --json labels`) so none are dropped.
+   exactly one owner (`factory:local` for a local session). **Re-read** the live labels
+   immediately after `make start-task` and before PUT. If another worker has
+   gained ownership, do not overwrite it. Preserve all unrelated labels.
 
    Use PUT for replacement: POST only adds labels and retains old owners, stages, and statuses.
 
-**Claim immediately after picking** — before deep reading or editing — so the dispatcher sees
-the lease and moves on. Race etiquette: if `make start-task` fails with "not pending", a
-factory won the race; take the next uncontended candidate instead of retrying. If a factory
-claims the issue *after* you (a new unreleased claim marker or foreign `factory:<n>` owner
-appears while you work), do not fight or overwrite it — leave a release comment, restore
-`ralph-status:pending` + `factory:unowned`, and move to the next candidate. Ownership is a
-temporary next-action lease, never a contest.
+**Claim immediately after picking**, before implementation. If `make start-task`
+fails with "not pending", re-read live labels and select the next candidate.
+The status transition is not the complete factory lease; finish the atomic
+`factory:local` label update promptly. If a foreign owner appears before or
+during your work, stop and preserve your changes without clearing or
+overwriting their lease. The controller reconciles stale/contradictory leases;
+historical comments alone are not grounds for taking or releasing ownership.
 
 ## 5. Work the issue
 
