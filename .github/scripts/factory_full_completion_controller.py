@@ -14,6 +14,7 @@ from factory_capacity_policy import (
     apply_omniroute_free_entry_cap,
     completion_worker_target,
 )
+from factory_work_policy import eligibility
 
 TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
 TELEMETRY_ISSUE = "1093"
@@ -40,14 +41,16 @@ def raw_work_demand(policy, issues, prs) -> tuple[int, int]:
     number indirectly. Measure structurally eligible work here instead.
     """
     issue_map = {int(issue["number"]): issue for issue in issues}
-    cutover_open = policy.eligibility.RUST_CUTOVER_EPIC in {
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in {
         number for number, issue in issue_map.items()
         if str(issue.get("state") or "OPEN").upper() == "OPEN"
     }
-    allowed_prs = [
-        pr for pr in prs
-        if policy.pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
-    ]
+    allowed_prs = (
+        [pr for pr in prs if policy.pr_cutover_allowed(
+            pr, issue_map, cutover_open=True
+        )]
+        if cutover_open else prs
+    )
     completion = sum(
         policy.pr_is_static_candidate(pr, issue_map) for pr in allowed_prs
     )
@@ -64,9 +67,11 @@ def raw_work_demand(policy, issues, prs) -> tuple[int, int]:
             suppressing_pr_issues,
             no_diff_attempts=0,
         )
-        and policy.eligibility.rust_cutover_work_allowed(
-            policy.labels_of(issue), str(issue.get("body") or ""),
-            cutover_open=cutover_open,
+        and (
+            not cutover_open or eligibility.rust_cutover_work_allowed(
+                policy.labels_of(issue), str(issue.get("body") or ""),
+                cutover_open=True,
+            )
         )
         for issue in issues
     )
