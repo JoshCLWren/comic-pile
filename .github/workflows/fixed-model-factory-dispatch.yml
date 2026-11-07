@@ -83,6 +83,16 @@ jobs:
       queue: max
       cancel-in-progress: false
     runs-on: ubuntu-latest
+    # Expose only dispatch results needed by the unlocked cadence job.
+    outputs:
+      rotisserie_installed: ${{ steps.rotisserie_install.outcome }}
+      allow: ${{ steps.api_budget.outputs.allow }}
+      quota_deferred: ${{ steps.api_budget.outputs.quota_deferred }}
+      reset_epoch: ${{ steps.api_budget.outputs.reset_epoch }}
+      dispatched_count: ${{ steps.dispatch_workers.outputs.dispatched_count }}
+      dispatch_failed: ${{ steps.dispatch_workers.outputs.dispatch_failed }}
+      budget_deferred: ${{ steps.dispatch_workers.outputs.budget_deferred }}
+      budget_unreadable: ${{ steps.dispatch_workers.outputs.budget_unreadable }}
     permissions:
       actions: write
       checks: read
@@ -849,18 +859,26 @@ jobs:
           fi
           echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
 
+  # This job intentionally has no assignment concurrency group. It may sleep
+  # for 240s or for an API quota reset; neither wait may block lease writers.
+  roster-cadence:
+    needs: dispatch
+    if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && !inputs.target && needs.dispatch.outputs.rotisserie_installed == 'success' && (needs.dispatch.outputs.allow == 'true' || needs.dispatch.outputs.quota_deferred == 'true')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
       - name: Self-perpetuate roster cadence
-        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && !inputs.target && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
         continue-on-error: true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          DISPATCHED_COUNT: ${{ steps.dispatch_workers.outputs.dispatched_count }}
-          DISPATCH_FAILED: ${{ steps.dispatch_workers.outputs.dispatch_failed }}
-          API_RESET_EPOCH: ${{ steps.api_budget.outputs.reset_epoch }}
-          QUOTA_DEFERRED: ${{ steps.api_budget.outputs.quota_deferred }}
-          BUDGET_DEFERRED: ${{ steps.dispatch_workers.outputs.budget_deferred }}
-          BUDGET_UNREADABLE: ${{ steps.dispatch_workers.outputs.budget_unreadable }}
+          DISPATCHED_COUNT: ${{ needs.dispatch.outputs.dispatched_count }}
+          DISPATCH_FAILED: ${{ needs.dispatch.outputs.dispatch_failed }}
+          API_RESET_EPOCH: ${{ needs.dispatch.outputs.reset_epoch }}
+          QUOTA_DEFERRED: ${{ needs.dispatch.outputs.quota_deferred }}
+          BUDGET_DEFERRED: ${{ needs.dispatch.outputs.budget_deferred }}
+          BUDGET_UNREADABLE: ${{ needs.dispatch.outputs.budget_unreadable }}
         run: |
           set -Eeuo pipefail
           # GitHub throttles scheduled delivery to roughly hourly. Roster-mode

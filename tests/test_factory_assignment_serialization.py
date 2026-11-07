@@ -17,10 +17,9 @@ ASSIGNMENT_GROUP = "fixed-model-factory-dispatch"
 def _load_workflow(filename: str) -> dict:
     """Parse a workflow file with a real YAML parser.
 
-    The workflow surface is intentionally flat: every assignment writer carries
-    exactly one workflow-level ``concurrency`` block and one ``jobs:`` mapping.
-    Parsing with a YAML parser instead of string splitting keeps the test robust
-    against indentation changes, extra concurrency blocks, and reordered keys.
+    Parsing with a YAML parser instead of string splitting keeps the test
+    robust against indentation changes and additional jobs. The dispatcher
+    now separates its long-running cadence job from the serialized writer.
     """
     import yaml
 
@@ -128,3 +127,68 @@ def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> No
         assert writer == ASSIGNMENT_GROUP, filename
         assert _job_queue(workflow) == "max", filename
         assert _job_cancel(workflow) is False, filename
+
+
+def test_roster_cadence_waits_outside_shared_assignment_mutex() -> None:
+    """Neither the normal tick nor a quota-reset sleep may hold the lease lock."""
+    workflow = _load_workflow("fixed-model-factory-dispatch.yml")
+    writer = workflow["jobs"]["dispatch"]
+    cadence = workflow["jobs"]["roster-cadence"]
+    assert writer["concurrency"]["group"] == ASSIGNMENT_GROUP
+    assert writer["concurrency"]["queue"] == "max"
+    assert cadence["needs"] == "dispatch"
+    assert "concurrency" not in cadence
+    assert cadence["permissions"]["actions"] == "write"
+    assert "always()" in cadence["if"]
+    assert "needs.dispatch.outputs.rotisserie_installed" in cadence["if"]
+    assert "needs.dispatch.outputs.quota_deferred" in cadence["if"]
+
+    writer_steps = str(writer["steps"])
+    cadence_steps = str(cadence["steps"])
+    assert "sleep 240" not in writer_steps
+    assert 'sleep "$delay_seconds"' not in writer_steps
+    assert "sleep 240" in cadence_steps
+    assert 'sleep "$delay_seconds"' in cadence_steps
+
+    expected_outputs = {
+        "rotisserie_installed": "steps.rotisserie_install.outcome",
+        "allow": "steps.api_budget.outputs.allow",
+        "quota_deferred": "steps.api_budget.outputs.quota_deferred",
+        "reset_epoch": "steps.api_budget.outputs.reset_epoch",
+        "dispatched_count": "steps.dispatch_workers.outputs.dispatched_count",
+        "dispatch_failed": "steps.dispatch_workers.outputs.dispatch_failed",
+        "budget_deferred": "steps.dispatch_workers.outputs.budget_deferred",
+        "budget_unreadable": "steps.dispatch_workers.outputs.budget_unreadable",
+    }
+    for key, source in expected_outputs.items():
+        assert source in writer["outputs"][key]
+    env = cadence["steps"][0]["env"]
+    for key in expected_outputs:
+        if key == "rotisserie_installed" or key == "allow":
+            continue
+        assert any(f"needs.dispatch.outputs.{key}" in value for value in env.values())
+
+
+def test_migration_release_events_cannot_be_evicted_by_unrelated_label_churn() -> None:
+    """Important wakeups have a distinct pending slot from irrelevant PR labels."""
+    import json
+    import re
+
+    workflow = _load_workflow("factory-migration-lane-release.yml")
+    group = _ingress_group(workflow)
+    condition = workflow["jobs"]["release-waiter"]["if"]
+    assert "factory-migration-release-pr-{0}-{1}" in group
+    assert "github.event.pull_request.number" in group
+    assert "github.event.action == 'closed'" in group
+    assert "github.event.action == 'converted_to_draft'" in group
+    assert "&& 'reconcile' || 'other'" in group
+
+    def label_filter(expression: str) -> set[str]:
+        match = re.search(r"fromJSON\('(?P<labels>\[[^']+\])'\)", expression)
+        assert match, expression
+        return set(json.loads(match.group("labels")))
+
+    assert label_filter(group) == label_filter(condition)
+    assert "factory:migration-wait" in label_filter(group)
+    assert _ingress_queue(workflow) == "single"
+    assert _job_queue(workflow) == "max"

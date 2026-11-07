@@ -143,8 +143,8 @@ def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     chain_step = workflow.split("Self-perpetuate roster cadence", 1)[1]
-    assert "steps.dispatch_workers.outputs.dispatched_count" in chain_step
-    assert "steps.dispatch_workers.outputs.dispatch_failed" in chain_step
+    assert "needs.dispatch.outputs.dispatched_count" in chain_step
+    assert "needs.dispatch.outputs.dispatch_failed" in chain_step
     assert '[[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]' in chain_step
     assert '[[ "$dispatched_count" == "0" && "$dispatch_failed" == "false" ]]' in chain_step
     assert "Trustworthy zero-work tick: ending bounded roster session" in chain_step
@@ -221,8 +221,9 @@ def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> Non
     assert "if ! [[ \"$remaining_core\" =~ ^[0-9]+$ ]]" in batch
     assert "if (( remaining_core < 450 )); then" in batch
     chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
-    assert "steps.api_budget.outputs.allow == 'true'" in chain
-    assert "steps.api_budget.outputs.quota_deferred == 'true'" in chain
+    job_if = workflow.split("roster-cadence:", 1)[1].split("runs-on:", 1)[0]
+    assert "needs.dispatch.outputs.allow == 'true'" in job_if
+    assert "needs.dispatch.outputs.quota_deferred == 'true'" in job_if
     assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" not in chain
     assert "API_RESET_EPOCH:" in chain
     assert "BUDGET_DEFERRED:" in chain
