@@ -464,7 +464,10 @@ mod tests {
         let states = evaluate(&validated).unwrap();
         assert!(states[&1].eligible, "Abe #2 should be rollable");
         assert!(!states[&2].eligible, "Abe #31 must wait for Abe #2");
-        assert!(!states[&3].eligible, "Acheron must wait for earlier Julix entries");
+        assert!(
+            !states[&3].eligible,
+            "Acheron must wait for earlier Julix entries"
+        );
         assert!(states[&2].blockers.iter().any(|blocker| {
             blocker.kind == "strict_order" && blocker.waiting_on_issue_ids.contains(&11)
         }));
@@ -478,12 +481,24 @@ mod tests {
         assert_eq!(eligible[0].issue_id, 11);
 
         // Finishing the earliest unread entry releases #31, not Acheron.
-        inputs.core.issues.iter_mut().find(|issue| issue.id == 11).unwrap().status = "read".into();
+        inputs
+            .core
+            .issues
+            .iter_mut()
+            .find(|issue| issue.id == 11)
+            .unwrap()
+            .status = "read".into();
         let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
         assert!(states[&2].eligible);
         assert!(!states[&3].eligible);
-        inputs.core.issues.iter_mut().find(|issue| issue.id == 20).unwrap().status = "read".into();
+        inputs
+            .core
+            .issues
+            .iter_mut()
+            .find(|issue| issue.id == 20)
+            .unwrap()
+            .status = "read".into();
         let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
         let states = evaluate(&validated).unwrap();
         assert!(states[&3].eligible);
@@ -547,13 +562,19 @@ mod tests {
             name: "Milestone".into(),
             entries: vec![
                 crate::option_inputs::ReadingEntry {
-                    issue_id: 11, gate: "none".into(), skipped: false,
+                    issue_id: 11,
+                    gate: "none".into(),
+                    skipped: false,
                 },
                 crate::option_inputs::ReadingEntry {
-                    issue_id: 30, gate: "hold".into(), skipped: false,
+                    issue_id: 30,
+                    gate: "hold".into(),
+                    skipped: false,
                 },
                 crate::option_inputs::ReadingEntry {
-                    issue_id: 20, gate: "none".into(), skipped: false,
+                    issue_id: 20,
+                    gate: "none".into(),
+                    skipped: false,
                 },
             ],
             overlap_decisions: vec![],
