@@ -306,7 +306,7 @@ describe('targeted cache effects', () => {
     await applyUpdatedThreadCache(client, thread)
 
     expect(setQueryData).toHaveBeenCalledTimes(2)
-    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledTimes(4)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
     })
@@ -317,6 +317,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
     expect(resetQueries).not.toHaveBeenCalled()
   })
@@ -384,7 +387,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledTimes(4)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -392,6 +395,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
     // The bounded whole-queue total must not survive a membership change (#3261).
     expect(invalidateQueries).toHaveBeenCalledWith({
@@ -412,7 +418,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(2)
+    expect(invalidateQueries).toHaveBeenCalledTimes(3)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -421,6 +427,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.activeCount(),
@@ -437,7 +446,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(6)
+    expect(invalidateQueries).toHaveBeenCalledTimes(7)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -445,6 +454,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.activeCount(),
@@ -477,7 +489,7 @@ describe('targeted cache effects', () => {
 
     await invalidateAfterResumeRecovery(client)
 
-    expect(invalidateQueries).toHaveBeenCalledTimes(3)
+    expect(invalidateQueries).toHaveBeenCalledTimes(4)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -485,6 +497,9 @@ describe('targeted cache effects', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    })
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.queue.pages(),
@@ -587,6 +602,7 @@ describe('targeted cache effects', () => {
 
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.session.current(), exact: true })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.bootstrap(), exact: true })
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.roll.eligibleIssueIdsAll() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.readingPlans.all })
     })
