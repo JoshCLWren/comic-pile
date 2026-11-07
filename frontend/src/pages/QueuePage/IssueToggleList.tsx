@@ -198,7 +198,11 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
   const onDirectIssueMutated = useCallback((response: IssueReadRateResponse) => {
     baseIssuesRef.current = baseIssuesRef.current.map((issue) =>
       issue.id === response.issue.issue_id
-        ? { ...issue, status: response.issue.status === 'read' ? 'read' : 'unread', read_at: response.issue.read_at }
+        ? {
+            ...issue,
+            status: response.issue.status === 'read' ? 'read' : 'unread',
+            read_at: response.issue.status === 'read' ? (response.issue.read_at ?? issue.read_at) : null,
+          }
         : issue,
     )
     syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
