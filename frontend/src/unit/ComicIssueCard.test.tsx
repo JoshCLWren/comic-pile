@@ -5,6 +5,36 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ComicIssueAvailability, ComicIssueCard, ComicIssueCover, ComicIssueIdentity, ComicIssueRatingSlider } from '../components/ComicIssueCard'
 import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
 
+
+vi.mock('../components/ComicIssueMappingAction', () => ({
+  default: ({
+    issueId, initialIdentity, fetchEnabled, isOwned, compact, onAddToLibrary, onMapped,
+  }: {
+    issueId: number | null
+    initialIdentity?: { thread_title: string; has_unresolved: boolean; comicvine_issue_id: number | null }
+    fetchEnabled: boolean
+    isOwned: boolean
+    compact: boolean
+    onAddToLibrary?: () => void
+    onMapped: () => void
+  }) => (
+    <button
+      type="button"
+      data-testid="mapping-action"
+      data-issue={issueId ?? 'none'}
+      data-mapping={initialIdentity?.has_unresolved ? 'review' : initialIdentity ? 'known' : 'missing'}
+      data-title={initialIdentity?.thread_title ?? 'missing'}
+      data-provider={initialIdentity?.comicvine_issue_id ?? 'none'}
+      data-fetch={String(fetchEnabled)}
+      data-owned={String(isOwned)}
+      data-compact={String(compact)}
+      onClick={isOwned ? onMapped : onAddToLibrary}
+    >
+      Map
+    </button>
+  ),
+}))
+
 const card: IssueCard = {
   issue_id: 75, thread_id: 8, thread_title: 'Cable', issue_number: 'Annual 1', status: 'read',
   rating: 4, mapping_state: 'unmapped', has_confirmed_identity: false,
@@ -222,5 +252,101 @@ describe('exact issue projection fallback and accessibility boundaries', () => {
     rerender(<ComicIssueRatingSlider value={6} onChange={onChange} />)
     expect(slider.style.getPropertyValue('--slider-fill')).toBe('100%')
     expect(screen.getByText('6.0')).toBeVisible()
+  })
+})
+
+describe('shared comic mapping integration', () => {
+  it('maps the exact issue when batch metadata is present without gating direct corrections', async () => {
+    const mapped = vi.fn()
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, mapping_state: 'confirmed', has_confirmed_identity: true, comicvine_issue_id: 987 }}
+        threadTitle="Old title"
+        issueNumber="1"
+        status="read"
+        variant="compact"
+        onAddToLibrary={mapped}
+      />,
+      { wrapper },
+    )
+    const mapping = screen.getByTestId('mapping-action')
+    expect(mapping).toHaveAttribute('data-issue', '75')
+    expect(mapping).toHaveAttribute('data-title', 'Cable')
+    expect(mapping).toHaveAttribute('data-provider', '987')
+    expect(mapping).toHaveAttribute('data-mapping', 'known')
+    expect(mapping).toHaveAttribute('data-fetch', 'true')
+    expect(mapping).toHaveAttribute('data-owned', 'true')
+    expect(mapping).toHaveAttribute('data-compact', 'true')
+    expect(screen.getByRole('button', { name: 'Edit rating' })).toBeEnabled()
+    await userEvent.click(mapping)
+    expect(mapped).not.toHaveBeenCalled()
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('marks ambiguous candidates for review while keeping direct read active', async () => {
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, status: 'unread', thread_title: '', mapping_state: 'candidate', has_confirmed_identity: false }}
+        threadTitle="Fallback series"
+        issueNumber="2"
+        status="unread"
+      />,
+      { wrapper },
+    )
+    const mapping = screen.getByTestId('mapping-action')
+    expect(mapping).toHaveAttribute('data-title', 'Fallback series')
+    expect(mapping).toHaveAttribute('data-mapping', 'review')
+    expect(mapping).toHaveAttribute('data-provider', 'none')
+    expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Read now' }))
+    expect(screen.getByRole('slider')).toHaveValue('3.5')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(patch).not.toHaveBeenCalled()
+  })
+
+  it('does not report unmapped or explicit none states as ambiguous provider mappings', () => {
+    const { rerender } = render(
+      <ComicIssueCard issueId={75} card={card} threadTitle="Cable" issueNumber="Annual 1" status="read" />,
+      { wrapper },
+    )
+    expect(screen.getByTestId('mapping-action')).toHaveAttribute('data-mapping', 'known')
+    rerender(
+      <ComicIssueCard
+        issueId={75}
+        card={{ ...card, mapping_state: ' NONE ' }}
+        threadTitle="Cable"
+        issueNumber="Annual 1"
+        status="read"
+      />,
+    )
+    expect(screen.getByTestId('mapping-action')).toHaveAttribute('data-mapping', 'known')
+  })
+
+  it('keeps unowned provider cards actionable through Add to ComicPile with no personal writes', async () => {
+    const add = vi.fn()
+    render(
+      <ComicIssueCard
+        issueId={75}
+        card={null}
+        threadTitle="Provider comic"
+        issueNumber="1"
+        status="unread"
+        isOwned={false}
+        onAddToLibrary={add}
+        variant="standard"
+      />,
+      { wrapper },
+    )
+    const mapping = screen.getByTestId('mapping-action')
+    expect(mapping).toHaveAttribute('data-issue', 'none')
+    expect(mapping).toHaveAttribute('data-mapping', 'missing')
+    expect(mapping).toHaveAttribute('data-fetch', 'false')
+    expect(mapping).toHaveAttribute('data-owned', 'false')
+    await userEvent.click(mapping)
+    expect(add).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    expect(patch).not.toHaveBeenCalled()
   })
 })
