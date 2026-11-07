@@ -47,6 +47,24 @@ Static exclusions, in evaluation order:
 9. An open canonical PR already owning the issue (controller only).
 10. No-diff retry budget exhausted (bounded rolling window, never permanent).
 
+## Rust cutover scheduling dependency (active #4335)
+
+Until the Rust API cutover epic #4335 is **closed**, unrelated work must wait,
+including tickets created after the original backlog sweep and PRs already in
+review or repair. The shared eligibility rule only admits issues explicitly
+labeled `rust` or `main-breakage`. A real `Depends on #4335` declaration
+always blocks, even on a mislabeled Rust issue.
+
+The rule is enforced by the fixed-model issue and PR selectors, local/Ralph
+issue selection and explicit start, and the live exact-head merge gate. A PR
+with a linked issue inherits its eligibility, including a conflicting explicit
+`Closes #N` claim. Unlinked factory PRs must themselves carry the `rust`
+label while the epic remains open. This avoids consuming review workers on
+deferred work without mutating PR stage or lease labels. After #4335 closes,
+normal eligibility and issue dependencies resume automatically. The
+`main-breakage` exception protects the production/CI path needed to finish
+the cutover, not ordinary feature bugs.
+
 Dynamic gates applied on top by the controller: worker WIP caps, review
 backlog backpressure, Rotisserie intake authorization, live GitHub dependency
 blockers, and lease liveness. `explain` reports every gate it can observe
