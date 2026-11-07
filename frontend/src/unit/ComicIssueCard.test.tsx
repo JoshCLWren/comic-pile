@@ -239,6 +239,7 @@ describe('ComicIssueCard', () => {
       </QueryClientProvider>,
     )
     for (const button of screen.getAllByRole('button', { name: 'Read now' })) fireEvent.click(button)
+    // SAFETY: the slider role is rendered as an input element for each edited card.
     const sliders = screen.getAllByRole('slider') as HTMLInputElement[]
     expect(sliders).toHaveLength(2)
     expect(sliders[0].id).not.toBe(sliders[1].id)
@@ -264,5 +265,62 @@ describe('ComicIssueCard', () => {
     renderCard()
     expect(getIssueIdentitySpy).not.toHaveBeenCalled()
     expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Mapped')
+  })
+
+  it('resolves identity fallbacks when the card omits title, number and status', () => {
+    // No card and no explicit status: the card prefers the thread payload.
+    renderCard({ card: null, status: 'unread', rating: null })
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', expect.stringContaining('Hellboy in Hell #3'))
+    expect(screen.getByRole('button', { name: 'Read now' })).toBeTruthy()
+  })
+
+  it('does not save while a mark-unread write is pending', async () => {
+    let resolvePatch!: (value: unknown) => void
+    const pendingWrite = new Promise<unknown>((resolve) => {
+      resolvePatch = resolve
+    })
+    patchIssueSpy.mockReturnValue(pendingWrite)
+    renderCard({ card: READ_CARD, status: 'read' })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByText('Saving…')).toBeTruthy()
+    // SAFETY: the pending mark-unread control is rendered as a button element.
+    expect((screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled).toBe(true)
+    resolvePatch(readResponse({ ...READ_CARD, status: 'unread', rating: null }))
+    await waitFor(() => expect(screen.queryByText('Saving…')).toBeNull())
+  })
+
+  it('falls back to the save error message when the detail is empty', async () => {
+    const err = new Error('')
+    patchIssueSpy.mockRejectedValueOnce(err)
+    renderCard()
+    fireEvent.click(screen.getByRole('button', { name: 'Read now' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark read & save' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Could not save')
+  })
+
+  it('marks the ambiguous mapping state as unresolved without a confirmed identity', () => {
+    renderCard({ card: { ...UNREAD_CARD, has_confirmed_identity: false, mapping_state: 'ambiguous', comicvine_issue_id: null } })
+    expect(screen.getByTestId('comic-mapping-status')).toBeTruthy()
+  })
+
+  it('prefers the card title over the thread fallback when present', () => {
+    renderCard({ card: { ...UNREAD_CARD, thread_title: 'Card Title', issue_number: '9' } })
+    expect(screen.getByText('Card Title')).toBeTruthy()
+    expect(screen.getByText('#9')).toBeTruthy()
+  })
+
+  it('falls back to the thread title when the card title is empty', () => {
+    renderCard({ card: { ...UNREAD_CARD, thread_title: '' } })
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue Hellboy in Hell #3')
+  })
+
+  it('retries a failed mark unread directly from the error alert', async () => {
+    patchIssueSpy.mockRejectedValueOnce(new Error('offline'))
+    renderCard({ card: READ_CARD, status: 'read' })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByRole('alert')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledTimes(2))
   })
 })

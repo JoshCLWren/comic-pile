@@ -38,6 +38,13 @@ describe('issueCardsApi', () => {
     expect(client.post).toHaveBeenCalledWith('/v2/issues/cards', { issue_ids: [11, 12] })
   })
 
+  it('returns an empty batch without issuing a request for an empty set', async () => {
+    const cards = await api.fetchCards([])
+
+    expect(cards).toEqual([])
+    expect(client.post).not.toHaveBeenCalled()
+  })
+
   it('chunks lists beyond the server bound instead of one request per row', async () => {
     // SAFETY: the mock resolves the exact IssueCardsResponse shape the client consumes.
     client.post.mockResolvedValue({ items: [] } as components['schemas']['IssueCardsResponse'])
