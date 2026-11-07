@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ComicIssueCard, ComicIssueCover } from './ComicIssueCard'
 import { useIssueCards } from '../hooks/useIssueCards'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -12,25 +12,65 @@ interface Props {
   rating?: number | null
   card?: IssueCard | null
   onMutated?: (response: IssueReadRateResponse) => void
+  /** Parent already displays the exact issue name in an adjacent named link. */
+  hideTitle?: boolean
+}
+
+/** On-demand detail loader: a dense collapsed list does not mount a query per row. */
+function ExpandedIssueCard({
+  issueId, card, threadTitle, issueNumber, status, rating, onMutated, onCardLoaded,
+}: Omit<Props, 'hideTitle'> & { onCardLoaded: (card: IssueCard) => void }) {
+  const fetched = useIssueCards([issueId], { enabled: card == null })
+  const fetchedExact = fetched.data?.find((item) => item.issue_id === issueId) ?? null
+  useEffect(() => {
+    if (fetchedExact) onCardLoaded(fetchedExact)
+  }, [fetchedExact, onCardLoaded])
+  const resolved = card ?? fetchedExact
+  const title = resolved?.thread_title || threadTitle
+  const number = resolved?.issue_number || issueNumber
+  const isRead = (resolved?.status ?? status) === 'read'
+
+  return (
+    <div className="mt-2 space-y-2">
+      {fetched.isError && card == null && (
+        <div role="alert" className="text-xs text-[var(--theme-danger)]">
+          Could not load issue metadata: {getApiErrorDetail(fetched.error)}
+          <button
+            type="button" onClick={() => void fetched.refetch()}
+            className="ml-2 min-h-9 font-semibold underline"
+          >Retry</button>
+        </div>
+      )}
+      <ComicIssueCard
+        issueId={issueId}
+        card={resolved}
+        threadTitle={title}
+        issueNumber={number}
+        status={isRead ? 'read' : 'unread'}
+        rating={rating}
+        variant="compact"
+        onMutated={onMutated}
+      />
+    </div>
+  )
 }
 
 /**
- * One small, accessible entrance to the same issue-specific cover, mapping
- * and direct Read now / Rate / Mark unread card used in Reading Lists.
- *
- * Large issue grids pass their *one batched* card projection in `card`; the
- * trigger requests a card only if a reader expands an entry without a batch.
- * A click never triggers a Roll command, stage an edit, or navigate away.
- * This shared trigger is appropriate for Thread, Queue and creator evidence
- * where rendering the full editor in every row would crowd out the content.
+ * The shared covered entrance for every exact owned comic issue in a dense row.
+ * The owning view provides one bounded batch projection; an absent card is
+ * fetched only when the user expands this issue, never per collapsed row.
+ * The full action surface is ComicIssueCard, not a separate imitation.
  */
 export default function CompactIssueCardTrigger({
   issueId, threadTitle, issueNumber, status = 'unread',
-  rating = null, card, onMutated,
+  rating = null, card, onMutated, hideTitle = false,
 }: Props) {
   const [open, setOpen] = useState(false)
-  const fetched = useIssueCards([issueId], { enabled: open && card == null })
-  const resolved = card ?? fetched.data?.find((item) => item.issue_id === issueId) ?? null
+  const [loadedCard, setLoadedCard] = useState<IssueCard | null>(null)
+  // Never let a stale card for a different canonical issue masquerade as this
+  // issue if a virtualized list reuses a component position.
+  const resolved = (card?.issue_id === issueId ? card : null)
+    ?? (loadedCard?.issue_id === issueId ? loadedCard : null)
   const title = resolved?.thread_title || threadTitle
   const number = resolved?.issue_number || issueNumber
   const isRead = (resolved?.status ?? status) === 'read'
@@ -51,7 +91,7 @@ export default function CompactIssueCardTrigger({
           variant="compact"
         />
         <span className="min-w-0">
-          <span className="block break-words text-xs font-semibold">{title} #{number}</span>
+          {!hideTitle && <span className="block break-words text-xs font-semibold">{title} #{number}</span>}
           <span className="block text-[11px] text-[var(--theme-text-muted)]">
             {isRead ? 'Read' : 'Unread'}
             {(resolved?.rating ?? rating) != null ? ` · Rated ${resolved?.rating ?? rating}` : ''}
@@ -60,25 +100,16 @@ export default function CompactIssueCardTrigger({
         </span>
       </button>
       {open && (
-        <div className="mt-2 space-y-2">
-          {fetched.isError && !card && (
-            <div role="alert" className="text-xs text-[var(--theme-danger)]">
-              Could not load issue metadata: {getApiErrorDetail(fetched.error)}
-              <button type="button" onClick={() => void fetched.refetch()}
-                className="ml-2 min-h-9 font-semibold underline">Retry</button>
-            </div>
-          )}
-          <ComicIssueCard
-            issueId={issueId}
-            card={resolved}
-            threadTitle={title}
-            issueNumber={number}
-            status={isRead ? 'read' : 'unread'}
-            rating={rating}
-            variant="compact"
-            onMutated={onMutated}
-          />
-        </div>
+        <ExpandedIssueCard
+          issueId={issueId}
+          card={resolved}
+          threadTitle={title}
+          issueNumber={number}
+          status={isRead ? 'read' : 'unread'}
+          rating={rating}
+          onMutated={onMutated}
+          onCardLoaded={setLoadedCard}
+        />
       )}
     </div>
   )
