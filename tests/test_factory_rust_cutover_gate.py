@@ -144,3 +144,29 @@ def test_local_explicit_start_rejects_unmarked_issue_during_cutover(monkeypatch)
     )
     with pytest.raises(RuntimeError, match="wait for Rust cutover"):
         next_task._start_task(4707)
+
+
+def test_controller_explanation_reports_rust_cutover_deferral(monkeypatch) -> None:
+    """The operator eligibility report must agree with actual queue selection."""
+    spec = importlib.util.spec_from_file_location(
+        "factory_work_controller_rust_gate",
+        SCRIPTS / "factory-work-controller.py",
+    )
+    assert spec is not None and spec.loader is not None
+    controller = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = controller
+    spec.loader.exec_module(controller)
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda *_: None)
+    epic = issue(4335, "epic")
+    unrelated = issue(4708)
+    report = controller.explain_issue(
+        4708,
+        issue=unrelated,
+        issues=[epic, unrelated],
+        prs=[],
+        no_diff_attempts_by_issue={},
+        include_dynamic_gates=False,
+    )
+    assert report["eligible"] is False
+    assert report["dynamic_gates"]["rust_cutover_allowed"] is False
+    assert any("Rust cutover #4335" in text for text in report["reasons"])
