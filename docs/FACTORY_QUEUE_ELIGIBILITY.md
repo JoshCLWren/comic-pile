@@ -87,7 +87,13 @@ Rotisserie issue-intake configuration, a missing local `rotisserie` executable
 makes the *controller's* intake fail closed; it does **not** mean a local
 Ralph agent must install Rotisserie before claiming its own work.
 `reconcile` repairs contradictory labels and releases provably stale leases
-automatically; no hand-authored release comment is ever required.
+automatically; no hand-authored release comment is ever required. Local
+leases expire after 60 minutes of GitHub inactivity even when trusted lease
+markers are absent: the controller falls back to the issue/PR `updatedAt`,
+with a final live ownership/update check before releasing. Fixed-model
+leases without active runs use the same fallback with their 15-minute TTL.
+The creation date of a long-standing issue is never a substitute for its
+claim/update timestamp.
 
 ## Manual-only directive contract
 
