@@ -62,13 +62,14 @@ def bot_merge_paths() -> dict[str, list[int]]:
 
 
 def test_known_bot_merge_paths_are_all_found() -> None:
+    """Find concrete merge call sites; legacy workers delegate to the shared route."""
     paths = set(bot_merge_paths())
+    # The legacy NVIDIA and Omniroute workers now delegate to the canonical
+    # merge route; their call sites are covered in test_factory_worker_merge_route.py.
     assert {
         ".github/workflows/factory-ready-merge-drain.yml",
         ".github/workflows/fixed-model-factory-dispatch.yml",
         ".github/scripts/factory-canonical-merge-route.sh",
-        ".github/scripts/nvidia-factory-worker.sh",
-        ".github/scripts/omniroute-factory-worker.sh",
     } <= paths
 
 

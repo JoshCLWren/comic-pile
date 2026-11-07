@@ -38,6 +38,16 @@ if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-dispatch-production-deploy.sh" 
 else
   source .github/scripts/factory-dispatch-production-deploy.sh
 fi
+# Canonical exact-head merge route (see factory-canonical-merge-route.sh).
+# Worker-direct merges run the same trusted controller gates as the scheduled
+# drain and close through the trusted post-merge policy, never a raw
+# ``gh pr merge`` + ``gh issue close``.
+# shellcheck source=factory-canonical-merge-route.sh
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/factory-canonical-merge-route.sh" ]]; then
+  source "$(dirname "${BASH_SOURCE[0]}")/factory-canonical-merge-route.sh"
+else
+  source .github/scripts/factory-canonical-merge-route.sh
+fi
 
 log() { printf '[factory:%s][omniroute:%s][model:%s] %s\n' "$WORKER" "$PROVIDER" "$MODEL" "$*"; }
 remaining() { echo $((DEADLINE - $(date +%s))); }
@@ -62,6 +72,55 @@ record_no_diff_attempt() {
   epoch="$(date +%s)"
   marker="<!-- comic-pile-factory-claim-released-v3:issue-${number}:${WORKER_ID}:${epoch}:no-persisted-change-handoff -->"
   gh issue comment "$number" --body "$marker" >/dev/null 2>&1
+}
+
+current_stage() {
+  local number="$1" fallback="$2" labels stage
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  stage="$(jq -r --arg stage_re "$STAGE_RE" '[.[] | select(test($stage_re))][0] // empty' <<< "$labels")"
+  if [[ -n "$stage" ]]; then printf '%s\n' "$stage"; else printf '%s\n' "$fallback"; fi
+}
+
+current_owner_is_self() {
+  local number="$1" labels
+  labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}/labels?per_page=100" --jq '[.[].name]')"
+  jq -e --arg owner "$OWNER" 'index($owner) != null' >/dev/null <<< "$labels"
+}
+
+release_target() {
+  local number="$1" fallback_stage="$2" reason="$3" target_kind="${4:-target}"
+  local stage epoch marker
+  stage="$(current_stage "$number" "$fallback_stage")"
+  epoch="$(date +%s)"
+  marker="<!-- comic-pile-factory-claim-released-v3:${target_kind}-${number}:${WORKER_ID}:${epoch}:${reason} -->"
+  replace_labels "$number" 'factory:unowned' "$stage"
+  gh issue comment "$number" --body "$marker" >/dev/null 2>&1 || true
+  log "released ${target_kind} #${number} to factory:unowned at ${stage} (${reason})"
+}
+
+linked_issue_from_pr() {
+  local pr_json
+  pr_json="$(gh pr view "$1" --json headRefName,body,title)" || return 3
+  printf '%s' "$pr_json" | python3 -c '
+import json, sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+from factory_work_policy import linked_issue_from_pr
+issue = linked_issue_from_pr(json.load(sys.stdin))
+print(issue if issue is not None else "")
+' "$TRUSTED_REVIEW_CONTROLLER"
+}
+
+release_pr_and_issue() {
+  local pr="$1" branch="$2" stage="$3" reason="$4" issue state
+  release_target "$pr" "$stage" "$reason" 'pr'
+  issue="$(linked_issue_from_pr "$pr")" || return 3
+  if [[ -n "$issue" ]]; then
+    state="$(gh issue view "$issue" --json state --jq .state 2>/dev/null || true)"
+    if [[ "$state" == 'OPEN' ]] && current_owner_is_self "$issue"; then
+      release_target "$issue" "$stage" "$reason" 'issue'
+    fi
+  fi
 }
 
 ensure_owner_label() {
@@ -310,10 +369,12 @@ stage_trusted_review_controller() {
     local trusted_dir
     trusted_dir="$(mktemp -d "${RUNNER_TEMP:-/tmp}/comic-pile-review-controller.XXXXXX")"
     cp .github/scripts/factory-review-controller.py "$trusted_dir/factory-review-controller.py"
+    cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
     cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
     # Bind model provenance to a trusted main checkout snapshot, not PR data.
     cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
     cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+    cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
     chmod +x "$trusted_dir/factory-review-controller.py"
     TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
     export TRUSTED_REVIEW_CONTROLLER
@@ -479,25 +540,57 @@ while (( $(remaining) > 480 )); do
   fi
 
   current="$(git rev-parse HEAD)"
-  if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log" && machine_merge_gates_pass "$NUMBER" "$current"; then
-    log "all exact-head gates passed for PR #${NUMBER}; merging ${current}"
-    gh pr merge "$NUMBER" --merge --match-head-commit "$current" --delete-branch
-    factory_dispatch_production_deploy "Factory ${WORKER} merged PR #${NUMBER}"
-    issue_number="$(sed -nE "s#^factory/${WORKER}-([0-9]+)-omniroute$#\\1#p" <<< "$BRANCH")"
-    if [[ -n "$issue_number" ]]; then
-      state="$(gh issue view "$issue_number" --json state --jq .state 2>/dev/null || true)"
-      if [[ "$state" == 'OPEN' ]]; then
-        gh issue close "$issue_number" --reason completed \
-          --comment "Closed after Factory ${WORKER} · ${CALL_SIGN} merged PR #${NUMBER} through the normal exact-head gates."
-      fi
+  if grep -q 'FACTORY_GATE_READY' "/tmp/opencode-factory-${WORKER}.log"; then
+    # Merge only through the canonical exact-head route: the trusted controller
+    # gates (issue acceptance, exact-commit review/CI, substantive delivery and a
+    # fresh declared/native dependency check) must return JSON decision "pass",
+    # the head is pinned with --match-head-commit, and closure must use the
+    # trusted staged post-merge policy. Never run a PR-branch-controlled gate and
+    # never close the issue with a raw issue-close command.
+    if factory_merge_with_canonical_gates "$NUMBER" "$current"; then
+      log "trusted controller gates passed for PR #${NUMBER}; merged ${current}; post-merge closure ${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}"
+    else
+      merge_route_status=$?
+      case "$merge_route_status" in
+        3)
+          # The merge landed but the canonical closure policy did not complete.
+          # Leave the issue open with the durable closure reason instead of
+          # treating the merge as feature acceptance.
+          log "merged PR #${NUMBER}, but post-merge closure did not complete (${FACTORY_CLOSURE_STATUS}: ${FACTORY_CLOSURE_OUTCOME}); issue left open"
+          # The merge landed, so the PR is closed; skip it anyway so this
+          # session never re-enters the merge route for the same target.
+          SKIP_PRS+=("$NUMBER")
+          ;;
+        2)
+          log "merge command failed for PR #${NUMBER} at ${current}; leaving it open for another route"
+          # The PR is still open and still leased to this worker. Release the
+          # lease first so a peer can retry without waiting for this session to
+          # end, then skip it so choose_existing_pr does not hand it straight
+          # back for another full agent run.
+          release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'merge-failed'
+          SKIP_PRS+=("$NUMBER")
+          ;;
+        *)
+          log "trusted controller gates for PR #${NUMBER} decision=${FACTORY_MERGE_GATE_DECISION:-empty}; not merging (reason: ${FACTORY_MERGE_GATE_REASON:-no reason})"
+          # Do not merge: release lease and select other work. A retry decision
+          # (for example pending required CI) is not a reason to run this PR
+          # again in the same session, and the released lease lets
+          # choose_unowned_pr hand it straight back. Record it in SKIP_PRS so
+          # the session spends its budget on other targets instead.
+          release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'gate-denied'
+          SKIP_PRS+=("$NUMBER")
+          ;;
+      esac
     fi
     continue
   fi
 
   if (( transient_failure == 1 )); then
-    log "PR #${NUMBER} was interrupted transiently with no persisted edits; selecting other work"
+    log "PR #${NUMBER} was interrupted transiently with no persisted edits; releasing the lease and selecting other work"
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'transient-model-interruption'
   else
-    log "PR #${NUMBER} is not merge-eligible now; selecting other work"
+    log "PR #${NUMBER} is not merge-eligible now; releasing the lease for cross-worker takeover"
+    release_pr_and_issue "$NUMBER" "$BRANCH" 'factory:review' 'not-merge-eligible-handoff'
   fi
   SKIP_PRS+=("$NUMBER")
 done
