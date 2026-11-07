@@ -102,3 +102,45 @@ def test_unlinked_pr_requires_explicit_rust_label_during_cutover() -> None:
     assert numbers([epic], [orphan]) == set()  # branch still claims missing issue
     orphan["headRefName"] = "maintenance/rust-cutover"
     assert numbers([epic], [orphan]) == {("pr", 4708)}
+
+
+def test_local_selector_honors_cutover_gate_and_releases_when_epic_closes() -> None:
+    """Local issue sweeps cannot pick new unrelated work during the cutover."""
+    from scripts import next_task
+
+    def local_issue(number: int, *labels: str) -> dict:
+        return {
+            "number": number,
+            "title": str(number),
+            "body": "",
+            "url": f"https://github.com/JoshCLWren/comic-pile/issues/{number}",
+            "labels": [{"name": n} for n in labels],
+        }
+
+    epic = local_issue(4335, "epic")
+    unrelated = local_issue(4707, "ralph-task", "ralph-status:pending")
+    rust = local_issue(4346, "rust", "ralph-task", "ralph-status:pending")
+    assert next_task.select_next([epic, unrelated], set()) is None
+    assert next_task.select_next([epic, unrelated, rust], set()).issue["number"] == 4346
+    assert next_task.select_next([unrelated], {4335}).issue["number"] == 4707
+
+
+def test_local_explicit_start_rejects_unmarked_issue_during_cutover(monkeypatch) -> None:
+    """Direct start-task cannot sidestep the same issue-intake policy."""
+    import pytest
+    from scripts import next_task
+
+    issue = {
+        "number": 4707, "title": "New non-Rust work",
+        "body": "", "labels": [
+            {"name": "ralph-task"},
+            {"name": "ralph-status:pending"},
+        ],
+    }
+    monkeypatch.setattr(next_task, "_gh_issue", lambda _n: issue)
+    monkeypatch.setattr(
+        next_task, "_gh_issue_list",
+        lambda state: ([{"number": 4335}] if state == "open" else []),
+    )
+    with pytest.raises(RuntimeError, match="wait for Rust cutover"):
+        next_task._start_task(4707)
