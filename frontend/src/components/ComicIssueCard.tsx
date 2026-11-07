@@ -165,7 +165,7 @@ export function ComicIssueRatingSlider({
         // SAFETY: the custom property is read by the slider fill gradient, not by React's CSSProperties
         style={{ '--slider-fill': `${fillPct}%` } as CSSProperties}
         aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
-        aria-describedby={describedBy ?? valueId}
+        aria-describedby={describedBy ?? (showValue ? valueId : undefined)}
         onChange={(event) => onChange(event.target.value)}
       />
       {showScaleNote && <p className="text-[11px] text-[var(--theme-text-dim)]">0.5 – 5.0 in half steps</p>}

@@ -14,11 +14,31 @@ import type { IssueCard } from '../services/issueCardsApi'
  * button opens: cover, identity and rating without an intermediate Roll
  * navigation, writing nothing until Save. Queued Roll offers are unaffected.
  */
-export function ReadNowIssueButton({ issueId, threadId: _threadId, label = 'Read now', primary = false, threadTitle, issueNumber }: {
-  issueId: number; threadId: number; label?: string; primary?: boolean; threadTitle?: string; issueNumber?: string
+export function ReadNowIssueButton({
+  issueId,
+  threadId: _threadId,
+  label = 'Read now',
+  primary = false,
+  threadTitle,
+  issueNumber,
+  isRead: initialIsRead,
+}: {
+  issueId: number
+  threadId: number
+  label?: string
+  primary?: boolean
+  threadTitle?: string
+  issueNumber?: string
+  /** Known read status from the caller (e.g., availability === 'read'). */
+  isRead?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const cards = useIssueCards([issueId], { enabled: open })
+
+  // Use the known read state from caller during loading, fallback to 'unread'
+  const displayStatus: 'read' | 'unread' = cards.isPending
+    ? (initialIsRead ? 'read' : 'unread')
+    : (cards.data?.[0]?.status === 'read' ? 'read' : 'unread')
 
   if (open) {
     return (
@@ -30,14 +50,30 @@ export function ReadNowIssueButton({ issueId, threadId: _threadId, label = 'Read
         >
           Close issue card
         </button>
-        <ComicIssueCard
-          issueId={issueId}
-          card={cards.data?.[0] ?? null}
-          threadTitle={threadTitle ?? ''}
-          issueNumber={issueNumber ?? ''}
-          status={cards.data?.[0]?.status === 'read' ? 'read' : 'unread'}
-          variant="featured"
-        />
+        {cards.isError ? (
+          <div role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3">
+            <p className="text-sm text-[var(--theme-danger)]">
+              Unable to load issue card.
+              {getApiErrorDetail(cards.error) && `: ${getApiErrorDetail(cards.error)}`}
+            </p>
+            <button
+              type="button"
+              onClick={() => void cards.refetch()}
+              className="mt-2 min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        ) : (
+          <ComicIssueCard
+            issueId={issueId}
+            card={cards.data?.[0] ?? null}
+            threadTitle={threadTitle ?? ''}
+            issueNumber={issueNumber ?? ''}
+            status={displayStatus}
+            variant="featured"
+          />
+        )}
       </div>
     )
   }

@@ -19,6 +19,7 @@ import {
   applyEditedThreadToQueuePages,
   applyIssueReadSnapshotToCache,
   invalidateAfterDependencyChange,
+  invalidateIssueCards,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import { evaluateReadingProgress } from '../utils/readingProgress'
@@ -974,6 +975,8 @@ export default function ThreadDetailView() {
               onIssueChanged={() => {
                 // Refetch thread data to update STATUS display after issue mutations
                 refetch()
+                // Issue read state also lives in the issue-card cache.
+                void invalidateIssueCards(client)
               }}
               deferred={true}
               onPendingMutationsChange={setHasPendingIssueEdits}

@@ -241,6 +241,11 @@ export default function CustomCBLBuilder({
   useEffect(() => {
     const list = detailQuery.data
     if (!list) return
+    // Check if the query is currently refetching. If so, wait for it to complete
+    // before reseeding. This prevents stale cached data from overwriting in-progress
+    // local edits (status, gates, skips) when switching lists.
+    // See: https://github.com/JoshCLWren/comic-pile/issues/4693
+    if (detailQuery.isFetching) return
     // Only (re)seed the form when the selected list identity changes. React Query
     // can emit new data for the same list (refetch, cache write, or the second
     // run this effect triggers via setLoadedListId); reseeding then would discard
@@ -260,7 +265,7 @@ export default function CustomCBLBuilder({
     setLoadedListId(list.id)
     setMessage(null)
     setExportError(null)
-  }, [detailQuery.data, loadedListId])
+  }, [detailQuery.data, detailQuery.isFetching, loadedListId])
 
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),

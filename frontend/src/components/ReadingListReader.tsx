@@ -33,6 +33,14 @@ export function ReadingListReader({ listId, backTo }: { listId: number; backTo?:
     <ReadingGraphProblemCard />
     <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>
     {view.execution_mode === 'legacy' && <p className="text-sm text-[var(--theme-text-muted)]">Reading List execution is not active yet. Saved modes and gates do not change current Roll availability.</p>}
+    {issueCards.isError && (
+      <div role="alert" className="rounded-xl border border-[var(--theme-danger)] bg-[var(--theme-bg-panel)] p-3 text-[var(--theme-danger)]">
+        <p>Unable to load issue cards.</p>
+        <button type="button" onClick={() => void issueCards.refetch()} className="mt-2 min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline">
+          Retry cards
+        </button>
+      </div>
+    )}
     <CblReadingListFinder
       listId={listId}
       listName={view.name}

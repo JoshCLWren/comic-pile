@@ -292,6 +292,7 @@ export default function ReadingPlanDetailPage() {
               primary
               threadTitle={continueIssue.thread_title}
               issueNumber={continueIssue.issue_number}
+              isRead={continueIssue.availability === 'read'}
             />
           )}
           {editableListId != null ? (
