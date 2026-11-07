@@ -150,9 +150,7 @@ resets sequences before seeding synthetic data. It compares scalar
 identity/status/order and stored queue diagnostics with Python
 `load_shadow_inputs`, and forces a concurrent commit between the two native
 SELECTs to prove both read one repeatable-read snapshot. Both loaders use
-read-only repeatable-read transactions; unresolved stored references are
-rejected by the loader unit tests rather than by corrupting the canonical
-schema.
+read-only repeatable-read transactions.
 The test prints Python oracle CPU/wall time and native child-process CPU/wall time;
 the latter includes startup and authentication. These are diagnostic timings, not
 equivalent-workload performance claims (#4312 owns that gate). The native loader
