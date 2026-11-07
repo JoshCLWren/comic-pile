@@ -121,8 +121,12 @@ def test_local_selector_honors_cutover_gate_and_releases_when_epic_closes() -> N
     unrelated = local_issue(4707, "ralph-task", "ralph-status:pending")
     rust = local_issue(4346, "rust", "ralph-task", "ralph-status:pending")
     assert next_task.select_next([epic, unrelated], set()) is None
-    assert next_task.select_next([epic, unrelated, rust], set()).issue["number"] == 4346
-    assert next_task.select_next([unrelated], {4335}).issue["number"] == 4707
+    selected_rust = next_task.select_next([epic, unrelated, rust], set())
+    assert selected_rust is not None
+    assert selected_rust.issue["number"] == 4346
+    selected_after = next_task.select_next([unrelated], {4335})
+    assert selected_after is not None
+    assert selected_after.issue["number"] == 4707
 
 
 def test_local_explicit_start_rejects_unmarked_issue_during_cutover(monkeypatch) -> None:
