@@ -182,6 +182,14 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     const blocking = await createThread(page, { title: 'Blocking Alpha', format: 'Issue', issues_remaining: 2, total_issues: 2 })
     const blocked = await createThread(page, { title: 'Blocked Beta', format: 'Issue', issues_remaining: 2, total_issues: 2 })
 
+    // Set the pending selection while `blocked` is still unblocked: the
+    // canonical Dependency evaluator rejects set-pending on a blocked thread
+    // (400) since #3359, so the dependency below is seeded after pending.
+    const earlyPending = await page.request.post(`/api/threads/${blocked.id}/set-pending`, {
+      headers: { Authorization: `Bearer ${await getAuthToken(page)}` },
+    })
+    expect(earlyPending.ok(), `pre-seed set-pending failed: ${earlyPending.status()}`).toBeTruthy()
+
     // Reader-context edges are built from issue-level dependencies.
     const firstIssueId = async (threadId: number): Promise<number> => {
       const response = await page.request.get(`/api/v1/threads/${threadId}/issues`, {
@@ -205,7 +213,12 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     expect(created.ok(), `dependency create failed: ${await created.text()}`).toBeTruthy()
 
     await page.setViewportSize({ width: 1920, height: 926 })
-    await openRatingView(page, blocked.id)
+    // set-pending rejects a thread that is blocked by a dependency (400, the
+    // canonical Dependency evaluator contract since #3359), so pending must be
+    // set before the dependency is seeded — see the Group B disposition in
+    // #3507 — then just navigate back to the rating view.
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect(page.locator('#rating-input')).toBeVisible()
 
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(

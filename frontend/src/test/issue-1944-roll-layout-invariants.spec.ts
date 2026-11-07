@@ -221,13 +221,21 @@ async function rateCurrentIssue(
 }
 
 async function openRatingView(page: Page, threadId: number): Promise<void> {
+  await setPending(page, threadId)
+  await navigateRatingView(page)
+}
+
+// The canonical Dependency evaluator rejects set-pending on a blocked thread
+// (400) since #3359, so tests whose subject is a blocked thread must call
+// setPending *before* seeding the blocking dependency, then navigate here —
+// the Group B spec-adaptation disposition in #3507.
+async function navigateRatingView(page: Page): Promise<void> {
   const contextLoaded = page
     .waitForResponse((response) => response.url().includes('/reader-context'), {
       timeout: 15000,
     })
     .catch(() => null)
 
-  await setPending(page, threadId)
   await page.goto('/', { waitUntil: 'domcontentloaded' })
   await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
   await expect(page.getByTestId('rating-actions')).toBeVisible()
@@ -463,6 +471,10 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     const targetIssues = await listIssues(page, target.id)
     const blockerIssues = await listIssues(page, blocker.id)
 
+    // Pending first: set-pending rejects a thread blocked by a dependency
+    // (400), so `target` is selected before the block edges are seeded.
+    await setPending(page, target.id)
+
     // Fixture Two#1 → Fixture One#1 makes Two a blocked-by connection, and
     // Fixture One#2 → Fixture Three#1 gives One an outgoing block edge.
     await seedDependency(page, headers, blockerIssues[0]!, targetIssues[0]!)
@@ -472,7 +484,7 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     await seedCrossover(page, headers, 'Crisis on Fixture Pile', [target.id], [blockerIssues[0]!])
     await seedThreadIdentity(page, headers, target.id, 'Fixtureverse', 612001)
 
-    await openRatingView(page, target.id)
+    await navigateRatingView(page)
 
     await expect(page.getByText('Reading Context', { exact: true })).toBeVisible()
     await expect(page.getByText('Where you are in Fixtureverse')).toBeVisible()
@@ -522,9 +534,11 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
       total_issues: 2,
     })
     const headers = await authHeaders(page)
+    // Pending first: set-pending rejects a blocked thread (400).
+    await setPending(page, blocked.id)
     await seedDependency(page, headers, (await listIssues(page, anchor.id))[0]!, (await listIssues(page, blocked.id))[0]!)
 
-    await openRatingView(page, blocked.id)
+    await navigateRatingView(page)
 
     await expect(page.getByText('Reading Context', { exact: true })).toBeVisible()
     await expect(page.getByText('Blocked by:')).toBeVisible()
@@ -644,11 +658,13 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
       total_issues: 2,
     })
     const headers = await authHeaders(page)
+    // Pending first: set-pending rejects a blocked thread (400).
+    await setPending(page, target.id)
     await seedDependency(page, headers, (await listIssues(page, anchor.id))[0]!, (await listIssues(page, target.id))[0]!)
     await seedReadingOrder(page, headers, 'Reflow Route', [target.id])
     await seedThreadIdentity(page, headers, target.id, 'Reflowverse', 612004)
 
-    await openRatingView(page, target.id)
+    await navigateRatingView(page)
     await expect(page.getByText('Where you are in Reflowverse')).toBeVisible()
 
     const wide = await readGeometry(page)

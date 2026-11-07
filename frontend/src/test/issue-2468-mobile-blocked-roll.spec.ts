@@ -218,8 +218,6 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
     })
 
     const headers = await authHeaders(page)
-    await seedDependency(page, headers, (await listIssues(page, anchor.id))[0]!, (await listIssues(page, blocked.id))[0]!)
-    await seedThreadIdentity(page, headers, blocked.id, 'Justice League Europe', 2468_001)
 
     const contextLoaded = page
       .waitForResponse((response) => response.url().includes('/reader-context'), {
@@ -227,7 +225,14 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
       })
       .catch(() => null)
 
+    // Set the pending selection while `blocked` is still unblocked: the
+    // canonical Dependency evaluator rejects set-pending on a blocked thread
+    // (400) since #3359, so the dependency is seeded after pending — the
+    // Group B spec-adaptation disposition in #3507.
     await setPending(page, blocked.id)
+    await seedDependency(page, headers, (await listIssues(page, anchor.id))[0]!, (await listIssues(page, blocked.id))[0]!)
+    await seedThreadIdentity(page, headers, blocked.id, 'Justice League Europe', 2468_001)
+
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
     await expect(page.getByLabel('Blocked roll recovery')).toBeVisible({ timeout: 15000 })
