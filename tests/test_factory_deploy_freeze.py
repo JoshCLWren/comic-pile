@@ -86,6 +86,7 @@ def run(
     updated_at: str = "2026-10-12T12:00:00Z",
     html_url: str | None = None,
     job_list: list[dict[str, str]] | None = None,
+    head_sha: str | None = None,
 ) -> dict[str, object]:
     """Build one workflow-run fixture.
 
@@ -97,6 +98,7 @@ def run(
         updated_at: ISO timestamp used to pick the latest run.
         html_url: Optional HTML URL for the run.
         job_list: Optional jobs used to detect gate-blocked runs.
+        head_sha: Optional head SHA used by Vercel alias reconciliation.
 
     Returns:
         Workflow-run fixture.
@@ -112,6 +114,8 @@ def run(
     }
     if job_list is not None:
         payload["jobs"] = job_list
+    if head_sha is not None:
+        payload["head_sha"] = head_sha
     return payload
 
 
@@ -522,3 +526,131 @@ def test_red_without_job_data_still_freezes() -> None:
     assert decision["blocked"] is True
     assert decision["run_id"] == 99
     assert "deploy-fix" in str(decision["reason"])
+
+
+DUPLICATE_SHA = "2a7276ecfef9dd3a54894579a2b87ca09449a68a"
+
+
+def duplicate_cancel_jobs(*, failed_step: str = "Deploy exact commit to production") -> list[dict[str, object]]:
+    """Model the exact 2026-11-07 failure and unsafe alternatives."""
+    return [
+        {"name": "Red-deploy freeze gate", "conclusion": "success"},
+        {"name": "Deduplicate exact main SHA", "conclusion": "success"},
+        {
+            "name": "Migrate Neon and deploy exact main SHA",
+            "conclusion": "failure",
+            "steps": [
+                {"name": "Verify production schema at application head", "conclusion": "success"},
+                {"name": failed_step, "conclusion": "failure"},
+            ],
+        },
+        {"name": "Prune older Vercel deployments", "conclusion": "skipped"},
+    ]
+
+
+def test_verified_live_duplicate_cancellation_unfreezes_new_main() -> None:
+    """The reported CLI cancellation is safe to retry once its SHA is live."""
+    module = load_module()
+    payload = {"workflow_runs": [
+        run(99, conclusion="failure", head_sha=DUPLICATE_SHA,
+            job_list=duplicate_cancel_jobs(), html_url=RED_RUN_URL),
+    ]}
+    decision = module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)
+    assert decision["blocked"] is False
+    assert decision["frozen"] is False
+    assert decision["overridden"] is False
+    assert decision["run_id"] == 99
+    assert "schema verification" in str(decision["reason"])
+    assert module.evaluate_freeze(payload)["blocked"] is True
+    assert module.evaluate_freeze(payload, verified_live_sha="0" * 40)["blocked"] is True
+
+
+def test_live_same_sha_never_clears_migration_or_smoke_failures() -> None:
+    """Only the CLI deploy step qualifies, never a broken schema or smoke."""
+    module = load_module()
+    for failed_step in (
+        "Migrate production database before deploy",
+        "Verify production schema at application head",
+        "Smoke production health",
+        "Smoke production rejected login on the Rust runtime",
+    ):
+        payload = {"workflow_runs": [
+            run(99, conclusion="failure", head_sha=DUPLICATE_SHA,
+                job_list=duplicate_cancel_jobs(failed_step=failed_step)),
+        ]}
+        assert module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)["blocked"] is True
+
+
+def test_live_duplicate_missing_evidence_or_other_failures_stays_frozen() -> None:
+    """No unknown job, missing schema step, or multiple-failure bypass."""
+    module = load_module()
+    cases = [
+        None,
+        attempted_jobs(deploy_conclusion="failure"),
+        duplicate_cancel_jobs() + [{"name": "Other", "conclusion": "failure"}],
+        [{"name": "Migrate Neon and deploy exact main SHA",
+          "conclusion": "failure",
+          "steps": [{"name": "Deploy exact commit to production", "conclusion": "failure"}]}],
+    ]
+    for case in cases:
+        payload = {"workflow_runs": [
+            run(99, conclusion="failure", head_sha=DUPLICATE_SHA, job_list=case),
+        ]}
+        assert module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)["blocked"] is True
+
+
+def test_vercel_alias_verifier_rejects_untrusted_deployments() -> None:
+    """Even an exact SHA from a non-live, non-production target cannot unfreeze."""
+    from copy import deepcopy
+
+    script = REPO_ROOT / ".github" / "scripts" / "verify_vercel_production.py"
+    spec = importlib.util.spec_from_file_location("verify_vercel_production", script)
+    assert spec is not None and spec.loader is not None
+    verifier = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(verifier)
+    project_id = "prj_expected"
+    good = {
+        "projectId": project_id,
+        "readyState": "READY",
+        "target": "production",
+        "aliasError": None,
+        "alias": ["comic-pile.vercel.app"],
+        "meta": {
+            "githubCommitRef": "main",
+            "githubCommitSha": DUPLICATE_SHA,
+            "githubOrg": "JoshCLWren",
+            "githubRepo": "comic-pile",
+        },
+    }
+    assert verifier.verified_sha(good, project_id) == DUPLICATE_SHA
+    for field, bad_value in [
+        ("projectId", "prj_other"),
+        ("readyState", "BUILDING"),
+        ("target", "preview"),
+        ("aliasError", "not assigned"),
+        ("alias", ["different.vercel.app"]),
+    ]:
+        bad = deepcopy(good)
+        bad[field] = bad_value
+        assert verifier.verified_sha(bad, project_id) is None
+    for field, bad_value in [
+        ("githubCommitRef", "other"),
+        ("githubCommitSha", "abc"),
+        ("githubOrg", "other"),
+        ("githubRepo", "other"),
+    ]:
+        bad = deepcopy(good)
+        bad["meta"][field] = bad_value
+        assert verifier.verified_sha(bad, project_id) is None
+
+
+def test_deploy_reconciles_only_exact_ready_alias_then_runs_existing_smoke() -> None:
+    """Release workflow retains schema checks and post-deploy smoke."""
+    source = (WORKFLOWS / "deploy-production.yml").read_text(encoding="utf-8")
+    assert "verify_vercel_production.py" in source
+    assert "--verified-live-sha" in source
+    assert 'if [[ "$live_sha" != "$deploy_sha" ]]; then' in source
+    assert 'exit "$deploy_status"' in source
+    assert source.index("Verify production schema at application head") < source.index(
+        "Deploy exact commit to production"
+    ) < source.index("Smoke production rejected login on the Rust runtime")
