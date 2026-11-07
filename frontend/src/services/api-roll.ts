@@ -304,3 +304,10 @@ export function removeRollSnooze(threadId: number): void {
   const filtered = current.filter((id) => id !== threadId)
   writeRollSnoozes(filtered)
 }
+
+/**
+ * Add a thread ID to the browser snooze cookie, keeping existing snoozes.
+ */
+export function addRollSnooze(threadId: number): void {
+  writeRollSnoozes([...readRollSnoozes(), threadId])
+}
