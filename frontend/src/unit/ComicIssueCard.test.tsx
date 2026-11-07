@@ -261,6 +261,58 @@ describe('ComicIssueCard', () => {
     expect(screen.getByRole('button', { name: 'Read now' })).not.toBeDisabled()
   })
 
+
+  it('retries a failed Mark unread without writing a second correction event', async () => {
+    patchIssueSpy.mockRejectedValueOnce(new Error('Connection lost'))
+    patchIssueSpy.mockResolvedValueOnce(readResponse({ ...READ_CARD, status: 'unread', rating: null }))
+    renderCard({ card: READ_CARD, status: 'read' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Connection lost')
+    expect(patchIssueSpy).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledTimes(2))
+    expect(patchIssueSpy.mock.calls[0][0]).toBe(77)
+    expect(patchIssueSpy.mock.calls[1][0]).toBe(77)
+    expect(patchIssueSpy.mock.calls[0][1]).toEqual(expect.objectContaining({ status: 'unread' }))
+    expect(patchIssueSpy.mock.calls[1][1].idempotencyKey).toBe(patchIssueSpy.mock.calls[0][1].idempotencyKey)
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+  })
+
+  it('keeps a failed direct-read editor open for retry or Cancel', async () => {
+    patchIssueSpy.mockRejectedValueOnce(new Error('Save failed'))
+    renderCard({ showMapping: false })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rate / Mark read' }))
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '2.5' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Mark read & save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Save failed')
+    expect(screen.getByTestId('comic-issue-rating-editor')).toBeTruthy()
+    expect((screen.getByRole('slider') as HTMLInputElement).value).toBe('2.5')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByTestId('comic-issue-rating-editor')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Read now' })).toBeTruthy()
+    expect(patchIssueSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves a fallback identity and actions while the issue-card projection is absent', () => {
+    renderCard({
+      card: null,
+      threadTitle: 'An Annual',
+      issueNumber: 'Annual 1',
+      status: 'read',
+      rating: 4,
+      variant: 'standard',
+      showMapping: false,
+    })
+    expect(screen.getByText('An Annual')).toBeTruthy()
+    expect(screen.getByText(/Rated 4/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Edit rating' })).toBeTruthy()
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toBeTruthy()
+  })
+
   it('does not fetch the per-issue identity GET when the batch supplies mapping state', () => {
     renderCard()
     expect(getIssueIdentitySpy).not.toHaveBeenCalled()
