@@ -1621,10 +1621,21 @@ def explain_issue(
         gates['worker_specific_note'] = (
             'strike-retry producer exclusion is per worker and evaluated at assignment'
         )
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in {
+        int(row['number']) for row in issue_rows
+        if str(row.get('state') or 'OPEN').upper() == 'OPEN'
+    }
+    cutover_allowed = eligibility.rust_cutover_work_allowed(
+        labels_of(payload), str(payload.get('body') or ''),
+        cutover_open=cutover_open,
+    )
+    gates['rust_cutover_allowed'] = cutover_allowed
     report: dict[str, Any] = {
         'issue': number,
-        'eligible': verdict.eligible,
-        'reasons': list(verdict.reasons),
+        'eligible': verdict.eligible and cutover_allowed,
+        'reasons': list(verdict.reasons) + (
+            [] if cutover_allowed else ['Rust cutover #4335 is still open']
+        ),
         'labels': sorted(labels_of(payload)),
         'open_canonical_prs': owning_prs,
         'dynamic_gates': gates,
