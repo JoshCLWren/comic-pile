@@ -1,5 +1,8 @@
 import { useMemo } from 'react'
 import type { Dependency, Thread, ThreadListItem } from '../types'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 import {
   buildReadingOrderTimelineEntries,
   type GateStatus,
@@ -38,6 +41,10 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
     }
     return buildReadingOrderTimelineEntries({ thread, dependencies })
   }, [thread, dependencies])
+  const cards = useIssueCards(issueTimeline.flatMap((entry) =>
+    entry.kind === 'gate' ? [entry.gate.targetIssueId] : [],
+  ))
+  const cardsByIssue = indexIssueCards(cards.data)
 
   if (!thread) {
     return (
@@ -67,7 +74,7 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
       <div className="mt-3 max-h-[50vh] space-y-3 overflow-y-auto pr-1">
         {issueTimeline.map((entry) =>
           entry.kind === 'gate' ? (
-            <GateCard key={`gate-${entry.gate.targetIssueId}`} gate={entry.gate} />
+            <GateCard key={`gate-${entry.gate.targetIssueId}`} gate={entry.gate} card={cardsByIssue.get(entry.gate.targetIssueId)} />
           ) : (
             <SpanCard key={entry.span.id} span={entry.span} />
           ),
@@ -77,17 +84,28 @@ export default function ReadingOrderTimeline({ thread, dependencies }: Props) {
   )
 }
 
-function GateCard({ gate }: { gate: TimelineGateEntry }) {
+function GateCard({ gate, card }: { gate: TimelineGateEntry; card?: IssueCard }) {
   const statusMeta = STATUS_STYLES[gate.status]
   const prerequisiteCount = gate.prerequisiteLabels.length
   return (
     <div className="rounded-2xl border border-white/10 bg-stone-950/40 p-3 text-sm text-stone-200 shadow-inner">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="text-base font-semibold text-white">
-            Issue #{gate.issueNumberText ?? gate.targetIssueId}
-          </p>
-          <p className="text-xs text-stone-400">{gate.targetLabel}</p>
+          {card ? (
+            <CompactIssueCardTrigger
+              issueId={gate.targetIssueId}
+              card={card}
+              threadTitle={card.thread_title}
+              issueNumber={card.issue_number}
+            />
+          ) : (
+            <>
+              <p className="text-base font-semibold text-white">
+                Issue #{gate.issueNumberText ?? gate.targetIssueId}
+              </p>
+              <p className="text-xs text-stone-400">{gate.targetLabel}</p>
+            </>
+          )}
         </div>
         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-black uppercase tracking-wide ${statusMeta.classes}`}>
           {statusMeta.label}
