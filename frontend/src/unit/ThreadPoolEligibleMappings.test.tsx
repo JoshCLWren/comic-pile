@@ -75,6 +75,19 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByRole('button', { name: /Die face 2: First comic/i })).toBeVisible()
   })
 
+  it('falls back to scoped issue cards for the issue number when bootstrap omits it', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 1, title: 'Card comic', format: 'Comic', issue_id: 55 }]}
+          issueCards={{ items: [{ issue_id: 55, issue_number: '7' }] } as never}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('#7')).toBeVisible()
+  })
+
   it('omits eligible mappings while rating', () => {
     render(
       <MemoryRouter>

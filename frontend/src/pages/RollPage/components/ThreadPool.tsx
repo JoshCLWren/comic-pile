@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
+import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
@@ -24,6 +25,7 @@ interface ThreadPoolProps {
   unsnoozeIsPending: boolean
   shuffleIsPending: boolean
   eligibleThreadIds?: number[] | null
+  issueCards?: IssueCardsResponse | null
 }
 
 export function ThreadPool({
@@ -42,10 +44,12 @@ export function ThreadPool({
   unsnoozeIsPending,
   shuffleIsPending,
   eligibleThreadIds,
+  issueCards,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
+  const cardIssueById = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card.issue_number]))
   const displayPool = eligibleThreadIds?.length
     ? [...pool].sort((a, b) => {
         const rankA = eligibleThreadIds.indexOf(a.id)
@@ -215,7 +219,7 @@ export function ThreadPool({
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
                   <p className="truncate text-xs text-stone-400">
-                    {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
+                    {(thread.issue_number ?? (thread.issue_id != null ? cardIssueById.get(thread.issue_id) : undefined)) ? `#${thread.issue_number ?? cardIssueById.get(thread.issue_id as number)}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   <ThreadTagChips
