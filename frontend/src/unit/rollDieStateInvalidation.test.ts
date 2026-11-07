@@ -22,6 +22,16 @@ it('refreshes the scoped die-state resource after a die command (#4719)', async 
   })
 })
 
+it('refreshes every scoped eligible-pool variant after a die command (#4719)', async () => {
+  await invalidateAfterRollDieModeUpdate(queryClient)
+
+  // The pool is die-bounded, so a die command changes it even when the
+  // browser snooze list (part of each exact key) is unchanged.
+  expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
+    queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+  })
+})
+
 it('keeps refreshing bootstrap and the current session with the scoped die', async () => {
   await invalidateAfterRollDieModeUpdate(queryClient)
 

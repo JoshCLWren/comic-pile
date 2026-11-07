@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
-import { useRollDieState } from '../../hooks/useRollResources'
+import { useRollDieState, useRollEligibleIssueIds } from '../../hooks/useRollResources'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useResetDice,
@@ -19,6 +19,7 @@ import { useRate } from '../../hooks'
 import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
+import { readRollSnoozes } from '../../services/api-roll'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
@@ -73,6 +74,13 @@ export default function RollPage() {
   // the fallback while the query settles or fails, and the rest of the header
   // (die size, 3D model) stays bootstrap-derived until the next surface slice.
   const { data: scopedDieState } = useRollDieState()
+
+  // Eligible-pool surface migration (#4719): the scoped resource owns the
+  // ordered thread ids for the current die, with the browser snooze cookie
+  // passed exactly as Roll's offer sends it. Bootstrap remains the source of
+  // each face's display metadata and the fallback while this query settles.
+  const browserSnoozedThreadIds = readRollSnoozes()
+  const { data: scopedEligibleIssueIds } = useRollEligibleIssueIds(browserSnoozedThreadIds)
 
   // The committed rate response seeds this cache, so the idle strip renders
   // the saved rating and updated stats without a second GET (#2720).
@@ -495,6 +503,7 @@ export default function RollPage() {
 
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
+              eligibleThreadIds={scopedEligibleIssueIds?.thread_ids ?? null}
               snoozedExpanded={state.snoozedExpanded}
               onThreadClick={actions.handleThreadClick}
               onUnsnooze={snooze.handleUnsnooze}

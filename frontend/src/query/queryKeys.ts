@@ -171,6 +171,12 @@ export const queryKeys = {
     dieState: () => ['roll', 'die-state'] as const,
     eligibleIssueIds: (snoozedThreadIds: readonly number[] = []) =>
       ['roll', 'eligible-issue-ids', [...new Set(snoozedThreadIds)].sort((a, b) => a - b)] as const,
+    /**
+     * Prefix of every scoped eligible-pool query. Die commands can change the
+     * bounded pool without changing the snooze list, so invalidation must span
+     * every snoozed-value variant rather than one exact key.
+     */
+    eligibleIssueIdsAll: () => ['roll', 'eligible-issue-ids'] as const,
     issueCards: (issueIds: readonly number[]) =>
       ['roll', 'issue-cards', [...new Set(issueIds)]] as const,
     /**

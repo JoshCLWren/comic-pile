@@ -231,11 +231,12 @@ Bootstrap remains authoritative for session/pending/recovery, pool
 data, die size, and the 3D die model until those surfaces migrate. The
 callers in `frontend/src/hooks/useRollResources.ts` are now mounted
 incrementally: `RollPage` calls `useRollDieState` and passes the scoped
-value to `RollHeader`, so a cold Roll load is one session POST, one
-bootstrap GET, and one die-state GET. `coreRouteRequestBudget.test.tsx`
-pins that budget. `useRollEligibleIssueIds`, `useRollIssueCards`, and
-the composed `useRollResourceSnapshot` remain unwired, so they add no
-production requests yet.
+value to `RollHeader`, and calls `useRollEligibleIssueIds` with the
+browser snooze cookie and passes `thread_ids` to `ThreadPool`, so a cold
+Roll load is one session POST, one bootstrap GET, one die-state GET, and
+one eligible-ids GET. `coreRouteRequestBudget.test.tsx` pins that budget.
+`useRollIssueCards` and the composed `useRollResourceSnapshot` remain
+unwired, so they add no production requests yet.
 
 Migrate in this order, one surface per reviewable change:
 
@@ -245,10 +246,12 @@ Migrate in this order, one surface per reviewable change:
    invalidated after roll/set-die/reset. Remaining in this surface:
    drive the ladder list, `default_die` and `last_roll` from the
    scoped resource, and align die size and the 3D model with it.
-2. Eligible pool — `ThreadPool` in-play faces from
+2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
    `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
    `thread_ids`), with browser-owned snoozes as the `snoozed` query
-   value and bootstrap `rollable` as the fallback pool.
+   value and bootstrap `rollable` as the fallback pool. Bootstrap still
+   supplies each face's title, format, issue identity and routes until
+   the issue-card surface migrates.
 3. Issue cards — visible card enrichment from
    `POST /v2/issues/cards` (one bounded batch in first-request
    order, `items`), replacing the fields bootstrap already carries

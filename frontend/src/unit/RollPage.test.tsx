@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollDieState, useRollEligibleIssueIds } from '../hooks/useRollResources'
 import { useBugReportRestore } from '../contexts/useBugReportRestore'
 import { ToastProvider } from '../contexts/ToastProvider'
 import {
@@ -15,6 +16,7 @@ import { useSnooze } from '../hooks/useSnooze'
 import { useMoveToBack, useMoveToFront, useShuffleQueue } from '../hooks/useQueue'
 import { useRate } from '../hooks'
 import { threadsApi } from '../services/api-threads'
+import { writeRollSnoozes } from '../services/api-roll'
 import { cast } from '../utils/cast'
 
 const navigateSpy = vi.fn()
@@ -33,6 +35,10 @@ vi.mock('../components/GlossaryLink', () => ({
 }))
 
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollResources', () => ({
+  useRollDieState: vi.fn(),
+  useRollEligibleIssueIds: vi.fn(),
+}))
 vi.mock('../contexts/useBugReportRestore', () => ({ useBugReportRestore: vi.fn() }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: vi.fn(),
@@ -78,6 +84,9 @@ vi.mock('../services/api', async (importOriginal) => {
 
 // SAFETY: vi.mocked returns a typed mock whose mockReturnValue surface matches the hook; cast preserves the mock call API.
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+// SAFETY: Same mock-shape widening for the scoped resource hooks; safe because the test only reads their return objects.
+const mockedUseRollEligibleIssueIds = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollEligibleIssueIds))
+const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDieState))
 // SAFETY: Same mock-shape widening for the restore hook; safe because the test only reads the mocked return object.
 const mockedUseBugReportRestore = cast<ReturnType<typeof vi.fn>>(vi.mocked(useBugReportRestore))
 
@@ -109,6 +118,9 @@ function renderRollPage() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  writeRollSnoozes([])
+  mockedUseRollDieState.mockReturnValue({ data: undefined })
+  mockedUseRollEligibleIssueIds.mockReturnValue({ data: undefined })
   mockedUseRollBootstrap.mockReturnValue({
     data: bootstrap,
     refetch: vi.fn().mockResolvedValue(bootstrap),
@@ -150,6 +162,22 @@ it('renders the bounded bootstrap pool without Collections state', () => {
   expect(screen.getByText('Saga')).toBeInTheDocument()
   expect(screen.getByText('X-Men')).toBeInTheDocument()
   expect(screen.queryByText(/collection/i)).not.toBeInTheDocument()
+})
+
+it('renders the scoped eligible order and passes browser snoozes to the resource (#4719)', () => {
+  writeRollSnoozes([99])
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 6, issue_ids: [201], thread_ids: [2] },
+  })
+
+  renderRollPage()
+
+  // The scoped endpoint owns which bootstrap faces are in play and their
+  // order. Bootstrap still supplies each face's title/metadata.
+  expect(mockedUseRollEligibleIssueIds).toHaveBeenCalledWith([99])
+  expect(screen.getByLabelText(/1 in play, 1 mapped result/i)).toBeInTheDocument()
+  expect(screen.getByText('X-Men')).toBeInTheDocument()
+  expect(screen.queryByText('Saga')).not.toBeInTheDocument()
 })
 
 it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {
