@@ -225,6 +225,7 @@ def replace_factory_labels(
     expected_owner: str | None = None,
     inactive_before_epoch: int | None = None,
     observed_at_epoch: int | None = None,
+    related_owner_target: int | None = None,
 ) -> bool:
     """Atomically reconcile one target to exactly one owner and workflow stage.
 
@@ -255,6 +256,16 @@ def replace_factory_labels(
             or updated > inactive_before_epoch
         ):
             return False
+        if related_owner_target is not None:
+            # An issue and its canonical PR are one active local repair.
+            # Progress on either side must protect the paired owner lease.
+            related = target_json(related_owner_target)
+            if owner_of(labels_of(related)) == expected_owner:
+                related_update = last_github_update_epoch(
+                    related, now_epoch=checked_at
+                )
+                if related_update is None or related_update > inactive_before_epoch:
+                    return False
     # Shared write choke point: never add, repair, or re-apply factory labels
     # on a manual-only hold. Leftover factory* labels stay for humans.
     if is_manual_only(target.get("body")):
@@ -893,6 +904,37 @@ def reconcile_contradictory_labels(
     return repaired
 
 
+def paired_owned_targets(
+    issues: list[dict[str, Any]], prs: list[dict[str, Any]]
+) -> dict[int, int]:
+    """Find issue/PR pairs holding the same live owner lease.
+
+    A local PR repair may update the PR without commenting on its issue.
+    Treat that as activity for both halves of the same canonical work item.
+    Ambiguous multi-PR links are ignored rather than guessing.
+    """
+    issue_map = {int(issue["number"]): issue for issue in issues}
+    linked_by_issue: dict[int, list[int]] = {}
+    for pr in prs:
+        issue_number = linked_issue_from_pr(pr)
+        if issue_number is None or issue_number not in issue_map:
+            continue
+        owner = owner_of(labels_of(pr))
+        if owner in (None, "factory:unowned"):
+            continue
+        if owner != owner_of(labels_of(issue_map[issue_number])):
+            continue
+        linked_by_issue.setdefault(issue_number, []).append(int(pr["number"]))
+    pairs: dict[int, int] = {}
+    for issue_number, pr_numbers in linked_by_issue.items():
+        if len(pr_numbers) != 1:
+            continue
+        pr_number = pr_numbers[0]
+        pairs[issue_number] = pr_number
+        pairs[pr_number] = issue_number
+    return pairs
+
+
 def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
     """Expire inactive leases even when trusted progress markers are absent.
 
@@ -917,6 +959,7 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
         int(item["number"]): item
         for item in [*issue_items, *pr_items]
     }
+    pairs = paired_owned_targets(issue_items, pr_items)
     released: list[int] = []
     for number, owner in owned_targets(issue_items, pr_items):
         fixed_owner = FIXED_OWNER_RE.fullmatch(owner)
@@ -936,8 +979,16 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
                 )
             except RuntimeError:
                 updated_epoch = None
+        paired_number = pairs.get(number)
+        paired_update = (
+            last_github_update_epoch(targets[paired_number], now_epoch=now_epoch)
+            if paired_number is not None
+            else None
+        )
         observed = [
-            epoch for epoch in (marker_epoch, updated_epoch) if epoch is not None
+            epoch
+            for epoch in (marker_epoch, updated_epoch, paired_update)
+            if epoch is not None
         ]
         last_activity = max(observed) if observed else None
         if not lease_is_stale(
@@ -955,6 +1006,7 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
             expected_owner=owner,
             inactive_before_epoch=now_epoch - ttl,
             observed_at_epoch=now_epoch,
+            related_owner_target=paired_number,
         ):
             continue
         released.append(number)
