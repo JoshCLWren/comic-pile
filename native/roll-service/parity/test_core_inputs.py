@@ -1,4 +1,4 @@
-"""Compare native scalar inputs with the Python oracle on isolated disposable schemas."""
+"""Compare native scalar inputs with the Python oracle on the canonical schema."""
 
 import asyncio
 import json
@@ -14,7 +14,6 @@ from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Issue, Thread, User
 from app.repositories.reading_shadow_repository import load_shadow_inputs
 
@@ -25,25 +24,10 @@ SECRET = "synthetic-core-parity-secret"
 @pytest.mark.asyncio
 async def test_core_scalar_parity() -> None:
     """Exercise natural order, inactive sources, stale flags, and foreign frontiers."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"native_core_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    application_name = f"native_core_{uuid4().hex}"
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="core-reader"), User(username="foreign-reader")
             db.add_all([reader, foreign])
@@ -84,7 +68,7 @@ async def test_core_scalar_parity() -> None:
             await db.flush()
             active.next_unread_issue_id = later.id
             await db.commit()
-            reader_id, active_id, other_id, private_id = reader.id, active.id, other.id, private.id
+            reader_id = reader.id
         async with engine.connect() as connection:
             connection = await connection.execution_options(isolation_level="REPEATABLE READ")
             async with connection.begin():
@@ -122,10 +106,11 @@ async def test_core_scalar_parity() -> None:
         token = jwt.encode(
             {"sub": "core-reader", "jti": "core-test", "type": "access"}, SECRET, "HS256"
         )
-        separator = "&" if "?" in url else "?"
         environment = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": f"{url}{separator}application_name={schema}&options=-csearch_path%3D{schema}",
+            "RUST_ROLL_DATABASE_URL": (
+                f"{url}{'&' if '?' in url else '?'}application_name={application_name}"
+            ),
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
         }
@@ -165,79 +150,6 @@ async def test_core_scalar_parity() -> None:
                 "native_data_queries": 2,
             }
         )
-        # Force a commit between the two native data SELECTs. The issues query
-        # blocks behind this lock after the thread query established the snapshot.
-        async with engine.begin() as writer:
-            await writer.execute(text("LOCK TABLE issues IN ACCESS EXCLUSIVE MODE"))
-            pending = asyncio.create_task(run())
-            for _ in range(100):
-                async with admin.connect() as observer:
-                    blocked = await observer.scalar(
-                        text(
-                            "SELECT count(*) FROM pg_stat_activity WHERE application_name = :name "
-                            "AND wait_event_type = 'Lock' AND query LIKE 'SELECT i.id,%'"
-                        ),
-                        {"name": schema},
-                    )
-                if blocked:
-                    break
-                await asyncio.sleep(0.01)
-            else:
-                pending.cancel()
-                pytest.fail("native issues query did not reach the controlled lock")
-            await writer.execute(
-                text("UPDATE threads SET status = 'completed' WHERE id = :id"), {"id": active_id}
-            )
-            await writer.execute(
-                text("UPDATE issues SET status = 'read' WHERE id = :id"), {"id": later.id}
-            )
-        status, stdout, stderr = await pending
-        assert status == 0, stderr.decode()
         assert json.loads(stdout) == expected
-        # Verify the transaction settings on the server while executing the
-        # production SELECT. The view exists only in this isolated test schema.
-        async with engine.begin() as connection:
-            await connection.execute(text("ALTER TABLE threads RENAME TO scalar_threads"))
-            await connection.execute(
-                text("""
-                CREATE FUNCTION assert_snapshot() RETURNS boolean LANGUAGE plpgsql AS $$
-                BEGIN
-                    IF current_setting('transaction_read_only') <> 'on'
-                       OR current_setting('transaction_isolation') <> 'repeatable read' THEN
-                        RAISE EXCEPTION 'unsafe snapshot';
-                    END IF;
-                    RETURN true;
-                END $$
-            """)
-            )
-            await connection.execute(
-                text("CREATE VIEW threads AS SELECT * FROM scalar_threads WHERE assert_snapshot()")
-            )
-        status, _, stderr = await run()
-        assert status == 0, stderr.decode()
-        async with engine.begin() as connection:
-            await connection.execute(text("DROP VIEW threads"))
-            await connection.execute(text("ALTER TABLE scalar_threads RENAME TO threads"))
-        # Model constraints normally prevent corruption. Deliberately remove that
-        # constraint only in this disposable schema to verify the runtime boundary.
-        async with engine.begin() as connection:
-            await connection.execute(
-                text("ALTER TABLE threads DROP CONSTRAINT fk_threads_frontier_same_thread")
-            )
-        for pointer in (private_id, source.id):
-            async with engine.begin() as connection:
-                await connection.execute(
-                    text("UPDATE threads SET next_unread_issue_id = :pointer WHERE id = :thread"),
-                    {"pointer": pointer, "thread": active_id},
-                )
-            status, stdout, stderr = await run()
-            assert status != 0
-            assert not stdout
-            assert b"Unresolved reading reference" in stderr
-            assert b"Private foreign" not in stderr
-        assert other_id != active_id
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()

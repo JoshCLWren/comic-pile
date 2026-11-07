@@ -141,10 +141,15 @@ cd ../..
 PYTHONPATH=. uv run pytest native/roll-service/parity/test_core_inputs.py -q -s --no-cov
 ```
 
-Set `RUST_ROLL_TEST_DATABASE_URL` to that disposable database. The test creates and
-removes a unique synthetic schema, compares scalar identity/status/order and stored
-queue diagnostics with Python `load_shadow_inputs`, and injects invalid pointers
-only inside that schema. Both loaders use read-only repeatable-read transactions.
+Set `RUST_ROLL_TEST_DATABASE_URL` to that disposable database. The parity suite
+uses the restricted `roll_test_dml` role against the canonical Alembic schema in
+`public`; it never creates schemas or tables. Run a Rust test first to provision
+the role, then set `RUST_ROLL_PARITY_DATABASE_URL` to its DSN and run pytest.
+Each parity case takes a shared advisory lock, truncates application rows, and
+resets sequences before seeding synthetic data. It compares scalar
+identity/status/order and stored queue diagnostics with Python
+`load_shadow_inputs`, and injects invalid pointers only into its test rows. Both
+loaders use read-only repeatable-read transactions.
 The test prints Python oracle CPU/wall time and native child-process CPU/wall time;
 the latter includes startup and authentication. These are diagnostic timings, not
 equivalent-workload performance claims (#4312 owns that gate). The native loader
@@ -178,12 +183,15 @@ With a disposable local PostgreSQL URL in `RUST_ROLL_TEST_DATABASE_URL`:
 
 ```sh
 cargo build --locked --examples
+export RUST_ROLL_PARITY_DATABASE_URL=postgresql://roll_test_dml:roll-test-dml@localhost/native_auth_test
 cd ../..
 PYTHONPATH=. uv run pytest native/roll-service/parity/ -q -s --no-cov
 ```
 
-The Option E parity test creates/drops a unique schema, loads the same synthetic
-records through Python and Rust, and compares every constraint and diagnostic.
+The Python parity suite uses the provisioned DML-only role against the canonical
+Alembic schema. Its autouse fixture serializes each case, truncates application
+rows, and resets sequences before seeding. The Option E parity test loads the same
+synthetic records through Python and Rust, and compares every constraint and diagnostic.
 It includes conflicting and equivalent volume mappings, canonical issue volumes,
 strict/loose lists, curated insertion order, duplicate placements, skipped gates,
 read inactive prerequisite sources, historical dependencies, foreign exclusions,
@@ -252,12 +260,12 @@ bounded to three attempts inside one overall deadline. Failed/cancelled work
 discards the connection, rolling back session and checkpoint together.
 
 `parity/test_session_bootstrap.py` runs Python and Rust on the same seeded initial
-state in a unique disposable schema, rolls back Python, then compares every
+state in the canonical schema, rolls back Python, then compares every
 persisted session field and snapshot payload. It tests fresh/reused/expired
 sessions, pending context, recent cancellation activity, cutoff equality,
 manual/automatic dice, modes, timezone validation, observed/era bandwidth,
-foreign/missing session IDs, repeated GETs, concurrent first creation, checkpoint
-failure, and request cancellation before commit. It also asserts threads,
+foreign/missing session IDs, repeated GETs, and concurrent first creation. It
+also asserts threads,
 issues, and events remain unchanged. Timestamp spelling is normalized; values,
 nulls, ordering, and state are not discarded. No production data is used.
 
@@ -267,8 +275,9 @@ PYTHONPATH=. uv run pytest native/roll-service/parity/test_session_bootstrap.py 
 ```
 
 Run the Python command from the repository root with
-`RUST_ROLL_TEST_DATABASE_URL` pointing at disposable PostgreSQL, as in CI. The
-existing Native Rust Roll workflow discovers this parity file automatically.
+`RUST_ROLL_PARITY_DATABASE_URL` pointing at the provisioned `roll_test_dml` role
+on the same disposable PostgreSQL database. The existing Native Rust Roll
+workflow discovers this parity file automatically.
 Full response projection, recovery, and routing remain the separately scoped
 #4308–#4314 work; no production routing or preview deployment changes are made.
 

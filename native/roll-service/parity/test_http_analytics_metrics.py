@@ -28,7 +28,6 @@ from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Event, ReadingSession, RevokedToken, Thread, User
 
 SECRET = "synthetic-native-analytics-secret"
@@ -64,8 +63,8 @@ async def _run_example(env: dict[str, str]) -> dict[str, object]:
     return json.loads(out)
 
 
-async def _db_stats(admin) -> tuple[int, ...]:
-    async with admin.connect() as connection:
+async def _db_stats(engine) -> tuple[int, ...]:
+    async with engine.connect() as connection:
         row = (
             await connection.execute(
                 text(
@@ -84,23 +83,9 @@ async def test_native_analytics_metrics_is_bounded_owner_scoped_and_one_statemen
 ) -> None:
     """Preserve every visible metric and the one-statement budget."""
     monkeypatch.delenv("TEST_ENVIRONMENT", raising=False)
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"rust_analytics_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         owner_name = f"analytics_{uuid4().hex[:12]}"
         stranger_name = f"stranger_{uuid4().hex[:12]}"
         token = _token(owner_name, jti=f"jti-{uuid4().hex}")
@@ -273,17 +258,15 @@ async def test_native_analytics_metrics_is_bounded_owner_scoped_and_one_statemen
 
             env = {
                 **os.environ,
-                "RUST_ROLL_DATABASE_URL": url
-                + ("&" if "?" in url else "?")
-                + f"options=-csearch_path%3D{schema}",
+                "RUST_ROLL_DATABASE_URL": url,
                 "RUST_ROLL_JWT_SECRET": SECRET,
                 "RUST_ROLL_TEST_TOKEN": token,
                 "RUST_ROLL_POOL_SIZE": "2",
             }
 
-            before = await _db_stats(admin)
+            before = await _db_stats(engine)
             result = await _run_example(env)
-            after = await _db_stats(admin)
+            after = await _db_stats(engine)
             assert result["status"] == 200, result
             assert result["metrics_statements"] == 1, result
             assert result["payload_bytes"] < 16_384, result
@@ -447,6 +430,3 @@ async def test_native_analytics_metrics_is_bounded_owner_scoped_and_one_statemen
             assert stale_result["metrics_statements"] == 1
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()

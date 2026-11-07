@@ -1,7 +1,6 @@
 """Native v2 scoped Roll resources against the canonical Python oracle.
 
-The synthetic schema comes from the canonical SQLAlchemy models, so both
-mounted GETs run against the same tables production migrations create:
+Both mounted GETs run against the canonical Alembic schema used in production:
 
 * ``GET /api/v2/roll/die-state`` reports the current logical die, the approved
   d2-d20 ladder, the reset default and the newest recorded roll, and
@@ -26,10 +25,8 @@ from uuid import uuid4
 
 import pytest
 from jose import jwt
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Dependency, Event, Issue, RevokedToken, Thread, User
 
 SECRET = "synthetic-roll-resource-secret"
@@ -75,23 +72,9 @@ async def _run_example(env: dict[str, str]) -> dict[str, object]:
 @pytest.mark.asyncio
 async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
     """Die state, eligible ids, snoozes, isolation and one-statement budget."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"rust_roll_resources_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         owner_name = f"roll_{uuid4().hex[:12]}"
         stranger_name = f"stranger_{uuid4().hex[:12]}"
         owner_token = _token(owner_name, jti=f"jti-{uuid4().hex}", password_epoch=STORED_EPOCH)
@@ -233,9 +216,7 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
 
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url
-            + ("&" if "?" in url else "?")
-            + f"options=-csearch_path%3D{schema}",
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": owner_token,
             "RUST_ROLL_POOL_SIZE": "2",
@@ -346,6 +327,3 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
         assert stale["body"] == {"detail": "Password changed; please sign in again."}
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()
