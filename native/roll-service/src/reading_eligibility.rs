@@ -396,6 +396,178 @@ mod tests {
     }
 
     #[test]
+    fn out_of_order_reads_do_not_unlock_julix_later_frontiers() {
+        let mut inputs = test_inputs();
+        // Abe #31 follows already-read #30 locally, and Acheron follows an
+        // already-read Abe #27 in Julix. Neither can bypass unread Abe #2.
+        inputs.core.issues[2].position = 2;
+        inputs.core.issues[2].issue_number = "31".into();
+        inputs.core.issues.push(ReadingIssue {
+            id: 21,
+            thread_id: 2,
+            position: 1,
+            status: "read".into(),
+            issue_number: "30".into(),
+        });
+        inputs.core.threads.push(ReadingThread {
+            id: 3,
+            status: "active".into(),
+            title: "Sir Edward Grey: Acheron".into(),
+        });
+        inputs.core.issues.push(ReadingIssue {
+            id: 30,
+            thread_id: 3,
+            position: 1,
+            status: "unread".into(),
+            issue_number: "1".into(),
+        });
+        inputs.core.stored.push(StoredThreadEligibility {
+            thread_id: 3,
+            next_issue_id: Some(30),
+            is_blocked: false,
+            queue_position: 3,
+        });
+        inputs.core.threads.push(ReadingThread {
+            id: 4,
+            status: "completed".into(),
+            title: "Previously rated Abe #27".into(),
+        });
+        inputs.core.issues.push(ReadingIssue {
+            id: 40,
+            thread_id: 4,
+            position: 1,
+            status: "read".into(),
+            issue_number: "27".into(),
+        });
+        inputs.core.stored.push(StoredThreadEligibility {
+            thread_id: 4,
+            next_issue_id: None,
+            is_blocked: false,
+            queue_position: 4,
+        });
+        inputs.lists.push(crate::option_inputs::ReadingList {
+            list_id: 2,
+            mode: "strict".into(),
+            name: "Mignolaverse - Julix".into(),
+            entries: [10, 11, 21, 20, 40, 30]
+                .into_iter()
+                .map(|issue_id| crate::option_inputs::ReadingEntry {
+                    issue_id,
+                    gate: "none".into(),
+                    skipped: false,
+                })
+                .collect(),
+            overlap_decisions: vec![],
+        });
+
+        let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
+        let states = evaluate(&validated).unwrap();
+        assert!(states[&1].eligible, "Abe #2 should be rollable");
+        assert!(!states[&2].eligible, "Abe #31 must wait for Abe #2");
+        assert!(!states[&3].eligible, "Acheron must wait for earlier Julix entries");
+        assert!(states[&2].blockers.iter().any(|blocker| {
+            blocker.kind == "strict_order" && blocker.waiting_on_issue_ids.contains(&11)
+        }));
+        assert!(states[&3].blockers.iter().any(|blocker| {
+            blocker.kind == "strict_order"
+                && blocker.waiting_on_issue_ids.contains(&11)
+                && blocker.waiting_on_issue_ids.contains(&20)
+        }));
+        let eligible = validated.eligible_frontiers().unwrap();
+        assert_eq!(eligible.len(), 1);
+        assert_eq!(eligible[0].issue_id, 11);
+
+        // Finishing the earliest unread entry releases #31, not Acheron.
+        inputs.core.issues.iter_mut().find(|issue| issue.id == 11).unwrap().status = "read".into();
+        let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
+        let states = evaluate(&validated).unwrap();
+        assert!(states[&2].eligible);
+        assert!(!states[&3].eligible);
+        inputs.core.issues.iter_mut().find(|issue| issue.id == 20).unwrap().status = "read".into();
+        let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
+        let states = evaluate(&validated).unwrap();
+        assert!(states[&3].eligible);
+    }
+
+    #[test]
+    fn approved_volume_overlap_still_exempts_only_its_waiting_volume() {
+        let mut inputs = test_inputs();
+        inputs.thread_volumes.insert(1, "comicvine:11".into());
+        inputs.thread_volumes.insert(2, "comicvine:20".into());
+        inputs.lists.push(crate::option_inputs::ReadingList {
+            list_id: 2,
+            mode: "strict".into(),
+            name: "Overlapping volumes".into(),
+            entries: [11, 20]
+                .into_iter()
+                .map(|issue_id| crate::option_inputs::ReadingEntry {
+                    issue_id,
+                    gate: "none".into(),
+                    skipped: false,
+                })
+                .collect(),
+            overlap_decisions: vec![crate::option_inputs::OverlapDecision {
+                continuing_volume_id: "comicvine:20".into(),
+                waiting_volume_id: "comicvine:11".into(),
+            }],
+        });
+        let validated = ValidatedReadingInputs::new(inputs.clone(), &BTreeMap::new()).unwrap();
+        assert!(evaluate(&validated).unwrap()[&2].eligible);
+        assert_eq!(validated.eligible_frontiers().unwrap().len(), 2);
+
+        inputs.lists[0].overlap_decisions.clear();
+        let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
+        assert!(!evaluate(&validated).unwrap()[&2].eligible);
+    }
+
+    #[test]
+    fn read_hold_does_not_release_later_issue_while_earlier_issue_is_unread() {
+        let mut inputs = test_inputs();
+        inputs.core.threads.push(ReadingThread {
+            id: 3,
+            status: "completed".into(),
+            title: "Read milestone".into(),
+        });
+        inputs.core.issues.push(ReadingIssue {
+            id: 30,
+            thread_id: 3,
+            position: 1,
+            status: "read".into(),
+            issue_number: "milestone".into(),
+        });
+        inputs.core.stored.push(StoredThreadEligibility {
+            thread_id: 3,
+            next_issue_id: None,
+            is_blocked: false,
+            queue_position: 3,
+        });
+        inputs.lists.push(crate::option_inputs::ReadingList {
+            list_id: 2,
+            mode: "loose".into(),
+            name: "Milestone".into(),
+            entries: vec![
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 11, gate: "none".into(), skipped: false,
+                },
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 30, gate: "hold".into(), skipped: false,
+                },
+                crate::option_inputs::ReadingEntry {
+                    issue_id: 20, gate: "none".into(), skipped: false,
+                },
+            ],
+            overlap_decisions: vec![],
+        });
+        let validated = ValidatedReadingInputs::new(inputs, &BTreeMap::new()).unwrap();
+        let states = evaluate(&validated).unwrap();
+        assert!(states[&1].eligible);
+        assert!(!states[&2].eligible);
+        assert!(states[&2].blockers.iter().any(|blocker| {
+            blocker.kind == "hold" && blocker.waiting_on_issue_ids.contains(&11)
+        }));
+    }
+
+    #[test]
     fn contained_cycle_blocks_only_the_affected_thread() {
         let mut inputs = test_inputs();
         inputs.core.threads.push(ReadingThread {
