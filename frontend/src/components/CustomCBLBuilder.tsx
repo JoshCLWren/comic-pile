@@ -23,6 +23,7 @@ import {
 import CblReplaceReviewPanel from './CblReplaceReviewPanel'
 import ReadingListEntryCard from './ReadingListEntryCard'
 import ReadingListSeriesSkipControls from './ReadingListSeriesSkipControls'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { buildReplacementModel } from '../utils/readingListReplacementModel'
 import { getReadingListProgressIndex } from '../utils/readingListProgress'
 import ConfirmDialog from './ConfirmDialog'
@@ -245,6 +246,12 @@ export default function CustomCBLBuilder({
     // run this effect triggers via setLoadedListId); reseeding then would discard
     // in-progress mode/gate/skip edits before the reader saves them.
     if (list.id === loadedListId) return
+    
+    // Defer seeding if the query is currently refetching. This prevents stale
+    // cached data from overwriting in-progress local edits (status, gates, skips)
+    // when switching lists (#4693).
+    if (detailQuery.isFetching) return
+
     setName(list.name)
     setDescription(list.description ?? '')
     setMode(list.mode ?? DEFAULT_MODE)
@@ -259,7 +266,7 @@ export default function CustomCBLBuilder({
     setLoadedListId(list.id)
     setMessage(null)
     setExportError(null)
-  }, [detailQuery.data, loadedListId])
+  }, [detailQuery.data, detailQuery.isFetching, loadedListId])
 
   const createMutation = useMutation({
     mutationFn: () => customCBLApi.create({ name: newName.trim(), issue_ids: [] }),
@@ -510,6 +517,10 @@ export default function CustomCBLBuilder({
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  // One bounded batch for the visible entry page — cover, stored rating and
+  // mapping state without one request per row (#4444).
+  const visibleCardsQuery = useIssueCards(visibleEntries.map(({ entry }) => entry.issue_id))
+  const visibleCardsByIssue = indexIssueCards(visibleCardsQuery.data)
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
@@ -923,6 +934,15 @@ export default function CustomCBLBuilder({
                     onSkip={() => toggleSkipped(entry.issue_id)}
                     onDestinationChange={(value) => setMoveDestinations((current) => ({ ...current, [entry.issue_id]: value }))}
                     onMoveToPosition={() => moveIssueToPosition(index, entry.issue_id)}
+                    card={visibleCardsByIssue.get(entry.issue_id) ?? null}
+                    onIssueMutated={(response) => {
+                      // Global reading progress must not reseed unsaved gates/order/skips.
+                      setEntries((current) => current.map((item) =>
+                        item.issue_id === response.issue.issue_id
+                          ? { ...item, status: response.issue.status }
+                          : item,
+                      ))
+                    }}
                   />
                 ))}
               </ol>
