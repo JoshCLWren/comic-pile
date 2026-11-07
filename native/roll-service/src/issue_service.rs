@@ -217,10 +217,13 @@ async fn card(
              SELECT m.status, x.external_id,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
-                         NULLIF(x.metadata_json#>>'{image,medium_url}', ''),
-                         NULLIF(x.metadata_json#>>'{image,original_url}', ''),
-                         NULLIF(x.metadata_json->>'cover_image_url', ''),
-                         NULLIF(x.metadata_json->>'image_url', '')
+                         NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
+                         NULLIF(BTRIM(x.metadata_json->>'primary_image'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,original_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,super_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
              FROM issue_external_identity_mappings m
@@ -269,10 +272,13 @@ pub(crate) async fn cards(
              SELECT m.status, x.external_id,
                  CASE WHEN m.status='confirmed' THEN
                      COALESCE(
-                         NULLIF(x.metadata_json#>>'{image,medium_url}', ''),
-                         NULLIF(x.metadata_json#>>'{image,original_url}', ''),
-                         NULLIF(x.metadata_json->>'cover_image_url', ''),
-                         NULLIF(x.metadata_json->>'image_url', '')
+                         NULLIF(BTRIM(x.metadata_json->>'image_url'), ''),
+                         NULLIF(BTRIM(x.metadata_json->>'primary_image'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,original_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,super_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,medium_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json#>>'{image,small_url}'), ''),
+                         NULLIF(BTRIM(x.metadata_json->>'cover_image_url'), '')
                      )
                  ELSE NULL END AS cover_url
              FROM issue_external_identity_mappings m
@@ -1341,11 +1347,19 @@ mod tests {
                       created_at, updated_at)
                  VALUES (50, 'comicvine', 'issue', '4000-42',
                          '{"image":{"medium_url":"https://comicvine.example/covers/issue10.jpg"}}'::json,
+                         now(), now()),
+                        (51, 'comicvine', 'issue', '4000-43',
+                         '{"primary_image":"https://comicvine.example/covers/issue2.jpg"}'::json,
+                         now(), now()),
+                        (52, 'comicvine', 'issue', '4000-44',
+                         '{"image":{"super_url":"https://comicvine.example/covers/dependent.jpg"}}'::json,
                          now(), now());
                  INSERT INTO issue_external_identity_mappings
                      (id, issue_id, external_identity_id, status, evidence_json,
                       created_at, updated_at)
-                 VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now());"#)
+                 VALUES (500, 110, 50, 'confirmed', '{}'::json, now(), now()),
+                        (501, 102, 51, 'confirmed', '{}'::json, now(), now()),
+                        (502, 301, 52, 'confirmed', '{}'::json, now(), now());"#)
             .await
             .expect("seed canonical schema");
         let user = AuthenticatedUser::for_test(1);
@@ -1633,6 +1647,26 @@ mod tests {
         );
         assert_eq!(bounded.items[1].mapping_state, "unmapped");
         assert_eq!(bounded.items[1].cover_image_url, None);
+
+        // Production regression #4722: confirmed ComicVine mappings may have
+        // only primary_image, even though Roll displays that stored artwork.
+        // The batch and single-card (direct PATCH response) projections agree.
+        let covers = cards(&first, user, &[102, 301]).await.unwrap();
+        assert_eq!(covers.items.len(), 2);
+        assert_eq!(covers.items[0].mapping_state, "confirmed");
+        assert_eq!(
+            covers.items[0].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/issue2.jpg")
+        );
+        assert_eq!(
+            covers.items[1].cover_image_url.as_deref(),
+            Some("https://comicvine.example/covers/dependent.jpg")
+        );
+        let tx = first.transaction().await.unwrap();
+        let direct = card(&tx, user, 102).await.unwrap();
+        assert_eq!(direct.comicvine_issue_id.as_deref(), Some("4000-43"));
+        assert_eq!(direct.cover_image_url, covers.items[0].cover_image_url);
+        tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
