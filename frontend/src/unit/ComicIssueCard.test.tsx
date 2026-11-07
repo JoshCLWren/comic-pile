@@ -239,6 +239,7 @@ describe('ComicIssueCard', () => {
       </QueryClientProvider>,
     )
     for (const button of screen.getAllByRole('button', { name: 'Read now' })) fireEvent.click(button)
+    // SAFETY: the slider role is rendered as an input element.
     const sliders = screen.getAllByRole('slider') as HTMLInputElement[]
     expect(sliders).toHaveLength(2)
     expect(sliders[0].id).not.toBe(sliders[1].id)
