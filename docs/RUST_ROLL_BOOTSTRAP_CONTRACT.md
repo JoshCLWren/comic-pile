@@ -224,3 +224,33 @@ adapter and contract coverage. Two residuals remain:
   (semantic `--theme-continuity-accent` role, no new visual value),
   with adapter/unit coverage for the carried count and fail-closed
   rejection of negative or missing counts.
+
+## Surface migration order (scoped resources, #4369)
+
+Bootstrap remains authoritative until Roll surfaces migrate. The
+additive callers in `frontend/src/hooks/useRollResources.ts`
+(`useRollDieState`, `useRollEligibleIssueIds`, `useRollIssueCards`,
+and the composed `useRollResourceSnapshot`) exist but are not wired
+into `RollPage` yet, so no extra production requests fire and the
+`p0-roll-selection` request budgets are untouched.
+
+Migrate in this order, one surface per reviewable change:
+
+1. Die header — `RollHeader` die ladder/readout from
+   `GET /v2/roll/die-state` (`die`, `ladder`, `default_die`,
+   `last_roll`), falling back to bootstrap `current_die`/`manual_die`
+   until the scoped value wins.
+2. Eligible pool — `ThreadPool` in-play faces from
+   `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
+   `thread_ids`), with browser-owned snoozes as the `snoozed` query
+   value and bootstrap `rollable` as the fallback pool.
+3. Issue cards — visible card enrichment from
+   `POST /v2/issues/cards` (one bounded batch in first-request
+   order, `items`), replacing the fields bootstrap already carries
+   without adding a second per-issue fetch.
+
+Only after all three surfaces settle on scoped resources with green
+exact-head CI and independent review should the legacy Rust v2
+bootstrap be retired under #4369. Deleting bootstrap before that
+point would regress session/pending/recovery, which the scoped
+resources do not yet own.
