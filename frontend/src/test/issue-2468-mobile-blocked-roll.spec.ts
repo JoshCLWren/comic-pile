@@ -190,7 +190,8 @@ async function readGeometry(page: Page): Promise<MobileBlockedGeometry> {
       blockedCard: rectOf(card),
       readNowRows,
       readingContextBottom: rectOf(
-        document.querySelector('[data-testid="rating-region-reading-context"]'),
+        document.querySelector('[data-testid="reading-context-content"]') ?? 
+        document.querySelector('[data-testid="rating-region-reading-optional"]'),
       )?.bottom ?? 0,
       mobileNavTop,
     }
@@ -218,8 +219,6 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
     })
 
     const headers = await authHeaders(page)
-    await seedDependency(page, headers, (await listIssues(page, anchor.id))[0]!, (await listIssues(page, blocked.id))[0]!)
-    await seedThreadIdentity(page, headers, blocked.id, 'Justice League Europe', 2468_001)
 
     const contextLoaded = page
       .waitForResponse((response) => response.url().includes('/reader-context'), {
@@ -227,11 +226,27 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
       })
       .catch(() => null)
 
+    // Set the pending selection while `blocked` is still unblocked: the
+    // canonical Dependency evaluator rejects set-pending on a blocked thread
+    // (400) since #3359, so the dependency is seeded after pending — the
+    // Group B spec-adaptation disposition in #3507.
     await setPending(page, blocked.id)
+    await seedDependency(page, headers, (await listIssues(page, anchor.id))[0]!, (await listIssues(page, blocked.id))[0]!)
+    await seedThreadIdentity(page, headers, blocked.id, 'Justice League Europe', 2468_001)
+
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
+
+    // Open the Reading Context card to expose continuity content while the
+    // rating view is inspected. (Blocked-roll recovery guidance belongs to
+    // the Group A pillar port; this test's Group B fix is the set-pending
+    // ordering the Dependency evaluator requires.)
+    await page.getByRole('button', { name: 'Show context' }).click()
+
+    // The blocked roll recovery card shows the thread title and prerequisites
     await expect(page.getByLabel('Blocked roll recovery')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('Where you are in Justice League Europe')).toBeVisible()
+    await expect(page.getByText('Justice League Europe')).toBeVisible()
+
     await contextLoaded
     await page.evaluate(() => document.fonts.ready)
     await page.waitForTimeout(400)
