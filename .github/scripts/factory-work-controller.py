@@ -1609,8 +1609,16 @@ def explain_issue(
         for pr in pr_rows
         if linked_issue_from_pr(pr) == number and pr_suppresses_issue_candidate(pr, issue_map)
     )
-    pr_wip = factory_pr_wip_count(pr_rows)
-    review_backlog = factory_review_backlog_count(pr_rows)
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in {
+        int(row['number']) for row in issue_rows
+        if str(row.get('state') or 'OPEN').upper() == 'OPEN'
+    }
+    active_pr_rows = [
+        pr for pr in pr_rows
+        if pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
+    ]
+    pr_wip = factory_pr_wip_count(active_pr_rows)
+    review_backlog = factory_review_backlog_count(active_pr_rows)
     gates: dict[str, Any] = {
         'factory_pr_wip': pr_wip,
         'factory_pr_wip_limit': FACTORY_PR_WIP_LIMIT,
@@ -1631,10 +1639,6 @@ def explain_issue(
         gates['worker_specific_note'] = (
             'strike-retry producer exclusion is per worker and evaluated at assignment'
         )
-    cutover_open = eligibility.RUST_CUTOVER_EPIC in {
-        int(row['number']) for row in issue_rows
-        if str(row.get('state') or 'OPEN').upper() == 'OPEN'
-    }
     cutover_allowed = eligibility.rust_cutover_work_allowed(
         labels_of(payload), str(payload.get('body') or ''),
         cutover_open=cutover_open,
