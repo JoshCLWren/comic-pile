@@ -259,6 +259,16 @@ export default function CreatorDetailPage() {
     isError: teamChemistryError,
     refetch: refetchTeamChemistry,
   } = useCreatorTeamChemistry(isValidKey && showTeamChemistry)
+  // Hook stays above every loading/error return. Only rendered owner issue
+  // identities enter the bounded projection, never whole-series summaries.
+  const creatorCards = useIssueCards([
+    ...ratedIssues.map((issue) => issue.issue_id),
+    ...upcomingIssues.map((issue) => issue.issue_id),
+    ...readUnratedIssues.map((issue) => issue.issue_id),
+    ...(insights?.highest_rated_issues ?? []).map((issue) => issue.issue_id),
+    ...(insights?.lowest_rated_issues ?? []).map((issue) => issue.issue_id),
+  ], { enabled: isValidKey && !isPending })
+  const cardsByIssue = indexIssueCards(creatorCards.data)
 
   if (!isValidKey) {
     return (
@@ -343,15 +353,6 @@ export default function CreatorDetailPage() {
     (insight) => !highestRatedIssueIds.has(insight.issue_id),
   )
   const individualIssueCount = highestRatedIssues.length + lowestRatedIssues.length
-  // The loaded creator rows share one bounded cover/rating projection.
-  const creatorCards = useIssueCards([
-    ...ratedIssues.map((issue) => issue.issue_id),
-    ...upcomingIssues.map((issue) => issue.issue_id),
-    ...readUnratedIssues.map((issue) => issue.issue_id),
-    ...highestRatedIssues.map((issue) => issue.issue_id),
-    ...lowestRatedIssues.map((issue) => issue.issue_id),
-  ])
-  const cardsByIssue = indexIssueCards(creatorCards.data)
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 md:px-6">
