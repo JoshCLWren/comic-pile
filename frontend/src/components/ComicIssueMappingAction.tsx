@@ -21,6 +21,10 @@ export interface ComicIssueMappingActionProps {
   onAddToLibrary?: () => void
   /** Compact treatment for dense rows. */
   compact?: boolean
+  /** Batch query loading state; when true, shows neutral status instead of unmapped. */
+  isBatchLoading?: boolean
+  /** Batch query error state; when true, shows error status with retry option. */
+  isBatchError?: boolean
 }
 
 const BASE_BUTTON =
@@ -49,6 +53,8 @@ export default function ComicIssueMappingAction({
   onMapped,
   onAddToLibrary,
   compact = false,
+  isBatchLoading = false,
+  isBatchError = false,
 }: ComicIssueMappingActionProps) {
   const mapping = useComicIssueMapping({
     issueId,
@@ -77,15 +83,17 @@ export default function ComicIssueMappingAction({
   const issueLabel = issueNumber ? `issue #${issueNumber}` : 'this issue'
   const statusDot = mapping.isMapped ? 'bg-[var(--theme-comic-accent)]' : 'bg-[var(--theme-text-dim)]'
   const statusText =
-    mapping.status === 'mapped'
-      ? 'Mapped'
-      : mapping.status === 'ambiguous'
-        ? 'Mapping needs review'
-        : mapping.status === 'error'
-          ? 'Mapping status unavailable'
-          : mapping.isLoading
-            ? 'Checking mapping…'
+    isBatchLoading
+      ? 'Checking mapping…'
+      : mapping.status === 'mapped'
+        ? 'Mapped'
+        : mapping.status === 'ambiguous'
+          ? 'Mapping needs review'
+          : mapping.status === 'error'
+            ? 'Mapping status unavailable'
             : 'Not mapped'
+
+  const isResolvedMapping = !isBatchLoading && !isBatchError && !mapping.isError
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2" data-testid="comic-mapping-action">
@@ -113,7 +121,7 @@ export default function ComicIssueMappingAction({
         </button>
       )}
 
-      {!mapping.isMapped && !mapping.isLoading && (
+      {isResolvedMapping && !mapping.isMapped && (
         <button
           type="button"
           onClick={() => mapping.openMappingDialog('confirm')}

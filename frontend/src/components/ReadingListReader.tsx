@@ -29,6 +29,35 @@ export function ReadingListReader({ listId, backTo }: { listId: number; backTo?:
   if (query.isError) return <div role="alert"><p>Unable to load this Reading List.</p><button type="button" onClick={() => void query.refetch()}>Retry list</button></div>
   const view = query.data
   const cardsByIssue = indexIssueCards(issueCards.data)
+
+  if (issueCards.isError) {
+    return (
+      <section aria-label={`Read ${view.name}`} className="space-y-3">
+        <ReadingGraphProblemCard />
+        <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>
+        {view.execution_mode === 'legacy' && <p className="text-sm text-[var(--theme-text-muted)]">Reading List execution is not active yet. Saved modes and gates do not change current Roll availability.</p>}
+        <CblReadingListFinder
+          listId={listId}
+          listName={view.name}
+          backTo={backTo ?? '/continuity-plans'}
+          backLabel="Reading Plans"
+          testIdPrefix="cbl-reading-list"
+        />
+        <div role="alert" className="rounded-xl border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 p-3">
+          <p className="text-sm text-[var(--theme-danger)]">Unable to load issue covers and ratings.</p>
+          <button
+            type="button"
+            onClick={() => void issueCards.refetch()}
+            className="mt-2 min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-bold text-[var(--theme-continuity-accent)] hover:underline"
+          >
+            Retry covers
+          </button>
+        </div>
+        <p className="text-xs text-[var(--theme-text-muted)]">Issues without covers will show placeholders.</p>
+      </section>
+    )
+  }
+
   return <section aria-label={`Read ${view.name}`} className="space-y-3">
     <ReadingGraphProblemCard />
     <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>

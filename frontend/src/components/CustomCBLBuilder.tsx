@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
 import { queryKeys } from '../query/queryKeys'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import Modal from './Modal'
 import {
   customCBLApi,
@@ -237,6 +238,15 @@ export default function CustomCBLBuilder({
     enabled: open && replaceOpen && cblSource !== null,
   })
 
+  const persisted = detailQuery.data
+
+  // One batched card lookup for all visible entries - avoids N+1 requests per row.
+  const issueCardsQuery = useIssueCards(
+    persisted ? persisted.entries.map((entry) => entry.issue_id) : [],
+    { enabled: persisted != null && entries.length > 0 },
+  )
+  const cardsByIssueId = indexIssueCards(issueCardsQuery.data)
+
   useEffect(() => {
     const list = detailQuery.data
     if (!list) return
@@ -450,7 +460,6 @@ export default function CustomCBLBuilder({
     return () => onPendingChange?.(false)
   }, [isPending, onPendingChange])
 
-  const persisted = detailQuery.data
   const dirty = useMemo(() => {
     if (!persisted) return false
     return (
@@ -908,6 +917,9 @@ export default function CustomCBLBuilder({
                     entryCount={entries.length}
                     isNextUnread={entry.issue_id === nextUnreadIssueId}
                     cardRef={entry.issue_id === progressIssue?.issue_id ? currentIssueRef : undefined}
+                    card={cardsByIssueId.get(entry.issue_id) ?? null}
+                    isBatchLoading={issueCardsQuery.isPending}
+                    isBatchError={issueCardsQuery.isError}
                     mode={mode}
                     waitingOn={requirements.get(entry.issue_id) ?? []}
                     nameOf={nameFor}

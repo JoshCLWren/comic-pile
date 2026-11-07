@@ -348,6 +348,12 @@ export default function ThreadDetailView() {
   // adjacent thread summary and remaining count match without a refetch.
   function handleIssueCardMutated(response: IssueReadRateResponse) {
     if (!thread) return
+    const nextUnreadIssueId = response.thread.next_unread_issue_id ?? null
+    const nextUnreadIssue = issues.find((issue) => issue.id === nextUnreadIssueId)
+    const nextUnreadIssueNumber =
+      nextUnreadIssueId != null && nextUnreadIssue != null
+        ? nextUnreadIssue.issue_number
+        : thread.next_unread_issue_number ?? null
     const nextSnapshot = applyIssueReadStatus(
       { issues, thread },
       response.issue.issue_id,
@@ -355,11 +361,8 @@ export default function ThreadDetailView() {
         status: response.issue.status === 'read' ? 'read' : 'unread',
         read_at: response.issue.read_at ?? null,
         issues_remaining: response.thread.issues_remaining,
-        next_unread_issue_id: response.thread.next_unread_issue_id ?? null,
-        next_unread_issue_number:
-          response.thread.next_unread_issue_id != null
-            ? issues.find((issue) => issue.id === response.thread.next_unread_issue_id)?.issue_number ?? null
-            : null,
+        next_unread_issue_id: nextUnreadIssueId,
+        next_unread_issue_number: nextUnreadIssueNumber,
       },
     )
     handleIssueSnapshotChange(nextSnapshot)

@@ -34,16 +34,16 @@ export function useComicIssueActions(
   }, [options?.onMutated])
   // One in-flight intent per card; kept across the await so Cancel-then-retry
   // reuses the key while a different payload starts a fresh intent.
-  const unresolvedRef = useRef<{ status?: 'read' | 'unread'; rating?: number; key: string } | null>(null)
+  const unresolvedRef = useRef<{ issueId: number; status?: 'read' | 'unread'; rating?: number; key: string } | null>(null)
 
   const mutation = useMutation({
     mutationFn: (input: ComicIssueActionInput) => {
       const previous = unresolvedRef.current
       const key =
-        previous && previous.status === input.status && previous.rating === input.rating
+        previous && previous.issueId === issueId && previous.status === input.status && previous.rating === input.rating
           ? previous.key
           : newDirectIssueKey()
-      unresolvedRef.current = { status: input.status, rating: input.rating, key }
+      unresolvedRef.current = { issueId, status: input.status, rating: input.rating, key }
       return issueCardsApi.patchIssue(issueId, { status: input.status, rating: input.rating, idempotencyKey: key })
     },
     onSuccess: async (response) => {

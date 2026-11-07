@@ -230,7 +230,7 @@ describe('targeted cache effects', () => {
       issues_remaining: thread.issues_remaining,
       last_rating: thread.last_rating,
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -247,6 +247,9 @@ describe('targeted cache effects', () => {
     // Rating marks the issue read, so canonical reading boundaries must
     // recompute instead of retaining the pre-rating blocker.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.dependencies.all })
+    // Issue cards are updated on a rating, so the batched projection must
+    // refresh to reflect the new read status and rating.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.issueCards.all })
     expect(resetQueries).not.toHaveBeenCalled()
   })
 

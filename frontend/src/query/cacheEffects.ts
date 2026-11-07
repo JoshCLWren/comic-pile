@@ -148,6 +148,7 @@ export async function applyRatedThreadCache(
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
+    client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
   ])
 }
 

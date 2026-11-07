@@ -67,6 +67,10 @@ interface Props {
   /** Batched owner-scoped projection; enriches cover/rating/mapping when present. */
   card?: IssueCard | null
   onIssueMutated?: (response: IssueReadRateResponse) => void
+  /** Batch query loading state; propagates to mapping control. */
+  isBatchLoading?: boolean
+  /** Batch query error state; propagates to mapping control. */
+  isBatchError?: boolean
 }
 
 /** A legible full-title card on phones, with per-issue settings revealed on demand. */
@@ -74,6 +78,7 @@ export default function ReadingListEntryCard({
   entry, index, entryCount, isNextUnread, cardRef, mode, waitingOn, nameOf, expanded,
   moveDestination, disabled, onCheckpoint, onMoveEarlier, onMoveLater,
   onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition, card, onIssueMutated,
+  isBatchLoading = false, isBatchError = false,
 }: Props) {
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
@@ -165,6 +170,8 @@ export default function ReadingListEntryCard({
                         status={entry.status === 'read' ? 'read' : 'unread'}
                         variant="compact"
                         onMutated={onIssueMutated}
+                        isBatchLoading={isBatchLoading}
+                        isBatchError={isBatchError}
                       />
                     </li>
   )

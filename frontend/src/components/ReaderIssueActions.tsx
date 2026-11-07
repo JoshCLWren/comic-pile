@@ -23,21 +23,40 @@ export function ReadNowIssueButton({ issueId, threadId: _threadId, label = 'Read
   if (open) {
     return (
       <div className="space-y-2">
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          className="min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline"
-        >
-          Close issue card
-        </button>
-        <ComicIssueCard
-          issueId={issueId}
-          card={cards.data?.[0] ?? null}
-          threadTitle={threadTitle ?? ''}
-          issueNumber={issueNumber ?? ''}
-          status={cards.data?.[0]?.status === 'read' ? 'read' : 'unread'}
-          variant="featured"
-        />
+        {cards.isPending && (
+          <p className="text-sm text-[var(--theme-text-muted)]">Loading issue card…</p>
+        )}
+        {cards.isError && (
+          <div className="space-y-2">
+            <p className="text-sm text-[var(--theme-error)]">Unable to load this issue card.</p>
+            <button
+              type="button"
+              onClick={() => void cards.refetch()}
+              className="min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        {cards.isSuccess && (
+          <>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline"
+            >
+              Close issue card
+            </button>
+            <ComicIssueCard
+              issueId={issueId}
+              card={cards.data[0] ?? null}
+              threadTitle={threadTitle ?? ''}
+              issueNumber={issueNumber ?? ''}
+              status={cards.data[0]?.status === 'read' ? 'read' : 'unread'}
+              variant="featured"
+            />
+          </>
+        )}
       </div>
     )
   }

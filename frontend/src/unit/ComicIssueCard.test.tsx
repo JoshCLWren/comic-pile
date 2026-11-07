@@ -301,7 +301,7 @@ describe('ComicIssueCard', () => {
 
   it('marks the ambiguous mapping state as unresolved without a confirmed identity', () => {
     renderCard({ card: { ...UNREAD_CARD, has_confirmed_identity: false, mapping_state: 'ambiguous', comicvine_issue_id: null } })
-    expect(screen.getByTestId('comic-mapping-status')).toBeTruthy()
+    expect(screen.getByTestId('comic-mapping-status')).toHaveTextContent('Mapping needs review')
   })
 
   it('prefers the card title over the thread fallback when present', () => {

@@ -195,6 +195,10 @@ export interface ComicIssueCardProps {
   /** Opens the Add-to-ComicPile flow for provider-only entries. */
   onAddToLibrary?: () => void
   isOwned?: boolean
+  /** Batch query loading state; propagates to mapping control to suppress Map action. */
+  isBatchLoading?: boolean
+  /** Batch query error state; propagates to mapping control to show retry option. */
+  isBatchError?: boolean
 }
 
 function buildIdentity(card: IssueCard | null | undefined, threadTitle: string): IssueIdentityResponse | undefined {
@@ -236,6 +240,8 @@ export function ComicIssueCard({
   showMapping = true,
   onAddToLibrary,
   isOwned = true,
+  isBatchLoading = false,
+  isBatchError = false,
 }: ComicIssueCardProps) {
   const queryClient = useQueryClient()
   const ratingControlId = useId()
@@ -366,6 +372,8 @@ export function ComicIssueCard({
               compact={variant === 'compact'}
               onAddToLibrary={onAddToLibrary}
               onMapped={() => invalidateIssueCards(queryClient)}
+              isBatchLoading={isBatchLoading}
+              isBatchError={isBatchError}
             />
           )}
         </div>
@@ -397,7 +405,10 @@ export function ComicIssueCard({
             </button>
             <button
               type="button"
-              onClick={() => setEditor(null)}
+              onClick={() => {
+                actions.reset()
+                setEditor(null)
+              }}
               disabled={actions.isPending}
               className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[var(--theme-border)] px-4 text-sm font-bold text-[var(--theme-text-muted)] transition-colors hover:text-[var(--theme-text-primary)] disabled:opacity-50"
             >

@@ -233,6 +233,37 @@ export default function ReadingPlanDetailPage() {
   }
 
   const view = readerQuery.data
+
+  if (planCardsQuery.isError) {
+    return (
+      <section className="space-y-6 pb-8" aria-labelledby="reading-plan-heading" data-testid="reading-plan-reader">
+        <Breadcrumbs
+          items={[{ label: 'Reading plans', to: '/continuity-plans' }, { label: view.name }]}
+        />
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--theme-continuity-accent)]">
+              {readingPlanModeLabel(view.ordering_mode)}
+            </p>
+            <h1 id="reading-plan-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">
+              {view.name}
+            </h1>
+          </div>
+        </header>
+        <div role="alert" className="rounded-xl border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 p-3">
+          <p className="text-sm text-[var(--theme-danger)]">Unable to load issue covers and ratings.</p>
+          <button
+            type="button"
+            onClick={() => void planCardsQuery.refetch()}
+            className="mt-2 min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-bold text-[var(--theme-continuity-accent)] hover:underline"
+          >
+            Retry covers
+          </button>
+        </div>
+        <p className="text-xs text-[var(--theme-text-muted)]">Issues without covers will show placeholders.</p>
+      </section>
+    )
+  }
   const sourceNames = Object.fromEntries(view.sources.map((source) => [
     source.raw_source_path,
     displayReadingListName(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
