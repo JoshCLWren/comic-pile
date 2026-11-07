@@ -95,6 +95,16 @@ async function openRatingView(page: Page, threadId: number): Promise<void> {
   await expect(page.locator('#rating-input')).toBeVisible()
 }
 
+/**
+ * Opens the collapsed Reading Context optional card so assertions can
+ * check its expanded content (continuity edges, reading orders, etc.).
+ * The card is collapsed by default per the OptionalReadingCards design (#2764).
+ */
+async function openReadingContextCard(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Show context' }).click()
+  await page.waitForTimeout(200)
+}
+
 test.describe('Roll pointer target sizes (#1885)', () => {
   test('die selector renders ~44px primary targets with visible keyboard focus', async ({
     authenticatedPage,
@@ -219,6 +229,10 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     // #3507 — then just navigate back to the rating view.
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('#rating-input')).toBeVisible()
+
+    // Open the Reading Context card to access edge endpoint buttons and other
+    // continuity content. The card is collapsed by default per OptionalReadingCards design (#2764).
+    await openReadingContextCard(page)
 
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(

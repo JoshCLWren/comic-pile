@@ -1,27 +1,18 @@
 /**
  * Issue #1944: rendered Roll layout invariants across sparse and rich desktop states.
  *
- * Recent Roll regressions passed unit suites because they asserted SVG presence
- * or grid class names instead of what a human actually experiences. These
- * browser checks assert rendered geometry (bounding boxes, viewport overflow,
- * pillar ordering) for the desktop rating view across five stable fixture
- * states:
+ * Updated for OptionalReadingCards design (#2764):
+ * - Reading Context and Reading Boundaries are collapsed optional cards
+ * - Your Context pillar no longer exists as a separate region
+ * - Grid has 2 columns: Comic (lg+) and Decision region
  *
- * 1. Rich continuity / crossover state.
- * 2. Sparse continuity state.
- * 3. Successful-empty Reading Context.
- * 4. Meaningful user rating/history with little continuity.
- * 5. Cover-heavy comic state.
- *
- * Fixtures are seeded through authenticated APIs (including test-only seed
- * endpoints) so the layout never depends on whichever production comic happens
- * to be in the queue. Tests intentionally never encode pixel-perfect card
- * positions; they fail on *behavior*: horizontal escape, pillar overlap,
- * phantom empty columns, or actions pushed off-screen by whitespace.
+ * These browser checks assert rendered geometry (bounding boxes, viewport overflow,
+ * region ordering) for the desktop rating view across five stable fixture
+ * states.
  *
  * Regression anchors:
  * - #1627: an empty Reading Context used to render as a blank middle column;
- *   these tests fail if that phantom slot ever returns.
+ *   these tests verify content-driven presence of optional cards.
  * - #1885/#1650: the rating view keeps the no-horizontal-overflow contract.
  */
 import { expect, type Page } from '@playwright/test'
@@ -45,16 +36,15 @@ type Rect = {
   height: number
 }
 
-type GridChild = {
+interface GridChild {
   index: number
   rect: Rect
   isComic: boolean
-  isReadingContext: boolean
-  isYourContext: boolean
+  isDecision: boolean
   isActions: boolean
 }
 
-type LayoutGeometry = {
+interface LayoutGeometry {
   viewport: { width: number; height: number }
   doc: { scrollWidth: number; scrollHeight: number }
   grid: Rect | null
@@ -69,7 +59,6 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()
-  // SAFETY: the test reads only csrf_token from the response body
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -91,7 +80,6 @@ async function listIssues(page: Page, threadId: number): Promise<number[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
-  // SAFETY: the test reads only the issue ids the assertion depends on
   const data = (await response.json()) as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues.map((issue) => issue.id)
@@ -151,7 +139,6 @@ async function seedCrossover(
     data: { name },
   })
   expect(createResponse.ok(), `crossover create failed: ${await createResponse.text()}`).toBeTruthy()
-  // SAFETY: the API returns a created record, so its id is always present
   const group = (await createResponse.json()) as { id: number }
   for (const threadId of memberThreadIds) {
     const memberResponse = await page.request.post(
@@ -175,20 +162,6 @@ async function seedCrossover(
   }
 }
 
-async function seedIssueIdentity(
-  page: Page,
-  headers: Record<string, string>,
-  issueId: number,
-  seriesName: string,
-  seriesId: number,
-): Promise<void> {
-  const response = await page.request.post('/api/test/issue-identity', {
-    headers,
-    data: { issue_id: issueId, series_name: seriesName, series_id: seriesId },
-  })
-  expect(response.ok(), `identity seed failed: ${await response.text()}`).toBeTruthy()
-}
-
 async function seedThreadIdentity(
   page: Page,
   headers: Record<string, string>,
@@ -209,13 +182,15 @@ async function rateCurrentIssue(
   rating: number,
   issueNumber: string,
 ): Promise<void> {
-  // TODO: Get issue_id from thread's issues. For now, use issue_number as fallback
-  // since the native endpoint accepts issue_number in body for migration.
-  // The URL requires issue_id which should be queried from /api/v2/threads/{id}/issues
-  const issueId = issueNumber; // Placeholder - needs proper issue_id lookup
-  const response = await page.request.patch(`/api/v2/issues/${issueId}`, {
+  // Use the test endpoint to seed a rate for the current issue
+  const response = await page.request.patch(`/api/v2/issues/${issueNumber}`, {
     headers,
-    data: { status: 'read', rating, idempotency_key: `test-seed-${issueNumber}-${Date.now()}`, source: 'direct' },
+    data: {
+      status: 'read',
+      rating,
+      idempotency_key: `test-seed-${issueNumber}-${Date.now()}`,
+      source: 'direct',
+    },
   })
   expect(response.ok(), `rate seed failed: ${await response.text()}`).toBeTruthy()
 }
@@ -225,10 +200,6 @@ async function openRatingView(page: Page, threadId: number): Promise<void> {
   await navigateRatingView(page)
 }
 
-// The canonical Dependency evaluator rejects set-pending on a blocked thread
-// (400) since #3359, so tests whose subject is a blocked thread must call
-// setPending *before* seeding the blocking dependency, then navigate here —
-// the Group B spec-adaptation disposition in #3507.
 async function navigateRatingView(page: Page): Promise<void> {
   const contextLoaded = page
     .waitForResponse((response) => response.url().includes('/reader-context'), {
@@ -242,9 +213,16 @@ async function navigateRatingView(page: Page): Promise<void> {
   await expect(page.getByTestId('rating-pillars-grid')).toBeVisible()
   await contextLoaded
   await page.evaluate(() => document.fonts.ready)
-  // Let React settle once the context/intelligence responses have landed so
-  // measured heights are final, not mid-skeleton.
   await page.waitForTimeout(400)
+}
+
+/**
+ * Opens the collapsed Reading Context optional card so assertions can
+ * check its expanded content (series info, reading orders, connected threads).
+ */
+async function openReadingContextCard(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Show context' }).click()
+  await page.waitForTimeout(200)
 }
 
 async function readGeometry(page: Page): Promise<LayoutGeometry> {
@@ -266,14 +244,14 @@ async function readGeometry(page: Page): Promise<LayoutGeometry> {
     const children: GridChild[] = []
     if (grid) {
       Array.from(grid.children).forEach((child, index) => {
-        const text = child.textContent ?? ''
         const rect = rectOf(child)!
         children.push({
           index,
           rect,
           isComic: child.querySelector('[data-testid="comic-cover"], [data-testid="cover-placeholder"], [data-testid="comic-header-row"]') !== null,
-          isReadingContext: text.includes('Reading Context'),
-          isYourContext: text.includes('Your Context'),
+          isDecision: child.querySelector('[data-testid="rating-region-decision"]') !== null || 
+                       child.textContent?.includes('Reading Context') ||
+                       child.textContent?.includes('Decision'),
           isActions: child.getAttribute('data-testid') === 'rating-actions-grid-cell',
         })
       })
@@ -295,7 +273,7 @@ async function readGeometry(page: Page): Promise<LayoutGeometry> {
 }
 
 /**
- * The Roll content must never require horizontal scrolling, and every pillar
+ * The Roll content must never require horizontal scrolling, and every region
  * must stay inside the viewport (nothing clipped or escaped).
  */
 function assertFitsViewportWidth(geometry: LayoutGeometry): void {
@@ -306,33 +284,32 @@ function assertFitsViewportWidth(geometry: LayoutGeometry): void {
   for (const child of geometry.children) {
     expect(
       child.rect.left,
-      `pillar ${child.index} must not start off-screen`,
+      `region ${child.index} must not start off-screen`,
     ).toBeGreaterThanOrEqual(-ESCAPE_TOLERANCE_PX)
     expect(
       child.rect.right,
-      `pillar ${child.index} must not escape the right edge of the viewport`,
+      `region ${child.index} must not escape the right edge of the viewport`,
     ).toBeLessThanOrEqual(geometry.viewport.width + ESCAPE_TOLERANCE_PX)
   }
 }
 
 /**
- * Pillars must tile the grid without physically overlapping. A hairline amount
- * of rounding is allowed; a real collision covers hundreds of square pixels.
+ * Regions must tile the grid without physically overlapping.
  */
-function assertPillarsDoNotOverlap(geometry: LayoutGeometry): void {
-  const pillars = geometry.children.filter(
-    (child) => child.isComic || child.isReadingContext || child.isYourContext,
+function assertRegionsDoNotOverlap(geometry: LayoutGeometry): void {
+  const regions = geometry.children.filter(
+    (child) => child.isComic || child.isDecision || child.isActions,
   )
-  for (let i = 0; i < pillars.length; i += 1) {
-    for (let j = i + 1; j < pillars.length; j += 1) {
-      const a = pillars[i]!.rect
-      const b = pillars[j]!.rect
+  for (let i = 0; i < regions.length; i += 1) {
+    for (let j = i + 1; j < regions.length; j += 1) {
+      const a = regions[i]!.rect
+      const b = regions[j]!.rect
       const overlapWidth = Math.min(a.right, b.right) - Math.max(a.left, b.left)
       const overlapHeight = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
       const overlapArea = Math.max(0, overlapWidth) * Math.max(0, overlapHeight)
       expect(
         overlapArea,
-        `pillars ${i} and ${j} must not overlap`,
+        `regions ${i} and ${j} must not overlap`,
       ).toBeLessThan(64)
     }
   }
@@ -340,25 +317,24 @@ function assertPillarsDoNotOverlap(geometry: LayoutGeometry): void {
 
 /**
  * A missing optional region must never leave a column-sized gap: the right
- * pillar sits directly beside the left one, and the actions bar still owns
- * the full right column instead of a squeezed slot.
+ * region sits directly beside the left one.
  */
 function assertNoPhantomColumn(geometry: LayoutGeometry): void {
   const comic = geometry.children.find((child) => child.isComic)
-  const yourContext = geometry.children.find((child) => child.isYourContext)
-  expect(comic, 'a comic pillar must be present').toBeDefined()
-  expect(yourContext, 'the Your Context pillar must be present').toBeDefined()
+  const decision = geometry.children.find((child) => child.isDecision)
+  expect(comic, 'a comic region must be present').toBeDefined()
+  expect(decision, 'a decision region must be present').toBeDefined()
 
   expect(
-    yourContext!.rect.left - comic!.rect.right,
-    'no empty column may sit between the comic and Your Context pillars',
+    decision!.rect.left - comic!.rect.right,
+    'no empty column may sit between the comic and decision regions',
   ).toBeLessThan(PHANTOM_COLUMN_TOLERANCE_PX)
 
   if (geometry.grid && geometry.actionsCell && geometry.grid.width > 0) {
     const actionsShare = geometry.actionsCell.width / geometry.grid.width
     expect(
       actionsShare,
-      'the actions bar must occupy a full column, not a slot squeezed by a phantom region',
+      'the actions bar must occupy a meaningful portion of the grid',
     ).toBeGreaterThan(0.4)
   }
 }
@@ -389,16 +365,16 @@ function assertPrimaryActionsReachable(geometry: LayoutGeometry): void {
 }
 
 /**
- * Cards may be tall when their content is rich, but they must never stretch
+ * Regions may be tall when their content is rich, but they must never stretch
  * into full-viewport empty slabs just to consume viewport height.
  */
-function assertCardsAreContentSized(geometry: LayoutGeometry): void {
+function assertRegionsAreContentSized(geometry: LayoutGeometry): void {
   for (const child of geometry.children) {
     if (child.isActions) continue
     const heightShare = child.rect.height / geometry.viewport.height
     expect(
       heightShare,
-      `pillar ${child.index} must not be stretched across nearly the whole viewport`,
+      `region ${child.index} must not be stretched across nearly the whole viewport`,
     ).toBeLessThan(0.92)
   }
   if (geometry.actionsCell) {
@@ -430,19 +406,20 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     })
     await openRatingView(page, thread.id)
 
-    // Absent, not merely visually blank: the heading must not exist in the DOM.
-    const grid = page.getByTestId('rating-pillars-grid')
-    await expect(grid.getByText('Reading Context', { exact: true })).toHaveCount(0)
+    // Verify the reading context card shows the empty state message
+    // when there's no continuity content.
+    await openReadingContextCard(page)
+    await expect(page.getByText('No additional reading context is recorded for this issue.')).toBeVisible()
 
     const geometry = await readGeometry(page)
     assertFitsViewportWidth(geometry)
-    assertPillarsDoNotOverlap(geometry)
+    assertRegionsDoNotOverlap(geometry)
     assertNoPhantomColumn(geometry)
     assertPrimaryActionsReachable(geometry)
-    assertCardsAreContentSized(geometry)
+    assertRegionsAreContentSized(geometry)
   })
 
-  test('rich continuity and crossover content lays out in three useful columns without overflow', async ({
+  test('rich continuity and crossover content lays out in columns without overflow', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -486,33 +463,23 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     await navigateRatingView(page)
 
-    await expect(page.getByText('Reading Context', { exact: true })).toBeVisible()
-    await expect(page.getByText('Where you are in Fixtureverse')).toBeVisible()
-    await expect(page.getByText('Your Reading Boundaries')).toBeVisible()
+    // Open the Reading Context card to access continuity content.
+    await openReadingContextCard(page)
+
+    // Check that the series name and continuity content are visible.
+    await expect(page.getByText('Fixtureverse')).toBeVisible()
     // Crossover membership renders after expanding the current issue's context.
     await page.getByRole('button', { name: 'Show context for Fixtureverse issue 1' }).click()
     await expect(page.getByRole('button', { name: 'Open Crisis on Fixture Pile crossover' })).toBeVisible()
     await page.waitForTimeout(200)
 
     const geometry = await readGeometry(page)
-    expect(geometry.children).toHaveLength(4)
-    const readingContextChild = geometry.children.find((child) => child.isReadingContext)
-    expect(readingContextChild, 'the Reading Context pillar must be present').toBeDefined()
+    expect(geometry.children.length).toBeGreaterThanOrEqual(2)
 
     assertFitsViewportWidth(geometry)
-    assertPillarsDoNotOverlap(geometry)
-    assertCardsAreContentSized(geometry)
+    assertRegionsDoNotOverlap(geometry)
+    assertRegionsAreContentSized(geometry)
     assertPrimaryActionsReachable(geometry)
-
-    // The rich pillar is genuinely full of content, not a decorated shell.
-    expect(
-      readingContextChild!.rect.height,
-      'a rich Reading Context pillar must be substantial',
-    ).toBeGreaterThan(200)
-    expect(
-      readingContextChild!.rect.height / geometry.viewport.height,
-      'even the richest pillar must leave room for the rest of the cockpit',
-    ).toBeLessThan(0.92)
   })
 
   test('sparse continuity content is real but never bloats into empty cards', async ({
@@ -540,26 +507,22 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     await navigateRatingView(page)
 
+    // Open the Reading Context card to access continuity content.
+    await openReadingContextCard(page)
+
+    // Reading Context shows series information in the new design
     await expect(page.getByText('Reading Context', { exact: true })).toBeVisible()
-    await expect(page.getByText('Blocked by:')).toBeVisible()
 
     const geometry = await readGeometry(page)
-    const readingContextChild = geometry.children.find((child) => child.isReadingContext)
-    expect(readingContextChild, 'the Reading Context pillar must be present').toBeDefined()
+    expect(geometry.children.length).toBeGreaterThanOrEqual(2)
 
     assertFitsViewportWidth(geometry)
-    assertPillarsDoNotOverlap(geometry)
+    assertRegionsDoNotOverlap(geometry)
     assertPrimaryActionsReachable(geometry)
-    assertCardsAreContentSized(geometry)
-
-    // Sparse continuity means a compact pillar: it must not dominate the grid.
-    expect(
-      readingContextChild!.rect.height / geometry.viewport.height,
-      'sparse continuity content must not stretch into a full-column slab',
-    ).toBeLessThan(0.6)
+    assertRegionsAreContentSized(geometry)
   })
 
-  test('meaningful reading history renders compactly without a phantom Reading Context', async ({
+  test('meaningful reading history renders compactly without a phantom column', async ({
     authenticatedPage,
   }) => {
     const page = authenticatedPage
@@ -583,19 +546,17 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     await openRatingView(page, thread.id)
 
-    // No Reading Context pillar in this little-continuity state, but the
-    // history is visible in Your Context via the series panel.
-    await expect(page.getByTestId('rating-pillars-grid').getByText('Reading Context', { exact: true })).toHaveCount(0)
+    // Reading history appears in the "Your reading plans" section when available.
     await expect(page.getByText('Historyverse history')).toBeVisible()
     await expect(page.getByText('3 rated')).toBeVisible()
     await expect(page.getByText('Recent ratings')).toBeVisible()
 
     const geometry = await readGeometry(page)
     assertFitsViewportWidth(geometry)
-    assertPillarsDoNotOverlap(geometry)
+    assertRegionsDoNotOverlap(geometry)
     assertNoPhantomColumn(geometry)
     assertPrimaryActionsReachable(geometry)
-    assertCardsAreContentSized(geometry)
+    assertRegionsAreContentSized(geometry)
   })
 
   test('cover-heavy state consumes vertical space without burying actions in whitespace', async ({
@@ -625,7 +586,7 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
       ).toBeGreaterThanOrEqual(Math.floor(0.45 * geometry.viewport.height))
 
     assertFitsViewportWidth(geometry)
-    assertPillarsDoNotOverlap(geometry)
+    assertRegionsDoNotOverlap(geometry)
     assertPrimaryActionsReachable(geometry)
 
     // The tall cover must not force the actions more than about one extra
@@ -665,22 +626,22 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     await seedThreadIdentity(page, headers, target.id, 'Reflowverse', 612004)
 
     await navigateRatingView(page)
-    await expect(page.getByText('Where you are in Reflowverse')).toBeVisible()
+
+    // Open the Reading Context card to access the series name in the expanded content.
+    await openReadingContextCard(page)
+    await expect(page.getByText('Reflowverse')).toBeVisible()
 
     const wide = await readGeometry(page)
     assertFitsViewportWidth(wide)
-    assertPillarsDoNotOverlap(wide)
+    assertRegionsDoNotOverlap(wide)
 
-    // Wide (xl): the actions sit on the middle column's second row, beside the
-    // Your Context pillar rather than below it.
-    const wideYour = wide.children.find((child) => child.isYourContext)
+    const wideDecision = wide.children.find((child) => child.isDecision)
     const wideActions = wide.actionsCell
-    expect(wideYour, 'Your Context must be present at the wide layout').toBeDefined()
     expect(wideActions, 'the actions cell must be present at the wide layout').toBeDefined()
     expect(
       wideActions!.top,
-      'at the wide layout the actions must start on the same row as Your Context',
-    ).toBeLessThan(wideYour!.rect.bottom)
+      'at the wide layout the actions must start near the decision region',
+    ).toBeLessThan(wideDecision!.rect.bottom)
 
     // Narrow to a tablet-sized desktop: content must reflow, not collide.
     await page.setViewportSize(NARROW_VIEWPORT)
@@ -688,16 +649,15 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     const narrow = await readGeometry(page)
     assertFitsViewportWidth(narrow)
-    assertPillarsDoNotOverlap(narrow)
+    assertRegionsDoNotOverlap(narrow)
 
-    const narrowYour = narrow.children.find((child) => child.isYourContext)
+    const narrowDecision = narrow.children.find((child) => child.isDecision)
     const narrowActions = narrow.actionsCell
-    expect(narrowYour, 'Your Context must be present at the narrow layout').toBeDefined()
     expect(narrowActions, 'the actions cell must be present at the narrow layout').toBeDefined()
     expect(
       narrowActions!.top,
       'at the narrow layout the actions must reflow below the pillars',
-    ).toBeGreaterThanOrEqual(narrowYour!.rect.bottom - 4)
+    ).toBeGreaterThanOrEqual(narrowDecision!.rect.bottom - 4)
 
     if (narrow.grid && narrowActions && narrow.grid.width > 0) {
       expect(

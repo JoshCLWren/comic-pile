@@ -190,7 +190,8 @@ async function readGeometry(page: Page): Promise<MobileBlockedGeometry> {
       blockedCard: rectOf(card),
       readNowRows,
       readingContextBottom: rectOf(
-        document.querySelector('[data-testid="rating-region-reading-context"]'),
+        document.querySelector('[data-testid="reading-context-content"]') ?? 
+        document.querySelector('[data-testid="rating-region-reading-optional"]'),
       )?.bottom ?? 0,
       mobileNavTop,
     }
@@ -235,8 +236,17 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
 
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
+
+    // In the new OptionalReadingCards design, the blocked roll recovery card
+    // appears inside the Reading Context card when there's a blocked dependency.
+    // Open the Reading Context card to access the recovery content.
+    await page.getByRole('button', { name: 'Show context' }).click()
+    await page.waitForTimeout(200)
+
+    // The blocked roll recovery card shows the thread title and prerequisites
     await expect(page.getByLabel('Blocked roll recovery')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByText('Where you are in Justice League Europe')).toBeVisible()
+    await expect(page.getByText('Justice League Europe')).toBeVisible()
+
     await contextLoaded
     await page.evaluate(() => document.fonts.ready)
     await page.waitForTimeout(400)
