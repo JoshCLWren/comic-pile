@@ -1533,8 +1533,8 @@ def record_dependency_block(
     body = "\n\n".join(
         [
             marker,
-            f"Blocked by declared dependencies: issue #{issue_number} declares open "
-            f"dependencies: {listed}. This pull request and its linked issue stay open "
+            f"Blocked by scheduling or declared dependencies for issue #{issue_number}: "
+            f"{listed}. This pull request and its linked issue stay open "
             "until every declared dependency is closed; the check runs again "
             "automatically afterwards.",
         ]
@@ -1574,6 +1574,26 @@ def declared_dependency_gate(pr_number: int) -> GateResult:
     body = issue.get("body")
     if not isinstance(body, str):
         return gate_result("retry", "linked issue body could not be read")
+    # Recheck the live cutover gate at merge time. A new issue might not yet
+    # contain the scheduling prerequisite, and a PR can predate that body edit.
+    try:
+        cutover = target_json(eligibility.RUST_CUTOVER_EPIC)
+    except RuntimeError:
+        return gate_result("retry", "Rust cutover state could not be read")
+    cutover_state = str(cutover.get("state") or "").upper()
+    if cutover_state not in {"OPEN", "CLOSED"}:
+        return gate_result("retry", "Rust cutover state is unknown")
+    if not eligibility.rust_cutover_work_allowed(
+        labels_of(issue), body, cutover_open=cutover_state == "OPEN"
+    ):
+        record_dependency_block(
+            pr_number, issue_number, [eligibility.RUST_CUTOVER_EPIC]
+        )
+        return gate_result(
+            "retry",
+            f"Rust cutover #{eligibility.RUST_CUTOVER_EPIC} is still open; "
+            "unrelated work must wait",
+        )
     try:
         declared = eligibility.parse_declared_dependencies(body)
     except Exception:
