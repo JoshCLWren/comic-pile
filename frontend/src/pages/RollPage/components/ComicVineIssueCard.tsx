@@ -194,6 +194,7 @@ export function ComicVineIssueCard({ issueId }: ComicVineIssueCardProps) {
                           threadTitle={match.thread_title}
                           issueNumber={match.issue_number}
                           status={match.status}
+                          hideTitle={issue.comicpile_matches.length === 1}
                         />
                       ))}
                     </div>
