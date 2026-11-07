@@ -1,10 +1,19 @@
 import { renderHook, act } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import { useRollSnooze } from '../pages/RollPage/useRollSnooze'
+import { useRollRating } from '../pages/RollPage/useRollRating'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { RollResponse } from '../types'
+
+function createQueryWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
 
 function ratingThread(id: number): RatingThread {
   return {
@@ -261,18 +270,24 @@ describe('useRollSnooze', () => {
 
   it('enters the replacement rating view after a committed snooze', async () => {
     const mutate = vi.fn().mockResolvedValue(committedOutcome())
-    const enterRatingView = vi.fn().mockResolvedValue(undefined)
     const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(() => {
       const state = useRollPageState()
+      const rating = useRollRating({
+        state,
+        bootstrap: null,
+        rateMutation: { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false },
+        dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
+        refetchBootstrap,
+      })
       const snooze = useRollSnooze({
         state,
         snoozeMutation: { mutate },
-        enterRatingView,
+        enterRatingView: rating.enterRatingView,
         refetchBootstrap,
       })
       return { state, snooze }
-    })
+    }, { wrapper: createQueryWrapper() })
 
     act(() => {
       result.current.state.setActiveRatingThread(ratingThread(7))
@@ -285,15 +300,14 @@ describe('useRollSnooze', () => {
     })
 
     expect(mutate).toHaveBeenCalledWith(7)
-    expect(enterRatingView).toHaveBeenCalledWith(
-      9,
-      1,
-      expect.objectContaining({ thread_id: 9, title: 'Next Series' }),
-    )
     expect(refetchBootstrap).not.toHaveBeenCalled()
-    // The mock does not run the real view logic; the caller keeps the view
-    // open instead of closing it when a replacement thread is offered.
+    // The real enterRatingView routes the replacement offer into rating state,
+    // so the reader sees thread 9 instead of the snoozed thread 7.
+    expect(result.current.state.isRolling).toBe(false)
     expect(result.current.state.isRatingView).toBe(true)
-    expect(result.current.state.activeRatingThread?.id).toBe(7)
+    expect(result.current.state.selectedThreadId).toBe(9)
+    expect(result.current.state.rolledResult).toBe(1)
+    expect(result.current.state.activeRatingThread?.id).toBe(9)
+    expect(result.current.state.activeRatingThread?.title).toBe('Next Series')
   })
 })

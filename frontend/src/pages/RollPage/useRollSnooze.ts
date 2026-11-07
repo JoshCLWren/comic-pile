@@ -24,15 +24,16 @@ interface UseRollSnoozeParams {
   /**
    * Reports that the committed snooze could not refresh authoritative Roll
    * state. The page owns a visible recovery surface (a toast with a
-   * refresh-only retry), because the rating view closes as soon as the snooze
-   * commits and can no longer show its own error line.
+   * refresh-only retry), because the rating view moves to the replacement
+   * offer and can no longer reliably show a pool-stale error line.
    */
   onRefreshFailed?: (refreshError: unknown) => void
 }
 
 /**
- * Owns the retained snooze feature. Snoozing from the rating view closes the
- * rating session, while unsnoozing from the pool restores an eligible thread.
+ * Owns the retained snooze feature. Snoozing from the rating view moves the
+ * session to the replacement offer the Rust writer selected atomically, while
+ * unsnoozing from the pool restores an eligible thread.
  * The successful snooze mutation is the single owner of the authoritative
  * bootstrap refresh, so this hook never issues a second network refresh for the
  * same success.
