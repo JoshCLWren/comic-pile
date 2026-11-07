@@ -55,9 +55,9 @@ async function openFirstEditor() {
   await screen.findByText('Julix · Strict order')
   await userEvent.click(firstCard().getByRole('button', { name: 'Rate / Mark read' }))
 }
-function mount() {
+function mount(backTo?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter><ReadingListReader listId={2} /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter><ReadingListReader listId={2} backTo={backTo} /></MemoryRouter></QueryClientProvider>)
   return client
 }
 beforeEach(() => {
@@ -261,7 +261,7 @@ it('does not guess an issue ID or fetch an issue cover for thread-only prerequis
       },
     }),
   })
-  mount()
+  mount('/queue')
   expect(await screen.findByText('Julix · Strict order')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/3')
   expect(screen.queryByRole('button', { name: 'Reading and mapping actions for Starman #55' })).not.toBeInTheDocument()
