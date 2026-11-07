@@ -2987,6 +2987,8 @@ def _wire_dependency_gate(
     body: str,
     issue_bodies: dict[int, str],
     issue_states: dict[int, str] | None = None,
+    issue_labels: dict[int, list[str]] | None = None,
+    cutover_state: str = "closed",
     native_open: list[int] | None = None,
     native_error: bool = False,
     issue_fetch_error: bool = False,
@@ -3020,8 +3022,17 @@ def _wire_dependency_gate(
     def fake_target_json(number: int) -> dict[str, Any]:
         if issue_fetch_error:
             raise RuntimeError("gh failed")
+        if number == 4335:
+            return {"state": cutover_state, "body": ""}
         fetched.append(number)
-        return {"state": states.get(number, "open"), "body": issue_bodies.get(number, "")}
+        return {
+            "state": states.get(number, "open"),
+            "body": issue_bodies.get(number, ""),
+            "labels": [
+                {"name": label}
+                for label in (issue_labels or {}).get(number, [])
+            ],
+        }
 
     monkeypatch.setattr(module, "target_json", fake_target_json)
 
@@ -3063,6 +3074,58 @@ def _wire_dependency_gate(
 
     monkeypatch.setattr(module, "run_gh", fake_run_gh)
     return fetched, native_paths
+
+
+def test_rust_cutover_merge_gate_blocks_unmarked_new_issue(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """An issue created after the backlog sweep must not merge during cutover."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/46-4707-kilo-auto",
+        body="Closes #4707.",
+        issue_bodies={4707: "Fresh unrelated feature, no declared dependency."},
+        cutover_state="open",
+    )
+    result = module.declared_dependency_gate(4708)
+    assert result["decision"] == "retry"
+    assert "#4335" in result["reason"]
+
+
+def test_rust_cutover_merge_gate_allows_labeled_cutover_issue(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """Only explicit Rust-scoped work remains eligible while the epic is open."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/46-4707-kilo-auto",
+        body="Closes #4707.",
+        issue_bodies={4707: "Retire the remaining Rust v2 reader alias."},
+        issue_labels={4707: ["rust"]},
+        cutover_state="open",
+    )
+    assert module.declared_dependency_gate(4708)["decision"] == "pass"
+
+
+def test_rust_cutover_explicit_dependency_overrides_stale_label(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A deferral cannot be bypassed by accidentally retaining a rust label."""
+    module = load_review_controller()
+    _wire_dependency_gate(
+        monkeypatch,
+        module,
+        branch="factory/46-4707-kilo-auto",
+        body="Closes #4707.",
+        issue_bodies={4707: "Depends on #4335"},
+        issue_labels={4707: ["rust"]},
+        cutover_state="open",
+    )
+    assert module.declared_dependency_gate(4708)["decision"] == "retry"
 
 
 def test_declared_dependency_gate_blocks_open_declared_dependency(
