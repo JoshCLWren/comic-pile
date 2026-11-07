@@ -102,4 +102,77 @@ describe('compact shared issue entry across dense lists', () => {
     expect(screen.getByText(/Read · Rated 4.5/)).toBeVisible()
     expect(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' })).toHaveAttribute('aria-expanded', 'false')
   })
+  it('rejects a batch card belonging to a different issue instead of borrowing its art or rating', async () => {
+    setup(<CompactIssueCardTrigger
+      issueId={38}
+      card={card}
+      threadTitle="B.P.R.D."
+      issueNumber="Annual 2"
+      status="unread"
+      rating={null}
+    />)
+    const trigger = screen.getByRole('button', { name: 'Reading and mapping actions for B.P.R.D. #Annual 2' })
+    expect(trigger).toHaveTextContent('Unread')
+    expect(trigger).not.toHaveTextContent('Rated')
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute(
+      'aria-label', 'No cover for B.P.R.D. #Annual 2',
+    )
+    await userEvent.click(trigger)
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute(
+      'aria-label', 'Issue B.P.R.D. #Annual 2',
+    )
+    expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([38]))
+  })
+
+  it('keeps exact fallback identity and a compact accessible action when batch names are blank', async () => {
+    setup(<CompactIssueCardTrigger
+      issueId={37}
+      card={{ ...card, thread_title: '', issue_number: '', status: 'unread', rating: null, cover_image_url: null }}
+      threadTitle="Hellboy"
+      issueNumber="Winter Special"
+      hideTitle
+    />)
+    const trigger = screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #Winter Special' })
+    expect(trigger).not.toHaveTextContent('Hellboy #Winter Special')
+    expect(trigger).toHaveTextContent('Read / Rate / Map')
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute(
+      'aria-label', 'No cover for Hellboy #Winter Special',
+    )
+    await userEvent.click(trigger)
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute(
+      'aria-label', 'Issue Hellboy #Winter Special',
+    )
+    expect(fetchCards).not.toHaveBeenCalled()
+  })
+
+  it('expands a read issue for rating correction without generating a second read', async () => {
+    setup(<CompactIssueCardTrigger
+      issueId={37}
+      card={{ ...card, status: 'read', rating: 2.5 }}
+      threadTitle="Hellboy"
+      issueNumber="9"
+      status="unread"
+    />)
+    await userEvent.click(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' }))
+    expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit rating' }))
+    expect(screen.getByRole('slider')).toHaveValue('2.5')
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(patchIssue).not.toHaveBeenCalled()
+    expect(fetchCards).not.toHaveBeenCalled()
+  })
+
+  it('shows the row-provided read state when the projection is missing and can still correct it', async () => {
+    fetchCards.mockResolvedValue([])
+    setup(<CompactIssueCardTrigger
+      issueId={37} threadTitle="Hellboy" issueNumber="9" status="read"
+    />)
+    expect(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' })).toHaveTextContent('Read')
+    await userEvent.click(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' }))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
+    expect(screen.getByRole('button', { name: 'Mark unread' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+  })
+
 })
