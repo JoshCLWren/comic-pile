@@ -81,7 +81,21 @@ export function useRollSnooze({
       if (enterRatingView) {
         // Use the offer response directly so a failed background refresh cannot
         // leave the just-snoozed thread open in the rating view.
-        await enterRatingView(response.thread_id, response.result, response)
+        const threadMetadata: ThreadMetadata = {
+          id: response.thread_id,
+          title: response.title,
+          format: response.format,
+          issues_remaining: response.issues_remaining,
+          queue_position: response.queue_position,
+          total_issues: response.total_issues,
+          reading_progress: response.reading_progress ?? null,
+          issue_id: response.issue_id,
+          issue_number: response.issue_number,
+          next_issue_id: response.next_issue_id,
+          next_issue_number: response.next_issue_number,
+          last_rolled_result: response.result,
+        }
+        await enterRatingView(response.thread_id, response.result, threadMetadata)
       } else {
         await refetchBootstrap()
         setIsRolling(false)
@@ -105,7 +119,21 @@ export function useRollSnooze({
         // The Rust offer recorded the snooze and selected a replacement in the
         // same transaction (#4589). Keep the rating view open for it instead
         // of silently closing a pending session.
-        await enterRatingView(outcome.response.thread_id, outcome.response.result, outcome.response)
+        const threadMetadata: ThreadMetadata = {
+          id: outcome.response.thread_id,
+          title: outcome.response.title,
+          format: outcome.response.format,
+          issues_remaining: outcome.response.issues_remaining,
+          queue_position: outcome.response.queue_position,
+          total_issues: outcome.response.total_issues,
+          reading_progress: outcome.response.reading_progress ?? null,
+          issue_id: outcome.response.issue_id,
+          issue_number: outcome.response.issue_number,
+          next_issue_id: outcome.response.next_issue_id,
+          next_issue_number: outcome.response.next_issue_number,
+          last_rolled_result: outcome.response.result,
+        }
+        await enterRatingView(outcome.response.thread_id, outcome.response.result, threadMetadata)
       } else {
         setIsRatingView(false)
         setRolledResult(null)

@@ -186,6 +186,68 @@ describe('useRollSnooze', () => {
     expect(onRefreshFailed).toHaveBeenCalledWith(refreshFailure)
   })
 
+  it('reports refresh failure when replacement view opens with stale pool', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    const mutate = vi.fn().mockResolvedValue({
+      response: {
+        thread_id: 9,
+        title: 'Next Series',
+        format: 'Comic',
+        issues_remaining: 2,
+        queue_position: 2,
+        die_size: 12,
+        result: 1,
+        offset: 0,
+        snoozed_count: 1,
+        issue_id: null,
+        issue_number: null,
+        next_issue_id: null,
+        next_issue_number: null,
+        total_issues: 6,
+        reading_progress: null,
+      },
+      refreshed: false,
+      refreshError: refreshFailure,
+    } satisfies SnoozeMutationOutcome)
+    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
+    const onRefreshFailed = vi.fn()
+    const { result } = renderHook(() => {
+      const state = useRollPageState()
+      const rating = useRollRating({
+        state,
+        bootstrap: null,
+        rateMutation: { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false },
+        dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
+        refetchBootstrap,
+      })
+      const snooze = useRollSnooze({
+        state,
+        snoozeMutation: { mutate },
+        enterRatingView: rating.enterRatingView,
+        refetchBootstrap,
+        onRefreshFailed,
+      })
+      return { state, snooze }
+    }, { wrapper: createQueryWrapper() })
+
+    act(() => {
+      result.current.state.setActiveRatingThread(ratingThread(7))
+      result.current.state.setIsRatingView(true)
+      result.current.state.setIsRolling(true)
+    })
+
+    await act(async () => {
+      await result.current.snooze.handleSnooze()
+    })
+
+    // With enterRatingView and replacement thread, the view should stay open
+    expect(result.current.state.isRatingView).toBe(true)
+    expect(result.current.state.selectedThreadId).toBe(9)
+    expect(result.current.state.activeRatingThread?.id).toBe(9)
+    // But the refresh failure should still be reported
+    expect(onRefreshFailed).toHaveBeenCalledWith(refreshFailure)
+  })
+
   it('exposes the refresh-only retry without repeating the snooze', async () => {
     const retryRefresh = vi.fn().mockResolvedValue(true)
     const mutate = vi.fn().mockResolvedValue(committedOutcome())
@@ -263,7 +325,11 @@ describe('useRollSnooze', () => {
     expect(enterRatingView).toHaveBeenCalledWith(
       response.thread_id,
       response.result,
-      response,
+      expect.objectContaining({
+        id: response.thread_id,
+        title: response.title,
+        format: response.format,
+      }),
     )
     expect(refetchBootstrap).not.toHaveBeenCalled()
   })
