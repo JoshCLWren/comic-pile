@@ -4,17 +4,14 @@
 //! offer, and never deletes reading progress or past ratings. The browser owns
 //! clearing its temporary snooze cookie; the server does not treat it as state.
 use crate::{
-    auth::AuthenticatedUser,
+    auth::{AuthenticatedUser, VerifiedAccessClaims},
     db,
-    dice_api::Pending,
     dice_mutation::{self, DiceCommand},
-    reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
 use axum::{extract::State, http::StatusCode, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio_postgres::IsolationLevel;
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
@@ -30,6 +27,9 @@ pub struct ResetDiceResponse {
 
 /// Record the reset event and discard any pending offer in one transaction.
 /// Extracted so the real write path can run against disposable PostgreSQL.
+/// The HTTP handler now uses the single-statement path; this remains for the
+/// transaction-scoped tests that pin its semantics.
+#[allow(dead_code)]
 pub(crate) async fn persist_reset(
     tx: &tokio_postgres::Transaction<'_>,
     user: AuthenticatedUser,
@@ -70,35 +70,22 @@ pub(crate) async fn persist_reset(
 
 pub async fn reset(
     State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    claims: VerifiedAccessClaims,
     Json(request): Json<ResetDiceRequest>,
 ) -> Result<Json<ResetDiceResponse>, ApiError> {
     dice_mutation::validate(&request.idempotency_key, &DiceCommand::Reset)?;
-    let mut pending = Pending::new(db::checkout(&state).await?);
-    let tx = pending
-        .connection()
-        .build_transaction()
-        .isolation_level(IsolationLevel::ReadCommitted)
-        .start()
-        .await
-        .map_err(db::query_error)?;
-    // The write transaction's first statement is the per-reader advisory lock.
-    tx.query_one(
-        "SELECT pg_advisory_xact_lock($1::bigint)",
-        &[&(user.id() as i64)],
-    )
-    .await
-    .map_err(db::query_error)?;
-
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs_f64())
-        .unwrap_or(0.0);
-    let session_id =
-        reading_session::current_session_id(&tx, user, now, SessionPolicy::default()).await?;
-    let mutation = persist_reset(&tx, user, &request.idempotency_key, session_id).await?;
-    tx.commit().await.map_err(db::query_error)?;
-    pending.release();
+    // One issued SQL statement, including authentication (#4615).
+    let (mutation, session_id, session_cleared) =
+        dice_mutation::execute_reset_single(&state, &claims, &request.idempotency_key).await?;
+    // Preserve the old 409 contract: a fresh reset that resolved a current
+    // session must have cleared it; a replay must not clear (already guarded
+    // inside the statement by `EXISTS (SELECT 1 FROM inserted)`).
+    if !mutation.replayed && session_id.is_some() && session_cleared != 1 {
+        return Err(ApiError(
+            StatusCode::CONFLICT,
+            "Reading session changed; try again".to_string(),
+        ));
+    }
     Ok(Json(ResetDiceResponse {
         die: mutation.die_after,
         replayed: mutation.replayed,
@@ -126,7 +113,11 @@ pub fn reset_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::Config, router};
+    use crate::{
+        config::Config,
+        reading_session::{self, SessionPolicy},
+        router,
+    };
     use axum::{
         body::Body,
         http::{Request, StatusCode},

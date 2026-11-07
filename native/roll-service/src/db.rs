@@ -2,7 +2,16 @@
 use crate::{auth::AuthenticatedUser, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_postgres::{types::ToSql, Row};
+
+/// Total DB commands issued through [`query_one_optional`].
+///
+/// This counts at the tokio-postgres `query_opt` boundary — one per issued
+/// command — not at the handler/wrapper level. The #4615 single-statement
+/// regression asserts a delta of exactly 1 per HTTP request, so any separate
+/// auth, lock, receipt or die statement fails the test.
+pub static DB_COMMANDS_ISSUED: AtomicU64 = AtomicU64::new(0);
 
 fn unavailable() -> ApiError {
     ApiError(
@@ -37,6 +46,7 @@ pub(crate) async fn query_one_optional(
         }
     }
     let mut pending = Pending(Some(connection));
+    DB_COMMANDS_ISSUED.fetch_add(1, Ordering::Relaxed);
     let result = tokio::time::timeout(
         state.request_timeout,
         pending.0.as_ref().unwrap().query_opt(sql, params),

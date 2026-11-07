@@ -3,9 +3,8 @@
 //! Rerolls and ratings require Option E and progress validation within their
 //! enclosing transaction; do not expose them through this standalone route.
 use crate::{
-    auth::AuthenticatedUser,
-    db,
-    dice_mutation::{self, DiceCommand},
+    auth::VerifiedAccessClaims,
+    dice_mutation::{self},
     ApiError, AppState,
 };
 use axum::{extract::State, Json};
@@ -55,7 +54,7 @@ impl Pending {
 
 pub async fn manual_die(
     State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
+    claims: VerifiedAccessClaims,
     Json(request): Json<ManualDieRequest>,
 ) -> Result<Json<DiceCommandReceipt>, ApiError> {
     let (die, key) = match request {
@@ -64,15 +63,8 @@ pub async fn manual_die(
             idempotency_key,
         } => (die, idempotency_key),
     };
-    let mut pending = Pending::new(db::checkout(&state).await?);
-    let receipt = dice_mutation::execute_standalone(
-        pending.connection(),
-        user,
-        &key,
-        &DiceCommand::ManualSelect { die },
-    )
-    .await?;
-    pending.release();
+    // One issued SQL statement, including authentication (#4615).
+    let receipt = dice_mutation::execute_dice_command_single(&state, &claims, &key, die).await?;
     Ok(Json(DiceCommandReceipt {
         event_id: receipt.event_id,
         die_before: receipt.die_before,

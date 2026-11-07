@@ -9,15 +9,85 @@
 //! unique owner/key index guarantees retry safety even across processes.
 //! Every resulting die is persisted with the action, never recomputed on replay.
 use crate::{
-    auth::AuthenticatedUser,
+    auth::{validate_folded_auth, AuthenticatedUser, FoldedAuthRow, VerifiedAccessClaims},
     db,
     dice_state::{self, DiceAction},
-    ApiError,
+    AppState, ApiError,
 };
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_postgres::{Client, IsolationLevel, Transaction};
+
+/// Handler-level DB-command count for `POST /api/v2/roll/dice-command`.
+///
+/// Incremented once per request, immediately before the single statement is
+/// issued, mirroring `roll_resources::DIE_STATEMENTS_ISSUED`. It proves the
+/// handler emits exactly one query; the integration regression additionally
+/// proves the database received one command via `pg_stat_statements`.
+pub static DICE_COMMAND_STATEMENTS_ISSUED: AtomicU64 = AtomicU64::new(0);
+
+/// Handler-level DB-command count for `POST /api/v2/roll/reset`.
+pub static RESET_STATEMENTS_ISSUED: AtomicU64 = AtomicU64::new(0);
+
+/// Decoded single-statement projection for both standalone write paths.
+#[derive(Debug, Deserialize)]
+pub(crate) struct SingleStatementPayload {
+    pub auth: Option<FoldedAuthRow>,
+    pub event_id: Option<i32>,
+    pub die_before: Option<i32>,
+    pub die_after: Option<i32>,
+    #[serde(default)]
+    pub replayed: bool,
+    pub context: Option<String>,
+    pub session_id: Option<i32>,
+    pub session_cleared: Option<i64>,
+}
+
+/// Validate the folded auth row and derive the receipt, or map the
+/// authentication / idempotency-collision outcomes exactly as
+/// [`persist_in_transaction`] does.
+pub(crate) fn receipt_from_payload(
+    claims: &VerifiedAccessClaims,
+    command: &DiceCommand,
+    payload: SingleStatementPayload,
+) -> Result<DiceMutation, ApiError> {
+    validate_folded_auth(claims, payload.auth.as_ref())?;
+    let event_id = payload.event_id.ok_or(ApiError(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Invalid dice command receipt".to_string(),
+    ))?;
+    let die_before = payload.die_before.unwrap_or(dice_state::DEFAULT_DIE);
+    let die_after = payload.die_after.unwrap_or(dice_state::DEFAULT_DIE);
+    if payload.replayed {
+        let context = payload.context.unwrap_or_default();
+        let original: Value = serde_json::from_str(&context).map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid event receipt".to_string(),
+            )
+        })?;
+        let expected = serde_json::to_value(command).map_err(|_| {
+            ApiError(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid dice command".to_string(),
+            )
+        })?;
+        if original.get("dice_command") != Some(&expected) {
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                "Idempotency key already used for a different dice command".to_string(),
+            ));
+        }
+    }
+    Ok(DiceMutation {
+        event_id,
+        die_before,
+        die_after,
+        replayed: payload.replayed,
+    })
+}
 
 /// Payload is immutable for a given client-generated idempotency key.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -304,6 +374,235 @@ pub async fn execute_standalone(
     let result = persist_in_transaction(&tx, user, idempotency_key, command).await?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(result)
+}
+
+/// Measured pre-change counts (see #4615): `POST /api/v2/roll/dice-command`
+/// issued 1 folded-auth statement (via `AuthenticatedUser`) + BEGIN + advisory
+/// lock + `users FOR KEY SHARE` + receipt read + `current_die` + INSERT +
+/// COMMIT; `POST /api/v2/roll/reset` issued 1 folded-auth + BEGIN + advisory
+/// lock + `current_session_id` + a second advisory lock + `users FOR KEY
+/// SHARE` + receipt read + `current_die` + INSERT + `UPDATE sessions` +
+/// COMMIT. The functions below replace all of that with one statement.
+///
+/// Common CTE prefix: folded authentication (`auth`/`me`, identical to
+/// `auth::FOLDED_AUTH_CTES`), then the per-reader advisory lock materialized
+/// from the resolved owner. Every later CTE references `lock`, so the lock is
+/// evaluated before the receipt check, die read and write. The statement runs
+/// in autocommit, so `pg_advisory_xact_lock` is held for the whole statement
+/// — exactly the critical section the old explicit transaction protected —
+/// and the single statement is atomic by definition.
+const SINGLE_AUTH_CTES: &str = r#"auth AS (
+    SELECT u.id AS user_id,
+           COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) AS password_epoch,
+           EXISTS(SELECT 1 FROM revoked_tokens r WHERE r.jti = $2) AS revoked
+    FROM users u
+    WHERE u.username = $1
+    LIMIT 1
+),
+me AS (
+    SELECT (SELECT user_id FROM auth WHERE NOT revoked AND password_epoch <= $3) AS user_id
+),
+lock AS MATERIALIZED (
+    SELECT pg_advisory_xact_lock((SELECT user_id FROM me)::bigint)
+    WHERE (SELECT user_id FROM me) IS NOT NULL
+),
+previous AS MATERIALIZED (
+    SELECT id, die, die_after, context::text AS context
+    FROM events
+    WHERE user_id = (SELECT user_id FROM me)
+      AND context->>'dice_command_key' = $4
+      AND (SELECT 1 FROM lock) IS NOT NULL
+    LIMIT 1
+),
+die_state AS MATERIALIZED (
+    SELECT die_after
+    FROM events
+    WHERE user_id = (SELECT user_id FROM me)
+      AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
+      AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
+      AND (SELECT 1 FROM lock) IS NOT NULL
+    ORDER BY timestamp DESC, id DESC
+    LIMIT 1
+),
+computed AS (
+    SELECT
+        CASE
+            WHEN (SELECT die_after FROM die_state) IN (30, 50, 100) THEN 20
+            WHEN (SELECT die_after FROM die_state) IN (2, 4, 6, 8, 10, 12, 20)
+                THEN (SELECT die_after FROM die_state)
+            ELSE 6
+        END AS die_before,
+        $5::int AS die_after
+)"#;
+
+/// One issued SQL statement for `POST /api/v2/roll/dice-command`
+/// (manual die selection), including authentication.
+pub async fn execute_dice_command_single(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    idempotency_key: &str,
+    die: i32,
+) -> Result<DiceMutation, ApiError> {
+    let command = DiceCommand::ManualSelect { die };
+    validate(idempotency_key, &command)?;
+    let expected_epoch = claims.expected_epoch()?;
+    let username = claims.username().to_string();
+    let jti = claims.jti().to_string();
+    let context = json!({
+        "dice_command_key": idempotency_key,
+        "dice_command": command,
+    })
+    .to_string();
+    let sql = format!(
+        "WITH {SINGLE_AUTH_CTES},
+inserted AS MATERIALIZED (
+    INSERT INTO events
+        (user_id, type, timestamp, die, die_after, thread_id, issue_id, rating, context)
+    SELECT (SELECT user_id FROM me), 'manual_die', clock_timestamp(),
+           (SELECT die_before FROM computed), (SELECT die_after FROM computed),
+           NULL, NULL, NULL, $6::text::json
+    FROM computed
+    WHERE (SELECT user_id FROM me) IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM previous)
+      AND (SELECT 1 FROM lock) IS NOT NULL
+    RETURNING id, die, die_after, context::text AS context
+)
+SELECT jsonb_build_object(
+    'auth', (SELECT jsonb_build_object('password_epoch', password_epoch, 'revoked', revoked) FROM auth),
+    'event_id', COALESCE((SELECT id FROM inserted), (SELECT id FROM previous)),
+    'die_before', COALESCE((SELECT die FROM inserted), (SELECT die FROM previous)),
+    'die_after', COALESCE((SELECT die_after FROM inserted), (SELECT die_after FROM previous)),
+    'replayed', (SELECT id FROM inserted) IS NULL AND (SELECT id FROM previous) IS NOT NULL,
+    'context', COALESCE((SELECT context FROM inserted), (SELECT context FROM previous)),
+    'session_id', NULL::int,
+    'session_cleared', NULL::bigint
+)::text"
+    );
+    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 6] = [
+        &username,
+        &jti,
+        &expected_epoch,
+        &idempotency_key.to_string(),
+        &die,
+        &context,
+    ];
+    let connection = db::checkout(state).await?;
+    DICE_COMMAND_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
+    let row = db::query_one_optional(state, connection, &sql, &bindings)
+        .await?
+        .ok_or(ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid dice command receipt".to_string(),
+        ))?;
+    let encoded: String = row.try_get(0).map_err(db::query_error)?;
+    let payload: SingleStatementPayload = serde_json::from_str(&encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid native dice-command projection");
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid dice command receipt".to_string(),
+        )
+    })?;
+    receipt_from_payload(claims, &command, payload)
+}
+
+/// One issued SQL statement for `POST /api/v2/roll/reset`, including
+/// authentication, the current-session resolution, the reset event and the
+/// pending-selection clear. A replayed reset is read-only and never clears a
+/// newer pending selection (same guard as [`crate::roll_reset::persist_reset`]).
+pub async fn execute_reset_single(
+    state: &AppState,
+    claims: &VerifiedAccessClaims,
+    idempotency_key: &str,
+) -> Result<(DiceMutation, Option<i32>, i64), ApiError> {
+    let command = DiceCommand::Reset;
+    validate(idempotency_key, &command)?;
+    let expected_epoch = claims.expected_epoch()?;
+    let username = claims.username().to_string();
+    let jti = claims.jti().to_string();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs_f64())
+        .unwrap_or(0.0);
+    let gap_hours = crate::reading_session::SessionPolicy::default().gap_hours;
+    let context = json!({
+        "dice_command_key": idempotency_key,
+        "dice_command": command,
+    })
+    .to_string();
+    // Reset always lands on d6, so $5 is the post-command die.
+    let session_body = crate::reading_session::session_resolution_body(
+        "(SELECT user_id FROM me)",
+        "$7",
+        "$8",
+    );
+    let sql = format!(
+        "WITH {SINGLE_AUTH_CTES},
+current_session AS MATERIALIZED (
+    SELECT s.id AS session_id {session_body}
+),
+inserted AS MATERIALIZED (
+    INSERT INTO events
+        (user_id, type, timestamp, die, die_after, thread_id, issue_id, rating, context)
+    SELECT (SELECT user_id FROM me), 'reset_dice', clock_timestamp(),
+           (SELECT die_before FROM computed), 6,
+           NULL, NULL, NULL, $6::text::json
+    FROM computed
+    WHERE (SELECT user_id FROM me) IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM previous)
+      AND (SELECT 1 FROM lock) IS NOT NULL
+    RETURNING id, die, die_after, context::text AS context
+),
+cleared AS MATERIALIZED (
+    UPDATE sessions
+    SET pending_thread_id = NULL, pending_issue_id = NULL,
+        pending_thread_updated_at = NULL, manual_die = NULL
+    WHERE id = (SELECT session_id FROM current_session)
+      AND user_id = (SELECT user_id FROM me)
+      AND EXISTS (SELECT 1 FROM inserted)
+      AND (SELECT 1 FROM lock) IS NOT NULL
+    RETURNING id
+)
+SELECT jsonb_build_object(
+    'auth', (SELECT jsonb_build_object('password_epoch', password_epoch, 'revoked', revoked) FROM auth),
+    'event_id', COALESCE((SELECT id FROM inserted), (SELECT id FROM previous)),
+    'die_before', COALESCE((SELECT die FROM inserted), (SELECT die FROM previous)),
+    'die_after', COALESCE((SELECT die_after FROM inserted), (SELECT die_after FROM previous)),
+    'replayed', (SELECT id FROM inserted) IS NULL AND (SELECT id FROM previous) IS NOT NULL,
+    'context', COALESCE((SELECT context FROM inserted), (SELECT context FROM previous)),
+    'session_id', (SELECT session_id FROM current_session),
+    'session_cleared', (SELECT count(*) FROM cleared)
+)::text"
+    );
+    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 8] = [
+        &username,
+        &jti,
+        &expected_epoch,
+        &idempotency_key.to_string(),
+        &6_i32,
+        &context,
+        &now,
+        &gap_hours,
+    ];
+    let connection = db::checkout(state).await?;
+    RESET_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
+    let row = db::query_one_optional(state, connection, &sql, &bindings)
+        .await?
+        .ok_or(ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reset receipt".to_string(),
+        ))?;
+    let encoded: String = row.try_get(0).map_err(db::query_error)?;
+    let payload: SingleStatementPayload = serde_json::from_str(&encoded).map_err(|error| {
+        tracing::error!(%error, "Invalid native reset projection");
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Invalid reset receipt".to_string(),
+        )
+    })?;
+    let session_id = payload.session_id;
+    let session_cleared = payload.session_cleared.unwrap_or(0);
+    let mutation = receipt_from_payload(claims, &command, payload)?;
+    Ok((mutation, session_id, session_cleared))
 }
 
 #[cfg(test)]

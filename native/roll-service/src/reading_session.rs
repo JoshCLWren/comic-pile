@@ -638,7 +638,10 @@ async fn initialize_once(
 
 /// Return the authoritative current session id without creating a session or
 /// writing a checkpoint. Uses the same window and ordering as the Roll/Python
-/// resolver so Reset clears the session the rest of the app reads.
+/// resolver so Reset clears the session the rest of the app reads. The HTTP
+/// reset path now folds this into its single statement; this remains for
+/// transaction-scoped callers and tests.
+#[allow(dead_code)]
 pub(crate) async fn current_session_id(
     tx: &Transaction<'_>,
     user: AuthenticatedUser,
