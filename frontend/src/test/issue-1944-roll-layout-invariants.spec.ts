@@ -59,6 +59,7 @@ async function getCsrf(page: Page, token: string | null): Promise<string> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok()).toBeTruthy()
+  // SAFETY: the test reads only csrf_token from the response body
   const data = (await response.json()) as { csrf_token?: string }
   expect(data.csrf_token).toBeDefined()
   return data.csrf_token!
@@ -80,6 +81,7 @@ async function listIssues(page: Page, threadId: number): Promise<number[]> {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   expect(response.ok(), `issue list failed: ${await response.text()}`).toBeTruthy()
+  // SAFETY: the test reads only the issue ids the assertion depends on
   const data = (await response.json()) as { issues: Array<{ id: number }> }
   expect(data.issues.length).toBeGreaterThan(0)
   return data.issues.map((issue) => issue.id)
@@ -139,6 +141,7 @@ async function seedCrossover(
     data: { name },
   })
   expect(createResponse.ok(), `crossover create failed: ${await createResponse.text()}`).toBeTruthy()
+  // SAFETY: the API returns a created record, so its id is always present
   const group = (await createResponse.json()) as { id: number }
   for (const threadId of memberThreadIds) {
     const memberResponse = await page.request.post(
@@ -468,10 +471,10 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     // Check that the series name and continuity content are visible.
     await expect(page.getByText('Fixtureverse')).toBeVisible()
-    // Crossover membership renders after expanding the current issue's context.
-    await page.getByRole('button', { name: 'Show context for Fixtureverse issue 1' }).click()
-    await expect(page.getByRole('button', { name: 'Open Crisis on Fixture Pile crossover' })).toBeVisible()
-    await page.waitForTimeout(200)
+    // Rich continuity content renders through the Reading Context card: the
+    // series history panel plus the seeded reading plan are visible.
+    await expect(page.getByText('Fixtureverse history')).toBeVisible()
+    await expect(page.getByText('Crossover Route')).toBeVisible()
 
     const geometry = await readGeometry(page)
     expect(geometry.children.length).toBeGreaterThanOrEqual(2)
@@ -510,8 +513,9 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
     // Open the Reading Context card to access continuity content.
     await openReadingContextCard(page)
 
-    // Reading Context shows series information in the new design
-    await expect(page.getByText('Reading Context', { exact: true })).toBeVisible()
+    // The optional Reading Context card header is always visible; its
+    // contents expand inline in the decision region (no middle column).
+    await expect(page.getByText('Reading Context (optional)')).toBeVisible()
 
     const geometry = await readGeometry(page)
     expect(geometry.children.length).toBeGreaterThanOrEqual(2)
@@ -546,7 +550,10 @@ test.describe('Roll desktop layout invariants (#1944)', () => {
 
     await openRatingView(page, thread.id)
 
-    // Reading history appears in the "Your reading plans" section when available.
+    // The series history panel lives inside the collapsed Reading Context
+    // card, so open it before asserting the seeded ratings history.
+    await openReadingContextCard(page)
+    // Reading history renders in the series panel when available.
     await expect(page.getByText('Historyverse history')).toBeVisible()
     await expect(page.getByText('3 rated')).toBeVisible()
     await expect(page.getByText('Recent ratings')).toBeVisible()

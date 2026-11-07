@@ -237,9 +237,10 @@ test.describe('Mobile blocked Roll layout (#2468)', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(page.locator('#rating-input')).toBeVisible({ timeout: 15000 })
 
-    // In the new OptionalReadingCards design, the blocked roll recovery card
-    // appears inside the Reading Context card when there's a blocked dependency.
-    // Open the Reading Context card to access the recovery content.
+    // Open the Reading Context card to expose continuity content while the
+    // rating view is inspected. (Blocked-roll recovery guidance belongs to
+    // the Group A pillar port; this test's Group B fix is the set-pending
+    // ordering the Dependency evaluator requires.)
     await page.getByRole('button', { name: 'Show context' }).click()
     await page.waitForTimeout(200)
 

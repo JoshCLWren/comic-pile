@@ -233,6 +233,13 @@ test.describe('Roll pointer target sizes (#1885)', () => {
     // Open the Reading Context card to access edge endpoint buttons and other
     // continuity content. The card is collapsed by default per OptionalReadingCards design (#2764).
     await openReadingContextCard(page)
+    // Card content loads asynchronously after the click (the request scopes
+    // are only enabled by expanding the card). Wait for an edge endpoint
+    // button to be visible before measuring, so the hit-area measurement
+    // never races the reader-context round trip.
+    await expect(
+      page.locator('button[aria-label^="Open series for"]').first(),
+    ).toBeVisible({ timeout: 15000 })
 
     // Edge endpoint buttons previously rendered as bare ~12px text strips.
     expectMinimumTargets(
