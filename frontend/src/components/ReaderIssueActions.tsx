@@ -34,12 +34,12 @@ export function ReadNowIssueButton({
 }) {
   const [open, setOpen] = useState(false)
   const cards = useIssueCards([issueId], { enabled: open })
-
+  
   // Use the known read state from caller during loading, fallback to 'unread'
   const displayStatus: 'read' | 'unread' = cards.isPending
     ? (initialIsRead ? 'read' : 'unread')
     : (cards.data?.[0]?.status === 'read' ? 'read' : 'unread')
-
+  
   if (open) {
     return (
       <div className="space-y-2">
@@ -65,9 +65,11 @@ export function ReadNowIssueButton({
             </button>
           </div>
         ) : cards.isPending ? (
-          <p role="status" className="text-sm text-[var(--theme-text-muted)]">
-            Loading issue card…
-          </p>
+          <div className="flex items-center justify-center p-4">
+            <p role="status" className="text-sm text-[var(--theme-text-muted)]">
+              Loading issue card…
+            </p>
+          </div>
         ) : (
           <ComicIssueCard
             issueId={issueId}
