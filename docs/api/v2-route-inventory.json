@@ -129,7 +129,8 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts",
-        "frontend/src/services/nativeRollMutationApi.ts"
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/services/issueCardsApi.ts"
       ]
     },
     {
@@ -140,7 +141,8 @@
       "owning_issue": 4443,
       "consumers": [
         "frontend/src/services/nativeRollMutationApi.ts",
-        "frontend/src/services/api-issues.ts"
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/issueCardsApi.ts"
       ]
     },
     {
@@ -159,7 +161,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4443,
-      "consumers": ["frontend/src/services/rollResourcesApi.ts"]
+      "consumers": [
+        "frontend/src/services/rollResourcesApi.ts",
+        "frontend/src/services/issueCardsApi.ts"
+      ]
     },
     {
       "method": "GET",
@@ -324,7 +329,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4595,
-      "consumers": ["frontend/src/services/rollResourcesApi.ts"]
+      "consumers": [
+        "frontend/src/services/rollResourcesApi.ts"
+      ]
     },
     {
       "method": "GET",
@@ -332,7 +339,9 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4595,
-      "consumers": ["frontend/src/services/rollResourcesApi.ts"]
+      "consumers": [
+        "frontend/src/services/rollResourcesApi.ts"
+      ]
     },
     {
       "method": "POST",

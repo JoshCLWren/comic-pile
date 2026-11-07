@@ -1,8 +1,9 @@
 import { ReadingListReader } from './ReadingListReader'
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import {
@@ -166,6 +167,7 @@ export default function CustomCBLBuilder({
   const issueSearchInput = useRef<HTMLInputElement>(null)
   const issueSearchResults = useRef<HTMLDivElement>(null)
   const listNavigationRef = useRef<HTMLDivElement>(null)
+  const pendingNavigationFocusRef = useRef<number | null>(null)
   const currentIssueRef = useRef<HTMLLIElement>(null)
   const pendingProgressRevealRef = useRef<number | null>(null)
   const [readerOpen, setReaderOpen] = useState(false)
@@ -510,6 +512,18 @@ export default function CustomCBLBuilder({
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  const issueCards = useIssueCards(visibleEntries.map(({ entry }) => entry.issue_id), { enabled: open })
+  const cardsByIssue = indexIssueCards(issueCards.data)
+  // A page change may replace the navigation surface when its next card batch
+  // finishes loading. Restore focus after React commits the new DOM so keyboard
+  // readers stay in the list instead of silently falling back to <body>.
+  useLayoutEffect(() => {
+    if (pendingNavigationFocusRef.current !== currentPage) return
+    listNavigationRef.current?.focus({ preventScroll: true })
+    // Keep the intent through the in-flight metadata refresh. The next commit
+    // reasserts focus if the navigation node was replaced while cards loaded.
+    if (!issueCards.isFetching) pendingNavigationFocusRef.current = null
+  }, [currentPage, issueCards.isFetching, issueCards.data, entries])
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
@@ -537,7 +551,9 @@ export default function CustomCBLBuilder({
     target?.focus({ preventScroll: true })
   }
   const goToPage = (page: number) => {
-    setEntryPage(Math.max(0, Math.min(pageCount - 1, page)))
+    const targetPage = Math.max(0, Math.min(pageCount - 1, page))
+    pendingNavigationFocusRef.current = targetPage
+    setEntryPage(targetPage)
     focusListStart()
   }
 
@@ -904,6 +920,7 @@ export default function CustomCBLBuilder({
                   <ReadingListEntryCard
                     key={entry.issue_id}
                     entry={entry}
+                    card={cardsByIssue.get(entry.issue_id)}
                     index={index}
                     entryCount={entries.length}
                     isNextUnread={entry.issue_id === nextUnreadIssueId}

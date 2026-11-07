@@ -8,6 +8,7 @@ import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-
 import { tagsApi } from '../services/api-tags'
 import { threadsApi } from '../services/api-threads'
 import { queueApi } from '../services/api-queue'
+import { issueCardsApi, type IssueCard } from '../services/issueCardsApi'
 import { cast } from '../utils/cast'
 
 vi.mock('../services/api-continuity-plans', async () => {
@@ -206,8 +207,17 @@ const readerView: ReadingPlanReaderView = {
     ],
   }
 
+const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
+const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+function cardFor(issueId: number): IssueCard {
+  const issue = [availableIssue, blockedIssue, laterIssue].find((row) => row.issue_id === issueId) ?? laterIssue
+  return { issue_id: issueId, thread_id: issue.thread_id, thread_title: issue.thread_title,
+    issue_number: issue.issue_number, status: 'unread', rating: null,
+    mapping_state: 'unmapped', has_confirmed_identity: false }
+}
 beforeEach(() => {
   vi.clearAllMocks()
+  fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   mockGetReader.mockResolvedValue(readerView)
   mockSetPending.mockResolvedValue(cast<Awaited<ReturnType<typeof threadsApi.setPending>>>({ thread_id: 4, issue_id: 95 }))
   mockMoveToFront.mockResolvedValue(cast<Awaited<ReturnType<typeof queueApi.moveToFront>>>(undefined))
@@ -221,12 +231,19 @@ beforeEach(() => {
 
 describe('ReadingPlanDetailPage', () => {
 
-  it('starts the exact eligible issue from the header in Roll, without marking it read', async () => {
+  it('opens the exact issue from the header without writing or navigating to Roll', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
-    await waitFor(() => expect(mockSetPending).toHaveBeenCalledWith(4, 95))
-    expect(await screen.findByText('Roll screen')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Issue X-Men #95' })).toHaveLength(2))
+    const featured = screen.getAllByTestId('comic-issue-card').find((card) => card.dataset.variant === 'featured')
+    if (!featured) throw new Error('Featured issue card missing')
+    fireEvent.click(within(featured).getByRole('button', { name: 'Read now' }))
+    expect(within(featured).getByRole('slider')).toHaveValue('3.5')
+    fireEvent.click(within(featured).getByRole('button', { name: 'Cancel' }))
+    expect(patchIssue).not.toHaveBeenCalled()
+    expect(mockSetPending).not.toHaveBeenCalled()
     expect(mockMoveToFront).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
   it('moves an eligible series to the front without starting a pending roll', async () => {
@@ -239,22 +256,28 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
-  it('does not offer direct selection or queue movement on blocked or upcoming issues', async () => {
+  it('offers direct reading on blocked and upcoming issues without queue movement', async () => {
     renderPage()
     const blocked = await screen.findByTestId('blocked-next')
-    expect(within(blocked).queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    expect(within(blocked).getByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(within(blocked).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Show 1 upcoming issues' }))
     const upcoming = screen.getByTestId('upcoming-material')
-    expect(within(upcoming).queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+    expect(within(upcoming).getByRole('button', { name: 'Read now' })).toBeEnabled()
     expect(within(upcoming).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   })
 
-  it('shows a stale-frontier error and stays on the plan instead of opening the wrong issue', async () => {
-    mockSetPending.mockRejectedValue(new Error('This issue is no longer next and available. Refresh the reading plan and try again.'))
+  it('retries a failed header card load on the same plan without selecting a Roll', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Read next issue' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('This issue is no longer next')
+    await screen.findByRole('heading', { name: 'Age of Apocalypse' })
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95]))
+    fetchCards.mockRejectedValueOnce(new Error('cards offline'))
+    fireEvent.click(screen.getByRole('button', { name: 'Read next issue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('cards offline')
+    expect(patchIssue).not.toHaveBeenCalled()
+    expect(mockSetPending).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Issue X-Men #95' })).toHaveLength(2))
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 

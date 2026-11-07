@@ -7,6 +7,7 @@ import type { CustomCBL, CustomCBLListItem } from '../services/api-custom-cbl'
 import type { IssueMutationSnapshot } from '../pages/thread-detail/issueMutationState'
 import type { RateResponsePayload } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
+import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 import { queryKeys } from './queryKeys'
 import { isObject } from '../utils/runtimeChecks'
 import { isTransientQueryFailure } from './outageRetryBudget'
@@ -934,6 +935,8 @@ export async function invalidateAfterTagMutation(
 async function invalidateReadingEligibility(client: QueryClient, includeAuthoringLists = false): Promise<void> {
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.thread.all }),
+    // Legacy read/unread and direct v2 writes change the shared card status too.
+    client.invalidateQueries({ queryKey: queryKeys.issueCards.all }),
     client.invalidateQueries({ queryKey: queryKeys.queue.all }),
     client.invalidateQueries({ queryKey: queryKeys.roll.all }),
     client.invalidateQueries({ queryKey: queryKeys.dependencies.all }),
@@ -946,6 +949,65 @@ async function invalidateReadingEligibility(client: QueryClient, includeAuthorin
 /** Refresh global read state without refetching a just-saved authoring draft. */
 export async function invalidateAfterReaderProgress(client: QueryClient): Promise<void> {
   await invalidateReadingEligibility(client, true)
+}
+
+/**
+ * Refresh every batched issue-card projection after the mapping state of one
+ * issue changes, so the confirmed mapping, provider CDN cover and mapped
+ * badge re-render on every appearance of the same canonical issue without a
+ * full-page reload (#4444/#4450).
+ */
+export async function invalidateIssueCards(client: QueryClient): Promise<void> {
+  await client.invalidateQueries({ queryKey: queryKeys.issueCards.all })
+}
+
+/** Replace one card in every cached issue-card list that already holds it. */
+function replaceCachedCard(client: QueryClient, updated: IssueCard): void {
+  for (const [key, value] of client.getQueriesData<IssueCard[]>({ queryKey: queryKeys.issueCards.all })) {
+    if (!Array.isArray(value)) continue
+    const index = value.findIndex((card) => card.issue_id === updated.issue_id)
+    if (index === -1) continue
+    const next = value.slice()
+    next[index] = updated
+    client.setQueryData(key, next)
+  }
+}
+
+/**
+ * Reconcile every cache a direct issue read/rate touches (#4444).
+ * The confirmed card replaces the stale card in place, so duplicated
+ * appearances of the same issue agree immediately; thread progress is
+ * merged into the detail/summary caches without clobbering unrelated
+ * thread metadata; then the shared eligibility invalidation refreshes
+ * Thread, CBL/List/Plan, Queue, Roll and History reads.
+ */
+export async function applyIssueCardMutation(
+  client: QueryClient,
+  response: IssueReadRateResponse,
+): Promise<void> {
+  replaceCachedCard(client, response.issue)
+  const progress = response.thread
+  const mergeProgress = (cached: Thread | undefined): Thread | undefined => {
+    if (!cached) return undefined
+    // SAFETY: the native direct-read response always returns a valid Thread status string.
+    return {
+      ...cached,
+      issues_remaining: progress.issues_remaining,
+      status: progress.status as Thread['status'],
+      last_rating: progress.last_rating ?? cached.last_rating ?? null,
+      reading_progress: progress.reading_progress ?? cached.reading_progress ?? null,
+      next_unread_issue_id: progress.next_unread_issue_id ?? null,
+    }
+  }
+  const cachedDetail = client.getQueryData<Thread>(queryKeys.thread.detail(progress.thread_id))
+  if (cachedDetail) {
+    client.setQueryData<Thread>(queryKeys.thread.detail(progress.thread_id), mergeProgress(cachedDetail))
+  }
+  const cachedSummary = client.getQueryData<Thread>(queryKeys.thread.summary(progress.thread_id))
+  if (cachedSummary) {
+    client.setQueryData<Thread>(queryKeys.thread.summary(progress.thread_id), mergeProgress(cachedSummary))
+  }
+  await invalidateAfterReaderProgress(client)
 }
 
 /** Refresh every surface whose eligibility changed after an owner repair. */

@@ -1,5 +1,7 @@
 import type { Ref } from 'react'
 import type { CustomCBLEntry, ReadingListGate, ReadingListMode } from '../services/api-custom-cbl'
+import { ComicIssueCard } from './ComicIssueCard'
+import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
 
@@ -61,16 +63,22 @@ interface Props {
   onSkip: () => void
   onDestinationChange: (value: string) => void
   onMoveToPosition: () => void
+  /** Batched owner-scoped projection; enriches cover/rating/mapping when present. */
+  card?: IssueCard | null
+  /** Reconciles staged-entry read status after a direct action without reseeding list edits. */
+  onIssueMutated?: (response: IssueReadRateResponse) => void
 }
 
 /** A legible full-title card on phones, with per-issue settings revealed on demand. */
 export default function ReadingListEntryCard({
   entry, index, entryCount, isNextUnread, cardRef, mode, waitingOn, nameOf, expanded,
   moveDestination, disabled, onCheckpoint, onMoveEarlier, onMoveLater,
-  onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition,
+  onRemove, onToggleOptions, onGate, onSkip, onDestinationChange, onMoveToPosition, card, onIssueMutated,
 }: Props) {
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
+  // The editor owns the visible-page batch; rows never request metadata separately.
+  const resolvedCard = card ?? null
   return (
                     <li ref={cardRef} tabIndex={cardRef ? -1 : undefined} aria-current={isNextUnread ? "step" : undefined} className={`min-w-0 rounded-xl border p-3 ${isNextUnread ? "border-[var(--theme-continuity-accent)]" : "border-[var(--theme-border)]"}`} data-testid="reading-list-entry">
                       <div className="flex min-w-0 items-start gap-3">
@@ -146,6 +154,17 @@ export default function ReadingListEntryCard({
                         </div>
                       </div>
                       {waitText && <p className={`mt-2 break-words text-xs text-[var(--theme-text-muted)] sm:pl-10 ${expanded ? 'block' : 'hidden sm:block'}`}>{waitText}</p>}
+                      {/* Direct reading is separate from staged list edits:
+                          reading never commits or discards unsaved edits. */}
+                      <ComicIssueCard
+                        issueId={entry.issue_id}
+                        card={resolvedCard}
+                        threadTitle={entry.series_name}
+                        issueNumber={entry.issue_number}
+                        status={entry.status === 'read' ? 'read' : 'unread'}
+                        variant="compact"
+                        onMutated={onIssueMutated}
+                      />
                     </li>
   )
 }

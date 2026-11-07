@@ -323,6 +323,16 @@ export const queryKeys = {
     all: ['readerContext'] as const,
     detail: (issueId: number) => ['readerContext', issueId] as const,
   },
+  /**
+   * Owner-scoped issue-card projections (#4443/#4444). The key carries the
+   * sorted, deduplicated visible issue ids so every mount point with the same
+   * visible set shares one bounded batch instead of one request per row.
+   */
+  issueCards: {
+    all: ['issueCards'] as const,
+    list: (issueIds: number[]) =>
+      ['issueCards', 'list', [...new Set(issueIds)].sort((a, b) => a - b)] as const,
+  },
   readingPlans: {
     all: ['readingPlans'] as const,
     list: () => ['readingPlans', 'list'] as const,

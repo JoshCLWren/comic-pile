@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
 import { queryKeys } from '../query/queryKeys'
 
@@ -192,8 +193,10 @@ describe('CustomCBLBuilder', () => {
     fireEvent.change(screen.getByLabelText('Custom CBL'), { target: { value: '9' } })
     await waitFor(() => expect(screen.queryByText(/An existing reading cycle/)).not.toBeInTheDocument())
   })
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
   beforeEach(() => {
     vi.resetAllMocks()
+    fetchCards.mockResolvedValue([])
     mocks.list.mockResolvedValue([
       {
         id: 9,
@@ -234,6 +237,7 @@ describe('CustomCBLBuilder', () => {
 
     await screen.findByText('Hellboy and the B.P.R.D.: The Long Night #1')
     expect(screen.getAllByTestId('reading-list-entry')).toHaveLength(30)
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith(entries.slice(0, 30).map((entry) => entry.issue_id)))
     expect(screen.queryByText('Hellboy and the B.P.R.D.: The Long Night #31')).not.toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: 'Next 30' })[0])
     expect(screen.getByText('Hellboy and the B.P.R.D.: The Long Night #31')).toBeInTheDocument()

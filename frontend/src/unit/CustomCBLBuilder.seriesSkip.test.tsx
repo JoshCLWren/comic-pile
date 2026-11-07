@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import CustomCBLBuilder from '../components/CustomCBLBuilder'
+import { issueCardsApi } from '../services/issueCardsApi'
 import { existingList } from './fixtures/customCblFixture'
 
 const mocks = vi.hoisted(() => ({
@@ -74,8 +75,10 @@ const sameNameVolumesList = {
 }
 
 describe('saved-list editor series skip controls', () => {
+  const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
   beforeEach(() => {
     vi.resetAllMocks()
+    fetchCards.mockResolvedValue([])
     mocks.list.mockResolvedValue([
       {
         id: 9,
