@@ -20,12 +20,19 @@ permissions:
 # Capacity refill directly calls the canonical assignment controller. Keep it
 # in the same serialization domain as the dispatcher and completion drain so a
 # worker cannot be leased by two writers from the same stale idle snapshot.
+# Coalesce duplicate ingress events for this workflow only. The job-level
+# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch
+  group: factory-capacity-refill-ingress
+  queue: single
   cancel-in-progress: false
 
 jobs:
   refill:
+    concurrency:
+      group: fixed-model-factory-dispatch
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

@@ -53,15 +53,19 @@ permissions:
   issues: write
   pull-requests: write
 
+# Coalesce duplicate ingress events for this workflow only. The job-level
+# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch
-  # Every roster run creates its successor, so pending watchdog, recovery, and
-  # chain ticks must coalesce into one next run instead of multiplying chains.
+  group: fixed-model-factory-dispatch-ingress
   queue: single
   cancel-in-progress: false
 
 jobs:
   dispatch:
+    concurrency:
+      group: fixed-model-factory-dispatch
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       actions: write

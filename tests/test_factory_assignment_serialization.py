@@ -11,7 +11,66 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
-ASSIGNMENT_GROUP = "group: fixed-model-factory-dispatch"
+ASSIGNMENT_GROUP = "fixed-model-factory-dispatch"
+
+
+def _load_workflow(filename: str) -> dict:
+    """Parse a workflow file with a real YAML parser.
+
+    The workflow surface is intentionally flat: every assignment writer carries
+    exactly one workflow-level ``concurrency`` block and one ``jobs:`` mapping.
+    Parsing with a YAML parser instead of string splitting keeps the test robust
+    against indentation changes, extra concurrency blocks, and reordered keys.
+    """
+    import yaml
+
+    with (WORKFLOWS / filename).open(encoding="utf-8") as handle:
+        return yaml.safe_load(handle)
+
+
+def _ingress_group(workflow: dict) -> str:
+    """Return the workflow-level concurrency group expression, or ""."""
+    concurrency = workflow.get("concurrency") or {}
+    return str(concurrency.get("group", ""))
+
+
+def _ingress_queue(workflow: dict) -> str:
+    """Return the workflow-level concurrency queue mode, or ""."""
+    concurrency = workflow.get("concurrency") or {}
+    return str(concurrency.get("queue", ""))
+
+
+def _ingress_cancel(workflow: dict) -> bool:
+    """Return the workflow-level cancel-in-progress flag, defaulting True."""
+    concurrency = workflow.get("concurrency") or {}
+    return bool(concurrency.get("cancel-in-progress", True))
+
+
+def _job_group(workflow: dict) -> str:
+    """Return the first job's concurrency group expression, or ""."""
+    jobs = workflow.get("jobs") or {}
+    for job in jobs.values():
+        concurrency = job.get("concurrency") or {}
+        return str(concurrency.get("group", ""))
+    return ""
+
+
+def _job_queue(workflow: dict) -> str:
+    """Return the first job's concurrency queue mode, or ""."""
+    jobs = workflow.get("jobs") or {}
+    for job in jobs.values():
+        concurrency = job.get("concurrency") or {}
+        return str(concurrency.get("queue", ""))
+    return ""
+
+
+def _job_cancel(workflow: dict) -> bool:
+    """Return the first job's cancel-in-progress flag, defaulting True."""
+    jobs = workflow.get("jobs") or {}
+    for job in jobs.values():
+        concurrency = job.get("concurrency") or {}
+        return bool(concurrency.get("cancel-in-progress", True))
+    return True
 
 
 def test_all_factory_assignment_writers_share_one_concurrency_group() -> None:
@@ -32,12 +91,40 @@ def test_all_factory_assignment_writers_share_one_concurrency_group() -> None:
 
 def test_incident_writer_groups_are_not_independent() -> None:
     """The two writer groups implicated in incident #2727 must stay retired."""
-    completion = (WORKFLOWS / "factory-completion-drain.yml").read_text(
-        encoding="utf-8"
-    )
+    import re
+
+    completion = (WORKFLOWS / "factory-completion-drain.yml").read_text(encoding="utf-8")
     refill = (WORKFLOWS / "fixed-model-factory-capacity-refill.yml").read_text(
         encoding="utf-8"
     )
 
-    assert "group: factory-completion-drain" not in completion
+    # Ensure the retired independent writer group is not used as an exact group value
+    assert not re.search(r'(?m)^\s*group:\s*factory-completion-drain\s*$', completion)
     assert "group: fixed-model-capacity-refill-${{ github.event.workflow_run.id || github.run_id }}" not in refill
+    # Sanity: the shared serialization group must still be present in both.
+    assert _job_group(_load_workflow("factory-completion-drain.yml")) == ASSIGNMENT_GROUP
+    assert _job_group(_load_workflow("fixed-model-factory-capacity-refill.yml")) == ASSIGNMENT_GROUP
+
+
+def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> None:
+    """All writers must opt into FIFO queuing; a single-mode entrant evicts waiters."""
+    # Regression: migration-lane release runs were cancelled repeatedly while
+    # dispatcher and completion work arrived in the same shared group.
+    writers = (
+        "fixed-model-factory-dispatch.yml",
+        "fixed-model-factory-capacity-refill.yml",
+        "factory-completion-drain.yml",
+        "factory-migration-lane-release.yml",
+        "free-model-factory-dispatch.yml",
+    )
+    for filename in writers:
+        workflow = _load_workflow(filename)
+        ingress = _ingress_group(workflow)
+        writer = _job_group(workflow)
+        assert _ingress_queue(workflow) == "single", filename
+        assert _ingress_cancel(workflow) is False, filename
+        # The shared assignment group must not be used at workflow ingress level; it is only allowed in the job section.
+        assert ingress != ASSIGNMENT_GROUP, filename
+        assert writer == ASSIGNMENT_GROUP, filename
+        assert _job_queue(workflow) == "max", filename
+        assert _job_cancel(workflow) is False, filename

@@ -71,9 +71,9 @@ def test_dispatcher_installs_exact_rotisserie_revision_before_assignment() -> No
 def test_roster_chain_is_serialized_and_keeps_hourly_watchdog() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    assert "queue: single" in workflow
+    assert "queue: max" in workflow
     assert "cancel-in-progress: false" in workflow
-    assert "queue: max" not in workflow
+    assert "queue: single" in workflow  # duplicate roster ingress coalesces
     assert "- cron: '7 * * * *'" in workflow
     assert "Self-perpetuate roster cadence" in workflow
     assert "inputs.mode == 'roster'" in workflow
@@ -161,7 +161,7 @@ def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster() -> Non
         in workflow
     )
     assert "- cron: '7 * * * *'" in workflow
-    assert "queue: single" in workflow
+    assert "queue: max" in workflow
 
 
 def test_private_rotisserie_secret_has_safe_ssh_preflight() -> None:

@@ -13,12 +13,19 @@ permissions:
   issues: write
   pull-requests: write
 
+# Coalesce duplicate ingress events for this workflow only. The job-level
+# shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch
-  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+  group: factory-dispatch-compat-ingress
+  queue: single
+  cancel-in-progress: false
 
 jobs:
   dispatch:
+    concurrency:
+      group: fixed-model-factory-dispatch
+      queue: max
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - name: Resolve canonical dispatcher
