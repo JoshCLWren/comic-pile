@@ -654,9 +654,14 @@ def build_candidates(
         for issue in issues
         if str(issue.get('state') or 'OPEN').upper() == 'OPEN'
     }
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in open_numbers
     candidates: list[Candidate] = []
     for issue in issues:
         number = int(issue['number'])
+        if not eligibility.rust_cutover_work_allowed(
+            labels_of(issue), str(issue.get('body') or ''), cutover_open=cutover_open
+        ):
+            continue
         if not issue_is_static_candidate(
             issue,
             suppressing_pr_issues,
@@ -728,6 +733,29 @@ def build_candidates(
         # developed merge conflict starts a fresh budget without rewriting
         # truthful labels to factory:blocked.
         linked = linked_issue_from_pr(pr)
+        if cutover_open:
+            # Canonical branch identity and explicit closure may disagree. Hold
+            # the PR unless *every* issue it could deliver is cutover eligible.
+            delivered = {
+                number for number in (
+                    linked, issue_explicitly_closed_by_pr(pr)
+                ) if number is not None
+            }
+            if delivered:
+                if any(
+                    number not in issue_map
+                    or not eligibility.rust_cutover_work_allowed(
+                        labels_of(issue_map[number]),
+                        str(issue_map[number].get('body') or ''),
+                        cutover_open=True,
+                    )
+                    for number in delivered
+                ):
+                    continue
+            elif not eligibility.rust_cutover_work_allowed(
+                pr_labels, str(pr.get('body') or ''), cutover_open=True
+            ):
+                continue
         labels = set(pr_labels)
         if linked is not None and linked in issue_map:
             labels |= labels_of(issue_map[linked])
