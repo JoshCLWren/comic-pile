@@ -187,6 +187,42 @@ it('renders the scoped eligible order and passes browser snoozes to the resource
   expect(screen.queryByText('Saga')).not.toBeInTheDocument()
 })
 
+it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      current_die: 20,
+      roll_pool: [
+        { id: 1, title: 'Saga', format: 'Comic' },
+        { id: 2, title: 'X-Men', format: 'Comic' },
+        { id: 3, title: 'Runaways', format: 'Comic' },
+        { id: 4, title: 'Ultimate Spider-Man', format: 'Comic' },
+      ],
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollDieState.mockReturnValue({
+    data: { die: 2, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+  })
+
+  renderRollPage()
+
+  // Scoped die 2 bounds the visible pool even though bootstrap reports d20,
+  // and both rendered dice use the scoped sides.
+  expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.getByText('X-Men')).toBeInTheDocument()
+  expect(screen.queryByText('Runaways')).not.toBeInTheDocument()
+  const dice = screen.getAllByTestId('lazy-dice')
+  expect(dice.length).toBeGreaterThan(0)
+  for (const die of dice) {
+    expect(die).toHaveAttribute('data-sides', '2')
+  }
+})
+
 it('requests one scoped card batch and prefers its title and issue number (#4719)', () => {
   mockedUseRollBootstrap.mockReturnValue({
     data: {

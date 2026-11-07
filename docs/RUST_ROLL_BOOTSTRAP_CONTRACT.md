@@ -242,12 +242,12 @@ of its own.
 
 Migrate in this order, one surface per reviewable change:
 
-1. Die header — **selected die and readout mounted** from
-   `GET /v2/roll/die-state` (`die`), falling back to bootstrap
-   `current_die` while the scoped query settles or fails, and
-   invalidated after roll/set-die/reset. Remaining in this surface:
-   drive the ladder list, `default_die` and `last_roll` from the
-   scoped resource, and align die size and the 3D model with it.
+1. Die header — **selected die, ladder list, readout, die size and 3D model
+   mounted** from `GET /v2/roll/die-state` (`die`, `ladder`), falling back
+   to bootstrap `current_die` and the static ladder while the scoped query
+   settles or fails, and invalidated after roll/set-die/reset. Remaining in
+   this surface: drive `default_die` and `last_roll` from the scoped
+   resource.
 2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
    `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
    `thread_ids`), with browser-owned snoozes as the `snoozed` query
