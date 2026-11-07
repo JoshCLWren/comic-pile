@@ -21,9 +21,9 @@ import time
 from datetime import datetime
 from typing import Any, cast
 
+import factory_eligibility as eligibility
 from factory_review_policy import performed_via_untrusted_app
 from factory_work_policy import is_manual_only
-import factory_eligibility as eligibility
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 STALE_PR_GUARD_MARKER_RE = re.compile(
