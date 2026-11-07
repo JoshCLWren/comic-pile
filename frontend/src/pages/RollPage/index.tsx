@@ -173,9 +173,23 @@ export default function RollPage() {
     }
   }, [resetDiceMutation, state])
 
-  const rollPool = useMemo(() => bootstrap?.roll_pool ?? [], [bootstrap?.roll_pool])
+  // Use scoped eligible issue IDs to determine the authoritative pool order
+  // instead of bootstrap roll_pool. Bootstrap remains fallback while scoped queries settle.
+  const scopedPool = useMemo(() => {
+    if (!scopedEligibleIssueIds || scopedEligibleIssueIds.thread_ids == null) {
+      return bootstrap?.roll_pool ?? []
+    }
+    
+    // Map eligible thread IDs to the full thread objects, preserving order
+    const eligibleIds = scopedEligibleIssueIds.thread_ids
+    const poolThreads = bootstrap?.roll_pool ?? []
+    
+    return poolThreads
+      .filter(thread => eligibleIds.includes(thread.id))
+      .sort((a, b) => eligibleIds.indexOf(a.id) - eligibleIds.indexOf(b.id))
+  }, [scopedEligibleIssueIds, bootstrap?.roll_pool])
 
-  useRollPendingSession({ state, bootstrap, rollPool })
+  useRollPendingSession({ state, bootstrap, rollPool: scopedPool })
 
   const rating = useRollRating({
     state,
@@ -223,7 +237,7 @@ export default function RollPage() {
   const actions = useRollActions({
     state,
     bootstrap,
-    rollPool,
+    rollPool: scopedPool,
     navigate,
     mutations: {
       setDieMutation,
@@ -333,7 +347,7 @@ export default function RollPage() {
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
   const dieSize = state.currentDie || 6
-  const filteredThreads = rollPool.filter(
+  const filteredThreads = scopedPool.filter(
     (thread) =>
       !state.isRatingView || thread.id !== (state.selectedThreadId ? Number(state.selectedThreadId) : null),
   )
@@ -506,7 +520,7 @@ export default function RollPage() {
             )}
 
             <ThreadPool
-              pool={pool}
+              pool={scopedPool}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               selectedThreadId={state.selectedThreadId}
@@ -561,7 +575,7 @@ export default function RollPage() {
           setDiePending={setDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
           selectedThread={state.selectedThread}
-          pendingThreadId={bootstrap.pending_thread_id}
+          pendingThreadId={bootstrap?.pending_thread_id ?? null}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}
