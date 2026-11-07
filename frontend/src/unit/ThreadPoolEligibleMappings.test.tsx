@@ -58,6 +58,23 @@ describe('ThreadPool eligible mappings', () => {
     ).toBeTruthy()
   })
 
+  it('reorders the pool to scoped eligible thread ids when provided', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[
+            { id: 1, title: 'First comic', format: 'Comic' },
+            { id: 2, title: 'Second comic', format: 'Comic' },
+          ]}
+          eligibleThreadIds={[2, 1]}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('button', { name: /Die face 1: Second comic/i })).toBeVisible()
+    expect(screen.getByRole('button', { name: /Die face 2: First comic/i })).toBeVisible()
+  })
+
   it('omits eligible mappings while rating', () => {
     render(
       <MemoryRouter>
