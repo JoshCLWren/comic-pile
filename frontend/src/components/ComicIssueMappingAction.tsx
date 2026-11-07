@@ -25,6 +25,8 @@ export interface ComicIssueMappingActionProps {
   isBatchLoading?: boolean
   /** Batch query error state; when true, shows error status with retry option. */
   isBatchError?: boolean
+  /** Whether card data is available for this issue. When false after batch load, shows neutral status without Map action. */
+  hasCard?: boolean
 }
 
 const BASE_BUTTON =
@@ -55,6 +57,7 @@ export default function ComicIssueMappingAction({
   compact = false,
   isBatchLoading = false,
   isBatchError = false,
+  hasCard,
 }: ComicIssueMappingActionProps) {
   const mapping = useComicIssueMapping({
     issueId,
@@ -81,29 +84,44 @@ export default function ComicIssueMappingAction({
   }
 
   const issueLabel = issueNumber ? `issue #${issueNumber}` : 'this issue'
-  const statusDot = mapping.isMapped ? 'bg-[var(--theme-comic-accent)]' : 'bg-[var(--theme-text-dim)]'
+  const statusDot = hasCard === false
+    ? 'bg-[var(--theme-text-dim)]'
+    : mapping.isMapped
+      ? 'bg-[var(--theme-comic-accent)]'
+      : 'bg-[var(--theme-text-dim)]'
   const statusText =
     isBatchLoading
       ? 'Checking mapping…'
-      : mapping.status === 'mapped'
-        ? 'Mapped'
-        : mapping.status === 'ambiguous'
-          ? 'Mapping needs review'
-          : mapping.status === 'error'
-            ? 'Mapping status unavailable'
-            : 'Not mapped'
+      : hasCard === false
+        ? 'Mapping status unavailable'
+        : mapping.status === 'mapped'
+          ? 'Mapped'
+          : mapping.status === 'ambiguous'
+            ? 'Mapping needs review'
+            : mapping.status === 'error'
+              ? 'Mapping status unavailable'
+              : 'Not mapped'
 
   const isResolvedMapping = !isBatchLoading && !isBatchError
+  // When card data is not available (hasCard=false), show neutral state without Map action.
+  // This handles the case where the batch loaded but this issue isn't in the result.
+  const shouldShowMapButton = isResolvedMapping && !mapping.isMapped && hasCard !== false
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2" data-testid="comic-mapping-action">
       <span
         data-testid="comic-mapping-status"
-        data-mapping-status={mapping.isMapped ? 'linked' : 'unlinked'}
+        data-mapping-status={hasCard === false
+          ? 'pending'
+          : mapping.isMapped
+            ? 'linked'
+            : 'unlinked'}
         className={`inline-flex min-h-6 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${
-          mapping.isMapped
-            ? 'border-[var(--theme-comic-accent)]/30 text-[var(--theme-comic-accent)]'
-            : 'border-[var(--theme-border)] text-[var(--theme-text-dim)]'
+          hasCard === false
+            ? 'border-[var(--theme-border)] text-[var(--theme-text-dim)]'
+            : mapping.isMapped
+              ? 'border-[var(--theme-comic-accent)]/30 text-[var(--theme-comic-accent)]'
+              : 'border-[var(--theme-border)] text-[var(--theme-text-dim)]'
         }`}
       >
         <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${statusDot}`} />
@@ -121,7 +139,7 @@ export default function ComicIssueMappingAction({
         </button>
       )}
 
-      {isResolvedMapping && !mapping.isMapped && (
+      {shouldShowMapButton && (
         <button
           type="button"
           onClick={() => mapping.openMappingDialog('confirm')}

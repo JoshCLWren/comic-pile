@@ -374,6 +374,7 @@ export function ComicIssueCard({
               onMapped={() => invalidateIssueCards(queryClient)}
               isBatchLoading={isBatchLoading}
               isBatchError={isBatchError}
+              hasCard={card != null}
             />
           )}
         </div>

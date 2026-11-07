@@ -350,10 +350,17 @@ export default function ThreadDetailView() {
     if (!thread) return
     const nextUnreadIssueId = response.thread.next_unread_issue_id ?? null
     const nextUnreadIssue = issues.find((issue) => issue.id === nextUnreadIssueId)
-    const nextUnreadIssueNumber =
-      nextUnreadIssueId != null && nextUnreadIssue != null
-        ? nextUnreadIssue.issue_number
-        : thread.next_unread_issue_number ?? null
+    // When the next unread issue is not loaded, preserve the existing value
+    // instead of clearing it to null. Only write null when there is no next unread issue.
+    let nextUnreadIssueNumber: string | null
+    if (nextUnreadIssueId == null) {
+      nextUnreadIssueNumber = null
+    } else if (nextUnreadIssue != null) {
+      nextUnreadIssueNumber = String(nextUnreadIssue.issue_number)
+    } else {
+      // Next unread issue ID is non-null but not loaded; preserve existing value
+      nextUnreadIssueNumber = thread.next_unread_issue_number ?? null
+    }
     const nextSnapshot = applyIssueReadStatus(
       { issues, thread },
       response.issue.issue_id,
