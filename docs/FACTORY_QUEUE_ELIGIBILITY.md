@@ -13,12 +13,20 @@ the ComicPile work-selection paths (issue #3039).
 
 The controller's dispatcher (`assign`, `reconcile`, `release`,
 `conflict-recovery`, `stale`, `explain`) is the only path that may create a
-fixed-model lease. `scripts/next_task.py` never creates factory leases, never
-suppresses on canonical PRs (it has no PR view), and must agree with the
-controller on every static rule below. The Rotisserie adopter must agree too:
-its `_human_gate` is the same static rule set. When any path disagrees, the
-controller plus this document win; file a bug and fix the shared module, not a
-copy.
+fixed-model lease. `scripts/next_task.py` serves the separate local/Ralph
+queue; it does not create fixed-model leases or query canonical PRs, Rotisserie
+or the remote retry history. Both selectors share the *common* static rules,
+but their final `eligible` fields answer different questions. The Rotisserie
+adopter shares the common static rules but never assigns work. When the same
+static inputs disagree, fix the shared module rather than duplicating rules.
+
+For an **automated fixed-model assignment**, follow the controller verdict.
+For a **local issue implementation**, use Ralph selection followed by the
+local-factory claim procedure in
+`.agents/skills/local-factory-next-task/SKILL.md`: verify live ownership,
+open canonical PRs, dependencies and issue stage, then run `make start-task`
+and atomically set `factory:local`. A remote intake failure does not by itself
+prohibit an otherwise valid local claim.
 
 ## Shared semantics
 
@@ -45,7 +53,12 @@ Static exclusions, in evaluation order:
 7. An active factory lease (`factory:<worker>` / `factory:local`).
 8. Unresolved explicit dependencies (declared target still open).
 9. An open canonical PR already owning the issue (controller only).
-10. No-diff retry budget exhausted (bounded rolling window, never permanent).
+10. No-diff retry budget exhausted (fixed-model controller's rolling window;
+    not a Ralph selector input).
+
+An issue that passes the common static checks may still fail either selector's
+additional gates. `factory:unowned` means no active factory owner, not that
+all assignment gates have passed.
 
 ## Rust cutover scheduling dependency (active #4335)
 
@@ -68,10 +81,13 @@ the cutover, not ordinary feature bugs.
 Dynamic gates applied on top by the controller: worker WIP caps, review
 backlog backpressure, Rotisserie intake authorization, live GitHub dependency
 blockers, and lease liveness. `explain` reports every gate it can observe
-except lease liveness and the per-worker strike-retry exclusion, which is
-evaluated at assignment time for a specific worker. `reconcile` repairs
-contradictory labels and releases provably stale leases automatically; no
-hand-authored release comment is ever required.
+except lease liveness and the per-worker strike-retry exclusion, which are
+evaluated at assignment time for a specific worker. Under the expanded
+Rotisserie issue-intake configuration, a missing local `rotisserie` executable
+makes the *controller's* intake fail closed; it does **not** mean a local
+Ralph agent must install Rotisserie before claiming its own work.
+`reconcile` repairs contradictory labels and releases provably stale leases
+automatically; no hand-authored release comment is ever required.
 
 ## Manual-only directive contract
 
@@ -145,17 +161,24 @@ To ask why a specific issue is or is not eligible:
 python3 .github/scripts/factory-work-controller.py explain --issue 3039
 python3 .github/scripts/factory-work-controller.py explain --issue 3039 --json
 
-# Ralph-queue view (static rules + Ralph metadata only):
+# Local/Ralph queue view (shared static rules + Ralph metadata only):
 python3 scripts/next_task.py explain 3039
 ```
 
-Both commands are read-only and share `explain_issue_eligibility`, so the
-report cannot drift from what dispatch enforces. The controller report also
-names the open canonical PR that owns the issue, the worker-WIP and
-review-backlog counts against their limits, Rotisserie intake authorization,
-and any live open dependency blocker. The `next_task` report explicitly lists
-what it could not evaluate — canonical open-PR suppression is a controller-only
-gate.
+Both commands are read-only and use `explain_issue_eligibility` for the inputs
+they share. **Their top-level `eligible` values are not interchangeable**:
+the controller also checks open canonical PRs, Rotisserie authorization,
+remote no-diff retry history, and live dependency blockers; worker capacities
+and some lease/strike checks apply when it actually assigns work. The Ralph
+report lists these omitted checks under `not_evaluated`. In particular,
+`Ralph eligible: true` alongside `controller eligible: false` does not
+automatically make the issue globally claimable or forbid a local session:
+perform the live local contention checks and follow the local claim workflow.
 
-Historical claim/release comments are an append-only audit log. If `explain`
-reports a stale lease, run `reconcile`; do not hand-author release comments.
+Current owner labels and live issue/PR state determine active ownership.
+Historical claim/release comments and resume packets are append-only audit
+and handoff context, **not independent leases**. A previous claim with no
+matching release comment cannot override `factory:unowned` by itself.
+If actual labels contradict each other or a lease appears stale, run the
+controller's `reconcile` instead of hand-authoring release comments; never
+overwrite a foreign live owner.
