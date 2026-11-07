@@ -52,3 +52,34 @@ export function useRollIssueCards(
     enabled: issueIds.length > 0,
   })
 }
+
+/**
+ * Composed scoped snapshot (die + eligible ids + visible cards) for the
+ * next Roll surface migration. Additive only: it is not wired into
+ * RollPage yet, so the monolithic bootstrap remains authoritative and
+ * no extra prod requests fire until a surface opts in.
+ *
+ * @param snoozedThreadIds - Temporary snoozed thread ids, argument, not a URL string.
+ * @param api - Roll resources transport, injectable in tests.
+ */
+export function useRollResourceSnapshot(
+  snoozedThreadIds: readonly number[] = [],
+  api: RollResourcesApi = rollResourcesApi,
+) {
+  const dieState = useRollDieState(api)
+  const eligible = useRollEligibleIssueIds(snoozedThreadIds, api)
+  const issueIds = eligible.data?.issue_ids ?? []
+  const cards = useRollIssueCards(issueIds, api)
+  const isPending = dieState.isPending || eligible.isPending || (issueIds.length > 0 && cards.isPending)
+  const isError = dieState.isError || eligible.isError || cards.isError
+  return {
+    dieState: dieState.data,
+    eligibleIssueIds: eligible.data,
+    issueCards: cards.data,
+    isPending,
+    isError,
+    refetch: async () => {
+      await Promise.all([dieState.refetch(), eligible.refetch(), cards.refetch()])
+    },
+  }
+}
