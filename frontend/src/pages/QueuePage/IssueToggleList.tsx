@@ -20,6 +20,9 @@ import { isWindowDefined, isFunction } from '../../utils/runtimeChecks'
 import Tooltip from '../../components/Tooltip'
 import Modal from '../../components/Modal'
 import DeleteIssueDialog from './DeleteIssueDialog'
+import CompactIssueCardTrigger from '../../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../../hooks/useIssueCards'
+import type { IssueReadRateResponse } from '../../services/issueCardsApi'
 import { getDependencyTooltip } from '../../utils/dependencyHelpers'
 import {
   reorderIssuesForDrop,
@@ -173,6 +176,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     return issues.slice(startIndex, endIndex)
   }, [issues, isExpanded, getNextUnreadIssueId, getVisibilityWindow])
 
+  // Visible issue pills share one bounded projection; expanding the reorder
+  // view expands that batch. No per-row metadata requests.
+  const issueCardsQuery = useIssueCards(
+    (isReorderMode ? issues : getVisibleIssues()).map((issue) => issue.id),
+    { enabled: !isLoading && !loadError },
+  )
+  const cardsByIssue = indexIssueCards(issueCardsQuery.data)
+
   const [pendingCreates, setPendingCreates] = useState<string[]>([])
 
   const syncOptimisticIssues = useCallback((baseIssues: Issue[], pendingMutations: IssueMutation[]) => {
@@ -181,6 +192,18 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
     setDeleting(getPendingIssueIds(pendingMutations, 'delete'))
     setPendingCreates(getPendingCreates(pendingMutations))
   }, [])
+
+  // A direct issue read/rating is independent of the Edit Series draft.
+  // Keep pending staged edits intact atop the newly confirmed baseline.
+  const onDirectIssueMutated = useCallback((response: IssueReadRateResponse) => {
+    baseIssuesRef.current = baseIssuesRef.current.map((issue) =>
+      issue.id === response.issue.issue_id
+        ? { ...issue, status: response.issue.status as Issue['status'], read_at: response.issue.read_at }
+        : issue,
+    )
+    syncOptimisticIssues(baseIssuesRef.current, pendingMutationsRef.current)
+    onIssueChanged?.()
+  }, [onIssueChanged, syncOptimisticIssues])
 
   const fetchAllIssues = useCallback(async (): Promise<Issue[]> => {
     const allIssues: Issue[] = []
@@ -715,7 +738,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 key={issue.id}
                 data-testid={`issue-reorder-row-${issue.id}`}
                 data-issue-number={issue.issue_number}
-                className="surface-panel flex items-center gap-2 px-2 min-h-[44px]"
+                className="surface-panel flex flex-wrap items-center gap-2 px-2 min-h-[44px]"
               >
                 <span className="text-xs font-bold text-[var(--theme-text-primary)]">
                   #{issue.issue_number}
@@ -723,6 +746,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                 <span className="text-[10px] text-[var(--theme-text-muted)]">
                   {issue.status === 'read' ? '✅ Read' : '🟢 Unread'}
                 </span>
+                <CompactIssueCardTrigger
+                  issueId={issue.id}
+                  card={cardsByIssue.get(issue.id)}
+                  threadTitle={cardsByIssue.get(issue.id)?.thread_title ?? 'Comic'}
+                  issueNumber={issue.issue_number}
+                  status={issue.status === 'read' ? 'read' : 'unread'}
+                  onMutated={onDirectIssueMutated}
+                />
                 <span className="flex-1" />
                 <button
                   type="button"
@@ -776,7 +807,7 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
               data-testid={`issue-pill-${issue.id}`}
               data-issue-number={issue.issue_number}
               className={[
-                'flex items-center rounded border transition-all',
+                'flex flex-wrap items-center rounded border transition-all',
                 issue.status === 'read'
                   ? 'bg-amber-600/20 border-amber-500/30 text-amber-400'
                   : 'bg-white/5 border-white/10 text-stone-400',
@@ -804,6 +835,14 @@ export const IssueToggleList = forwardRef<IssueToggleListHandle, {
                  >
                    #{issue.issue_number} {issue.status === 'read' ? '✅' : '🟢'}
                  </button>
+                 <CompactIssueCardTrigger
+                   issueId={issue.id}
+                   card={cardsByIssue.get(issue.id)}
+                   threadTitle={cardsByIssue.get(issue.id)?.thread_title ?? 'Comic'}
+                   issueNumber={issue.issue_number}
+                   status={issue.status === 'read' ? 'read' : 'unread'}
+                   onMutated={onDirectIssueMutated}
+                 />
               {hasDeps && tooltipContent && (
                 <>
                   <Tooltip content={tooltipContent}>
