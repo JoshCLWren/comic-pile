@@ -993,7 +993,8 @@ impl ValidatedReadingInputs {
             })
             .map(|issue| issue.id)
             .collect();
-        Ok(self
+
+        let mut unsatisfied: BTreeSet<ConstraintEdge> = self
             .edges
             .iter()
             .filter(|edge| {
@@ -1005,7 +1006,113 @@ impl ValidatedReadingInputs {
                     && incomplete.contains(&edge.source_issue_id)
             })
             .cloned()
-            .collect())
+            .collect();
+
+        // The graph used for cycle validation has adjacent strict-list edges.
+        // Those edges alone cannot enforce live strict order after an out-of-order
+        // read: A (unread) -> B (read) -> C (unread) makes C appear eligible.
+        // Add runtime-only blockers from every earlier unread list entry to the
+        // current Thread frontiers. Do not add these edges to the stable graph:
+        // cycle validation must remain independent of mutable reading status.
+        //
+        // This matches Python reading_list_evaluator._list_blockers, including
+        // list skips, collection exclusions, approved volume overlaps, and holds.
+        let mut first_unread: HashMap<i32, (i32, i32)> = HashMap::new();
+        for issue in &self.inputs.core.issues {
+            if !incomplete.contains(&issue.id) {
+                continue;
+            }
+            let key = (issue.position, issue.id);
+            let first = first_unread.entry(issue.thread_id).or_insert(key);
+            if key < *first {
+                *first = key;
+            }
+        }
+        let frontiers: HashSet<i32> = first_unread.values().map(|&(_, id)| id).collect();
+        let volumes: HashMap<i32, &str> = self
+            .inputs
+            .core
+            .issues
+            .iter()
+            .filter_map(|issue| {
+                self.inputs
+                    .thread_volumes
+                    .get(&issue.thread_id)
+                    .map(|volume| (issue.id, volume.as_str()))
+            })
+            .collect();
+
+        for list in &self.inputs.lists {
+            let list_name = label(&list.name, list.list_id);
+            let strict_origin = format!("list {list_name} strict order");
+            let hold_origin = format!("list {list_name} hold");
+            let mut waiting_by_volume: HashMap<&str, HashSet<&str>> = HashMap::new();
+            for decision in &list.overlap_decisions {
+                waiting_by_volume
+                    .entry(decision.continuing_volume_id.as_str())
+                    .or_default()
+                    .insert(decision.waiting_volume_id.as_str());
+            }
+
+            let mut earlier_unread: Vec<i32> = Vec::new();
+            let mut hold_unread: Vec<i32> = Vec::new();
+            for entry in list.entries.iter().filter(|entry| {
+                !entry.skipped && !self.inputs.excluded_issue_ids.contains(&entry.issue_id)
+            }) {
+                if incomplete.contains(&entry.issue_id) {
+                    if frontiers.contains(&entry.issue_id)
+                        && !self.cyclic_issue_ids.contains(&entry.issue_id)
+                    {
+                        if list.mode == "strict" {
+                            let waiting = volumes
+                                .get(&entry.issue_id)
+                                .and_then(|volume| waiting_by_volume.get(volume));
+                            for source in &earlier_unread {
+                                let exempt = waiting.is_some_and(|waiting_volumes| {
+                                    volumes
+                                        .get(source)
+                                        .is_some_and(|volume| waiting_volumes.contains(volume))
+                                });
+                                if !exempt {
+                                    unsatisfied.insert(ConstraintEdge::in_list(
+                                        *source,
+                                        entry.issue_id,
+                                        &strict_origin,
+                                        list.list_id,
+                                    ));
+                                }
+                            }
+                        }
+                        for source in &hold_unread {
+                            unsatisfied.insert(ConstraintEdge::in_list(
+                                *source,
+                                entry.issue_id,
+                                &hold_origin,
+                                list.list_id,
+                            ));
+                        }
+                        if entry.gate == "hold" {
+                            for source in &earlier_unread {
+                                unsatisfied.insert(ConstraintEdge::in_list(
+                                    *source,
+                                    entry.issue_id,
+                                    &hold_origin,
+                                    list.list_id,
+                                ));
+                            }
+                        }
+                    }
+                    earlier_unread.push(entry.issue_id);
+                }
+                if entry.gate == "hold" {
+                    // A previously read hold cannot release later entries while
+                    // an issue preceding that hold is still unread.
+                    hold_unread.clone_from(&earlier_unread);
+                }
+            }
+        }
+
+        Ok(unsatisfied.into_iter().collect())
     }
 
     /// Live Option E frontiers. Ignore stale stored blocked/frontier fields:
