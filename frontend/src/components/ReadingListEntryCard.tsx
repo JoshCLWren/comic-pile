@@ -1,7 +1,6 @@
 import type { Ref } from 'react'
 import type { CustomCBLEntry, ReadingListGate, ReadingListMode } from '../services/api-custom-cbl'
 import { ComicIssueCard } from './ComicIssueCard'
-import { useIssueCards } from '../hooks/useIssueCards'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
 
 const GATE_ORDER: ReadingListGate[] = ['none', 'after_previous', 'hold']
@@ -78,9 +77,8 @@ export default function ReadingListEntryCard({
 }: Props) {
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
-  // Always fetch cards for fallback, but only use when card is null
-  const fallbackCards = useIssueCards([entry.issue_id], { enabled: true })
-  const resolvedCard = card ?? fallbackCards.data?.[0] ?? null
+  // The editor owns the visible-page batch; rows never request metadata separately.
+  const resolvedCard = card ?? null
   return (
                     <li ref={cardRef} tabIndex={cardRef ? -1 : undefined} aria-current={isNextUnread ? "step" : undefined} className={`min-w-0 rounded-xl border p-3 ${isNextUnread ? "border-[var(--theme-continuity-accent)]" : "border-[var(--theme-border)]"}`} data-testid="reading-list-entry">
                       <div className="flex min-w-0 items-start gap-3">

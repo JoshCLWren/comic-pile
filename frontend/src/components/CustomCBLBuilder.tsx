@@ -3,6 +3,7 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from '
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { applyCommittedReadingPlan, applyCreatedCustomCBL, applyUpdatedCustomCBL, applyDeletedCustomCBL } from '../query/cacheEffects'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import { queryKeys } from '../query/queryKeys'
 import Modal from './Modal'
 import {
@@ -510,6 +511,8 @@ export default function CustomCBLBuilder({
   const pageCount = Math.max(1, Math.ceil(matchedEntries.length / ENTRY_PAGE_SIZE))
   const currentPage = Math.min(entryPage, pageCount - 1)
   const visibleEntries = matchedEntries.slice(currentPage * ENTRY_PAGE_SIZE, (currentPage + 1) * ENTRY_PAGE_SIZE)
+  const issueCards = useIssueCards(visibleEntries.map(({ entry }) => entry.issue_id), { enabled: open })
+  const cardsByIssue = indexIssueCards(issueCards.data)
   const progressIndex = getReadingListProgressIndex(entries)
   const progressIssue = entries[progressIndex]
   const nextUnreadIssueId = entries.find((entry) => !entry.skipped && entry.status === 'unread')?.issue_id
@@ -904,6 +907,7 @@ export default function CustomCBLBuilder({
                   <ReadingListEntryCard
                     key={entry.issue_id}
                     entry={entry}
+                    card={cardsByIssue.get(entry.issue_id)}
                     index={index}
                     entryCount={entries.length}
                     isNextUnread={entry.issue_id === nextUnreadIssueId}

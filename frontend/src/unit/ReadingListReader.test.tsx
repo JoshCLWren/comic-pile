@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -7,6 +7,7 @@ import { ReadingListReader } from '../components/ReadingListReader'
 import { customCBLApi, type ReadingListReader as ReaderView } from '../services/api-custom-cbl'
 import { tagsApi } from '../services/api-tags'
 import { issuesApi } from '../services/api-issues'
+import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
 import { queryKeys } from '../query/queryKeys'
 
 vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn() } }))
@@ -23,6 +24,27 @@ const view: ReaderView = {
       ] } },
   ],
 }
+function cardFor(issueId: number): IssueCard {
+  const entry = view.entries?.find((row) => row.issue_id === issueId) ?? view.entries?.[0]
+  if (!entry) throw new Error('Missing fixture')
+  return { issue_id: issueId, thread_id: entry.thread_id, thread_title: entry.series_name,
+    issue_number: entry.issue_number, status: entry.status, rating: null,
+    mapping_state: 'unmapped', has_confirmed_identity: false }
+}
+function receipt(issueId = 10, status = 'read'): IssueReadRateResponse {
+  return { issue: { ...cardFor(issueId), status, rating: 3.5 },
+    thread: { thread_id: cardFor(issueId).thread_id, status: 'active', issues_remaining: 1 },
+    read_event_created: status === 'read', rating_event_created: status === 'read', replayed: false }
+}
+const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
+const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+function firstCard() {
+  return within(screen.getAllByTestId('comic-issue-card')[0])
+}
+async function openFirstEditor() {
+  await screen.findByText('Julix · Strict order')
+  await userEvent.click(firstCard().getByRole('button', { name: 'Rate / Mark read' }))
+}
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
   render(<QueryClientProvider client={client}><MemoryRouter><ReadingListReader listId={2} /></MemoryRouter></QueryClientProvider>)
@@ -30,38 +52,43 @@ function mount() {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
+  patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
   vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(customCBLApi.getReader).mockResolvedValue(structuredClone(view))
   vi.mocked(issuesApi.markRead).mockResolvedValue()
   vi.mocked(issuesApi.markUnread).mockResolvedValue()
 })
 
-it('shows every blocker, exact issue links and list-local skip without enabling blocked reads', async () => {
+it('shows every blocker, exact issue links and list-local skip while keeping blocked reads actionable', async () => {
   mount()
   expect(await screen.findByText('Julix · Strict order')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Open The Dead Remembered issue #2' })).toHaveAttribute('href', '/thread/1?issue=10#issue-10')
   expect(screen.getByRole('link', { name: 'Open Starman issue #55' })).toHaveTextContent('Reader prerequisite: waiting on Starman #55')
   expect(screen.getByText(/Skipped only in this list/)).toBeVisible()
-  expect(screen.getAllByRole('button', { name: 'Mark read' })).toHaveLength(1)
-  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(1)
+  expect(screen.getAllByRole('button', { name: 'Rate / Mark read' })).toHaveLength(2)
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Move to front' })).toHaveLength(1)
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20]))
 })
 
 it('marks the exact offered issue and refreshes the reader plus other eligibility surfaces', async () => {
   const client = mount()
   client.setQueryData(queryKeys.queue.activeCount(), 3)
-  await userEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
-  await waitFor(() => expect(issuesApi.markRead).toHaveBeenCalledWith(10))
+  await openFirstEditor()
+  await userEvent.click(firstCard().getByRole('button', { name: 'Mark read & save' }))
+  await waitFor(() => expect(patchIssue).toHaveBeenCalledWith(10, expect.objectContaining({ status: 'read', rating: 3.5, idempotencyKey: expect.any(String) })))
   await waitFor(() => expect(customCBLApi.getReader).toHaveBeenCalledTimes(2))
   expect(client.getQueryState(queryKeys.queue.activeCount())?.isInvalidated).toBe(true)
 })
 
 it('leaves the issue unread after a failed write and offers a retry', async () => {
-  vi.mocked(issuesApi.markRead).mockRejectedValue(new Error('offline'))
+  patchIssue.mockRejectedValueOnce(new Error('offline'))
   mount()
-  await userEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to update this issue')
-  expect(screen.getByRole('button', { name: 'Mark read' })).toBeEnabled()
+  await openFirstEditor()
+  await userEvent.click(firstCard().getByRole('button', { name: 'Mark read & save' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('offline')
+  expect(firstCard().getByRole('button', { name: 'Mark read & save' })).toBeEnabled()
   expect(customCBLApi.getReader).toHaveBeenCalledTimes(1)
 })
 
@@ -80,7 +107,7 @@ function entryFixture() {
   return entry
 }
 
-it('shows read, later, excluded and inactive states without offering unavailable reads', async () => {
+it('shows read, later, excluded and inactive states with manual reading available', async () => {
   const entry = entryFixture()
   vi.mocked(customCBLApi.getReader).mockResolvedValue({ ...view, mode: 'loose', entries: [
     { ...entry, availability: 'read', status: 'read' },
@@ -88,17 +115,18 @@ it('shows read, later, excluded and inactive states without offering unavailable
     { ...entry, id: 4, issue_id: 40, availability: 'excluded' },
     { ...entry, id: 5, issue_id: 50, availability: 'inactive' },
   ] })
+  fetchCards.mockImplementation(async (ids) => ids.map((id) => ({ ...cardFor(id), status: id === 10 ? 'read' : 'unread' })))
   mount()
   expect(await screen.findByText('Julix · Loose order')).toBeVisible()
-  expect(screen.getByText('Read')).toBeVisible()
+  expect(screen.getAllByText('Read').length).toBeGreaterThan(0)
   expect(screen.getByText('After earlier unread issues in this series')).toBeVisible()
   expect(screen.getByText('Excluded from your collection')).toBeVisible()
   expect(screen.getByText('Series is inactive')).toBeVisible()
-  expect(screen.queryByRole('button', { name: 'Mark read' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+  expect(screen.getAllByRole('button', { name: 'Rate / Mark read' }).length).toBeGreaterThan(0)
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(3)
   expect(screen.queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
-  await waitFor(() => expect(issuesApi.markUnread).toHaveBeenCalledWith(10))
+  await waitFor(() => expect(patchIssue).toHaveBeenCalledWith(10, expect.objectContaining({ status: 'unread' })))
   expect(issuesApi.markRead).not.toHaveBeenCalled()
 })
 
@@ -109,18 +137,19 @@ it('keeps legacy unread members visible while withholding direct availability cl
   mount()
   expect(await screen.findByText('Open series for current availability')).toBeVisible()
   expect(screen.getByRole('link', { name: 'The Dead Remembered #2' })).toHaveAttribute('href', '/thread/1')
-  expect(screen.queryByRole('button', { name: 'Mark read' })).not.toBeInTheDocument()
+  expect(screen.getAllByRole('button', { name: 'Rate / Mark read' }).length).toBeGreaterThan(0)
 })
 
 it('prevents duplicate progress writes while a mutation is pending', async () => {
   let finish: (() => void) | undefined
-  vi.mocked(issuesApi.markRead).mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+  patchIssue.mockImplementation(() => new Promise<IssueReadRateResponse>((resolve) => { finish = () => resolve(receipt()) }))
   mount()
-  await userEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
+  await openFirstEditor()
+  await userEvent.click(firstCard().getByRole('button', { name: 'Mark read & save' }))
   const saving = screen.getByRole('button', { name: 'Saving…' })
   expect(saving).toBeDisabled()
   await userEvent.click(saving)
-  expect(issuesApi.markRead).toHaveBeenCalledTimes(1)
+  expect(patchIssue).toHaveBeenCalledTimes(1)
   if (!finish) throw new Error('The write must have started')
   await act(async () => { finish?.() })
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Saving…' })).not.toBeInTheDocument())
@@ -130,10 +159,11 @@ it('keeps read state after a failed mark-unread action', async () => {
   vi.mocked(customCBLApi.getReader).mockResolvedValue({ ...view, entries: [
     { ...entryFixture(), availability: 'read', status: 'read' },
   ] })
-  vi.mocked(issuesApi.markUnread).mockRejectedValue(new Error('offline'))
+  fetchCards.mockResolvedValue([{ ...cardFor(10), status: 'read', rating: 4 }])
+  patchIssue.mockRejectedValueOnce(new Error('offline'))
   mount()
   await userEvent.click(await screen.findByRole('button', { name: 'Mark unread' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to update this issue')
+  expect(await screen.findByRole('alert')).toHaveTextContent('offline')
   expect(screen.getByRole('button', { name: 'Mark unread' })).toBeEnabled()
   expect(issuesApi.markRead).not.toHaveBeenCalled()
   expect(customCBLApi.getReader).toHaveBeenCalledTimes(1)
@@ -143,7 +173,7 @@ it('keeps progress usable when tags fail to load', async () => {
   vi.mocked(tagsApi.threadIssuesEffective).mockRejectedValue(new Error('tags offline'))
   mount()
   expect((await screen.findAllByText('Tags unavailable.')).length).toBeGreaterThan(0)
-  expect(screen.getByRole('button', { name: 'Mark read' })).toBeEnabled()
+  expect(firstCard().getByRole('button', { name: 'Rate / Mark read' })).toBeEnabled()
 })
 
 it('shows inherited tags and lets readers inspect their source', async () => {
