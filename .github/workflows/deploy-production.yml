@@ -80,6 +80,7 @@ jobs:
           OVERRIDE_REASON: ${{ github.event.inputs.reason || '' }}
           ACTOR: ${{ github.actor }}
           OWNER: ${{ github.repository_owner }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           runs_file="$RUNNER_TEMP/deploy-production-runs.json"
@@ -97,6 +98,12 @@ jobs:
             exit 0
           fi
           extra=(--fetch-jobs)
+          # A canceled duplicate CLI deploy must not latch the red freeze if
+          # its exact SHA is already READY on the authenticated live alias.
+          # This is only a candidate: factory_deploy_freeze.py also verifies
+          # GitHub job steps (schema passed, CLI deploy was the sole failure).
+          verified_live_sha="$(python3 .github/scripts/verify_vercel_production.py || true)"
+          extra+=(--verified-live-sha "$verified_live_sha")
           if [[ "$OVERRIDE_FREEZE" == "true" ]]; then
             if [[ "$ACTOR" != "$OWNER" ]]; then
               echo "::warning::Ignoring override_freeze from ${ACTOR}; only repository owner ${OWNER} may override."
@@ -355,6 +362,10 @@ jobs:
           set -euo pipefail
           deploy_sha="$(git rev-parse HEAD)"
           commit_message="$(git log -1 --pretty=%s)"
+          # A parallel CLI deployment can win the alias and cancel this one.
+          # Reconcile ONLY if the live production alias is READY on our exact
+          # (already schema-verified) SHA. Other errors must remain fatal.
+          set +e
           vercel deploy \
             --prod \
             --yes \
@@ -370,6 +381,16 @@ jobs:
             --meta githubOrg="$GITHUB_REPOSITORY_OWNER" \
             --meta githubRepo="${GITHUB_REPOSITORY#*/}" \
             --meta githubCommitAuthorLogin="$GITHUB_ACTOR"
+          deploy_status=$?
+          set -e
+          if [[ "$deploy_status" -ne 0 ]]; then
+            live_sha="$(python3 .github/scripts/verify_vercel_production.py || true)"
+            if [[ "$live_sha" != "$deploy_sha" ]]; then
+              echo "::error::Vercel CLI failed and production alias does not serve $deploy_sha" >&2
+              exit "$deploy_status"
+            fi
+            echo "::warning::CLI deployment was superseded, but production alias serves $deploy_sha. Continuing all verification and smoke checks."
+          fi
 
       - name: Verify the newest production deployment matches this SHA
         env:

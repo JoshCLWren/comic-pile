@@ -4,7 +4,9 @@
 The freeze is active only while the most recent *attempted* Deploy Production
 run on ``main`` is red. Gate-blocked runs (the freeze job stopped the deploy)
 and cancelled, skipped, or neutral runs do not count. Only a successful
-attempted deploy lifts the freeze. Maintainers may bypass it with
+attempted deploy normally lifts the freeze. A failed CLI-deploy step may also
+be reconciled when the same SHA is verified READY at the live Vercel alias,
+provided schema verification succeeded and no other step failed. Maintainers may bypass it with
 ``--override`` and a non-empty ``--reason``; that override is restricted to
 the repository owner at the workflow layer. Factory merge drains honor the
 freeze except for PRs labeled ``deploy-fix``.
@@ -22,6 +24,9 @@ from typing import TypedDict
 
 WORKFLOW_NAME = "Deploy Production"
 GATE_JOB_NAME = "Red-deploy freeze gate"
+DEPLOY_JOB_NAME = "Migrate Neon and deploy exact main SHA"
+CLI_DEPLOY_STEP = "Deploy exact commit to production"
+SCHEMA_VERIFICATION_STEP = "Verify production schema at application head"
 DEPLOY_FIX_LABEL = "deploy-fix"
 RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
 SUCCESS_CONCLUSIONS = frozenset({"success"})
@@ -259,12 +264,62 @@ def latest_completed_deploy_run(
     return latest_attempted_deploy_run(payload, jobs_loader=jobs_loader)
 
 
+def duplicate_deploy_recovered(
+    run: Mapping[str, object],
+    verified_live_sha: str | None,
+) -> bool:
+    """Recognize a failed CLI deploy superseded by a verified live sibling.
+
+    The Vercel alias must be READY at the failed run's exact SHA. The failed
+    run must have verified the production schema and then failed *only* in the
+    CLI deploy step. Migration and post-deploy smoke failures never qualify.
+    Missing job/step evidence fails closed.
+    """
+    if not verified_live_sha or str(run.get("head_sha") or "") != verified_live_sha:
+        return False
+
+    jobs = _jobs_from_run(run)
+    if not jobs:
+        return False
+
+    for job in jobs:
+        name = str(job.get("name") or "")
+        conclusion = str(job.get("conclusion") or "").lower()
+        if name != DEPLOY_JOB_NAME and conclusion in RED_CONCLUSIONS:
+            return False
+
+    deployment_jobs = [job for job in jobs if str(job.get("name") or "") == DEPLOY_JOB_NAME]
+    if len(deployment_jobs) != 1:
+        return False
+    job = deployment_jobs[0]
+    if str(job.get("conclusion") or "").lower() != "failure":
+        return False
+    raw_steps = job.get("steps")
+    if not isinstance(raw_steps, list):
+        return False
+    steps = [step for step in raw_steps if isinstance(step, Mapping)]
+    if len(steps) != len(raw_steps):
+        return False
+    schema_verified = any(
+        str(step.get("name") or "") == SCHEMA_VERIFICATION_STEP
+        and str(step.get("conclusion") or "").lower() == "success"
+        for step in steps
+    )
+    failures = [
+        str(step.get("name") or "")
+        for step in steps
+        if str(step.get("conclusion") or "").lower() in RED_CONCLUSIONS
+    ]
+    return schema_verified and failures == [CLI_DEPLOY_STEP]
+
+
 def evaluate_freeze(
     payload: object,
     *,
     override: bool = False,
     reason: str = "",
     jobs_loader: JobsLoader | None = None,
+    verified_live_sha: str | None = None,
 ) -> FreezeDecision:
     """Return the freeze decision for one workflow-runs payload.
 
@@ -274,6 +329,9 @@ def evaluate_freeze(
         reason: Required explanation when ``override`` is true.
         jobs_loader: Optional per-run jobs fetcher used to skip gate-blocked
             runs without paging the full job history.
+        verified_live_sha: SHA observed READY at the live, authenticated
+            Vercel production alias. Does not authorize bypassing failed
+            migrations or smoke checks.
 
     Returns:
         JSON-serializable decision including ``blocked``, ``frozen``, the
@@ -323,6 +381,24 @@ def evaluate_freeze(
             "run_id": None,
             "run_url": None,
             "reason": "no attempted Deploy Production runs on main",
+        }
+
+    if last_is_red and latest is not None and duplicate_deploy_recovered(
+        latest, verified_live_sha
+    ):
+        return {
+            "blocked": False,
+            "frozen": False,
+            "overridden": False,
+            "conclusion": conclusion,
+            "run_id": run_id,
+            "run_url": run_url or None,
+            "reason": (
+                f"Failed CLI deploy {run_url or run_id} is reconciled: "
+                f"the exact commit {verified_live_sha} is READY on the "
+                "production alias after schema verification. "
+                "Retrying main through the normal migration and smoke pipeline."
+            ),
         }
 
     if last_is_red:
@@ -436,6 +512,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Logged explanation when --override is set.",
     )
     parser.add_argument(
+        "--verified-live-sha",
+        default="",
+        help="SHA verified READY at Vercel production alias; only reconciles a failed CLI-deploy step.",
+    )
+    parser.add_argument(
         "--fetch-jobs",
         action="store_true",
         help="Load jobs for each run so gate-blocked runs can be skipped.",
@@ -462,6 +543,7 @@ def main(argv: list[str] | None = None) -> int:
             override=bool(args.override),
             reason=str(args.reason or ""),
             jobs_loader=fetch_run_jobs if args.fetch_jobs else None,
+            verified_live_sha=str(args.verified_live_sha or "") or None,
         )
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"invalid workflow-runs response: {exc}", file=sys.stderr)
