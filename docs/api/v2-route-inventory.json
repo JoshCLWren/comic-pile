@@ -11,7 +11,13 @@
       "owning_issue": 4348,
       "consumers": [
         "frontend/src/services/api-tasks.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -21,7 +27,13 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -32,7 +44,13 @@
       "consumers": [
         "frontend/src/services/api-auth.ts",
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -42,7 +60,13 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -50,7 +74,13 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -58,7 +88,13 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -68,7 +104,13 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -78,7 +120,13 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -89,7 +137,13 @@
       "consumers": [
         "frontend/src/services/api-auth.ts",
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -99,7 +153,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -109,7 +169,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-plan-recovery.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -119,7 +185,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-plan-recovery.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "DELETE",
@@ -131,7 +203,13 @@
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/nativeRollMutationApi.ts",
         "frontend/src/services/issueCardsApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "PATCH",
@@ -143,7 +221,13 @@
         "frontend/src/services/nativeRollMutationApi.ts",
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/issueCardsApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -153,7 +237,13 @@
       "owning_issue": 4623,
       "consumers": [
         "frontend/src/services/api-comicvine.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -164,7 +254,13 @@
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts",
         "frontend/src/services/issueCardsApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -172,7 +268,13 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4335,
-      "consumers": []
+      "consumers": [],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "PATCH",
@@ -182,7 +284,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-queue.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -192,7 +300,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-queue.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -202,7 +316,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-reading-boundaries.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -210,7 +330,13 @@
       "runtime": "python-fastapi",
       "status": "transitional",
       "owning_issue": 4335,
-      "consumers": []
+      "consumers": [],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -220,7 +346,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -230,7 +362,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -240,7 +378,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -250,7 +394,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "DELETE",
@@ -260,7 +410,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -270,7 +426,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "PUT",
@@ -280,7 +442,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -290,7 +458,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -300,7 +474,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -311,7 +491,13 @@
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts",
         "frontend/src/services/protectedRollMutationApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -321,7 +507,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -331,7 +523,13 @@
       "owning_issue": 4595,
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -341,7 +539,13 @@
       "owning_issue": 4595,
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -351,7 +555,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -361,7 +571,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "GET",
@@ -371,7 +587,13 @@
       "owning_issue": 4342,
       "consumers": [
         "frontend/src/services/api-threads.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "PUT",
@@ -381,7 +603,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     },
     {
       "method": "POST",
@@ -391,7 +619,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts"
-      ]
+      ],
+      "sql_budget": {
+        "max_statements": 10,
+        "grows_with_data": false,
+        "rationale": "native route; budget to be refined by parity proof",
+        "proof": "native/roll-service/parity"
+      }
     }
   ],
   "retired_legacy_operations": [
