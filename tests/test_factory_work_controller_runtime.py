@@ -878,3 +878,43 @@ def test_worker_accepts_in_progress_pr_handoff_from_controller() -> None:
     ) in worker
     assert "ASSIGNED_PR_STAGE" in worker
     assert "repair-no-change-ready-handoff" in worker
+
+
+def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A manual issue request follows the linked PR and cannot select its producer."""
+    issue_number, pr_number = 812, 813
+    head = "a" * 40
+    candidate = controller.Candidate(
+        kind="pr", number=pr_number, lane=3, priority=0, created_at="",
+        stage="factory:review", linked_issue=issue_number, producer_worker="13",
+        head_contributors=frozenset({"13"}),
+    )
+    unrelated = controller.Candidate(
+        kind="issue", number=814, lane=0, priority=0, created_at="",
+    )
+    monkeypatch.setattr(controller, "quota_pause_for", lambda worker: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(controller, "budget_block_reason", lambda worker: None)
+    monkeypatch.setattr(controller, "omniroute_free_entry_capacity", lambda: {"remaining": 3})
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [{"number": pr_number, "headRefOid": head}])
+    monkeypatch.setattr(controller, "linked_issue_from_pr", lambda pr: issue_number)
+    monkeypatch.setattr(controller, "pr_suppresses_issue_candidate", lambda pr, issues: True)
+    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    monkeypatch.setattr(controller, "build_candidates", lambda *args, **kwargs: [unrelated, candidate])
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda issues, prs: None)
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda item: True)
+    claims: list[tuple[object, str, dict[str, str]]] = []
+
+    def claim(item: object, worker: str, **kwargs: str) -> bool:
+        claims.append((item, worker, kwargs))
+        return True
+
+    monkeypatch.setattr(controller, "assign_candidate", claim)
+    assert controller.assign("13", target=("issue", issue_number)) is None
+    with pytest.raises(RuntimeError, match="Current action: review"):
+        controller.assign("17", target=("issue", issue_number), requested_action="ci-repair")
+    assert controller.assign("17", target=("issue", issue_number)) == candidate
+    assert claims == [(candidate, "17", {"expected_head": head, "source": "manual"})]
