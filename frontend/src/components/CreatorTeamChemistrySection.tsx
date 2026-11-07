@@ -104,7 +104,11 @@ function IssueRefs({ pair, cardsByIssue }: { pair: CreatorTeamPair; cardsByIssue
             status="read"
             rating={ref.effective_rating}
           />
-          <Link to={threadIssueRoutePath(ref.thread_id, ref.issue_id)} className="text-xs underline">Open issue</Link>
+          <Link
+            to={threadIssueRoutePath(ref.thread_id, ref.issue_id)}
+            className="text-xs underline"
+            aria-label={`${ref.thread_title} issue ${ref.issue_number}${ref.effective_rating != null ? `, rated ${ref.effective_rating} out of 5` : ''}`}
+          >{ref.thread_title} #{ref.issue_number}</Link>
         </div>
       ))}
       {pair.shared_rated_issue_count > pair.max_shared_issue_refs && (
