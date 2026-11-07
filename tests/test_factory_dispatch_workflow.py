@@ -221,8 +221,9 @@ def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> Non
     assert "if ! [[ \"$remaining_core\" =~ ^[0-9]+$ ]]" in batch
     assert "if (( remaining_core < 450 )); then" in batch
     chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
-    assert "steps.api_budget.outputs.allow == 'true'" in chain
-    assert "steps.api_budget.outputs.quota_deferred == 'true'" in chain
+    job_if = workflow.split("roster-cadence:", 1)[1].split("runs-on:", 1)[0]
+    assert "needs.dispatch.outputs.allow == 'true'" in job_if
+    assert "needs.dispatch.outputs.quota_deferred == 'true'" in job_if
     assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" not in chain
     assert "API_RESET_EPOCH:" in chain
     assert "BUDGET_DEFERRED:" in chain
