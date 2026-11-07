@@ -948,13 +948,28 @@ def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]
     reconcile_stale_leases(now_epoch=now_epoch)
     issues = list_issues()
     prs = list_prs()
+    issue_map = {int(issue['number']): issue for issue in issues}
+    cutover_open = eligibility.RUST_CUTOVER_EPIC in issue_map
+    eligible_prs = [
+        pr for pr in prs
+        if pr_cutover_allowed(pr, issue_map, cutover_open=cutover_open)
+    ]
     from factory_work_policy import factory_review_backlog_count
-    backlog = factory_review_backlog_count(prs)
+    backlog = factory_review_backlog_count(eligible_prs)
     snapshot = omniroute_free_entry_capacity()
     from factory_capacity_policy import completion_worker_target, FleetDemand
     demand = FleetDemand(
-        completion=sum(1 for pr in prs if pr.get('state') == 'OPEN' and not pr.get('isDraft')),
-        production=len(issues),
+        completion=sum(
+            1 for pr in eligible_prs
+            if pr.get('state') == 'OPEN' and not pr.get('isDraft')
+        ),
+        production=sum(
+            1 for issue in issues
+            if eligibility.rust_cutover_work_allowed(
+                labels_of(issue), str(issue.get('body') or ''),
+                cutover_open=cutover_open,
+            )
+        ),
         idle_workers=0,
     )
     target = completion_worker_target(demand)
