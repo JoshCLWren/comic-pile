@@ -9,6 +9,8 @@ import type { CreatorComparisonIssueRef, CreatorComparisonItem, CreatorCompariso
 import { CreatorMetricDrilldownModal } from '../components/CreatorMetricDrilldownModal'
 import Breadcrumbs from '../components/Breadcrumbs'
 import GlossaryLink from '../components/GlossaryLink'
+import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 interface MetricClickParams {
   role?: string
@@ -250,6 +252,9 @@ function IssueDrilldown({
   detailPath: string | null
   groupLabel: string
 }) {
+  // A single batch provides identity/cover for every exact issue in this drilldown.
+  const cards = useIssueCards(refs.map((ref) => ref.issue_id))
+  const cardsByIssue = indexIssueCards(cards.data)
   // Bounded drilldown (issue #3174): surprising counts link back to the actual
   // supporting issues instead of standing alone as bare numbers. The sample is
   // truncated at maxRefs while the headline count stays the full total.
@@ -261,13 +266,16 @@ function IssueDrilldown({
       <ul className="space-y-1" aria-label={groupLabel}>
         {refs.map((ref) => (
           <li key={ref.issue_id} className="min-w-0">
+            <CompactIssueCardTrigger
+              issueId={ref.issue_id}
+              card={cardsByIssue.get(ref.issue_id)}
+              threadTitle={ref.thread_title}
+              issueNumber={ref.issue_number}
+            />
             <Link
               to={threadIssueRoutePath(ref.thread_id, ref.issue_id)}
-              className="block min-w-0 truncate rounded text-sm font-semibold underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-              style={{ color: 'var(--theme-text-primary)' }}
-            >
-              {ref.thread_title} #{ref.issue_number}
-            </Link>
+              className="block text-xs font-semibold underline text-[var(--theme-text-muted)]"
+            >Open issue</Link>
           </li>
         ))}
       </ul>
