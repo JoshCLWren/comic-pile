@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRollResourceSnapshot } from '../hooks/useRollResources'
 import type { RollResourcesApi } from '../services/rollResourcesApi'
@@ -23,8 +23,7 @@ describe('useRollResourceSnapshot', () => {
   it('composes die, eligible ids and cards without a URL surface', async () => {
     const fake = api()
     const { result } = renderHook(() => useRollResourceSnapshot([], fake), { wrapper: wrapper() })
-    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
-    expect(result.current.dieState?.die).toBe(20)
+    await waitFor(() => expect(result.current.dieState?.die).toBe(20))
     expect(result.current.eligibleIssueIds?.issue_ids).toEqual([101, 102])
     expect(fake.issueCards).toHaveBeenCalledWith([101, 102])
     expect(result.current.isError).toBe(false)
