@@ -59,7 +59,11 @@ function IssueRow({ row, showRating, card, status }: { row: CreatorIssueRow; sho
           <RatingValue value={row.effective_rating} label={`Rated ${row.effective_rating} out of 5`} />
         )}
         {ratedAt && <span>{ratedAt}</span>}
-        <Link to={threadIssueRoutePath(row.thread_id, row.issue_id)} className="underline">Open issue</Link>
+        <Link
+          to={threadIssueRoutePath(row.thread_id, row.issue_id)}
+          aria-label={`Open ${row.thread_title} #${row.issue_number} in its thread`}
+          className="underline"
+        >{row.thread_title} #{row.issue_number}</Link>
       </div>
     </li>
   )
@@ -212,7 +216,11 @@ function IssueInsightCard({ insight, card }: { insight: CreatorIssueInsight; car
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
         <RatingValue value={insight.effective_rating} label={`Rated ${insight.effective_rating} out of 5`} />
         {insight.roles.length > 0 && <span className="break-words">{insight.roles.join(', ')}</span>}
-        <Link to={threadIssueRoutePath(insight.thread_id, insight.issue_id)} className="underline">Open issue</Link>
+        <Link
+          to={threadIssueRoutePath(insight.thread_id, insight.issue_id)}
+          aria-label={`Open ${insight.thread_title} #${insight.issue_number} in its thread`}
+          className="underline"
+        >{insight.thread_title} #{insight.issue_number}</Link>
       </div>
     </li>
   )
