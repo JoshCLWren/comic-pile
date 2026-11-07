@@ -294,9 +294,10 @@ def explain_issue(
 
     Uses the same shared eligibility module as the fixed-model controller, with
     ``require_ralph_labels`` enabled because this selector serves the Ralph
-    queue. Canonical open-PR suppression is a controller-only gate that this
-    selector has no view of, so the report says so explicitly instead of
-    implying the issue is dispatchable.
+    queue. This is not an authorization for fixed-model dispatch: that
+    controller also evaluates canonical PRs, Rotisserie intake, retry history,
+    and worker-specific gates that this selector does not query. The report
+    explicitly names those omitted checks.
 
     Args:
         issue: The GitHub issue payload to explain.
@@ -328,6 +329,11 @@ def explain_issue(
         "labels": sorted(_labels(issue)),
         "not_evaluated": [
             "canonical open-PR suppression (controller-only gate)",
+            "Rotisserie issue-intake authorization (fixed-model only)",
+            "rolling no-diff retry budget (fixed-model only)",
+            "worker WIP, review-backlog, quota, and capacity (fixed-model dispatch gates)",
+            "live GitHub dependency blockers (controller-only gate)",
+            "lease liveness and worker-specific strike-retry exclusion (assignment-time gates)",
         ],
     }
 
