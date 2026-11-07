@@ -315,6 +315,11 @@ async def test_initialize_cancellation_rolls_back_new_session_and_checkpoint():
             ),
             "RUST_ROLL_TEST_INITIALIZE": "1",
             "RUST_ROLL_TEST_NOW": str(NOW.timestamp()),
+            # Cancel the initialization future in Rust while the checkpoint query
+            # is still blocked; the process and its single-connection pool stay
+            # alive so the post-cancel checkout proves the connection was discarded.
+            "RUST_ROLL_TEST_CANCEL_ON_STDIN": "1",
+            "RUST_ROLL_POOL_SIZE": "1",
         }
         async with engine.begin() as blocker:
             await blocker.execute(
@@ -324,6 +329,7 @@ async def test_initialize_cancellation_rolls_back_new_session_and_checkpoint():
             process = await asyncio.create_subprocess_exec(
                 str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
                 env=environment,
+                stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -345,8 +351,12 @@ async def test_initialize_cancellation_rolls_back_new_session_and_checkpoint():
                 await asyncio.sleep(0.01)
             else:
                 pytest.fail("native initializer did not reach the locked checkpoint query")
-            process.kill()
-            await process.communicate()
+            assert process.stdin is not None
+            process.stdin.write(b"x")
+            await process.stdin.drain()
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+            assert process.returncode == 0, stderr.decode()
+            assert json.loads(stdout) == {"cancelled": True, "checkout_usable": True}
             process = None
 
         async with engine.connect() as connection:

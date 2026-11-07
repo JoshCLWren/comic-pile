@@ -132,7 +132,7 @@ never used to choose eligibility. Missing or cross-thread pointers fail closed;
 failed or canceled transactions discard their physical pool connection.
 
 The local parity example is a CLI only, with no public HTTP route. On a disposable
-PostgreSQL database (schema creation privileges required):
+PostgreSQL database with the canonical Alembic schema already applied:
 
 ```bash
 cd native/roll-service
@@ -148,8 +148,11 @@ the role, then set `RUST_ROLL_PARITY_DATABASE_URL` to its DSN and run pytest.
 Each parity case takes a shared advisory lock, truncates application rows, and
 resets sequences before seeding synthetic data. It compares scalar
 identity/status/order and stored queue diagnostics with Python
-`load_shadow_inputs`, and injects invalid pointers only into its test rows. Both
-loaders use read-only repeatable-read transactions.
+`load_shadow_inputs`, and forces a concurrent commit between the two native
+SELECTs to prove both read one repeatable-read snapshot. Both loaders use
+read-only repeatable-read transactions; unresolved stored references are
+rejected by the loader unit tests rather than by corrupting the canonical
+schema.
 The test prints Python oracle CPU/wall time and native child-process CPU/wall time;
 the latter includes startup and authentication. These are diagnostic timings, not
 equivalent-workload performance claims (#4312 owns that gate). The native loader
@@ -264,10 +267,14 @@ state in the canonical schema, rolls back Python, then compares every
 persisted session field and snapshot payload. It tests fresh/reused/expired
 sessions, pending context, recent cancellation activity, cutoff equality,
 manual/automatic dice, modes, timezone validation, observed/era bandwidth,
-foreign/missing session IDs, repeated GETs, and concurrent first creation. It
-also asserts threads,
-issues, and events remain unchanged. Timestamp spelling is normalized; values,
-nulls, ordering, and state are not discarded. No production data is used.
+foreign/missing session IDs, repeated GETs, concurrent first creation, and a
+checkpoint insert conflict that must roll back the new session. A separate case
+cancels the initialization future in Rust while the checkpoint query is blocked,
+then proves the same pool still serves a query and no partial session or
+snapshot survives. Deadlock retry is covered deterministically by unit tests on
+the bounded attempt loop. It also asserts threads, issues, and events remain
+unchanged. Timestamp spelling is normalized; values, nulls, ordering, and state
+are not discarded. No production data is used.
 
 ```sh
 cargo build --locked --examples

@@ -68,7 +68,7 @@ async def test_core_scalar_parity() -> None:
             await db.flush()
             active.next_unread_issue_id = later.id
             await db.commit()
-            reader_id = reader.id
+            reader_id, active_id, later_id = reader.id, active.id, later.id
         async with engine.connect() as connection:
             connection = await connection.execution_options(isolation_level="REPEATABLE READ")
             async with connection.begin():
@@ -138,6 +138,40 @@ async def test_core_scalar_parity() -> None:
         after = resource.getrusage(resource.RUSAGE_CHILDREN)
         assert status == 0, stderr.decode()
         assert json.loads(stdout) == expected
+        # Force a commit between the two native data SELECTs. The issues query
+        # blocks behind this lock after the thread query established the
+        # repeatable-read snapshot, so the native projection must not observe the
+        # concurrently committed status changes.
+        async with engine.begin() as writer:
+            await writer.execute(text("LOCK TABLE issues IN ACCESS EXCLUSIVE MODE"))
+            pending = asyncio.create_task(run())
+            for _ in range(100):
+                async with engine.connect() as observer:
+                    blocked = await observer.scalar(
+                        text(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE application_name = :name "
+                            "AND wait_event_type = 'Lock' AND query LIKE 'SELECT i.id,%'"
+                        ),
+                        {"name": application_name},
+                    )
+                if blocked:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pending.cancel()
+                pytest.fail("native issues query did not reach the controlled lock")
+            await writer.execute(
+                text("UPDATE threads SET status = 'completed' WHERE id = :id"),
+                {"id": active_id},
+            )
+            await writer.execute(
+                text("UPDATE issues SET status = 'read' WHERE id = :id"),
+                {"id": later_id},
+            )
+        status, stdout, stderr = await pending
+        assert status == 0, stderr.decode()
+        assert json.loads(stdout) == expected, "the two native SELECTs must share one snapshot"
         print(
             {
                 "python_oracle_cpu_s": python_cpu,
@@ -150,6 +184,5 @@ async def test_core_scalar_parity() -> None:
                 "native_data_queries": 2,
             }
         )
-        assert json.loads(stdout) == expected
     finally:
         await engine.dispose()
