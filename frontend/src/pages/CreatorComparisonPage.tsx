@@ -275,7 +275,7 @@ function IssueDrilldown({
             <Link
               to={threadIssueRoutePath(ref.thread_id, ref.issue_id)}
               className="block text-xs font-semibold underline text-[var(--theme-text-muted)]"
-            >Open issue</Link>
+            >{ref.thread_title} #{ref.issue_number}</Link>
           </li>
         ))}
       </ul>
