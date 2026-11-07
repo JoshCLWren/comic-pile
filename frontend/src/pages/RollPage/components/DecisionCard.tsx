@@ -1,5 +1,6 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import GlossaryLink from '../../../components/GlossaryLink'
+import { ComicIssueRatingSlider } from '../../../components/ComicIssueCard'
 import { RATING_THRESHOLD, getRatingColorClass } from '../utils'
 import {
   rollPrimaryActionClass,
@@ -61,10 +62,6 @@ export function DecisionCard({
   const isLastIssue = issuesRemaining === 1
   const threadTitle = activeRatingThread?.title ?? null
   const issueNumber = activeRatingThread?.next_issue_number ?? activeRatingThread?.issue_number ?? null
-  const ratingFillPct = Math.min(
-    100,
-    Math.max(0, ((rating - 0.5) / (5.0 - 0.5)) * 100),
-  )
 
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle')
 
@@ -148,20 +145,13 @@ export function DecisionCard({
         </div>
       </div>
 
-      <input
-        type="range"
-        id="rating-input"
-        name="rating"
-        min="0.5"
-        max="5.0"
-        step="0.5"
+      <ComicIssueRatingSlider
         value={rating}
-        className="rating-slider h-4 w-full"
-        // SAFETY: the custom property is read by the slider fill gradient, not by React's CSSProperties
-        style={{ '--slider-fill': `${ratingFillPct}%` } as CSSProperties}
-        aria-label="Rating from 0.5 to 5.0 in steps of 0.5"
-        aria-describedby="rating-value queue-effect"
-        onChange={(event) => onUpdateRating(event.target.value)}
+        onChange={onUpdateRating}
+        inputId="rating-input"
+        describedBy="rating-value queue-effect"
+        showScaleNote={false}
+        showValue={false}
       />
 
       <p id="queue-effect" className="text-[11px] font-bold leading-relaxed text-stone-400">
