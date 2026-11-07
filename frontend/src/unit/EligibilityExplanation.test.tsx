@@ -53,7 +53,7 @@ it('uses the owner card batch for exact prerequisite art while preserving the de
         isBlocked
         dependencies={[
           { issue_id: 44, thread_id: 4, thread_title: 'One Year In', issue_number: '1', label: 'Hold: One Year In #1' },
-          { thread_id: 8, thread_title: 'Unknown Issue', label: 'Finish an unknown issue' },
+          { thread_id: 8, thread_title: 'Unknown Issue', issue_number: '2', label: 'Finish an unknown issue' },
         ]}
         cardsByIssue={new Map([[44, card]])}
       />
