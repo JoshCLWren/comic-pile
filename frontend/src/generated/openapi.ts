@@ -15416,6 +15416,16 @@ export interface components {
             die: number;
             /** @description The eligible issue identifiers, in queue order. */
             issue_ids: number[];
+            /**
+             * @description Why an empty in-play pool has no faces, when it does.
+             *     Derived from the already-loaded Option E inputs and the eligible
+             *     frontiers before the die bound and browser snoozes, exactly as
+             *     `GET /api/v2/roll/bootstrap` reports it. `ready` means at least one
+             *     frontier is eligible; the other variants name why an empty pool has
+             *     no in-play faces (`no_series`, `all_blocked`, `all_completed`,
+             *     `all_out_of_pool`). It never carries a list or whole-library report.
+             */
+            pool_reason: components["schemas"]["PoolReason"];
             /** @description The owning thread identifiers, parallel to `issue_ids`. */
             thread_ids: number[];
         };

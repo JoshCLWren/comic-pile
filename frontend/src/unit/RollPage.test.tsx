@@ -174,7 +174,7 @@ it('renders the bounded bootstrap pool without Collections state', () => {
 it('renders the scoped eligible order and passes browser snoozes to the resource (#4719)', () => {
   writeRollSnoozes([99])
   mockedUseRollEligibleIssueIds.mockReturnValue({
-    data: { die: 6, issue_ids: [201], thread_ids: [2] },
+    data: { die: 6, issue_ids: [201], thread_ids: [2], pool_reason: 'ready' },
   })
 
   renderRollPage()
@@ -205,7 +205,7 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
     error: null,
   })
   mockedUseRollEligibleIssueIds.mockReturnValue({
-    data: { die: 6, issue_ids: [11], thread_ids: [1] },
+    data: { die: 6, issue_ids: [11], thread_ids: [1], pool_reason: 'ready' },
   })
   mockedUseRollIssueCards.mockReturnValue({
     data: {
@@ -227,6 +227,31 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
   expect(screen.getByText('Canonical card title')).toBeInTheDocument()
   expect(screen.getByText('#9')).toBeInTheDocument()
   expect(screen.queryByText('Bootstrap title')).not.toBeInTheDocument()
+})
+
+it('prefers the scoped pool reason over bootstrap for the empty-pool copy (#4719)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      roll_pool: [],
+      pool_reason: 'all_blocked',
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 6, issue_ids: [], thread_ids: [], pool_reason: 'all_completed' },
+  })
+  mockedUseRollIssueCards.mockReturnValue({ data: { items: [] } })
+
+  renderRollPage()
+
+  // An explicitly empty scoped result means zero eligible faces, not a
+  // bootstrap fallback, and the scoped reason owns the empty-pool copy.
+  expect(screen.getByText('Every series is completed')).toBeInTheDocument()
+  expect(screen.queryByText(/waiting on earlier issues/i)).not.toBeInTheDocument()
 })
 
 it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {

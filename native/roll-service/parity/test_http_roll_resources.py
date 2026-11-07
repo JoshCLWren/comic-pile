@@ -267,6 +267,7 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
             "die": 4,
             "issue_ids": owner_issue_ids[:4],
             "thread_ids": owner_thread_ids[:4],
+            "pool_reason": "ready",
         }
 
         snoozed = await _run_example(
@@ -284,6 +285,7 @@ async def test_scoped_roll_resources_match_the_canonical_schema() -> None:
             "die": 4,
             "issue_ids": owner_issue_ids[2:6],
             "thread_ids": owner_thread_ids[2:6],
+            "pool_reason": "ready",
         }
 
         malformed = await _run_example(
