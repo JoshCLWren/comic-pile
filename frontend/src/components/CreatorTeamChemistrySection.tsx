@@ -2,6 +2,9 @@ import { Link } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { creatorRoutePath } from '../utils/creatorKey'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 import type {
   CreatorTeamChemistryResponse,
   CreatorTeamMember,
@@ -86,41 +89,32 @@ function MemberBaselineContext({
   )
 }
 
-function IssueRefs({ pair }: { pair: CreatorTeamPair }) {
-  if (pair.shared_issue_refs.length === 0) {
-    return null
-  }
+function IssueRefs({ pair, cardsByIssue }: { pair: CreatorTeamPair; cardsByIssue: Map<number, IssueCard> }) {
+  if (pair.shared_issue_refs.length === 0) return null
   return (
-    <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+    <div className="mt-2 space-y-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
       <span>Shared issues:</span>
       {pair.shared_issue_refs.map((ref) => (
-        <Link
-          key={ref.issue_id}
-          to={threadIssueRoutePath(ref.thread_id, ref.issue_id)}
-          className={`rounded ${FOCUS_RING}`}
-          style={{ color: 'var(--theme-text-primary)' }}
-          aria-label={`${ref.thread_title} issue ${ref.issue_number}${
-            ref.effective_rating != null ? `, rated ${ref.effective_rating} out of 5` : ''
-          }`}
-        >
-          <span className="underline decoration-dotted underline-offset-2">
-            {ref.thread_title} #{ref.issue_number}
-          </span>
-          {ref.effective_rating != null && (
-            <span style={{ color: 'var(--theme-personal-accent)' }}> {formatRating(ref.effective_rating)}★</span>
-          )}
-        </Link>
+        <div key={ref.issue_id} className="min-w-0">
+          <CompactIssueCardTrigger
+            issueId={ref.issue_id}
+            card={cardsByIssue.get(ref.issue_id)}
+            threadTitle={ref.thread_title}
+            issueNumber={ref.issue_number}
+            status="read"
+            rating={ref.effective_rating}
+          />
+          <Link to={threadIssueRoutePath(ref.thread_id, ref.issue_id)} className="text-xs underline">Open issue</Link>
+        </div>
       ))}
       {pair.shared_rated_issue_count > pair.max_shared_issue_refs && (
-        <span>
-          +{pair.shared_rated_issue_count - pair.max_shared_issue_refs} more
-        </span>
+        <span>+{pair.shared_rated_issue_count - pair.max_shared_issue_refs} more</span>
       )}
-    </span>
+    </div>
   )
 }
 
-function PairRow({ pair }: { pair: CreatorTeamPair }) {
+function PairRow({ pair, cardsByIssue }: { pair: CreatorTeamPair; cardsByIssue: Map<number, IssueCard> }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -148,7 +142,7 @@ function PairRow({ pair }: { pair: CreatorTeamPair }) {
           {pair.shared_rated_issue_count === 1 ? '' : 's'}
         </span>
       </div>
-      <IssueRefs pair={pair} />
+      <IssueRefs pair={pair} cardsByIssue={cardsByIssue} />
     </li>
   )
 }
@@ -191,6 +185,11 @@ export default function CreatorTeamChemistrySection({
       )
     : data.pairs
 
+  const cards = useIssueCards(matched.flatMap((pair) =>
+    pair.shared_issue_refs.map((issue) => issue.issue_id),
+  ))
+  const cardsByIssue = indexIssueCards(cards.data)
+
   if (matched.length === 0) {
     return (
       <SectionShell id={`${forCreatorKey ?? 'creators'}-team-chemistry-heading`} heading={heading}>
@@ -209,7 +208,7 @@ export default function CreatorTeamChemistrySection({
     <SectionShell id={`${forCreatorKey ?? 'creators'}-team-chemistry-heading`} heading={heading}>
       <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {matched.map((pair) => (
-          <PairRow key={pair.pair_key} pair={pair} />
+          <PairRow key={pair.pair_key} pair={pair} cardsByIssue={cardsByIssue} />
         ))}
       </ul>
       {partialMetadata && (
