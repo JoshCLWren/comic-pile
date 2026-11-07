@@ -2,19 +2,19 @@ import { Link } from 'react-router-dom'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { BlockingDependency } from '../types'
 import CompactIssueCardTrigger from './CompactIssueCardTrigger'
-import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 
 interface Props {
   isBlocked: boolean
   reasons?: string[]
   dependencies?: BlockingDependency[]
   emptyLabel?: string
+  /** Optional owner batch, supplied by a parent that knows all visible IDs. */
+  cardsByIssue?: ReadonlyMap<number, IssueCard>
 }
 
 /** Render the backend decision without deriving eligibility from visible edges. */
-export function EligibilityExplanation({ isBlocked, reasons = [], dependencies = [], emptyLabel = 'Available now' }: Props) {
-  const cards = useIssueCards(dependencies.map((dependency) => dependency.issue_id ?? 0))
-  const cardsByIssue = indexIssueCards(cards.data)
+export function EligibilityExplanation({ isBlocked, reasons = [], dependencies = [], emptyLabel = 'Available now', cardsByIssue }: Props) {
   const labels = new Set(dependencies.map((dependency) => dependency.label))
   const remainingReasons = reasons.filter((reason) => !labels.has(reason))
   return (
@@ -24,17 +24,17 @@ export function EligibilityExplanation({ isBlocked, reasons = [], dependencies =
         <ul className="mt-1 space-y-1" aria-label="Reading requirements">
           {dependencies.map((dependency, index) => (
             <li key={`${dependency.issue_id ?? dependency.thread_id}-${index}`} className="break-words">
-              {dependency.issue_id != null && cardsByIssue.has(dependency.issue_id) ? (
+              <Link aria-label={`Open ${dependency.thread_title}${dependency.issue_id ? ` issue #${dependency.issue_number}` : ''}`} to={threadIssueRoutePath(dependency.thread_id, dependency.issue_id)} className="text-[var(--theme-continuity-accent)] underline hover:text-[var(--theme-text-primary)]">
+                {dependency.label}
+              </Link>
+              {dependency.issue_id != null && (
                 <CompactIssueCardTrigger
                   issueId={dependency.issue_id}
-                  card={cardsByIssue.get(dependency.issue_id)}
+                  card={cardsByIssue?.get(dependency.issue_id)}
                   threadTitle={dependency.thread_title}
                   issueNumber={dependency.issue_number ?? ''}
+                  hideTitle
                 />
-              ) : (
-                <Link aria-label={`Open ${dependency.thread_title}${dependency.issue_id ? ` issue #${dependency.issue_number}` : ''}`} to={threadIssueRoutePath(dependency.thread_id, dependency.issue_id)} className="text-[var(--theme-continuity-accent)] underline hover:text-[var(--theme-text-primary)]">
-                  {dependency.label}
-                </Link>
               )}
             </li>
           ))}
