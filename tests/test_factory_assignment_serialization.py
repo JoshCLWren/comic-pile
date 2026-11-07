@@ -184,7 +184,7 @@ def test_migration_release_events_cannot_be_evicted_by_unrelated_label_churn() -
     assert "&& 'reconcile' || 'other'" in group
 
     def label_filter(expression: str) -> set[str]:
-        match = re.search(r"fromJSON\\('(?P<labels>\\[[^']+\\])'\\)", expression)
+        match = re.search(r"fromJSON\('(?P<labels>\[[^']+\])'\)", expression)
         assert match, expression
         return set(json.loads(match.group("labels")))
 
