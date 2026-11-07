@@ -26,6 +26,33 @@ from comic_pile.comicvine_provider import (
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_exception_source(exc: Exception) -> str:
+    """Extract a safe, sanitized source location from an exception traceback.
+
+    Never logs the exception message itself, as it may contain raw provider URLs,
+    API credentials, or other sensitive data from ComicVine responses.
+
+    Args:
+        exc: The caught exception.
+
+    Returns:
+        A string like "comicvine_fallback.py:150" identifying where the exception
+        originated, with all sensitive content stripped.
+    """
+    # Walk to the final traceback entry and use its tb_lineno
+    if exc.__traceback__ is not None:
+        tb = exc.__traceback__
+        while tb.tb_next:
+            tb = tb.tb_next
+        filename = tb.tb_frame.f_code.co_filename
+        lineno = tb.tb_lineno
+        # Use just the basename, not the full path
+        return f"{Path(filename).name}:{lineno}"
+
+    return "unknown_source"
+
+
 COMICVINE_METADATA_MAX_AGE = timedelta(days=30)
 COMICVINE_REQUEST_TIMEOUT_SECONDS = 5.0
 COMICVINE_FALLBACK_MAX_ATTEMPTS = 2
@@ -82,6 +109,8 @@ def metadata_needs_hydration(
         True when deep metadata is missing or older than the refresh window.
     """
     metadata = identity.metadata_json
+    if not isinstance(metadata, dict):
+        return True
     raw_payload = metadata.get("raw_provider_payload")
     if not isinstance(raw_payload, dict):
         return True
@@ -107,6 +136,8 @@ def metadata_needs_hydration(
 
 def _comicvine_issue_id(external_id: str) -> int | None:
     """Parse a stored ComicVine issue identity without guessing from ComicPile metadata."""
+    if not isinstance(external_id, str):
+        return None
     normalized = external_id.removeprefix("4000-").strip()
     return int(normalized) if normalized.isdigit() else None
 
@@ -143,9 +174,10 @@ async def refresh_issue_metadata(identity_id: int) -> bool:
         return False
     except Exception as exc:
         logger.warning(
-            "comicvine_fallback_inline_failed identity_id=%s error=%s",
+            "comicvine_fallback_inline_failed identity_id=%s error=%s source=%s",
             identity_id,
             type(exc).__name__,
+            _safe_exception_source(exc),
         )
         return False
 
@@ -276,9 +308,10 @@ async def _run_issue_hydration(identity_id: int) -> bool:
             )
     except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as exc:
         logger.warning(
-            "comicvine_fallback_db_unavailable identity_id=%s error=%s",
+            "comicvine_fallback_db_unavailable identity_id=%s error=%s source=%s",
             identity_id,
             type(exc).__name__,
+            _safe_exception_source(exc),
         )
         return False
 
