@@ -23,6 +23,7 @@ from typing import Any, cast
 
 from factory_review_policy import performed_via_untrusted_app
 from factory_work_policy import is_manual_only
+import factory_eligibility as eligibility
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 STALE_PR_GUARD_MARKER_RE = re.compile(
@@ -365,6 +366,45 @@ def issue_has_open_blocker(number: int) -> bool:
     return any(item.get("state") == "open" for item in blockers)
 
 
+
+def stale_pr_is_cutover_deferred(pr: dict[str, Any]) -> bool:
+    """Keep intentionally deferred PRs open until the Rust cutover finishes.
+
+    This guard only runs for PRs already past the adaptive stale threshold.
+    A failed issue-state read must not result in destructive PR closure.
+    """
+    epic = gh_json(["api", f"repos/{REPO}/issues/{eligibility.RUST_CUTOVER_EPIC}"])
+    if not isinstance(epic, dict) or str(epic.get("state") or "").lower() not in {
+        "open", "closed",
+    }:
+        raise RuntimeError("Rust cutover epic state unavailable during stale decay")
+    if str(epic["state"]).lower() == "closed":
+        return False
+
+    linked = linked_issue_from_pr(pr)
+    if linked is None:
+        labels = {
+            str(label.get("name") if isinstance(label, dict) else label)
+            for label in (pr.get("labels") or [])
+        }
+        return not eligibility.rust_cutover_work_allowed(
+            labels, str(pr.get("body") or ""), cutover_open=True
+        )
+
+    issue = gh_json(["api", f"repos/{REPO}/issues/{linked}"])
+    if not isinstance(issue, dict) or str(issue.get("state") or "").lower() not in {
+        "open", "closed",
+    }:
+        raise RuntimeError(f"linked issue #{linked} state unavailable during stale decay")
+    labels = {
+        str(label.get("name") if isinstance(label, dict) else label)
+        for label in (issue.get("labels") or [])
+    }
+    return not eligibility.rust_cutover_work_allowed(
+        labels, str(issue.get("body") or ""), cutover_open=True
+    )
+
+
 def close_pr_implementation(pr_number: int) -> None:
     """Close a stale PR implementation attempt."""
     run_gh(["pr", "close", str(pr_number), "--repo", REPO])
@@ -458,6 +498,23 @@ def process_stale_prs(
             continue
 
         linked_issue = linked_issue_from_pr(pr)
+        try:
+            if stale_pr_is_cutover_deferred(pr):
+                results.append({
+                    "pr": pr_number,
+                    "status": "cutover-deferred",
+                    "age_seconds": age,
+                    "issue": linked_issue,
+                })
+                continue
+        except RuntimeError as exc:
+            # Do not destroy a possibly deferred PR because GitHub was
+            # unavailable. The next reconciliation tick will retry.
+            results.append({
+                "pr": pr_number, "status": "cutover-check-unavailable",
+                "age_seconds": age, "error": str(exc),
+            })
+            continue
         if dry_run:
             results.append({
                 "pr": pr_number,
