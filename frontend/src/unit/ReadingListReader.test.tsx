@@ -7,6 +7,7 @@ import { ReadingListReader } from '../components/ReadingListReader'
 import { customCBLApi, type ReadingListReader as ReaderView } from '../services/api-custom-cbl'
 import { tagsApi } from '../services/api-tags'
 import { issuesApi } from '../services/api-issues'
+import { queueApi } from '../services/api-queue'
 import { issueCardsApi, type IssueCard, type IssueReadRateResponse } from '../services/issueCardsApi'
 import { queryKeys } from '../query/queryKeys'
 
@@ -38,6 +39,7 @@ function receipt(issueId = 10, status = 'read'): IssueReadRateResponse {
 }
 const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 const patchIssue = vi.spyOn(issueCardsApi, 'patchIssue')
+const moveToFront = vi.spyOn(queueApi, 'moveToFront')
 function firstCard() {
   return within(screen.getAllByTestId('comic-issue-card')[0])
 }
@@ -52,6 +54,8 @@ function mount() {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  moveToFront.mockReset()
+  moveToFront.mockResolvedValue(undefined)
   fetchCards.mockImplementation(async (ids) => ids.map(cardFor))
   patchIssue.mockImplementation(async (id, input) => receipt(id, input.status ?? 'read'))
   vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] })
@@ -188,4 +192,46 @@ it('shows inherited tags and lets readers inspect their source', async () => {
   expect(screen.getByText('Inherited')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Show sources for inherited tag Physical' }))
   expect(screen.getByRole('link', { name: 'Open Thread: The Dead Remembered' })).toHaveAttribute('href', '/thread/1?tagEditor=thread')
+})
+
+it('retries moving the visible series to the front after an explicit queue write error', async () => {
+  moveToFront.mockRejectedValueOnce(new Error('queue offline'))
+  mount()
+  const available = await screen.findByRole('button', { name: 'Move to front' })
+  await userEvent.click(available)
+  expect(await screen.findByRole('alert')).toHaveTextContent('queue offline')
+  expect(moveToFront).toHaveBeenCalledExactlyOnceWith(1)
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
+  await userEvent.click(screen.getByRole('button', { name: 'Move to front' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Moved to front' })).toBeVisible())
+  expect(moveToFront).toHaveBeenCalledTimes(2)
+  expect(patchIssue).not.toHaveBeenCalled()
+})
+
+it('shows a safe default queue error for an unhelpful rejection without disabling the reader', async () => {
+  moveToFront.mockRejectedValueOnce(new Error(''))
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Move to front' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to move this series to the front.')
+  expect(screen.getAllByRole('button', { name: 'Rate / Mark read' })).toHaveLength(2)
+  expect(patchIssue).not.toHaveBeenCalled()
+})
+
+it('shows a single bounded card-load failure and restores issue-specific covers after retry', async () => {
+  fetchCards.mockRejectedValueOnce(new Error('metadata offline')).mockResolvedValueOnce([
+    { ...cardFor(10), cover_image_url: 'https://comicvine.gamespot.com/issue-10.jpg', rating: 4 },
+    { ...cardFor(20), cover_image_url: 'https://comicvine.gamespot.com/issue-20.jpg' },
+  ])
+  mount()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load issue cards.')
+  expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20])
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
+  await userEvent.click(screen.getByRole('button', { name: 'Retry cards' }))
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledTimes(2))
+  expect(await screen.findByRole('img', { name: 'Cover for The Dead Remembered #2' })).toHaveAttribute(
+    'src', 'https://comicvine.gamespot.com/issue-10.jpg',
+  )
+  expect(screen.getByRole('img', { name: 'Cover for King of Fear #1' })).toHaveAttribute(
+    'src', 'https://comicvine.gamespot.com/issue-20.jpg',
+  )
 })
