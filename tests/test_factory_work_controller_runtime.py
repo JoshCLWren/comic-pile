@@ -210,7 +210,12 @@ def test_reconcile_does_not_release_active_fixed_worker(
 ) -> None:
     """Verify reconcile does not release active fixed worker."""
     monkeypatch.setattr(controller, "active_fixed_workers", lambda: {13})
-    monkeypatch.setattr(controller, "owned_targets", lambda: [(701, "factory:13")])
+    monkeypatch.setattr(
+        controller,
+        "list_issues",
+        lambda: [{"number": 701, "labels": [{"name": "factory:13"}]}],
+    )
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
     writes: list[tuple[Any, ...]] = []
     monkeypatch.setattr(
         controller,
