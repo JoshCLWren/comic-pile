@@ -55,7 +55,7 @@ describe('compact shared issue entry across dense lists', () => {
     expect(screen.getByTestId('comic-issue-cover-placeholder')).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' }))
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
-    expect(await screen.findByRole('img', { name: 'Cover for Hellboy #9' })).toHaveAttribute('src', card.cover_image_url)
+    expect((await screen.findAllByRole('img', { name: 'Cover for Hellboy #9' }))[0]).toHaveAttribute('src', card.cover_image_url)
     expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
   })
 
@@ -76,7 +76,7 @@ describe('compact shared issue entry across dense lists', () => {
     expect(alert).toHaveTextContent('Metadata temporarily unavailable')
     expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    expect(await screen.findByRole('img', { name: 'Cover for Hellboy #9' })).toHaveAttribute('src', card.cover_image_url)
+    expect((await screen.findAllByRole('img', { name: 'Cover for Hellboy #9' }))[0]).toHaveAttribute('src', card.cover_image_url)
   })
 
   it('opens rating without writing; saving delegates to direct issue command', async () => {
