@@ -50,7 +50,8 @@ export function ThreadPool({
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
   const cardIssueById = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card.issue_number]))
-  const displayPool = eligibleThreadIds?.length
+  // An explicitly empty scoped result means zero eligible faces, not a bootstrap fallback.
+  const displayPool = eligibleThreadIds != null
     ? [...pool].sort((a, b) => {
         const rankA = eligibleThreadIds.indexOf(a.id)
         const rankB = eligibleThreadIds.indexOf(b.id)
