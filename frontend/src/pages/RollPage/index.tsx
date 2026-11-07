@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import LazyDice3D from '../../components/LazyDice3D'
 import { useRollBootstrap } from '../../hooks/useRollBootstrap'
+import { useRollDieState } from '../../hooks/useRollResources'
 import { useBugReportRestore } from '../../contexts/useBugReportRestore'
 import {
   useResetDice,
@@ -66,6 +67,12 @@ export default function RollPage() {
     error: bootstrapError,
     isRetrying: isBootstrapRetrying,
   } = useRollBootstrap()
+
+  // Die-header surface migration (#4719): the scoped die resource is
+  // authoritative for the selected die and ladder readout. Bootstrap remains
+  // the fallback while the query settles or fails, and the rest of the header
+  // (die size, 3D model) stays bootstrap-derived until the next surface slice.
+  const { data: scopedDieState } = useRollDieState()
 
   // The committed rate response seeds this cache, so the idle strip renders
   // the saved rating and updated stats without a second GET (#2720).
@@ -393,6 +400,7 @@ export default function RollPage() {
         onOpenOverride={modals.openOverrideModal}
         onOpenDieModal={() => state.setIsDieModalOpen(true)}
         onBackToQueue={handleBackToQueue}
+        dieState={scopedDieState ?? null}
       />
 
       <ReadingModeLauncher />

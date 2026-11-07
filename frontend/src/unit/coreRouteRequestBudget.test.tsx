@@ -486,10 +486,13 @@ describe('core route request budgets', () => {
     })
   })
 
-  it('Roll initializes once before one read-only bootstrap, even under StrictMode', async () => {
+  it('Roll initializes once, reads bootstrap once, and mounts the scoped die header', async () => {
     const { calls, client } = createRequestRecorder((call) => {
       if (call.url === '/v2/reading-sessions') return { session_id: 1, created: false }
       if (call.url === '/v2/roll/bootstrap') return bootstrap
+      if (call.url === '/v2/roll/die-state') {
+        return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
+      }
       return {}
     })
     setDefaultHttpClient(client)
@@ -499,12 +502,18 @@ describe('core route request budgets', () => {
     await waitFor(() => expect(calls.some((call) => call.url === '/v2/roll/bootstrap')).toBe(true))
     await drainSettledWork()
 
-    expect(calls).toHaveLength(2)
-    expect(calls.map(({ method, url }) => [method, url])).toEqual([
-      ['POST', '/v2/reading-sessions'],
-      ['GET', '/v2/roll/bootstrap'],
-    ])
-    expect(calls[1].params?.timezone).toBe(
+    // #4719 die-header surface: the scoped resource is a real production read,
+    // so the cold Roll load is one session POST, one bootstrap GET, and one
+    // die-state GET. RollHeader's scoped-override rendering is covered by
+    // RollPage.workspace-chrome.test.tsx; this budget proves the page mounts it.
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    expect(requestCounts(calls)).toEqual({
+      'POST /v2/reading-sessions': 1,
+      [`GET /v2/roll/bootstrap${timezone ? `?timezone=${timezone}` : ''}`]: 1,
+      'GET /v2/roll/die-state': 1,
+    })
+    const bootstrapCall = calls.find((call) => call.url === '/v2/roll/bootstrap')
+    expect(bootstrapCall?.params?.timezone).toBe(
       Intl.DateTimeFormat().resolvedOptions().timeZone || undefined,
     )
   })
