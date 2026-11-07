@@ -26,6 +26,31 @@ from comic_pile.comicvine_provider import (
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_exception_source(exc: Exception) -> str:
+    """Extract a safe, sanitized source location from an exception traceback.
+
+    Never logs the exception message itself, as it may contain raw provider URLs,
+    API credentials, or other sensitive data from ComicVine responses.
+
+    Args:
+        exc: The caught exception.
+
+    Returns:
+        A string like "comicvine_fallback.py:150" identifying where the exception
+        originated, with all sensitive content stripped.
+    """
+    # Get the frame info from the exception's traceback
+    if exc.__traceback__ is not None:
+        frame = exc.__traceback__.tb_frame
+        filename = frame.f_code.co_filename
+        lineno = frame.f_lineno
+        # Use just the basename, not the full path
+        return f"{Path(filename).name}:{lineno}"
+
+    return "unknown_source"
+
+
 COMICVINE_METADATA_MAX_AGE = timedelta(days=30)
 COMICVINE_REQUEST_TIMEOUT_SECONDS = 5.0
 COMICVINE_FALLBACK_MAX_ATTEMPTS = 2
@@ -147,10 +172,10 @@ async def refresh_issue_metadata(identity_id: int) -> bool:
         return False
     except Exception as exc:
         logger.warning(
-            "comicvine_fallback_inline_failed identity_id=%s error=%s",
+            "comicvine_fallback_inline_failed identity_id=%s error=%s source=%s",
             identity_id,
             type(exc).__name__,
-            exc_info=True,
+            _safe_exception_source(exc),
         )
         return False
 
@@ -281,10 +306,10 @@ async def _run_issue_hydration(identity_id: int) -> bool:
             )
     except (TimeoutError, sqlalchemy_exc.TimeoutError, sqlalchemy_exc.DBAPIError) as exc:
         logger.warning(
-            "comicvine_fallback_db_unavailable identity_id=%s error=%s",
+            "comicvine_fallback_db_unavailable identity_id=%s error=%s source=%s",
             identity_id,
             type(exc).__name__,
-            exc_info=True,
+            _safe_exception_source(exc),
         )
         return False
 
