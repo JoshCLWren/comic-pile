@@ -466,7 +466,7 @@ completion_action_for_stage() {
 completion_action_matches_stage() {
   case "${1:-}:${2:-}" in
     merge-conflict:factory:conflict|merge-conflict:factory:changes-requested) return 0 ;;
-    ci-repair:factory:ci) return 0 ;;
+    ci-repair:factory:ci|ci-repair:factory:changes-requested) return 0 ;;
     review-findings:factory:changes-requested) return 0 ;;
     review:factory:review) return 0 ;;
     *) return 1 ;;

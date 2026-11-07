@@ -442,9 +442,15 @@ def assign_candidate(
                     )
                     release_verified_claims(claimed)
                     return False
-                if action is not None and live_action != action:
+                expected_action = action
+                if source == 'manual':
+                    expected_action = completion_action_for(candidate.stage, candidate.conflicted)
+                    if action == 'ci-repair' and not required_checks_failed(number):
+                        release_verified_claims(claimed)
+                        return False
+                if expected_action is not None and live_action != expected_action:
                     print(
-                        f'[factory-controller] Jev action {action} no longer matches '
+                        f'[factory-controller] Expected action {expected_action} no longer matches '
                         f'PR #{number} live state ({live_action}); discarding recommendation',
                         file=sys.stderr,
                     )
@@ -467,7 +473,7 @@ def assign_candidate(
                 selected_pr = candidate.kind == 'pr' and number == candidate.number
                 lease_kwargs: dict[str, str] = {}
                 if selected_pr and action:
-                    lease_kwargs = {'action': action, 'source': 'jev'}
+                    lease_kwargs = {'action': action, 'source': source or 'jev'}
                     if expected_head:
                         lease_kwargs['head'] = expected_head
                 elif source:
@@ -977,7 +983,11 @@ def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
     }
 
 
-def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
+def assign(worker: str, kinds: tuple[str, ...] | None = None,
+    *,
+    target: tuple[str, int] | None = None,
+    requested_action: str = 'advance',
+) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker.
 
     When kinds is provided, only candidates whose kind is in the tuple
@@ -1008,8 +1018,9 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
             file=sys.stderr,
         )
         return None
-    reconcile_stale_leases()
-    reconcile_contradictory_labels()
+    if target is None:
+        reconcile_stale_leases()
+        reconcile_contradictory_labels()
     issues = list_issues()
     prs = list_prs()
     try:
@@ -1040,6 +1051,38 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         candidates = [candidate for candidate in candidates if candidate.kind in kinds]
     elif attempt_records is None:
         candidates = [candidate for candidate in candidates if candidate.kind == 'pr']
+    if target is not None:
+        kind, number = target
+        linked_prs = [
+            pr for pr in prs
+            if kind == 'issue' and linked_issue_from_pr(pr) == number
+            and pr_suppresses_issue_candidate(pr, {})
+        ]
+        if len(linked_prs) > 1:
+            raise RuntimeError('Multiple open PRs claim this issue. Select the PR directly.')
+        if linked_prs:
+            kind, number = 'pr', int(linked_prs[0]['number'])
+        candidates = [
+            candidate for candidate in candidates
+            if (candidate.kind, candidate.number) == (kind, number)
+        ]
+        if not candidates:
+            raise RuntimeError('No eligible work on this target. Check its stage, leases and blockers.')
+        selected = candidates[0]
+        eligible_action = (
+            'implement' if selected.kind == 'issue'
+            else completion_action_for(selected.stage, selected.conflicted)
+        )
+        ci_override = (
+            requested_action == 'ci-repair' and eligible_action == 'review-findings'
+            and required_checks_failed(selected.number)
+        )
+        if not ci_override and (
+            eligible_action is None or requested_action not in ('advance', eligible_action)
+        ):
+            raise RuntimeError(f'Requested action is unavailable. Current action: {eligible_action or "none"}.')
+        if not candidate_is_live_executable(selected):
+            raise RuntimeError('The selected target is blocked or still waiting on checks.')
     candidates = order_candidates_for_worker(
         resolve_review_head_contributors(candidates, prs), worker
     )
@@ -1047,7 +1090,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
     # worker. Completion actions may be promoted across ordinary lane-3 PR
     # classes; every live claim, protected lane, and worker-specific exclusion
     # remains authoritative. Legacy same-class issue reports still apply.
-    jev_path = os.environ.get("FACTORY_JEV_RANKING_FILE", "")
+    jev_path = os.environ.get("FACTORY_JEV_RANKING_FILE", "") if target is None else ""
     canonical_candidates = candidates
     jev_used = False
     jev_pr: int | None = None
@@ -1127,6 +1170,22 @@ def assign(worker: str, kinds: tuple[str, ...] | None=None) -> Candidate | None:
         ):
             continue
         action = jev_action if jev_used and jev_pr == candidate.number else None
+        if target is not None:
+            if candidate.kind == 'pr':
+                head = next(str(pr.get('headRefOid') or '') for pr in prs if pr['number'] == candidate.number)
+                if not re.fullmatch(r'[0-9a-f]{40}', head):
+                    continue
+                if ci_override:
+                    if assign_candidate(
+                        candidate, worker, action='ci-repair', expected_head=head, source='manual'
+                    ):
+                        return candidate
+                elif assign_candidate(candidate, worker, expected_head=head, source='manual'):
+                    return candidate
+                continue
+            if assign_candidate(candidate, worker, source='manual'):
+                return candidate
+            continue
         # Issue-selection provenance: record source=jev only when the actual
         # pick differs from the deterministic first live candidate, so the
         # durable lease never misattributes a canonical choice to the model.
@@ -1622,6 +1681,45 @@ def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
     }
 
 
+def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
+    """Allocate one worker to the selected target through the normal lease policy."""
+    from factory_completion_controller import (
+        capacity_report,
+        latest_worker_health,
+        load_manifest_candidates,
+        registry_comments,
+    )
+
+    if number <= 0:
+        raise ValueError('Select a positive issue or PR number.')
+    health = latest_worker_health(registry_comments(), trusted=comment_is_trusted)
+    manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
+    capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
+    workers = cast(list[dict[str, str]], capacity['executable_candidates'])
+    for worker in sorted({row['worker'] for row in workers}, key=int):
+        candidate = assign(worker, target=(kind, number), requested_action=action)
+        if candidate is None:
+            continue
+        selected = (
+            'implement' if candidate.kind == 'issue'
+            else completion_action_for(candidate.stage, candidate.conflicted)
+        )
+        try:
+            run_gh(['workflow', 'run', 'free-model-factory-entry.yml', '--repo', REPO,
+                    '--ref', 'main', '-f', f'worker={worker}'])
+        except RuntimeError:
+            # A timed-out POST can already have queued the worker. Keep its lease
+            # so another manual request cannot start duplicate work.
+            raise RuntimeError('Could not confirm worker dispatch. Check Actions before retrying.') from None
+        return {
+            'action': selected if action == 'advance' else action,
+            'kind': candidate.kind,
+            'number': candidate.number,
+        }
+    raise RuntimeError('No eligible action or available independent worker. Check current stage, leases, and factory capacity.')
+
+
+
 def main() -> int:
     """Run the factory controller command-line interface."""
     parser = argparse.ArgumentParser()
@@ -1633,6 +1731,12 @@ def main() -> int:
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
     assign_parser.add_argument('--kinds', nargs='*', default=None)
+    target_parser = subparsers.add_parser('dispatch-target')
+    target_parser.add_argument('--kind', required=True, choices=('issue', 'pr'))
+    target_parser.add_argument('--number', required=True, type=int)
+    target_parser.add_argument('--action', required=True, choices=(
+        'advance', 'implement', 'merge-conflict', 'ci-repair', 'review-findings', 'review',
+    ))
     inspect_parser = subparsers.add_parser('inspect')
     inspect_parser.add_argument('--worker', required=True)
     release_parser = subparsers.add_parser('release')
@@ -1663,6 +1767,9 @@ def main() -> int:
             print(json.dumps({'kind': 'none'}))
             return 0
         print(json.dumps({'kind': candidate.kind, 'number': candidate.number, 'lane': candidate.lane, 'priority': candidate.priority, 'linked_issue': candidate.linked_issue, 'conflicted': candidate.conflicted}))
+        return 0
+    if args.command == 'dispatch-target':
+        print(json.dumps(dispatch_target(args.kind, args.number, args.action)))
         return 0
     if args.command == 'inspect':
         print(json.dumps(inspect_assignment(args.worker)))

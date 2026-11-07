@@ -19,6 +19,21 @@ on:
         description: Optional active external Factory; blank runs the strategy smoke set
         required: false
         type: string
+      target:
+        description: Optional issue or PR to advance, in the form issue:123 or pr:123
+        required: false
+        type: string
+      action:
+        description: Action to take on the selected target
+        default: advance
+        type: choice
+        options:
+          - advance
+          - implement
+          - merge-conflict
+          - ci-repair
+          - review-findings
+          - review
   push:
     branches: [main]
     paths:
@@ -56,12 +71,13 @@ permissions:
 # Coalesce duplicate ingress events for this workflow only. The job-level
 # shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: fixed-model-factory-dispatch-ingress
+  group: ${{ inputs.target && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
   queue: single
   cancel-in-progress: false
 
 jobs:
   dispatch:
+    if: "!inputs.target || github.ref == 'refs/heads/main'"
     concurrency:
       group: fixed-model-factory-dispatch
       queue: max
@@ -194,8 +210,29 @@ jobs:
           fi
           echo "allow=true" >> "$GITHUB_OUTPUT"
 
+      - name: Advance selected issue or pull request
+        if: inputs.target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ inputs.target }}
+          ACTION: ${{ inputs.action }}
+          ALLOW: ${{ steps.api_budget.outputs.allow }}
+        run: |
+          set -Eeuo pipefail
+          if [[ "$ALLOW" != true ]]; then
+            echo "::error::Factory API quota is low. Retry after the quota resets."
+            exit 1
+          fi
+          if ! [[ "$TARGET" =~ ^(issue|pr):([1-9][0-9]*)$ ]]; then
+            echo "::error::Select a valid issue or pull request."
+            exit 1
+          fi
+          python3 .github/scripts/factory-work-controller.py dispatch-target \
+            --kind "${BASH_REMATCH[1]}" --number "${BASH_REMATCH[2]}" --action "$ACTION"
+
       - name: Reconcile serialized migration finalization lane
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -204,7 +241,7 @@ jobs:
           python3 .github/scripts/factory_migration_lane.py reconcile
 
       - name: Check main health (block merges onto red main)
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         id: main_health
         shell: bash
         env:
@@ -246,7 +283,7 @@ jobs:
           fi
 
       - name: Check Deploy Production freeze
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         id: deploy_freeze
         shell: bash
         env:
@@ -280,7 +317,7 @@ jobs:
           fi
 
       - name: Reconcile unowned factory CI PRs
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -289,7 +326,7 @@ jobs:
           python3 .github/scripts/factory-review-controller.py reconcile-ci
 
       - name: Drain exact-head ready factory PRs
-        if: steps.api_budget.outputs.allow == 'true' && steps.main_health.outputs.main_red != 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target && steps.main_health.outputs.main_red != 'true'
         continue-on-error: true
         shell: bash
         env:
@@ -397,7 +434,7 @@ jobs:
           done
 
       - name: Trigger merge drain on dispatcher cadence
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         continue-on-error: true
         shell: bash
         env:
@@ -410,7 +447,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --ref main
 
       - name: Expire stale factory PR attempts
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -424,7 +461,7 @@ jobs:
       # the decision only within existing interchangeable classes and otherwise
       # falls back.
       - name: Rank factory work selection with Jev (active selection)
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         continue-on-error: true
         shell: bash
         env:
@@ -451,7 +488,7 @@ jobs:
           echo "FACTORY_JEV_RANKING_FILE=$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_ENV"
 
       - name: Preserve Jev selection decision for later evaluation
-        if: always() && hashFiles('.github/scripts/factory_jev_shadow.py') != ''
+        if: always() && !inputs.target && hashFiles('.github/scripts/factory_jev_shadow.py') != ''
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -461,7 +498,7 @@ jobs:
           retention-days: 14
 
       - name: Resolve and dispatch fixed workers
-        if: steps.api_budget.outputs.allow == 'true'
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         id: dispatch_workers
         shell: bash
         env:
@@ -813,7 +850,7 @@ jobs:
           echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
 
       - name: Self-perpetuate roster cadence
-        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
+        if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && !inputs.target && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
         continue-on-error: true
         shell: bash
         env:
