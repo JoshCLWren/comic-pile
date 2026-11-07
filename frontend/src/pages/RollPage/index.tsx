@@ -75,8 +75,9 @@ export default function RollPage() {
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die and ladder readout. Bootstrap remains
-  // the fallback while the query settles or fails, and the rest of the header
-  // (die size, 3D model) stays bootstrap-derived until the next surface slice.
+  // the fallback while the query settles or fails. The die-sync projection
+  // below also prefers the scoped die for page state; the rest of the header
+  // (die size, 3D model) follows from that same authoritative die.
   const { data: scopedDieState } = useRollDieState()
 
   // Eligible-pool surface migration (#4719): the scoped resource owns the
@@ -149,6 +150,7 @@ export default function RollPage() {
   useRollBootstrapSync({
     state,
     bootstrap,
+    scopedDieState: scopedDieState ?? null,
     isBootstrapError,
     bootstrapError,
     navigate,
