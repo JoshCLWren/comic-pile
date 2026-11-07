@@ -1007,7 +1007,13 @@ export async function applyIssueCardMutation(
   if (cachedSummary) {
     client.setQueryData<Thread>(queryKeys.thread.summary(progress.thread_id), mergeProgress(cachedSummary))
   }
-  await invalidateAfterReaderProgress(client)
+  await Promise.all([
+    invalidateAfterReaderProgress(client),
+    // Creator ratings, averages, comparison breakdowns and issue evidence are
+    // derived from saved ratings; keep them coherent with the shared card.
+    client.invalidateQueries({ queryKey: queryKeys.creator.all }),
+    client.invalidateQueries({ queryKey: queryKeys.creators.all }),
+  ])
 }
 
 /** Refresh every surface whose eligibility changed after an owner repair. */
