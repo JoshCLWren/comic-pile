@@ -29,7 +29,7 @@ async def test_inline_typeerror_reports_source_without_secret(
     assert any(
         "comicvine_fallback_inline_failed identity_id=2656" in message
         and "error=TypeError" in message
-        and "source=" in message
+        and "source=test_comicvine_fallback_typeerror.py:20" in message
         for message in messages
     )
     assert all("secret-value" not in message for message in messages)

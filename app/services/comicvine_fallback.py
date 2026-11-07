@@ -40,11 +40,13 @@ def _safe_exception_source(exc: Exception) -> str:
         A string like "comicvine_fallback.py:150" identifying where the exception
         originated, with all sensitive content stripped.
     """
-    # Get the frame info from the exception's traceback
+    # Walk to the final traceback entry and use its tb_lineno
     if exc.__traceback__ is not None:
-        frame = exc.__traceback__.tb_frame
-        filename = frame.f_code.co_filename
-        lineno = frame.f_lineno
+        tb = exc.__traceback__
+        while tb.tb_next:
+            tb = tb.tb_next
+        filename = tb.tb_frame.f_code.co_filename
+        lineno = tb.tb_lineno
         # Use just the basename, not the full path
         return f"{Path(filename).name}:{lineno}"
 
