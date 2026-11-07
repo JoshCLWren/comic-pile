@@ -266,6 +266,10 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText('Roll screen')).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
     expect(mockMoveToFront).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Close issue card' }))
+    expect(container.querySelector('[data-variant="featured"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Read next issue' })).toBeEnabled()
+    expect(patchIssueSpy).not.toHaveBeenCalled()
   })
 
   it('moves an eligible series to the front without starting a pending roll', async () => {

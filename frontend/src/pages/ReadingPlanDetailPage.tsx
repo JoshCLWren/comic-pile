@@ -120,7 +120,7 @@ function IssueRow({ issue, sourceNames, card }: { issue: ReadingPlanReaderIssue;
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>
         {issue.blockers.length > 0 && <PlanIssueBlockers blockers={issue.blockers} />}
-        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} seriesTitle={issue.thread_title} card={card ?? null} />
+        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} availability={issue.availability} seriesTitle={issue.thread_title} card={card ?? null} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
             Source reading order: {sourceNames[issue.source_paths[0]] ?? displayCblSourceTitle(null, issue.source_paths[0]) ?? 'Reading order'}

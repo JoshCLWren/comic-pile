@@ -148,6 +148,7 @@ it('keeps legacy unread members visible with the same direct controls', async ()
   expect(await screen.findByText('Open series for current availability')).toBeVisible()
   expect(screen.getByRole('link', { name: 'The Dead Remembered #2' })).toHaveAttribute('href', '/thread/1')
   expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
+  expect(screen.queryByTestId('comic-issue-availability')).toBeNull()
 })
 
 it('prevents duplicate progress writes while a mutation is pending', async () => {

@@ -22,14 +22,23 @@ export function ReadNowIssueButton({ issueId, threadId: _threadId, label = 'Read
 
   if (open) {
     return (
-      <ComicIssueCard
-        issueId={issueId}
-        card={cards.data?.[0] ?? null}
-        threadTitle={threadTitle ?? ''}
-        issueNumber={issueNumber ?? ''}
-        status={cards.data?.[0]?.status === 'read' ? 'read' : 'unread'}
-        variant="featured"
-      />
+      <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="min-h-11 rounded-lg px-3 text-sm font-bold text-[var(--theme-primary-action)] hover:underline"
+        >
+          Close issue card
+        </button>
+        <ComicIssueCard
+          issueId={issueId}
+          card={cards.data?.[0] ?? null}
+          threadTitle={threadTitle ?? ''}
+          issueNumber={issueNumber ?? ''}
+          status={cards.data?.[0]?.status === 'read' ? 'read' : 'unread'}
+          variant="featured"
+        />
+      </div>
     )
   }
 
@@ -53,8 +62,8 @@ export function ReadNowIssueButton({ issueId, threadId: _threadId, label = 'Read
  * Reading Lists. The availability prop is advisory only: blocked, later,
  * excluded or inactive issues keep their full direct controls.
  */
-export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, available, seriesTitle, card }: {
-  issueId: number; threadId: number; issueNumber: string; isRead: boolean; available: boolean; seriesTitle?: string; card?: IssueCard | null
+export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, available, availability, seriesTitle, card }: {
+  issueId: number; threadId: number; issueNumber: string; isRead: boolean; available: boolean; availability?: string; seriesTitle?: string; card?: IssueCard | null
 }) {
   const fallbackCards = useIssueCards([issueId], { enabled: card === undefined })
   const resolvedCard = card ?? fallbackCards.data?.[0] ?? null
@@ -76,9 +85,13 @@ export function ReaderIssueActions({ issueId, threadId, issueNumber, isRead, ava
   }
 
   const advisory =
-    available
+    isRead || available || availability === 'read' || availability === 'legacy'
       ? null
-      : "Reading list suggests this waits — you can still read it now. Your choice doesn't change the list order."
+      : availability === 'excluded'
+        ? 'Excluded from your collection; you can still read it manually without changing the exclusion.'
+        : availability === 'inactive'
+          ? 'This series is inactive; you can still read this issue manually.'
+          : "Reading list suggests this waits — you can still read it now. Your choice doesn't change the list order."
 
   return (
     <div className="mt-2 space-y-1">
