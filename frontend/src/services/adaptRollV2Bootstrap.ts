@@ -25,8 +25,11 @@ export function adaptRollV2Bootstrap(state: RollV2BootstrapResponse): RollBootst
 
   return {
     ...state,
-    roll_pool: state.rollable.map(({ thread, issue, routes }) => {
+    roll_pool: state.rollable.map(({ thread, issue, routes, overflow_routes_count }) => {
       if (!Array.isArray(thread.tags) || !issue || !Array.isArray(routes)) {
+        throw new Error('Incomplete native Roll v2 candidate')
+      }
+      if (!Number.isInteger(overflow_routes_count) || overflow_routes_count < 0) {
         throw new Error('Incomplete native Roll v2 candidate')
       }
       return {
@@ -34,6 +37,7 @@ export function adaptRollV2Bootstrap(state: RollV2BootstrapResponse): RollBootst
         issue_id: issue.id,
         issue_number: issue.number,
         route_labels: routes.map((route) => route.name),
+        overflow_routes_count,
       }
     }),
   }

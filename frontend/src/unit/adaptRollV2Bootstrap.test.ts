@@ -19,6 +19,7 @@ const sample = {
     },
     issue: { id: 404, number: '12' },
     routes: [{ kind: 'group', name: 'Reading list' }],
+    overflow_routes_count: 2,
   }],
 // SAFETY: This intentionally partial v2 fixture covers only the adapter's
 // relevant runtime invariants; unused session fields are never inspected.
@@ -31,6 +32,7 @@ describe('native v2 Roll bootstrap compatibility', () => {
     expect(state.roll_pool[0].issue_id).toBe(404)
     expect(state.roll_pool[0].issue_number).toBe('12')
     expect(state.roll_pool[0].route_labels).toEqual(['Reading list'])
+    expect(state.roll_pool[0].overflow_routes_count).toBe(2)
     for (const diagnostic of ['blocked_count', 'stale_thread_count', 'inactive_count', 'excluded_count']) {
       expect(state).not.toHaveProperty(diagnostic)
     }
@@ -53,6 +55,21 @@ describe('native v2 Roll bootstrap compatibility', () => {
     // SAFETY: deliberately malformed fixture exercises the reason allow-list.
     expect(() => adaptRollV2Bootstrap(malformed as RollV2BootstrapResponse))
       .toThrow('Incomplete native Roll v2 bootstrap response')
+  })
+
+  it('refuses native candidate rows with a negative or missing route overflow count', () => {
+    const negative = {
+      ...sample,
+      rollable: [{ ...sample.rollable[0], overflow_routes_count: -1 }],
+    }
+    // SAFETY: This deliberately malformed candidate must fail at the adapter boundary.
+    expect(() => adaptRollV2Bootstrap(negative as RollV2BootstrapResponse))
+      .toThrow('Incomplete native Roll v2 candidate')
+    const { overflow_routes_count: _ignored, ...missing } = sample.rollable[0]
+    const withoutOverflow = { ...sample, rollable: [missing] }
+    // SAFETY: This deliberately incomplete candidate must fail at the adapter boundary.
+    expect(() => adaptRollV2Bootstrap(withoutOverflow as RollV2BootstrapResponse))
+      .toThrow('Incomplete native Roll v2 candidate')
   })
 
   it('refuses native candidate rows without visible tags', () => {

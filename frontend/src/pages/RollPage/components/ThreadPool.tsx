@@ -214,9 +214,9 @@ export function ThreadPool({
                     label={`Tags for ${thread.title}`}
                     className="mt-1"
                   />
-                  {routeLabels.length ? (
-                    <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Connected to: {routeLabels.join(' · ')}
+                  {routeLabels.length || (thread.overflow_routes_count ?? 0) > 0 ? (
+                    <p className="mt-1 truncate text-[10px] text-[var(--theme-continuity-accent)]">
+                      Connected to: {routeLabels.join(' · ')}{routeLabels.length && (thread.overflow_routes_count ?? 0) > 0 ? ' · ' : ''}{(thread.overflow_routes_count ?? 0) > 0 ? `+${thread.overflow_routes_count} more` : ''}
                     </p>
                   ) : null}
                 </div>
