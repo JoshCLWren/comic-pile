@@ -288,7 +288,7 @@ describe('shared comic mapping integration', () => {
     render(
       <ComicIssueCard
         issueId={75}
-        card={{ ...card, status: 'unread', thread_title: '', mapping_state: 'candidate', has_confirmed_identity: false }}
+        card={{ ...card, status: 'unread', rating: null, thread_title: '', mapping_state: 'candidate', has_confirmed_identity: false }}
         threadTitle="Fallback series"
         issueNumber="2"
         status="unread"
