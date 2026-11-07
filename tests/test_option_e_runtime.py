@@ -13,6 +13,7 @@ from app.models import Dependency, Event, Issue, ReadingSession, Thread, User
 from app.models.collection_exclusion import CollectionExclusion
 from app.models.custom_cbl import CustomCBLEntry, CustomCBLList, CustomCBLOverlapDecision
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
+from app.models.reading_plan_membership import ReadingPlanSource
 from app.services.reading_eligibility_service import get_execution_eligibility
 from app.services.thread_service import list_queue_threads
 from comic_pile.queue import get_bounded_roll_pool_rows
@@ -486,6 +487,89 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
     assert later.is_blocked is False
     first_detail = await auth_client.get(f"/api/v1/threads/{first_id}")
     assert first_detail.json()["is_blocked"] is False
+
+
+async def test_v2_continuity_plan_reader_covers_combined_blockers(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """V2 reader must show ordered issues with strict-order blocker and separate prerequisite."""
+    user = await get_or_create_user_async(async_db)
+    # Create a linked-list fixture: first -> second, with second blocked by both
+    # a strict-order CBL entry and a separate reader prerequisite
+    first, first_issues = await _series(async_db, user.id, "Ordered First", 1)
+    second, second_issues = await _series(async_db, user.id, "Blocked Second", 2)
+    prerequisite, prereq_issues = await _series(async_db, user.id, "Required Third", 3)
+
+    # Create a strict-order reading list that places first before second
+    reading_list = CustomCBLList(user_id=user.id, name="Linked Order", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=first_issues[0].id, position=1),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=second_issues[0].id, position=2),
+    ])
+
+    # Add a separate reader prerequisite blocking second (different origin)
+    async_db.add(Dependency(
+        source_issue_id=prereq_issues[0].id,
+        target_issue_id=second_issues[0].id,
+        origin="reader",
+    ))
+
+    # Create a continuity plan that links all issues in sequence
+    plan_response = await auth_client.post("/api/v1/continuity-plans/", json={
+        "name": "Linked blockers test", "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {"id": "first", "node_type": "issue", "ref_id": first_issues[0].id,
+             "lane_id": "main", "position": 0},
+            {"id": "second", "node_type": "issue", "ref_id": second_issues[0].id,
+             "lane_id": "main", "position": 1},
+            {"id": "prereq", "node_type": "issue", "ref_id": prereq_issues[0].id,
+             "lane_id": "main", "position": 2},
+        ],
+    })
+    assert plan_response.status_code == 201, plan_response.text
+    plan_id = plan_response.json()["id"]
+
+    # Link the reading list to the plan for v2 reader access
+    async_db.add(ReadingPlanSource(
+        plan_id=plan_id,
+        raw_source_path=f"custom-cbl:{reading_list.id}",
+        custom_cbl_list_id=reading_list.id,
+    ))
+
+    await async_db.commit()
+
+    # Test v2 reader endpoint
+    v2_reader = await auth_client.get(f"/api/v2/continuity-plans/{plan_id}/reader")
+    assert v2_reader.status_code == 200, v2_reader.text
+    view = v2_reader.json()
+    assert view["execution_mode"] == "option_e"
+
+    # Assert ordered issue IDs in lanes
+    lane_issues = view["lanes"][0]["issues"]
+    ordered_ids = [issue["issue_id"] for issue in lane_issues]
+    assert ordered_ids == [first_issues[0].id, second_issues[0].id, prereq_issues[0].id]
+
+    # Assert blocked issue ID in blocked_next
+    blocked = view["blocked_next"]
+    blocked_ids = [issue["issue_id"] for issue in blocked]
+    assert second_issues[0].id in blocked_ids, f"Expected second issue {second_issues[0].id} in blocked, got {blocked_ids}"
+
+    # Get the blocked issue details
+    second_blocked = next(issue for issue in blocked if issue["issue_id"] == second_issues[0].id)
+    assert second_blocked["availability"] == "blocked"
+
+    # Assert both blocker explanations are present
+    blockers = second_blocked["blockers"]
+    blocker_explanations = [b["explanation"] for b in blockers]
+
+    # Should have blocker from strict order CBL and from reader prerequisite
+    assert any("Strict order in Linked Order" in exp for exp in blocker_explanations), \
+        f"Expected strict order explanation, got: {blocker_explanations}"
+    assert any("prerequisite" in exp.lower() for exp in blocker_explanations), \
+        f"Expected prerequisite explanation, got: {blocker_explanations}"
 
 
 async def test_reading_list_reader_is_inactive_until_approved(
