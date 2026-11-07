@@ -167,6 +167,12 @@ export async function applyUpdatedThreadCache(
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
   ])
 }
 
@@ -233,6 +239,12 @@ export async function invalidateAfterResumeRecovery(client: QueryClient): Promis
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
     }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
   ])
 }
@@ -252,6 +264,12 @@ export async function resetRollBootstrapAfterManualSelection(
     client.resetQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    }),
+    client.resetQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.resetQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
     }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),
@@ -294,6 +312,12 @@ export async function invalidateAfterQueueMovement(
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
     }),
     // Exclude/restore move a series across the active-queue boundary without
     // deleting it (#3807), so the excluded library view is a fourth surface
@@ -685,6 +709,8 @@ export async function invalidateSessionRecoveryCache(
   await Promise.all([
     client.invalidateQueries({ queryKey: queryKeys.session.current(), exact: true }),
     client.invalidateQueries({ queryKey: queryKeys.roll.bootstrap(), exact: true }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.eligibleIssueIdsAll() }),
+    client.invalidateQueries({ queryKey: queryKeys.roll.issueCardsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.queue.pages() }),
     client.invalidateQueries({ queryKey: queryKeys.readingPlans.all }),
   ])
@@ -839,6 +865,21 @@ export async function invalidateAfterRollDieModeUpdate(
     client.invalidateQueries({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
+    }),
+    // The Roll header now reads its selected die from the scoped resource, so a
+    // die command must refresh that query too or the header keeps showing the
+    // die the reader just replaced until the query's stale window elapses.
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    }),
+    // The scoped pool is bounded by the current die, so a die command can
+    // change it without changing the snooze list.
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    }),
+    client.invalidateQueries({
+      queryKey: queryKeys.roll.issueCardsAll(),
     }),
     client.invalidateQueries({
       queryKey: queryKeys.session.current(),

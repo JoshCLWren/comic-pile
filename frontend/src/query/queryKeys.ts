@@ -171,8 +171,19 @@ export const queryKeys = {
     dieState: () => ['roll', 'die-state'] as const,
     eligibleIssueIds: (snoozedThreadIds: readonly number[] = []) =>
       ['roll', 'eligible-issue-ids', [...new Set(snoozedThreadIds)].sort((a, b) => a - b)] as const,
+    /**
+     * Prefix of every scoped eligible-pool query. Die commands can change the
+     * bounded pool without changing the snooze list, so invalidation must span
+     * every snoozed-value variant rather than one exact key.
+     */
+    eligibleIssueIdsAll: () => ['roll', 'eligible-issue-ids'] as const,
     issueCards: (issueIds: readonly number[]) =>
       ['roll', 'issue-cards', [...new Set(issueIds)]] as const,
+    /**
+     * Prefix of every scoped issue-card batch. The visible batch changes with
+     * the eligible pool, so invalidation must span every exact id list.
+     */
+    issueCardsAll: () => ['roll', 'issue-cards'] as const,
     /**
      * Canonical session-scoped last-read cache (issue #2720). A successful
      * rate seeds it synchronously from the mutation response's

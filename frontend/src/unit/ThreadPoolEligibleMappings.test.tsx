@@ -113,6 +113,38 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByText('#7')).toBeVisible()
   })
 
+  it('prefers the scoped card title and issue number over bootstrap identity', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{
+            id: 1,
+            title: 'Stale bootstrap title',
+            format: 'Comic',
+            issue_id: 55,
+            issue_number: '6',
+          }]}
+          issueCards={{
+            items: [{
+              issue_id: 55,
+              thread_id: 1,
+              thread_title: 'Canonical card title',
+              issue_number: '7',
+              status: 'unread',
+              has_confirmed_identity: true,
+              mapping_state: 'confirmed',
+            }],
+          }}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('Canonical card title')).toBeVisible()
+    expect(screen.getByText('#7')).toBeVisible()
+    expect(screen.queryByText('Stale bootstrap title')).not.toBeInTheDocument()
+    expect(screen.queryByText('#6')).not.toBeInTheDocument()
+  })
+
   it('carries the route overflow count on the face cue', () => {
     render(
       <MemoryRouter>

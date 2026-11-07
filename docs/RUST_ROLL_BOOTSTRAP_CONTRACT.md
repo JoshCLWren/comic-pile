@@ -227,27 +227,38 @@ adapter and contract coverage. Two residuals remain:
 
 ## Surface migration order (scoped resources, #4369)
 
-Bootstrap remains authoritative until Roll surfaces migrate. The
-additive callers in `frontend/src/hooks/useRollResources.ts`
-(`useRollDieState`, `useRollEligibleIssueIds`, `useRollIssueCards`,
-and the composed `useRollResourceSnapshot`) exist but are not wired
-into `RollPage` yet, so no extra production requests fire and the
-`p0-roll-selection` request budgets are untouched.
+Bootstrap remains authoritative for session/pending/recovery, pool
+data, die size, and the 3D die model until those surfaces migrate. The
+callers in `frontend/src/hooks/useRollResources.ts` are now mounted
+incrementally: `RollPage` calls `useRollDieState` and passes the scoped
+value to `RollHeader`, calls `useRollEligibleIssueIds` with the
+browser snooze cookie and passes `thread_ids` to `ThreadPool`, and calls
+`useRollIssueCards` for that visible eligible batch, so a cold Roll load
+is one session POST, one bootstrap GET, one die-state GET, one
+eligible-ids GET and one bounded issue-cards POST.
+`coreRouteRequestBudget.test.tsx` pins that budget. The composed
+`useRollResourceSnapshot` remains unwired and adds no production request
+of its own.
 
 Migrate in this order, one surface per reviewable change:
 
-1. Die header — `RollHeader` die ladder/readout from
-   `GET /v2/roll/die-state` (`die`, `ladder`, `default_die`,
-   `last_roll`), falling back to bootstrap `current_die`/`manual_die`
-   until the scoped value wins.
-2. Eligible pool — `ThreadPool` in-play faces from
+1. Die header — **selected die and readout mounted** from
+   `GET /v2/roll/die-state` (`die`), falling back to bootstrap
+   `current_die` while the scoped query settles or fails, and
+   invalidated after roll/set-die/reset. Remaining in this surface:
+   drive the ladder list, `default_die` and `last_roll` from the
+   scoped resource, and align die size and the 3D model with it.
+2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
    `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
    `thread_ids`), with browser-owned snoozes as the `snoozed` query
-   value and bootstrap `rollable` as the fallback pool.
-3. Issue cards — visible card enrichment from
+   value and bootstrap `rollable` as the fallback pool. Bootstrap still
+   supplies each face's title, format, issue identity and routes until
+   the issue-card surface migrates.
+3. Issue cards — **mounted** as visible card enrichment from
    `POST /v2/issues/cards` (one bounded batch in first-request
-   order, `items`), replacing the fields bootstrap already carries
-   without adding a second per-issue fetch.
+   order, `items`), replacing the title and issue number bootstrap
+   already carries without adding a second per-issue fetch. Bootstrap
+   remains the fallback while the batch settles or fails.
 
 Only after all three surfaces settle on scoped resources with green
 exact-head CI and independent review should the legacy Rust v2

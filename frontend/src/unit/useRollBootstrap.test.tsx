@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
 import { ROLL_BOOTSTRAP_RECONCILED_EVENT } from '../hooks/rollMutationReconciliation'
 import { queryClient } from '../query/queryClient'
+import { queryKeys } from '../query/queryKeys'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import { cast } from '../utils/cast'
 import { ToastProvider } from '../contexts/ToastProvider'
@@ -239,6 +240,29 @@ describe('useRollBootstrap', () => {
     expect(result.current.data).toBe(bootstrapResponse)
     expect(result.current.isError).toBe(false)
     expect(localStorage.getItem('comic_pile_last_session_id_1')).toBe('1')
+  })
+
+  it('refreshes the derived eligible pool after a reconciled bootstrap (#4719)', async () => {
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+    renderBootstrap()
+
+    await waitFor(() => expect(mockedBootstrap).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ROLL_BOOTSTRAP_RECONCILED_EVENT, { detail: bootstrapResponse }),
+      )
+    })
+
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.eligibleIssueIdsAll(),
+    })
+    // The new eligible ids change the card batch key; invalidating the old
+    // batch here would issue one wasted POST against the pre-rating ids.
+    expect(invalidateQueries).not.toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.issueCardsAll(),
+    })
   })
 
   it('keeps reconciled state when an older bootstrap request resolves later', async () => {
