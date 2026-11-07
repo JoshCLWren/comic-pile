@@ -96,10 +96,17 @@ export function useRollSnooze({
       const expectedId = state.activeRatingThread?.id
       const outcome = await snoozeMutation.mutate(expectedId)
       setIsRolling(false)
-      setIsRatingView(false)
-      setRolledResult(null)
-      setSelectedThreadId(null)
-      setActiveRatingThread(null)
+      if (enterRatingView && outcome.response?.thread_id != null) {
+        // The Rust offer recorded the snooze and selected a replacement in the
+        // same transaction (#4589). Keep the rating view open for it instead
+        // of silently closing a pending session.
+        await enterRatingView(outcome.response.thread_id, outcome.response.result, outcome.response)
+      } else {
+        setIsRatingView(false)
+        setRolledResult(null)
+        setSelectedThreadId(null)
+        setActiveRatingThread(null)
+      }
       // The mutation already published authoritative state when its bounded
       // refresh succeeded. When it exhausted those attempts the reader would
       // otherwise be looking at a closed rating view over a stale pool, so the

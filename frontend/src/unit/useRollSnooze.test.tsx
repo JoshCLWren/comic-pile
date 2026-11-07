@@ -46,10 +46,21 @@ function nextOffer(): RollResponse {
 function committedOutcome(): SnoozeMutationOutcome {
   return {
     response: {
-      current_die: 12,
-      pending_thread_id: null,
-      reading_mode_suggested: false,
-      correction: null,
+      thread_id: 9,
+      title: 'Next Series',
+      format: 'Comic',
+      issues_remaining: 2,
+      queue_position: 2,
+      die_size: 8,
+      result: 1,
+      offset: 0,
+      snoozed_count: 1,
+      issue_id: null,
+      issue_number: null,
+      next_issue_id: null,
+      next_issue_number: null,
+      total_issues: 6,
+      reading_progress: null,
     },
     refreshed: true,
     refreshError: null,
@@ -134,10 +145,21 @@ describe('useRollSnooze', () => {
     const refreshFailure = new Error('bootstrap unavailable')
     const mutate = vi.fn().mockResolvedValue({
       response: {
-        current_die: 12,
-        pending_thread_id: null,
-        reading_mode_suggested: false,
-        correction: null,
+        thread_id: 9,
+        title: 'Next Series',
+        format: 'Comic',
+        issues_remaining: 2,
+        queue_position: 2,
+        die_size: 12,
+        result: 1,
+        offset: 0,
+        snoozed_count: 1,
+        issue_id: null,
+        issue_number: null,
+        next_issue_id: null,
+        next_issue_number: null,
+        total_issues: 6,
+        reading_progress: null,
       },
       refreshed: false,
       refreshError: refreshFailure,
@@ -235,5 +257,43 @@ describe('useRollSnooze', () => {
       response,
     )
     expect(refetchBootstrap).not.toHaveBeenCalled()
+  })
+
+  it('enters the replacement rating view after a committed snooze', async () => {
+    const mutate = vi.fn().mockResolvedValue(committedOutcome())
+    const enterRatingView = vi.fn().mockResolvedValue(undefined)
+    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
+    const { result } = renderHook(() => {
+      const state = useRollPageState()
+      const snooze = useRollSnooze({
+        state,
+        snoozeMutation: { mutate },
+        enterRatingView,
+        refetchBootstrap,
+      })
+      return { state, snooze }
+    })
+
+    act(() => {
+      result.current.state.setActiveRatingThread(ratingThread(7))
+      result.current.state.setIsRatingView(true)
+      result.current.state.setIsRolling(true)
+    })
+
+    await act(async () => {
+      await result.current.snooze.handleSnooze()
+    })
+
+    expect(mutate).toHaveBeenCalledWith(7)
+    expect(enterRatingView).toHaveBeenCalledWith(
+      9,
+      1,
+      expect.objectContaining({ thread_id: 9, title: 'Next Series' }),
+    )
+    expect(refetchBootstrap).not.toHaveBeenCalled()
+    // The mock does not run the real view logic; the caller keeps the view
+    // open instead of closing it when a replacement thread is offered.
+    expect(result.current.state.isRatingView).toBe(true)
+    expect(result.current.state.activeRatingThread?.id).toBe(7)
   })
 })

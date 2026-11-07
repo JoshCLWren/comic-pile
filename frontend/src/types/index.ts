@@ -227,13 +227,6 @@ export interface SnoozeCorrectionInfo {
   suggest_clarification: boolean;
 }
 
-/** Client view of the Snooze response used to decide clarification UI. */
-export interface SnoozeSessionResponse {
-  current_die: number;
-  pending_thread_id: number | null;
-  reading_mode_suggested: boolean;
-  correction: SnoozeCorrectionInfo | null;
-}
 
 export interface SessionCurrent {
   id: number;

@@ -12,7 +12,7 @@ import type { NavigateFunction } from 'react-router-dom'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
-import type { SnoozeSessionResponse } from '../types'
+import type { RollResponse } from '../types'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -44,7 +44,7 @@ function pooledThread(id: number): RollBootstrapThread {
 interface HarnessOptions {
   bootstrap?: RollBootstrapResponse
   selectedThreadId?: number
-  snoozeImpl?: () => Promise<SnoozeSessionResponse>
+  snoozeImpl?: () => Promise<RollResponse>
   refreshed?: boolean
   refreshError?: unknown
 }
@@ -53,7 +53,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
   const { bootstrap = bootstrapWith(), snoozeImpl, refreshed = true, refreshError = null } = options
 
   // SAFETY: the hook only awaits the result; the stub stands in for the API's empty 200 body
-  const snoozeResponse = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as SnoozeSessionResponse | undefined)))
+  const snoozeResponse = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as RollResponse | undefined)))
   const snoozeMutate = vi.fn(async () => ({
     response: await snoozeResponse(),
     refreshed,
