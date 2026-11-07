@@ -108,6 +108,9 @@ export function useRollActions({
     shuffleQueueMutation,
   } = mutations
 
+  /**
+   * Handles clicking on a thread in the roll pool, opening the action sheet.
+   */
   function handleThreadClick(thread: RollBootstrapThread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
@@ -118,11 +121,17 @@ export function useRollActions({
    * mutation only runs from `performShuffle`, so one click can never reorder the
    * reader's entire queue on its own (issue #3261).
    */
+  /**
+   * Opens the shuffle confirmation dialog for the entire roll pool.
+   */
   function handleShufflePool() {
     setShuffleError('')
     setIsShuffleOpen(true)
   }
 
+  /**
+   * Handles actions selected from the thread action sheet.
+   */
   async function handleAction(action: string) {
     setIsActionSheetOpen(false)
     const isSnoozed =
@@ -257,6 +266,9 @@ export function useRollActions({
     }
   }
 
+  /**
+   * Sets the die size for the current roll session.
+   */
   async function handleSetDie(die: number) {
     try {
       await setDieMutation.mutate(die)
@@ -268,6 +280,10 @@ export function useRollActions({
     }
   }
 
+  /**
+   * Recovers from a pending roll conflict by refetching the bootstrap state
+   * and entering the rating view for the actual pending thread.
+   */
   async function recoverPendingRollConflict() {
     const latest = await refetchBootstrap()
     const pendingId = Number(latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0)
@@ -290,6 +306,9 @@ export function useRollActions({
    * reader can retry without re-discovering the button. The reason renders
    * inside the dialog: a toast paints below the modal layer, and a native
    * `alert` blocks the page and is invisible to QA automation (issue #4193).
+   */
+  /**
+   * Performs the actual queue shuffle operation after confirmation.
    */
   async function performShuffle() {
     try {
