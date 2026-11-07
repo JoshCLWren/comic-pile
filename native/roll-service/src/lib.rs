@@ -6,6 +6,7 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
 pub mod db;
+pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
@@ -320,6 +321,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/reading-graph", get(reading_graph::reading_graph))
         .route("/api/v2/reading-graph/repairs", post(reading_graph::repair))
+        .route(
+            "/api/v2/dependencies/",
+            post(dependencies::create_dependency),
+        )
+        .route(
+            "/api/v2/dependencies/{dependency_id}",
+            delete(dependencies::delete_dependency),
+        )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route(
             "/api/v2/issues/{issue_id}/comicvine",

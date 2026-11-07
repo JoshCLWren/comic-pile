@@ -6226,6 +6226,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/dependencies/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Documentation-only operation for the mounted dependency create.
+         * @description Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Option E graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.
+         */
+        post: operations["create_dependency_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/dependencies/{dependency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Documentation-only operation for the mounted dependency delete.
+         * @description Delete one owner-scoped dependency and refresh denormalized blocked flags. Issues, read state, ratings and history are preserved.
+         */
+        delete: operations["delete_dependency_documentation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/issues/cards": {
         parameters: {
             query?: never;
@@ -11354,6 +11394,18 @@ export interface components {
             target_type: "thread" | "issue";
         };
         /**
+         * @description Flat wire request mirroring the Python `DependencyCreate` payload so the
+         *     Dependency Builder migrates without changing its semantics.
+         */
+        DependencyCreateRequest: {
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
+        /**
          * DependencyGroupCreate
          * @description Create a named dependency group.
          */
@@ -12998,6 +13050,32 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
+        };
+        /**
+         * @description Issue-level dependency response mirroring the Python `DependencyResponse`
+         *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
+         */
+        NativeDependencyResponse: {
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            is_issue_level: boolean;
+            note?: string | null;
+            /** Format: int32 */
+            source_issue_id?: number | null;
+            /** Format: int32 */
+            source_issue_thread_id?: number | null;
+            source_label?: string | null;
+            /** Format: int32 */
+            source_thread_id?: number | null;
+            /** Format: int32 */
+            target_issue_id?: number | null;
+            /** Format: int32 */
+            target_issue_thread_id?: number | null;
+            target_label?: string | null;
+            /** Format: int32 */
+            target_thread_id?: number | null;
+            warning?: string | null;
         };
         /** @description Request body for an enumeration-safe password-recovery email. */
         NativeForgotPasswordRequest: {
@@ -25391,6 +25469,107 @@ export interface operations {
             };
             /** @description Stale preview or different authoritative list */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_dependency_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DependencyCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Created dependency */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
+                };
+            };
+            /** @description Invalid or duplicate dependency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading constraint cycle: nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_dependency_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Dependency id */
+                dependency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

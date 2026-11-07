@@ -352,7 +352,10 @@ async fn canonical_blocked_thread_ids(
 /// the legacy queue projection both filter on the stored column; a stale value
 /// lets a re-blocked thread enter the pool or hides a just-unblocked one.
 /// Mirrors `comic_pile.dependencies.refresh_user_blocked_status`.
-async fn refresh_blocked_threads(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+pub(crate) async fn refresh_blocked_threads(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<(), ApiError> {
     let blocked = canonical_blocked_thread_ids(tx, user_id).await?;
     // `id = ANY($2)` is false for an empty array, so this blocks exactly the
     // canonical set and clears every other stale flag in one owner-scoped write.

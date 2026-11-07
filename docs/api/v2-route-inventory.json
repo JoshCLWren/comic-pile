@@ -122,6 +122,26 @@
       ]
     },
     {
+      "method": "POST",
+      "path": "/api/v2/dependencies/",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
       "method": "DELETE",
       "path": "/api/v2/issues/{issue_id}",
       "runtime": "native-rust",
