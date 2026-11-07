@@ -88,6 +88,7 @@ function renderSync(
   bootstrap: RollBootstrapResponse | null | undefined,
   scopedDieState: DieStateResponse | null | undefined,
 ) {
+  // SAFETY: these die-sync cases never pass isBootstrapError true, so the hook never calls navigate (it only navigates on a 401); a no-op stub is safe.
   return renderHook(() =>
     useRollBootstrapSync({
       state: stateSetters(),
