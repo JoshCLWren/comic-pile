@@ -484,7 +484,8 @@ mod tests {
     const SEED_ROWS: &str = r#"
         INSERT INTO users (id, username, password_changed_at) VALUES
             (1, 'reader-one', to_timestamp({STORED_EPOCH})),
-            (2, 'reader-two', to_timestamp({STORED_EPOCH}));
+            (2, 'reader-two', to_timestamp({STORED_EPOCH})),
+            (3, 'reader-empty', to_timestamp({STORED_EPOCH}));
         INSERT INTO revoked_tokens (user_id, jti, expires_at)
             VALUES (1, 'revoked-jti', NOW() + interval '1 day');
         -- Reader one: six active threads, one completed thread, a d4 die.
@@ -824,6 +825,25 @@ mod tests {
         let (status, die) = fixture.get("/api/v2/roll/die-state", Some(&token)).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(die["die"], 4);
+    }
+
+    #[tokio::test]
+    async fn empty_library_reports_no_series_at_eligible_ids() {
+        let Some(fixture) = Fixture::start().await else {
+            return;
+        };
+        let token = fixture.token("reader-empty", "reader-empty-jti", STORED_EPOCH);
+
+        let (status, eligible) = fixture
+            .get("/api/v2/roll/eligible-issue-ids", Some(&token))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(ints(&eligible, "issue_ids").is_empty());
+        assert!(ints(&eligible, "thread_ids").is_empty());
+        assert_eq!(
+            eligible["pool_reason"], "no_series",
+            "a reader with no series must explain the empty pool, not claim ready"
+        );
     }
 
     #[tokio::test]
