@@ -384,57 +384,20 @@ pub async fn execute_standalone(
 /// SHARE` + receipt read + `current_die` + INSERT + `UPDATE sessions` +
 /// COMMIT. The functions below replace all of that with one statement.
 ///
-/// Common CTE prefix: folded authentication (`auth`/`me`, identical to
-/// `auth::FOLDED_AUTH_CTES`), then the per-reader advisory lock materialized
-/// from the resolved owner. Every later CTE references `lock`, so the lock is
-/// evaluated before the receipt check, die read and write. The statement runs
-/// in autocommit, so `pg_advisory_xact_lock` is held for the whole statement
-/// — exactly the critical section the old explicit transaction protected —
-/// and the single statement is atomic by definition.
-const SINGLE_AUTH_CTES: &str = r#"auth AS (
-    SELECT u.id AS user_id,
-           COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) AS password_epoch,
-           EXISTS(SELECT 1 FROM revoked_tokens r WHERE r.jti = $2) AS revoked
-    FROM users u
-    WHERE u.username = $1
-    LIMIT 1
-),
-me AS (
-    SELECT (SELECT user_id FROM auth WHERE NOT revoked AND password_epoch <= $3) AS user_id
-),
-lock AS MATERIALIZED (
-    SELECT pg_advisory_xact_lock((SELECT user_id FROM me)::bigint)
-    WHERE (SELECT user_id FROM me) IS NOT NULL
-),
-previous AS MATERIALIZED (
-    SELECT id, die, die_after, context::text AS context
-    FROM events
-    WHERE user_id = (SELECT user_id FROM me)
-      AND context->>'dice_command_key' = $4
-      AND (SELECT 1 FROM lock) IS NOT NULL
-    LIMIT 1
-),
-die_state AS MATERIALIZED (
-    SELECT die_after
-    FROM events
-    WHERE user_id = (SELECT user_id FROM me)
-      AND type IN ('rate', 'snooze', 'undo', 'manual_die', 'reset_dice')
-      AND die_after IN (2, 4, 6, 8, 10, 12, 20, 30, 50, 100)
-      AND (SELECT 1 FROM lock) IS NOT NULL
-    ORDER BY timestamp DESC, id DESC
-    LIMIT 1
-),
-computed AS (
-    SELECT
-        CASE
-            WHEN (SELECT die_after FROM die_state) IN (30, 50, 100) THEN 20
-            WHEN (SELECT die_after FROM die_state) IN (2, 4, 6, 8, 10, 12, 20)
-                THEN (SELECT die_after FROM die_state)
-            ELSE 6
-        END AS die_before,
-        $5::int AS die_after
-)"#;
-
+/// Single issued command for both standalone writes: one `SELECT` of a
+/// `VOLATILE SECURITY INVOKER` PL/pgSQL function (migration
+/// `c46150000001_roll_dice_write_functions`).
+///
+/// A data-modifying CTE is not equivalent here: under READ COMMITTED the
+/// whole statement shares one snapshot taken before the MATERIALIZED
+/// advisory lock is acquired, so a concurrent same-key retry misses the
+/// winner's receipt (unique-index 500 instead of a replay) and distinct
+/// commands record a stale `die_before`. Each PL/pgSQL command takes a
+/// fresh snapshot, so lock-then-read-then-write observes the winner's
+/// committed rows. The client still issues exactly one command per HTTP
+/// request, including folded authentication, the advisory lock, the
+/// idempotency receipt, the event-derived die read and the write.
+///
 /// One issued SQL statement for `POST /api/v2/roll/dice-command`
 /// (manual die selection), including authentication.
 pub async fn execute_dice_command_single(
@@ -453,31 +416,7 @@ pub async fn execute_dice_command_single(
         "dice_command": command,
     })
     .to_string();
-    let sql = format!(
-        "WITH {SINGLE_AUTH_CTES},
-inserted AS MATERIALIZED (
-    INSERT INTO events
-        (user_id, type, timestamp, die, die_after, thread_id, issue_id, rating, context)
-    SELECT (SELECT user_id FROM me), 'manual_die', clock_timestamp(),
-           (SELECT die_before FROM computed), (SELECT die_after FROM computed),
-           NULL, NULL, NULL, $6::text::json
-    FROM computed
-    WHERE (SELECT user_id FROM me) IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM previous)
-      AND (SELECT 1 FROM lock) IS NOT NULL
-    RETURNING id, die, die_after, context::text AS context
-)
-SELECT jsonb_build_object(
-    'auth', (SELECT jsonb_build_object('password_epoch', password_epoch, 'revoked', revoked) FROM auth),
-    'event_id', COALESCE((SELECT id FROM inserted), (SELECT id FROM previous)),
-    'die_before', COALESCE((SELECT die FROM inserted), (SELECT die FROM previous)),
-    'die_after', COALESCE((SELECT die_after FROM inserted), (SELECT die_after FROM previous)),
-    'replayed', (SELECT id FROM inserted) IS NULL AND (SELECT id FROM previous) IS NOT NULL,
-    'context', COALESCE((SELECT context FROM inserted), (SELECT context FROM previous)),
-    'session_id', NULL::int,
-    'session_cleared', NULL::bigint
-)::text"
-    );
+    let sql = "SELECT public.roll_dice_command_write($1, $2, $3, $4, $5, $6)";
     let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 6] = [
         &username,
         &jti,
@@ -488,7 +427,7 @@ SELECT jsonb_build_object(
     ];
     let connection = db::checkout(state).await?;
     DICE_COMMAND_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-    let row = db::query_one_optional(state, connection, &sql, &bindings)
+    let row = db::query_one_optional(state, connection, sql, &bindings)
         .await?
         .ok_or(ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -529,60 +468,20 @@ pub async fn execute_reset_single(
         "dice_command": command,
     })
     .to_string();
-    // Reset always lands on d6, so $5 is the post-command die.
-    let session_body =
-        crate::reading_session::session_resolution_body("(SELECT user_id FROM me)", "$7", "$8");
-    let sql = format!(
-        "WITH {SINGLE_AUTH_CTES},
-current_session AS MATERIALIZED (
-    SELECT s.id AS session_id {session_body}
-),
-inserted AS MATERIALIZED (
-    INSERT INTO events
-        (user_id, type, timestamp, die, die_after, thread_id, issue_id, rating, context)
-    SELECT (SELECT user_id FROM me), 'reset_dice', clock_timestamp(),
-           (SELECT die_before FROM computed), 6,
-           NULL, NULL, NULL, $6::text::json
-    FROM computed
-    WHERE (SELECT user_id FROM me) IS NOT NULL
-      AND NOT EXISTS (SELECT 1 FROM previous)
-      AND (SELECT 1 FROM lock) IS NOT NULL
-    RETURNING id, die, die_after, context::text AS context
-),
-cleared AS MATERIALIZED (
-    UPDATE sessions
-    SET pending_thread_id = NULL, pending_issue_id = NULL,
-        pending_thread_updated_at = NULL, manual_die = NULL
-    WHERE id = (SELECT session_id FROM current_session)
-      AND user_id = (SELECT user_id FROM me)
-      AND EXISTS (SELECT 1 FROM inserted)
-      AND (SELECT 1 FROM lock) IS NOT NULL
-    RETURNING id
-)
-SELECT jsonb_build_object(
-    'auth', (SELECT jsonb_build_object('password_epoch', password_epoch, 'revoked', revoked) FROM auth),
-    'event_id', COALESCE((SELECT id FROM inserted), (SELECT id FROM previous)),
-    'die_before', COALESCE((SELECT die FROM inserted), (SELECT die FROM previous)),
-    'die_after', COALESCE((SELECT die_after FROM inserted), (SELECT die_after FROM previous)),
-    'replayed', (SELECT id FROM inserted) IS NULL AND (SELECT id FROM previous) IS NOT NULL,
-    'context', COALESCE((SELECT context FROM inserted), (SELECT context FROM previous)),
-    'session_id', (SELECT session_id FROM current_session),
-    'session_cleared', (SELECT count(*) FROM cleared)
-)::text"
-    );
-    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 8] = [
+    // Reset always lands on d6 (applied inside the function).
+    let sql = "SELECT public.roll_reset_write($1, $2, $3, $4, $5, $6, $7)";
+    let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 7] = [
         &username,
         &jti,
         &expected_epoch,
         &idempotency_key.to_string(),
-        &6_i32,
         &context,
         &now,
         &gap_hours,
     ];
     let connection = db::checkout(state).await?;
     RESET_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
-    let row = db::query_one_optional(state, connection, &sql, &bindings)
+    let row = db::query_one_optional(state, connection, sql, &bindings)
         .await?
         .ok_or(ApiError(
             StatusCode::INTERNAL_SERVER_ERROR,

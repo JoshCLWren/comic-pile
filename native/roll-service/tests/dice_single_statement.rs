@@ -242,3 +242,93 @@ async fn dice_command_and_reset_issue_one_db_command_each() {
         "revoked-token rejection must still be the single folded statement"
     );
 }
+
+/// Concurrency regression (CodeRabbit review on #4709): two same-key requests
+/// racing for the per-reader advisory lock must not race past the receipt —
+/// the loser must observe the winner's committed receipt and replay, not hit
+/// the unique index and return 500. Distinct concurrent commands must chain
+/// on a fresh die state, never a stale snapshot.
+#[tokio::test]
+async fn concurrent_same_key_retries_replay_and_distinct_keys_chain() {
+    let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
+        return;
+    };
+    let state = test_support::test_state(8)
+        .await
+        .expect("disposable PostgreSQL required");
+    let _db = test_support::reset_for_test(&state).await;
+    seed(&state).await;
+
+    let db_url = test_support::database_url().await;
+    let config = Config::from_lookup(|name| match name {
+        "RUST_ROLL_DATABASE_URL" => Some(db_url.clone()),
+        "RUST_ROLL_JWT_SECRET" => Some(TEST_JWT_SECRET.into()),
+        _ => None,
+    })
+    .unwrap();
+    let app_state = Arc::new(AppState::new(config).unwrap());
+    let app = router(app_state.clone());
+    let auth = token("reader-1");
+
+    // Eight concurrent identical commands: exactly one writes, seven replay.
+    let mut handles = Vec::new();
+    for _ in 0..8 {
+        let app = app.clone();
+        let auth = auth.clone();
+        handles.push(tokio::spawn(async move {
+            post(
+                &app,
+                "/api/v2/roll/dice-command",
+                &auth,
+                json!({"kind":"manual_select","die":12,"idempotency_key":"concurrent-4615-001"}),
+            )
+            .await
+        }));
+    }
+    let mut event_id = None;
+    let mut fresh = 0;
+    for handle in handles {
+        let (status, body) = handle.await.unwrap();
+        assert_eq!(status, StatusCode::OK, "{body}");
+        match event_id {
+            None => event_id = Some(body["event_id"].as_i64().unwrap()),
+            Some(id) => assert_eq!(body["event_id"].as_i64().unwrap(), id, "{body}"),
+        }
+        if !body["replayed"].as_bool().unwrap() {
+            fresh += 1;
+        }
+    }
+    assert_eq!(fresh, 1, "exactly one concurrent writer may insert");
+    let connection = state.pool.get().await.unwrap();
+    let count: i64 = connection
+        .query_one(
+            "SELECT COUNT(*) FROM events WHERE user_id=1 AND context->>'dice_command_key'='concurrent-4615-001'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 1);
+    drop(connection);
+
+    // Two distinct keys racing: die chain must be serialized, not stale.
+    let (first, second) = tokio::join!(
+        post(
+            &app,
+            "/api/v2/roll/dice-command",
+            &auth,
+            json!({"kind":"manual_select","die":12,"idempotency_key":"concurrent-4615-002"}),
+        ),
+        post(
+            &app,
+            "/api/v2/roll/dice-command",
+            &auth,
+            json!({"kind":"manual_select","die":8,"idempotency_key":"concurrent-4615-003"}),
+        ),
+    );
+    assert_eq!(first.0, StatusCode::OK, "{}", first.1);
+    assert_eq!(second.0, StatusCode::OK, "{}", second.1);
+    let chain_ok = (first.1["die_after"] == second.1["die_before"] && second.1["die_after"] == 8)
+        || (second.1["die_after"] == first.1["die_before"] && first.1["die_after"] == 12);
+    assert!(chain_ok, "die chain: first={} second={}", first.1, second.1);
+}
