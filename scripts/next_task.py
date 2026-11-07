@@ -114,9 +114,14 @@ def _is_acceptance_parent(issue: IssuePayload) -> bool:
 
 def select_next(issues: list[IssuePayload], closed_numbers: set[int]) -> Candidate | None:
     """Select the highest-priority executable pending issue."""
+    cutover_open = any(issue["number"] == eligibility.RUST_CUTOVER_EPIC for issue in issues)
     candidates: list[Candidate] = []
     for issue in issues:
         labels = _labels(issue)
+        if not eligibility.rust_cutover_work_allowed(
+            labels, issue.get("body"), cutover_open=cutover_open
+        ):
+            continue
         if "ralph-status:pending" not in labels or labels & EXCLUDED_LABELS:
             continue
         if labels & EPIC_ACCEPTANCE_LABELS or _is_manual_only(issue):
@@ -139,7 +144,7 @@ def _gh_issue_list(state: str) -> list[IssuePayload]:
         "--state",
         state,
         "--limit",
-        "200",
+        "1000",
         "--json",
         "number,title,body,labels,url",
     ]
@@ -240,6 +245,14 @@ def _start_task(issue_number: int) -> int:
     }
     if _has_unresolved_dependency(issue, closed_numbers):
         raise RuntimeError(f"#{issue_number} has an unresolved dependency; no status change made")
+    cutover_open = any(
+        row["number"] == eligibility.RUST_CUTOVER_EPIC
+        for row in _gh_issue_list("open")
+    )
+    if not eligibility.rust_cutover_work_allowed(
+        labels, issue.get("body"), cutover_open=cutover_open
+    ):
+        raise RuntimeError(f"#{issue_number} must wait for Rust cutover #4335")
 
     _run_gh(
         [
