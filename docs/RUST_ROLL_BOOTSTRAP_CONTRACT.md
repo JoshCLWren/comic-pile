@@ -156,3 +156,101 @@ contracts; #4311 must compare full Python/Rust status/JSON/database effects;
 All mutations, Queue/auth/catalog APIs, ingress deployment and rollback remain
 outside this contract task. No production routing switch is authorized here;
 #4313 retains the campaign cutover gates.
+
+## Production runtime proof (2026-11-07)
+
+Authenticated production execution of `GET /api/v2/roll/bootstrap` in the
+native Rust runtime was verified via a Playwright (MCP) browser session
+against `https://comic-pile.vercel.app` on 2026-11-07 (UTC). This is the
+production proof required before the #4350 cleanup closes, distinct from
+health/401 checks.
+
+Evidence captured in that session:
+
+- Login as the production owner account via `/login` → `POST
+  /api/v2/auth/login => 200`, then `GET /api/v2/auth/me => 200`.
+- Roll page (`/`) rendered the `Roll` heading, die selector (`d20`
+  pressed), account identity `Josh_Digital_Comics`, and "20 in play / 20
+  mapped results" with all 20 die faces.
+- Browser network ledger showed `POST /api/v2/reading-sessions => 200`,
+  `GET /api/v2/roll/bootstrap?timezone=America%2FChicago => 200` on
+  initial load, and `GET /api/v2/roll/bootstrap => 200` plus `POST
+  /api/v2/roll/offer => 200` after clicking "Roll the dice"
+  (`#main-die-3d`).
+- The rendered roll landed on "Rolled 14 of d20 · #14 in queue — Jenny
+  Sparks: The Secret History of the Authority #1" with the rating slider
+  (`3.0`, `d20 → d20`) visible, confirming session/pending/die/rollable
+  selection over the live bootstrap payload.
+- Response headers for the bootstrap GETs and the roll offer POST:
+  `x-comicpile-api-runtime: rust`, `server: Vercel`,
+  `content-type: application/json` — i.e. the current `vercel.json`
+  destination `api/native_roll.rs` served successful authenticated
+  production Roll traffic, not only route configuration.
+- A direct authenticated `fetch` with the browser's own token returned
+  `200` and `x-comicpile-api-runtime: rust` with the `BootstrapResponseV2`
+  top-level keys (`session_id`, `user_id`, `current_die`,
+  `manual_die`, `pending_thread_id`, `last_rolled_result`,
+  `session_mode`, `active_thread`, `roll_recovery`, `bandwidth`,
+  `rollable`, `pool_reason`, …), `current_die: 20`, `session_id: 1018131`,
+  `user_id: 25`, consistent with the rendered "20 in play" UI.
+
+No credentials, tokens, or passwords are stored in this document. The
+production password supplied for the check must be treated as rotated
+after use and must never be committed (see `docs/api/PASSWORD_POLICY.md`).
+Any follow-up cleanup (#4350) still requires green exact-head CI and
+independent semantic/acceptance review; this proof does not by itself
+authorize removing other Python operations.
+
+### Residual #4369 surfaced (2026-11-07)
+
+Audit of the #4369 losses against the current native v2 adapter found
+tags, `pool_reason`, `roll_recovery` + bandwidth/session mode,
+session/pending, die, and rollable issue/routes already carried, with
+adapter and contract coverage. Two residuals remain:
+
+- Excluded/inactive/blocked/stale counters (`inactive_count`,
+  `excluded_count`, …) are not carried by v2. The current adapter
+  explicitly retires them and the v2 fixture asserts their absence;
+  v2 replaces that whole-library report with the single
+  `pool_reason` explanation, and no live frontend surface consumes
+  the retired counters. This retirement is intentional and must be
+  reconciled with `AGENTS.md` wording before claiming the counters
+  are "preserved".
+- `overflow_routes_count` was sent by native Rust but dropped by
+  `adaptRollV2Bootstrap`, so a "+N more" route overflow was invisible
+  even though the v2 type capped routes at 3. Fixed by carrying the
+  validated count through `RollBootstrapThread.overflow_routes_count`
+  and rendering "+N more" in `ThreadPool`'s existing continuity line
+  (semantic `--theme-continuity-accent` role, no new visual value),
+  with adapter/unit coverage for the carried count and fail-closed
+  rejection of negative or missing counts.
+
+## Surface migration order (scoped resources, #4369)
+
+Bootstrap remains authoritative until Roll surfaces migrate. The
+additive callers in `frontend/src/hooks/useRollResources.ts`
+(`useRollDieState`, `useRollEligibleIssueIds`, `useRollIssueCards`,
+and the composed `useRollResourceSnapshot`) exist but are not wired
+into `RollPage` yet, so no extra production requests fire and the
+`p0-roll-selection` request budgets are untouched.
+
+Migrate in this order, one surface per reviewable change:
+
+1. Die header — `RollHeader` die ladder/readout from
+   `GET /v2/roll/die-state` (`die`, `ladder`, `default_die`,
+   `last_roll`), falling back to bootstrap `current_die`/`manual_die`
+   until the scoped value wins.
+2. Eligible pool — `ThreadPool` in-play faces from
+   `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
+   `thread_ids`), with browser-owned snoozes as the `snoozed` query
+   value and bootstrap `rollable` as the fallback pool.
+3. Issue cards — visible card enrichment from
+   `POST /v2/issues/cards` (one bounded batch in first-request
+   order, `items`), replacing the fields bootstrap already carries
+   without adding a second per-issue fetch.
+
+Only after all three surfaces settle on scoped resources with green
+exact-head CI and independent review should the legacy Rust v2
+bootstrap be retired under #4369. Deleting bootstrap before that
+point would regress session/pending/recovery, which the scoped
+resources do not yet own.

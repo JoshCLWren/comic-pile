@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { scrollToTopSemantic } from '../../../scroll/scrollCoordinator'
 import { ThreadTagChips } from '../../../components/Tags/ThreadTagChips'
 import type { RollBootstrapThread, RollPoolReason } from '../../../types/rollBootstrap'
+import type { IssueCardsResponse } from '../../../generated/nativeV2Client'
 
 interface ThreadPoolProps {
   pool: RollBootstrapThread[]
@@ -23,6 +24,8 @@ interface ThreadPoolProps {
   onShuffle: () => void
   unsnoozeIsPending: boolean
   shuffleIsPending: boolean
+  eligibleThreadIds?: number[] | null
+  issueCards?: IssueCardsResponse | null
 }
 
 export function ThreadPool({
@@ -40,10 +43,21 @@ export function ThreadPool({
   onShuffle,
   unsnoozeIsPending,
   shuffleIsPending,
+  eligibleThreadIds,
+  issueCards,
 }: ThreadPoolProps) {
   const navigate = useNavigate()
   const wasRatingView = useRef(isRatingView)
   const snoozedTotal = snoozedCount ?? snoozedThreads.length
+  const cardIssueById = new Map((issueCards?.items ?? []).map((card) => [card.issue_id, card.issue_number]))
+  // An explicitly empty scoped result means zero eligible faces, not a bootstrap fallback.
+  const displayPool = eligibleThreadIds != null
+    ? [...pool].sort((a, b) => {
+        const rankA = eligibleThreadIds.indexOf(a.id)
+        const rankB = eligibleThreadIds.indexOf(b.id)
+        return (rankA === -1 ? Number.MAX_SAFE_INTEGER : rankA) - (rankB === -1 ? Number.MAX_SAFE_INTEGER : rankB)
+      }).filter((thread) => eligibleThreadIds.includes(thread.id))
+    : pool
 
   useEffect(() => {
     const returnedToRoll = wasRatingView.current && !isRatingView
@@ -64,17 +78,17 @@ export function ThreadPool({
       {!isRatingView && <div className="flex items-center gap-2 shrink-0 mb-4">
         <div className="w-2 h-2 rounded-full bg-[var(--theme-comic-accent)] shadow-[0_0_15px_var(--accent-red)]"></div>
         <div className="flex-1">
-          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{pool.length} in play</p>
-          {dieSize && pool.length > 0 && pool.length < dieSize && (
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-300">{displayPool.length} in play</p>
+          {dieSize && displayPool.length > 0 && displayPool.length < dieSize && (
             <p className="text-[10px] text-stone-500 mt-1" data-smaller-than-die>
-              Only {pool.length} of d{dieSize} faces are mapped to an in-play series — the roll picks among these visible faces.
+              Only {displayPool.length} of d{dieSize} faces are mapped to an in-play series — the roll picks among these visible faces.
             </p>
           )}
         </div>
         <button
           type="button"
           onClick={onShuffle}
-          disabled={shuffleIsPending || pool.length < 2}
+          disabled={shuffleIsPending || displayPool.length < 2}
           aria-describedby="shuffle-queue-description"
           className="h-8 px-3 rounded-lg border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 text-[10px] font-black uppercase tracking-widest text-[var(--theme-danger)] hover:bg-[var(--theme-danger)]/20 disabled:opacity-50 transition-colors"
         >
@@ -83,8 +97,8 @@ export function ThreadPool({
         <span id="shuffle-queue-description" className="sr-only">Randomizes the complete active queue, then refreshes these die mappings.</span>
       </div>}
 
-      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${pool.length} in play, ${pool.length} mapped result${pool.length === 1 ? '' : 's'}`}>
-        {pool.length === 0 && emptyPoolReason === 'all_blocked' ? (
+      {!isRatingView && <div className="space-y-2" data-roll-pool aria-label={`${displayPool.length} in play, ${displayPool.length} mapped result${displayPool.length === 1 ? '' : 's'}`}>
+        {displayPool.length === 0 && emptyPoolReason === 'all_blocked' ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
@@ -102,7 +116,7 @@ export function ThreadPool({
               Go to Queue
             </button>
           </div>
-        ) : pool.length === 0 && emptyPoolReason === 'all_completed' ? (
+        ) : displayPool.length === 0 && emptyPoolReason === 'all_completed' ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">📚</div>
             <div>
@@ -120,7 +134,7 @@ export function ThreadPool({
               + Add a Series
             </button>
           </div>
-        ) : pool.length === 0 && emptyPoolReason === 'all_out_of_pool' ? (
+        ) : displayPool.length === 0 && emptyPoolReason === 'all_out_of_pool' ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">📚</div>
             <div>
@@ -138,7 +152,7 @@ export function ThreadPool({
               Go to Queue
             </button>
           </div>
-        ) : pool.length === 0 && (snoozedTotal === 0 || emptyPoolReason === 'no_series') ? (
+        ) : displayPool.length === 0 && (snoozedTotal === 0 || emptyPoolReason === 'no_series') ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🎲</div>
             <div>
@@ -160,7 +174,7 @@ export function ThreadPool({
               </ul>
             </div>
           </div>
-        ) : pool.length === 0 && snoozedTotal > 0 ? (
+        ) : displayPool.length === 0 && snoozedTotal > 0 ? (
           <div className="text-center py-6 space-y-4">
             <div className="text-4xl">🔒</div>
             <div>
@@ -179,11 +193,13 @@ export function ThreadPool({
             </button>
           </div>
         ) : (
-          pool.map((thread, index) => {
+          displayPool.map((thread, index) => {
             const isSelected = selectedThreadId && Number(selectedThreadId) === thread.id
             const routeLabels = (thread.route_labels ?? []).filter(Boolean)
             const tags = thread.tags ?? []
             const tagNames = tags.map((tag) => tag.name)
+            const cardIssueNumber = thread.issue_id != null ? cardIssueById.get(thread.issue_id) : undefined
+            const issueNumber = thread.issue_number ?? cardIssueNumber
             return (
               <div
                 key={thread.id}
@@ -196,7 +212,7 @@ export function ThreadPool({
                 }}
                 role="button"
                 tabIndex={0}
-                aria-label={`Die face ${index + 1}: ${thread.title}${thread.issue_number ? `, issue ${thread.issue_number}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}. Open series actions.`}
+                aria-label={`Die face ${index + 1}: ${thread.title}${issueNumber ? `, issue ${issueNumber}` : ''}${tagNames.length ? `, tagged ${tagNames.join(', ')}` : ''}${routeLabels.length ? `, connected to ${routeLabels.join(', ')}` : ''}${(thread.overflow_routes_count ?? 0) > 0 ? `, ${thread.overflow_routes_count} more connected routes` : ''}. Open series actions.`}
                 className={`flex items-center gap-3 px-4 py-3 bg-[var(--theme-bg-panel)] border border-[var(--theme-border)] rounded-xl group transition-all cursor-pointer hover:bg-white/10 ${isSelected ? 'pool-thread-selected border-[var(--theme-comic-accent)]/30' : ''
                   }`}
               >
@@ -206,7 +222,7 @@ export function ThreadPool({
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-stone-200 truncate text-sm">{thread.title}</p>
                   <p className="truncate text-xs text-stone-400">
-                    {thread.issue_number ? `#${thread.issue_number}` : 'Next unread issue'}
+                    {issueNumber ? `#${issueNumber}` : 'Next unread issue'}
                   </p>
                   <p className="text-[10px] font-black text-stone-500 uppercase tracking-widest mt-0.5">{thread.format}</p>
                   <ThreadTagChips
@@ -214,9 +230,9 @@ export function ThreadPool({
                     label={`Tags for ${thread.title}`}
                     className="mt-1"
                   />
-                  {routeLabels.length ? (
-                    <p className="mt-1 truncate text-[10px] text-sky-300">
-                      Connected to: {routeLabels.join(' · ')}
+                  {routeLabels.length || (thread.overflow_routes_count ?? 0) > 0 ? (
+                    <p className="mt-1 truncate text-[10px] text-[var(--theme-continuity-accent)]">
+                      Connected to: {routeLabels.join(' · ')}{routeLabels.length && (thread.overflow_routes_count ?? 0) > 0 ? ' · ' : ''}{(thread.overflow_routes_count ?? 0) > 0 ? `+${thread.overflow_routes_count} more` : ''}
                     </p>
                   ) : null}
                 </div>

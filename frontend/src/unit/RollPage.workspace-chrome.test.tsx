@@ -100,6 +100,12 @@ describe('Roll rating header chrome (#2712)', () => {
     expect(onBackToQueue).toHaveBeenCalledTimes(1)
   })
 
+  it('uses scoped die-state when provided, falling back to bootstrap die', () => {
+    renderHeader({ dieState: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null } })
+    expect(screen.getByRole('button', { name: 'd20' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('leaves the die view header chrome untouched', () => {
     const { container } = renderHeader({ isRatingView: false, onBackToQueue: vi.fn() })
 
