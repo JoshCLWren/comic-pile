@@ -79,7 +79,7 @@ export default function ReadingListEntryCard({
   const label = `${entry.series_name} #${entry.issue_number}`
   const waitText = waitDescription(entry, mode, waitingOn, nameOf)
   // Standalone fallback when no batched card is supplied by the builder.
-  const fallbackCards = useIssueCards([entry.issue_id], { enabled: card === undefined })
+  const fallbackCards = useIssueCards([entry.issue_id], { enabled: card == null })
   const resolvedCard = card ?? fallbackCards.data?.[0] ?? null
   return (
                     <li ref={cardRef} tabIndex={cardRef ? -1 : undefined} aria-current={isNextUnread ? "step" : undefined} className={`min-w-0 rounded-xl border p-3 ${isNextUnread ? "border-[var(--theme-continuity-accent)]" : "border-[var(--theme-border)]"}`} data-testid="reading-list-entry">
