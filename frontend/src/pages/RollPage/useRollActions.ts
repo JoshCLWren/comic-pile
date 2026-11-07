@@ -108,6 +108,9 @@ export function useRollActions({
     shuffleQueueMutation,
   } = mutations
 
+  /**
+   * Handles clicking on a thread in the roll pool, opening the action sheet.
+   */
   function handleThreadClick(thread: RollBootstrapThread) {
     setSelectedThread(thread)
     setIsActionSheetOpen(true)
@@ -118,11 +121,17 @@ export function useRollActions({
    * mutation only runs from `performShuffle`, so one click can never reorder the
    * reader's entire queue on its own (issue #3261).
    */
+  /**
+   * Opens the shuffle confirmation dialog for the entire roll pool.
+   */
   function handleShufflePool() {
     setShuffleError('')
     setIsShuffleOpen(true)
   }
 
+  /**
+   * Handles actions selected from the thread action sheet.
+   */
   async function handleAction(action: string) {
     setIsActionSheetOpen(false)
     const isSnoozed =
@@ -206,6 +215,35 @@ export function useRollActions({
           // The mutation owns the single authoritative refresh; this handler
           // only reports its outcome so a stale pool is never silent.
           const outcome = await snoozeMutation.mutate(selectedThread!.id)
+          if (outcome.response?.thread_id != null) {
+            // The Rust offer recorded the snooze and selected a replacement in the
+            // same transaction. Keep the rating view open for it instead of
+            // silently closing a pending session.
+            const threadMetadata: ThreadMetadata = {
+              id: outcome.response.thread_id,
+              title: outcome.response.title,
+              format: outcome.response.format,
+              issues_remaining: outcome.response.issues_remaining,
+              queue_position: outcome.response.queue_position,
+              total_issues: outcome.response.total_issues,
+              reading_progress: outcome.response.reading_progress ?? null,
+              issue_id: outcome.response.issue_id,
+              issue_number: outcome.response.issue_number,
+              next_issue_id: outcome.response.next_issue_id,
+              next_issue_number: outcome.response.next_issue_number,
+              last_rolled_result: outcome.response.result,
+            }
+            // Ensure we always enter the rating view for the replacement offer,
+            // independently of whether the bootstrap refresh succeeded.
+            enterRatingView(outcome.response.thread_id, outcome.response.result, threadMetadata)
+
+            if (!outcome.refreshed) {
+              // The bootstrap still names the snoozed thread as pending.
+              // Suppress pending auto-open so stale data cannot restore the
+              // old pending thread over the replacement just entered.
+              suppressPendingAutoOpenRef.current = true
+            }
+          }
           if (!outcome.refreshed) {
             if (onSnoozeRefreshFailed) {
               onSnoozeRefreshFailed(outcome.refreshError)
@@ -228,6 +266,9 @@ export function useRollActions({
     }
   }
 
+  /**
+   * Sets the die size for the current roll session.
+   */
   async function handleSetDie(die: number) {
     try {
       await setDieMutation.mutate(die)
@@ -239,6 +280,10 @@ export function useRollActions({
     }
   }
 
+  /**
+   * Recovers from a pending roll conflict by refetching the bootstrap state
+   * and entering the rating view for the actual pending thread.
+   */
   async function recoverPendingRollConflict() {
     const latest = await refetchBootstrap()
     const pendingId = Number(latest?.pending_thread_id ?? bootstrap?.pending_thread_id ?? 0)
@@ -261,6 +306,9 @@ export function useRollActions({
    * reader can retry without re-discovering the button. The reason renders
    * inside the dialog: a toast paints below the modal layer, and a native
    * `alert` blocks the page and is invisible to QA automation (issue #4193).
+   */
+  /**
+   * Performs the actual queue shuffle operation after confirmation.
    */
   async function performShuffle() {
     try {

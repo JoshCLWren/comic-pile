@@ -1,10 +1,19 @@
 import { renderHook, act } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import { useRollSnooze } from '../pages/RollPage/useRollSnooze'
+import { useRollRating } from '../pages/RollPage/useRollRating'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import type { SnoozeMutationOutcome } from '../hooks/useSnooze'
 import type { RatingThread } from '../pages/RollPage/types'
 import type { RollResponse } from '../types'
+
+function createQueryWrapper() {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
 
 function ratingThread(id: number): RatingThread {
   return {
@@ -46,10 +55,21 @@ function nextOffer(): RollResponse {
 function committedOutcome(): SnoozeMutationOutcome {
   return {
     response: {
-      current_die: 12,
-      pending_thread_id: null,
-      reading_mode_suggested: false,
-      correction: null,
+      thread_id: 9,
+      title: 'Next Series',
+      format: 'Comic',
+      issues_remaining: 2,
+      queue_position: 2,
+      die_size: 8,
+      result: 1,
+      offset: 0,
+      snoozed_count: 1,
+      issue_id: null,
+      issue_number: null,
+      next_issue_id: null,
+      next_issue_number: null,
+      total_issues: 6,
+      reading_progress: null,
     },
     refreshed: true,
     refreshError: null,
@@ -134,10 +154,21 @@ describe('useRollSnooze', () => {
     const refreshFailure = new Error('bootstrap unavailable')
     const mutate = vi.fn().mockResolvedValue({
       response: {
-        current_die: 12,
-        pending_thread_id: null,
-        reading_mode_suggested: false,
-        correction: null,
+        thread_id: 9,
+        title: 'Next Series',
+        format: 'Comic',
+        issues_remaining: 2,
+        queue_position: 2,
+        die_size: 12,
+        result: 1,
+        offset: 0,
+        snoozed_count: 1,
+        issue_id: null,
+        issue_number: null,
+        next_issue_id: null,
+        next_issue_number: null,
+        total_issues: 6,
+        reading_progress: null,
       },
       refreshed: false,
       refreshError: refreshFailure,
@@ -152,6 +183,70 @@ describe('useRollSnooze', () => {
     // The snooze committed, so the rating view closes...
     expect(result.current.state.isRatingView).toBe(false)
     // ...but the stale pool/pending state is never silent.
+    expect(onRefreshFailed).toHaveBeenCalledWith(refreshFailure)
+  })
+
+  it('reports refresh failure when replacement view opens with stale pool', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    const mutate = vi.fn().mockResolvedValue({
+      response: {
+        thread_id: 9,
+        title: 'Next Series',
+        format: 'Comic',
+        issues_remaining: 2,
+        queue_position: 2,
+        die_size: 12,
+        result: 1,
+        offset: 0,
+        snoozed_count: 1,
+        issue_id: null,
+        issue_number: null,
+        next_issue_id: null,
+        next_issue_number: null,
+        total_issues: 6,
+        reading_progress: null,
+      },
+      refreshed: false,
+      refreshError: refreshFailure,
+    } satisfies SnoozeMutationOutcome)
+    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
+    const onRefreshFailed = vi.fn()
+    const { result } = renderHook(() => {
+      const state = useRollPageState()
+      const rating = useRollRating({
+        state,
+        bootstrap: null,
+        rateMutation: { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false },
+        dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
+        refetchBootstrap,
+      })
+      const snooze = useRollSnooze({
+        state,
+        snoozeMutation: { mutate },
+        enterRatingView: rating.enterRatingView,
+        refetchBootstrap,
+        onRefreshFailed,
+      })
+      return { state, snooze }
+    }, { wrapper: createQueryWrapper() })
+
+    act(() => {
+      result.current.state.setActiveRatingThread(ratingThread(7))
+      result.current.state.setIsRatingView(true)
+      result.current.state.setIsRolling(true)
+    })
+
+    await act(async () => {
+      await result.current.snooze.handleSnooze()
+    })
+
+    // With enterRatingView and replacement thread, the view should stay open
+    expect(result.current.state.isRatingView).toBe(true)
+    expect(result.current.state.selectedThreadId).toBe(9)
+    expect(result.current.state.activeRatingThread?.id).toBe(9)
+    // Stale bootstrap cannot restore the snoozed pending thread over it.
+    expect(result.current.state.suppressPendingAutoOpenRef.current).toBe(true)
+    // But the refresh failure should still be reported
     expect(onRefreshFailed).toHaveBeenCalledWith(refreshFailure)
   })
 
@@ -232,8 +327,55 @@ describe('useRollSnooze', () => {
     expect(enterRatingView).toHaveBeenCalledWith(
       response.thread_id,
       response.result,
-      response,
+      expect.objectContaining({
+        id: response.thread_id,
+        title: response.title,
+        format: response.format,
+      }),
     )
     expect(refetchBootstrap).not.toHaveBeenCalled()
+  })
+
+  it('enters the replacement rating view after a committed snooze', async () => {
+    const mutate = vi.fn().mockResolvedValue(committedOutcome())
+    const refetchBootstrap = vi.fn().mockResolvedValue(undefined)
+    const { result } = renderHook(() => {
+      const state = useRollPageState()
+      const rating = useRollRating({
+        state,
+        bootstrap: null,
+        rateMutation: { mutate: vi.fn().mockResolvedValue({ rate: undefined, bootstrap: null }), isPending: false },
+        dismissPendingMutation: { mutate: vi.fn().mockResolvedValue(undefined), isPending: false },
+        refetchBootstrap,
+      })
+      const snooze = useRollSnooze({
+        state,
+        snoozeMutation: { mutate },
+        enterRatingView: rating.enterRatingView,
+        refetchBootstrap,
+      })
+      return { state, snooze }
+    }, { wrapper: createQueryWrapper() })
+
+    act(() => {
+      result.current.state.setActiveRatingThread(ratingThread(7))
+      result.current.state.setIsRatingView(true)
+      result.current.state.setIsRolling(true)
+    })
+
+    await act(async () => {
+      await result.current.snooze.handleSnooze()
+    })
+
+    expect(mutate).toHaveBeenCalledWith(7)
+    expect(refetchBootstrap).not.toHaveBeenCalled()
+    // The real enterRatingView routes the replacement offer into rating state,
+    // so the reader sees thread 9 instead of the snoozed thread 7.
+    expect(result.current.state.isRolling).toBe(false)
+    expect(result.current.state.isRatingView).toBe(true)
+    expect(result.current.state.selectedThreadId).toBe(9)
+    expect(result.current.state.rolledResult).toBe(1)
+    expect(result.current.state.activeRatingThread?.id).toBe(9)
+    expect(result.current.state.activeRatingThread?.title).toBe('Next Series')
   })
 })

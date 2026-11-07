@@ -3,7 +3,6 @@ import type {
   RateResponsePayload,
   RollResponse,
   OverrideRollPayload,
-  SnoozeSessionResponse,
 } from '../types'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 
@@ -18,7 +17,7 @@ export interface RollApi {
 
 export interface ProtectedRollMutationApi {
   rate: (data: RatePayload) => Promise<RateResponsePayload>
-  snooze: () => Promise<SnoozeSessionResponse>
+  snooze: () => Promise<RollResponse>
   bootstrap: () => Promise<RollBootstrapResponse>
 }
 

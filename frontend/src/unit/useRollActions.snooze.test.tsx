@@ -12,7 +12,7 @@ import type { NavigateFunction } from 'react-router-dom'
 import { useRollActions } from '../pages/RollPage/useRollActions'
 import { useRollPageState } from '../pages/RollPage/useRollPageState'
 import { SNOOZE_REQUIRES_PENDING_SERIES_REASON } from '../components/snoozeAvailability'
-import type { SnoozeSessionResponse } from '../types'
+import type { RollResponse } from '../types'
 import type { RollBootstrapResponse, RollBootstrapThread } from '../types/rollBootstrap'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
@@ -44,7 +44,7 @@ function pooledThread(id: number): RollBootstrapThread {
 interface HarnessOptions {
   bootstrap?: RollBootstrapResponse
   selectedThreadId?: number
-  snoozeImpl?: () => Promise<SnoozeSessionResponse>
+  snoozeImpl?: () => Promise<RollResponse>
   refreshed?: boolean
   refreshError?: unknown
 }
@@ -53,13 +53,14 @@ function renderActionSheet(options: HarnessOptions = {}) {
   const { bootstrap = bootstrapWith(), snoozeImpl, refreshed = true, refreshError = null } = options
 
   // SAFETY: the hook only awaits the result; the stub stands in for the API's empty 200 body
-  const snoozeResponse = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as SnoozeSessionResponse | undefined)))
+  const snoozeResponse = vi.fn(snoozeImpl ?? (() => Promise.resolve(undefined as RollResponse | undefined)))
   const snoozeMutate = vi.fn(async () => ({
     response: await snoozeResponse(),
     refreshed,
     refreshError,
   }))
   const onSnoozeRefreshFailed = vi.fn()
+  const enterRatingView = vi.fn(() => Promise.resolve())
   const refetchBootstrap = vi.fn(() => Promise.resolve(bootstrap))
 
   const { result } = renderHook(() => {
@@ -80,7 +81,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
         shuffleQueueMutation: { mutate: vi.fn(() => Promise.resolve()), isPending: false },
       },
       refetchBootstrap,
-      enterRatingView: vi.fn(() => Promise.resolve()),
+      enterRatingView,
       // SAFETY: the hook only calls setPending; the stub omits the rest of the API surface
       threadsApi: { setPending: vi.fn() } as never,
       onSnoozeRefreshFailed,
@@ -90,7 +91,7 @@ function renderActionSheet(options: HarnessOptions = {}) {
   })
 
   // `result` stays live so every assertion reads the latest render's closure.
-  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed }
+  return { result, snoozeMutate, snoozeResponse, refetchBootstrap, onSnoozeRefreshFailed, enterRatingView }
 }
 
 /** Select the pooled series whose action sheet the reader opened. */
@@ -119,6 +120,44 @@ describe('Roll pool action sheet snooze (issue #3260)', () => {
     expect(snoozeMutate).toHaveBeenCalledWith(8)
     // Successful snooze must not trigger a second bootstrap refresh.
     expect(refetchBootstrap).not.toHaveBeenCalled()
+  })
+
+  it('enters the replacement offer even when the snooze refresh fails', async () => {
+    const refreshFailure = new Error('bootstrap unavailable')
+    const replacement: RollResponse = {
+      thread_id: 9,
+      title: 'Next Series',
+      format: 'Comic',
+      issues_remaining: 2,
+      queue_position: 2,
+      die_size: 12,
+      result: 1,
+      offset: 0,
+      snoozed_count: 1,
+      issue_id: null,
+      issue_number: null,
+      next_issue_id: null,
+      next_issue_number: null,
+      total_issues: 6,
+      reading_progress: null,
+    }
+    const { result, enterRatingView, onSnoozeRefreshFailed } = renderActionSheet({
+      bootstrap: bootstrapWith({ pending_thread_id: 8 }),
+      snoozeImpl: () => Promise.resolve(replacement),
+      refreshed: false,
+      refreshError: refreshFailure,
+    })
+    selectThread(result, 8)
+
+    await act(async () => {
+      await result.current.actions.handleAction('snooze')
+    })
+
+    // The replacement is entered independently of refresh success, and the
+    // stale bootstrap cannot restore the snoozed pending thread over it.
+    expect(enterRatingView).toHaveBeenCalledWith(9, 1, expect.objectContaining({ id: 9, title: 'Next Series' }))
+    expect(result.current.state.suppressPendingAutoOpenRef.current).toBe(true)
+    expect(onSnoozeRefreshFailed).toHaveBeenCalledWith(refreshFailure)
   })
 
   it('reports an exhausted authoritative refresh after a committed snooze', async () => {
