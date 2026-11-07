@@ -75,6 +75,21 @@ describe('ThreadPool eligible mappings', () => {
     expect(screen.getByRole('button', { name: /Die face 2: First comic/i })).toBeVisible()
   })
 
+  it('honors an explicitly empty scoped eligible pool rather than stale bootstrap faces', () => {
+    render(
+      <MemoryRouter>
+        <ThreadPool
+          {...baseProps}
+          pool={[{ id: 1, title: 'No longer eligible', format: 'Comic' }]}
+          eligibleThreadIds={[]}
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('0 in play')).toBeVisible()
+    expect(screen.queryByRole('button', { name: /Die face 1:/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('No longer eligible')).not.toBeInTheDocument()
+  })
+
   it('falls back to scoped issue cards for the issue number when bootstrap omits it', () => {
     render(
       <MemoryRouter>
