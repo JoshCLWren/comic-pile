@@ -479,12 +479,7 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
     assert plan_response.status_code == 201, plan_response.text
     plan_id = plan_response.json()["id"]
     plan_reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
-    assert plan_reader.status_code == 200
-    assert plan_reader.json()["execution_mode"] == "option_e"
-    blocked = plan_reader.json()["blocked_next"]
-    assert len(blocked) == 1
-    assert blocked[0]["issue_id"] == later_issue_id
-    assert [row["explanation"] for row in blocked[0]["blockers"]] == explanation["blocking_reasons"]
+    assert plan_reader.status_code == 404
     # Reading explanations does not repair stored pointers or cached flags.
     await async_db.refresh(later)
     assert later.next_unread_issue_id != later_issue_id

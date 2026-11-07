@@ -116,7 +116,7 @@ test.describe('Issue #4503 route request budgets', () => {
     await expect(page.getByRole('heading', { name: 'Request budget plan' })).toBeVisible()
     await settleCalls(
       page,
-      () => countCalls(calls, 'GET', `/api/v1/continuity-plans/${plan.id}/reader`),
+      () => countCalls(calls, 'GET', `/api/v2/continuity-plans/${plan.id}/reader`),
     )
     await settleCalls(
       page,
@@ -124,7 +124,7 @@ test.describe('Issue #4503 route request budgets', () => {
       1,
     )
 
-    expect(countCalls(calls, 'GET', `/api/v1/continuity-plans/${plan.id}/reader`)).toBe(1)
+    expect(countCalls(calls, 'GET', `/api/v2/continuity-plans/${plan.id}/reader`)).toBe(1)
     expect(countCalls(calls, 'GET', `/api/v1/tags/effective/plan/${plan.id}/`)).toBe(1)
   })
 })
