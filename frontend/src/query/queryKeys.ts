@@ -168,6 +168,11 @@ export const queryKeys = {
   roll: {
     all: ['roll'] as const,
     bootstrap: () => ['roll', 'bootstrap'] as const,
+    dieState: () => ['roll', 'die-state'] as const,
+    eligibleIssueIds: (snoozedThreadIds: readonly number[] = []) =>
+      ['roll', 'eligible-issue-ids', [...new Set(snoozedThreadIds)].sort((a, b) => a - b)] as const,
+    issueCards: (issueIds: readonly number[]) =>
+      ['roll', 'issue-cards', [...new Set(issueIds)]] as const,
     /**
      * Canonical session-scoped last-read cache (issue #2720). A successful
      * rate seeds it synchronously from the mutation response's
