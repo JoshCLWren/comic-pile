@@ -983,9 +983,7 @@ def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
     }
 
 
-def assign(
-    worker: str,
-    kinds: tuple[str, ...] | None = None,
+def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
     requested_action: str = 'advance',
