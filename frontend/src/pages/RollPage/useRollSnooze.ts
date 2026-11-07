@@ -55,6 +55,10 @@ export function useRollSnooze({
     setErrorMessage,
   } = state
 
+  /**
+   * Removes a thread from the browser snooze cookie and refreshes the bootstrap
+   * to update the UI state.
+   */
   async function handleUnsnooze(threadId: number) {
     try {
       // Roll unsnooze is client-only: remove the thread from the browser snooze cookie

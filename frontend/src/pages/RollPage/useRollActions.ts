@@ -212,6 +212,25 @@ export function useRollActions({
             } else {
               setErrorMessage(getApiErrorDetail(outcome.refreshError))
             }
+          } else if (outcome.response?.thread_id != null) {
+            // The Rust offer recorded the snooze and selected a replacement in the
+            // same transaction. Keep the rating view open for it instead of
+            // silently closing a pending session.
+            const threadMetadata: ThreadMetadata = {
+              id: outcome.response.thread_id,
+              title: outcome.response.title,
+              format: outcome.response.format,
+              issues_remaining: outcome.response.issues_remaining,
+              queue_position: outcome.response.queue_position,
+              total_issues: outcome.response.total_issues,
+              reading_progress: outcome.response.reading_progress ?? null,
+              issue_id: outcome.response.issue_id,
+              issue_number: outcome.response.issue_number,
+              next_issue_id: outcome.response.next_issue_id,
+              next_issue_number: outcome.response.next_issue_number,
+              last_rolled_result: outcome.response.result,
+            }
+            enterRatingView(outcome.response.thread_id, outcome.response.result, threadMetadata)
           }
           break
         }
