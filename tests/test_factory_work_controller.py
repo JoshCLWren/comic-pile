@@ -7,7 +7,7 @@ import json
 import subprocess
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import Mock
@@ -1803,7 +1803,7 @@ def test_replace_factory_labels_writes_ordinary_pr(
 
 def _lease_timestamp(epoch: int) -> str:
     """Return a deterministic GitHub update timestamp."""
-    return datetime.fromtimestamp(epoch, tz=timezone.utc).isoformat()
+    return datetime.fromtimestamp(epoch, tz=UTC).isoformat()
 
 
 def _local_lease_item(number: int, updated: int, *extra: str) -> dict[str, Any]:
