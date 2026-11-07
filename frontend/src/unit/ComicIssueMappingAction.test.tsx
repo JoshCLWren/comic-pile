@@ -172,6 +172,34 @@ describe('ComicIssueMappingAction', () => {
     await waitFor(() => expect(searchSeriesSpy).toHaveBeenCalled())
   })
 
+  it('uses the compact Change label for a mapped row', () => {
+    render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={MAPPED}
+        compact
+      />,
+    )
+    expect(screen.getByTestId('comic-mapping-change')).toHaveTextContent('Change')
+  })
+
+  it('shows the remove failure inside the confirm dialog', async () => {
+    removeIdentitySpy.mockRejectedValueOnce(new Error('mapping is in use'))
+    render(
+      <ComicIssueMappingAction
+        issueId={77}
+        threadTitle="Hellboy in Hell"
+        issueNumber="1"
+        initialIdentity={MAPPED}
+      />,
+    )
+    fireEvent.click(screen.getByTestId('comic-mapping-remove'))
+    fireEvent.click(await screen.findByText('Remove mapping'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('mapping is in use')
+  })
+
   it('removes the mapping through the accessible confirm dialog and refetches', async () => {
     const onMapped = vi.fn().mockResolvedValue(undefined)
     render(

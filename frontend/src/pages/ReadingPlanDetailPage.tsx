@@ -1,5 +1,7 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
 import { ReaderIssueActions, ReadNowIssueButton } from '../components/ReaderIssueActions'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 import { ReadingPlanRecovery } from '../components/ReadingPlanRecovery'
 import { useState } from 'react'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
@@ -87,7 +89,7 @@ function PlanIssueBlockers({ blockers }: { blockers: ReadingPlanReaderIssue['blo
   )
 }
 
-function IssueRow({ issue, sourceNames }: { issue: ReadingPlanReaderIssue; sourceNames: Readonly<Record<string, string>> }) {
+function IssueRow({ issue, sourceNames, card }: { issue: ReadingPlanReaderIssue; sourceNames: Readonly<Record<string, string>>; card?: IssueCard | null }) {
   const isRead = issue.availability === 'read'
   const isBlocked = issue.availability === 'blocked'
   const isAvailable = issue.availability === 'available'
@@ -118,7 +120,7 @@ function IssueRow({ issue, sourceNames }: { issue: ReadingPlanReaderIssue; sourc
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>
         {issue.blockers.length > 0 && <PlanIssueBlockers blockers={issue.blockers} />}
-        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} seriesTitle={issue.thread_title} />
+        <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} availability={issue.availability} seriesTitle={issue.thread_title} card={card ?? null} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
             Source reading order: {sourceNames[issue.source_paths[0]] ?? displayCblSourceTitle(null, issue.source_paths[0]) ?? 'Reading order'}
@@ -173,6 +175,30 @@ export default function ReadingPlanDetailPage() {
   const parsedId = id ? Number(id) : null
   const planId = parsedId && Number.isInteger(parsedId) && parsedId > 0 ? parsedId : null
   const readerQuery = useReadingPlanReader(planId)
+  // Hydrate only rendered rows. Expanding a section fetches newly visible ids.
+  // Hidden 400+ issue lanes must not trigger large initial batches.
+  const planView = readerQuery.data
+  const planCardsQuery = useIssueCards(
+    planView
+      ? [
+          ...planView.available_now.map((issue) => issue.issue_id),
+          ...planView.blocked_next.slice(0, visibleBlockedCount).map((issue) => issue.issue_id),
+          ...(showUpcoming
+            ? planView.lanes.flatMap((lane) => lane.issues)
+                .filter((issue) => issue.availability === 'later')
+                .slice(0, visibleUpcomingCount)
+                .map((issue) => issue.issue_id)
+            : []),
+          ...(showReadingOrder
+            ? planView.lanes.flatMap((lane) => lane.issues)
+                .slice(0, visibleOrderCount)
+                .map((issue) => issue.issue_id)
+            : []),
+        ]
+      : [],
+    { enabled: readerQuery.isSuccess },
+  )
+  const cardsByIssue = indexIssueCards(planCardsQuery.data)
 
   if (planId == null) {
     return (
@@ -207,6 +233,37 @@ export default function ReadingPlanDetailPage() {
   }
 
   const view = readerQuery.data
+
+  if (planCardsQuery.isError) {
+    return (
+      <section className="space-y-6 pb-8" aria-labelledby="reading-plan-heading" data-testid="reading-plan-reader">
+        <Breadcrumbs
+          items={[{ label: 'Reading plans', to: '/continuity-plans' }, { label: view.name }]}
+        />
+        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--theme-continuity-accent)]">
+              {readingPlanModeLabel(view.ordering_mode)}
+            </p>
+            <h1 id="reading-plan-heading" className="text-2xl font-black text-[var(--theme-text-primary)]">
+              {view.name}
+            </h1>
+          </div>
+        </header>
+        <div role="alert" className="rounded-xl border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 p-3">
+          <p className="text-sm text-[var(--theme-danger)]">Unable to load issue covers and ratings.</p>
+          <button
+            type="button"
+            onClick={() => void planCardsQuery.refetch()}
+            className="mt-2 min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-bold text-[var(--theme-continuity-accent)] hover:underline"
+          >
+            Retry covers
+          </button>
+        </div>
+        <p className="text-xs text-[var(--theme-text-muted)]">Issues without covers will show placeholders.</p>
+      </section>
+    )
+  }
   const sourceNames = Object.fromEntries(view.sources.map((source) => [
     source.raw_source_path,
     displayReadingListName(source.display_name, source.source_path ?? source.raw_source_path) ?? 'Reading order',
@@ -264,6 +321,8 @@ export default function ReadingPlanDetailPage() {
               threadId={continueIssue.thread_id}
               label="Read next issue"
               primary
+              threadTitle={continueIssue.thread_title}
+              issueNumber={continueIssue.issue_number}
             />
           )}
           {editableListId != null ? (
@@ -332,7 +391,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.available_now.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
             ))}
           </ul>
         )}
@@ -350,7 +409,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.blocked_next.slice(0, visibleBlockedCount).map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
             ))}
           </ul>
         )}
@@ -388,7 +447,7 @@ export default function ReadingPlanDetailPage() {
           {showUpcoming && (
             <ul className="mt-3 space-y-2">
               {upcoming.slice(0, visibleUpcomingCount).map((issue) => (
-                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
+                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
               ))}
             </ul>
           )}
@@ -510,7 +569,7 @@ export default function ReadingPlanDetailPage() {
                 ) : (
                   <ul className="space-y-2">
                     {lane.issues.map((issue) => (
-                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} />
+                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id) ?? null} />
                     ))}
                   </ul>
                 )}

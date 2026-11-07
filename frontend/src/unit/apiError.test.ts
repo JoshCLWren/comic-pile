@@ -187,6 +187,16 @@ describe('isIndeterminateApiOutcome', () => {
     expect(isIndeterminateApiOutcome(error)).toBe(true)
   })
 
+  it('treats a null axios response as a transport failure', () => {
+    const error = { isAxiosError: true, response: null }
+    expect(isIndeterminateApiOutcome(error)).toBe(true)
+  })
+
+  it('classifies plain objects by their message field', () => {
+    expect(isIndeterminateApiOutcome({ message: 'Network Error' })).toBe(true)
+    expect(isIndeterminateApiOutcome({ message: 42 })).toBe(false)
+  })
+
   it('treats a generic network error message as indeterminate', () => {
     expect(isIndeterminateApiOutcome(new Error('Network Error'))).toBe(true)
     expect(isIndeterminateApiOutcome(new Error('Failed to fetch'))).toBe(true)

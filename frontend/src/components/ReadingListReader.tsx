@@ -6,6 +6,7 @@ import { queryKeys } from '../query/queryKeys'
 import { EligibilityExplanation } from './EligibilityExplanation'
 import { ReaderIssueActions } from './ReaderIssueActions'
 import { CblReadingListFinder } from './CblSourceFinder'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 const AVAILABILITY = {
   read: 'Read', available: 'Available now', blocked: 'Waiting', later: 'After earlier unread issues in this series',
@@ -18,9 +19,45 @@ export function ReadingListReader({ listId, backTo }: { listId: number; backTo?:
     queryKey: queryKeys.customCBLs.reader(listId),
     queryFn: () => customCBLApi.getReader(listId),
   })
+  const entries = query.data?.entries ?? []
+  // One bounded batch for every visible entry — never one request per row.
+  const issueCards = useIssueCards(
+    entries.map((entry) => entry.issue_id),
+    { enabled: query.isSuccess },
+  )
   if (query.isPending) return <p>Loading Reading List…</p>
   if (query.isError) return <div role="alert"><p>Unable to load this Reading List.</p><button type="button" onClick={() => void query.refetch()}>Retry list</button></div>
   const view = query.data
+  const cardsByIssue = indexIssueCards(issueCards.data)
+
+  if (issueCards.isError) {
+    return (
+      <section aria-label={`Read ${view.name}`} className="space-y-3">
+        <ReadingGraphProblemCard />
+        <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>
+        {view.execution_mode === 'legacy' && <p className="text-sm text-[var(--theme-text-muted)]">Reading List execution is not active yet. Saved modes and gates do not change current Roll availability.</p>}
+        <CblReadingListFinder
+          listId={listId}
+          listName={view.name}
+          backTo={backTo ?? '/continuity-plans'}
+          backLabel="Reading Plans"
+          testIdPrefix="cbl-reading-list"
+        />
+        <div role="alert" className="rounded-xl border border-[var(--theme-danger)]/40 bg-[var(--theme-danger)]/10 p-3">
+          <p className="text-sm text-[var(--theme-danger)]">Unable to load issue covers and ratings.</p>
+          <button
+            type="button"
+            onClick={() => void issueCards.refetch()}
+            className="mt-2 min-h-11 rounded-lg border border-[var(--theme-border)] px-3 text-sm font-bold text-[var(--theme-continuity-accent)] hover:underline"
+          >
+            Retry covers
+          </button>
+        </div>
+        <p className="text-xs text-[var(--theme-text-muted)]">Issues without covers will show placeholders.</p>
+      </section>
+    )
+  }
+
   return <section aria-label={`Read ${view.name}`} className="space-y-3">
     <ReadingGraphProblemCard />
     <h4 className="text-base font-bold text-[var(--theme-text-primary)]">{view.name} · {view.mode === 'strict' ? 'Strict order' : 'Loose order'}</h4>
@@ -37,7 +74,7 @@ export function ReadingListReader({ listId, backTo }: { listId: number; backTo?:
         <Link to={`/thread/${entry.thread_id}`} className="text-sm font-semibold text-[var(--theme-text-primary)]">{entry.series_name} #{entry.issue_number}</Link>
         {entry.skipped && <p className="text-xs text-[var(--theme-text-muted)]">Skipped only in this list; other lists and Roll may still offer it.</p>}
         <EligibilityExplanation isBlocked={entry.availability === 'blocked'} emptyLabel={AVAILABILITY[entry.availability]} reasons={entry.explanation?.blocking_reasons} dependencies={entry.explanation?.blocking_dependencies} />
-        <ReaderIssueActions issueId={entry.issue_id} threadId={entry.thread_id} issueNumber={entry.issue_number} isRead={entry.status === 'read'} available={entry.availability === 'available'} seriesTitle={entry.series_name} />
+        <ReaderIssueActions issueId={entry.issue_id} threadId={entry.thread_id} issueNumber={entry.issue_number} isRead={entry.status === 'read'} available={entry.availability === 'available'} availability={entry.availability} seriesTitle={entry.series_name} card={cardsByIssue.get(entry.issue_id) ?? null} />
       </li>)}
     </ol>}
   </section>

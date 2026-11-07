@@ -19,6 +19,7 @@ import {
   applyEditedThreadToQueuePages,
   applyIssueReadSnapshotToCache,
   invalidateAfterDependencyChange,
+  invalidateIssueCards,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
 import { evaluateReadingProgress } from '../utils/readingProgress'
@@ -36,8 +37,10 @@ import { TagSection } from '../components/Tags/TagSection'
 import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
-import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
-import { IssueRateButton } from './thread-detail/IssueRateButton'
+import { ComicIssueCard } from '../components/ComicIssueCard'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
+import type { IssueReadRateResponse } from '../services/issueCardsApi'
+import { applyIssueReadStatus } from './thread-detail/issueMutationState'
 import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import {
@@ -177,6 +180,13 @@ export default function ThreadDetailView() {
 
   const issuesQuery = useThreadIssuePages(threadId, { enabled: issuesExpanded })
   const issues = issuesQuery.issues
+  // One bounded batch projection for the loaded issue rows — cover, stored
+  // rating and mapping state without one request per row (#4444).
+  const issueCardsQuery = useIssueCards(
+    issues.map((issue) => issue.id),
+    { enabled: issuesExpanded && issuesQuery.pages.length > 0 },
+  )
+  const cardsByIssue = indexIssueCards(issueCardsQuery.data)
   // Row-level tag chips (issue #3422): one bulk read covers every visible
   // issue so rows render direct (solid) and inherited (dashed, read-only)
   // chips without opening an editor and without one request per issue.
@@ -332,6 +342,30 @@ export default function ThreadDetailView() {
 
   function handleIssueSnapshotChange(snapshot: IssueMutationSnapshot) {
     applyIssueReadSnapshotToCache(client, snapshot)
+  }
+
+  // Reconcile the visible rows from the confirmed direct write so the
+  // adjacent thread summary and remaining count match without a refetch.
+  function handleIssueCardMutated(response: IssueReadRateResponse) {
+    if (!thread) return
+    const nextUnreadIssueId = response.thread.next_unread_issue_id ?? null
+    const nextUnreadIssue = issues.find((issue) => issue.id === nextUnreadIssueId)
+    const nextUnreadIssueNumber =
+      nextUnreadIssueId != null && nextUnreadIssue != null
+        ? nextUnreadIssue.issue_number
+        : thread.next_unread_issue_number ?? null
+    const nextSnapshot = applyIssueReadStatus(
+      { issues, thread },
+      response.issue.issue_id,
+      {
+        status: response.issue.status === 'read' ? 'read' : 'unread',
+        read_at: response.issue.read_at ?? null,
+        issues_remaining: response.thread.issues_remaining,
+        next_unread_issue_id: nextUnreadIssueId,
+        next_unread_issue_number: nextUnreadIssueNumber,
+      },
+    )
+    handleIssueSnapshotChange(nextSnapshot)
   }
 
   const handleEditSubmit = async (event: FormEvent) => {
@@ -764,65 +798,53 @@ export default function ThreadDetailView() {
                               : 'bg-white/5 border-white/10'
                           }${deepLinkedIssueId === issue.id ? ' issue-deep-link-target' : ''}`}
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="flex min-w-0 items-center gap-2">
-                              {bulkSelectMode && (
-                                <input
-                                  type="checkbox"
-                                  checked={selectedIssueIds.has(issue.id)}
-                                  onChange={() => handleToggleIssueSelection(issue.id)}
-                                  aria-label={`Select issue #${issue.issue_number}`}
-                                  className="h-4 w-4 shrink-0 accent-amber-400"
+                          <div className="flex items-start gap-2">
+                            {bulkSelectMode && (
+                              <input
+                                type="checkbox"
+                                checked={selectedIssueIds.has(issue.id)}
+                                onChange={() => handleToggleIssueSelection(issue.id)}
+                                aria-label={`Select issue #${issue.issue_number}`}
+                                className="mt-4 h-4 w-4 shrink-0 accent-amber-400"
+                              />
+                            )}
+                            <ComicIssueCard
+                              issueId={issue.id}
+                              card={cardsByIssue.get(issue.id) ?? null}
+                              threadTitle={thread.title}
+                              issueNumber={issue.issue_number}
+                              status={issue.status}
+                              variant="compact"
+                              onMutated={handleIssueCardMutated}
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <IssueCreator
+                                  creators={issueCreatorsByIssueId.get(issue.id) ?? []}
+                                  fallbackCreators={seriesCreatorCredits}
                                 />
-                              )}
-                              <span className="text-sm font-medium text-stone-300">
-                                #{issue.issue_number}
-                              </span>
-                              <IssueCreator
-                                creators={issueCreatorsByIssueId.get(issue.id) ?? []}
-                                fallbackCreators={seriesCreatorCredits}
-                              />
-                            </span>
-                            <div className="flex items-center gap-3">
-                              <CblComicFinder
-                                issueId={issue.id}
-                                comicLabel={`${thread.title} #${issue.issue_number}`}
-                                backTo={`/thread/${thread.id}`}
-                                backLabel="Series"
-                                testIdPrefix={`cbl-comic-${issue.id}`}
-                              />
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setTagEditorIssue({
-                                    id: issue.id,
-                                    issue_number: issue.issue_number,
-                                  })
-                                }
-                                aria-label={`Edit tags for issue #${issue.issue_number}`}
-                                title={`Edit tags for issue #${issue.issue_number}`}
-                                className="text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
-                              >
-                                Tags
-                              </button>
-                              <span className="text-xs font-black uppercase tracking-widest">
-                                {issue.status === 'read' ? (
-                                  <span className="text-green-400">Read</span>
-                                ) : (
-                                  <span className="text-stone-500">Unread</span>
-                                )}
-                              </span>
-                              <IssueReadStatusButton
-                                issue={issue}
-                                snapshot={{ issues, thread }}
-                                onSnapshotChange={handleIssueSnapshotChange}
-                              />
-                              <IssueRateButton
-                                issue={issue}
-                                snapshot={{ issues, thread }}
-                                onSnapshotChange={handleIssueSnapshotChange}
-                              />
-                            </div>
+                                <CblComicFinder
+                                  issueId={issue.id}
+                                  comicLabel={`${thread.title} #${issue.issue_number}`}
+                                  backTo={`/thread/${thread.id}`}
+                                  backLabel="Series"
+                                  testIdPrefix={`cbl-comic-${issue.id}`}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setTagEditorIssue({
+                                      id: issue.id,
+                                      issue_number: issue.issue_number,
+                                    })
+                                  }
+                                  aria-label={`Edit tags for issue #${issue.issue_number}`}
+                                  title={`Edit tags for issue #${issue.issue_number}`}
+                                  className="min-h-11 rounded-lg px-3 text-xs font-black uppercase tracking-widest text-stone-500 hover:text-amber-300"
+                                >
+                                  Tags
+                                </button>
+                              </div>
+                            </ComicIssueCard>
                           </div>
                           {rowTags && (
                             <IssueTagRowChips
@@ -954,8 +976,12 @@ export default function ThreadDetailView() {
               threadId={thread.id}
               onOpenDependencies={() => setIsDependencyOpen(true)}
               onIssueChanged={() => {
-                // Refetch thread data to update STATUS display after issue mutations
+                // Refetch thread data to update STATUS display after issue mutations,
+                // and reconcile the batched issue-card projections so the shared
+                // ComicIssueCard rows show the new read state instead of stale
+                // cached cards (#4693 CodeRabbit review).
                 refetch()
+                void invalidateIssueCards(client)
               }}
               deferred={true}
               onPendingMutationsChange={setHasPendingIssueEdits}

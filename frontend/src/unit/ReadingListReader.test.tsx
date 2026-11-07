@@ -1,17 +1,38 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { ReadingListReader } from '../components/ReadingListReader'
 import { customCBLApi, type ReadingListReader as ReaderView } from '../services/api-custom-cbl'
 import { tagsApi } from '../services/api-tags'
-import { issuesApi } from '../services/api-issues'
 import { queryKeys } from '../query/queryKeys'
+import type { IssueReadRateResponse } from '../services/issueCardsApi'
+
+const { patchIssueSpy, fetchCardsSpy } = vi.hoisted(() => ({
+  patchIssueSpy: vi.fn(),
+  fetchCardsSpy: vi.fn(),
+}))
 
 vi.mock('../services/api-custom-cbl', () => ({ customCBLApi: { getReader: vi.fn() } }))
-vi.mock('../services/api-issues', () => ({ issuesApi: { markRead: vi.fn(), markUnread: vi.fn() } }))
+vi.mock('../services/issueCardsApi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/issueCardsApi')>()
+  return { ...actual, issueCardsApi: { fetchCards: fetchCardsSpy, patchIssue: patchIssueSpy } }
+})
 vi.mock('../services/api-tags', () => ({ tagsApi: { threadIssuesEffective: vi.fn().mockResolvedValue({ issues: [] }) } }))
+vi.mock('../services/api-comicvine', () => ({
+  comicVineApi: {
+    searchSeries: vi.fn().mockResolvedValue({ results: [] }),
+    getSeriesIssues: vi.fn().mockResolvedValue({ comicvine_volume_id: 42, series_name: '', issues: [] }),
+    getIssueIntelligence: vi.fn().mockResolvedValue(null),
+    getIssueIdentity: vi.fn().mockResolvedValue({
+      issue_id: 10, thread_id: 1, thread_title: 'The Dead Remembered',
+      has_confirmed_identity: false, comicvine_issue_id: null,
+      confirmed_mappings: [], candidate_mappings: [], has_unresolved: false,
+    }),
+    confirmIdentity: vi.fn(), replaceIdentity: vi.fn(), removeIdentity: vi.fn(), refreshMetadata: vi.fn(),
+  },
+}))
 
 const view: ReaderView = {
   list_id: 2, name: 'Julix', mode: 'strict', execution_mode: 'option_e', entries: [
@@ -28,40 +49,57 @@ function mount() {
   render(<QueryClientProvider client={client}><MemoryRouter><ReadingListReader listId={2} /></MemoryRouter></QueryClientProvider>)
   return client
 }
+
+function writeResponse(issueId: number): IssueReadRateResponse {
+  return {
+    issue: {
+      issue_id: issueId, thread_id: 1, thread_title: 'The Dead Remembered', issue_number: '2',
+      status: 'read', read_at: '2026-10-01T00:00:00.000Z', rating: 3.5,
+      has_confirmed_identity: false, mapping_state: 'unmapped', comicvine_issue_id: null, cover_image_url: null,
+    },
+    thread: { thread_id: 1, status: 'active', issues_remaining: 5, next_unread_issue_id: null, reading_progress: null, last_rating: 3.5 },
+    read_event_created: true, rating_event_created: true, replayed: false, final_rating: 3.5, die_after: null,
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(tagsApi.threadIssuesEffective).mockResolvedValue({ thread_id: 1, issues: [] })
   vi.mocked(customCBLApi.getReader).mockResolvedValue(structuredClone(view))
-  vi.mocked(issuesApi.markRead).mockResolvedValue()
-  vi.mocked(issuesApi.markUnread).mockResolvedValue()
+  fetchCardsSpy.mockResolvedValue([])
+  patchIssueSpy.mockImplementation(async (issueId: number) => writeResponse(issueId))
 })
 
-it('shows every blocker, exact issue links and list-local skip without enabling blocked reads', async () => {
+it('shows every blocker, exact issue links and list-local skip; blocked reads stay actionable', async () => {
   mount()
   expect(await screen.findByText('Julix · Strict order')).toBeVisible()
   expect(screen.getByRole('link', { name: 'Open The Dead Remembered issue #2' })).toHaveAttribute('href', '/thread/1?issue=10#issue-10')
   expect(screen.getByRole('link', { name: 'Open Starman issue #55' })).toHaveTextContent('Reader prerequisite: waiting on Starman #55')
   expect(screen.getByText(/Skipped only in this list/)).toBeVisible()
-  expect(screen.getAllByRole('button', { name: 'Mark read' })).toHaveLength(1)
-  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(1)
+  // The blocked entry keeps the same direct controls; availability is advisory.
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Move to front' })).toHaveLength(1)
 })
 
 it('marks the exact offered issue and refreshes the reader plus other eligibility surfaces', async () => {
   const client = mount()
   client.setQueryData(queryKeys.queue.activeCount(), 3)
-  await userEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
-  await waitFor(() => expect(issuesApi.markRead).toHaveBeenCalledWith(10))
+  const card = await screen.findByLabelText('Issue The Dead Remembered #2')
+  await userEvent.click(within(card).getByRole('button', { name: 'Read now' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Mark read & save' }))
+  await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledWith(10, expect.objectContaining({ status: 'read' })))
   await waitFor(() => expect(customCBLApi.getReader).toHaveBeenCalledTimes(2))
   expect(client.getQueryState(queryKeys.queue.activeCount())?.isInvalidated).toBe(true)
 })
 
 it('leaves the issue unread after a failed write and offers a retry', async () => {
-  vi.mocked(issuesApi.markRead).mockRejectedValue(new Error('offline'))
+  patchIssueSpy.mockRejectedValueOnce(new Error('offline'))
   mount()
-  await userEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to update this issue')
-  expect(screen.getByRole('button', { name: 'Mark read' })).toBeEnabled()
+  const card = await screen.findByLabelText('Issue The Dead Remembered #2')
+  await userEvent.click(within(card).getByRole('button', { name: 'Read now' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Mark read & save' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('offline')
+  expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
   expect(customCBLApi.getReader).toHaveBeenCalledTimes(1)
 })
 
@@ -80,7 +118,7 @@ function entryFixture() {
   return entry
 }
 
-it('shows read, later, excluded and inactive states without offering unavailable reads', async () => {
+it('shows read, later, excluded and inactive states with advisory-only availability', async () => {
   const entry = entryFixture()
   vi.mocked(customCBLApi.getReader).mockResolvedValue({ ...view, mode: 'loose', entries: [
     { ...entry, availability: 'read', status: 'read' },
@@ -90,37 +128,40 @@ it('shows read, later, excluded and inactive states without offering unavailable
   ] })
   mount()
   expect(await screen.findByText('Julix · Loose order')).toBeVisible()
-  expect(screen.getByText('Read')).toBeVisible()
-  expect(screen.getByText('After earlier unread issues in this series')).toBeVisible()
-  expect(screen.getByText('Excluded from your collection')).toBeVisible()
-  expect(screen.getByText('Series is inactive')).toBeVisible()
-  expect(screen.queryByRole('button', { name: 'Mark read' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Read now' })).not.toBeInTheDocument()
+  const explanations = screen.getAllByTestId('eligibility-explanation')
+  expect(explanations.map((el) => el.textContent)).toContainEqual(expect.stringContaining('Read'))
+  expect(explanations.map((el) => el.textContent)).toContainEqual(expect.stringContaining('After earlier unread issues in this series'))
+  expect(explanations.map((el) => el.textContent)).toContainEqual(expect.stringContaining('Excluded from your collection'))
+  expect(explanations.map((el) => el.textContent)).toContainEqual(expect.stringContaining('Series is inactive'))
+  // Every owned issue keeps its direct controls, even when unavailable.
+  expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(3)
   expect(screen.queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
-  await waitFor(() => expect(issuesApi.markUnread).toHaveBeenCalledWith(10))
-  expect(issuesApi.markRead).not.toHaveBeenCalled()
+  await waitFor(() => expect(patchIssueSpy).toHaveBeenCalledWith(10, expect.objectContaining({ status: 'unread' })))
 })
 
-it('keeps legacy unread members visible while withholding direct availability claims', async () => {
+it('keeps legacy unread members visible with the same direct controls', async () => {
   vi.mocked(customCBLApi.getReader).mockResolvedValue({ ...view, execution_mode: 'legacy', entries: [
     { ...entryFixture(), availability: 'legacy' },
   ] })
   mount()
   expect(await screen.findByText('Open series for current availability')).toBeVisible()
   expect(screen.getByRole('link', { name: 'The Dead Remembered #2' })).toHaveAttribute('href', '/thread/1')
-  expect(screen.queryByRole('button', { name: 'Mark read' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
+  expect(screen.queryByTestId('comic-issue-availability')).toBeNull()
 })
 
 it('prevents duplicate progress writes while a mutation is pending', async () => {
   let finish: (() => void) | undefined
-  vi.mocked(issuesApi.markRead).mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+  patchIssueSpy.mockImplementation(() => new Promise<IssueReadRateResponse>((resolve) => { finish = () => resolve(writeResponse(10)) }))
   mount()
-  await userEvent.click(await screen.findByRole('button', { name: 'Mark read' }))
+  const card = await screen.findByLabelText('Issue The Dead Remembered #2')
+  await userEvent.click(within(card).getByRole('button', { name: 'Read now' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Mark read & save' }))
   const saving = screen.getByRole('button', { name: 'Saving…' })
   expect(saving).toBeDisabled()
   await userEvent.click(saving)
-  expect(issuesApi.markRead).toHaveBeenCalledTimes(1)
+  expect(patchIssueSpy).toHaveBeenCalledTimes(1)
   if (!finish) throw new Error('The write must have started')
   await act(async () => { finish?.() })
   await waitFor(() => expect(screen.queryByRole('button', { name: 'Saving…' })).not.toBeInTheDocument())
@@ -130,12 +171,12 @@ it('keeps read state after a failed mark-unread action', async () => {
   vi.mocked(customCBLApi.getReader).mockResolvedValue({ ...view, entries: [
     { ...entryFixture(), availability: 'read', status: 'read' },
   ] })
-  vi.mocked(issuesApi.markUnread).mockRejectedValue(new Error('offline'))
+  patchIssueSpy.mockRejectedValue(new Error('offline'))
   mount()
   await userEvent.click(await screen.findByRole('button', { name: 'Mark unread' }))
-  expect(await screen.findByRole('alert')).toHaveTextContent('Unable to update this issue')
+  expect(await screen.findByRole('alert')).toHaveTextContent('offline')
   expect(screen.getByRole('button', { name: 'Mark unread' })).toBeEnabled()
-  expect(issuesApi.markRead).not.toHaveBeenCalled()
+  expect(patchIssueSpy).toHaveBeenCalledWith(10, expect.objectContaining({ status: 'unread' }))
   expect(customCBLApi.getReader).toHaveBeenCalledTimes(1)
 })
 
@@ -143,7 +184,8 @@ it('keeps progress usable when tags fail to load', async () => {
   vi.mocked(tagsApi.threadIssuesEffective).mockRejectedValue(new Error('tags offline'))
   mount()
   expect((await screen.findAllByText('Tags unavailable.')).length).toBeGreaterThan(0)
-  expect(screen.getByRole('button', { name: 'Mark read' })).toBeEnabled()
+  const card = await screen.findByLabelText('Issue The Dead Remembered #2')
+  expect(within(card).getByRole('button', { name: 'Read now' })).toBeEnabled()
 })
 
 it('shows inherited tags and lets readers inspect their source', async () => {
@@ -158,4 +200,10 @@ it('shows inherited tags and lets readers inspect their source', async () => {
   expect(screen.getByText('Inherited')).toBeVisible()
   await userEvent.click(screen.getByRole('button', { name: 'Show sources for inherited tag Physical' }))
   expect(screen.getByRole('link', { name: 'Open Thread: The Dead Remembered' })).toHaveAttribute('href', '/thread/1?tagEditor=thread')
+})
+
+it('reads one batched card projection for the visible entries', async () => {
+  mount()
+  await screen.findByText('Julix · Strict order')
+  await waitFor(() => expect(fetchCardsSpy).toHaveBeenCalledWith([10, 20]))
 })
