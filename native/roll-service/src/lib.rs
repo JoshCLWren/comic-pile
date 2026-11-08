@@ -46,6 +46,7 @@ mod session_bandwidth;
 pub mod session_detail;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod tags;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -526,6 +527,32 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/releases/{release_id}/retract",
             post(releases::retract),
         )
+        .route("/api/v1/tags/", get(tags::list_tags))
+        .route("/api/v1/tags/", post(tags::create_tag))
+        .route(
+            "/api/v1/tags/effective/issue/{issue_id}/",
+            get(tags::effective_for_issue),
+        )
+        .route(
+            "/api/v1/tags/effective/plan/{plan_id}/",
+            get(tags::effective_for_plan),
+        )
+        .route(
+            "/api/v1/tags/effective/thread/{thread_id}/",
+            get(tags::effective_for_thread),
+        )
+        .route(
+            "/api/v1/tags/effective/thread/{thread_id}/issues/",
+            get(tags::thread_issues_effective),
+        )
+        .route("/api/v1/tags/{tag_id}/", get(tags::get_tag))
+        .route("/api/v1/tags/{tag_id}/", put(tags::update_tag))
+        .route("/api/v1/tags/{tag_id}/", delete(tags::delete_tag))
+        .route("/api/v1/tags/{tag_id}/assign/", post(tags::assign_tag))
+        .route("/api/v1/tags/{tag_id}/bulk-assign/", post(tags::bulk_assign_tag))
+        .route("/api/v1/tags/{tag_id}/bulk-unassign/", post(tags::bulk_unassign_tag))
+        .route("/api/v1/tags/{tag_id}/unassign/", delete(tags::unassign_tag))
+        .route("/api/v1/tags/{tag_id}/usage/", get(tags::get_tag_usage))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(
