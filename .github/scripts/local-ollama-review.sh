@@ -19,10 +19,14 @@ gh_retry gh pr diff "$PR" > /tmp/p.patch
 truncate -s 8000 /tmp/p.patch || true
 # call provider via OpenAI-compatible chat (bounded, single message, standard scheme)
 python3 -c "import json; patch=open('/tmp/p.patch').read(); open('/tmp/req.json','w').write(json.dumps({'model': '${REVIEW_PROVIDER_MODEL}', 'messages': [{'role':'user','content': f'Review PR head ${HEAD}. Reply APPROVE or REJECT plus reason. Patch: {patch[:6000]}'}], 'max_tokens': 80}))"
-curl -fsS -m 120 -X POST "${REVIEW_PROVIDER_URL%/}/chat/completions" \
-  -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
-  --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err \
-  || { echo "REVIEW_PROVIDER_URL unreachable; skipping"; cat /tmp/curl.err; exit 0; }
+for attempt in 1 2 3 4 5; do
+  curl -fsS -m 120 -X POST "${REVIEW_PROVIDER_URL%/}/chat/completions" \
+    -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
+    --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err && break || {
+      echo "provider attempt $attempt failed, retrying in 10s" >&2; cat /tmp/curl.err; sleep 10;
+      [ "$attempt" = 5 ] && { echo "REVIEW_PROVIDER_URL unreachable after 5 tries; skipping"; exit 0; }
+    }
+done
 VERDICT="$(python3 -c "import json; print(json.load(open('/tmp/resp.json'))['choices'][0]['message']['content'][:200])")"
 echo "local verdict: $VERDICT"
 case "$VERDICT" in APPROVE*) WVERDICT=approve;; *) echo "not approving; skipping controller stamp"; exit 0;; esac
