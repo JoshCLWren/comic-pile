@@ -495,11 +495,11 @@ pub async fn update_queue_entry(
     }
     match reposition(&state, user, thread_id, patch.position).await {
         Ok(response) => Ok(Json(response)),
-        // A pooled connection the platform or the server dropped between two
-        // requests can fail its first statement without being flagged closed.
-        // One retry on a fresh connection, while nothing has been written,
-        // keeps a reader's move from being lost to transport state. The bound is
-        // exactly one retry, and only for the retryable availability contract.
+        // `db::checkout` already replaces a socket that cannot carry its first
+        // statement (#4732). This narrower retry covers a connection that dies
+        // after that checkout but before the movement statement, while nothing
+        // has been written. The bound is exactly one retry, and only for the
+        // retryable availability contract.
         Err(Step {
             error,
             retryable: true,

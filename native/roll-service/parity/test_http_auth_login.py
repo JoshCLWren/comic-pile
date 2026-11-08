@@ -2,7 +2,7 @@
 
 The original #4484 test manually created a simplified subset of PostgreSQL
 tables and did not run rejected logins. Here the native HTTP router executes
-against the same SQLAlchemy model schema used by the Python application.
+against the same canonical Alembic schema used by the Python application.
 """
 from __future__ import annotations
 
@@ -12,11 +12,10 @@ import os
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.auth import hash_password
-from app.database import Base
 from app.models import User
 from app.models.failed_login_attempt import FailedLoginAttempt
 
@@ -27,23 +26,9 @@ PASSWORD = "parity-auth-password-correct"
 @pytest.mark.asyncio
 async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
     """Require real failed-attempt INSERTs and identical 401 rejection bodies."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"rust_auth_parity_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         username = f"auth_{uuid4().hex[:16]}"
         async with AsyncSession(engine) as session:
             session.add(
@@ -59,7 +44,7 @@ async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
         env = os.environ.copy()
         env.update(
             {
-                "RUST_ROLL_DATABASE_URL": f"{url}?options=-c%20search_path%3D{schema}",
+                "RUST_ROLL_DATABASE_URL": url,
                 "RUST_ROLL_JWT_SECRET": SECRET,
                 "RUST_ROLL_TEST_USERNAME": username,
                 "RUST_ROLL_TEST_PASSWORD": PASSWORD,
@@ -104,6 +89,3 @@ async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
         assert count == 2, "both rejected login branches must persist their failed attempt"
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()

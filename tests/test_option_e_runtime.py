@@ -479,17 +479,98 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
     assert plan_response.status_code == 201, plan_response.text
     plan_id = plan_response.json()["id"]
     plan_reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
-    assert plan_reader.status_code == 200
-    assert plan_reader.json()["execution_mode"] == "option_e"
-    blocked = plan_reader.json()["blocked_next"]
-    assert len(blocked) == 1
-    assert blocked[0]["issue_id"] == later_issue_id
-    assert [row["explanation"] for row in blocked[0]["blockers"]] == explanation["blocking_reasons"]
-    # Reading explanations does not repair stored pointers or cached flags.
+    assert plan_reader.status_code == 404
+    # Reading explanations do not repair stored pointers or cached flags.
     await async_db.refresh(later)
     assert later.next_unread_issue_id != later_issue_id
     assert later.is_blocked is False
     first_detail = await auth_client.get(f"/api/v1/threads/{first_id}")
+    assert first_detail.json()["is_blocked"] is False
+
+
+async def test_option_e_linked_list_blockers(
+    option_e: None, auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Linked-list fixture: strict-order blocker alongside a separate prerequisite.
+
+    Asserts the ordered issue IDs, the blocked issue ID, and both blocker
+    explanations so a regression that drops either explanation can be caught.
+    """
+    user = await get_or_create_user_async(async_db)
+    first, first_issues = await _series(async_db, user.id, "Linked list 1", 1)
+    later, later_issues = await _series(async_db, user.id, "Linked list 2", 2)
+    prereq, prereq_issues = await _series(async_db, user.id, "Prerequisite", 1)
+    reading_list = CustomCBLList(user_id=user.id, name="LinkedListTest", mode="strict")
+    async_db.add(reading_list)
+    await async_db.flush()
+    async_db.add_all([
+        CustomCBLEntry(list_id=reading_list.id, issue_id=first_issues[0].id, position=1),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=later_issues[0].id, position=2),
+        CustomCBLEntry(list_id=reading_list.id, issue_id=later_issues[1].id, position=3, skipped=True),
+        Dependency(source_issue_id=prereq_issues[0].id, target_issue_id=later_issues[0].id,
+                   origin="reader"),
+    ])
+    later.next_unread_issue_id = later_issues[1].id
+    list_id = reading_list.id
+    first_issue_id = first_issues[0].id
+    later_issue_id = later_issues[0].id
+    prereq_issue_id = prereq_issues[0].id
+    await async_db.commit()
+
+    batch = await auth_client.post("/api/v1/threads:getBlockingInfo", json={"thread_ids": [later.id]})
+    assert batch.status_code == 200
+    explanation = batch.json()["threads"][str(later.id)]
+    assert explanation["is_blocked"] is True
+    assert {row["issue_id"] for row in explanation["blocking_dependencies"]} == {
+        first_issue_id, prereq_issue_id,
+    }
+    # Both the strict-order blocker (from the reading list) and the reader
+    # prerequisite must be present; dropping either would be a regression.
+    assert any("Strict order in LinkedListTest" in reason for reason in explanation["blocking_reasons"])
+    assert any("Reader prerequisite" in reason for reason in explanation["blocking_reasons"])
+
+    single = await auth_client.post(f"/api/v1/threads/{later.id}:getBlockingInfo")
+    assert single.json() == explanation
+    detail = await auth_client.get(f"/api/v1/threads/{later.id}")
+    assert detail.status_code == 200
+    assert detail.json()["next_unread_issue_id"] == later_issue_id
+    assert detail.json()["blocking_reasons"] == explanation["blocking_reasons"]
+
+    page = await list_queue_threads(
+        async_db, user.id, search=None, sort="position", page_size=50, page_token=None,
+    )
+    queue_row = next(row for row in page.threads if row.id == later.id)
+    assert queue_row.blocking_reasons == explanation["blocking_reasons"]
+
+    reader = await auth_client.get(f"/api/v1/custom-cbls/{list_id}/reader")
+    assert reader.status_code == 200
+    view = reader.json()
+    assert view["execution_mode"] == "option_e"
+    assert len(view["entries"]) == 3
+    assert view["entries"][0]["availability"] == "available"
+    assert view["entries"][1]["availability"] == "blocked"
+    assert view["entries"][1]["explanation"] == explanation
+    assert view["entries"][2]["skipped"] is True
+    assert view["entries"][2]["availability"] == "later"
+
+    plan_response = await auth_client.post("/api/v1/continuity-plans/", json={
+        "name": "Historical shorter copy", "ordering_mode": "informational",
+        "lanes": [{"id": "main", "name": "Main", "order": 0}],
+        "nodes": [
+            {"id": "first", "node_type": "issue", "ref_id": first_issue_id,
+             "lane_id": "main", "position": 0},
+            {"id": "later", "node_type": "issue", "ref_id": later_issue_id,
+             "lane_id": "main", "position": 1},
+        ],
+    })
+    assert plan_response.status_code == 201, plan_response.text
+    plan_id = plan_response.json()["id"]
+    plan_reader = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}/reader")
+    assert plan_reader.status_code == 404
+    await async_db.refresh(later)
+    assert later.next_unread_issue_id != later_issue_id
+    assert later.is_blocked is False
+    first_detail = await auth_client.get(f"/api/v1/threads/{first.id}")
     assert first_detail.json()["is_blocked"] is False
 
 

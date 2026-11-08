@@ -645,9 +645,7 @@ mod tests {
 
     #[tokio::test]
     async fn stored_offer_lookup_and_metadata_are_owner_scoped() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let (client, _db) = seeded(
             &url,
@@ -693,9 +691,7 @@ mod tests {
 
     #[tokio::test]
     async fn offer_event_insert_binds_text_json_context() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let (client, _db) = seeded(
             &url,
@@ -739,9 +735,7 @@ mod tests {
 
     #[tokio::test]
     async fn persist_offer_writes_the_event_and_pending_bridge() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let (mut client, _db) = seeded(
             &url,
@@ -832,9 +826,7 @@ mod tests {
 
     #[tokio::test]
     async fn stale_authenticated_queue_offer_returns_conflict_without_mutation() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let state = crate::test_support::test_state(2)
             .await
             .expect("disposable PostgreSQL required");

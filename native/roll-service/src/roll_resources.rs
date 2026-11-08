@@ -102,6 +102,14 @@ pub struct RollEligibleIssueIdsResponse {
     pub issue_ids: Vec<i32>,
     /// The owning thread identifiers, parallel to `issue_ids`.
     pub thread_ids: Vec<i32>,
+    /// Why an empty in-play pool has no faces, when it does.
+    /// Derived from the already-loaded Option E inputs and the eligible
+    /// frontiers before the die bound and browser snoozes, exactly as
+    /// `GET /api/v2/roll/bootstrap` reports it. `ready` means at least one
+    /// frontier is eligible; the other variants name why an empty pool has
+    /// no in-play faces (`no_series`, `all_blocked`, `all_completed`,
+    /// `all_out_of_pool`). It never carries a list or whole-library report.
+    pub pool_reason: crate::reading_constraints::PoolReason,
 }
 
 /// Query parameters for `GET /api/v2/roll/eligible-issue-ids`.
@@ -366,10 +374,18 @@ fn select_eligible(
     };
     excluded.extend(snoozed.iter().copied());
     let pool = offer_frontiers(&candidates, &excluded, die);
+    // A single reason, derived from the same validated inputs, keeps the
+    // empty pool state truthful without re-materializing whole-library
+    // diagnostics and without adding database work. It intentionally uses
+    // `candidates` before the die bound and browser snoozes, so a pool that
+    // is empty only because every face was snoozed still reports `ready`
+    // and the frontend's snoozed copy owns the explanation.
+    let pool_reason = crate::reading_constraints::pool_reason(validated.inputs(), &candidates);
     Ok(RollEligibleIssueIdsResponse {
         die,
         issue_ids: pool.iter().map(|item| item.issue_id).collect(),
         thread_ids: pool.iter().map(|item| item.thread_id).collect(),
+        pool_reason,
     })
 }
 
@@ -468,7 +484,8 @@ mod tests {
     const SEED_ROWS: &str = r#"
         INSERT INTO users (id, username, password_changed_at) VALUES
             (1, 'reader-one', to_timestamp({STORED_EPOCH})),
-            (2, 'reader-two', to_timestamp({STORED_EPOCH}));
+            (2, 'reader-two', to_timestamp({STORED_EPOCH})),
+            (3, 'reader-empty', to_timestamp({STORED_EPOCH}));
         INSERT INTO revoked_tokens (user_id, jti, expires_at)
             VALUES (1, 'revoked-jti', NOW() + interval '1 day');
         -- Reader one: six active threads, one completed thread, a d4 die.
@@ -735,6 +752,7 @@ mod tests {
             .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(eligible["die"], 4);
+        assert_eq!(eligible["pool_reason"], "ready");
         assert_eq!(ints(&eligible, "issue_ids"), vec![100, 200, 300, 400]);
         assert_eq!(ints(&eligible, "thread_ids"), vec![10, 20, 30, 40]);
 
@@ -756,6 +774,20 @@ mod tests {
             vec![100, 400, 500, 600]
         );
         assert_eq!(ints(&snoozed_eligible, "thread_ids"), vec![10, 40, 50, 60]);
+
+        // A pool that is empty only because every eligible thread was
+        // browser-snoozed still reports `ready`, from the candidates before
+        // the snoozes, so the frontend snoozed copy owns that explanation
+        // rather than a blocked/completed empty-pool message.
+        let (status, all_snoozed) = fixture
+            .get(
+                "/api/v2/roll/eligible-issue-ids?snoozed=10,20,30,40,50,60",
+                Some(&token),
+            )
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(ints(&all_snoozed, "issue_ids").is_empty());
+        assert_eq!(all_snoozed["pool_reason"], "ready");
     }
 
     #[tokio::test]
@@ -774,6 +806,7 @@ mod tests {
         // The next offer snoozes the pending thread first: d4 steps up to d6
         // and thread 10 leaves the pool, exactly as the offer's write path does.
         assert_eq!(eligible["die"], 6, "the pending snooze steps the die up");
+        assert_eq!(eligible["pool_reason"], "ready");
         assert_eq!(
             ints(&eligible, "thread_ids"),
             vec![20, 30, 40, 50, 60],
@@ -792,6 +825,25 @@ mod tests {
         let (status, die) = fixture.get("/api/v2/roll/die-state", Some(&token)).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(die["die"], 4);
+    }
+
+    #[tokio::test]
+    async fn empty_library_reports_no_series_at_eligible_ids() {
+        let Some(fixture) = Fixture::start().await else {
+            return;
+        };
+        let token = fixture.token("reader-empty", "reader-empty-jti", STORED_EPOCH);
+
+        let (status, eligible) = fixture
+            .get("/api/v2/roll/eligible-issue-ids", Some(&token))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(ints(&eligible, "issue_ids").is_empty());
+        assert!(ints(&eligible, "thread_ids").is_empty());
+        assert_eq!(
+            eligible["pool_reason"], "no_series",
+            "a reader with no series must explain the empty pool, not claim ready"
+        );
     }
 
     #[tokio::test]

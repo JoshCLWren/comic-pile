@@ -1,7 +1,7 @@
 """Authenticated native Issue card POST against the canonical app schema.
 
-The mounted Rust route runs on a disposable schema created from the canonical
-SQLAlchemy models. The projection must return exact owned card state, confirmed
+The mounted Rust route runs on the canonical Alembic schema. The projection
+must return exact owned card state, confirmed
 mapping metadata and the exact stored provider CDN URL, with no per-card
 provider call and no foreign-user data. Field shape and request ordering are
 asserted directly because this is a new Rust product contract, not a
@@ -17,10 +17,8 @@ from uuid import uuid4
 
 import pytest
 from jose import jwt
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import (
     ExternalIdentity,
@@ -51,25 +49,9 @@ async def _run_example(env: dict[str, str]) -> dict[str, object]:
 @pytest.mark.asyncio
 async def test_authenticated_issue_cards_are_owner_scoped_and_bounded() -> None:
     """Return exact owned cards, confirmed URLs, and omit foreign or duplicate IDs."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_issue_cards_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # The schema is new, so skip public-schema table collisions while
-            # keeping public on the path for the pg_trgm operator class.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         now = datetime.now(UTC)
         read_at = datetime(2026, 1, 2, 3, 4, 5, 123456, tzinfo=UTC)
         username = f"cards_{uuid4().hex[:16]}"
@@ -318,10 +300,9 @@ async def test_authenticated_issue_cards_are_owner_scoped_and_bounded() -> None:
             SECRET,
             "HS256",
         )
-        query = f"options=-csearch_path%3D{name}"
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_POOL_SIZE": "2",
@@ -342,5 +323,3 @@ async def test_authenticated_issue_cards_are_owner_scoped_and_bounded() -> None:
             assert invalid["status"] == 422, invalid
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))

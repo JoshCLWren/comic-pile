@@ -150,6 +150,10 @@ stage_trusted_kilo_helper() {
   if [[ -z "$TRUSTED_KILO_HELPER" ]]; then
     TRUSTED_KILO_HELPER="$(mktemp /tmp/comic-pile-kilo-auto-run.XXXXXX.sh)"
   fi
+  if [[ -z "${KILO_SERVED_MODELS_FILE:-}" ]]; then
+    KILO_SERVED_MODELS_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/kilo-served-models.XXXXXX")"
+    export KILO_SERVED_MODELS_FILE
+  fi
   cp .github/scripts/kilo-auto-factory-run.sh "$TRUSTED_KILO_HELPER"
   chmod +x "$TRUSTED_KILO_HELPER"
 }

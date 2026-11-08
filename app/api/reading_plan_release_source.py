@@ -9,11 +9,11 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.reading_plan_release_source import (
+    ReadingPlanReleaseSourceStatus,
     ReleaseSourceCreate,
     ReleaseSourceResponse,
     ReleaseSourceUpdate,
 )
-from app.schemas.reading_plan_reader import ReadingPlanReleaseSourceStatus
 from app.services import reading_plan_release_source_service as service
 
 router = APIRouter(tags=["reading-plan-release-sources"])

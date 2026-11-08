@@ -2,6 +2,7 @@
 use crate::{auth::AuthenticatedUser, ApiError, AppState};
 use axum::http::StatusCode;
 use deadpool_postgres::Object;
+use std::time::Duration;
 use tokio_postgres::{types::ToSql, Row};
 
 fn unavailable() -> ApiError {
@@ -11,12 +12,103 @@ fn unavailable() -> ApiError {
     )
 }
 
+/// Physical connections one checkout may try before reporting unavailability.
+///
+/// A single idle socket is the production failure (#4732); a few attempts also
+/// cover a small pool whose sockets all died in the same freeze. The bound keeps
+/// recovery from turning into an unbounded connect loop.
+const CHECKOUT_ATTEMPTS: usize = 3;
+
+/// A live database answers `SELECT 1` in milliseconds; a half-open socket hangs.
+///
+/// The probe is capped so a bounded recovery still fits inside the request
+/// deadline instead of letting the outer middleware turn it into a generic
+/// request timeout.
+const MAX_PROBE_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// Pool wait/create deadlines are configured at startup; no unbounded retry loop.
+///
+/// Every checkout first proves the physical socket can carry a statement. A
+/// pooled connection can be half-open after an idle freeze or platform pause:
+/// `is_closed` is false and the driver only learns otherwise when the first
+/// statement hangs or the peer resets. Validating here means every mounted
+/// handler, authentication included, starts on a live connection before it can
+/// write anything. The probe is the request's first statement, so recovery never
+/// replays handler SQL, a write, or an audit event.
+///
+/// A connection that cannot carry the probe is discarded rather than returned to
+/// the pool. Ordinary SQL errors never reach this path: the probe cannot produce
+/// one, and handler statements keep their existing classification in
+/// [`query_error_for`].
 pub async fn checkout(state: &AppState) -> Result<Object, ApiError> {
+    if !state.connection_recovery {
+        return acquire(state).await;
+    }
+    tokio::time::timeout(state.request_timeout, recover(state))
+        .await
+        .unwrap_or_else(|_| Err(unavailable()))
+}
+
+/// Replace pooled sockets that cannot carry a statement, bounded to
+/// [`CHECKOUT_ATTEMPTS`].
+async fn recover(state: &AppState) -> Result<Object, ApiError> {
+    let mut attempt = 1;
+    loop {
+        let connection = acquire(state).await?;
+        match probe(state, connection).await {
+            Ok(connection) => return Ok(connection),
+            Err(error)
+                if error.0 == StatusCode::SERVICE_UNAVAILABLE && attempt < CHECKOUT_ATTEMPTS =>
+            {
+                tracing::warn!(
+                    attempt,
+                    max_attempts = CHECKOUT_ATTEMPTS,
+                    "discarding a pooled connection that could not carry its first statement"
+                );
+                attempt += 1;
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Bounded pool acquisition; no unbounded retry loop.
+async fn acquire(state: &AppState) -> Result<Object, ApiError> {
     tokio::time::timeout(state.request_timeout, state.pool.get())
         .await
         .map_err(|_| unavailable())?
         .map_err(|_| unavailable())
+}
+
+/// Prove a checked-out connection can carry a statement.
+///
+/// Dropping the probe future (timeout or outer request cancellation) discards
+/// the physical connection, because PostgreSQL may still be executing work on
+/// it. A failed or cancelled probe is never returned to the pool.
+async fn probe(state: &AppState, connection: Object) -> Result<Object, ApiError> {
+    struct Pending(Option<Object>);
+    impl Drop for Pending {
+        fn drop(&mut self) {
+            if let Some(connection) = self.0.take() {
+                drop(Object::take(connection));
+            }
+        }
+    }
+    let mut pending = Pending(Some(connection));
+    let result = tokio::time::timeout(
+        state.request_timeout.min(MAX_PROBE_TIMEOUT),
+        pending
+            .0
+            .as_ref()
+            .expect("checked-out PostgreSQL client")
+            .simple_query("SELECT 1"),
+    )
+    .await;
+    match result {
+        Err(_) => Err(unavailable()),
+        Ok(Ok(_)) => Ok(pending.0.take().expect("checked-out PostgreSQL client")),
+        Ok(Err(error)) => Err(query_error_for("database.checkout_probe", error)),
+    }
 }
 
 pub(crate) async fn query_one_optional(
@@ -185,7 +277,6 @@ pub async fn require_owned_reading_session(
 mod tests {
     use super::*;
     use crate::config::Config;
-    use std::time::Duration;
 
     /// #4535: a statement that never reached the server is transport state, not
     /// an internal error. A server-rejected statement and a value/shape defect

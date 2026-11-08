@@ -28,7 +28,6 @@ ROUTER_SUBMODULES = (
     "health",
     "issue_dependency_batch",
     "reading_order_projection",
-    "reading_plan_reader",
     "reading_plan_sync",
     "recommendation_diagnostics",
     "releases",
