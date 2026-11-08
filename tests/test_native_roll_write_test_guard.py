@@ -248,21 +248,19 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
         parity_source = parity.read_text(encoding="utf-8")
         conftest = parity_root / "conftest.py"
         conftest_source = conftest.read_text(encoding="utf-8") if conftest.is_file() else ""
-        combined_source = parity_source + conftest_source
-        assert any(marker in combined_source for marker in DB_TEST_MARKERS), (
+        assert any(marker in parity_source for marker in DB_TEST_MARKERS), (
             f"{parity.name} must run against the canonical PostgreSQL database "
             "(RUST_ROLL_PARITY_DATABASE_URL, RUST_ROLL_TEST_DATABASE_URL, or a "
-            "test_support accessor) — either directly or via a conftest.py fixture"
+            "test_support accessor)"
         )
-        # Accept either the per-file Base.metadata.create_all pattern (legacy) or
-        # the canonical-schema conftest autouse fixture (reset_canonical_schema),
-        # which serializes tests and rebuilds the schema via TRUNCATE + sequence reset.
-        schema_proven = "Base.metadata.create_all" in combined_source or (
+        # The canonical Alembic schema is proven by the shared autouse fixture,
+        # which serializes tests and resets rows and sequences via TRUNCATE + setval.
+        schema_proven = (
             "reset_canonical_schema" in conftest_source
+            and "autouse=True" in conftest_source
         )
         assert schema_proven, (
-            f"{parity.name} must use the canonical app schema — either call "
-            "Base.metadata.create_all directly, or rely on the parity conftest "
+            f"{parity.name} must use the canonical app schema via the parity conftest "
             "reset_canonical_schema autouse fixture"
         )
 
