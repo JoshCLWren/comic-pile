@@ -49,7 +49,6 @@ export interface RatingViewData {
   snoozeIsPending?: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze?: () => void
@@ -148,7 +147,6 @@ export function useRatingView({
     rateIsPending: rateMutation.isPending,
     snoozeIsPending: (rerollMutation ?? snoozeMutation).isPending,
     dismissIsPending: dismissPendingMutation.isPending,
-    manualDie: null,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,

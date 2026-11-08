@@ -145,7 +145,6 @@ describe('rating view die projection (#4352 contract-after)', () => {
   it('reports automatic mode while no die is pinned', () => {
     const { result } = renderUseRatingView()
 
-    expect(result.current.manualDie).toBeNull()
     expect(result.current.currentDie).toBe(6)
     expect(result.current.predictedDie).toBe(8)
   })
@@ -153,18 +152,9 @@ describe('rating view die projection (#4352 contract-after)', () => {
   it('keeps the ladder readout at a pinned die now that manual mode is gone (#3144 retired)', () => {
     // `RollPage` derives the selected die during render (#4352) and passes it
     // to `useRatingView`, so the card sees the same die from both props.
-    // Bootstrap no longer carries manual_die, so manualDie is always null and
-    // the card always shows the ladder move.
     const { result } = renderUseRatingView(20)
 
-    expect(result.current.manualDie).toBeNull()
     expect(result.current.currentDie).toBe(20)
-  })
-
-  it('treats a not-yet-loaded scoped die as automatic mode', () => {
-    const { result } = renderUseRatingView()
-
-    expect(result.current.manualDie).toBeNull()
   })
 })
 
