@@ -582,7 +582,7 @@
       "issue": 4739,
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
-      "catch_all_dest": "/api/index.py",
+      "catch_all_dest": "/api/native_roll.rs",
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 216,
@@ -600,7 +600,7 @@
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "runtime": "python-fastapi",
       "note": "Vercel catch-all routes every remaining /api/* request to the Python FastAPI app."
     },
