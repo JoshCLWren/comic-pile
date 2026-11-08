@@ -1290,9 +1290,7 @@ mod tests {
 
     #[tokio::test]
     async fn direct_read_is_owner_scoped_and_does_not_touch_roll_or_queue() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let _state = crate::test_support::test_state(2)
             .await

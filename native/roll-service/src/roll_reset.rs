@@ -197,9 +197,7 @@ mod tests {
 
     #[tokio::test]
     async fn persist_reset_records_d6_and_clears_pending() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let (mut client, _db) = seeded(
             &url,
@@ -329,9 +327,7 @@ mod tests {
 
     #[tokio::test]
     async fn persist_reset_clears_every_pending_column() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let (mut client, _db) = seeded(
             &url,

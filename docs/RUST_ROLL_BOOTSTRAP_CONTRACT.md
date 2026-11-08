@@ -28,10 +28,11 @@ Python oracle; nothing regenerates native output from it.
 
 ## Reproduce
 
-Use Python 3.14 and `uv sync --frozen --all-extras`. The Rust database-backed
-bootstrap tests read `RUST_ROLL_TEST_DATABASE_URL` and self-skip (reporting
-success without exercising SQL) when it is unset; CI sets the variable, so this
-is a local-only skip. Point it at a disposable local PostgreSQL test database.
+Use Python 3.14 and `uv sync --frozen --all-extras`. All Rust database-backed
+bootstrap tests require `RUST_ROLL_TEST_DATABASE_URL` and **fail** with setup
+instructions when it is unset; reporting success without exercising SQL is
+forbidden. Point it at a disposable local PostgreSQL test database. The
+`RUST_ROLL_ALLOW_DB_SKIP` override is deliberately unsupported and rejected.
 The Python checks below use `TEST_DATABASE_URL`
 and `DATABASE_URL` and refuse non-test database names. Never point either suite
 at a reader's library, a read-only testuser snapshot, or production.
