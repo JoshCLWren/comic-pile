@@ -66,6 +66,11 @@ export function RollHeader({
   dieState,
 }: RollHeaderProps) {
   const effectiveDie = dieState?.die ?? currentDie
+  // Scoped ladder is authoritative when present; the static ladder remains
+  // the fallback while the die-state query settles or fails.
+  const effectiveLadder =
+    dieState?.ladder && dieState.ladder.length > 0 ? dieState.ladder : DICE_LADDER
+  const maxLadderDie = effectiveLadder[effectiveLadder.length - 1]
   const rawMode = bootstrap.session_mode
   const sessionMode: SessionModeState | null | undefined = rawMode
     ? {
@@ -94,7 +99,7 @@ export function RollHeader({
         </span>
       ) : (
         <>
-          {snoozedThreads.length > 0 && effectiveDie >= DICE_LADDER[DICE_LADDER.length - 1] && (
+          {snoozedThreads.length > 0 && effectiveDie >= maxLadderDie && (
             <div className="mt-1 flex items-center gap-2">
               <span className="text-[9px] uppercase tracking-wider text-stone-500">
                 pool at max size (d{dieSize}) - snoozing won&apos;t increase it further
@@ -166,7 +171,7 @@ export function RollHeader({
                 role="group"
                 aria-label="Die sizes"
               >
-                {DICE_LADDER.map((die) => {
+                {effectiveLadder.map((die) => {
                   const selected = die === effectiveDie
                   return (
                     <button

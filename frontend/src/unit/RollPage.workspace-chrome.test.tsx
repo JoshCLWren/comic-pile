@@ -106,6 +106,21 @@ describe('Roll rating header chrome (#2712)', () => {
     expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('drives the ladder buttons from the scoped ladder when present (#4719)', () => {
+    renderHeader({ dieState: { die: 8, ladder: [4, 8], default_die: 6, last_roll: null } })
+    expect(screen.getByRole('button', { name: 'd8' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd4' })).toHaveAttribute('aria-pressed', 'false')
+    // The static ladder no longer supplies the header when scoped data settles.
+    expect(screen.queryByRole('button', { name: 'd6' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'd20' })).not.toBeInTheDocument()
+  })
+
+  it('falls back to the static ladder when the scoped ladder is empty (#4719)', () => {
+    renderHeader({ dieState: { die: 6, ladder: [], default_die: 6, last_roll: null } })
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd20' })).toBeInTheDocument()
+  })
+
   it('leaves the die view header chrome untouched', () => {
     const { container } = renderHeader({ isRatingView: false, onBackToQueue: vi.fn() })
 
