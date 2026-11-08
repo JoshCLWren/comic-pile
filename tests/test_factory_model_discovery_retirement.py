@@ -1798,15 +1798,15 @@ def test_committed_tsv_retires_openrouter_laguna_workers_68_and_69() -> None:
 
 
 def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
-    """Six ghost lanes retire after their models left the free catalogs.
+    """Eight ghost lanes retire after their models left the free catalogs.
 
     OpenRouter ``nvidia/nemotron-3-super-120b-a12b:free`` (w63) and
     ``minimax/minimax-m3.1-flash:free`` (w94), plus OpenCode
     ``space-bunny-free`` (w49), ``muse-spark-1.3-contributor-free`` (w58),
     ``longcat-2.5-preview-free`` (w73), and ``cat-jam-free`` (w83) are no
     longer served free. OpenCode Nemotron 3 Ultra (worker 42) and kilo-auto
-    worker 46 stay. Requesty worker 93 remains active; NVIDIA worker 95
-    later retired when its Super VL model disappeared from the catalog.
+    worker 46 stay. Requesty workers 92/93 retired; NVIDIA worker 95 later
+    retired when its Super VL model disappeared from the catalog.
     The remaining roster still satisfies the balanced-schedule invariant.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
@@ -1814,7 +1814,7 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     by_worker = {row["worker"]: row for row in rows}
     models = {row["model"] for row in rows}
 
-    for worker in (49, 58, 63, 73, 83, 94):
+    for worker in (49, 58, 63, 73, 83, 92, 93, 94):
         assert worker not in lock["expected_workers"]
         assert worker in lock["retired_workers"]
         assert str(worker) not in by_worker
@@ -1824,21 +1824,22 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert "longcat-2.5-preview-free" in lock["retired_models"]
     assert "cat-jam-free" in lock["retired_models"]
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
+    assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
+    assert "nvidia/nemotron-3-super-120b-a12b" in lock["retired_models"]
     assert "space-bunny-free" not in models
     assert "muse-spark-1.3-contributor-free" not in models
     assert "nvidia/nemotron-3-super-120b-a12b:free" not in models
     assert "longcat-2.5-preview-free" not in models
     assert "cat-jam-free" not in models
     assert "minimax/minimax-m3.1-flash:free" not in models
+    assert "nvidia/nemotron-3-ultra-550b-a55b" not in models
+    assert "nvidia/nemotron-3-super-120b-a12b" not in models
     assert by_worker["42"]["source"] == "opencode-free"
     assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
     assert by_worker["42"]["scheduler"] == "dispatcher"
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["46"]["scheduler"] == "dispatcher"
-    assert by_worker["93"]["source"] == "requesty"
-    assert by_worker["93"]["model"] == "nvidia/nemotron-3-super-120b-a12b"
-    assert by_worker["93"]["scheduler"] == "dispatcher"
     _assert_committed_pin(
         by_worker,
         lock,

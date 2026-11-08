@@ -43,19 +43,22 @@ def test_committed_budgets_stay_under_account_limits() -> None:
 
 
 def test_committed_roster_pins_smoked_router_lanes() -> None:
-    """Workers 91-93 are the smoked OrcaRouter/Requesty lanes."""
+    """Worker 91 is the smoked OrcaRouter lane; Requesty lanes 92/93 are retired."""
     rows = {row["worker"]: row for row in roster.load_roster_rows(roster.default_roster_path())}
     assert (rows["91"]["source"], rows["91"]["model"]) == ("orcarouter", "z-ai/glm-5.3-flash-free")
-    assert (rows["92"]["source"], rows["92"]["model"]) == (
-        "requesty",
-        "nvidia/nemotron-3-ultra-550b-a55b",
-    )
-    assert (rows["93"]["source"], rows["93"]["model"]) == (
-        "requesty",
-        "nvidia/nemotron-3-super-120b-a12b",
-    )
     lock = json.loads((ROOT / ".github" / "factory-expected-workers.json").read_text())
-    assert {91, 92, 93} <= set(lock["expected_workers"])
+    assert {91} <= set(lock["expected_workers"])
+    assert {92, 93}.isdisjoint(lock["expected_workers"])
+    assert {92, 93}.issubset(set(lock["retired_workers"]))
+    assert "92" not in rows and "93" not in rows
+    assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
+    assert "nvidia/nemotron-3-super-120b-a12b" in lock["retired_models"]
+    assert "nvidia/nemotron-3-ultra-550b-a55b" not in {
+        row["model"] for row in rows.values()
+    }
+    assert "nvidia/nemotron-3-super-120b-a12b" not in {
+        row["model"] for row in rows.values()
+    }
     # tencent/hy4-preview-free hit OrcaRouter's free-tier prompt cap in smoke.
     assert "tencent/hy4-preview-free" not in {row["model"] for row in rows.values()}
 
