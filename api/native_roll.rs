@@ -182,10 +182,9 @@ async fn native_not_found() -> Response {
         Json(serde_json::json!({"detail": "Not Found"})),
     )
         .into_response();
-    response.headers_mut().insert(
-        "x-comicpile-api-runtime",
-        HeaderValue::from_static("rust"),
-    );
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
     response
 }
 
@@ -300,10 +299,12 @@ mod tests {
     async fn unknown_api_route_returns_rust_json_404_without_database() {
         let mut router = app();
         let response = router
-            .call(Request::builder()
-                .uri("/api/v2/definitely-not-registered")
-                .body(Body::empty())
-                .unwrap())
+            .call(
+                Request::builder()
+                    .uri("/api/v2/definitely-not-registered")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
             .await
             .expect("router response");
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
