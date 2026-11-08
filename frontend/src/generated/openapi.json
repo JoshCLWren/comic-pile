@@ -261,6 +261,22 @@
         "title": "BatchBlockingExplanationResponse",
         "type": "object"
       },
+      "BlockerKind": {
+        "enum": [
+          "strict_order",
+          "hold",
+          "after_previous",
+          "prerequisite"
+        ],
+        "type": "string"
+      },
+      "BlockerOrigin": {
+        "enum": [
+          "reading_list",
+          "reader_prerequisite"
+        ],
+        "type": "string"
+      },
       "BlockingDependency": {
         "description": "One unread Issue required by a list or explicit prerequisite.",
         "properties": {
@@ -1207,6 +1223,13 @@
         "title": "BoundaryIssue",
         "type": "object"
       },
+      "BoundaryListMode": {
+        "enum": [
+          "strict",
+          "loose"
+        ],
+        "type": "string"
+      },
       "BoundaryReadingList": {
         "description": "One owned Reading List that places an Issue.",
         "properties": {
@@ -1234,6 +1257,15 @@
         ],
         "title": "BoundaryReadingList",
         "type": "object"
+      },
+      "BoundaryState": {
+        "enum": [
+          "blocked",
+          "available",
+          "complete",
+          "unavailable"
+        ],
+        "type": "string"
       },
       "BugReportCreate": {
         "description": "Request schema for creating a bug report or feature request.",
@@ -10257,6 +10289,14 @@
         "title": "DuplicateAnomalyResponse",
         "type": "object"
       },
+      "EditorKind": {
+        "enum": [
+          "reading_list",
+          "prerequisite",
+          "issue"
+        ],
+        "type": "string"
+      },
       "EffectiveTagResponse": {
         "description": "One deduplicated effective tag with every contributing source.\n\nAttributes:\n    tag: The tag itself.\n    direct: ``True`` when the tag is directly assigned to the queried\n        object (it may additionally be inherited through parent paths).\n    sources: Every object whose direct assignment contributes this tag,\n        including the queried object itself for direct assignments. A tag\n        inherited through several paths appears once with all of its\n        sources retained.",
         "properties": {
@@ -13125,7 +13165,7 @@
             ]
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/EditorKind"
           },
           "label": {
             "type": "string"
@@ -13207,7 +13247,7 @@
             "type": "integer"
           },
           "mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryListMode"
           },
           "name": {
             "type": "string"
@@ -13438,24 +13478,6 @@
         ],
         "type": "object"
       },
-      "NativeReadingBoundaryBatchResponseV2": {
-        "properties": {
-          "threads": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/NativeReadingBoundaryExplanationV2"
-            },
-            "propertyNames": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "type": "object"
-          }
-        },
-        "required": [
-          "threads"
-        ],
-        "type": "object"
-      },
       "NativeReadingBoundaryBlocker": {
         "properties": {
           "editor": {
@@ -13469,10 +13491,10 @@
             ]
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerKind"
           },
           "origin": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerOrigin"
           },
           "reason": {
             "type": "string"
@@ -13511,7 +13533,7 @@
             ]
           },
           "state": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryState"
           },
           "summary": {
             "type": "string"
@@ -15925,20 +15947,21 @@
         "type": "object"
       },
       "ReadingBoundaryBatchResponseV2": {
-        "description": "Only canonical reading requirements for the requested owned series.",
         "properties": {
           "threads": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
+              "$ref": "#/components/schemas/NativeReadingBoundaryExplanationV2"
             },
-            "title": "Threads",
+            "propertyNames": {
+              "format": "int32",
+              "type": "integer"
+            },
             "type": "object"
           }
         },
         "required": [
           "threads"
         ],
-        "title": "ReadingBoundaryBatchResponseV2",
         "type": "object"
       },
       "ReadingBoundaryBlocker": {
@@ -37197,7 +37220,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeReadingBoundaryBatchResponseV2"
+                  "$ref": "#/components/schemas/ReadingBoundaryBatchResponseV2"
                 }
               }
             },

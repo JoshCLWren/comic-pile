@@ -1898,6 +1898,22 @@
           }
         }
       },
+      "BlockerKind": {
+        "type": "string",
+        "enum": [
+          "strict_order",
+          "hold",
+          "after_previous",
+          "prerequisite"
+        ]
+      },
+      "BlockerOrigin": {
+        "type": "string",
+        "enum": [
+          "reading_list",
+          "reader_prerequisite"
+        ]
+      },
       "BootstrapActiveThread": {
         "type": "object",
         "description": "Currently pending thread shown by the Roll surface.",
@@ -2557,7 +2573,7 @@
             "format": "int32"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/EditorKind"
           },
           "label": {
             "type": "string"
@@ -2627,6 +2643,13 @@
           }
         }
       },
+      "BoundaryListMode": {
+        "type": "string",
+        "enum": [
+          "strict",
+          "loose"
+        ]
+      },
       "BoundaryReadingList": {
         "type": "object",
         "required": [
@@ -2640,12 +2663,21 @@
             "format": "int32"
           },
           "mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryListMode"
           },
           "name": {
             "type": "string"
           }
         }
+      },
+      "BoundaryState": {
+        "type": "string",
+        "enum": [
+          "blocked",
+          "available",
+          "complete",
+          "unavailable"
+        ]
       },
       "ComicPileMatch": {
         "type": "object",
@@ -2916,6 +2948,14 @@
             "type": "boolean"
           }
         }
+      },
+      "EditorKind": {
+        "type": "string",
+        "enum": [
+          "reading_list",
+          "prerequisite",
+          "issue"
+        ]
       },
       "ForgotPasswordRequest": {
         "type": "object",
@@ -4002,10 +4042,10 @@
             ]
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerKind"
           },
           "origin": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerOrigin"
           },
           "reason": {
             "type": "string"
@@ -4044,7 +4084,7 @@
             ]
           },
           "state": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryState"
           },
           "summary": {
             "type": "string"

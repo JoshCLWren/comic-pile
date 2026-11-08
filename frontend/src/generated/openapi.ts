@@ -6926,6 +6926,10 @@ export interface components {
                 [key: string]: components["schemas"]["BlockingExplanation"];
             };
         };
+        /** @enum {string} */
+        BlockerKind: "strict_order" | "hold" | "after_previous" | "prerequisite";
+        /** @enum {string} */
+        BlockerOrigin: "reading_list" | "reader_prerequisite";
         /**
          * BlockingDependency
          * @description One unread Issue required by a list or explicit prerequisite.
@@ -7243,6 +7247,8 @@ export interface components {
             /** Volume Label */
             volume_label?: string | null;
         };
+        /** @enum {string} */
+        BoundaryListMode: "strict" | "loose";
         /**
          * BoundaryReadingList
          * @description One owned Reading List that places an Issue.
@@ -7258,6 +7264,8 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** @enum {string} */
+        BoundaryState: "blocked" | "available" | "complete" | "unavailable";
         /**
          * BugReportCreate
          * @description Request schema for creating a bug report or feature request.
@@ -11743,6 +11751,8 @@ export interface components {
             /** Thread Ids */
             thread_ids: number[];
         };
+        /** @enum {string} */
+        EditorKind: "reading_list" | "prerequisite" | "issue";
         /**
          * EffectiveTagResponse
          * @description One deduplicated effective tag with every contributing source.
@@ -12988,7 +12998,7 @@ export interface components {
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
-            kind: string;
+            kind: components["schemas"]["EditorKind"];
             label: string;
             /** Format: int32 */
             list_id?: number | null;
@@ -13011,7 +13021,7 @@ export interface components {
         NativeBoundaryReadingList: {
             /** Format: int32 */
             list_id: number;
-            mode: string;
+            mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
@@ -13080,22 +13090,17 @@ export interface components {
         NativeReadingBoundaryBatchRequest: {
             thread_ids: number[];
         };
-        NativeReadingBoundaryBatchResponseV2: {
-            threads: {
-                [key: string]: components["schemas"]["NativeReadingBoundaryExplanationV2"];
-            };
-        };
         NativeReadingBoundaryBlocker: {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
-            kind: string;
-            origin: string;
+            kind: components["schemas"]["BlockerKind"];
+            origin: components["schemas"]["BlockerOrigin"];
             reason: string;
             waiting_on: components["schemas"]["NativeBoundaryIssue"][];
         };
         NativeReadingBoundaryExplanationV2: {
             blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
             next?: null | components["schemas"]["NativeReadingBoundaryNext"];
-            state: string;
+            state: components["schemas"]["BoundaryState"];
             summary: string;
             /** Format: int32 */
             thread_id: number;
@@ -14071,14 +14076,9 @@ export interface components {
                 [key: string]: components["schemas"]["ReadingBoundaryExplanation"];
             };
         };
-        /**
-         * ReadingBoundaryBatchResponseV2
-         * @description Only canonical reading requirements for the requested owned series.
-         */
         ReadingBoundaryBatchResponseV2: {
-            /** Threads */
             threads: {
-                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
+                [key: string]: components["schemas"]["NativeReadingBoundaryExplanationV2"];
             };
         };
         /**
@@ -25702,7 +25702,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReadingBoundaryBatchResponseV2"];
+                    "application/json": components["schemas"]["ReadingBoundaryBatchResponseV2"];
                 };
             };
             /** @description Not authenticated */
