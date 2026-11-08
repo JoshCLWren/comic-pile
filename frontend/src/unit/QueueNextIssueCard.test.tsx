@@ -34,10 +34,11 @@ const card: IssueCard = {
 
 function issueList(id: number | null): IssueListResponse {
   return {
+    // SAFETY: this test fixture deliberately supplies only the id, issue number,
+    // and status fields consumed by QueueNextIssueCard; other issue fields are
+    // irrelevant to the on-demand resolver assertion below.
     issues: id == null ? [] : [{
       id, issue_number: id === 37 ? '9' : '10', status: 'unread',
-    // SAFETY: the fixture uses only the exact issue fields exercised by this resolver;
-    // the API response shape is otherwise supplied by the typed IssueListResponse.
     }] as IssueListResponse['issues'],
     total_count: id == null ? 0 : 1,
     next_page_token: null,
