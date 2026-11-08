@@ -42,9 +42,18 @@ def python_operations(app: FastAPI | None = None) -> list[tuple[str, str]]:
     Exclude only the synthetic JSON 404 catch-all, not legitimate hidden APIs.
     """
     if app is None:
-        from app.main import create_app
+        # Assemble the actual production router mounts without initializing
+        # settings, database pools, or frontend assets. This stays stable
+        # across local, CI, and production environments, including pytest's
+        # TEST_ENVIRONMENT and development-only debug routes.
+        from app.main import _register_lightweight_routers
+        from app.router_mounts import build_router_mounts
 
-        app = create_app(serve_frontend=False, defer_router_imports=False)
+        app = FastAPI()
+        _register_lightweight_routers(app)
+        for mount in build_router_mounts("production"):
+            if mount.key not in {"debug", "test-helpers"}:
+                mount.register(app)
     schema = app.openapi()
     documented = {
         (method.upper(), path)
