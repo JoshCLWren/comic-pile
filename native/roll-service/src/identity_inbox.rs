@@ -125,19 +125,25 @@ fn source_entry_summary(thread_title: &str, issue_number: &str, metadata: &Value
     if let Some(volume) = metadata.get("volume").and_then(|v| v.as_object()) {
         if let Some(name) = volume.get("name").and_then(|v| v.as_str()) {
             if !name.is_empty() {
-                parts.push(format!("({})", name));
+                parts.push(format!("({name})"));
             }
         }
     }
     if let Some(publisher) = metadata.get("publisher").and_then(|v| v.as_str()) {
         if !publisher.is_empty() {
-            parts.push(format!("- {}", publisher));
+            parts.push(format!("- {publisher}"));
         }
     }
     parts.join(" ")
 }
 
 fn why_stopped(status: &str, evidence: &Value) -> String {
+    let is_empty_evidence = evidence.is_null()
+        || evidence.as_object().map(|o| o.is_empty()).unwrap_or(false)
+        || evidence.as_array().map(|a| a.is_empty()).unwrap_or(false);
+    if is_empty_evidence {
+        return "No candidates found".to_string();
+    }
     if let Some(obj) = evidence.as_object() {
         if let Some(reason) = obj.get("decision_reason").and_then(|v| v.as_str()) {
             if !reason.is_empty() {
@@ -151,7 +157,7 @@ fn why_stopped(status: &str, evidence: &Value) -> String {
     if status == "candidate" {
         return "Multiple candidates require explicit review".to_string();
     }
-    format!("Status: {}", status)
+    format!("Status: {status}")
 }
 
 fn parse_json_text(text: Option<String>) -> Value {
@@ -389,7 +395,7 @@ pub async fn get_inbox_item(
 ) -> Result<Json<IdentityInboxResponse>, ApiError> {
     let item = fetch_item(&state, user.id(), mapping_id)
         .await?
-        .ok_or_else(|| not_found(&format!("Inbox item {} not found", mapping_id)))?;
+        .ok_or_else(|| not_found(&format!("Inbox item {mapping_id} not found")))?;
     Ok(Json(IdentityInboxResponse {
         items: vec![item],
         total: 1,
@@ -404,7 +410,7 @@ pub async fn search_issues(
     Query(q): Query<SearchQuery>,
 ) -> Result<Json<IdentityInboxSearchResponse>, ApiError> {
     let _ = (state, user);
-    if q.q.trim().is_empty() || q.q.len() > 200 || q.q.len() < 1 {
+    if q.q.trim().is_empty() || q.q.len() > 200 || q.q.is_empty() {
         return Err(unprocessable("q invalid"));
     }
     let limit = q.limit.unwrap_or(10);
@@ -486,16 +492,13 @@ pub async fn search_issues(
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let issue_number = obj
-                    .get("issue_number")
-                    .map(|v| {
-                        if v.is_null() {
-                            None
-                        } else {
-                            Some(v.to_string().trim_matches('"').to_string())
-                        }
-                    })
-                    .flatten();
+                let issue_number = obj.get("issue_number").and_then(|v| {
+                    if v.is_null() {
+                        None
+                    } else {
+                        Some(v.to_string().trim_matches('"').to_string())
+                    }
+                });
 
                 let issue_name = obj
                     .get("name")
@@ -504,10 +507,10 @@ pub async fn search_issues(
 
                 let mut evidence = Vec::new();
                 if let Some(vn) = &volume_name {
-                    evidence.push(format!("Volume: {}", vn));
+                    evidence.push(format!("Volume: {vn}"));
                 }
                 if let Some(pubn) = &publisher {
-                    evidence.push(format!("Publisher: {}", pubn));
+                    evidence.push(format!("Publisher: {pubn}"));
                 }
 
                 results.push(IdentityInboxSearchResult {
@@ -552,7 +555,7 @@ fn percent_encode(s: &str) -> String {
                 out.push(b as char)
             }
             b' ' => out.push_str("%20"),
-            _ => out.push_str(&format!("%{:02X}", b)),
+            _ => out.push_str(&format!("%{b:02X}")),
         }
     }
     out
@@ -574,15 +577,14 @@ fn fetch_comicvine(url: String) -> Option<Value> {
     use std::io::{Read, Write};
     let without = url.strip_prefix("https://")?;
     let (host, rest) = without.split_once('/')?;
-    let path = format!("/{}", rest);
-    let addr = format!("{}:443", host);
+    let path = format!("/{rest}");
+    let addr = format!("{host}:443");
     let stream = std::net::TcpStream::connect(&addr).ok()?;
     let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(30)));
     let connector = TlsConnector::new().ok()?;
     let mut tls = connector.connect(host, stream).ok()?;
     let request = format!(
-        "GET {} HTTP/1.1\r\nHost: {}\r\nUser-Agent: ComicPile/1.0\r\nAccept: application/json\r\nConnection: close\r\n\r\n",
-        path, host
+        "GET {path} HTTP/1.1\r\nHost: {host}\r\nUser-Agent: ComicPile/1.0\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
     );
     tls.write_all(request.as_bytes()).ok()?;
     let mut buf = Vec::new();
@@ -627,7 +629,7 @@ pub async fn confirm(
     // issue + thread ownership
     let it = tx
         .query_opt(
-            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1",
+            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 FOR UPDATE OF i",
             &[&issue_id],
         )
         .await
@@ -675,8 +677,7 @@ pub async fn confirm(
     if conflict.is_some() {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(bad_request(&format!(
-            "issue already has a confirmed {} identity",
-            provider
+            "issue already has a confirmed {provider} identity"
         )));
     }
 
@@ -789,6 +790,24 @@ pub async fn reject(
         return Err(bad_request("mapping not owned by this user"));
     }
 
+    // validate external identity
+    let idr = tx
+        .query_opt(
+            "SELECT id, entity_type FROM external_identities WHERE id = $1",
+            &[&external_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let Some(ident) = idr else {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(bad_request("external identity is not an issue identity"));
+    };
+    let entity_type: String = ident.get(1);
+    if entity_type != "issue" {
+        tx.rollback().await.map_err(db::query_error)?;
+        return Err(bad_request("external identity is not an issue identity"));
+    }
+
     // upsert rejected
     let existing = tx
         .query_opt(
@@ -800,7 +819,7 @@ pub async fn reject(
     if let Some(er) = existing {
         let eid: i32 = er.get(0);
         tx.execute(
-            "UPDATE issue_external_identity_mappings SET status='rejected', rejection_reason=$2, updated_at=NOW() WHERE id=$1",
+            "UPDATE issue_external_identity_mappings SET status='rejected', evidence_source=NULL, confidence=NULL, rejection_reason=$2, updated_at=NOW() WHERE id=$1",
             &[&eid, &rejection_reason],
         )
         .await
