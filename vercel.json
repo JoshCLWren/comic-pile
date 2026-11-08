@@ -1061,7 +1061,13 @@
     {
       "src": "^/api/v1/creators$",
       "methods": [
-        "GET",
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/creators$",
+      "methods": [
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1133,7 +1139,13 @@
     {
       "src": "^/api/v1/creators/summaries$",
       "methods": [
-        "GET",
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/creators/summaries$",
+      "methods": [
         "OPTIONS"
       ],
       "dest": "/api/index.py"
