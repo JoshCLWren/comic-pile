@@ -170,3 +170,51 @@ def test_scheduled_batch_filters_pauses_before_offer_cap() -> None:
     scheduled = text[text.index("source_seed=") : text.index("Scheduled batch:")]
     assert 'head -n "$offer_count"' not in scheduled
     assert scheduled.index("factory_quota_pause.py filter") < scheduled.index(".[:$cap]")
+
+
+@pytest.mark.parametrize("message", ["HTTP 429 Too Many Requests", "status code: 429"])
+def test_z_ai_429_is_quota_in_smoke_log_and_classifier(tmp_path: Path, message: str) -> None:
+    """Free Z.AI rate limits pause capacity rather than imply a missing model."""
+    modules = {}
+    for name, filename in (
+        ("quota_classifier", "classify-fixed-model-run.py"),
+        ("quota_smoke", "factory_live_opencode.py"),
+    ):
+        spec = importlib.util.spec_from_file_location(name, SCRIPTS / filename)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+        modules[name] = module
+    log = (
+        "Factory 97 locked: source=z-ai model=glm-4.5-flash runtime=z-ai/glm-4.5-flash "
+        "minute=:50 scheduler=dispatcher configured=true\n" + message
+    )
+    assert modules["quota_classifier"].classify(log).outcome_class == "provider_quota"
+    target = tmp_path / 'outcome'
+    assert modules["quota_smoke"].record_smoke_failure(message, 'z-ai/glm-4.5-flash', target)
+    assert target.read_text().startswith('provider_quota\t')
+
+
+def test_z_ai_session_429_records_quota(tmp_path: Path) -> None:
+    """Execute the session classifier to prove a 429 produces durable quota evidence."""
+    import subprocess
+
+    source = (SCRIPTS / 'free-model-factory-worker.sh').read_text()
+    functions = source[source.index('record_terminal_outcome() {'):source.index(
+        '# A PR branch may predate the Kilo integration'
+    )]
+    worker = f'quota-test-{tmp_path.name}'
+    log = Path(f'/tmp/opencode-factory-{worker}.log')
+    outcome = tmp_path / 'outcome'
+    log.write_text('HTTP 429 Too Many Requests\n')
+    try:
+        result = subprocess.run(
+            ['bash', '-c', 'SOURCE=z-ai\nWORKER="$1"\nTERMINAL_OUTCOME_FILE="$2"\n'
+             + functions + '\nrecord_agent_failure_outcome 1\n', '_', worker, str(outcome)],
+            capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert outcome.read_text().startswith('provider_quota\t')
+    finally:
+        log.unlink(missing_ok=True)
