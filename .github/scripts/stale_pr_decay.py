@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Adaptive stale-PR decay guard for autonomous Factory implementation attempts.
+"""Non-destructive stale-PR diagnostics for autonomous Factory attempts.
 
-Factory PRs converge quickly; long-lived attempts indicate failed convergence.
-This module calculates staleness relative to a rolling population of the last
-100 eligible successfully merged Factory PRs, using a robust percentile-based
-threshold (default 2x P90) with a documented lower floor.
+A rolling population of the last 100 merged Factory PRs supplies an adaptive
+age threshold. Exceeding it is a recovery signal, not a reason to discard
+still-open implementation work or reset its linked issue.
 
-Staleness is an attempt-level circuit breaker, independent of semantic strikes.
+Only a separately evidenced, explicit supersession/abandonment decision may
+close an unfinished PR. The scheduled evaluator never makes that decision.
 """
 from __future__ import annotations
 
@@ -442,7 +442,10 @@ def record_stale_expiration(
     age_seconds: float,
     baseline: dict[str, Any],
 ) -> str:
-    """Reset the linked issue, close the stale PR, then record expiration.
+    """Legacy explicit expiration helper, never called by scheduled stale checks.
+
+    Do not invoke this without independently verified supersession and a
+    durable work-preservation handoff. Age alone cannot justify PR closure.
 
     The issue reset happens before PR close so a partial failure remains safe:
     an open canonical PR still suppresses duplicate issue intake, while a
@@ -463,9 +466,10 @@ def process_stale_prs(
     now_epoch: int | None = None,
     dry_run: bool = False,
 ) -> list[dict[str, Any]]:
-    """Evaluate open PRs for staleness and expire any that cross the threshold.
+    """Report stale PRs without closing them or resetting linked issue state.
 
-    Returns a list of expiration results with details for observability.
+    Age is not evidence that commits are wrong, redundant, or unrecoverable.
+    Existing branches, issue ownership, reviews, and CI remain intact.
     """
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
     if prs is None:
@@ -515,27 +519,18 @@ def process_stale_prs(
                 "age_seconds": age, "error": str(exc),
             })
             continue
-        if dry_run:
-            results.append({
-                "pr": pr_number,
-                "status": "would-expire",
-                "age_seconds": age,
-                "issue": linked_issue,
-                "baseline": baseline,
-            })
-            continue
-
-        try:
-            marker = record_stale_expiration(pr_number, linked_issue or 0, age, baseline)
-            results.append({
-                "pr": pr_number,
-                "status": "expired",
-                "age_seconds": age,
-                "issue": linked_issue,
-                "marker": marker,
-            })
-        except Exception as exc:
-            results.append({"pr": pr_number, "status": "error", "error": str(exc)})
+        # Do not automatically throw away useful code because a review, CI,
+        # provider, or merge repair took longer than the adaptive threshold.
+        # The scheduler already sees this open PR for normal recovery actions.
+        # Explicit evidence-based supersession is a separate operation.
+        results.append({
+            "pr": pr_number,
+            "status": "stale-preserved",
+            "age_seconds": age,
+            "issue": linked_issue,
+            "baseline": baseline,
+            "dry_run": dry_run,
+        })
 
     return results
 
