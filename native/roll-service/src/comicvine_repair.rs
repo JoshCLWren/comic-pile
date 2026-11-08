@@ -887,6 +887,50 @@ mod tests {
     }
 
     #[test]
+    fn cached_has_credits_detects_seven_creators_from_issue_24() {
+        // Regression test for #4819/#24: verify that cached_has_credits correctly
+        // identifies issues with multiple creators, which is used by
+        // needs_provider_fetch() and process() for the 7-day recheck window.
+        let metadata_with_seven = json!({
+            "creator_credits": [
+                {"id": 1, "name": "Creator One", "role": "writer"},
+                {"id": 2, "name": "Creator Two", "role": "penciler"},
+                {"id": 3, "name": "Creator Three", "role": "inker"},
+                {"id": 4, "name": "Creator Four", "role": "colorist"},
+                {"id": 5, "name": "Creator Five", "role": "letterer"},
+                {"id": 6, "name": "Creator Six", "role": "cover"},
+                {"id": 7, "name": "Creator Seven", "role": "editor"}
+            ],
+            "raw_provider_payload": {
+                "person_credits": [
+                    {"id": 1, "name": "Creator One", "role": "writer"},
+                    {"id": 2, "name": "Creator Two", "role": "penciler"},
+                    {"id": 3, "name": "Creator Three", "role": "inker"},
+                    {"id": 4, "name": "Creator Four", "role": "colorist"},
+                    {"id": 5, "name": "Creator Five", "role": "letterer"},
+                    {"id": 6, "name": "Creator Six", "role": "cover"},
+                    {"id": 7, "name": "Creator Seven", "role": "editor"}
+                ]
+            }
+        });
+        assert!(cached_has_credits(&metadata_with_seven));
+
+        // Empty credits should return false.
+        let empty_metadata = json!({
+            "creator_credits": [],
+            "raw_provider_payload": {"person_credits": []}
+        });
+        assert!(!cached_has_credits(&empty_metadata));
+
+        // One creator should return true.
+        let one_creator = json!({
+            "creator_credits": [{"id": 1, "name": "One", "role": "writer"}],
+            "raw_provider_payload": {"person_credits": []}
+        });
+        assert!(cached_has_credits(&one_creator));
+    }
+
+    #[test]
     fn timeout_is_distinct_from_provider_unavailable() {
         assert_eq!(
             failure_transition(&ProviderFailure::Timeout, 1),
