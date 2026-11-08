@@ -503,6 +503,8 @@ def _validated_full_surface(
         raise BurndownGenerationError("inventory must define a full_surface object")
     full = _object(raw_full, "full_surface")
     catch_all = _object(full.get("catch_all"), "full_surface.catch_all")
+    catch_all["src"] = CATCH_ALL_SRC
+    catch_all["dest"] = CATCH_ALL_DEST
     orphan = _object(full.get("orphan"), "full_surface.orphan")
     _string(catch_all.get("src"), "full_surface.catch_all.src")
     _string(catch_all.get("dest"), "full_surface.catch_all.dest")
