@@ -21,6 +21,26 @@ use crate::AppState;
 const ALGORITHM: Algorithm = Algorithm::HS256;
 const MAX_USERNAME_FAILURES: i64 = 5;
 const MAX_IP_FAILURES: i64 = 10;
+/// Advisory-lock domain for per-username login lockout serialization (#4746).
+///
+/// Lock domains keep per-username and per-IP advisory locks in disjoint
+/// namespaces, so a lock in one dimension can never alias the other. Fixed
+/// username-then-IP acquisition is then deadlock-free: an attempt waiting on
+/// a username lock holds nothing yet, and an attempt waiting on an IP lock
+/// holds only its username lock.
+const LOCK_DOMAIN_USERNAME: i32 = 4_746_001;
+/// Advisory-lock domain for per-client-IP login lockout serialization (#4746).
+const LOCK_DOMAIN_IP: i32 = 4_746_002;
+
+/// Failure counts for one login attempt: recent failures for the account and
+/// for the client address. Shared by the optimistic gate and the serialized
+/// recount so both phases decide on identical SQL. Bind only the username and
+/// client address; the plaintext password never reaches PostgreSQL.
+const FAILURE_COUNTS_SQL: &str = "SELECT \
+    (SELECT count(*) FROM failed_login_attempts \
+     WHERE username = $1 AND attempted_at >= NOW() - INTERVAL '15 minutes'), \
+    (SELECT count(*) FROM failed_login_attempts \
+     WHERE ip_address = $2 AND attempted_at >= NOW() - INTERVAL '30 minutes')";
 
 /// Static synthetic bcrypt cost-12 hash for unknown accounts. There is no
 /// account using this digest. Avoid lazy generation, which would make the
@@ -88,6 +108,38 @@ impl AuthService {
     }
 
     /// Authenticate a username/password pair.
+    ///
+    /// # Lockout linearization (#4746)
+    ///
+    /// Login runs in two short database phases separated by lock-free bcrypt
+    /// verification on tokio's blocking pool. Phase 1 is an optimistic gate
+    /// (failure counts, then the user row) that runs without a transaction
+    /// and skips bcrypt when the account is already locked. Phase 2 is the
+    /// authoritative decision: one transaction takes per-username and per-IP
+    /// transaction advisory locks, recounts under the locks, and then either
+    /// conditionally records the failure or clears the account's failures
+    /// before committing. A login that is locked when Phase 2 recounts —
+    /// including one whose correct password raced the lock — is rejected with
+    /// the same non-enumerating 401 and records nothing, exactly like a login
+    /// that was already locked in Phase 1. Concurrent attempts therefore
+    /// linearize to a sequential interleaving instead of racing the count.
+    ///
+    /// Neither phase holds a pooled connection across the ~100 ms of bcrypt
+    /// CPU. Unknown accounts and rows without a password hash still pay one
+    /// dummy verification, so known, unknown and locked responses stay
+    /// indistinguishable and locked logins never advance the audit count.
+    ///
+    /// # Statement budget
+    ///
+    /// Bounded and independent of attempt history: Phase 1 issues at most 2
+    /// application statements (combined counts, user fetch); Phase 2 issues
+    /// 4 application statements plus `BEGIN`/`COMMIT` transaction control
+    /// (two advisory locks, recount, one insert or delete); checkout liveness
+    /// probes are infrastructure and excluded here. Total 6 application + 2
+    /// transaction control = 8. Counts are indexed by
+    /// `ix_failed_login_username_time` / `ix_failed_login_ip_time`, so they
+    /// stay range scans as history grows. Only the username and client
+    /// address are bound; the plaintext password never reaches PostgreSQL.
     pub async fn login(
         &self,
         request: &LoginRequest,
@@ -97,60 +149,111 @@ impl AuthService {
             return Err(AuthError::EmailLogin);
         }
 
-        let connection = checkout(&self.state).await?;
-        let username_failures: i64 = connection
-            .query_one(
-                "SELECT count(*) FROM failed_login_attempts \
-                 WHERE username = $1 AND attempted_at >= NOW() - INTERVAL '15 minutes'",
-                &[&request.username],
-            )
-            .await
-            .map_err(query_error)?
-            .get(0);
-        let ip_failures: i64 = connection
-            .query_one(
-                "SELECT count(*) FROM failed_login_attempts \
-                 WHERE ip_address = $1 AND attempted_at >= NOW() - INTERVAL '30 minutes'",
-                &[&client_ip],
-            )
-            .await
-            .map_err(query_error)?
-            .get(0);
-        if username_failures >= MAX_USERNAME_FAILURES || ip_failures >= MAX_IP_FAILURES {
-            return Err(AuthError::InvalidCredentials);
-        }
-
-        let user = self
-            .user_by_username(&connection, &request.username)
-            .await?;
-        let Some(user) = user else {
-            verify_unknown_account_password(&request.password).await?;
-            self.record_failed_attempt(&connection, &request.username, client_ip)
-                .await?;
-            return Err(AuthError::InvalidCredentials);
+        // Phase 1 (optimistic gate): combined counts, then the user row, on
+        // one short checkout with no transaction. A concurrent login that
+        // inserts after these reads is still seen by the authoritative
+        // recount in Phase 2, so this snapshot is never trusted for the
+        // outcome.
+        let (password_hash, password_epoch) = {
+            let connection = checkout(&self.state).await?;
+            let counts = connection
+                .query_one(FAILURE_COUNTS_SQL, &[&request.username, &client_ip])
+                .await
+                .map_err(query_error)?;
+            if counts.get::<_, i64>(0) >= MAX_USERNAME_FAILURES
+                || counts.get::<_, i64>(1) >= MAX_IP_FAILURES
+            {
+                return Err(AuthError::InvalidCredentials);
+            }
+            match self
+                .user_by_username(&connection, &request.username)
+                .await?
+            {
+                Some(user) => (user.password_hash, user.password_epoch),
+                None => (None, 0),
+            }
         };
-        let Some(password_hash) = user.password_hash.as_deref() else {
-            verify_unknown_account_password(&request.password).await?;
-            self.record_failed_attempt(&connection, &request.username, client_ip)
-                .await?;
-            return Err(AuthError::InvalidCredentials);
-        };
-        if !verify_password_blocking(request.password.clone(), password_hash.to_string()).await? {
-            self.record_failed_attempt(&connection, &request.username, client_ip)
-                .await?;
-            return Err(AuthError::InvalidCredentials);
-        }
+        // The pool checkout ended with the block above. Bcrypt below runs
+        // with no connection held, so slow password verification cannot
+        // starve the bounded pool.
 
-        connection
+        let verified = match password_hash.as_deref() {
+            Some(password_hash) => {
+                verify_password_blocking(request.password.clone(), password_hash.to_string())
+                    .await?
+            }
+            None => {
+                verify_unknown_account_password(&request.password).await?;
+                false
+            }
+        };
+
+        // Phase 2 (serialized decision): advisory locks first so the recount
+        // observes every committed failure for this account and address,
+        // then a single conditional write in the same transaction.
+        let mut connection = checkout(&self.state).await?;
+        let transaction = connection.transaction().await.map_err(query_error)?;
+        transaction
             .execute(
-                "DELETE FROM failed_login_attempts WHERE username = $1",
-                &[&request.username],
+                "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+                &[&LOCK_DOMAIN_USERNAME, &request.username],
             )
             .await
             .map_err(query_error)?;
-        drop(connection);
-
-        self.issue_tokens(&user.username, user.password_epoch).await
+        transaction
+            .execute(
+                "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+                &[&LOCK_DOMAIN_IP, &client_ip],
+            )
+            .await
+            .map_err(query_error)?;
+        let counts = transaction
+            .query_one(FAILURE_COUNTS_SQL, &[&request.username, &client_ip])
+            .await
+            .map_err(query_error)?;
+        if counts.get::<_, i64>(0) >= MAX_USERNAME_FAILURES
+            || counts.get::<_, i64>(1) >= MAX_IP_FAILURES
+        {
+            // Returning drops the transaction uncommitted: a locked login
+            // records nothing, preserving the sequential lockout contract.
+            return Err(AuthError::InvalidCredentials);
+        }
+        if verified {
+            transaction
+                .execute(
+                    "DELETE FROM failed_login_attempts WHERE username = $1",
+                    &[&request.username],
+                )
+                .await
+                .map_err(query_error)?;
+            transaction.commit().await.map_err(query_error)?;
+            return self.issue_tokens(&request.username, password_epoch).await;
+        }
+        transaction
+            .execute(
+                "INSERT INTO failed_login_attempts (username, ip_address, attempted_at) VALUES ($1, $2, NOW())",
+                &[&request.username, &client_ip],
+            )
+            .await
+            .map_err(|error| {
+                // Operational evidence for SQLSTATE without ever logging inputs,
+                // the attempted username, client IP, password or database URL.
+                if let Some(db_error) = error.as_db_error() {
+                    tracing::error!(
+                        sqlstate = db_error.code().code(),
+                        operation = "auth_failed_attempt_insert",
+                        "native authentication write failed"
+                    );
+                } else {
+                    tracing::error!(
+                        operation = "auth_failed_attempt_insert",
+                        "native authentication write failed (driver/transport)"
+                    );
+                }
+                AuthError::from(query_error(error))
+            })?;
+        transaction.commit().await.map_err(query_error)?;
+        Err(AuthError::InvalidCredentials)
     }
 
     /// Rotate a refresh token, revoking its predecessor to detect replay.
@@ -254,38 +357,6 @@ impl AuthService {
             is_admin: row.get(4),
             password_epoch: row.get(5),
         }))
-    }
-
-    async fn record_failed_attempt(
-        &self,
-        connection: &deadpool_postgres::Object,
-        username: &str,
-        client_ip: &str,
-    ) -> AuthResult<()> {
-        connection
-            .execute(
-                "INSERT INTO failed_login_attempts (username, ip_address, attempted_at) VALUES ($1, $2, NOW())",
-                &[&username, &client_ip],
-            )
-            .await
-            .map_err(|error| {
-                // Operational evidence for SQLSTATE without ever logging inputs,
-                // the attempted username, client IP, password or database URL.
-                if let Some(db_error) = error.as_db_error() {
-                    tracing::error!(
-                        sqlstate = db_error.code().code(),
-                        operation = "auth_failed_attempt_insert",
-                        "native authentication write failed"
-                    );
-                } else {
-                    tracing::error!(
-                        operation = "auth_failed_attempt_insert",
-                        "native authentication write failed (driver/transport)"
-                    );
-                }
-                AuthError::from(query_error(error))
-            })?;
-        Ok(())
     }
 
     async fn revoke_jti(&self, user_id: i32, jti: &str, expires_at: i64) -> AuthResult<bool> {
