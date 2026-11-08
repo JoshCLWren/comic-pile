@@ -153,8 +153,6 @@ export default function RollPage() {
   }, [showToast, retrySnoozeRefresh])
 
   useRollBootstrapSync({
-    state,
-    bootstrap,
     isBootstrapError,
     bootstrapError,
     navigate,
@@ -350,6 +348,10 @@ export default function RollPage() {
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(effectiveDie) ? effectiveDie : 6
   const hasRollableContent = pool.length > 0 || snoozedThreads.length > 0
+  // Rolled state is derived from the pending roll itself, not tracked
+  // separately. Clearing the pending roll (rate/snooze/cancel/reset-dice)
+  // nulls `rolledResult`, so the die and CTA fall back to idle/"Begin".
+  const hasRolled = state.rolledResult != null
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
@@ -458,7 +460,7 @@ export default function RollPage() {
                   role="button"
                   tabIndex={0}
                   aria-label={displayDie === 2 ? "Flip the coin" : "Roll the dice"}
-                  className={`dice-state-${state.diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
+                  className={`${hasRolled ? 'dice-state-rolled' : 'dice-state-idle'} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
                   style={{ width: '200px', height: '200px' }}
                   data-testid="main-die-3d"
                 >
@@ -469,13 +471,12 @@ export default function RollPage() {
                       isRolling={state.isRolling}
                       showValue={false}
                       color={0xffffff}
-                      onRollComplete={() => state.setDiceState('rolled')}
                     />
                   </div>
                 </div>
                 <RollCta
                   isRolling={state.isRolling}
-                  hasRolled={state.diceState !== 'idle'}
+                  hasRolled={hasRolled}
                   onRoll={actions.handleRoll}
                 />
               </>

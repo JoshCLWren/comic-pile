@@ -96,7 +96,6 @@ export function useRollActions({
     setThreadToMigrate,
     setShowMigrationDialog,
     setIsRolling,
-    setDiceState,
   } = state
   const {
     setDieMutation,
@@ -305,7 +304,6 @@ export function useRollActions({
     if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current)
 
     setIsRolling(true)
-    setDiceState('idle')
 
     let currentRollCount = 0
     rollIntervalRef.current = setInterval(() => {
