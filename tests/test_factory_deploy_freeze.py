@@ -571,7 +571,7 @@ def test_live_same_sha_never_clears_migration_or_smoke_failures() -> None:
     for failed_step in (
         "Migrate production database before deploy",
         "Verify production schema at application head",
-        "Smoke production health",
+        "Smoke production Rust health",
         "Smoke production rejected login on the Rust runtime",
     ):
         payload = {"workflow_runs": [
