@@ -119,8 +119,8 @@ record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
   if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
-  elif [[ "$SOURCE" == z-ai && -f "$log_file" ]] && grep -Eqi '(^|[^0-9.])429([^0-9]|$)|too many requests' "$log_file"; then
-    record_terminal_outcome provider_quota "Z.AI free account rate limit requires quota backoff (agent exit ${status})"
+  elif [[ ( "$SOURCE" == z-ai || "$SOURCE" == kilo-auto ) && -f "$log_file" ]] && grep -Eqi '(^|[^0-9.])429([^0-9]|$)|too many requests' "$log_file"; then
+    record_terminal_outcome provider_quota "Free provider account rate limit requires quota backoff (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
@@ -219,7 +219,7 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
-  prompt="You are external-model Factory ${WORKER} for JoshCLWren/comic-pile. Durable worker ID: ${WORKER_ID}. Source: ${SOURCE}. Requested model or route: ${MODEL}. Runtime selector: ${RUNTIME_MODEL}. Assigned target: ${target}. Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy. ${mission} Work only on the assigned target during this agent invocation. Edit the checked-out branch, run focused validation, and use gh/GitHub when needed for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules."
+  prompt="Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy.  Edit only the assigned target, run focused validation, and use GitHub for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules. Run context: Worker: ${WORKER_ID}; source: ${SOURCE}; model: ${MODEL}; runtime: ${RUNTIME_MODEL}; target: ${target}. ${mission}"
 
   bash "$TRUSTED_KILO_HELPER" \
     "$timeout_seconds" \

@@ -142,7 +142,8 @@ def main() -> None:
     )
 
     kilo = [row for row in rows if row['source'] == 'kilo-auto']
-    assert len(kilo) == 1 and kilo[0]['worker'] == '46'
+    assert {row['worker'] for row in kilo} == {'46', '98'}
+    assert all(row['model'] == 'kilo-auto/free' for row in kilo)
     assert kilo[0]['model'] == 'kilo-auto/free'
     assert kilo[0]['display_name'] == 'Kilo Auto Free · Forge'
 

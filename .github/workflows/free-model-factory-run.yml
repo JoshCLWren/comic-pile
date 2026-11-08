@@ -1072,6 +1072,15 @@ jobs:
               "$RUNNER_TEMP/kilo-auto-smoke.log"
             status=$?
             set -e
+            python3 .github/scripts/factory_live_opencode.py \
+              --smoke-log "$RUNNER_TEMP/kilo-auto-smoke.log" \
+              --runtime-model "$FACTORY_RUNTIME_MODEL" \
+              --outcome-file "$RUNNER_TEMP/factory-discovery-outcome"
+            if [[ -f "$RUNNER_TEMP/factory-discovery-outcome" ]] && \
+              grep -q '^provider_quota' "$RUNNER_TEMP/factory-discovery-outcome"; then
+              echo 'Kilo quota exhausted; ending before session and pausing the shared free account' >&2
+              exit 1
+            fi
             if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
               break
             fi

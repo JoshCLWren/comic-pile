@@ -449,8 +449,8 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "/(?:openapi\\.json|docs|redoc|health)",
-      "dest": "/api/index.py"
+      "src": "^/(?:openapi\\.json|docs|redoc|health)$",
+      "status": 404
     },
     {
       "src": "/",

@@ -72,6 +72,7 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     monkeypatch.setenv("FACTORY_ATTEMPT_HISTORY_CACHE", str(tmp_path / "pass.json"))
     monkeypatch.setattr(CONTROLLER, "gh_json", github)
     monkeypatch.setattr(CONTROLLER, "quota_pause_for", lambda worker: None)
+    monkeypatch.setattr(CONTROLLER, "runtime_quota_block_reason", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "worker_has_active_lease", lambda worker: False)
     monkeypatch.setattr(CONTROLLER, "budget_block_reason", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "omniroute_free_entry_capacity", lambda: {"remaining": 3})

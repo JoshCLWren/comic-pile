@@ -22,7 +22,7 @@ mkdir -p "$HOME"
 export SOURCE=kilo-auto WORKER="$FACTORY_WORKER" DISPLAY="Anonymous fork repair"
 export MODEL=kilo-auto/free RUNTIME_MODEL=kilo/kilo-auto/free
 export FACTORY_RUNTIME_MODEL="$RUNTIME_MODEL" OPENCODE_MODEL="$RUNTIME_MODEL"
-prompt="Repair PR #${REQUESTED_PR} at exact head ${EXPECTED_HEAD}. Read ${RUNNER_TEMP}/fork-context.txt for trusted policy, issue scope, source snapshot, and review findings. Follow the normal factory requirements and fix every actionable finding with regressions. This is an isolated read-only GitHub job: do not post comments, commit, push, merge, or alter Actions state. Edit the worktree and run tests; trusted code outside this invocation will persist changes. No repository/provider secrets are available. Use only the pinned anonymous Kilo route. End with FACTORY_GATE_NOT_READY if required work remains."
+prompt="Follow factory policy; fix actionable findings with regressions. This is an isolated read-only GitHub job: do not post comments, commit, push, merge, or alter Actions state. Edit the worktree and run tests; the trusted wrapper persists changes. No repository/provider secrets are available. Use only the pinned anonymous Kilo route. End with FACTORY_GATE_NOT_READY if required work remains. Run context: Repair PR #${REQUESTED_PR} at exact head ${EXPECTED_HEAD}; context: ${RUNNER_TEMP}/fork-context.txt (trusted policy and untrusted scope, source and findings)."
 bash "$TRUSTED_FORK_DIRECTORY/kilo-auto-factory-run.sh" \
   900 "Contributor PR #${REQUESTED_PR}" "$prompt" "$RUNNER_TEMP/fork-agent.log"
 

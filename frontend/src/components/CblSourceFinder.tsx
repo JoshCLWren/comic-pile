@@ -2,6 +2,8 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import Modal from './Modal'
 import CblComparisonList from './CblComparisonList'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards } from '../hooks/useIssueCards'
 import {
   useCblComicvineIssueOccurrences,
   useCblIssueIdentity,
@@ -129,6 +131,10 @@ export function CblComicFinder({
 }: CblComicFinderProps) {
   const [open, setOpen] = useState(false)
   const identityQuery = useCblIssueIdentity(issueId, open)
+  // The finder already owns one canonical issue ID. Fetch its card only once
+  // the modal opens, never during a collapsed list or provider-only search.
+  const ownedCards = useIssueCards([issueId], { enabled: open })
+  const ownedCard = ownedCards.data?.find((item) => item.issue_id === issueId) ?? null
   const confirmedIds = (identityQuery.data?.confirmed_mappings ?? []).map(
     (mapping) => mapping.comicvine_id,
   )
@@ -246,7 +252,28 @@ export function CblComicFinder({
         onClose={() => setOpen(false)}
         size="large"
       >
-        <div className="space-y-3">{renderResults()}</div>
+        <div className="space-y-3">
+          {ownedCard && (
+            <div data-testid={`${testIdPrefix}-owned-issue-actions`}>
+              <CompactIssueCardTrigger
+                issueId={issueId}
+                card={ownedCard}
+                threadTitle={ownedCard.thread_title}
+                issueNumber={ownedCard.issue_number}
+                status={ownedCard.status === 'read' ? 'read' : 'unread'}
+                rating={ownedCard.rating}
+              />
+            </div>
+          )}
+          {ownedCards.isError && (
+            <LookupError
+              error={ownedCards.error}
+              retry={() => void ownedCards.refetch()}
+              message="Could not load this issue's cover and reading actions."
+            />
+          )}
+          {renderResults()}
+        </div>
       </Modal>
     </>
   )

@@ -637,12 +637,8 @@ A start update records current UTC and `Outcome: running`. A completion update p
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
-Delivery funnel reports use separate opened/merged/unmerged-close event windows
-of 14 and 30 days. Starter PR outcomes and advance-commit contribution shares
-are distinct. Each merged PR contributes one credit unit divided among its
-advance commits, including squash-body subjects without duplicate credit.
-Retired and unattributed history remain visible. Immutable merged attribution
-is cached on the existing status branch; unavailable history is not reported as zero.
+Worker prompts put stable policy before run identity, targets and findings.
+Trim duplicated instructions; preserve source/issue security and exact-head review context.
 
 ### Kilo served-model attribution
 
@@ -652,3 +648,29 @@ subject. The trusted wrapper aggregates distinct model IDs across invocations,
 keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
 from served-model evidence. Missing metadata is explicitly unreported; assistant
 and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+
+### Second Kilo free lane
+
+Worker 98 runs `kilo-auto/free` at :10, thirty minutes from worker 46 at :40.
+It uses the same anonymous Kilo CLI free route and existing `PR_REBASE_TOKEN`;
+there is no second account or credential. A smoke or session HTTP 429 records
+`provider_quota` and pauses assignment for both Kilo workers for thirty minutes,
+then automatically permits a new probe. A quota-limited smoke ends immediately
+instead of continuing into an expensive coding session. Worker 46's historical
+static-pause protection does not exempt it from this shared runtime quota backoff.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+Delivery funnel reports use separate opened/merged/unmerged-close event windows
+of 14 and 30 days. Starter PR outcomes and advance-commit contribution shares
+are distinct. Each merged PR contributes one credit unit divided among its
+advance commits, including squash-body subjects without duplicate credit.
+Retired and unattributed history remain visible. Immutable merged attribution
+is cached on the existing status branch; unavailable history is not reported as zero.
+
