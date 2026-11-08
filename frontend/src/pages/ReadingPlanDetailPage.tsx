@@ -290,6 +290,7 @@ export default function ReadingPlanDetailPage() {
               status={continueIssue.availability === 'read' ? 'read' : 'unread'}
               card={cardsByIssue.get(continueIssue.issue_id)}
               actionLabel="Read next issue"
+              expandedVariant="featured"
             />
           )
           {editableListId != null ? (
