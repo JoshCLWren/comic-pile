@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
@@ -35,8 +36,24 @@ def timestamp(value: object) -> datetime | None:
 def commit_credit(
     messages: Sequence[str], pins: Sequence[Mapping[str, str]],
 ) -> Counter[tuple[str, str]]:
-    """Count advance lines, including nested squash subjects and served-model suffixes."""
-    aliases = {row['display_name']: (row['worker'], row['model']) for row in pins}
+    """Count advance lines, including nested squash subjects and served-model suffixes.
+
+    Display names shared by several workers are ambiguous for worker credit:
+    they map to ``unattributed`` while retaining the single agreed model, or
+    the display name itself when colliding rows disagree on the model.
+    """
+    workers_by_name: dict[str, set[str]] = {}
+    models_by_name: dict[str, set[str]] = {}
+    for row in pins:
+        name = row['display_name']
+        workers_by_name.setdefault(name, set()).add(row['worker'])
+        models_by_name.setdefault(name, set()).add(row['model'])
+    aliases: dict[str, tuple[str, str]] = {}
+    for name, workers in workers_by_name.items():
+        worker = next(iter(workers)) if len(workers) == 1 else 'unattributed'
+        models = models_by_name[name]
+        model = next(iter(models)) if len(models) == 1 else name
+        aliases[name] = (worker, model)
     counts: Counter[tuple[str, str]] = Counter()
     for message in messages:
         for match in ADVANCE.finditer(message):
@@ -156,11 +173,21 @@ def collect_delivery_funnel(
                           for key, value in counts.items()]
         retained[sha] = cache[sha]
         credits = records(cache[sha])
-        total = sum(float(str(row['count'])) for row in credits)
-        if total <= 0:
-            continue
-        for credit in credits:
-            share = float(str(credit['count'])) / total
+        parsed_counts: list[float] = []
+        for row in credits:
+            raw_count = row.get('count')
+            try:
+                count = float(str(raw_count))
+            except (TypeError, ValueError):
+                raise ValueError('invalid funnel cache count') from None
+            if not math.isfinite(count) or count <= 0:
+                raise ValueError('invalid funnel cache count')
+            parsed_counts.append(count)
+        total = sum(parsed_counts)
+        if total <= 0 or not math.isfinite(total):
+            raise ValueError('invalid funnel cache count')
+        for credit, count in zip(credits, parsed_counts, strict=True):
+            share = count / total
             for days in (14, 30):
                 if merged >= now - timedelta(days=days):
                     add('worker', str(credit['worker']), days, 'commit_share', share)

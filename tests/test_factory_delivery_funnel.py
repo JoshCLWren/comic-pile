@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -95,3 +96,54 @@ def test_invalid_api_history_is_not_a_zero_success_sample() -> None:
     """A malformed response fails closed for the dashboard's unavailable state."""
     with pytest.raises(ValueError, match='invalid funnel'):
         funnel.records({'message': 'API unavailable'})
+
+
+def test_ambiguous_display_name_credits_unattributed_but_keeps_proven_model() -> None:
+    """A display name shared by two workers cannot steal another worker's credit."""
+    pins = [
+        {'worker': '54', 'model': 'glm-4.5-flash', 'display_name': 'Shared Name'},
+        {'worker': '55', 'model': 'glm-4.5-flash', 'display_name': 'Shared Name'},
+    ]
+    counts = funnel.commit_credit(['factory: advance #1 with Shared Name'], pins)
+    assert counts[('unattributed', 'glm-4.5-flash')] == 1
+    assert ('54', 'glm-4.5-flash') not in counts
+    assert ('55', 'glm-4.5-flash') not in counts
+
+
+def test_ambiguous_display_name_with_conflicting_models_falls_back_to_name() -> None:
+    """When colliding rows disagree on the model, attribution falls back to the label."""
+    pins = [
+        {'worker': '54', 'model': 'model-a', 'display_name': 'Shared Name'},
+        {'worker': '55', 'model': 'model-b', 'display_name': 'Shared Name'},
+    ]
+    counts = funnel.commit_credit(['factory: advance #1 with Shared Name'], pins)
+    assert counts[('unattributed', 'Shared Name')] == 1
+
+
+@pytest.mark.parametrize(
+    'count',
+    [0, -1, float('nan'), float('inf'), float('-inf'), 'oops', None],
+)
+def test_invalid_cached_count_is_not_a_zero_success_sample(
+    tmp_path: Path, count: object,
+) -> None:
+    """Non-finite or non-positive cached counts fail closed for the dashboard."""
+    prs = [
+        {'number': 1, 'head': {'ref': 'factory/54-7-z-ai'}, 'labels': [],
+         'body': 'Model: glm-4.5-flash', 'created_at': '2026-11-06T00:00:00Z',
+         'updated_at': '2026-11-06T00:00:00Z', 'merged_at': '2026-11-06T00:00:00Z',
+         'closed_at': '2026-11-06T00:00:00Z', 'merge_commit_sha': SHA},
+    ]
+
+    def fetch(endpoint: str) -> object:
+        if endpoint.startswith('pulls?'):
+            return prs
+        raise AssertionError(endpoint)
+
+    cache = tmp_path / 'cache.json'
+    cache.write_text(json.dumps({
+        'version': 1,
+        'merges': {SHA: [{'worker': '54', 'model': 'glm-4.5-flash', 'count': count}]},
+    }))
+    with pytest.raises(ValueError, match='invalid funnel cache count'):
+        funnel.collect_delivery_funnel(fetch, PINS, now=NOW, cache_path=cache)
