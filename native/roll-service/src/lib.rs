@@ -211,6 +211,21 @@ async fn bound_request(
     response
 }
 
+/// Replace Rust's default panic hook in production with a payload-free signal.
+///
+/// `catch_unwind` invokes the hook *before* returning an error. Without this,
+/// a handler panic can return sanitized JSON yet still leak its message, source
+/// location, or user content through Vercel's stderr logs. This is process-wide
+/// by design and is installed once at the native Rust executable entrypoints.
+pub fn install_sanitized_panic_hook() {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        std::panic::set_hook(Box::new(|_| {
+            eprintln!("native Rust panic: payload and location redacted");
+        }));
+    });
+}
+
 /// Map a handler panic to the standard 500 JSON body without leaking details.
 ///
 /// The panic payload and location are deliberately never logged: payloads can
@@ -518,6 +533,35 @@ mod tests {
         assert_eq!(
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Not Found"}"#
+        );
+    }
+
+    #[test]
+    fn panic_hook_child_never_logs_sensitive_payload() {
+        if std::env::var_os("COMICPILE_PANIC_HOOK_CHILD").is_none() {
+            return;
+        }
+        install_sanitized_panic_hook();
+        panic!("secret-canary-panic-message");
+    }
+
+    #[test]
+    fn panic_hook_redacts_payload_in_real_subprocess() {
+        // Never replace the hook of this shared test process: the child is
+        // isolated so parallel Rust tests retain their normal failure output.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "tests::panic_hook_child_never_logs_sensitive_payload", "--nocapture"])
+            .env("COMICPILE_PANIC_HOOK_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "child must panic and fail");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stderr.contains("native Rust panic: payload and location redacted"));
+        assert!(
+            !stderr.contains("secret-canary-panic-message")
+                && !stdout.contains("secret-canary-panic-message"),
+            "panic payload must not escape to stdout/stderr"
         );
     }
 
