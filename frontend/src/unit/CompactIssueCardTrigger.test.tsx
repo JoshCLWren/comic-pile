@@ -33,6 +33,18 @@ beforeEach(() => {
 })
 
 describe('compact shared issue entry across dense lists', () => {
+  it('keeps a Reading Plan header label while opening the same exact issue card', async () => {
+    setup(<CompactIssueCardTrigger
+      issueId={37} card={card} threadTitle="Hellboy" issueNumber="9"
+      actionLabel="Read next issue"
+    />)
+    const next = screen.getByRole('button', { name: 'Read next issue: Hellboy #9' })
+    expect(next).toHaveTextContent('Read next issue')
+    await userEvent.click(next)
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue Hellboy #9')
+    expect(fetchCards).not.toHaveBeenCalled()
+  })
+
   it('uses the owning list batch, renders exact cover, and opens the shared card without a second request', async () => {
     setup(<CompactIssueCardTrigger
       issueId={37} card={card} threadTitle="stale title" issueNumber="1" status="unread"
