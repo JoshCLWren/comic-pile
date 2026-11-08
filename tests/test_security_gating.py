@@ -1,4 +1,10 @@
-"""Tests for security gating of internal endpoints."""
+"""Tests for security gating of internal endpoints.
+
+Admin/debug HTTP handlers were pruned (#4861), so the gating covered here is
+the retained eager health/ping/metrics exposure plus the guarantee that the
+pruned admin/debug paths answer 404 regardless of the internal-ops/debug
+flags. Health/ping/metrics are intentionally unaffected and stay asserted.
+"""
 
 import logging
 import os
@@ -24,18 +30,24 @@ def test_get_client_ip_truncates_to_the_persisted_column_bound() -> None:
 @pytest.mark.parametrize(
     "endpoint",
     [
-        "/api/tasks/",
-        "/api/tasks/ready",
-        "/api/tasks/metrics",
         "/api/admin/export/csv/",
+        "/api/v1/admin/export/csv/",
         "/api/admin/export/json/",
+        "/api/v1/admin/export/json/",
         "/api/admin/export/summary/",
+        "/api/v1/admin/export/summary/",
+        "/api/debug/log",
+        "/api/v1/debug/log",
     ],
 )
-async def test_internal_routes_return_404_when_disabled(client: AsyncClient, endpoint: str) -> None:
-    """Internal routes return 404 when ENABLE_INTERNAL_OPS_ROUTES is false (default)."""
+async def test_pruned_routes_return_404_regardless_of_gate(
+    client: AsyncClient, endpoint: str
+) -> None:
+    """Pruned admin/debug routes return 404 even when internal ops are enabled."""
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
-    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
+    original_debug = os.getenv("ENABLE_DEBUG_ROUTES")
+    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
+    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
 
     try:
         response = await client.get(endpoint)
@@ -45,43 +57,49 @@ async def test_internal_routes_return_404_when_disabled(client: AsyncClient, end
             os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
         else:
             os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = original_value
+        if original_debug is None:
+            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
+        else:
+            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
 
 
 @pytest.mark.asyncio
-async def test_admin_routes_accessible_when_enabled(
-    sample_data: dict,
-    async_db: AsyncSession,
-) -> None:
-    """Admin routes work when ENABLE_INTERNAL_OPS_ROUTES is true."""
-    _ = sample_data
-    from app.database import get_db
-    from httpx import ASGITransport, AsyncClient
+async def test_internal_routes_return_404_when_disabled(client: AsyncClient) -> None:
+    """The pruned routes stay 404 with the legacy gate disabled, like before."""
+    original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
+    os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
 
+    try:
+        response = await client.get("/api/admin/export/csv/")
+        assert response.status_code == 404
+    finally:
+        if original_value is None:
+            os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
+        else:
+            os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = original_value
+
+
+@pytest.mark.asyncio
+async def test_pruned_admin_routes_stay_404_when_enabled(
+    client: AsyncClient,
+) -> None:
+    """Enabling internal ops no longer revives the deleted admin handlers (#4861)."""
     original_value = os.getenv("ENABLE_INTERNAL_OPS_ROUTES")
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "true"
 
-    from app.main import app
-
-    app.dependency_overrides[get_db] = await _create_async_db_override(async_db)
-    transport = ASGITransport(app=app)
     try:
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/api/admin/export/csv/")
-            assert response.status_code == 200, (
-                f"Unexpected status code: {response.status_code}"
-            )
-
-            response = await ac.get("/api/admin/export/json/")
-            assert response.status_code == 200, (
-                f"Unexpected status code: {response.status_code}"
-            )
-
-            response = await ac.get("/api/admin/export/summary/")
-            assert response.status_code == 200, (
-                f"Unexpected status code: {response.status_code}"
+        for endpoint in (
+            "/api/admin/export/csv/",
+            "/api/admin/export/json/",
+            "/api/admin/export/summary/",
+            "/api/admin/import/csv/",
+            "/api/admin/delete-test-data/",
+        ):
+            response = await client.get(endpoint)
+            assert response.status_code == 404, (
+                f"{endpoint} must stay pruned even with internal ops enabled"
             )
     finally:
-        app.dependency_overrides.clear()
         if original_value is None:
             os.environ.pop("ENABLE_INTERNAL_OPS_ROUTES", None)
         else:
@@ -90,15 +108,15 @@ async def test_admin_routes_accessible_when_enabled(
 
 @pytest.mark.asyncio
 async def test_production_mode_blocks_internal_routes(client: AsyncClient) -> None:
-    """Production mode (default) blocks all internal routes."""
+    """Production mode keeps pruned admin/debug routes at 404."""
     os.environ["ENABLE_DEBUG_ROUTES"] = "false"
     os.environ["ENABLE_INTERNAL_OPS_ROUTES"] = "false"
 
     try:
-        response = await client.get("/api/tasks/")
+        response = await client.get("/api/admin/export/csv/")
         assert response.status_code == 404
 
-        response = await client.get("/api/admin/export/csv/")
+        response = await client.post("/api/debug/log", json={})
         assert response.status_code == 404
     finally:
         os.environ.pop("ENABLE_DEBUG_ROUTES", None)
@@ -110,6 +128,16 @@ async def test_health_routes_always_accessible(client: AsyncClient) -> None:
     """Health routes are always accessible (not gated)."""
     response = await client.get("/health")
     assert response.status_code in (200, 503)
+
+
+@pytest.mark.asyncio
+async def test_ping_and_metrics_routes_always_accessible(client: AsyncClient) -> None:
+    """Eager ping/metrics routes are retained and always accessible (#4861)."""
+    ping = await client.get("/api/ping")
+    assert ping.status_code == 200
+
+    metrics = await client.get("/api/metrics")
+    assert metrics.status_code == 200
 
 
 @pytest.mark.asyncio
