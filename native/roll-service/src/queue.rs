@@ -915,14 +915,30 @@ mod tests {
     /// checkout fail deterministically instead of merely slowing down.
     async fn state_with_pool_size(pool_size: usize) -> Arc<AppState> {
         let url = test_database_url().await;
+        state_with_database_url(&url, pool_size, true).await
+    }
+
+    /// Build a test state from an explicit database URL and recovery mode.
+    ///
+    /// The transport-failure regression disables checkout recovery so the
+    /// armed proxy drop lands after checkout, on the handler's first
+    /// statement, which isolates the reposition retry from the checkout
+    /// probe retry (#4732).
+    async fn state_with_database_url(
+        url: &str,
+        pool_size: usize,
+        connection_recovery: bool,
+    ) -> Arc<AppState> {
         let config = Config::from_lookup(|name| match name {
-            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_DATABASE_URL" => Some(url.to_string()),
             "RUST_ROLL_JWT_SECRET" => Some("synthetic-queue-test".into()),
             "RUST_ROLL_POOL_SIZE" => Some(pool_size.to_string()),
             _ => None,
         })
         .expect("queue test config");
-        Arc::new(AppState::new(config).expect("queue test state"))
+        let mut state = AppState::new(config).expect("queue test state");
+        state.connection_recovery = connection_recovery;
+        Arc::new(state)
     }
 
     /// Reset the canonical Alembic schema shared by these tests.
@@ -2130,15 +2146,213 @@ mod tests {
         );
     }
 
+    /// Resolve the host:port the transport-failure proxy forwards to.
+    fn upstream_addr(real_url: &str) -> std::net::SocketAddr {
+        use std::net::ToSocketAddrs;
+        let authority = real_url
+            .split_once("://")
+            .map(|(_, rest)| rest)
+            .unwrap_or(real_url)
+            .split('/')
+            .next()
+            .unwrap_or_default();
+        let host_port = authority
+            .rsplit_once('@')
+            .map(|(_, host)| host)
+            .unwrap_or(authority);
+        let host_port = if host_port.contains(':') {
+            host_port.to_string()
+        } else {
+            format!("{host_port}:5432")
+        };
+        host_port
+            .to_socket_addrs()
+            .expect("resolve the test database address")
+            .next()
+            .expect("the test database address must resolve")
+    }
+
+    /// Rewrite only the host:port of a PostgreSQL URI to point at the proxy.
+    fn proxied_database_url(real_url: &str, proxy: std::net::SocketAddr) -> String {
+        let (scheme, rest) = real_url.split_once("://").expect("PostgreSQL URI");
+        let (authority, path) = match rest.split_once('/') {
+            Some((authority, path)) => (authority, format!("/{path}")),
+            None => (rest, String::new()),
+        };
+        let credentials = authority
+            .rsplit_once('@')
+            .map(|(credentials, _)| format!("{credentials}@"))
+            .unwrap_or_default();
+        format!("{scheme}://{credentials}{proxy}{path}")
+    }
+
+    /// A byte-transparent TCP proxy that can sever the next client statement.
+    ///
+    /// Startup, authentication and ordinary statements are forwarded untouched.
+    /// Once armed, the next client-to-server write is swallowed and both
+    /// sockets shut down, so the driver fails that statement in flight as a
+    /// transport error while the connection still looked healthy at checkout.
+    struct FaultProxy {
+        address: std::net::SocketAddr,
+        drops: Arc<std::sync::atomic::AtomicUsize>,
+        task: tokio::task::JoinHandle<()>,
+    }
+
+    impl FaultProxy {
+        async fn start(upstream: std::net::SocketAddr) -> Self {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind the transport-failure proxy");
+            let address = listener.local_addr().expect("proxy address");
+            let drops = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let counter = Arc::clone(&drops);
+            let task = tokio::spawn(async move {
+                loop {
+                    let Ok((client, _)) = listener.accept().await else {
+                        return;
+                    };
+                    let Ok(upstream_stream) = tokio::net::TcpStream::connect(upstream).await else {
+                        continue;
+                    };
+                    let counter = Arc::clone(&counter);
+                    tokio::spawn(forward_fault_proxy(client, upstream_stream, counter));
+                }
+            });
+            Self {
+                address,
+                drops,
+                task,
+            }
+        }
+
+        fn sever_next_statement(&self) {
+            self.drops.store(1, std::sync::atomic::Ordering::SeqCst);
+        }
+
+        fn drops_remaining(&self) -> usize {
+            self.drops.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        fn abort(&self) {
+            self.task.abort();
+        }
+    }
+
+    async fn forward_fault_proxy(
+        client: tokio::net::TcpStream,
+        upstream: tokio::net::TcpStream,
+        drops: Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let (mut client_read, mut client_write) = client.into_split();
+        let (mut upstream_read, mut upstream_write) = upstream.into_split();
+        let client_to_server = async {
+            let mut buffer = [0u8; 16 * 1024];
+            loop {
+                let read = match client_read.read(&mut buffer).await {
+                    Ok(0) | Err(_) => return,
+                    Ok(read) => read,
+                };
+                if drops.load(std::sync::atomic::Ordering::SeqCst) > 0 {
+                    drops.store(0, std::sync::atomic::Ordering::SeqCst);
+                    let _ = upstream_write.shutdown().await;
+                    return;
+                }
+                if upstream_write.write_all(&buffer[..read]).await.is_err() {
+                    return;
+                }
+            }
+        };
+        let server_to_client = async {
+            let mut buffer = [0u8; 16 * 1024];
+            while let Ok(read) = upstream_read.read(&mut buffer).await {
+                if read == 0 || client_write.write_all(&buffer[..read]).await.is_err() {
+                    return;
+                }
+            }
+        };
+        tokio::select! {
+            _ = client_to_server => {}
+            _ = server_to_client => {}
+        }
+    }
+
+    /// Frozen-connection regression for the reposition retry (#4535, #4578).
+    ///
+    /// `pg_terminate_backend` cannot prove the queue retry: it closes the
+    /// socket cleanly, the pool hands out a fresh connection before the
+    /// handler runs, and the retry arm never executes. The proxy instead
+    /// tears the socket down while the handler's first statement is in
+    /// flight, after checkout has already handed the connection to the
+    /// request — the state a platform freeze leaves behind.
+    ///
+    /// Checkout recovery is disabled on the proxied state so the drop lands
+    /// after checkout, on `BEGIN`, isolating the reposition retry from the
+    /// checkout probe retry (#4732), which `tests/pool_recovery.rs` covers
+    /// separately. Without the reposition retry this reposition returns its
+    /// 503 envelope; with it the move commits exactly once.
+    #[tokio::test]
+    async fn reposition_retries_when_the_first_handler_statement_fails_in_flight() {
+        let _guard = DB_LOCK.lock().await;
+        let state = state_with_pool_size(1).await;
+        reset(&state).await;
+        let user = AuthenticatedUser::for_test(7);
+        seed(&state, 7, &[(1, 1, false), (2, 2, false), (3, 3, false)]).await;
+
+        let real_url = test_database_url().await;
+        let proxy = FaultProxy::start(upstream_addr(&real_url)).await;
+        let proxied =
+            state_with_database_url(&proxied_database_url(&real_url, proxy.address), 1, false)
+                .await;
+
+        // Warm the single proxied pool slot so the next reposition is handed
+        // this exact, already-established connection.
+        let connection = db::checkout(&proxied).await.expect("warm connection");
+        connection
+            .query_one("SELECT 1", &[])
+            .await
+            .expect("warm query through the proxy");
+        drop(connection);
+
+        // Arm the drop: the next statement on the pooled connection dies in
+        // flight. The retry's fresh connection passes through untouched.
+        proxy.sever_next_statement();
+
+        let moved = update_queue_entry(
+            State(proxied.clone()),
+            user,
+            Path(1),
+            Json(QueueEntryPatch { position: 3 }),
+        )
+        .await
+        .expect("a reposition must retry once on a fresh connection")
+        .0;
+
+        assert_eq!(
+            proxy.drops_remaining(),
+            0,
+            "the proxy must have dropped the first handler statement in flight"
+        );
+        assert_eq!(moved.position, 3);
+        assert_eq!(positions(&state, 7).await, vec![(2, 1), (3, 2), (1, 3)]);
+        assert_eq!(
+            event_count(&state, "reorder").await,
+            1,
+            "the retried attempt records exactly one reorder event"
+        );
+
+        drop(proxied);
+        proxy.abort();
+    }
+
     /// Canonical-schema coverage for the reposition path (#4535).
     ///
-    /// The shared `queue_unit_test` fixture is hand-rolled, so it cannot catch a
-    /// production shape difference. The real `threads` row is NOT NULL across ten
-    /// columns and defaults the rest, `events` carries the owner-assignment
-    /// trigger, and `threads(id, next_unread_issue_id)` is a deferred foreign key
-    /// to `issues(thread_id, id)`. This fixture mirrors those constraints and
-    /// seeds a production-sized queue (330 entries, 247 blocked) so the move runs
-    /// against the shape production actually serves.
+    /// Every test in this module runs the canonical Alembic schema, so this
+    /// one adds scale rather than environment: a production-sized queue of
+    /// 330 entries with a 247-row blocked tail, the owner-assignment trigger,
+    /// and the deferred `threads.next_unread_issue_id` key all in play. It is
+    /// not a hand-written schema mirror — the DDL mirror was removed with the
+    /// Alembic migration (#4578) and the seed inserts through the real tables.
     #[tokio::test]
     async fn reposition_persists_against_the_production_schema_shape() {
         let _guard = DB_LOCK.lock().await;
