@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'native/roll-service/**'
+      - 'build.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'api/native_roll.rs'
@@ -22,6 +23,7 @@ on:
     branches: [main]
     paths:
       - 'native/roll-service/**'
+      - 'build.rs'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'api/native_roll.rs'
@@ -129,13 +131,14 @@ jobs:
           bundle="$(mktemp -d)"
           trap 'rm -rf "$bundle"' EXIT
           mkdir -p "$bundle/api" "$bundle/native/roll-service"
-          cp Cargo.toml Cargo.lock "$bundle/"
+          cp Cargo.toml Cargo.lock build.rs "$bundle/"
           cp api/native_roll.rs api/native_issue.rs "$bundle/api/"
           cp native/roll-service/Cargo.toml "$bundle/native/roll-service/"
           cp -R native/roll-service/src "$bundle/native/roll-service/src"
           test ! -e "$bundle/native/roll-service/tests"
           (
             cd "$bundle"
+            COMICPILE_BUILD_SHA="$GITHUB_SHA" \
             CARGO_TARGET_DIR="$GITHUB_WORKSPACE/native/roll-service/target" \
               cargo build --release --locked --bin native_roll
           )

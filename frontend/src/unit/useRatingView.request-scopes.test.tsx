@@ -56,8 +56,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     isRolling: false,
     rolledResult: null,
     selectedThreadId: null,
-    currentDie: 6,
-    diceState: 'idle',
     isOverrideOpen: false,
     overrideThreadId: '',
     overrideErrorMessage: '',
@@ -81,8 +79,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     setIsRolling: vi.fn(),
     setRolledResult: vi.fn(),
     setSelectedThreadId: vi.fn(),
-    setCurrentDie: vi.fn(),
-    setDiceState: vi.fn(),
     setIsOverrideOpen: vi.fn(),
     setOverrideThreadId: vi.fn(),
     setOverrideErrorMessage: vi.fn(),
@@ -131,6 +127,7 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
   const state = mockState({ activeRatingThread: ACTIVE_THREAD })
   const params = {
     state,
+    currentDie: 6,
     readerContextRequested: false,
     readingContextRequested: false,
     readingBoundariesRequested: false,
@@ -160,7 +157,7 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
 
 beforeEach(() => {
   getBoundaries.mockReset()
-  getBoundaries.mockResolvedValue({ threads: { [ACTIVE_THREAD.id]: { thread_id: ACTIVE_THREAD.id, state: 'available', summary: 'Ready to read.' } } })
+  getBoundaries.mockResolvedValue({ threads: { [ACTIVE_THREAD.id]: { thread_id: ACTIVE_THREAD.id, state: 'available', summary: 'Ready to read.', blockers: [] } } })
   getReaderContext.mockReset()
   getReaderContext.mockResolvedValue(READER_CONTEXT)
 })
@@ -240,6 +237,7 @@ it('a failed reader-context request stays out of the shared rating error channel
     () =>
       useRatingView({
         state,
+        currentDie: 6,
         readerContextRequested: true,
         readingContextRequested: true,
         readingBoundariesRequested: false,

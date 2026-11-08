@@ -197,14 +197,6 @@ def _register_tags(app: FastAPI) -> None:
     app.include_router(tags.router)
 
 
-def _register_queue(app: FastAPI) -> None:
-    """Register queue routers."""
-    from app.api import queue
-
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
-
-
 def _register_reading_orders(app: FastAPI) -> None:
     """Register reading-order routers (absolute ``/api/v1`` paths)."""
     from app.api import reading_orders
@@ -310,13 +302,6 @@ def _register_dependencies(app: FastAPI) -> None:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
 
-def _register_delivery(app: FastAPI) -> None:
-    """Register delivery routers."""
-    from app.api import delivery
-
-    app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
-
-
 def _register_demo(app: FastAPI) -> None:
     """Register the unauthenticated guest demo router."""
     from app.api import demo
@@ -327,7 +312,7 @@ def _register_demo(app: FastAPI) -> None:
 
 
 def _register_catalog(app: FastAPI) -> None:
-    """Register catalog and external-attach routers (absolute ``/api/v1`` paths)."""
+    """Register catalog series-mapping routers (absolute ``/api/v1`` paths)."""
     from app.api import catalog
 
     app.include_router(catalog.router, tags=["catalog"])
@@ -352,18 +337,6 @@ def _register_cbl_adoption(app: FastAPI) -> None:
     from app.api import cbl_plan_adoption
 
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
-
-
-def _register_performance_metrics(app: FastAPI) -> None:
-    """Register performance-metric collection routers."""
-    from app.api import performance_metric
-
-    app.include_router(
-        performance_metric.router,
-        prefix="/api/v1/performance-metrics",
-        tags=["performance-metrics"],
-    )
-
 
 
 def _register_debug(app: FastAPI) -> None:
@@ -401,7 +374,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("creators", frozenset({"creators"}), _register_creators),
     RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount("tags", frozenset({"tags"}), _register_tags),
-    RouterMount("queue", frozenset({"queue"}), _register_queue),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
@@ -444,13 +416,11 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         ),
         _register_dependencies,
     ),
-    RouterMount("delivery", frozenset({"delivery"}), _register_delivery),
     RouterMount("demo", frozenset({"demo"}), _register_demo),
-    RouterMount("catalog", frozenset({"catalog", "threads"}), _register_catalog),
+    RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
     RouterMount("identity-inbox", frozenset({"identity-inbox"}), _register_identity_inbox),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
     RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
-    RouterMount("performance-metrics", frozenset({"performance-metrics"}), _register_performance_metrics),
 )
 
 

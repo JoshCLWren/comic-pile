@@ -1365,7 +1365,7 @@
           "roll"
         ],
         "summary": "Documentation-only operation for the mounted v2 Roll bootstrap read.",
-        "description": "The published response is the actual handler DTO, so known session, die,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
+        "description": "The published response is the actual handler DTO, so known session,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
         "operationId": "bootstrap_documentation",
         "parameters": [
           {
@@ -1898,6 +1898,22 @@
           }
         }
       },
+      "BlockerKind": {
+        "type": "string",
+        "enum": [
+          "strict_order",
+          "hold",
+          "after_previous",
+          "prerequisite"
+        ]
+      },
+      "BlockerOrigin": {
+        "type": "string",
+        "enum": [
+          "reading_list",
+          "reader_prerequisite"
+        ]
+      },
       "BootstrapActiveThread": {
         "type": "object",
         "description": "Currently pending thread shown by the Roll surface.",
@@ -2180,7 +2196,6 @@
         "required": [
           "session_id",
           "user_id",
-          "current_die",
           "session_mode",
           "bandwidth",
           "rollable",
@@ -2204,10 +2219,6 @@
           "bandwidth": {
             "$ref": "#/components/schemas/BootstrapBandwidth"
           },
-          "current_die": {
-            "type": "integer",
-            "format": "int32"
-          },
           "last_read": {
             "oneOf": [
               {
@@ -2224,13 +2235,6 @@
               "null"
             ],
             "format": "int64"
-          },
-          "manual_die": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
           },
           "pending_thread_id": {
             "type": [
@@ -2557,7 +2561,7 @@
             "format": "int32"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/EditorKind"
           },
           "label": {
             "type": "string"
@@ -2627,6 +2631,13 @@
           }
         }
       },
+      "BoundaryListMode": {
+        "type": "string",
+        "enum": [
+          "strict",
+          "loose"
+        ]
+      },
       "BoundaryReadingList": {
         "type": "object",
         "required": [
@@ -2640,12 +2651,21 @@
             "format": "int32"
           },
           "mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryListMode"
           },
           "name": {
             "type": "string"
           }
         }
+      },
+      "BoundaryState": {
+        "type": "string",
+        "enum": [
+          "blocked",
+          "available",
+          "complete",
+          "unavailable"
+        ]
       },
       "ComicPileMatch": {
         "type": "object",
@@ -2916,6 +2936,14 @@
             "type": "boolean"
           }
         }
+      },
+      "EditorKind": {
+        "type": "string",
+        "enum": [
+          "reading_list",
+          "prerequisite",
+          "issue"
+        ]
       },
       "ForgotPasswordRequest": {
         "type": "object",
@@ -4002,10 +4030,10 @@
             ]
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerKind"
           },
           "origin": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerOrigin"
           },
           "reason": {
             "type": "string"
@@ -4044,7 +4072,7 @@
             ]
           },
           "state": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryState"
           },
           "summary": {
             "type": "string"

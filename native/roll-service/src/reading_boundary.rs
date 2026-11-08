@@ -10,12 +10,12 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use tokio_postgres::{IsolationLevel, Transaction};
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBatchRequest {
@@ -37,10 +37,50 @@ pub fn validate_thread_ids(thread_ids: &[i32]) -> Result<(), ApiError> {
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryListMode {
+    Strict,
+    Loose,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockerKind {
+    StrictOrder,
+    Hold,
+    AfterPrevious,
+    Prerequisite,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BlockerOrigin {
+    ReadingList,
+    ReaderPrerequisite,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EditorKind {
+    ReadingList,
+    Prerequisite,
+    Issue,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum BoundaryState {
+    Blocked,
+    Available,
+    Complete,
+    Unavailable,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct BoundaryReadingList {
     pub list_id: i32,
     pub name: String,
-    pub mode: String,
+    pub mode: BoundaryListMode,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -56,8 +96,8 @@ pub struct BoundaryIssue {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBlocker {
-    pub kind: String,
-    pub origin: String,
+    pub kind: BlockerKind,
+    pub origin: BlockerOrigin,
     pub reason: String,
     pub waiting_on: Vec<BoundaryIssue>,
     pub editor: Option<BoundaryEditorTarget>,
@@ -65,7 +105,7 @@ pub struct ReadingBoundaryBlocker {
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct BoundaryEditorTarget {
-    pub kind: String,
+    pub kind: EditorKind,
     pub label: String,
     pub list_id: Option<i32>,
     pub thread_id: Option<i32>,
@@ -82,7 +122,7 @@ pub struct ReadingBoundaryNext {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryExplanationV2 {
     pub thread_id: i32,
-    pub state: String,
+    pub state: BoundaryState,
     pub summary: String,
     pub next: Option<ReadingBoundaryNext>,
     pub blockers: Vec<ReadingBoundaryBlocker>,
@@ -149,6 +189,29 @@ const KIND_TEXT: &[(&str, &str)] = &[
     ("after_previous", "Wait for previous"),
 ];
 
+fn list_mode_from_str(mode: &str) -> BoundaryListMode {
+    match mode {
+        "loose" => BoundaryListMode::Loose,
+        _ => BoundaryListMode::Strict,
+    }
+}
+
+fn blocker_kind_from_str(kind: &str) -> BlockerKind {
+    match kind {
+        "strict_order" => BlockerKind::StrictOrder,
+        "hold" => BlockerKind::Hold,
+        "after_previous" => BlockerKind::AfterPrevious,
+        _ => BlockerKind::Prerequisite,
+    }
+}
+
+fn blocker_origin_from_str(origin: &str) -> BlockerOrigin {
+    match origin {
+        "reader_prerequisite" => BlockerOrigin::ReaderPrerequisite,
+        _ => BlockerOrigin::ReadingList,
+    }
+}
+
 fn prerequisite_origin_label(origin: Option<&str>) -> String {
     match origin {
         Some("reader") => "Reader prerequisite".to_string(),
@@ -176,7 +239,7 @@ fn issue_label(labels: &BoundaryShadowLabels, issue_id: i32) -> BoundaryIssue {
                 .map(|m| BoundaryReadingList {
                     list_id: m.list_id,
                     name: m.name.clone(),
-                    mode: m.mode.clone(),
+                    mode: list_mode_from_str(&m.mode),
                 })
                 .collect(),
         })
@@ -222,7 +285,7 @@ fn blocker_editor(
 ) -> Option<BoundaryEditorTarget> {
     if let Some(list_id) = blocker.list_id {
         return Some(BoundaryEditorTarget {
-            kind: "reading_list".to_string(),
+            kind: EditorKind::ReadingList,
             label: list_name(snapshot, labels, Some(list_id)),
             list_id: Some(list_id),
             thread_id: None,
@@ -233,7 +296,7 @@ fn blocker_editor(
     blocker.prerequisite_id?;
     let source_id = blocker.waiting_on_issue_ids.first().copied();
     Some(BoundaryEditorTarget {
-        kind: "prerequisite".to_string(),
+        kind: EditorKind::Prerequisite,
         label: prerequisite_origin_label(blocker.origin.as_deref()),
         list_id: None,
         thread_id: source_id.and_then(|id| snapshot.issue_thread_ids.get(&id).copied()),
@@ -283,13 +346,12 @@ fn project_blocker(
 ) -> ReadingBoundaryBlocker {
     let blocker = &gate.blocker;
     ReadingBoundaryBlocker {
-        kind: blocker.kind.clone(),
-        origin: if blocker.list_id.is_some() {
+        kind: blocker_kind_from_str(&blocker.kind),
+        origin: blocker_origin_from_str(if blocker.list_id.is_some() {
             "reading_list"
         } else {
             "reader_prerequisite"
-        }
-        .to_string(),
+        }),
         reason: blocker_reason(snapshot, labels, gate),
         waiting_on: gate
             .described_issue_ids
@@ -346,7 +408,7 @@ pub struct ReadingEligibilitySnapshot {
 }
 
 async fn load_boundary_labels(
-    db: &Object,
+    db: &Transaction<'_>,
     user: AuthenticatedUser,
     requested_thread_ids: &HashSet<i32>,
 ) -> Result<BoundaryShadowLabels, ApiError> {
@@ -558,7 +620,7 @@ async fn load_boundary_labels(
 }
 
 async fn _volume_labels_by_thread(
-    db: &Object,
+    db: &Transaction<'_>,
     user_id: i32,
     thread_ids: &HashSet<i32>,
 ) -> Result<HashMap<i32, String>, ApiError> {
@@ -630,15 +692,15 @@ pub async fn project_boundary_explanation(
     let requirements = crate::reading_blocker_projection::requirement_count(&gates);
 
     let boundary_state = match state {
-        None => "unavailable",
-        Some(_) if next_issue.is_none() => "complete",
-        Some(evaluated) if evaluated.eligible => "available",
-        Some(_) => "blocked",
+        None => BoundaryState::Unavailable,
+        Some(_) if next_issue.is_none() => BoundaryState::Complete,
+        Some(evaluated) if evaluated.eligible => BoundaryState::Available,
+        Some(_) => BoundaryState::Blocked,
     };
 
     Ok(ReadingBoundaryExplanationV2 {
         thread_id,
-        state: boundary_state.to_string(),
+        state: boundary_state,
         summary: summary(
             &thread.title,
             state,
@@ -653,7 +715,7 @@ pub async fn project_boundary_explanation(
             ReadingBoundaryNext {
                 issue,
                 editor: Some(BoundaryEditorTarget {
-                    kind: "issue".to_string(),
+                    kind: EditorKind::Issue,
                     label: issue_label,
                     list_id: None,
                     thread_id: Some(issue_thread_id),
@@ -673,20 +735,49 @@ async fn get_reading_boundary_explanations(
 ) -> Result<ReadingBoundaryBatchResponseV2, ApiError> {
     validate_thread_ids(&thread_ids)?;
     let requested: HashSet<i32> = thread_ids.iter().copied().collect();
-    let labels = load_boundary_labels(&db::checkout(state).await?, user, &requested).await?;
-
-    let missing = thread_ids
-        .iter()
-        .copied()
-        .find(|id| !labels.threads.contains_key(id));
-    if let Some(thread_id) = missing {
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            format!("Thread {thread_id} not found"),
-        ));
-    }
-
-    let validated = option_inputs::load_option_inputs_contained(state, user).await?;
+    // One RepeatableRead read-only snapshot for labels + Option E inputs so a
+    // concurrent reading-list mutation cannot produce an internally
+    // inconsistent explanation (#4347).
+    let mut pending = crate::dice_api::Pending::new(db::checkout(state).await?);
+    let result = tokio::time::timeout(state.request_timeout, async {
+        let tx = pending
+            .connection()
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .read_only(true)
+            .start()
+            .await
+            .map_err(db::query_error)?;
+        let labels = load_boundary_labels(&tx, user, &requested).await?;
+        let missing = thread_ids
+            .iter()
+            .copied()
+            .find(|id| !labels.threads.contains_key(id));
+        if let Some(thread_id) = missing {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(ApiError(
+                StatusCode::NOT_FOUND,
+                format!("Thread {thread_id} not found"),
+            ));
+        }
+        let validated = option_inputs::load_validated_contained_in_transaction(&tx, user).await?;
+        tx.rollback().await.map_err(db::query_error)?;
+        Ok::<_, ApiError>((labels, validated))
+    })
+    .await;
+    let (labels, validated) = match result {
+        Err(_) => {
+            return Err(ApiError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Database temporarily unavailable".to_string(),
+            ));
+        }
+        Ok(Err(error)) => return Err(error),
+        Ok(Ok(values)) => {
+            pending.release();
+            values
+        }
+    };
     let snapshot = build_eligibility_snapshot(&validated, &labels, &requested)?;
 
     let mut threads = HashMap::new();
@@ -870,8 +961,8 @@ mod tests {
         );
 
         blockers.push(ReadingBoundaryBlocker {
-            kind: "prerequisite".to_string(),
-            origin: "reader_prerequisite".to_string(),
+            kind: BlockerKind::Prerequisite,
+            origin: BlockerOrigin::ReaderPrerequisite,
             reason: "Reader prerequisite: read Fourth World #2 first".to_string(),
             waiting_on: vec![],
             editor: None,

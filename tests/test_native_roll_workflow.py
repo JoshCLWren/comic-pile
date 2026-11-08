@@ -11,6 +11,7 @@ import yaml
 @pytest.mark.parametrize(
     "changed_path",
     [
+        "build.rs",
         "app/repositories/reading_shadow_repository.py",
         "app/repositories/reading_list_authoring_repository.py",
         "app/repositories/reading_overlap_decision_repository.py",

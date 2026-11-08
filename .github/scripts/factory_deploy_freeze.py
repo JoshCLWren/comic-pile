@@ -146,8 +146,8 @@ def run_attempted_deploy(
         jobs: Optional job list. ``None`` means job data is unknown.
 
     Returns:
-        ``True`` when a non-gate job ran, ``False`` when the run was
-        gate-blocked, ``None`` when job data is unknown.
+        ``True`` when the deploy job ran or setup failed, ``False`` for
+        gate-blocked/deduplicated runs, ``None`` when job data is unknown.
 
     """
     attached = jobs if jobs is not None else _jobs_from_run(run)
@@ -158,7 +158,11 @@ def run_attempted_deploy(
         if name == GATE_JOB_NAME:
             continue
         conclusion = str(job.get("conclusion") or "").lower()
-        if conclusion not in NON_ATTEMPT_JOB_CONCLUSIONS:
+        # A successful deduplication/prune is not a verified deployment and
+        # must not hide the real attempt from recovery or lift a smoke freeze.
+        if name == DEPLOY_JOB_NAME and conclusion not in NON_ATTEMPT_JOB_CONCLUSIONS:
+            return True
+        if conclusion in RED_CONCLUSIONS:
             return True
     return False
 
@@ -217,6 +221,8 @@ def latest_attempted_deploy_run(
     eligible: list[Mapping[str, object]] = []
     for run in workflow_runs(payload):
         status = str(run.get("status") or "").lower()
+        if run.get("head_branch", "main") != "main":
+            continue
         if not is_deploy_production_run(run):
             continue
         if status and status != "completed":
@@ -275,7 +281,7 @@ def duplicate_deploy_recovered(
     CLI deploy step. Migration and post-deploy smoke failures never qualify.
     Missing job/step evidence fails closed.
     """
-    if not verified_live_sha or str(run.get("head_sha") or "") != verified_live_sha:
+    if not verified_live_sha or str(run.get("attempt_sha") or "") != verified_live_sha:
         return False
 
     jobs = _jobs_from_run(run)
@@ -406,7 +412,8 @@ def evaluate_freeze(
             "Last attempted Deploy Production run on main is "
             f"{conclusion}: {run_url or f'run {run_id}'}. "
             "Factory merges are frozen except PRs labeled "
-            f"{DEPLOY_FIX_LABEL}. Re-run Deploy Production with "
+            f"{DEPLOY_FIX_LABEL}. A new merged deploy-fix on main permits one recovery "
+            "attempt through normal deployment and smoke gates. Re-run Deploy Production with "
             "workflow_dispatch override_freeze=true and a reason after the fix "
             "is on main. Only the repository owner may override."
         )
@@ -521,6 +528,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Load jobs for each run so gate-blocked runs can be skipped.",
     )
+    parser.add_argument(
+        "--recover-reviewed-fix", action="store_true",
+        help="Permit a new merged deploy-fix on current main to retry the full pipeline.",
+    )
     return parser.parse_args(argv)
 
 
@@ -538,6 +549,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = json.load(sys.stdin)
+        if args.verified_live_sha:
+            from factory_deploy_recovery import attempt_revision
+
+            latest = latest_attempted_deploy_run(payload, jobs_loader=fetch_run_jobs)
+            if isinstance(latest, dict):
+                latest["attempt_sha"] = attempt_revision(
+                    latest, os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
+                )
         decision = evaluate_freeze(
             payload,
             override=bool(args.override),
@@ -548,6 +567,23 @@ def main(argv: list[str] | None = None) -> int:
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"invalid workflow-runs response: {exc}", file=sys.stderr)
         return 2
+    if decision["blocked"] and args.recover_reviewed_fix:
+        from factory_deploy_recovery import merged_repair
+
+        latest = latest_attempted_deploy_run(payload, jobs_loader=fetch_run_jobs)
+        if latest is not None:
+            try:
+                repair = merged_repair(latest, os.environ["GITHUB_REPOSITORY"])
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                print(f"Repair proof unavailable; preserving freeze: {exc}", file=sys.stderr)
+                repair = None
+            if repair is not None:
+                decision["blocked"] = False
+                decision["frozen"] = False
+                decision["reason"] = (
+                    f"New merged deploy-fix PR #{repair} permits one recovery attempt "
+                    "through normal schema, deployment and smoke verification."
+                )
     print(json.dumps(decision, sort_keys=True))
     print(str(decision["reason"]), file=sys.stderr)
     return 1 if decision["blocked"] else 0

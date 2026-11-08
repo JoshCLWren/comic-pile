@@ -329,7 +329,7 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
 
 def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
-    if 'main-breakage' in labels:
+    if 'main-breakage' in labels or 'deploy-fix' in labels:
         return 0
     if 'user-reported' in labels and 'bug' in labels:
         return 1

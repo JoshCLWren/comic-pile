@@ -53,7 +53,6 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
-    manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onSnooze: vi.fn(),

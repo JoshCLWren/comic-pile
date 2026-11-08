@@ -128,6 +128,27 @@ A substantive implementation PR changes product behavior, correctness, performan
 
 ## Lease semantics
 
+### Local factory delivery roles
+
+Local orchestration owns the authorized objective through implementation,
+targeted local verification, exact-head CI repair, actual independent review,
+gated merge, authorized deployment and real production acceptance. A PR or
+scheduled-review handoff alone is not ordinary completion. When an eligible
+local independent reviewer can run, start it rather than waiting for scheduled
+pickup; use [the executable ACP review path](LOCAL_FACTORY_REVIEW.md).
+
+Implementation and CI-repair workers are contributors and cannot independently
+approve their resulting head. Record actual reviewer identity, confirmed ACP
+session/model and exact head; never fabricate controller markers or approvals.
+Manually tag actual active local review with the canonical `factory:review` +
+`factory:local` lease, preserving other live ownership and unrelated labels via
+atomic replacement, then release when the session ends. Read only ACP checkpoints,
+model-selection metadata and final reports/verdicts, never full logs/transcripts.
+The coordinator checks all existing merge and production authorization gates;
+this workflow grants no additional authority. Remote PR/backlog intake thresholds
+do not apply to local sessions. Detailed Codex routing lives in
+`.agents/skills/crouton-factory-codex/SKILL.md`.
+
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
@@ -707,3 +728,18 @@ falls back to normal ranking when no preferred work is eligible. Manual
 issue/repair dispatch tries the corresponding eligible specialist first, then
 continues through normal workers if assignment declines (busy, paused or leased).
 Review independence, claims, quotas, and remote capacity gates remain unchanged.
+
+
+## Production deployment recovery
+
+`Production Deploy Recovery` maintains one GitHub repair issue for an unresolved
+attempted deployment failure, on completion and a 15-minute heartbeat. `deploy-fix`
+repairs use the protected priority lane alongside main-breakage. Existing remote
+factory WIP/review-backlog thresholds and all lease, CI, independent review and
+production gates still apply; this changes neither schedules nor capacity limits.
+
+A new `deploy-fix` merged onto main after the last failed attempted release permits
+one automatic recovery deployment with schema verification and both production
+smokes. A failed recovery consumes that repair; it cannot blindly retry unchanged
+code. The repository owner retains the explicit reasoned manual freeze override.
+A fully verified release closes managed repair issues when no live worker owns them.

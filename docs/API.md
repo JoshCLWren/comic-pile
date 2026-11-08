@@ -294,62 +294,29 @@ a password change that predates the token's credential epoch.
 
 ## Queue
 
-Queue management for thread positioning.
-
-### PUT /queue/threads/{thread_id}/position/
-
-Move thread to a specific position.
-
-**Request Body**:
-
-```json
-{
-  "new_position": 3
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": 1,
-  "title": "Batman Vol. 1",
-  "format": "TPB",
-  "issues_remaining": 6,
-  "position": 3,
-  "status": "active",
-  "last_rating": 4.5,
-  "last_activity_at": "2025-12-30T10:30:00",
-  "created_at": "2025-12-30T08:00:00"
-}
-```
+Queue management for thread positioning. The native Rust queue-entry resource
+is the only queue-ordering surface; the legacy Python action routes
+(`PUT /queue/threads/{thread_id}/position/`, `PUT /queue/threads/{thread_id}/back/`,
+`POST /queue/shuffle/`, and their `/api/v1/queue` twins) were retired in #4458
+and now answer 404.
 
 ### PATCH /api/v2/queue-entries/{thread_id}
 
-Move an owned thread to the front with `{"position": 1}`. This resource is
-implemented in native Rust and replaces both legacy move-to-front PUT aliases.
-The response contains `thread_id`, `position`, and `ordering_version`, rather
+Move an owned thread to the requested reader-visible ordinal with
+`{"position": 3}`. Front is `{"position": 1}` and back is a rank beyond the
+end (for example `{"position": 2147483647}`), using the same PATCH — there is
+no `:moveFront` or `:moveBack` custom method. This resource is implemented in
+native Rust and replaces the legacy move-to-front, move-to-position, and
+move-to-back PUT aliases. The response contains `thread_id`, `position`, and
+`ordering_version` (a content revision of the reader's queue order), rather
 than a full thread projection. Queue/Thread clients already use this resource.
 
-### PUT /queue/threads/{thread_id}/back/
+### POST /api/v2/queue-orders
 
-Move thread to the back of the queue.
-
-**Response**: `200 OK`
-
-```json
-{
-  "id": 1,
-  "title": "Batman Vol. 1",
-  "format": "TPB",
-  "issues_remaining": 6,
-  "position": 10,
-  "status": "active",
-  "last_rating": 4.5,
-  "last_activity_at": "2025-12-30T10:30:00",
-  "created_at": "2025-12-30T08:00:00"
-}
-```
+Record a durable, idempotent queue-order revision for a shuffle with
+`{"idempotency_key": "<client retry key>"}`. Replaying a committed key returns
+the same `event_id` with `replayed: true` instead of re-shuffling. Implemented
+in native Rust; replaces the legacy `POST /queue/shuffle/` action.
 
 ---
 
@@ -410,8 +377,8 @@ every later roll. `POST /api/v2/roll/reset` returns the die to d6 and clears
 the browser's temporary snoozes and the pending roll.
 
 The v1 `POST /api/v1/roll/set-die` and `POST /api/v1/roll/clear-manual-die`
-routes were retired (#4352, #4353): nothing pins a manual die any more, so
-there is no automatic ladder to resume.
+routes were retired (#4352, #4353) and replaced by their v2 successors
+(`POST /api/v2/roll/dice-command` and `POST /api/v2/roll/reset` respectively).
 
 ## Rate
 

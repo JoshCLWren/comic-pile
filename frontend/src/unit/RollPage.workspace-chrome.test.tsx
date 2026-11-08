@@ -19,6 +19,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { cast } from '../utils/cast'
 import { RollFooter } from '../pages/RollPage/components/RollFooter'
 import { RollHeader } from '../pages/RollPage/components/RollHeader'
+import { resolveRollSelectedDie } from '../pages/RollPage/selectedDie'
 import {
   ROLL_WORKSPACE_MAX_WIDTH,
   ROLL_WORKSPACE_TRACKS,
@@ -36,7 +37,6 @@ vi.mock('../components/GlossaryLink', () => ({
 // SAFETY: test fixture supplies only the fields the header component reads for session state
 const BOOTSTRAP = cast<RollBootstrapResponse>({
   session_mode: null,
-  manual_die: null,
 })
 
 function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>> = {}) {
@@ -100,8 +100,75 @@ describe('Roll rating header chrome (#2712)', () => {
     expect(onBackToQueue).toHaveBeenCalledTimes(1)
   })
 
-  it('uses scoped die-state when provided, falling back to bootstrap die', () => {
-    renderHeader({ dieState: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null } })
+  // #4352: die selection is render-derived (`resolveRollSelectedDie`), not
+  // effect-synced. The header receives the derived die as `currentDie`.
+  it('uses the scoped die (#4352)', () => {
+    const selectedDie = resolveRollSelectedDie(
+      { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null },
+    )
+    expect(selectedDie).toBe(20)
+    renderHeader({
+      currentDie: selectedDie,
+      dieState: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null },
+    })
+    expect(screen.getByRole('button', { name: 'd20' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('defaults to d6 while scoped state is unsettled (#4352 contract-after)', () => {
+    const selectedDie = resolveRollSelectedDie(undefined)
+    expect(selectedDie).toBe(6)
+    renderHeader({ currentDie: selectedDie, dieState: null })
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('defaults to d6 when scoped state is null (#4352 contract-after)', () => {
+    const selectedDie = resolveRollSelectedDie(null)
+    expect(selectedDie).toBe(6)
+    renderHeader({ currentDie: selectedDie, dieState: null })
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('defaults to d6 when scoped state is absent (#4352 contract-after)', () => {
+    expect(resolveRollSelectedDie(undefined)).toBe(6)
+    expect(resolveRollSelectedDie(null)).toBe(6)
+  })
+
+  it('defaults to d6 when the scoped query errored (#4352 contract-after)', () => {
+    // RollPage maps `isScopedDieStateError` to `undefined` scoped state
+    // (index.tsx) so the scoped-only derivation falls back to d6.
+    const selectedDie = resolveRollSelectedDie(undefined)
+    expect(selectedDie).toBe(6)
+    renderHeader({ currentDie: selectedDie, dieState: null })
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('shows the new die after die-state invalidation without a bootstrap refetch (#4352)', () => {
+    // `useSetDie` invalidates the scoped die-state query; the header must
+    // track the refetched `dieState` while `bootstrap` stays byte-identical.
+    const before = resolveRollSelectedDie(
+      { die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    )
+    const { rerender } = renderHeader({
+      currentDie: before,
+      dieState: { die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    })
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
+
+    const after = resolveRollSelectedDie(
+      { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    )
+    expect(after).toBe(20)
+    rerender(
+      <MemoryRouter>
+        <RollHeader
+          {...headerProps({
+            currentDie: after,
+            dieState: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+          })}
+        />
+      </MemoryRouter>,
+    )
     expect(screen.getByRole('button', { name: 'd20' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'false')
   })

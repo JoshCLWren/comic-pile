@@ -108,19 +108,36 @@ def test_v1_undo_aliases_match_legacy_route_methods() -> None:
         assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
 
 
-def test_v1_queue_aliases_match_legacy_route_methods() -> None:
-    """Canonical /api/v1/queue aliases reuse the same queue handler contracts."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
+def test_retired_queue_routes_are_absent() -> None:
+    """Native v2 queue-entry resources replace position/back/shuffle on every alias.
 
-    alias_pairs = (
-        ("/api/queue/shuffle/", "/api/v1/queue/shuffle/"),
-        ("/api/queue/threads/{thread_id}/back/", "/api/v1/queue/threads/{thread_id}/back/"),
-        ("/api/queue/threads/{thread_id}/position/", "/api/v1/queue/threads/{thread_id}/position/"),
-    )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+    Regression guard for the retired queue action surface (#4458): no Python
+    handler may be re-registered for the legacy position/back/shuffle paths
+    under either prefix, and the FastAPI OpenAPI document must not publish
+    those operations again. ``PATCH /api/v2/queue-entries/{thread_id}`` with a
+    target ``position`` and ``POST /api/v2/queue-orders`` (in
+    ``native/contracts/v2-runtime.openapi.json``) are the replacement.
+    """
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in methods_by_path, (
+            f"{prefix}/threads/{{thread_id}}/position/ must stay retired; "
+            "PATCH /api/v2/queue-entries/{thread_id} is the replacement"
+        )
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in methods_by_path, (
+            f"{prefix}/threads/{{thread_id}}/back/ must stay retired; "
+            "PATCH /api/v2/queue-entries/{thread_id} with position is the replacement"
+        )
+        assert f"{prefix}/shuffle/" not in methods_by_path, (
+            f"{prefix}/shuffle/ must stay retired; "
+            "POST /api/v2/queue-orders is the replacement"
+        )
+
+    schema = create_app(serve_frontend=False).openapi()
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in schema["paths"]
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in schema["paths"]
+        assert f"{prefix}/shuffle/" not in schema["paths"]
 
 
 def test_v1_admin_aliases_match_legacy_route_methods() -> None:
@@ -167,21 +184,14 @@ def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> Non
     assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
 
 
-def test_delivery_target_route_addresses_slash_containing_branches() -> None:
-    """Delivery target lookup supports slash-containing repos and branches.
-
-    Regression guard: the delivery target/branch lookup must split the target
-    repository into ``owner``/``repo`` path segments and use the
-    ``{branch_name:path}`` converter, because every allowlisted target
-    repository (e.g. ``JoshCLWren/Latticery``) and factory branch name (e.g.
-    ``factory/2875-first-extraction-slice``) contains slashes. A route that
-    models either as a single path segment can never match a real delivery.
-    """
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
-    target_path = "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}"
-    assert target_path in methods_by_path
-    assert "GET" in methods_by_path[target_path]
+def test_retired_zero_browser_delivery_routes_are_absent() -> None:
+    """Delivery HTTP API was pruned: the browser never calls it."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for path in (
+        "/api/v1/delivery",
+        "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}",
+    ):
+        assert path not in methods_by_path
 
 
 def test_no_new_bare_api_client_routes() -> None:
@@ -217,9 +227,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/health/warmup",
             "/api/instance/warm",
             "/api/ping",
-            "/api/queue/shuffle/",
-            "/api/queue/threads/{thread_id}/back/",
-            "/api/queue/threads/{thread_id}/position/",
             "/api/roll/bootstrap",
             "/api/roll/dismiss-pending",
             "/api/roll/override",

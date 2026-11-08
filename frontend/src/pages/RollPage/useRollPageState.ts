@@ -6,8 +6,6 @@ export interface RollPageState {
   isRolling: boolean
   rolledResult: number | null
   selectedThreadId: number | null
-  currentDie: number
-  diceState: string
   isOverrideOpen: boolean
   overrideThreadId: string
   overrideErrorMessage: string
@@ -35,8 +33,6 @@ export interface RollPageStateSetters {
   setIsRolling: (value: boolean) => void
   setRolledResult: (value: number | null) => void
   setSelectedThreadId: (value: number | null) => void
-  setCurrentDie: (value: number) => void
-  setDiceState: (value: string) => void
   setIsOverrideOpen: (value: boolean) => void
   setOverrideThreadId: (value: string) => void
   setOverrideErrorMessage: (value: string) => void
@@ -60,8 +56,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
   const [isRolling, setIsRolling] = useState(false)
   const [rolledResult, setRolledResult] = useState<number | null>(null)
   const [selectedThreadId, setSelectedThreadId] = useState<number | null>(null)
-  const [currentDie, setCurrentDie] = useState(6)
-  const [diceState, setDiceState] = useState('idle')
   const [isOverrideOpen, setIsOverrideOpen] = useState(false)
   const [overrideThreadId, setOverrideThreadId] = useState('')
   const [overrideErrorMessage, setOverrideErrorMessage] = useState('')
@@ -91,10 +85,6 @@ export function useRollPageState(): RollPageState & RollPageStateSetters {
     setRolledResult,
     selectedThreadId,
     setSelectedThreadId,
-    currentDie,
-    setCurrentDie,
-    diceState,
-    setDiceState,
     isOverrideOpen,
     setIsOverrideOpen,
     overrideThreadId,

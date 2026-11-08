@@ -87,6 +87,7 @@ def run(
     html_url: str | None = None,
     job_list: list[dict[str, str]] | None = None,
     head_sha: str | None = None,
+    attempt_sha: str | None = None,
 ) -> dict[str, object]:
     """Build one workflow-run fixture.
 
@@ -114,6 +115,8 @@ def run(
     }
     if job_list is not None:
         payload["jobs"] = job_list
+    if attempt_sha is not None:
+        payload["attempt_sha"] = attempt_sha
     if head_sha is not None:
         payload["head_sha"] = head_sha
     return payload
@@ -359,7 +362,7 @@ def test_deploy_workflow_fails_fast_before_migrations() -> None:
     assert "needs: freeze" in workflow
     assert "github.repository_owner" in workflow
     assert "github.actor" in workflow
-    assert "--paginate" not in workflow.split("factory_deploy_freeze.py")[0][-800:]
+    assert "gh api --paginate --slurp" in workflow
     assert f"per_page={load_module().RUNS_PAGE_SIZE}" in workflow
     assert "needs.freeze.outputs.proceed == 'true'" in workflow
     assert 'echo "proceed=false"' in workflow
@@ -375,7 +378,7 @@ def test_merge_drains_respect_deploy_freeze() -> None:
         assert "deploy_freeze" in source
         assert "DEPLOY_FROZEN" in source
         assert "deploy-fix" in source
-        assert "--paginate --slurp" not in source.split("Check Deploy Production freeze")[1][
+        assert "--paginate --slurp" in source.split("Check Deploy Production freeze")[1][
             :800
         ]
         assert f"per_page={load_module().RUNS_PAGE_SIZE}" in source.split(
@@ -552,7 +555,7 @@ def test_verified_live_duplicate_cancellation_unfreezes_new_main() -> None:
     """The reported CLI cancellation is safe to retry once its SHA is live."""
     module = load_module()
     payload = {"workflow_runs": [
-        run(99, conclusion="failure", head_sha=DUPLICATE_SHA,
+        run(99, conclusion="failure", head_sha=DUPLICATE_SHA, attempt_sha=DUPLICATE_SHA,
             job_list=duplicate_cancel_jobs(), html_url=RED_RUN_URL),
     ]}
     decision = module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)
@@ -575,7 +578,7 @@ def test_live_same_sha_never_clears_migration_or_smoke_failures() -> None:
         "Smoke production rejected login on the Rust runtime",
     ):
         payload = {"workflow_runs": [
-            run(99, conclusion="failure", head_sha=DUPLICATE_SHA,
+            run(99, conclusion="failure", head_sha=DUPLICATE_SHA, attempt_sha=DUPLICATE_SHA,
                 job_list=duplicate_cancel_jobs(failed_step=failed_step)),
         ]}
         assert module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)["blocked"] is True
@@ -594,7 +597,7 @@ def test_live_duplicate_missing_evidence_or_other_failures_stays_frozen() -> Non
     ]
     for case in cases:
         payload = {"workflow_runs": [
-            run(99, conclusion="failure", head_sha=DUPLICATE_SHA, job_list=case),
+            run(99, conclusion="failure", head_sha=DUPLICATE_SHA, attempt_sha=DUPLICATE_SHA, job_list=case),
         ]}
         assert module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)["blocked"] is True
 
@@ -654,3 +657,88 @@ def test_deploy_reconciles_only_exact_ready_alias_then_runs_existing_smoke() -> 
     assert source.index("Verify production schema at application head") < source.index(
         "Deploy exact commit to production"
     ) < source.index("Smoke production rejected login on the Rust runtime")
+
+
+
+def test_ready_only_deduplication_cannot_lift_a_smoke_freeze() -> None:
+    """READY without probes cannot shadow the real failed attempt."""
+    module = load_module()
+    failed = run(99, conclusion="failure", job_list=attempted_jobs(deploy_conclusion="failure"))
+    skipped = run(100, updated_at="2026-10-12T19:00:00Z", job_list=jobs(
+        ("Red-deploy freeze gate", "success"),
+        ("Deduplicate exact main SHA", "success"),
+        ("Migrate Neon and deploy exact main SHA", "skipped"),
+        ("Prune older Vercel deployments", "success"),
+    ))
+    decision = module.evaluate_freeze({"workflow_runs": [failed, skipped]})
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 99
+
+
+def test_preflight_failure_still_routes_to_repair() -> None:
+    """A failure before migration is still actionable and must freeze."""
+    module = load_module()
+    failed = run(99, conclusion="failure", job_list=jobs(
+        ("Red-deploy freeze gate", "success"),
+        ("Deduplicate exact main SHA", "failure"),
+        ("Migrate Neon and deploy exact main SHA", "skipped"),
+    ))
+    assert module.evaluate_freeze({"workflow_runs": [failed]})["blocked"] is True
+
+
+def test_failure_survives_more_than_one_page_of_gate_blocks() -> None:
+    """Run summary pagination cannot age the last actual failure out of the gate."""
+    module = load_module()
+    blocked = [run(number, conclusion="failure") for number in range(202, 101, -1)]
+    failed = run(100, conclusion="failure")
+    older = run(99)
+    fetched: list[int] = []
+
+    def loader(run_id: int) -> list[dict[str, str]]:
+        fetched.append(run_id)
+        if run_id <= 100:
+            return attempted_jobs(deploy_conclusion="failure")
+        return gate_blocked_jobs()
+
+    payload = [
+        {"workflow_runs": blocked[:100]},
+        {"workflow_runs": [*blocked[100:], failed, older]},
+    ]
+    decision = module.evaluate_freeze(payload, jobs_loader=loader)
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 100
+    assert len(fetched) == 102
+    assert 99 not in fetched
+
+
+def test_live_trigger_sha_cannot_reconcile_a_different_attempt_revision() -> None:
+    """Moving main and missing historical evidence must never clear a freeze."""
+    module = load_module()
+    for selected in (None, "f" * 40):
+        payload = {"workflow_runs": [run(
+            99, conclusion="failure", head_sha=DUPLICATE_SHA, attempt_sha=selected,
+            job_list=duplicate_cancel_jobs(),
+        )]}
+        assert module.evaluate_freeze(payload, verified_live_sha=DUPLICATE_SHA)["blocked"] is True
+
+
+def test_non_main_attempt_does_not_change_main_freeze() -> None:
+    """Unfiltered history pagination still selects only completed main attempts."""
+    module = load_module()
+    other = run(101, job_list=attempted_jobs(deploy_conclusion="success"))
+    other["head_branch"] = "feature"
+    payload = {"workflow_runs": [other, run(
+        100, conclusion="failure", job_list=attempted_jobs(deploy_conclusion="failure"),
+    )]}
+    assert module.evaluate_freeze(payload)["blocked"] is True
+
+
+def test_history_pagination_avoids_filtered_search_cap() -> None:
+    """GitHub's filtered-run search cap must not silently truncate the history."""
+    for name in (
+        "deploy-production.yml", "factory-ready-merge-drain.yml",
+        "fixed-model-factory-dispatch.yml",
+    ):
+        source = (WORKFLOWS / name).read_text()
+        assert "deploy-production.yml/runs?per_page=100" in source
+        assert "runs?branch=main&status=completed" not in source

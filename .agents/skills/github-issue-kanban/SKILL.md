@@ -53,6 +53,17 @@ section in [local-factory-session](../local-factory-session/SKILL.md): monitor t
 head through required CI, repair failures locally, and report the actual result. A PR
 link with "CI pending" is not an ordinary completion boundary.
 
+Continue authorized local factory delivery through actual independent review,
+gated merge, deployment and real acceptance. Do not wait for scheduled review
+when an eligible local reviewer can run: follow
+[the Codex Crouton adapter](../crouton-factory-codex/SKILL.md) and
+[the executable ACP review path](../../../docs/LOCAL_FACTORY_REVIEW.md).
+Record the actual independent reviewer/model/session and exact head; manually
+use the canonical `factory:review` + `factory:local` lease only during active
+local review, then release it. Never invent a controller approval. Read only
+ACP checkpoints/model-selection metadata and final reports/verdicts, not logs.
+Preserve CI, independence, ownership, merge and production authorization gates.
+
 For any Python change, local verification must include the exact CI pair
 `ruff check .` **and** `ty check --error-on-warning` against the whole repo
 (`bash scripts/check-python-ci-lint.sh`). Path-filtered ruff or ty is not a valid CI substitute.

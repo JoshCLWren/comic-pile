@@ -21,10 +21,8 @@ EXPECTED_FIELDS: Final = {
     "BootstrapResponseV2": (
         "active_thread",
         "bandwidth",
-        "current_die",
         "last_read",
         "last_rolled_result",
-        "manual_die",
         "pending_thread_id",
         "pool_reason",
         "roll_recovery",
