@@ -771,47 +771,6 @@ async def list_excluded_threads(
     )
 
 
-async def completed_threads_html(db: AsyncSession, user_id: int) -> str:
-    """Render completed threads as option elements for the reactivation modal.
-
-    Args:
-        db: Database session.
-        user_id: Owner of the threads.
-
-    Returns:
-        HTML string with option elements for completed threads.
-    """
-    threads = await thread_repository.fetch_completed_threads(db, user_id)
-    options = "\n".join(
-        f'<option value="{thread.id}">{thread.title} ({thread.normalize_format()})</option>'
-        for thread in threads
-    )
-    return f'<option value="">Select a completed thread...</option>\n{options}'
-
-
-async def active_threads_html(db: AsyncSession, user_id: int) -> str:
-    """Render active threads as radio buttons for the override modal.
-
-    Args:
-        db: Database session.
-        user_id: Owner of the threads.
-
-    Returns:
-        HTML string with radio button elements for active threads.
-    """
-    threads = await thread_repository.fetch_active_threads(db, user_id)
-    items = "\n".join(
-        f'<div class="flex items-center p-2 hover:bg-gray-50 rounded">'
-        f'<input type="radio" name="thread_id" value="{thread.id}" id="thread-{thread.id}" class="mr-3">'
-        f'<label for="thread-{thread.id}" class="flex-1 cursor-pointer">'
-        f'<span class="font-medium">{thread.title}</span>'
-        f'<span class="text-sm text-gray-500 ml-2">({thread.normalize_format()})</span>'
-        f"</label></div>"
-        for thread in threads
-    )
-    return items or '<p class="text-gray-500 text-center py-4">No active threads available</p>'
-
-
 async def find_potential_duplicate_matches(
     db: AsyncSession,
     user_id: int,
