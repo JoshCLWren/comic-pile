@@ -826,7 +826,7 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
     if candidate.kind == 'pr' and candidate.is_fork:
         try:
             from factory_roster import load_roster_rows
-            source = next((row['source'] for row in load_roster_rows() if row['worker'] == worker), '')
+            source = next((row.get('source', '') for row in load_roster_rows() if row.get('worker') == worker), '')
         except (OSError, ValueError):
             return False
         if candidate.stage == 'factory:review':
@@ -851,9 +851,9 @@ def worker_delivery_role(worker: str) -> str:
         return ''
     if row is None:
         return ''
-    if row['source'] == 'z-ai' and row['model'] == 'glm-4.5-flash':
+    if row.get('source') == 'z-ai' and row.get('model') == 'glm-4.5-flash':
         return 'starter'
-    if row['source'] == 'kilo-auto' and row['model'] == 'kilo-auto/free':
+    if row.get('source') == 'kilo-auto' and row.get('model') == 'kilo-auto/free':
         return 'finisher'
     return ''
 
@@ -870,6 +870,13 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
     role = worker_delivery_role(worker)
 
     def role_preference(candidate: Candidate) -> int:
+        if (
+            review_first
+            and candidate.kind == 'pr'
+            and candidate.stage == 'factory:review'
+            and not candidate.conflicted
+        ):
+            return 1
         if candidate.lane <= 1:
             return candidate.lane
         if role == 'starter' and candidate.kind == 'issue':
