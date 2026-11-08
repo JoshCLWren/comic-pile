@@ -782,6 +782,7 @@ def test_age_only_preserves_review_claim_commit_and_issue_even_in_normal_mode(mo
             "issue": 4719,
             "baseline": baseline,
             "dry_run": dry_run,
+            "jev": {"status": "unavailable", "reason": "missing dedicated Jev key"},
         }]
         assert [label["name"] for label in pr["labels"]] == labels
 
@@ -811,3 +812,89 @@ def test_stale_report_preserves_branch_without_linked_issue(monkeypatch) -> None
     result = module.process_stale_prs(prs=[pr], now_epoch=now)
     assert result[0]["status"] == "stale-preserved"
     assert result[0]["issue"] is None
+
+
+def test_stale_jev_preserves_incomplete_work_even_when_model_suggests_closure() -> None:
+    """Jev is consulted but cannot directly expire valuable commits."""
+    prs = [
+        make_pr(
+            4727, state="OPEN", body="Part of #4719. The migration is unfinished.",
+            labels=["factory", "factory:changes-requested", "rust"],
+        ),
+        make_pr(4758, state="OPEN", body="Only partial SQL proof exists."),
+    ]
+    calls: list[dict[str, Any]] = []
+
+    def jev(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
+        assert api_key == "test-jev-key"
+        calls.append(payload)
+        return {
+            "model": module.JEV_MODEL,
+            "answers": {
+                "closure_4727": {
+                    "type": "choice", "choice": "preserve",
+                    "confidence": 0.99,
+                    "probabilities": {"preserve": 0.99, "closure_review": 0.01},
+                },
+                "closure_4758": {
+                    "type": "choice", "choice": "closure_review",
+                    "confidence": 0.95,
+                    "probabilities": {"preserve": 0.04, "closure_review": 0.96},
+                },
+            },
+        }
+
+    decisions = module.consult_jev_on_aged_prs(prs, "test-jev-key", client=jev)
+    assert len(calls) == 1
+    assert calls[0]["model"] == module.JEV_MODEL
+    assert decisions[4727]["status"] == "preserve"
+    # High confidence authorizes a separate investigation, not automatic close.
+    assert decisions[4758]["status"] == "closure-review"
+
+
+def test_stale_jev_unavailable_abstains_without_destructive_fallback() -> None:
+    """Provider interruptions and malformed answers always retain the old PR."""
+    prs = [make_pr(4727, state="OPEN")]
+    no_key = module.consult_jev_on_aged_prs(prs, "")
+    assert no_key[4727]["status"] == "unavailable"
+    assert no_key[4727]["reason"] == "missing dedicated Jev key"
+
+    def unavailable(_payload: dict[str, Any], _key: str) -> dict[str, Any]:
+        raise OSError("provider unreachable")
+
+    result = module.consult_jev_on_aged_prs(prs, "test-jev-key", client=unavailable)
+    assert result[4727]["status"] == "unavailable"
+
+    invalid = module.consult_jev_on_aged_prs(
+        prs, "test-jev-key",
+        client=lambda _payload, _key: {
+            "model": module.JEV_MODEL,
+            "answers": {
+                "closure_4727": {
+                    "type": "choice", "choice": "closure_review",
+                    "confidence": 0.8,
+                    "probabilities": {"preserve": -1, "closure_review": 2},
+                },
+            },
+        },
+    )
+    assert invalid[4727]["status"] == "unavailable"
+
+
+def test_stale_jev_weak_closure_decision_is_preservation() -> None:
+    """Low-confidence choice does not promote a PR into closure investigation."""
+    prs = [make_pr(4727, state="OPEN")]
+    result = module.consult_jev_on_aged_prs(
+        prs, "test-jev-key",
+        client=lambda _payload, _key: {
+            "model": module.JEV_MODEL,
+            "answers": {
+                "closure_4727": {
+                    "type": "choice", "choice": "closure_review",
+                    "confidence": 0.55,
+                    "probabilities": {"preserve": 0.4, "closure_review": 0.6},
+                },
+            },
+        },
+    )
+    assert result[4727]["status"] == "preserve"
