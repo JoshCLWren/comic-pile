@@ -14,7 +14,7 @@
 60	openrouter-free	cohere/north-mini-code:free	30	dispatcher	OpenRouter Cohere North Mini Code Free
 61	openrouter-free	google/gemma-4-31b-it:free	55	dispatcher	OpenRouter Gemma 4 31B Free
 62	openrouter-free	google/gemma-4-26b-a4b-it:free	0	dispatcher	OpenRouter Gemma 4 26B Free
-64	openrouter-free	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free	10	dispatcher	OpenRouter Nemotron 3 Omni Free
+64	openrouter-free	nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free	35	dispatcher	OpenRouter Nemotron 3 Omni Free
 65	openrouter-free	nvidia/nemotron-3.5-lightning:free	25	dispatcher	OpenRouter Nemotron 3.5 Lightning Free
 75	opencode-free	nemotron-3.5-super-vl-free	25	dispatcher	OpenCode Nemotron 3.5 Super Vl Free
 80	nvidia	z-ai/glm-5.3-flash	40	dispatcher	NVIDIA GLM 5.3 Flash
@@ -23,4 +23,4 @@
 91	orcarouter	z-ai/glm-5.3-flash-free	5	dispatcher	OrcaRouter GLM 5.3 Flash Free
 96	openrouter-free	stealth/crouton-alpha	45	dispatcher	OpenRouter Crouton Alpha Free
 97	z-ai	glm-4.5-flash	50	dispatcher	Z.AI GLM 4.5 Flash II
-98	kilo-auto	kilo-auto/free	35	dispatcher	Kilo Auto Free II
+98	kilo-auto	kilo-auto/free	10	dispatcher	Kilo Auto Free II

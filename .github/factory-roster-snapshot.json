@@ -117,7 +117,7 @@
       "worker": "64",
       "source": "openrouter-free",
       "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-      "minute": "10",
+      "minute": "35",
       "scheduler": "dispatcher",
       "display_name": "OpenRouter Nemotron 3 Omni Free"
     },
@@ -189,7 +189,7 @@
       "worker": "98",
       "source": "kilo-auto",
       "model": "kilo-auto/free",
-      "minute": "35",
+      "minute": "10",
       "scheduler": "dispatcher",
       "display_name": "Kilo Auto Free II"
     }
