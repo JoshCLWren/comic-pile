@@ -310,21 +310,44 @@ pub async fn bootstrap_at(
     policy: SessionPolicy,
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
-    tokio::time::timeout(state.request_timeout, async {
-        for attempt in 0..3 {
-            let result = bootstrap_once(state, user, timezone, policy, now).await;
-            if !matches!(&result, Err(e) if e.1 == "Reading session deadlock") || attempt == 2 {
-                return result;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(100 << attempt)).await;
-        }
-        unreachable!()
-    })
+    tokio::time::timeout(
+        state.request_timeout,
+        retry_deadlock(|| bootstrap_once(state, user, timezone, policy, now)),
+    )
     .await
     .unwrap_or(Err(ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
         "Database temporarily unavailable".to_string(),
     )))
+}
+
+/// Total attempts for a deadlock-detected bootstrap or initialization.
+const DEADLOCK_ATTEMPTS: u32 = 3;
+
+fn is_deadlock<T>(result: &Result<T, ApiError>) -> bool {
+    matches!(result, Err(error) if error.1 == "Reading session deadlock")
+}
+
+/// Retry a transaction body when PostgreSQL chose it as a deadlock victim.
+///
+/// The backoff doubles per attempt (`100ms`, `200ms`). Any other error, and the
+/// final attempt, is returned unchanged so callers see the real failure.
+async fn retry_deadlock<T, F, Fut>(mut operation: F) -> Result<T, ApiError>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<T, ApiError>>,
+{
+    for attempt in 0..DEADLOCK_ATTEMPTS {
+        let result = operation().await;
+        if !is_deadlock(&result) || attempt + 1 == DEADLOCK_ATTEMPTS {
+            return result;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(u64::from(
+            100_u32 << attempt,
+        )))
+        .await;
+    }
+    unreachable!("retry_deadlock always returns on its final attempt")
 }
 fn session_error(error: tokio_postgres::Error) -> ApiError {
     if error.code() == Some(&tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED) {
@@ -449,16 +472,10 @@ pub async fn initialize_at(
     policy: SessionPolicy,
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
-    tokio::time::timeout(state.request_timeout, async {
-        for attempt in 0..3 {
-            let result = initialize_once(state, user, timezone, policy, now).await;
-            if !matches!(&result, Err(e) if e.1 == "Reading session deadlock") || attempt == 2 {
-                return result;
-            }
-            tokio::time::sleep(std::time::Duration::from_millis(100 << attempt)).await;
-        }
-        unreachable!()
-    })
+    tokio::time::timeout(
+        state.request_timeout,
+        retry_deadlock(|| initialize_once(state, user, timezone, policy, now)),
+    )
     .await
     .unwrap_or(Err(ApiError(
         StatusCode::SERVICE_UNAVAILABLE,
@@ -948,5 +965,60 @@ mod tests {
         );
 
         tx.rollback().await.unwrap();
+    }
+
+    fn deadlock() -> ApiError {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Reading session deadlock".to_string(),
+        )
+    }
+
+    #[tokio::test]
+    async fn deadlock_is_retried_until_the_transaction_succeeds() {
+        use std::cell::Cell;
+        let calls = Cell::new(0_u32);
+        let result: Result<u8, ApiError> = retry_deadlock(|| {
+            let attempt = calls.get() + 1;
+            calls.set(attempt);
+            std::future::ready(if attempt < DEADLOCK_ATTEMPTS {
+                Err(deadlock())
+            } else {
+                Ok(7)
+            })
+        })
+        .await;
+        assert_eq!(result.ok(), Some(7));
+        assert_eq!(calls.get(), DEADLOCK_ATTEMPTS);
+    }
+
+    #[tokio::test]
+    async fn persistent_deadlock_returns_the_original_error_after_the_last_attempt() {
+        use std::cell::Cell;
+        let calls = Cell::new(0_u32);
+        let result: Result<u8, ApiError> = retry_deadlock(|| {
+            calls.set(calls.get() + 1);
+            std::future::ready(Err(deadlock()))
+        })
+        .await;
+        let error = result.err().unwrap();
+        assert_eq!(error.1, "Reading session deadlock");
+        assert_eq!(calls.get(), DEADLOCK_ATTEMPTS);
+    }
+
+    #[tokio::test]
+    async fn non_deadlock_errors_are_returned_without_retrying() {
+        use std::cell::Cell;
+        let calls = Cell::new(0_u32);
+        let result: Result<u8, ApiError> = retry_deadlock(|| {
+            calls.set(calls.get() + 1);
+            std::future::ready(Err(ApiError(
+                StatusCode::BAD_REQUEST,
+                "not a deadlock".to_string(),
+            )))
+        })
+        .await;
+        assert_eq!(result.err().unwrap().0, StatusCode::BAD_REQUEST);
+        assert_eq!(calls.get(), 1);
     }
 }

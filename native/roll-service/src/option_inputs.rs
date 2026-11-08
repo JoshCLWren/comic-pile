@@ -768,6 +768,37 @@ mod tests {
     }
 
     #[test]
+    fn dangling_list_entry_is_reported_as_unresolved() {
+        // A persisted list entry can outlive the issue it references. The
+        // snapshot join yields no owned issue for it, so assembly must retain a
+        // typed unresolved marker that fails execution closed instead of
+        // silently dropping the entry.
+        let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
+            "threads": [
+                {"id": 1, "status": "active", "title": "Alpha",
+                 "next_unread_issue_id": 10, "is_blocked": false, "queue_position": 1}
+            ],
+            "issues": [
+                {"id": 10, "thread_id": 1, "position": 1, "status": "unread",
+                 "issue_number": "1"}
+            ],
+            "lists": [{"id": 50, "mode": "strict", "name": "Strict"}],
+            "entries": [
+                {"id": 100, "list_id": 50, "issue_id": 999,
+                 "gate": "after_previous", "skipped": false}
+            ],
+            "prerequisites": [], "evidence": [], "overlaps": [],
+            "exclusions": [], "issue_volumes": []
+        }))
+        .unwrap();
+        let inputs = assemble_snapshot(snapshot).ok().unwrap();
+        assert_eq!(inputs.unresolved.len(), 1);
+        assert_eq!(inputs.unresolved[0].kind, "list_entry");
+        assert_eq!(inputs.unresolved[0].object_id, 100);
+        assert!(inputs.require_resolved().is_err());
+    }
+
+    #[test]
     fn cte_snapshot_decodes_all_empty_aggregates() {
         let snapshot: SnapshotRows = serde_json::from_value(serde_json::json!({
             "threads": [], "issues": [], "lists": [], "entries": [],

@@ -53,6 +53,7 @@ def test_deploy_smoke_asserts_native_health_and_retains_negative_login() -> None
     assert "/health" not in health_smoke.replace("/api/v2/health", "")
     assert "status" in health_smoke and "200" in health_smoke
     assert "x-comicpile-api-runtime" in health_smoke
+    assert 'tolower($1) == "x-comicpile-api-runtime:"' in health_smoke
     assert '"rust"' in health_smoke
     assert "/api/v2/auth/login" in login_smoke
     assert "401" in login_smoke

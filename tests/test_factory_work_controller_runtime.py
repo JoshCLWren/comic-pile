@@ -930,3 +930,49 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     assert claims[-1] == (
         feedback, "17", {"action": "ci-repair", "expected_head": head, "source": "manual"},
     )
+
+
+@pytest.mark.parametrize("worker", ["54", "82", "97"])
+def test_z_ai_quota_pauses_shared_account_and_auto_resumes(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str,
+) -> None:
+    """A trusted 429 stops assignment for the shared account, then expires."""
+    completion = __import__("factory_completion_controller")
+
+    comments = [{
+        "author_association": "OWNER",
+        "body": (
+            "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-97 -->\n"
+            "Worker: opencode-free-model-factory-97\nAttempt outcome: provider_quota\n"
+            "Updated: 2026-11-07T00:00:00Z\n"
+        ),
+    }]
+    updated = completion.parse_time("2026-11-07T00:00:00Z")
+    assert updated is not None
+    monkeypatch.setattr(completion, "registry_comments", lambda: comments)
+    monkeypatch.setattr(controller.time, "time", lambda: updated + 1)
+    assert "paused until" in controller.runtime_quota_block_reason(worker)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: pytest.fail(
+        "a quota pause must stop assignment before lease/capacity work"
+    ))
+    assert controller.assign(worker) is None
+    monkeypatch.setattr(controller.time, "time", lambda: updated + 1800)
+    assert controller.runtime_quota_block_reason(worker) is None
+
+
+def test_runtime_quota_ignores_untrusted_and_other_providers(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """External prose cannot pause the fleet; other providers are unaffected."""
+    completion = __import__("factory_completion_controller")
+
+    monkeypatch.setattr(completion, "registry_comments", lambda: [{
+        "author_association": "NONE",
+        "body": "Worker: opencode-free-model-factory-97\nAttempt outcome: provider_quota\n"
+                "Updated: 2026-11-07T00:00:00Z\n",
+    }])
+    updated = completion.parse_time("2026-11-07T00:00:00Z")
+    assert updated is not None
+    monkeypatch.setattr(controller.time, "time", lambda: updated + 1)
+    assert controller.runtime_quota_block_reason("97") is None
+    assert controller.runtime_quota_block_reason("46") is None

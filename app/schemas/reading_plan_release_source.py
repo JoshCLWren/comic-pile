@@ -38,6 +38,21 @@ class ReleaseSourceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReadingPlanReleaseSourceStatus(BaseModel):
+    """One followed ComicVine volume and its sync state on a Reading Plan."""
+
+    source_id: int
+    thread_id: int
+    external_identity_id: int
+    provider_volume_id: str
+    provider_title: str | None = None
+    provider_publisher: str | None = None
+    provider_start_year: int | None = None
+    provider_issue_count: int | None = None
+    enabled: bool
+    last_synced_at: datetime | None = None
+
+
 class ReadingPlanReleaseCandidate(BaseModel):
     """One ComicVine volume a reader may follow for a Reading Plan thread.
 

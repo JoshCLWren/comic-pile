@@ -5083,7 +5083,8 @@
         "required": [
           "die",
           "issue_ids",
-          "thread_ids"
+          "thread_ids",
+          "pool_reason"
         ],
         "properties": {
           "die": {
@@ -5098,6 +5099,10 @@
               "format": "int32"
             },
             "description": "The eligible issue identifiers, in queue order."
+          },
+          "pool_reason": {
+            "$ref": "#/components/schemas/PoolReason",
+            "description": "Why an empty in-play pool has no faces, when it does.\nDerived from the already-loaded Option E inputs and the eligible\nfrontiers before the die bound and browser snoozes, exactly as\n`GET /api/v2/roll/bootstrap` reports it. `ready` means at least one\nfrontier is eligible; the other variants name why an empty pool has\nno in-play faces (`no_series`, `all_blocked`, `all_completed`,\n`all_out_of_pool`). It never carries a list or whole-library report."
           },
           "thread_ids": {
             "type": "array",

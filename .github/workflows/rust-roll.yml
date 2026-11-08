@@ -62,11 +62,18 @@ jobs:
       SECRET_KEY: native-roll-test-secret
       DATABASE_URL: postgresql+asyncpg://postgres:native-local-test@127.0.0.1:5432/native_auth_test
       RUST_ROLL_TEST_DATABASE_URL: postgresql://postgres:native-local-test@127.0.0.1:5432/native_auth_test
+      RUST_ROLL_PARITY_DATABASE_URL: postgresql://roll_test_dml:roll-test-dml@127.0.0.1:5432/native_auth_test
     defaults:
       run:
         working-directory: native/roll-service
     steps:
       - uses: actions/checkout@v7
+      - name: Reject any database-test skip setting
+        run: |
+          if [[ -n "${RUST_ROLL_ALLOW_DB_SKIP+x}" ]]; then
+            echo "::error::RUST_ROLL_ALLOW_DB_SKIP is forbidden in CI and factory tests."
+            exit 1
+          fi
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
       - name: Formatting
@@ -87,6 +94,22 @@ jobs:
         run: uv run python scripts/export_roll_test_schema.py --check
       - name: Unit and integration tests
         run: cargo test --locked --all-targets
+      - name: Assert missing database URL fails, not skips
+        run: |
+          set -euo pipefail
+          output="$(mktemp)"
+          trap 'rm -f "$output"' EXIT
+          if env -u RUST_ROLL_TEST_DATABASE_URL cargo test --locked --lib \
+              test_support::tests::the_test_role_cannot_create_persistent_schema >"$output" 2>&1; then
+            echo "::error::Database-backed Rust test passed without its required database URL."
+            cat "$output"
+            exit 1
+          fi
+          if ! grep -q 'RUST_ROLL_TEST_DATABASE_URL is required' "$output"; then
+            echo "::error::Database-backed test failed for the wrong reason."
+            cat "$output"
+            exit 1
+          fi
       - name: Build scalar parity runner
         run: cargo build --locked --examples
       - name: Python versus Rust scalar parity

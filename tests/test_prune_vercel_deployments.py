@@ -160,8 +160,8 @@ def test_verify_project_rejects_name_or_id_mismatch() -> None:
         verify_project(project, project_id="prj_expected", project_name="other")
 
 
-def test_select_keepers_keeps_only_live_production_alias() -> None:
-    """Keep-N=1 is the live alias only; previous READY production is deleted."""
+def test_select_keepers_retains_previous_ready_and_live_production() -> None:
+    """Keep-N=2 protects the live target and most recent older READY production."""
     live = _deployment("dpl_live", created=300)
     previous = _deployment("dpl_prev", created=200)
     older = _deployment("dpl_old", created=100)
@@ -172,13 +172,12 @@ def test_select_keepers_keeps_only_live_production_alias() -> None:
     deployments = [older, failed, previous, preview, live, building]
     keepers = select_keepers("dpl_live", deployments)
 
-    assert KEEP_N == 1
-    assert keepers == {"dpl_live", "dpl_building"}
+    assert KEEP_N == 2
+    assert keepers == {"dpl_live", "dpl_prev", "dpl_building"}
     candidates = select_prune_candidates(deployments, keepers)
     assert [item.uid for item in candidates] == [
         "dpl_old",
         "dpl_fail",
-        "dpl_prev",
         "dpl_preview",
     ]
 
@@ -196,7 +195,7 @@ def test_select_keepers_keeps_live_alias_even_when_not_ready() -> None:
 
 
 def test_select_keepers_keeps_only_live_on_first_production_deploy() -> None:
-    """A first production deploy still keeps only the live alias."""
+    """A first production deploy has no prior READY rollback candidate."""
     live = _deployment("dpl_live", created=100)
     canceled = _deployment("dpl_canceled", created=50, state="CANCELED")
 
@@ -261,9 +260,9 @@ def test_run_prune_deletes_non_keepers_and_never_the_live_alias() -> None:
     )
 
     assert result.live_id == "dpl_live"
-    assert set(result.deleted) == {"dpl_old", "dpl_prev", "dpl_error"}
+    assert set(result.deleted) == {"dpl_old", "dpl_error"}
     assert "dpl_live" not in client.deleted
-    assert "dpl_prev" in client.deleted
+    assert "dpl_prev" in result.kept and "dpl_prev" not in client.deleted
     assert "dpl_building" not in client.deleted
     assert result.failed == ()
 
@@ -354,9 +353,9 @@ def test_script_never_invokes_project_level_vercel_remove() -> None:
     assert "os.system" not in source
     assert "vercel remove comic-pile" not in source
     assert "DELETE_BATCH_SIZE = 200" in source
-    assert "KEEP_N = 1" in source
-    assert "keep-N=1" in source
-    assert "keep-N=2" not in source
+    assert "KEEP_N = 2" in source
+    assert "keep-N=2" in source
+    assert "keep-N=1" not in source
 
 
 def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
@@ -364,10 +363,10 @@ def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "scripts/prune_vercel_deployments.py" in workflow
-    assert "--keep-n 1" in workflow
+    assert "--keep-n 2" in workflow
     assert "--fail-soft" in workflow
-    assert "Keep only the live production alias" in workflow
-    assert "previous Ready production" not in workflow
+    assert "Keep live and previous READY production" in workflow
+    assert "No rollback candidate" not in workflow
     assert "needs.deploy.result == 'success'" in workflow
     assert "needs.deploy.result == 'skipped'" in workflow
     assert "vercel remove comic-pile" not in workflow
@@ -378,14 +377,14 @@ def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
     assert "ref: ${{ needs.preflight.outputs.deploy_sha }}" in workflow
 
 
-def test_deployment_docs_describe_keep_one_live_alias_policy() -> None:
+def test_deployment_docs_describe_two_ready_production_policy() -> None:
     """The keep policy must be documented next to the deploy contract."""
     docs = DOCS.read_text(encoding="utf-8")
 
     assert "current production" in docs
-    assert "keep-N=1" in docs
-    assert "keep-N=2" not in docs
-    assert "no rollback candidate" in docs
+    assert "Keep-N=2 production READY policy" in docs
+    assert "keep-N=1" not in docs
+    assert "rollback candidate" in docs
     assert "scripts/prune_vercel_deployments.py" in docs
     assert "--fail-soft" in docs
 
@@ -415,6 +414,7 @@ def test_prune_refreshes_protection_when_rollout_starts_after_planning() -> None
                     "targets": {"production": "dpl_incoming"},
                 }
                 self.deployments = [
+                    _deployment("dpl_ancient", created=50),
                     _deployment("dpl_serving", created=100),
                     _deployment("dpl_incoming", created=300, state="BUILDING"),
                 ]
@@ -422,9 +422,134 @@ def test_prune_refreshes_protection_when_rollout_starts_after_planning() -> None
 
     client = RolloutVercel(
         {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_previous"}},
-        [_deployment("dpl_serving", created=100), _deployment("dpl_previous", created=200)],
+        [_deployment("dpl_ancient", created=50), _deployment("dpl_serving", created=100), _deployment("dpl_previous", created=200)],
     )
     result = run_prune(client, project_id="prj_expected", project_name="comic-pile", dry_run=False, log=lambda _: None)
     assert client.deleted == []
     assert "dpl_serving" in result.kept
     assert result.live_id == "dpl_incoming"
+
+
+def test_previous_ready_ignores_newer_failed_preview_and_building() -> None:
+    """The latest record may not be a recoverable production deployment."""
+    rows = [
+        _deployment("dpl_old", created=100),
+        _deployment("dpl_prev", created=200),
+        _deployment("dpl_live", created=300),
+        _deployment("dpl_failed", created=400, state="ERROR"),
+        _deployment("dpl_preview", created=500, target="preview"),
+        _deployment("dpl_building", created=600, state="BUILDING", target=None),
+    ]
+    keepers = select_keepers("dpl_live", rows)
+
+    assert {"dpl_live", "dpl_prev", "dpl_building"} <= keepers
+    assert "dpl_old" not in keepers
+    assert "dpl_failed" not in keepers
+    assert "dpl_preview" not in keepers
+
+
+def test_alias_rollback_retains_newer_previous_ready() -> None:
+    """An operator may promote an older READY deployment back to production."""
+    rows = [
+        _deployment("dpl_live", created=100),
+        _deployment("dpl_older", created=50),
+        _deployment("dpl_last_live", created=300),
+        _deployment("dpl_previous", created=200),
+    ]
+    assert select_keepers("dpl_live", rows) == {"dpl_live", "dpl_last_live"}
+
+
+def test_previous_ready_ties_are_deterministic() -> None:
+    """Scrambled API pagination order cannot change the selected fallback."""
+    rows = [
+        _deployment("dpl_b", created=100),
+        _deployment("dpl_a", created=100),
+        _deployment("dpl_live", created=200),
+    ]
+    assert select_keepers("dpl_live", rows) == {"dpl_live", "dpl_b"}
+    assert select_keepers("dpl_live", list(reversed(rows))) == {"dpl_live", "dpl_b"}
+
+
+def test_prune_does_not_delete_new_live_alias_after_planning() -> None:
+    """Alias promotion between candidate selection and delete rechecks protection."""
+
+    class MovingAliasVercel(FakeVercel):
+        project_reads = 0
+
+        def fetch_project(self) -> Mapping[str, object]:
+            self.project_reads += 1
+            if self.project_reads > 1:
+                self.project = {
+                    "id": "prj_expected",
+                    "name": "comic-pile",
+                    "targets": {"production": "dpl_old"},
+                }
+            return self.project
+
+    client = MovingAliasVercel(
+        {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_live"}},
+        [
+            _deployment("dpl_old", created=100),
+            _deployment("dpl_prev", created=200),
+            _deployment("dpl_live", created=300),
+        ],
+    )
+    result = run_prune(
+        client,
+        project_id="prj_expected",
+        project_name="comic-pile",
+        dry_run=False,
+        log=lambda _: None,
+    )
+
+    assert "dpl_old" not in client.deleted
+    assert "dpl_old" in result.kept
+    assert "dpl_prev" not in client.deleted
+    assert "dpl_live" not in client.deleted
+
+
+def test_vercel_protection_wins_a_delete_race() -> None:
+    """Aliased rows rejected by Vercel are keepers, not failed deletions."""
+    client = FakeVercel(
+        {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_live"}},
+        [
+            _deployment("dpl_old", created=100),
+            _deployment("dpl_prev", created=200),
+            _deployment("dpl_live", created=300),
+        ],
+        delete_results={
+            "dpl_old": DeleteOutcome("dpl_old", False, 409, True, "currently aliased"),
+        },
+    )
+    result = run_prune(
+        client,
+        project_id="prj_expected",
+        project_name="comic-pile",
+        dry_run=False,
+        log=lambda _: None,
+    )
+    assert result.failed == ()
+    assert result.deleted == ()
+    assert "dpl_old" in result.kept
+
+
+def test_failed_latest_deploy_keeps_previous_ready_rollback_candidate() -> None:
+    """A later failed promotion cannot consume the prior-ready slot."""
+    client = FakeVercel(
+        {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_live"}},
+        [
+            _deployment("dpl_old", created=100),
+            _deployment("dpl_prev", created=200),
+            _deployment("dpl_live", created=300),
+            _deployment("dpl_failed", created=400, state="FAILED"),
+        ],
+    )
+    result = run_prune(
+        client,
+        project_id="prj_expected",
+        project_name="comic-pile",
+        dry_run=False,
+        log=lambda _: None,
+    )
+    assert set(result.deleted) == {"dpl_old", "dpl_failed"}
+    assert "dpl_prev" in result.kept
