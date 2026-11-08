@@ -76,7 +76,10 @@ export default function RollPage() {
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
   // model. Bootstrap remains the fallback while the query settles or fails.
-  const { data: scopedDieState } = useRollDieState()
+  const { data: cachedScopedDieState, isError: isScopedDieStateError } = useRollDieState()
+  // TanStack Query preserves previously successful data after a failed refetch.
+  // A failed scoped refresh must not overrule the newly reconciled bootstrap die.
+  const scopedDieState = isScopedDieStateError ? undefined : cachedScopedDieState
 
   // Eligible-pool surface migration (#4719): the scoped resource owns the
   // ordered thread ids for the current die, with the browser snooze cookie
@@ -555,7 +558,7 @@ export default function RollPage() {
           onCloseOverride={modals.closeOverrideModal}
           isDieModalOpen={state.isDieModalOpen}
           onCloseDieModal={() => state.setIsDieModalOpen(false)}
-          currentDie={state.currentDie}
+          currentDie={effectiveDie}
           onSetDie={actions.handleSetDie}
           onResetDice={handleResetDice}
           resetDicePending={resetDiceMutation.isPending}
