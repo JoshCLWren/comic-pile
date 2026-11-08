@@ -129,7 +129,7 @@ def generate_routes(
     # Preflight to every still-registered Python operation must reach FastAPI's
     # CORS middleware even though OPTIONS is not listed in its OpenAPI schema.
     python_rules = []
-    for path, methods in python_methods.items():
+    for path, methods in sorted(python_methods.items()):
         methods.add("OPTIONS")
         python_rules.append({
             "src": route_regex(path),
