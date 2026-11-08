@@ -409,7 +409,11 @@ async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
         .iter()
         .map(|row| row.get(0))
         .collect();
-    assert_eq!(remaining, vec![issues["1"]], "stale repair must not delete it");
+    assert_eq!(
+        remaining,
+        vec![issues["1"]],
+        "stale repair must not delete it"
+    );
 }
 
 #[tokio::test]
