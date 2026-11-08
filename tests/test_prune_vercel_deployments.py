@@ -372,7 +372,7 @@ def test_deploy_production_prunes_after_smoke_and_on_skipped_sha() -> None:
     assert "needs.deploy.result == 'skipped'" in workflow
     assert "vercel remove comic-pile" not in workflow
     assert workflow.index(".venv/bin/alembic upgrade head") < workflow.index("vercel deploy")
-    assert workflow.index("Smoke production health") < workflow.index(
+    assert workflow.index("Smoke production Rust health") < workflow.index(
         "Prune older Vercel deployments"
     )
     assert "ref: ${{ needs.preflight.outputs.deploy_sha }}" in workflow
