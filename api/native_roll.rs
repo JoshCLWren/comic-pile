@@ -175,6 +175,20 @@ where
     }
 }
 
+/// Unknown API paths must terminate in Rust without initializing Python or Neon.
+async fn native_not_found() -> Response {
+    let mut response = (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({"detail": "Not Found"})),
+    )
+        .into_response();
+    response.headers_mut().insert(
+        "x-comicpile-api-runtime",
+        HeaderValue::from_static("rust"),
+    );
+    response
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
@@ -256,6 +270,7 @@ fn app() -> Router {
         .route("/api/auth/csrf", get(native_dispatch))
         .route("/api/auth/forgot-password", post(native_dispatch))
         .route("/api/auth/reset-password", post(native_dispatch))
+        .fallback(native_not_found)
 }
 
 #[tokio::main]
