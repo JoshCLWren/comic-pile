@@ -170,7 +170,7 @@ describe('issue-specific cover and shared rating input', () => {
 
   it('treats the Roll featured cover as decorative while preserving accessible zoom controls', () => {
     const image = 'https://comicvine.gamespot.com/a/uploads/original/hellboy.jpg'
-    render(
+    const { container } = render(
       <ComicIssueCover
         coverImageUrl={image}
         threadTitle="Hellboy"
@@ -183,7 +183,7 @@ describe('issue-specific cover and shared rating input', () => {
       </ComicIssueCover>,
     )
     expect(screen.getByTestId('roll-decorative-cover')).toBeVisible()
-    expect(screen.getByRole('img', { hidden: true })).toHaveAttribute('alt', '')
+    expect(container.querySelector('img')).toHaveAttribute('alt', '')
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'View cover larger' })).toBeEnabled()
   })
