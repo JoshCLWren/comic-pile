@@ -654,3 +654,30 @@ def test_deploy_reconciles_only_exact_ready_alias_then_runs_existing_smoke() -> 
     assert source.index("Verify production schema at application head") < source.index(
         "Deploy exact commit to production"
     ) < source.index("Smoke production rejected login on the Rust runtime")
+
+
+
+def test_ready_only_deduplication_cannot_lift_a_smoke_freeze() -> None:
+    """READY without probes cannot shadow the real failed attempt."""
+    module = load_module()
+    failed = run(99, conclusion="failure", job_list=attempted_jobs(deploy_conclusion="failure"))
+    skipped = run(100, updated_at="2026-10-12T19:00:00Z", job_list=jobs(
+        ("Red-deploy freeze gate", "success"),
+        ("Deduplicate exact main SHA", "success"),
+        ("Migrate Neon and deploy exact main SHA", "skipped"),
+        ("Prune older Vercel deployments", "success"),
+    ))
+    decision = module.evaluate_freeze({"workflow_runs": [failed, skipped]})
+    assert decision["blocked"] is True
+    assert decision["run_id"] == 99
+
+
+def test_preflight_failure_still_routes_to_repair() -> None:
+    """A failure before migration is still actionable and must freeze."""
+    module = load_module()
+    failed = run(99, conclusion="failure", job_list=jobs(
+        ("Red-deploy freeze gate", "success"),
+        ("Deduplicate exact main SHA", "failure"),
+        ("Migrate Neon and deploy exact main SHA", "skipped"),
+    ))
+    assert module.evaluate_freeze({"workflow_runs": [failed]})["blocked"] is True

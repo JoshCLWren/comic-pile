@@ -146,8 +146,8 @@ def run_attempted_deploy(
         jobs: Optional job list. ``None`` means job data is unknown.
 
     Returns:
-        ``True`` when a non-gate job ran, ``False`` when the run was
-        gate-blocked, ``None`` when job data is unknown.
+        ``True`` when the deploy job ran or setup failed, ``False`` for
+        gate-blocked/deduplicated runs, ``None`` when job data is unknown.
 
     """
     attached = jobs if jobs is not None else _jobs_from_run(run)
@@ -158,7 +158,11 @@ def run_attempted_deploy(
         if name == GATE_JOB_NAME:
             continue
         conclusion = str(job.get("conclusion") or "").lower()
-        if conclusion not in NON_ATTEMPT_JOB_CONCLUSIONS:
+        # A successful deduplication/prune is not a verified deployment and
+        # must not hide the real attempt from recovery or lift a smoke freeze.
+        if name == DEPLOY_JOB_NAME and conclusion not in NON_ATTEMPT_JOB_CONCLUSIONS:
+            return True
+        if conclusion in RED_CONCLUSIONS:
             return True
     return False
 
