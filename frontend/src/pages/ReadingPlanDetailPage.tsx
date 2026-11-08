@@ -292,7 +292,7 @@ export default function ReadingPlanDetailPage() {
               actionLabel="Read next issue"
               expandedVariant="featured"
             />
-          )
+          )}
           {editableListId != null ? (
             <button
               type="button"
