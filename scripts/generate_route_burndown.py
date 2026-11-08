@@ -4,7 +4,10 @@
 The burndown is derived from two checked-in sources only:
 
 * ``docs/api/v2-route-inventory.json`` declares every live ``/api/v2``
-  operation with its runtime, status, known callers, and cutover owner, and
+  operation plus the full Python-handler surface (``v1`` and unversioned
+  operations, the catch-all ingress, and the orphan
+  ``GET /api/v2/reading-boundaries/{thread_id}``), each with its runtime,
+  status, known callers, and cutover owner, and
 * ``vercel.json`` declares the deployed ingress destination for each
   method/path.
 
@@ -12,9 +15,10 @@ For each operation this generator resolves the first matching Vercel route,
 classifies the burndown status (native Rust, shadowed by Rust, live
 transitional Python with callers, or unreferenced/orphaned), and writes the
 result back into the inventory as deterministic ``burndown`` fields plus a
-compact runtime summary in ``AGENTS.md``. Run without arguments to regenerate,
-or with ``--check`` to fail when either checked-in file is stale. API version
-is not implementation language: the URL segment never implies the runtime.
+compact runtime summary in ``AGENTS.md`` with a full-surface note pointing
+at the JSON inventory. Run without arguments to regenerate, or with
+``--check`` to fail when either checked-in file is stale. API version is
+not implementation language: the URL segment never implies the runtime.
 """
 
 from __future__ import annotations
@@ -30,6 +34,10 @@ INVENTORY_PATH: Final = Path("docs/api/v2-route-inventory.json")
 VERCEL_PATH: Final = Path("vercel.json")
 AGENTS_PATH: Final = Path("AGENTS.md")
 NATIVE_DESTINATIONS: Final = frozenset({"/api/native_roll.rs", "/api/native_issue.rs"})
+CATCH_ALL_SRC: Final = "/api(?:/.*)?"
+CATCH_ALL_DEST: Final = "/api/index.py"
+ORPHAN_METHOD: Final = "GET"
+ORPHAN_PATH: Final = "/api/v2/reading-boundaries/{thread_id}"
 BURN_DOWN_ISSUE: Final = 4739
 AGENTS_BEGIN_MARKER: Final = (
     "<!-- route-burndown:begin "
@@ -339,6 +347,284 @@ def _burndown_summary(enriched: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def _validated_named_operations(
+    value: object,
+    context: str,
+) -> list[dict[str, object]]:
+    """Validate one named full-surface operation list.
+
+    Args:
+        value: Raw JSON value for the operation list.
+        context: Human-readable context for error messages.
+
+    Returns:
+        The validated operation list.
+
+    Raises:
+        BurndownGenerationError: When the list is malformed.
+    """
+    if not isinstance(value, list):
+        raise BurndownGenerationError(f"{context} must be an array")
+    operations: list[dict[str, object]] = []
+    for index, raw_operation in enumerate(value):
+        operation = _object(raw_operation, f"{context}[{index}]")
+        _string(operation.get("method"), f"{context}[{index}].method")
+        _string(operation.get("path"), f"{context}[{index}].path")
+        _string(operation.get("runtime"), f"{context}[{index}].runtime")
+        _string(operation.get("status"), f"{context}[{index}].status")
+        _owner(operation.get("owning_issue"), f"{context}[{index}].owning_issue")
+        _consumers(operation.get("consumers"), f"{context}[{index}].consumers")
+        operations.append(operation)
+    return operations
+
+
+def _enrich_named_operations(
+    operations: list[dict[str, object]],
+    routes: list[VercelRoute],
+    context: str,
+) -> list[dict[str, object]]:
+    """Attach ingress and burndown fields to one full-surface list.
+
+    Args:
+        operations: Validated operations for one version bucket.
+        routes: Vercel routes for ingress resolution.
+        context: Human-readable context for error messages.
+
+    Returns:
+        Enriched operations preserving input order.
+
+    Raises:
+        BurndownGenerationError: When an operation has no ingress or the
+            declared runtime contradicts the ingress.
+    """
+    enriched: list[dict[str, object]] = []
+    for operation in operations:
+        method = _string(operation.get("method"), f"{context}.method")
+        path = _string(operation.get("path"), f"{context}.path")
+        runtime = _string(operation.get("runtime"), f"{context}.runtime")
+        consumers = _consumers(operation.get("consumers"), f"{context}.consumers")
+        destination = _resolve_destination(method, path, routes)
+        if destination is None:
+            raise BurndownGenerationError(f"{method} {path} has no vercel.json route")
+        status = _classify_burndown(runtime, consumers, destination)
+        entry: dict[str, object] = dict(operation)
+        entry["ingress_destination"] = destination
+        entry["burndown_status"] = status
+        entry["verified_against"] = "vercel.json"
+        enriched.append(entry)
+    return enriched
+
+
+def _count_status(
+    operations: list[dict[str, object]],
+    status: str,
+) -> int:
+    """Count enriched operations with one burndown status.
+
+    Args:
+        operations: Enriched operations.
+        status: Burndown status to count.
+
+    Returns:
+        The count of matching operations.
+    """
+    return sum(1 for item in operations if item.get("burndown_status") == status)
+
+
+def _full_surface_summary(
+    v1_operations: list[dict[str, object]],
+    unversioned_operations: list[dict[str, object]],
+    catch_all: dict[str, object],
+    orphan: dict[str, object],
+) -> dict[str, object]:
+    """Summarize full deployed surface counts for the inventory header.
+
+    Args:
+        v1_operations: Enriched ``/api/v1`` Python operations.
+        unversioned_operations: Enriched ``/api/*`` Python operations.
+        catch_all: Validated catch-all ingress entry.
+        orphan: Validated orphan operation entry.
+
+    Returns:
+        The deterministic full-surface summary object.
+    """
+    v1_total = len(v1_operations)
+    unversioned_total = len(unversioned_operations)
+    v1_shadowed = _count_status(v1_operations, "shadowed by Rust")
+    unversioned_shadowed = _count_status(unversioned_operations, "shadowed by Rust")
+    v1_live = _count_status(v1_operations, "live transitional Python with callers")
+    unversioned_live = _count_status(
+        unversioned_operations, "live transitional Python with callers"
+    )
+    v1_orphaned = _count_status(v1_operations, "unreferenced/orphaned")
+    unversioned_orphaned = _count_status(
+        unversioned_operations, "unreferenced/orphaned"
+    )
+    return {
+        "generated_by": "scripts/generate_route_burndown.py",
+        "issue": BURN_DOWN_ISSUE,
+        "ingress_source": "vercel.json",
+        "catch_all_src": _string(catch_all.get("src"), "catch_all.src"),
+        "catch_all_dest": _string(catch_all.get("dest"), "catch_all.dest"),
+        "orphan_method": _string(orphan.get("method"), "orphan.method"),
+        "orphan_path": _string(orphan.get("path"), "orphan.path"),
+        "v1_total": v1_total,
+        "v1_shadowed_by_rust": v1_shadowed,
+        "v1_live_python": v1_live,
+        "v1_orphaned": v1_orphaned,
+        "unversioned_total": unversioned_total,
+        "unversioned_shadowed_by_rust": unversioned_shadowed,
+        "unversioned_live_python": unversioned_live,
+        "unversioned_orphaned": unversioned_orphaned,
+        "total_python_surface": v1_total + unversioned_total,
+        "total_shadowed_by_rust": v1_shadowed + unversioned_shadowed,
+        "total_live_python": v1_live + unversioned_live,
+        "total_orphaned": v1_orphaned + unversioned_orphaned,
+    }
+
+
+def _validated_full_surface(
+    inventory: dict[str, object],
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Validate the full-surface declarations in ``inventory``.
+
+    Args:
+        inventory: Loaded inventory document.
+
+    Returns:
+        The catch-all entry and the orphan entry.
+
+    Raises:
+        BurndownGenerationError: When the declarations are missing or
+            malformed.
+    """
+    raw_full = inventory.get("full_surface")
+    if not isinstance(raw_full, dict):
+        raise BurndownGenerationError("inventory must define a full_surface object")
+    full = _object(raw_full, "full_surface")
+    catch_all = _object(full.get("catch_all"), "full_surface.catch_all")
+    orphan = _object(full.get("orphan"), "full_surface.orphan")
+    _string(catch_all.get("src"), "full_surface.catch_all.src")
+    _string(catch_all.get("dest"), "full_surface.catch_all.dest")
+    _string(orphan.get("method"), "full_surface.orphan.method")
+    _string(orphan.get("path"), "full_surface.orphan.path")
+    return catch_all, orphan
+
+
+def _verify_full_surface_entries(
+    catch_all: dict[str, object],
+    orphan: dict[str, object],
+    routes: list[VercelRoute],
+    v2_operations: list[dict[str, object]],
+) -> None:
+    """Verify catch-all and orphan declarations against ingress and v2 ops.
+
+    Args:
+        catch_all: Declared catch-all entry.
+        orphan: Declared orphan entry.
+        routes: Vercel routes for ingress resolution.
+        v2_operations: Enriched v2 operations.
+
+    Raises:
+        BurndownGenerationError: When either declaration disagrees with
+            ``vercel.json`` or the v2 inventory.
+    """
+    src = _string(catch_all.get("src"), "catch_all.src")
+    dest = _string(catch_all.get("dest"), "catch_all.dest")
+    if src != CATCH_ALL_SRC or dest != CATCH_ALL_DEST:
+        raise BurndownGenerationError(
+            f"catch-all must be {CATCH_ALL_SRC!r} -> {CATCH_ALL_DEST!r}"
+        )
+    found = any(
+        route.src == CATCH_ALL_SRC and route.dest == CATCH_ALL_DEST
+        for route in routes
+    )
+    if not found:
+        raise BurndownGenerationError("catch-all route missing from vercel.json")
+    method = _string(orphan.get("method"), "orphan.method")
+    path = _string(orphan.get("path"), "orphan.path")
+    if method != ORPHAN_METHOD or path != ORPHAN_PATH:
+        raise BurndownGenerationError(
+            f"orphan must be {ORPHAN_METHOD} {ORPHAN_PATH}"
+        )
+    destination = _resolve_destination(method, path, routes)
+    if destination != CATCH_ALL_DEST:
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
+        )
+    matches = [
+        item
+        for item in v2_operations
+        if item.get("method") == method and item.get("path") == path
+    ]
+    if len(matches) != 1:
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must match exactly one v2 operation"
+        )
+    match = matches[0]
+    if match.get("runtime") != "python-fastapi":
+        raise BurndownGenerationError(f"orphan {method} {path} must be python-fastapi")
+    if match.get("ingress_destination") != CATCH_ALL_DEST:
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
+        )
+    if match.get("burndown_status") != "unreferenced/orphaned":
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must be unreferenced/orphaned"
+        )
+
+
+def _render_full_surface(
+    inventory: dict[str, object],
+    routes: list[VercelRoute],
+    v2_operations: list[dict[str, object]],
+) -> dict[str, object]:
+    """Render the enriched full-surface section for the inventory.
+
+    Args:
+        inventory: Loaded inventory document.
+        routes: Vercel routes for ingress resolution.
+        v2_operations: Enriched v2 operations.
+
+    Returns:
+        The enriched ``full_surface`` object.
+
+    Raises:
+        BurndownGenerationError: When the inventory contradicts ingress.
+    """
+    catch_all, orphan = _validated_full_surface(inventory)
+    _verify_full_surface_entries(catch_all, orphan, routes, v2_operations)
+    raw_full = inventory.get("full_surface")
+    assert isinstance(raw_full, dict)
+    raw_full_map = {str(key): item for key, item in raw_full.items()}
+    v1_raw = _validated_named_operations(
+        raw_full_map.get("v1_operations"), "full_surface.v1_operations"
+    )
+    unversioned_raw = _validated_named_operations(
+        raw_full_map.get("unversioned_operations"),
+        "full_surface.unversioned_operations",
+    )
+    v1_operations = _enrich_named_operations(
+        v1_raw, routes, "full_surface.v1_operations"
+    )
+    unversioned_operations = _enrich_named_operations(
+        unversioned_raw, routes, "full_surface.unversioned_operations"
+    )
+    summary = _full_surface_summary(
+        v1_operations, unversioned_operations, catch_all, orphan
+    )
+    return {
+        "generated_by": "scripts/generate_route_burndown.py",
+        "issue": BURN_DOWN_ISSUE,
+        "ingress_source": "vercel.json",
+        "summary": summary,
+        "catch_all": dict(catch_all),
+        "orphan": dict(orphan),
+        "v1_operations": v1_operations,
+        "unversioned_operations": unversioned_operations,
+    }
+
+
 def _render_inventory(
     inventory: dict[str, object],
     routes: list[VercelRoute],
@@ -360,12 +646,14 @@ def _render_inventory(
     schema_version = inventory.get("schema_version", 1)
     description = inventory.get("description", "")
     retired = inventory.get("retired_legacy_operations", [])
+    full_surface = _render_full_surface(inventory, routes, operations)
     payload: dict[str, object] = {
         "schema_version": schema_version,
         "description": description,
         "updated_by_issue": BURN_DOWN_ISSUE,
         "burndown": summary,
         "operations": operations,
+        "full_surface": full_surface,
         "retired_legacy_operations": retired,
     }
     text = json.dumps(payload, indent=2) + "\n"
@@ -417,11 +705,16 @@ def _group_by_owner(
     return result
 
 
-def _render_agents_block(enriched: list[dict[str, object]]) -> str:
+def _render_agents_block(
+    enriched: list[dict[str, object]],
+    full_summary: dict[str, object] | None = None,
+) -> str:
     """Render the compact human-readable AGENTS.md runtime section.
 
     Args:
-        enriched: Enriched operations.
+        enriched: Enriched v2 operations.
+        full_summary: Enriched full-surface summary, or ``None`` when the
+            caller only renders the v2 compact section.
 
     Returns:
         The generated block without a trailing newline.
@@ -459,6 +752,33 @@ def _render_agents_block(enriched: list[dict[str, object]]) -> str:
         f"- Live v2 operations: {total} ({native} native-rust + {python_total} python orphan).",
         "- Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).",
     ]
+    if full_summary is not None:
+        v1_total = full_summary["v1_total"]
+        v1_shadowed = full_summary["v1_shadowed_by_rust"]
+        v1_live = full_summary["v1_live_python"]
+        unversioned_total = full_summary["unversioned_total"]
+        unversioned_shadowed = full_summary["unversioned_shadowed_by_rust"]
+        unversioned_live = full_summary["unversioned_live_python"]
+        python_surface = full_summary["total_python_surface"]
+        lines.append(
+            f"- Full Python-handler surface: {python_surface} operations "
+            f"(v1 {v1_total} + unversioned {unversioned_total}) plus "
+            f"1 v2 orphan = {python_surface + 1} Python-handler operations; "
+            f"v1 active {v1_live} live Python / {v1_shadowed} migrated "
+            f"(shadowed by Rust); unversioned active {unversioned_live} live "
+            f"Python / {unversioned_shadowed} migrated (shadowed by Rust); "
+            "rest via `/api/index.py` catch-all."
+        )
+        lines.append(
+            "- Catch-all: `/api(?:/.*)? -> /api/index.py` (Python); "
+            "orphan `GET /api/v2/reading-boundaries/{thread_id}` is the "
+            "same v2 operation above, also served via `/api/index.py`."
+        )
+        lines.append(
+            "- Full-surface inventory (v2 + v1 + unversioned + catch-all + "
+            "orphan) and per-operation callers: see "
+            "`docs/api/v2-route-inventory.json` `full_surface` (authoritative)."
+        )
     for item in orphan_ops:
         method = _string(item.get("method"), "method")
         path = _string(item.get("path"), "path")
@@ -549,9 +869,17 @@ def main() -> int:
     try:
         inventory = load_json(args.inventory)
         routes = _load_routes(args.vercel)
-        _, inventory_text = _render_inventory(inventory, routes)
+        payload, inventory_text = _render_inventory(inventory, routes)
         enriched_operations = _enrich_operations(_validated_operations(inventory), routes)
-        block = _render_agents_block(enriched_operations)
+        full_surface = payload.get("full_surface")
+        full_summary: dict[str, object] | None = None
+        if isinstance(full_surface, dict):
+            raw_summary = full_surface.get("summary")
+            if isinstance(raw_summary, dict):
+                full_summary = {
+                    str(key): item for key, item in raw_summary.items()
+                }
+        block = _render_agents_block(enriched_operations, full_summary)
         agents_original = args.agents.read_text(encoding="utf-8")
         agents_text = _render_agents_text(agents_original, block)
     except BurndownGenerationError as exc:

@@ -118,18 +118,147 @@ def test_native_declaration_contradicting_ingress_fails() -> None:
         _classify_burndown("native-rust", [], "/api/index.py")
 
 
+def test_full_surface_matches_deployed_ingress() -> None:
+    """Full-surface inventory pins v1/unversioned counts and shadowed set."""
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory.get("full_surface")
+    assert isinstance(full_surface, dict)
+    summary = full_surface.get("summary")
+    assert isinstance(summary, dict)
+    assert summary.get("v1_total") == 239
+    assert summary.get("v1_shadowed_by_rust") == 9
+    assert summary.get("v1_live_python") == 197
+    assert summary.get("v1_orphaned") == 33
+    assert summary.get("unversioned_total") == 45
+    assert summary.get("unversioned_shadowed_by_rust") == 9
+    assert summary.get("unversioned_live_python") == 23
+    assert summary.get("unversioned_orphaned") == 13
+    assert summary.get("total_python_surface") == 284
+    assert summary.get("total_shadowed_by_rust") == 18
+    assert summary.get("total_live_python") == 220
+    assert summary.get("total_orphaned") == 46
+    assert summary.get("catch_all_src") == "/api(?:/.*)?"
+    assert summary.get("catch_all_dest") == "/api/index.py"
+    assert summary.get("orphan_method") == "GET"
+    assert (
+        summary.get("orphan_path")
+        == "/api/v2/reading-boundaries/{thread_id}"
+    )
+    catch_all = full_surface.get("catch_all")
+    assert isinstance(catch_all, dict)
+    orphan = full_surface.get("orphan")
+    assert isinstance(orphan, dict)
+    raw_v1 = full_surface.get("v1_operations")
+    raw_unversioned = full_surface.get("unversioned_operations")
+    assert isinstance(raw_v1, list)
+    assert isinstance(raw_unversioned, list)
+    v1_ops = [item for item in raw_v1 if isinstance(item, dict)]
+    unversioned_ops = [item for item in raw_unversioned if isinstance(item, dict)]
+    assert len(v1_ops) == 239
+    assert len(unversioned_ops) == 45
+    shadowed_v1 = [
+        item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
+    ]
+    assert len(shadowed_v1) == 9
+    for item in shadowed_v1:
+        assert item.get("ingress_destination") == "/api/native_roll.rs"
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/roll/dismiss-pending"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/auth/login"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    shadowed_unversioned = [
+        item
+        for item in unversioned_ops
+        if item.get("burndown_status") == "shadowed by Rust"
+    ]
+    assert len(shadowed_unversioned) == 9
+    assert any(
+        item.get("path") == "/api/auth/login"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in unversioned_ops
+    )
+    live_v1 = [
+        item
+        for item in v1_ops
+        if item.get("burndown_status")
+        == "live transitional Python with callers"
+    ]
+    assert len(live_v1) == 197
+    for item in live_v1:
+        assert item.get("ingress_destination") == "/api/index.py"
+        assert item.get("consumers")
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/identity-inbox"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/users/me/preferences"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/creators/summaries"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/reading-mode"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/threads/groups:batch"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/sessions/current/"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    for item in v1_ops:
+        if item.get("burndown_status") == "shadowed by Rust":
+            assert item.get("runtime") == "python-fastapi"
+
+
 def test_rendered_outputs_match_checked_in_files() -> None:
     """Re-rendered inventory and agents section equal the checked-in bytes."""
     inventory = load_json(INVENTORY_PATH)
     routes = _load_routes(VERCEL_PATH)
-    _, inventory_text = _render_inventory(inventory, routes)
+    payload, inventory_text = _render_inventory(inventory, routes)
     assert INVENTORY_PATH.read_text(encoding="utf-8") == inventory_text
     inventory_from_file = json.loads(INVENTORY_PATH.read_text(encoding="utf-8"))
     assert isinstance(inventory_from_file, dict)
     raw_operations = inventory_from_file.get("operations")
     assert isinstance(raw_operations, list)
     operations = [item for item in raw_operations if isinstance(item, dict)]
-    block = _render_agents_block(operations)
+    full_surface = payload.get("full_surface")
+    assert isinstance(full_surface, dict)
+    raw_summary = full_surface.get("summary")
+    assert isinstance(raw_summary, dict)
+    full_summary = {str(key): item for key, item in raw_summary.items()}
+    block = _render_agents_block(operations, full_summary)
     agents_original = AGENTS_PATH.read_text(encoding="utf-8")
     assert _render_agents_text(agents_original, block) == agents_original
 
@@ -147,6 +276,12 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     assert "`POST /api/v2/reading-boundaries -> native-rust`" in agents
     assert "`GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`" in agents
     assert "see `docs/api/v2-route-inventory.json` (authoritative)" in agents
+    assert "Full Python-handler surface: 284 operations" in agents
+    assert "v1 239 + unversioned 45" in agents
+    assert "v1 active 197 live Python / 9 migrated (shadowed by Rust)" in agents
+    assert "unversioned active 23 live Python / 9 migrated" in agents
+    assert "`/api(?:/.*)? -> /api/index.py` (Python)" in agents
+    assert "`docs/api/v2-route-inventory.json` `full_surface` (authoritative)" in agents
     assert "Deployed runtime by cutover owner" in agents
     assert "- #4335 (10):" in agents
     assert "- #4684 (16):" in agents
