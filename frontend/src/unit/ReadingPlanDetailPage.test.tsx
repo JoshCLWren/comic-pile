@@ -267,17 +267,17 @@ describe('ReadingPlanDetailPage', () => {
     expect(within(upcoming).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   })
 
-  it('retries a failed header card load on the same plan without selecting a Roll', async () => {
+  it('opens the featured header card from the parent batch without an extra metadata request', async () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Age of Apocalypse' })
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95]))
-    fetchCards.mockRejectedValueOnce(new Error('cards offline'))
     fireEvent.click(screen.getByRole('button', { name: 'Read next issue' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('cards offline')
+    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Issue X-Men #95' })).toHaveLength(2))
+    const featured = screen.getAllByTestId('comic-issue-card').find((node) => node.dataset.variant === 'featured')
+    expect(featured).toBeDefined()
+    expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95])
     expect(patchIssue).not.toHaveBeenCalled()
     expect(mockSetPending).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Issue X-Men #95' })).toHaveLength(2))
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
