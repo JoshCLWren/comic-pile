@@ -395,7 +395,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Read & Rate unlocks once the active reading requirements are satisfied.',
+      'Automatic Roll waits for prerequisites, but you can still read an exact issue manually.',
     )
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
@@ -423,7 +423,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Read & Rate unlocks once the active reading requirements are satisfied.',
+      'Automatic Roll waits for prerequisites, but you can still read an exact issue manually.',
     )
   })
 
