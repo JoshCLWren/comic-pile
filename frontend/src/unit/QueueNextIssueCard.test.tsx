@@ -41,6 +41,7 @@ function issueList(id: number | null): IssueListResponse {
       id, issue_number: id === 37 ? '9' : '10', status: 'unread',
     }] as IssueListResponse['issues'],
     total_count: id == null ? 0 : 1,
+    page_size: 1,
     next_page_token: null,
   }
 }
