@@ -7,12 +7,13 @@ literal single statement. The 2026-11-07 #4335 update requires a reviewed
 ``sql_budget`` beside each DB-backed Rust operation in
 ``docs/api/v2-route-inventory.json``.
 
-This test pins that budget for the continuity-plan reader: it counts the
-application-issued statements on the handler's call path (auth, plan,
-sources, the authoritative Reading List read, the Option E snapshot, and
-the two release-metadata reads) and asserts the inventory budget matches,
-so a future edit cannot silently add a per-row or per-request statement.
-All of these statements are set-based and independent of library size.
+This test records the budget for the continuity-plan reader as a static
+call-site pin: it counts the plan handler's own query call sites and checks
+the inventory budget matches (auth/list/snapshot helper statements are
+presence-checked, not counted). A new helper-internal query will not fail
+this test automatically; it requires a manual inventory update backed by a
+measured budget. All of these statements are set-based and independent of
+library size.
 """
 
 from __future__ import annotations
@@ -53,7 +54,7 @@ def _reader_entry() -> dict[str, object]:
 
 
 def test_continuity_plan_reader_sql_budget_matches_handler_call_path() -> None:
-    """The declared budget equals the statements on the Rust call path."""
+    """The declared budget equals the statically pinned Rust call sites."""
     entry = _reader_entry()
     budget = entry.get("sql_budget")
     assert isinstance(budget, dict), "reader entry must declare a sql_budget"
