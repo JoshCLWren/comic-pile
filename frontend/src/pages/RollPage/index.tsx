@@ -24,6 +24,7 @@ import { getApiErrorDetail, getApiErrorStatus } from '../../utils/apiError'
 import { isDiceSide } from '../../components/diceTypes'
 import { threadsApi } from '../../services/api-threads'
 import { readRollSnoozes } from '../../services/api-roll'
+import type { RollBootstrapThread } from '../../types/rollBootstrap'
 import type { ThreadMetadata } from './types'
 import { useRollPageState } from './useRollPageState'
 import { useRollBootstrapSync } from './useRollBootstrapSync'
@@ -194,21 +195,20 @@ export default function RollPage() {
       (scopedIssueCards?.items ?? []).map((card) => [card.thread_id, card]),
     )
     return [...new Set(scopedEligibleIssueIds.thread_ids)]
-      .map((id) => {
+      .flatMap((id): RollBootstrapThread[] => {
         const bootstrapThread = byId.get(id)
-        if (bootstrapThread) return bootstrapThread
+        if (bootstrapThread) return [bootstrapThread]
         const card = cardByThreadId.get(id)
-        if (!card) return null
-        return {
+        if (!card) return []
+        return [{
           id,
           title: card.thread_title,
           format: '',
           issue_id: card.issue_id,
           issue_number: card.issue_number,
           tags: [],
-        }
+        }]
       })
-      .filter((thread): thread is NonNullable<typeof thread> => thread != null)
   }, [scopedEligibleIssueIds, scopedIssueCards, bootstrap?.roll_pool])
 
   useRollPendingSession({ state, bootstrap, rollPool: scopedPool })
