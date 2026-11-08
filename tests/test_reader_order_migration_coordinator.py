@@ -84,6 +84,30 @@ async def _thread_issue(
     return thread, issue
 
 
+def _isolate_synthetic_classifications(
+    monkeypatch: pytest.MonkeyPatch,
+    classifications: dict[int, str] | None = None,
+) -> None:
+    """Pin Step 14 lookups so synthetic IDs never inherit production maps."""
+    synthetic = dict(classifications or {})
+
+    def _classifications(
+        _index: object,
+    ) -> tuple[dict[int, str], dict[str, list[dict[str, object]]]]:
+        return (dict(synthetic), {})
+
+    for module in (
+        "app.services.explicit_reader_order_migration",
+        "app.services.reader_order_migration_coordinator",
+    ):
+        monkeypatch.setattr(f"{module}._load_step14_index", lambda: {})
+        monkeypatch.setattr(f"{module}._explicit_classifications", _classifications)
+    monkeypatch.setattr(
+        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
+        lambda _index: (),
+    )
+
+
 def test_migration_report_status_buckets() -> None:
     """Operator-facing statuses stay stable for every refusal class."""
     assert migration_report_status({"already_migrated": True, "ok": True}) == (
@@ -287,23 +311,12 @@ async def test_explicit_migration_refuses_needs_review_intersection(
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
 
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index",
-        lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: (
-            {
-                reader_order.id: "reading_plan_order",
-                needs_review.id: "needs_review",
-            },
-            {"family": []},
-        ),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {
+            reader_order.id: "reading_plan_order",
+            needs_review.id: "needs_review",
+        },
     )
 
     spec = ExplicitReaderOrderSpec(
@@ -399,20 +412,9 @@ async def test_build_manifest_report_marks_already_migrated_explicit(
     # Pin the classification: the production Step 14 index is keyed by
     # dependency ID, so sequential test IDs can collide with real
     # classifications (e.g. ID 15 is a production standalone_prerequisite).
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index",
-        lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: (
-            {dependency.id: "reading_plan_order" for dependency in reader_order},
-            {"family": []},
-        ),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {dependency.id: "reading_plan_order" for dependency in reader_order},
     )
 
     spec = ExplicitReaderOrderSpec(
@@ -492,20 +494,9 @@ async def test_grouped_already_migrated_rejects_extra_convergence_edge(
     # Pin the classification: the production Step 14 index is keyed by
     # dependency ID, so sequential test IDs can collide with real
     # classifications (e.g. ID 15 is a production standalone_prerequisite).
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index",
-        lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: (
-            {dependency.id: "reading_plan_order" for dependency in reader_order},
-            {"family": []},
-        ),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {dependency.id: "reading_plan_order" for dependency in reader_order},
     )
 
     spec = ExplicitReaderOrderSpec(
@@ -611,20 +602,9 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
     # Pin the classification: the production Step 14 index is keyed by
     # dependency ID, so sequential test IDs can collide with real
     # classifications (e.g. ID 15 is a production standalone_prerequisite).
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index",
-        lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: (
-            {dependency.id: "reading_plan_order" for dependency in reader_order},
-            {"family": []},
-        ),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {dependency.id: "reading_plan_order" for dependency in reader_order},
     )
 
     spec = ExplicitReaderOrderSpec(
@@ -678,11 +658,9 @@ async def test_build_manifest_report_marks_already_migrated_groupless_explicit(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("dependency_id", [None, 101])
 async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
-    dependency_id: int | None,
 ) -> None:
     """A Step 23B plan absorbs residual exact edges without losing its full order."""
     user = await get_or_create_user_async(async_db)
@@ -700,19 +678,17 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
         )
     ]
     issues = [row[1] for row in rows]
+    # IDs are sequence-minted: a hardcoded legacy ID would both depend on the
+    # production Step 14 map and risk a dependencies_pkey collision once the
+    # sequence reaches it, so the flushed IDs below are the only identities.
     dependencies = [
         Dependency(
-            id=dependency_id,
             source_issue_id=issues[0].id,
             target_issue_id=issues[2].id,
             note="covered by Step 23B",
             created_at=datetime.now(UTC),
         ),
         Dependency(
-            # Explicit legacy ID 101 does not advance PostgreSQL's sequence.
-            # Keep this unrelated synthetic edge away from the next sequence
-            # allocation so test order cannot produce a dependencies_pkey collision.
-            id=10_000_000 + issues[1].id if dependency_id is not None else None,
             source_issue_id=issues[1].id,
             target_issue_id=issues[2].id,
             note="residual explicit edge",
@@ -731,17 +707,9 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
         plan_name="Legacy order projection",
         reader_order_dependency_ids=tuple(row.id for row in dependencies),
     )
-    # Synthetic dependencies must never inherit classifications from production IDs.
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: ({row.id: "reading_plan_order" for row in dependencies}, {}),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {row.id: "reading_plan_order" for row in dependencies},
     )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
@@ -804,12 +772,10 @@ async def test_partial_overlap_overlays_explicit_gates_on_existing_plan(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("dependency_id", [None, 101])
 async def test_batch_apply_refuses_token_mismatch(
     async_db: AsyncSession,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    dependency_id: int | None,
 ) -> None:
     """Batch apply refuses when a safe row's snapshot token no longer matches."""
     user = await get_or_create_user_async(async_db)
@@ -837,7 +803,6 @@ async def test_batch_apply_refuses_token_mismatch(
     for issue in issues:
         async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
     reader_order = Dependency(
-        id=dependency_id,
         source_issue_id=issues[0].id,
         target_issue_id=issues[2].id,
         note="classified reader order",
@@ -856,18 +821,9 @@ async def test_batch_apply_refuses_token_mismatch(
         reader_order_dependency_ids=(reader_order.id,),
     )
     # Fixture identities must not inherit production dependency classifications.
-    # ID 101 is deliberately covered because the production index marks it
-    # needs_review; sequence allocation previously made this test order-dependent.
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {reader_order.id: "reading_plan_order"},
     )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
@@ -972,16 +928,9 @@ async def test_batch_apply_refuses_reader_fact_drift_before_mutation(
         reader_order_dependency_ids=(reader_order.id,),
     )
     # Synthetic identities must not inherit production Step 14 classifications.
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: ({reader_order.id: "reading_plan_order"}, {}),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {reader_order.id: "reading_plan_order"},
     )
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
@@ -1090,17 +1039,7 @@ async def test_batch_apply_refuses_group_membership_drift_before_mutation(
     # This test exercises post-dry-run group drift, not the production Step 14
     # dependency classifications. Generated test IDs can collide with historical
     # production IDs (e.g. "needs_review" dependency 101), so isolate them.
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._load_step14_index", lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._explicit_classifications",
-        lambda _index: ({}, {}),
-    )
-    monkeypatch.setattr(
-        "app.services.explicit_reader_order_migration._generated_reader_order_patterns",
-        lambda _index: (),
-    )
+    _isolate_synthetic_classifications(monkeypatch)
     snapshot = await build_explicit_reader_order_dry_run(async_db, spec)
     assert snapshot["ok"] is True, snapshot["errors"]
     snapshot = {**snapshot, "status": "safe-to-migrate"}
