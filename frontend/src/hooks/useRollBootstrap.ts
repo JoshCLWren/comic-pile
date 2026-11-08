@@ -129,6 +129,14 @@ export function useRollBootstrap(api?: RollBootstrapApi) {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.roll.eligibleIssueIdsAll(),
       })
+      // A rating (or other reconciled mutation) can change the logical die.
+      // The Roll header/die sync prefer the scoped dieState resource, so it
+      // must refresh alongside the eligible pool or the page keeps the
+      // pre-rating die for the stale window (30s default) after Read/Rate.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.roll.dieState(),
+        exact: true,
+      })
     }
 
     window.addEventListener(ROLL_BOOTSTRAP_RECONCILED_EVENT, handleReconciledBootstrap)
