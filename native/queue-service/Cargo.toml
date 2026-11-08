@@ -1,0 +1,37 @@
+[package]
+name = "comicpile-queue-service"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88"
+publish = false
+
+[dependencies]
+bytes = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+tokio-native-tls = "0.3"
+validator = { version = "0.20", features = ["derive"] }
+tower = "0.5"
+thiserror = "2.0"
+sha2 = "0.10"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-native-tls"] }
+http = "1.1"
+bcrypt = "0.17"
+axum = "0.8"
+base64 = "0.22"
+chrono = "0.4"
+chrono-tz = "0.10"
+deadpool-postgres = "0.14"
+jsonwebtoken = { version = "9", default-features = false }
+native-tls = "0.2"
+postgres-native-tls = "0.5"
+rand = "0.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "io-util"] }
+tokio-postgres = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+unicode-casefold = "0.2"
+utoipa = "5"
