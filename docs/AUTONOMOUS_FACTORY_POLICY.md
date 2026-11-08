@@ -696,3 +696,14 @@ advance commits, including squash-body subjects without duplicate credit.
 Retired and unattributed history remain visible. Immutable merged attribution
 is cached on the existing status branch; unavailable history is not reported as zero.
 
+### Measured starter/finisher preference
+
+Within otherwise eligible work, lanes pinned to `z-ai` / `glm-4.5-flash`
+prefer fresh issues and lanes pinned to `kilo-auto` / `kilo-auto/free` prefer
+PR changes-requested and CI-repair work. The role comes from source/model in
+the current roster, including future duplicate slots, not worker numbers.
+Main-breakage and user-reported bugs retain protected priority. Every lane
+falls back to normal ranking when no preferred work is eligible. Manual
+issue/repair dispatch tries the corresponding eligible specialist first, then
+continues through normal workers if assignment declines (busy, paused or leased).
+Review independence, claims, quotas, and remote capacity gates remain unchanged.

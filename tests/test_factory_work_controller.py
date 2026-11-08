@@ -2086,3 +2086,30 @@ def test_unrelated_pr_activity_cannot_extend_an_inactive_issue_lease(
     assert controller.paired_owned_targets([issue_row], [unrelated]) == {}
     assert controller.reconcile_stale_leases(now_epoch=now) == [4549]
     assert len(writes) == 1
+
+
+@pytest.mark.parametrize('worker,preferred', [('54', 'issue'), ('46', 'pr')])
+def test_starter_finisher_preferences_keep_normal_fallback(
+    controller: types.ModuleType, worker: str, preferred: str,
+) -> None:
+    """Specialists prefer their measured strength but still accept other eligible work."""
+    candidates = [
+        controller.Candidate('issue', 1001, 3, 4, '2026-11-01T00:00:00Z'),
+        controller.Candidate('pr', 1002, 3, 0, '2026-11-01T00:00:00Z',
+                             stage='factory:changes-requested'),
+        controller.Candidate('pr', 1004, 3, 0, '2026-10-01T00:00:00Z',
+                             stage='factory:review'),
+    ]
+    ordered = controller.order_candidates_for_worker(candidates, worker)
+    assert ordered[0].kind == preferred
+    fallback = [candidate for candidate in candidates if candidate.kind != preferred]
+    assert controller.order_candidates_for_worker(fallback, worker) == fallback
+    urgent = controller.Candidate('issue', 1003, 0, 4, '2026-11-07T00:00:00Z')
+    assert controller.order_candidates_for_worker([*candidates, urgent], worker)[0] == urgent
+    # A protected review must not be demoted by review-capacity or role preferences.
+    protected_review = controller.Candidate(
+        'pr', 1005, 0, 0, '2026-11-07T00:00:00Z', stage='factory:review',
+    )
+    assert controller.order_candidates_for_worker(
+        [*candidates, protected_review], worker,
+    )[0] == protected_review
