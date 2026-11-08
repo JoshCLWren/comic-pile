@@ -76,14 +76,15 @@ export default function RollPage() {
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
-  // model. Bootstrap remains the fallback while the query settles or fails.
+  // model. Bootstrap no longer carries die fields; the scoped query is the
+  // only die source with a d6 default while it settles or fails.
   const { data: cachedScopedDieState, isError: isScopedDieStateError } = useRollDieState()
   // TanStack Query preserves previously successful data after a failed refetch.
-  // A failed scoped refresh must not overrule the newly reconciled bootstrap die.
+  // A failed scoped refresh must not overrule the reconciled scoped die.
   const scopedDieState = isScopedDieStateError ? undefined : cachedScopedDieState
-  // #4352: derive during render, no effect/no state. Scoped wins, then the
-  // bootstrap manual pin, then the event-derived die, defaulting to d6.
-  const selectedDie = resolveRollSelectedDie(scopedDieState, bootstrap)
+  // #4352: derive during render, no effect/no state. Scoped-only, defaulting
+  // to d6 while pending or failed.
+  const selectedDie = resolveRollSelectedDie(scopedDieState)
 
   // Eligible-pool surface migration (#4719): the scoped resource owns the
   // ordered thread ids for the current die, with the browser snooze cookie
@@ -313,7 +314,6 @@ export default function RollPage() {
   const ratingViewData = useRatingView({
     state,
     currentDie: selectedDie,
-    bootstrap,
     readerContextRequested: rating.readerContextRequested,
     readingContextRequested: rating.readingContextRequested,
     readingBoundariesRequested: rating.readingBoundariesRequested,
@@ -337,8 +337,8 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  // Derived die drives the pool cutoff and 3D model; scoped wins over
-  // bootstrap with a d6 default (see `resolveRollSelectedDie` above).
+  // Derived die drives the pool cutoff and 3D model; scoped-only with a d6
+  // default (see `resolveRollSelectedDie` above).
   const effectiveDie = selectedDie
   const dieSize = effectiveDie || 6
   const filteredThreads = rollPool.filter(

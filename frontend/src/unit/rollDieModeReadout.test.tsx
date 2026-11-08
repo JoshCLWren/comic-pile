@@ -8,7 +8,6 @@ import { readerContextApi } from '../services/api-reader-context'
 import type { RollApi } from '../services/apiTypes'
 import { queryClient } from '../query/queryClient'
 import { queryKeys } from '../query/queryKeys'
-import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollPageState, RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 import type { RatingThread } from '../pages/RollPage/types'
 
@@ -91,36 +90,6 @@ function mockState(
   }
 }
 
-function bootstrapWithManualDie(manualDie: number | null): RollBootstrapResponse {
-  return {
-    session_id: 1,
-    user_id: 1,
-    current_die: manualDie ?? 6,
-    manual_die: manualDie,
-    pending_thread_id: null,
-    last_rolled_result: null,
-    session_mode: {
-      active_bandwidth: null,
-      predicted_bandwidth: null,
-      bandwidth_confidence: null,
-      bandwidth_source: null,
-      bandwidth_version: null,
-      active_intent: null,
-      predicted_intent: null,
-      intent_confidence: null,
-      intent_source: null,
-      intent_version: null,
-      session_mode_correction_guidance: null,
-    },
-    active_thread: null,
-    roll_pool: [],
-    snoozed_threads: [],
-    snoozed_count: 0,
-    skipped_thread_ids: [],
-    skipped_threads: [],
-  }
-}
-
 function wrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
     return <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -133,16 +102,12 @@ function testClient(): QueryClient {
   })
 }
 
-function renderUseRatingView(
-  bootstrap?: RollBootstrapResponse | null,
-  currentDie = 6,
-) {
+function renderUseRatingView(currentDie = 6) {
   return renderHook(
     () =>
       useRatingView({
         state: mockState(),
         currentDie,
-        bootstrap,
         readerContextRequested: false,
         readingContextRequested: false,
         readingBoundariesRequested: false,
@@ -176,35 +141,35 @@ beforeEach(() => {
   setDie.mockClear()
 })
 
-describe('rating view manual-die projection', () => {
+describe('rating view die projection (#4352 contract-after)', () => {
   it('reports automatic mode while no die is pinned', () => {
-    const { result } = renderUseRatingView(bootstrapWithManualDie(null))
+    const { result } = renderUseRatingView()
 
     expect(result.current.manualDie).toBeNull()
     expect(result.current.currentDie).toBe(6)
     expect(result.current.predictedDie).toBe(8)
   })
 
-  // Issue #3144: the rating card needs this projection to drop the ladder
-  // readout that manual mode suppresses.
-  it('reports the pinned die so the card can drop the ladder readout (#3144)', () => {
+  it('keeps the ladder readout at a pinned die now that manual mode is gone (#3144 retired)', () => {
     // `RollPage` derives the selected die during render (#4352) and passes it
     // to `useRatingView`, so the card sees the same die from both props.
-    const { result } = renderUseRatingView(bootstrapWithManualDie(20), 20)
+    // Bootstrap no longer carries manual_die, so manualDie is always null and
+    // the card always shows the ladder move.
+    const { result } = renderUseRatingView(20)
 
-    expect(result.current.manualDie).toBe(20)
+    expect(result.current.manualDie).toBeNull()
     expect(result.current.currentDie).toBe(20)
   })
 
-  it('treats a not-yet-loaded bootstrap as automatic mode', () => {
-    const { result } = renderUseRatingView(undefined)
+  it('treats a not-yet-loaded scoped die as automatic mode', () => {
+    const { result } = renderUseRatingView()
 
     expect(result.current.manualDie).toBeNull()
   })
 })
 
-describe('die-mode mutations refresh the manual_die projection', () => {
-  it('pinning a die invalidates the resources that report manual_die', async () => {
+describe('die-mode mutations invalidate scoped die-state', () => {
+  it('pinning a die invalidates the scoped die-state and bootstrap', async () => {
     const invalidateQueries = vi
       .spyOn(queryClient, 'invalidateQueries')
       .mockResolvedValue(undefined)

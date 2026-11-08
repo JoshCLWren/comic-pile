@@ -11,8 +11,7 @@ interface UseRollBootstrapSyncParams {
 /**
  * Redirects to the login boundary when the session expires. The page owns no
  * refetch here; the selected die is derived during render in `RollPage`
- * from `scopedDieState.die` with fallback to the bootstrap
- * `manual_die`/`current_die` pair (see `selectedDie.ts`), and the rolled
+ * from `scopedDieState.die` with a d6 default (see `selectedDie.ts`), and the rolled
  * result is hydrated by `useRollPendingSession` (wider source
  * `active_thread.last_rolled_result ?? bootstrap.last_rolled_result` when a
  * pending thread exists) with the die/CTA derived from

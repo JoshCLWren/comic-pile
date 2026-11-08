@@ -37,7 +37,6 @@ vi.mock('../components/GlossaryLink', () => ({
 // SAFETY: test fixture supplies only the fields the header component reads for session state
 const BOOTSTRAP = cast<RollBootstrapResponse>({
   session_mode: null,
-  manual_die: null,
 })
 
 function headerProps(overrides: Partial<React.ComponentProps<typeof RollHeader>> = {}) {
@@ -103,10 +102,9 @@ describe('Roll rating header chrome (#2712)', () => {
 
   // #4352: die selection is render-derived (`resolveRollSelectedDie`), not
   // effect-synced. The header receives the derived die as `currentDie`.
-  it('prefers the scoped die over bootstrap manual/current die (#4352)', () => {
+  it('uses the scoped die (#4352)', () => {
     const selectedDie = resolveRollSelectedDie(
       { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null },
-      { manual_die: 12, current_die: 8 },
     )
     expect(selectedDie).toBe(20)
     renderHeader({
@@ -117,44 +115,39 @@ describe('Roll rating header chrome (#2712)', () => {
     expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('falls back to bootstrap manual die while scoped state is unsettled (#4352)', () => {
-    const selectedDie = resolveRollSelectedDie(undefined, { manual_die: 12, current_die: 8 })
-    expect(selectedDie).toBe(12)
+  it('defaults to d6 while scoped state is unsettled (#4352 contract-after)', () => {
+    const selectedDie = resolveRollSelectedDie(undefined)
+    expect(selectedDie).toBe(6)
     renderHeader({ currentDie: selectedDie, dieState: null })
-    expect(screen.getByRole('button', { name: 'd12' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('falls back to bootstrap current die when no manual die is pinned (#4352)', () => {
-    const selectedDie = resolveRollSelectedDie(null, { manual_die: null, current_die: 8 })
-    expect(selectedDie).toBe(8)
+  it('defaults to d6 when scoped state is null (#4352 contract-after)', () => {
+    const selectedDie = resolveRollSelectedDie(null)
+    expect(selectedDie).toBe(6)
     renderHeader({ currentDie: selectedDie, dieState: null })
-    expect(screen.getByRole('button', { name: 'd8' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('defaults to d6 when both scoped and bootstrap dice are absent (#4352)', () => {
-    expect(resolveRollSelectedDie(undefined, undefined)).toBe(6)
-    expect(resolveRollSelectedDie(null, null)).toBe(6)
+  it('defaults to d6 when scoped state is absent (#4352 contract-after)', () => {
+    expect(resolveRollSelectedDie(undefined)).toBe(6)
+    expect(resolveRollSelectedDie(null)).toBe(6)
   })
 
-  it('falls back to bootstrap current die when the scoped query errored (#4352)', () => {
+  it('defaults to d6 when the scoped query errored (#4352 contract-after)', () => {
     // RollPage maps `isScopedDieStateError` to `undefined` scoped state
-    // (index.tsx:79-82) while preserving previously-cached data semantics;
-    // the bootstrap fallback must still win over the d6 default.
-    const selectedDie = resolveRollSelectedDie(undefined, { manual_die: null, current_die: 8 })
-    expect(selectedDie).toBe(8)
+    // (index.tsx) so the scoped-only derivation falls back to d6.
+    const selectedDie = resolveRollSelectedDie(undefined)
+    expect(selectedDie).toBe(6)
     renderHeader({ currentDie: selectedDie, dieState: null })
-    expect(screen.getByRole('button', { name: 'd8' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'd6' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('shows the new die after die-state invalidation without a bootstrap refetch (#4352)', () => {
     // `useSetDie` invalidates the scoped die-state query; the header must
-    // track the refetched `dieState` while `bootstrap` (and thus the derived
-    // fallback) stays byte-identical.
-    // SAFETY: minimal stub carrying only the fields the pure derivation reads; missing fields are never accessed.
-    const bootstrap = { manual_die: null, current_die: 6 } as RollBootstrapResponse
+    // track the refetched `dieState` while `bootstrap` stays byte-identical.
     const before = resolveRollSelectedDie(
       { die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
-      bootstrap,
     )
     const { rerender } = renderHeader({
       currentDie: before,
@@ -164,7 +157,6 @@ describe('Roll rating header chrome (#2712)', () => {
 
     const after = resolveRollSelectedDie(
       { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
-      bootstrap,
     )
     expect(after).toBe(20)
     rerender(
