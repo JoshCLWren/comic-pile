@@ -134,13 +134,13 @@ it('calls dependency endpoints with expected paths', async () => {
   expect(get).toHaveBeenCalledWith('/v1/dependencies/blocked')
   expect(get).toHaveBeenCalledWith('/v1/threads/11/dependencies')
   expect(post).toHaveBeenCalledWith('/v1/threads/12:getBlockingInfo')
-  expect(post).toHaveBeenCalledWith('/v1/dependencies/', {
+  expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'thread',
     source_id: 1,
     target_type: 'thread',
     target_id: 2,
   })
-  expect(del).toHaveBeenCalledWith('/v1/dependencies/7')
+  expect(del).toHaveBeenCalledWith('/v2/dependencies/7')
 })
 
 it('calls every remaining API resource endpoint', async () => {
@@ -227,7 +227,7 @@ it('handles request defaults and issue dependency payloads', async () => {
   await dependenciesApi.createDependency({
     sourceType: 'issue', sourceId: 8, targetType: 'issue', targetId: 9,
   })
-  expect(post).toHaveBeenCalledWith('/v1/dependencies/', {
+  expect(post).toHaveBeenCalledWith('/v2/dependencies/', {
     source_type: 'issue', source_id: 8, target_type: 'issue', target_id: 9,
   })
   await sessionApi.list()

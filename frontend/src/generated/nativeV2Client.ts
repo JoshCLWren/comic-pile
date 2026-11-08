@@ -31,6 +31,12 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface CreateDependencyRequest {
+  body: components['schemas']['DependencyCreateRequest']
+}
+
+export type CreateDependencyResponse = components['schemas']['NativeDependencyResponse']
+
 export interface CreateIssuesRequest {
   path: {
     thread_id: number
@@ -53,6 +59,14 @@ export interface CreateReadingListRequest {
 export type CreateReadingListResponse = components['schemas']['ReadingList']
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
+
+export interface DeleteDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+}
+
+export type DeleteDependencyResponse = void
 
 export interface DeleteIssueRequest {
   path: {
@@ -268,10 +282,12 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   csrf(): Promise<CsrfResponse>
+  deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   dieState(): Promise<DieStateResponse>
@@ -315,6 +331,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    createDependency(args: CreateDependencyRequest) {
+      return client.post<CreateDependencyResponse, CreateDependencyRequest['body']>(
+        "/v2/dependencies/",
+        args.body,
+      )
+    },
     createIssues(args: CreateIssuesRequest) {
       return client.post<CreateIssuesResponse, CreateIssuesRequest['body']>(
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
@@ -335,6 +357,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
+    },
+    deleteDependency(args: DeleteDependencyRequest) {
+      return client.delete<DeleteDependencyResponse>(
+        `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+      )
     },
     deleteIssue(args: DeleteIssueRequest) {
       return client.delete<DeleteIssueResponse>(
