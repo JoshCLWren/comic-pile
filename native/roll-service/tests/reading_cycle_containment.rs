@@ -284,6 +284,135 @@ fn bprd_list_order(ids: &BTreeMap<String, i32>) -> Vec<i32> {
 }
 
 #[tokio::test]
+async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "repair-race").await;
+    let (_, issues) = seed_thread(&state, owner, "Race Series", 1, &["1", "2", "3"]).await;
+    // A strict backwards edge (3 -> 1) conflicts with series order (1 -> 2 -> 3).
+    let list = seed_list(
+        &state,
+        owner,
+        "Race List",
+        "strict",
+        &[issues["3"], issues["1"]],
+    )
+    .await;
+    let request = json!({
+        "action": "delete_list_entry",
+        "list_id": list,
+        "issue_id": issues["1"],
+    });
+    let (preview_status, preview) = send(
+        &state,
+        (&token, &csrf),
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(request.clone()),
+    )
+    .await;
+    assert_eq!(preview_status, StatusCode::OK, "{preview}");
+    assert_eq!(preview["status_before"], "cycle");
+    assert!(preview["graph"]["repairs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|option| option["action"] == "delete_list_entry"
+            && option["list_id"] == list
+            && option["issue_id"] == issues["1"]));
+
+    // Simulate a competing, correctly serialized Reading List writer holding
+    // the exact same advisory lock as dependency creation and repair.
+    let mut writer = state.pool.get().await.unwrap();
+    let writer_tx = writer.transaction().await.unwrap();
+    writer_tx
+        .execute(
+            "SELECT pg_advisory_xact_lock($1,$2)",
+            &[&699001_i32, &owner],
+        )
+        .await
+        .unwrap();
+
+    let request = json!({
+        "action": "delete_list_entry",
+        "list_id": list,
+        "issue_id": issues["1"],
+        "confirm": true,
+    });
+    let repair_state = state.clone();
+    let task = tokio::spawn(async move {
+        send(
+            &repair_state,
+            (&token, &csrf),
+            "POST",
+            "/api/v2/reading-graph/repairs",
+            Some(request),
+        )
+        .await
+    });
+
+    // Wait for the handler to attempt its reader lock. On the previous
+    // implementation its snapshot was already read at this point, so the
+    // following graph edit caused an unsafe stale repair. This is a real
+    // PostgreSQL lock wait rather than a timing-dependent sleep.
+    let observer = state.pool.get().await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(8), async {
+        loop {
+            let waiting: bool = observer
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM pg_locks
+                     WHERE locktype='advisory' AND NOT granted
+                       AND classid=$1::oid AND objid=$2::oid)",
+                    &[&699001_i32, &owner],
+                )
+                .await
+                .unwrap()
+                .get(0);
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("confirmed repair should block on the writer's advisory lock");
+
+    // The writer resolves the cycle by deleting a *different* list entry.
+    // The requested entry still exists, but is no longer an offered repair.
+    writer_tx
+        .execute(
+            "DELETE FROM custom_cbl_entries WHERE list_id=$1 AND issue_id=$2",
+            &[&list, &issues["3"]],
+        )
+        .await
+        .unwrap();
+    writer_tx.commit().await.unwrap();
+    drop(writer);
+    drop(observer);
+
+    let (status, response) = task.await.unwrap();
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{response}");
+    assert_eq!(
+        response["detail"],
+        "Repair is not applicable to the current reading graph"
+    );
+
+    let reader = state.pool.get().await.unwrap();
+    let remaining: Vec<i32> = reader
+        .query(
+            "SELECT issue_id FROM custom_cbl_entries WHERE list_id=$1 ORDER BY position",
+            &[&list],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(remaining, vec![issues["1"]], "stale repair must not delete it");
+}
+
+#[tokio::test]
 async fn bprd_normal_add_preserves_reader_order_and_return_master_history() {
     let Some((state, _db)) = database().await else {
         return;
