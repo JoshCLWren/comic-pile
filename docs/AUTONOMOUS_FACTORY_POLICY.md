@@ -624,3 +624,12 @@ Scheduled ChatGPT workers must update their assigned permanent comment on regist
 A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
