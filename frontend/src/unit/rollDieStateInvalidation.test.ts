@@ -14,7 +14,7 @@ it('refreshes the scoped die-state resource after a die command (#4719)', async 
   await invalidateAfterRollDieModeUpdate(queryClient)
 
   // The Roll header reads its selected die from the scoped resource. Without
-  // this invalidation, set-die/roll/reset leaves the header on the replaced die
+  // this invalidation, dice-command/roll/reset leaves the header on the replaced die
   // until the query's stale window elapses.
   expect(queryClient.invalidateQueries).toHaveBeenCalledWith({
     queryKey: queryKeys.roll.dieState(),

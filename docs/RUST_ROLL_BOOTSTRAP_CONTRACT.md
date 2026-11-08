@@ -248,7 +248,7 @@ Migrate in this order, one surface per reviewable change:
 1. Die header — **selected die, ladder list, readout, die size and 3D model
    mounted** from `GET /v2/roll/die-state` (`die`, `ladder`), falling back
    to bootstrap `current_die` and the static ladder while the scoped query
-   settles or fails, and invalidated after roll/set-die/reset. Remaining in
+   settles or fails, and invalidated after roll/dice-command/reset. Remaining in
    this surface: drive `default_die` and `last_roll` from the scoped
    resource.
 2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
