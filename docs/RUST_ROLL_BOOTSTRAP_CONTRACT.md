@@ -227,8 +227,10 @@ adapter and contract coverage. Two residuals remain:
 
 ## Surface migration order (scoped resources, #4369)
 
-Bootstrap remains authoritative for session/pending/recovery, pool
-data, die size, and the 3D die model until those surfaces migrate. The
+Bootstrap remains authoritative for session/pending/recovery and supplies
+fallback pool metadata. The scoped die-state resource now owns die size
+and the 3D die model when its query succeeds; Bootstrap is the fallback
+while the scoped query is pending or fails. The
 callers in `frontend/src/hooks/useRollResources.ts` are now mounted
 incrementally: `RollPage` calls `useRollDieState` and passes the scoped
 value to `RollHeader`, calls `useRollEligibleIssueIds` with the
