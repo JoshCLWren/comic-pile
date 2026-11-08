@@ -617,6 +617,18 @@ Record observed facts, distinguish local checks from CI, include no secrets, and
 
 Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 
+## Z.AI free account quota backoff
+
+Worker 97 adds a second `z-ai` / `glm-4.5-flash` lane at :50, thirty minutes
+from worker 54 at :20, using the existing `Z_AI_API_KEY` and `PR_REBASE_TOKEN`.
+HTTP 429 from either smoke or the coding session records `provider_quota`.
+Before assigning work, the controller reads trusted registry attempt evidence
+and pauses the shared Z.AI account for thirty minutes from the recorded error.
+All Z.AI workers share this backoff; expiry automatically permits another probe.
+A rate limit is not evidence that a model has been removed and does not retire
+any worker. Failure to read the quota evidence aborts assignment rather than
+assuming the account is available.
+
 ## External scheduled-factory heartbeat
 
 Scheduled ChatGPT workers must update their assigned permanent comment on registry issue #1093 at the start and completion of every run, following `docs/FACTORY_GITHUB_VISIBILITY.md`. The registry and the watchdog's alert issue are operational telemetry, not executable backlog work. Workers must never claim, implement, label, or close them.
@@ -624,3 +636,63 @@ Scheduled ChatGPT workers must update their assigned permanent comment on regist
 A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
+
+Worker prompts put stable policy before run identity, targets and findings.
+Trim duplicated instructions; preserve source/issue security and exact-head review context.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+
+### Second Kilo free lane
+
+Worker 98 runs `kilo-auto/free` at :10, thirty minutes from worker 46 at :40.
+It uses the same anonymous Kilo CLI free route and existing `PR_REBASE_TOKEN`;
+there is no second account or credential. A smoke or session HTTP 429 records
+`provider_quota` and pauses assignment for both Kilo workers for thirty minutes,
+then automatically permits a new probe. A quota-limited smoke ends immediately
+instead of continuing into an expensive coding session. Worker 46's historical
+static-pause protection does not exempt it from this shared runtime quota backoff.
+
+### Monthly provider quotas pause; they do not retire a lane
+
+Mistral and Ollama Cloud monthly-quota failures record `provider_quota` during
+smoke and sessions. Assignment pauses that source until the next UTC calendar
+month as a configured fallback when no account reset date is supplied; expiry
+permits another smoke automatically. Another quota failure renews the pause.
+This fallback is not evidence of a provider's actual account billing date.
+Monthly quota alone cannot justify roster retirement. Retirement requires
+separate non-quota evidence, such as model removal, revoked authentication or
+repeated invalid output, recorded in its PR. Catalog discovery already protects
+these runtime-only providers from catalog-absence retirement.
+
+The earlier retired identities 48 and 55 remain retired. Post-reset runs
+[41774076436](https://github.com/JoshCLWren/comic-pile/actions/runs/41774076436)
+and [41774209074](https://github.com/JoshCLWren/comic-pile/actions/runs/41774209074)
+on November 4, before #4622 merged, still reported Mistral API budget exhaustion
+and Ollama monthly usage exhaustion respectively. Their terminal registry
+records said `unknown_failure`; smoke classification now preserves that quota
+cause. Josh confirmed on November 7 that quotas remain exhausted. No new live
+probe was run and no recovery is claimed. Only a later successful existing-key
+probe can justify restoring a provider under a fresh, unused worker number.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+Delivery funnel reports use separate opened/merged/unmerged-close event windows
+of 14 and 30 days. Starter PR outcomes and advance-commit contribution shares
+are distinct. Each merged PR contributes one credit unit divided among its
+advance commits, including squash-body subjects without duplicate credit.
+Retired and unattributed history remain visible. Immutable merged attribution
+is cached on the existing status branch; unavailable history is not reported as zero.
+

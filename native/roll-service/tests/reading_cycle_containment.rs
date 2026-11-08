@@ -284,6 +284,135 @@ fn bprd_list_order(ids: &BTreeMap<String, i32>) -> Vec<i32> {
 }
 
 #[tokio::test]
+async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "repair-race").await;
+    let (_, issues) = seed_thread(&state, owner, "Race Series", 1, &["1", "2", "3"]).await;
+    // A strict backwards edge (3 -> 1) conflicts with series order (1 -> 2 -> 3).
+    let list = seed_list(
+        &state,
+        owner,
+        "Race List",
+        "strict",
+        &[issues["3"], issues["1"]],
+    )
+    .await;
+    let request = json!({
+        "action": "delete_list_entry",
+        "list_id": list,
+        "issue_id": issues["1"],
+    });
+    let (preview_status, preview) = send(
+        &state,
+        (&token, &csrf),
+        "POST",
+        "/api/v2/reading-graph/repairs",
+        Some(request.clone()),
+    )
+    .await;
+    assert_eq!(preview_status, StatusCode::OK, "{preview}");
+    assert_eq!(preview["status_before"], "cycle");
+    // A successful preview proves the requested action was offered, and
+    // its projected graph is the *post-repair* graph, not the original one.
+    assert_eq!(preview["status_after"], "ok");
+
+    // Simulate a competing, correctly serialized Reading List writer holding
+    // the exact same advisory lock as dependency creation and repair.
+    let mut writer = state.pool.get().await.unwrap();
+    let writer_tx = writer.transaction().await.unwrap();
+    writer_tx
+        .execute(
+            "SELECT pg_advisory_xact_lock($1,$2)",
+            &[&699001_i32, &owner],
+        )
+        .await
+        .unwrap();
+
+    let request = json!({
+        "action": "delete_list_entry",
+        "list_id": list,
+        "issue_id": issues["1"],
+        "confirm": true,
+    });
+    let repair_state = state.clone();
+    let task = tokio::spawn(async move {
+        send(
+            &repair_state,
+            (&token, &csrf),
+            "POST",
+            "/api/v2/reading-graph/repairs",
+            Some(request),
+        )
+        .await
+    });
+
+    // Wait for the handler to attempt its reader lock. On the previous
+    // implementation its snapshot was already read at this point, so the
+    // following graph edit caused an unsafe stale repair. This is a real
+    // PostgreSQL lock wait rather than a timing-dependent sleep.
+    let observer = state.pool.get().await.unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(8), async {
+        loop {
+            let waiting: bool = observer
+                .query_one(
+                    "SELECT EXISTS(SELECT 1 FROM pg_locks
+                     WHERE locktype='advisory' AND NOT granted
+                       AND classid::integer=$1 AND objid::integer=$2)",
+                    &[&699001_i32, &owner],
+                )
+                .await
+                .unwrap()
+                .get(0);
+            if waiting {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("confirmed repair should block on the writer's advisory lock");
+
+    // The writer resolves the cycle by deleting a *different* list entry.
+    // The requested entry still exists, but is no longer an offered repair.
+    writer_tx
+        .execute(
+            "DELETE FROM custom_cbl_entries WHERE list_id=$1 AND issue_id=$2",
+            &[&list, &issues["3"]],
+        )
+        .await
+        .unwrap();
+    writer_tx.commit().await.unwrap();
+    drop(writer);
+    drop(observer);
+
+    let (status, response) = task.await.unwrap();
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{response}");
+    assert_eq!(
+        response["detail"],
+        "Repair is not applicable to the current reading graph"
+    );
+
+    let reader = state.pool.get().await.unwrap();
+    let remaining: Vec<i32> = reader
+        .query(
+            "SELECT issue_id FROM custom_cbl_entries WHERE list_id=$1 ORDER BY position",
+            &[&list],
+        )
+        .await
+        .unwrap()
+        .iter()
+        .map(|row| row.get(0))
+        .collect();
+    assert_eq!(
+        remaining,
+        vec![issues["1"]],
+        "stale repair must not delete it"
+    );
+}
+
+#[tokio::test]
 async fn bprd_normal_add_preserves_reader_order_and_return_master_history() {
     let Some((state, _db)) = database().await else {
         return;
@@ -1425,4 +1554,198 @@ async fn list_update_requires_exact_predecessor_review_and_preserves_plan_refere
         .unwrap()
         .get(0);
     assert!(history_preserved);
+}
+
+#[tokio::test]
+async fn dependency_create_rejects_combined_series_and_strict_list_cycle() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "dependency-cycle-owner").await;
+    let auth = (token.as_str(), csrf.as_str());
+
+    // Series order alone is acyclic: A1 -> A2 and B1 -> B2. The strict list
+    // adds B1 -> A2. A reader prerequisite A2 -> B1 closes a loop that no
+    // single constraint family contains; the Python dependency surface only
+    // checked dependency edges, so this edge could previously be committed
+    // and then outage every read path (#4684 Muse-shaped cycle).
+    let (_a, a_ids) = seed_thread(&state, owner, "Alpha", 1, &["1", "2"]).await;
+    let (_b, b_ids) = seed_thread(&state, owner, "Beta", 2, &["1", "2"]).await;
+    seed_list(
+        &state,
+        owner,
+        "Crossing strict list",
+        "strict",
+        &[b_ids["1"], a_ids["2"]],
+    )
+    .await;
+
+    let (status, rejected) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/dependencies/",
+        Some(json!({
+            "source_type": "issue",
+            "source_id": a_ids["2"],
+            "target_type": "issue",
+            "target_id": b_ids["1"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{rejected}");
+    let detail = rejected["detail"].as_str().unwrap();
+    assert!(detail.contains("Reading constraint cycle"), "{detail}");
+    assert!(detail.contains("Nothing was changed"), "{detail}");
+    assert!(detail.contains("Alpha #2"), "{detail}");
+    assert!(detail.contains("Beta #1"), "{detail}");
+
+    // Nothing was persisted and unaffected readers keep working.
+    let conn = state.pool.get().await.unwrap();
+    let count: i64 = conn
+        .query_one(
+            "SELECT count(*) FROM dependencies WHERE origin='reader'",
+            &[],
+        )
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(count, 0);
+    for path in ["/api/v2/threads", "/api/v2/reading-graph"] {
+        let (status, body) = send(&state, auth, "GET", path, None).await;
+        assert_eq!(status, StatusCode::OK, "{path}: {body}");
+    }
+
+    // A benign edge that keeps the projected graph acyclic still succeeds.
+    let (status, created) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/dependencies/",
+        Some(json!({
+            "source_type": "issue",
+            "source_id": a_ids["1"],
+            "target_type": "issue",
+            "target_id": b_ids["2"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    assert_eq!(created["source_label"], "Alpha #1");
+    assert_eq!(created["target_label"], "Beta #2");
+    assert_eq!(created["is_issue_level"], true);
+}
+
+#[tokio::test]
+async fn dependency_lifecycle_validation_and_owner_scoped_delete() {
+    let Some((state, _db)) = database().await else {
+        return;
+    };
+    let (token, csrf, owner) = register(&state, "dependency-lifecycle-owner").await;
+    let auth = (token.as_str(), csrf.as_str());
+    let (other_token, other_csrf, _other) = register(&state, "dependency-lifecycle-other").await;
+    let other_auth = (other_token.as_str(), other_csrf.as_str());
+
+    let (_a, a_ids) = seed_thread(&state, owner, "Alpha", 1, &["1", "2"]).await;
+    let (_b, b_ids) = seed_thread(&state, owner, "Beta", 2, &["1", "2"]).await;
+
+    // Thread-level and mixed requests keep the Python rejection semantics.
+    let (status, body) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/dependencies/",
+        Some(json!({
+            "source_type": "thread",
+            "source_id": 1,
+            "target_type": "thread",
+            "target_id": 2
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert!(body["detail"]
+        .as_str()
+        .unwrap()
+        .contains("no longer supported"));
+
+    let (status, body) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/dependencies/",
+        Some(json!({
+            "source_type": "issue",
+            "source_id": a_ids["1"],
+            "target_type": "issue",
+            "target_id": a_ids["1"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+
+    let (status, created) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/dependencies/",
+        Some(json!({
+            "source_type": "issue",
+            "source_id": a_ids["1"],
+            "target_type": "issue",
+            "target_id": b_ids["1"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED, "{created}");
+    let dependency_id = created["id"].as_i64().unwrap() as i32;
+
+    // Duplicate edges are refused without a second row.
+    let (status, body) = send(
+        &state,
+        auth,
+        "POST",
+        "/api/v2/dependencies/",
+        Some(json!({
+            "source_type": "issue",
+            "source_id": a_ids["1"],
+            "target_type": "issue",
+            "target_id": b_ids["1"]
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    assert_eq!(body["detail"], "Dependency already exists");
+
+    // Another owner's delete sees the same 404 as a missing edge.
+    let (status, body) = send(
+        &state,
+        other_auth,
+        "DELETE",
+        &format!("/api/v2/dependencies/{dependency_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
+
+    let (status, body) = send(
+        &state,
+        auth,
+        "DELETE",
+        &format!("/api/v2/dependencies/{dependency_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["message"], "Dependency deleted");
+
+    let (status, body) = send(
+        &state,
+        auth,
+        "DELETE",
+        &format!("/api/v2/dependencies/{dependency_id}"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body}");
 }

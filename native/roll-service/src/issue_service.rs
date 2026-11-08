@@ -352,7 +352,10 @@ async fn canonical_blocked_thread_ids(
 /// the legacy queue projection both filter on the stored column; a stale value
 /// lets a re-blocked thread enter the pool or hides a just-unblocked one.
 /// Mirrors `comic_pile.dependencies.refresh_user_blocked_status`.
-async fn refresh_blocked_threads(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+pub(crate) async fn refresh_blocked_threads(
+    tx: &Transaction<'_>,
+    user_id: i32,
+) -> Result<(), ApiError> {
     let blocked = canonical_blocked_thread_ids(tx, user_id).await?;
     // `id = ANY($2)` is false for an empty array, so this blocks exactly the
     // canonical set and clears every other stale flag in one owner-scoped write.
@@ -1287,9 +1290,7 @@ mod tests {
 
     #[tokio::test]
     async fn direct_read_is_owner_scoped_and_does_not_touch_roll_or_queue() {
-        let Ok(_admin) = std::env::var("RUST_ROLL_TEST_DATABASE_URL") else {
-            return;
-        };
+        let _admin = crate::test_support::required_test_admin_url();
         let url = crate::test_support::database_url().await;
         let _state = crate::test_support::test_state(2)
             .await

@@ -10,6 +10,9 @@ import CreatorTeamChemistrySection from '../components/CreatorTeamChemistrySecti
 import Breadcrumbs from '../components/Breadcrumbs'
 import { RatingHistoryChart } from '../components/RatingHistoryChart'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
+import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
+import { indexIssueCards, useIssueCards } from '../hooks/useIssueCards'
+import type { IssueCard } from '../services/issueCardsApi'
 
 function formatRatingDate(value: string | null): string | null {
   if (!value) return null
@@ -38,26 +41,30 @@ function RatingValue({ value, label }: { value: number; label: string }) {
   )
 }
 
-function IssueRow({ row, showRating }: { row: CreatorIssueRow; showRating: boolean }) {
+function IssueRow({ row, showRating, card, status }: { row: CreatorIssueRow; showRating: boolean; card?: IssueCard | null; status?: 'read' | 'unread' }) {
   const ratedAt = formatRatingDate(row.rating_timestamp)
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <Link
-        to={threadIssueRoutePath(row.thread_id, row.issue_id)}
-        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-        aria-label={`Open ${row.thread_title} #${row.issue_number} in its thread`}
-      >
-        <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
-          {row.thread_title} #{row.issue_number}
-        </span>
-        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-          {row.roles.length > 0 && <span className="break-words">{row.roles.join(', ')}</span>}
-          {showRating && row.effective_rating != null && (
-            <RatingValue value={row.effective_rating} label={`Rated ${row.effective_rating} out of 5`} />
-          )}
-          {ratedAt && <span>{ratedAt}</span>}
-        </span>
-      </Link>
+      <CompactIssueCardTrigger
+        issueId={row.issue_id}
+        threadTitle={row.thread_title}
+        issueNumber={row.issue_number}
+        status={status ?? (showRating ? 'read' : 'unread')}
+        rating={row.effective_rating}
+        card={card}
+      />
+      <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        {row.roles.length > 0 && <span className="break-words">{row.roles.join(', ')}</span>}
+        {showRating && row.effective_rating != null && (
+          <RatingValue value={row.effective_rating} label={`Rated ${row.effective_rating} out of 5`} />
+        )}
+        {ratedAt && <span>{ratedAt}</span>}
+        <Link
+          to={threadIssueRoutePath(row.thread_id, row.issue_id)}
+          aria-label={`Open ${row.thread_title} #${row.issue_number} in its thread`}
+          className="underline"
+        >{row.thread_title} #{row.issue_number}</Link>
+      </div>
     </li>
   )
 }
@@ -71,6 +78,8 @@ function SeriesGroupDrilldown({
 }) {
   const { issues, total, isPending, isError, isFetchingMore, hasMore, loadMore } =
     useCreatorSeriesIssues(creatorKey, group.series_key)
+  const cards = useIssueCards(issues.map((issue) => issue.issue_id), { enabled: !isPending })
+  const cardsByIssue = indexIssueCards(cards.data)
 
   if (isPending) {
     return (
@@ -97,7 +106,7 @@ function SeriesGroupDrilldown({
       </p>
       <ul className="mt-2 space-y-2">
         {issues.map((row) => (
-          <IssueRow key={row.issue_id} row={row} showRating />
+          <IssueRow key={row.issue_id} row={row} showRating status="read" card={cardsByIssue.get(row.issue_id)} />
         ))}
       </ul>
       {hasMore && (
@@ -193,22 +202,26 @@ function SeriesInsightCard({ label, insight }: { label: string; insight: Creator
   )
 }
 
-function IssueInsightCard({ insight }: { insight: CreatorIssueInsight }) {
+function IssueInsightCard({ insight, card }: { insight: CreatorIssueInsight; card?: IssueCard | null }) {
   return (
     <li className="min-w-0 rounded-xl border px-3 py-2" style={{ borderColor: 'var(--theme-border)', backgroundColor: 'var(--theme-bg-panel)' }}>
-      <Link
-        to={threadIssueRoutePath(insight.thread_id, insight.issue_id)}
-        className="block min-w-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
-        aria-label={`Open ${insight.thread_title} #${insight.issue_number} in its thread`}
-      >
-        <span className="block min-w-0 truncate text-sm font-semibold" style={{ color: 'var(--theme-text-primary)' }}>
-          {insight.thread_title} #{insight.issue_number}
-        </span>
-        <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
-          <RatingValue value={insight.effective_rating} label={`Rated ${insight.effective_rating} out of 5`} />
-          {insight.roles.length > 0 && <span className="break-words">{insight.roles.join(', ')}</span>}
-        </span>
-      </Link>
+      <CompactIssueCardTrigger
+        issueId={insight.issue_id}
+        threadTitle={insight.thread_title}
+        issueNumber={insight.issue_number}
+        status="read"
+        rating={insight.effective_rating}
+        card={card}
+      />
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: 'var(--theme-text-muted)' }}>
+        <RatingValue value={insight.effective_rating} label={`Rated ${insight.effective_rating} out of 5`} />
+        {insight.roles.length > 0 && <span className="break-words">{insight.roles.join(', ')}</span>}
+        <Link
+          to={threadIssueRoutePath(insight.thread_id, insight.issue_id)}
+          aria-label={`Open ${insight.thread_title} #${insight.issue_number} in its thread`}
+          className="underline"
+        >{insight.thread_title} #{insight.issue_number}</Link>
+      </div>
     </li>
   )
 }
@@ -254,6 +267,16 @@ export default function CreatorDetailPage() {
     isError: teamChemistryError,
     refetch: refetchTeamChemistry,
   } = useCreatorTeamChemistry(isValidKey && showTeamChemistry)
+  // Hook stays above every loading/error return. Only rendered owner issue
+  // identities enter the bounded projection, never whole-series summaries.
+  const creatorCards = useIssueCards([
+    ...ratedIssues.map((issue) => issue.issue_id),
+    ...upcomingIssues.map((issue) => issue.issue_id),
+    ...readUnratedIssues.map((issue) => issue.issue_id),
+    ...(insights?.highest_rated_issues ?? []).map((issue) => issue.issue_id),
+    ...(insights?.lowest_rated_issues ?? []).map((issue) => issue.issue_id),
+  ], { enabled: isValidKey && !isPending })
+  const cardsByIssue = indexIssueCards(creatorCards.data)
 
   if (!isValidKey) {
     return (
@@ -451,7 +474,7 @@ export default function CreatorDetailPage() {
                   </h4>
                   <ul className="mt-1 space-y-2">
                     {[...highestRatedIssues, ...lowestRatedIssues].map((insight) => (
-                      <IssueInsightCard key={insight.issue_id} insight={insight} />
+                      <IssueInsightCard key={insight.issue_id} insight={insight} card={cardsByIssue.get(insight.issue_id)} />
                     ))}
                   </ul>
                 </div>
@@ -464,7 +487,7 @@ export default function CreatorDetailPage() {
                       </h4>
                       <ul className="mt-1 space-y-2">
                         {highestRatedIssues.map((insight) => (
-                          <IssueInsightCard key={insight.issue_id} insight={insight} />
+                          <IssueInsightCard key={insight.issue_id} insight={insight} card={cardsByIssue.get(insight.issue_id)} />
                         ))}
                       </ul>
                     </div>
@@ -476,7 +499,7 @@ export default function CreatorDetailPage() {
                       </h4>
                       <ul className="mt-1 space-y-2">
                         {lowestRatedIssues.map((insight) => (
-                          <IssueInsightCard key={insight.issue_id} insight={insight} />
+                          <IssueInsightCard key={insight.issue_id} insight={insight} card={cardsByIssue.get(insight.issue_id)} />
                         ))}
                       </ul>
                     </div>
@@ -642,7 +665,7 @@ export default function CreatorDetailPage() {
           {upcomingIssues.length > 0 ? (
             <ul className="mt-2 space-y-2">
               {upcomingIssues.map((row) => (
-                <IssueRow key={row.issue_id} row={row} showRating={false} />
+                <IssueRow key={row.issue_id} row={row} showRating={false} status="unread" card={cardsByIssue.get(row.issue_id)} />
               ))}
             </ul>
           ) : (
@@ -665,7 +688,7 @@ export default function CreatorDetailPage() {
           )}
           <ul className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {readUnratedIssues.map((row) => (
-              <IssueRow key={row.issue_id} row={row} showRating={false} />
+              <IssueRow key={row.issue_id} row={row} showRating={false} status="read" card={cardsByIssue.get(row.issue_id)} />
             ))}
           </ul>
         </section>

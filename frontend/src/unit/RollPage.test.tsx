@@ -174,7 +174,7 @@ it('renders the bounded bootstrap pool without Collections state', () => {
 it('renders the scoped eligible order and passes browser snoozes to the resource (#4719)', () => {
   writeRollSnoozes([99])
   mockedUseRollEligibleIssueIds.mockReturnValue({
-    data: { die: 6, issue_ids: [201], thread_ids: [2] },
+    data: { die: 6, issue_ids: [201], thread_ids: [2], pool_reason: 'ready' },
   })
 
   renderRollPage()
@@ -187,12 +187,48 @@ it('renders the scoped eligible order and passes browser snoozes to the resource
   expect(screen.queryByText('Saga')).not.toBeInTheDocument()
 })
 
+it('drives the pool cutoff and 3D die from scoped die-state when present (#4719)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      current_die: 20,
+      roll_pool: [
+        { id: 1, title: 'Saga', format: 'Comic' },
+        { id: 2, title: 'X-Men', format: 'Comic' },
+        { id: 3, title: 'Runaways', format: 'Comic' },
+        { id: 4, title: 'Ultimate Spider-Man', format: 'Comic' },
+      ],
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollDieState.mockReturnValue({
+    data: { die: 2, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+  })
+
+  renderRollPage()
+
+  // Scoped die 2 bounds the visible pool even though bootstrap reports d20,
+  // and both rendered dice use the scoped sides.
+  expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
+  expect(screen.getByText('Saga')).toBeInTheDocument()
+  expect(screen.getByText('X-Men')).toBeInTheDocument()
+  expect(screen.queryByText('Runaways')).not.toBeInTheDocument()
+  const dice = screen.getAllByTestId('lazy-dice')
+  expect(dice.length).toBeGreaterThan(0)
+  for (const die of dice) {
+    expect(die).toHaveAttribute('data-sides', '2')
+  }
+})
+
 it('backfills an eligible face missing from bootstrap from scoped cards (#4719)', () => {
   // Independent reads can disagree: thread 3 is Rust-eligible but absent
   // from the stale bootstrap slice. It must appear from the scoped card
   // identity instead of being silently dropped from the UI pool.
   mockedUseRollEligibleIssueIds.mockReturnValue({
-    data: { die: 6, issue_ids: [301, 101], thread_ids: [3, 1] },
+    data: { die: 6, issue_ids: [301, 101], thread_ids: [3, 1], pool_reason: 'ready' },
   })
   mockedUseRollIssueCards.mockReturnValue({
     data: {
@@ -230,7 +266,7 @@ it('backfills an eligible face missing from bootstrap from scoped cards (#4719)'
 it('dedupes repeated eligible thread ids and caps the visible pool at the die (#4719)', () => {
   mockedUseRollDieState.mockReturnValue({ data: { die: 2, default_die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], last_roll: null } })
   mockedUseRollEligibleIssueIds.mockReturnValue({
-    data: { die: 2, issue_ids: [201, 202, 101], thread_ids: [2, 2, 1] },
+    data: { die: 2, issue_ids: [201, 202, 101], thread_ids: [2, 2, 1], pool_reason: 'ready' },
   })
   mockedUseRollIssueCards.mockReturnValue({
     data: {
@@ -284,7 +320,7 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
     error: null,
   })
   mockedUseRollEligibleIssueIds.mockReturnValue({
-    data: { die: 6, issue_ids: [11], thread_ids: [1] },
+    data: { die: 6, issue_ids: [11], thread_ids: [1], pool_reason: 'ready' },
   })
   mockedUseRollIssueCards.mockReturnValue({
     data: {
@@ -306,6 +342,31 @@ it('requests one scoped card batch and prefers its title and issue number (#4719
   expect(screen.getByText('Canonical card title')).toBeInTheDocument()
   expect(screen.getByText('#9')).toBeInTheDocument()
   expect(screen.queryByText('Bootstrap title')).not.toBeInTheDocument()
+})
+
+it('prefers the scoped pool reason over bootstrap for the empty-pool copy (#4719)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      roll_pool: [],
+      pool_reason: 'all_blocked',
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 6, issue_ids: [], thread_ids: [], pool_reason: 'all_completed' },
+  })
+  mockedUseRollIssueCards.mockReturnValue({ data: { items: [] } })
+
+  renderRollPage()
+
+  // An explicitly empty scoped result means zero eligible faces, not a
+  // bootstrap fallback, and the scoped reason owns the empty-pool copy.
+  expect(screen.getByText('Every series is completed')).toBeInTheDocument()
+  expect(screen.queryByText(/waiting on earlier issues/i)).not.toBeInTheDocument()
 })
 
 it('ignores retired diagnostic reports while retaining the active pool (#4441)', () => {
@@ -366,6 +427,53 @@ it('loads every active override page only after the modal opens', async () => {
   expect(threadsApi.list).toHaveBeenNthCalledWith(2, { page_size: 200 }, 'page-2')
   expect(await screen.findByRole('option', { name: 'First Choice (Comic)' })).toBeInTheDocument()
   expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
+})
+
+it('uses the scoped die in the die-selection modal when bootstrap differs (#4719)', async () => {
+  const user = userEvent.setup()
+  mockedUseRollBootstrap.mockReturnValue({
+    data: { ...bootstrap, current_die: 8 },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollDieState.mockReturnValue({
+    data: { die: 2, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    isError: false,
+  })
+
+  renderRollPage()
+  await user.click(screen.getByRole('button', { name: /^current die d2$/i }))
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
+  expect(within(dieModal).getByText(/die is currently d2/i)).toBeInTheDocument()
+  for (const die of screen.getAllByTestId('lazy-dice')) {
+    expect(die).toHaveAttribute('data-sides', '2')
+  }
+})
+
+it('falls back to the reconciled bootstrap die after a scoped refetch error (#4719)', async () => {
+  const user = userEvent.setup()
+  mockedUseRollBootstrap.mockReturnValue({
+    data: { ...bootstrap, current_die: 8 },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  // TanStack retains stale successful data alongside isError on a failed refetch.
+  mockedUseRollDieState.mockReturnValue({
+    data: { die: 2, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    isError: true,
+  })
+
+  renderRollPage()
+  await user.click(screen.getByRole('button', { name: /^current die d8$/i }))
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
+  expect(within(dieModal).getByText(/die is currently d8/i)).toBeInTheDocument()
+  for (const die of screen.getAllByTestId('lazy-dice')) {
+    expect(die).toHaveAttribute('data-sides', '8')
+  }
 })
 
 it('names the mobile die control for the event-derived die without an Auto mode (#4353)', async () => {

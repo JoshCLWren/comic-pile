@@ -1,4 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { ReactElement } from 'react'
+import { issueCardsApi } from '../services/issueCardsApi'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import MigrationDialog from '../components/MigrationDialog'
@@ -6,6 +9,14 @@ import PositionSlider from '../components/PositionSlider'
 import ReadingOrderTimeline from '../components/ReadingOrderTimeline'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { MarqueeTitle } from '../components/MarqueeTitle'
+
+// Timeline gates now show owner-scoped issue covers through one bounded query.
+const fetchIssueCards = vi.spyOn(issueCardsApi, 'fetchCards')
+fetchIssueCards.mockResolvedValue([])
+function renderTimeline(node: ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
+}
 
 const migrate = vi.hoisted(() => vi.fn())
 vi.mock('../services/api-migration', () => ({ migrationApi: { migrateThread: migrate } }))
@@ -89,10 +100,10 @@ describe('small and dialog components', () => {
   })
 
   it('renders reading timeline empty and populated states', () => {
-    render(<ReadingOrderTimeline thread={null} dependencies={[]} />)
+    renderTimeline(<ReadingOrderTimeline thread={null} dependencies={[]} />)
     expect(screen.getByText(/Select a thread/)).toBeInTheDocument()
     // SAFETY: test fixture supplies only the fields the component reads
-    render(<ReadingOrderTimeline thread={{ ...thread, issues_remaining: 0, total_issues: null, next_unread_issue_number: null } as never} dependencies={[]} />)
+    renderTimeline(<ReadingOrderTimeline thread={{ ...thread, issues_remaining: 0, total_issues: null, next_unread_issue_number: null } as never} dependencies={[]} />)
     expect(screen.getByText('Completed')).toBeInTheDocument()
     expect(screen.getByText(/more precise/)).toBeInTheDocument()
   })
@@ -111,7 +122,7 @@ describe('small and dialog components', () => {
       { id: 2, source_thread_id: 3, target_thread_id: null, source_issue_id: 2, target_issue_id: 104, source_label: 'Other #2', target_label: 'Target #5', target_issue_thread_id: 1, source_issue_thread_id: 3, is_issue_level: true, created_at: 'now' },
     ]
     // SAFETY: test fixture supplies only the fields the component reads
-    render(<ReadingOrderTimeline thread={timelineThread as never} dependencies={dependencies as never} />)
+    renderTimeline(<ReadingOrderTimeline thread={timelineThread as never} dependencies={dependencies as never} />)
     expect(screen.getAllByText('Issue #2').length).toBeGreaterThan(0)
     expect(screen.getByText('Blocked')).toBeInTheDocument()
     expect(screen.getByText('Dormant')).toBeInTheDocument()
@@ -120,7 +131,7 @@ describe('small and dialog components', () => {
   })
 
   it('renders unknown reading position and a single prerequisite gate', () => {
-    render(<ReadingOrderTimeline
+    renderTimeline(<ReadingOrderTimeline
       // SAFETY: test fixture supplies only the fields the component reads
       thread={{ ...thread, issues_remaining: 3, total_issues: 5, next_unread_issue_number: null, next_unread_issue_id: 100 } as never}
       // SAFETY: the fixture supplies only the fields the card renders
@@ -135,7 +146,7 @@ describe('small and dialog components', () => {
   })
 
   it('renders current spans and safe gate labels for sparse issue metadata', () => {
-    render(<ReadingOrderTimeline
+    renderTimeline(<ReadingOrderTimeline
       // SAFETY: test fixture supplies only the fields the component reads
       thread={{ ...thread, id: 1, issues_remaining: 2, total_issues: 6, next_unread_issue_number: '4', next_unread_issue_id: 104 } as never}
       // SAFETY: the fixture supplies only the fields the card renders

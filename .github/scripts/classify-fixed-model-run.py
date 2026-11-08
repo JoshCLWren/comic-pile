@@ -217,7 +217,10 @@ def classify(log: str) -> Result:
 
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
-    if QUOTA_RE.search(log):
+    if QUOTA_RE.search(log) or (
+        values["source"] in {"z-ai", "kilo-auto"}
+        and re.search(r"(?<![0-9.])429(?!\d)|too many requests", log, re.I)
+    ):
         return Result(
             **common,
             outcome="PROVIDER QUOTA",

@@ -258,10 +258,44 @@ describe('useRollBootstrap', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.eligibleIssueIdsAll(),
     })
+    // A reconciled bootstrap can carry a new die (rating changed it); the
+    // scoped dieState is authoritative for the header/sync, so it must
+    // refresh alongside the eligible pool (#4726/#4729 stale-die).
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    })
     // The new eligible ids change the card batch key; invalidating the old
     // batch here would issue one wasted POST against the pre-rating ids.
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.roll.issueCardsAll(),
+    })
+  })
+
+  it('refreshes scoped die-state after a reconciled bootstrap that changed the die (#4719)', async () => {
+    mockedBootstrap.mockResolvedValue(bootstrapResponse)
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+    renderBootstrap()
+
+    await waitFor(() => expect(mockedBootstrap).toHaveBeenCalledTimes(1))
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(ROLL_BOOTSTRAP_RECONCILED_EVENT, {
+          detail: { ...bootstrapResponse, current_die: 8 },
+        }),
+      )
+    })
+
+    // Rating moves the die; without this the scoped die the Roll page prefers
+    // stays at the pre-rating value for the 30s stale window.
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    })
+    expect(queryClient.getQueryData(queryKeys.roll.bootstrap())).toEqual({
+      ...bootstrapResponse,
+      current_die: 8,
     })
   })
 

@@ -2,8 +2,8 @@
 
 The native `PATCH /api/v2/issues/{issue_id}` command replaces the Python
 read/unread writers, so it must maintain the same denormalized state. The
-mounted Rust route runs on a disposable schema created from the canonical
-SQLAlchemy models (including `threads.is_blocked NOT NULL` and
+mounted Rust route runs on the canonical Alembic schema (including
+`threads.is_blocked NOT NULL` and
 `dependencies`), which is exactly the schema the hand-written unit test was
 missing when the stale blocked flag went unnoticed.
 
@@ -28,7 +28,6 @@ from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Dependency, Issue, ReadingSession, Thread, User
 from app.services.undo_snapshot_service import UndoSnapshotService
 
@@ -76,25 +75,9 @@ async def _skip_pool_ids(db: AsyncSession, user_id: int) -> set[int]:
 @pytest.mark.asyncio
 async def test_direct_issue_reads_refresh_canonical_blocked_state() -> None:
     """Read/unread a prerequisite and assert the dependent thread's Skip state."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_issue_command_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # The schema is new, so skip public-schema table collisions while
-            # keeping public on the path for the pg_trgm operator class.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         now = datetime.now(UTC)
         username = f"commands_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -189,10 +172,9 @@ async def test_direct_issue_reads_refresh_canonical_blocked_state() -> None:
             SECRET,
             "HS256",
         )
-        query = f"options=-csearch_path%3D{name}"
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_POOL_SIZE": "2",
@@ -253,8 +235,6 @@ async def test_direct_issue_reads_refresh_canonical_blocked_state() -> None:
             assert dependent_id not in pool, "re-blocked dependent must be Skip-excluded"
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
 
 
 @pytest.mark.asyncio
@@ -267,23 +247,9 @@ async def test_direct_unread_reactivates_completed_series_into_queue() -> None:
     `completed` at position 0, so a direct unread must append it behind the
     reader's existing queue instead of leaving an active thread outside it.
     """
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_issue_reactivate_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         now = datetime.now(UTC)
         username = f"reactivate_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -344,10 +310,9 @@ async def test_direct_unread_reactivates_completed_series_into_queue() -> None:
             SECRET,
             "HS256",
         )
-        query = f"options=-csearch_path%3D{name}"
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_POOL_SIZE": "2",
@@ -403,8 +368,6 @@ async def test_direct_unread_reactivates_completed_series_into_queue() -> None:
             assert active_id in pool
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
 
 
 @pytest.mark.asyncio
@@ -416,23 +379,9 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
     issue, thread progress, queue, blocked state and pending offer before the
     action, so the Roll "Undo rating" action restores the pre-rating state.
     """
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_issue_undo_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         now = datetime.now(UTC)
         username = f"undo_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -495,10 +444,9 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
             SECRET,
             "HS256",
         )
-        query = f"options=-csearch_path%3D{name}"
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_POOL_SIZE": "2",
@@ -579,8 +527,6 @@ async def test_native_rating_writes_undo_delta_that_python_undo_restores() -> No
             assert undo_events == 1
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
 
 
 @pytest.mark.asyncio
@@ -591,23 +537,9 @@ async def test_native_completion_undo_restores_queue_and_blocked_state() -> None
     dependent series' persisted blocked flag. The delta snapshot records those
     pre-action values, and the retained Python undo service must apply them.
     """
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_issue_queue_undo_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         now = datetime.now(UTC)
         username = f"queueundo_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -708,10 +640,9 @@ async def test_native_completion_undo_restores_queue_and_blocked_state() -> None
             SECRET,
             "HS256",
         )
-        query = f"options=-csearch_path%3D{name}"
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_POOL_SIZE": "2",
@@ -806,5 +737,3 @@ async def test_native_completion_undo_restores_queue_and_blocked_state() -> None
             assert restored_session.pending_issue_id == rated_issue_id
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))

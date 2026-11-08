@@ -6,6 +6,7 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
 pub mod db;
+pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
@@ -65,6 +66,12 @@ pub struct AppState {
     pub request_timeout: Duration,
     pub access_token_expire_minutes: i64,
     pub refresh_token_expire_days: i64,
+    /// Validate a checked-out socket with a read-only probe before a handler can
+    /// use it, replacing one that cannot carry a statement (#4732).
+    ///
+    /// Production always enables this. The regression suite disables it to prove
+    /// the first-statement failure it prevents; no environment variable can.
+    pub connection_recovery: bool,
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
@@ -75,6 +82,10 @@ impl AppState {
             config.database,
             MakeTlsConnector::new(tls),
             ManagerConfig {
+                // `db::checkout` validates the socket with a bounded read-only
+                // probe before any handler statement (#4732). Keeping Fast
+                // avoids probing twice on every checkout; the centralized probe
+                // also classifies and bounds recovery instead of swallowing it.
                 recycling_method: RecyclingMethod::Fast,
             },
         );
@@ -94,6 +105,7 @@ impl AppState {
             request_timeout: config.request_timeout,
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
+            connection_recovery: true,
         })
     }
 }
@@ -320,6 +332,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/reading-graph", get(reading_graph::reading_graph))
         .route("/api/v2/reading-graph/repairs", post(reading_graph::repair))
+        .route(
+            "/api/v2/dependencies/",
+            post(dependencies::create_dependency),
+        )
+        .route(
+            "/api/v2/dependencies/{dependency_id}",
+            delete(dependencies::delete_dependency),
+        )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route(
             "/api/v2/issues/{issue_id}/comicvine",

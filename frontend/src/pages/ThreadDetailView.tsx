@@ -17,7 +17,6 @@ import { useThreadIssueCreators } from '../hooks/useThreadIssueCreators'
 import { useThreadIssuesEffectiveTags } from '../hooks/useTags'
 import {
   applyEditedThreadToQueuePages,
-  applyIssueReadSnapshotToCache,
   invalidateAfterDependencyChange,
 } from '../query/cacheEffects'
 import { getApiErrorDetail } from '../utils/apiError'
@@ -36,8 +35,8 @@ import { TagSection } from '../components/Tags/TagSection'
 import { IssueTagRowChips } from '../components/Tags/IssueTagRowChips'
 import { BulkTagToolbar } from '../components/Tags/BulkTagToolbar'
 import { IssueToggleList, type IssueToggleListHandle } from '../pages/QueuePage/IssueToggleList'
-import { IssueReadStatusButton } from './thread-detail/IssueReadStatusButton'
-import { IssueRateButton } from './thread-detail/IssueRateButton'
+import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
+import { indexIssueCards, useIssueCards } from '../hooks/useIssueCards'
 import { CblComicFinder } from '../components/CblSourceFinder'
 import { CreatorInput } from '../pages/QueuePage/QueueModals'
 import {
@@ -45,7 +44,6 @@ import {
   TAG_EDITOR_THREAD,
   tagEditorSearch,
 } from '../components/Tags/sourceNavigation'
-import type { IssueMutationSnapshot } from './thread-detail/issueMutationState'
 
 function IssueCreator({
   creators,
@@ -194,6 +192,12 @@ export default function ThreadDetailView() {
   const issuesError = issuesQuery.isError
   const issuesLoaded = issuesQuery.pages.length > 0
   const nextPageToken = issuesQuery.nextPageToken
+  // The currently loaded issue pages share a single bounded metadata batch.
+  // Expanding a thread never starts one cover/rating request per row.
+  const issueCardsQuery = useIssueCards(issues.map((issue) => issue.id), {
+    enabled: issuesExpanded && !issuesError,
+  })
+  const cardsByIssue = indexIssueCards(issueCardsQuery.data)
 
   useEffect(() => {
     if (activeThreadIdRef.current !== threadId) {
@@ -328,10 +332,6 @@ export default function ThreadDetailView() {
     if (thread && thread.total_issues !== null && nextPageToken) {
       void issuesQuery.fetchNextPage()
     }
-  }
-
-  function handleIssueSnapshotChange(snapshot: IssueMutationSnapshot) {
-    applyIssueReadSnapshotToCache(client, snapshot)
   }
 
   const handleEditSubmit = async (event: FormEvent) => {
@@ -812,16 +812,7 @@ export default function ThreadDetailView() {
                                   <span className="text-stone-500">Unread</span>
                                 )}
                               </span>
-                              <IssueReadStatusButton
-                                issue={issue}
-                                snapshot={{ issues, thread }}
-                                onSnapshotChange={handleIssueSnapshotChange}
-                              />
-                              <IssueRateButton
-                                issue={issue}
-                                snapshot={{ issues, thread }}
-                                onSnapshotChange={handleIssueSnapshotChange}
-                              />
+
                             </div>
                           </div>
                           {rowTags && (
@@ -830,6 +821,14 @@ export default function ThreadDetailView() {
                               issueNumber={issue.issue_number}
                             />
                           )}
+                          <CompactIssueCardTrigger
+                            issueId={issue.id}
+                            card={cardsByIssue.get(issue.id)}
+                            threadTitle={thread.title}
+                            issueNumber={issue.issue_number}
+                            status={issue.status === 'read' ? 'read' : 'unread'}
+                            onMutated={() => { void issuesQuery.refetch() }}
+                          />
                         </div>
                       )
                     })}

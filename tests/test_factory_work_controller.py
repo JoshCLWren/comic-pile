@@ -1868,6 +1868,30 @@ def _lease_reconcile_setup(
     return writes
 
 
+def test_reconcile_skips_manual_only_history_reads(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Manual-only holds never consume comment history calls or label writes."""
+    now = 2_000_000_000
+    held_issue = _local_lease_item(3129, now - 7200, "factory:building")
+    held_issue["body"] = "<!-- factory-execution:manual-only -->\n"
+    ordinary_issue = _local_lease_item(4684, now - 7200, "factory:building")
+    writes = _lease_reconcile_setup(
+        controller, monkeypatch, [held_issue, ordinary_issue]
+    )
+    history_reads: list[int] = []
+    monkeypatch.setattr(
+        controller,
+        "latest_lease_activity_epoch",
+        lambda number: history_reads.append(number) or None,
+    )
+
+    assert controller.reconcile_stale_leases(now_epoch=now) == [4684]
+    assert history_reads == [4684]
+    assert len(writes) == 1
+    assert "factory:unowned" in writes[0]["labels"]
+
+
 def test_reconcile_expires_old_local_claim_without_trusted_marker(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:

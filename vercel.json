@@ -424,6 +424,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "/api/v2/dependencies/",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/dependencies/[0-9]+$",
+      "methods": [
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/issues/[0-9]+/comicvine$",
       "methods": [
         "GET"
@@ -435,8 +449,8 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "/(?:openapi\\.json|docs|redoc|health)",
-      "dest": "/api/index.py"
+      "src": "^/(?:openapi\\.json|docs|redoc|health)$",
+      "status": 404
     },
     {
       "src": "/",

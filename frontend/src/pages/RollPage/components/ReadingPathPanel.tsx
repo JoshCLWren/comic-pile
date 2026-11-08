@@ -5,6 +5,9 @@ import {
   classifyEdgesRelativeToCurrent,
 } from '../readingPath'
 import { readingContextType } from '../readingContextTypography'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
+import type { IssueCard } from '../../../services/issueCardsApi'
 
 interface ReadingPathPanelProps {
   context: ReaderContextResponse
@@ -67,6 +70,10 @@ export function ReadingPathPanel({
   onOpenThread,
 }: ReadingPathPanelProps) {
   const seriesName = context.series.series_name
+  const cards = useIssueCards(context.local_chain.edges.flatMap((edge) => [
+    edge.source_issue_id, edge.target_issue_id,
+  ]))
+  const cardsByIssue = indexIssueCards(cards.data)
   const currentIssue = useMemo(
     () => context.local_chain.issues.find((issue) => issue.relation === 'current') ?? null,
     [context],
@@ -147,7 +154,16 @@ export function ReadingPathPanel({
                     >
                       {step.status === 'read' ? '✓' : '○'}
                     </span>
-                    <EdgeEndpoint label={step.label} threadId={step.threadId} onOpen={onOpenThread} />
+                    {step.issueId !== context.issue_id && cardsByIssue.has(step.issueId) ? (
+                      <CompactIssueCardTrigger
+                        issueId={step.issueId}
+                        card={cardsByIssue.get(step.issueId)}
+                        threadTitle={cardsByIssue.get(step.issueId)!.thread_title}
+                        issueNumber={cardsByIssue.get(step.issueId)!.issue_number}
+                      />
+                    ) : (
+                      <EdgeEndpoint label={step.label} threadId={step.threadId} onOpen={onOpenThread} />
+                    )}
                     <StepStateMark status={step.status} />
                   </div>
                   {step.explanations.map((copy) => (
@@ -204,7 +220,7 @@ export function ReadingPathPanel({
             After you read this
           </div>
           {fromCurrent.map((edge) => (
-            <EdgeRow key={`from-${edge.kind}-${edge.id}`} edge={edge} onOpen={onOpenThread} />
+            <EdgeRow key={`from-${edge.kind}-${edge.id}`} edge={edge} onOpen={onOpenThread} cardsByIssue={cardsByIssue} activeIssueId={context.issue_id} />
           ))}
         </div>
       )}
@@ -221,7 +237,7 @@ export function ReadingPathPanel({
             These unlock after your current read — they don&apos;t block {anchorLabel}.
           </p>
           {later.map((edge) => (
-            <EdgeRow key={`later-${edge.kind}-${edge.id}`} edge={edge} onOpen={onOpenThread} subdued />
+            <EdgeRow key={`later-${edge.kind}-${edge.id}`} edge={edge} onOpen={onOpenThread} cardsByIssue={cardsByIssue} activeIssueId={context.issue_id} subdued />
           ))}
         </div>
       )}
@@ -238,10 +254,14 @@ export function ReadingPathPanel({
 function EdgeRow({
   edge,
   onOpen,
+  cardsByIssue,
+  activeIssueId,
   subdued = false,
 }: {
   edge: ReaderContextEdge
   onOpen: (threadId: number) => void
+  cardsByIssue: Map<number, IssueCard>
+  activeIssueId: number
   subdued?: boolean
 }) {
   const arrow = edge.kind === 'dependency' ? '→' : '↝'
@@ -258,9 +278,27 @@ function EdgeRow({
       <div className="mt-1 h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: accent }}></div>
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <EdgeEndpoint label={edge.source_label} threadId={edge.source_thread_id} onOpen={onOpen} />
+          {edge.source_issue_id !== activeIssueId && cardsByIssue.has(edge.source_issue_id) ? (
+            <CompactIssueCardTrigger
+              issueId={edge.source_issue_id}
+              card={cardsByIssue.get(edge.source_issue_id)}
+              threadTitle={cardsByIssue.get(edge.source_issue_id)!.thread_title}
+              issueNumber={cardsByIssue.get(edge.source_issue_id)!.issue_number}
+            />
+          ) : (
+            <EdgeEndpoint label={edge.source_label} threadId={edge.source_thread_id} onOpen={onOpen} />
+          )}
           <span className="text-[var(--theme-text-muted)]" aria-hidden="true">{arrow}</span>
-          <EdgeEndpoint label={edge.target_label} threadId={edge.target_thread_id} onOpen={onOpen} />
+          {edge.target_issue_id !== activeIssueId && cardsByIssue.has(edge.target_issue_id) ? (
+            <CompactIssueCardTrigger
+              issueId={edge.target_issue_id}
+              card={cardsByIssue.get(edge.target_issue_id)}
+              threadTitle={cardsByIssue.get(edge.target_issue_id)!.thread_title}
+              issueNumber={cardsByIssue.get(edge.target_issue_id)!.issue_number}
+            />
+          ) : (
+            <EdgeEndpoint label={edge.target_label} threadId={edge.target_thread_id} onOpen={onOpen} />
+          )}
         </div>
         {copy ? (
           <div className="break-words italic text-[var(--theme-text-muted)]" style={readingContextType('bodyCopy')}>

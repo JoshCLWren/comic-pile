@@ -80,6 +80,7 @@ jobs:
           OVERRIDE_REASON: ${{ github.event.inputs.reason || '' }}
           ACTOR: ${{ github.actor }}
           OWNER: ${{ github.repository_owner }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           runs_file="$RUNNER_TEMP/deploy-production-runs.json"
@@ -97,6 +98,12 @@ jobs:
             exit 0
           fi
           extra=(--fetch-jobs)
+          # A canceled duplicate CLI deploy must not latch the red freeze if
+          # its exact SHA is already READY on the authenticated live alias.
+          # This is only a candidate: factory_deploy_freeze.py also verifies
+          # GitHub job steps (schema passed, CLI deploy was the sole failure).
+          verified_live_sha="$(python3 .github/scripts/verify_vercel_production.py || true)"
+          extra+=(--verified-live-sha "$verified_live_sha")
           if [[ "$OVERRIDE_FREEZE" == "true" ]]; then
             if [[ "$ACTOR" != "$OWNER" ]]; then
               echo "::warning::Ignoring override_freeze from ${ACTOR}; only repository owner ${OWNER} may override."
@@ -355,6 +362,10 @@ jobs:
           set -euo pipefail
           deploy_sha="$(git rev-parse HEAD)"
           commit_message="$(git log -1 --pretty=%s)"
+          # A parallel CLI deployment can win the alias and cancel this one.
+          # Reconcile ONLY if the live production alias is READY on our exact
+          # (already schema-verified) SHA. Other errors must remain fatal.
+          set +e
           vercel deploy \
             --prod \
             --yes \
@@ -370,6 +381,16 @@ jobs:
             --meta githubOrg="$GITHUB_REPOSITORY_OWNER" \
             --meta githubRepo="${GITHUB_REPOSITORY#*/}" \
             --meta githubCommitAuthorLogin="$GITHUB_ACTOR"
+          deploy_status=$?
+          set -e
+          if [[ "$deploy_status" -ne 0 ]]; then
+            live_sha="$(python3 .github/scripts/verify_vercel_production.py || true)"
+            if [[ "$live_sha" != "$deploy_sha" ]]; then
+              echo "::error::Vercel CLI failed and production alias does not serve $deploy_sha" >&2
+              exit "$deploy_status"
+            fi
+            echo "::warning::CLI deployment was superseded, but production alias serves $deploy_sha. Continuing all verification and smoke checks."
+          fi
 
       - name: Verify the newest production deployment matches this SHA
         env:
@@ -405,12 +426,25 @@ jobs:
           jq -r '.deployments[] | "  \(.uid) \(.readyState) \(.meta.githubCommitSha // "no-sha") workflow=\((.meta.githubDeployment // "") | tostring) aliasError=\((.aliasError // null) | tostring)"' <<< "$response" >&2
           exit 1
 
-      - name: Smoke production health
+      - name: Smoke production Rust health
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error \
+          body_file="$(mktemp)"
+          header_file="$(mktemp)"
+          trap 'rm -f "$body_file" "$header_file"' EXIT
+          status="$(curl --silent --show-error --max-time 25 \
             --retry 10 --retry-delay 2 --retry-all-errors \
-            https://comic-pile.vercel.app/health >/dev/null
+            --dump-header "$header_file" \
+            --output "$body_file" \
+            --write-out '%{http_code}' \
+            https://comic-pile.vercel.app/api/v2/health)"
+          health="$(jq -r '.status // ""' "$body_file")"
+          runtime="$(awk 'tolower($1) == "x-comicpile-api-runtime:" {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
+          if [[ "$status" != "200" || "$health" != "ok" || "$runtime" != "rust" ]]; then
+            echo "::error::Production Rust health contract failed (HTTP $status, health=${health:-missing}, runtime=${runtime:-missing})" >&2
+            exit 1
+          fi
+          echo "Production health contract passed (HTTP 200, status ok, runtime rust)"
 
       - name: Smoke production rejected login on the Rust runtime
         run: |
@@ -443,7 +477,7 @@ jobs:
           fi
           echo "Production rejected-login contract passed (HTTP 401, runtime rust)"
 
-  # Keep-N=1: live production alias only. No rollback candidate.
+  # Keep-N=2: live production alias plus previous READY rollback candidate.
   # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
   prune:
     name: Prune older Vercel deployments
@@ -473,7 +507,7 @@ jobs:
             exit 1
           fi
 
-      - name: Keep only the live production alias
+      - name: Keep live and previous READY production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -481,5 +515,5 @@ jobs:
             --project-id "$VERCEL_PROJECT_ID" \
             --project-name comic-pile \
             --team-id "$VERCEL_ORG_ID" \
-            --keep-n 1 \
+            --keep-n 2 \
             --fail-soft

@@ -1,12 +1,16 @@
 import { Link } from 'react-router-dom'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { CreatorMetricIssue } from '../types/index'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 
 interface DrilldownIssueListProps {
   issues: CreatorMetricIssue[]
 }
 
 export function DrilldownIssueList({ issues }: DrilldownIssueListProps) {
+  const cards = useIssueCards(issues.map((issue) => issue.issue_id))
+  const cardsByIssue = indexIssueCards(cards.data)
   if (issues.length === 0) {
     return (
       <div className="surface-panel rounded-xl p-6 border text-center" style={{ borderColor: 'var(--theme-border)' }}>
@@ -34,16 +38,18 @@ export function DrilldownIssueList({ issues }: DrilldownIssueListProps) {
           </div>
           
           <div className="flex-1 min-w-0">
+            <CompactIssueCardTrigger
+              issueId={issue.issue_id}
+              card={cardsByIssue.get(issue.issue_id)}
+              threadTitle={issue.thread_title}
+              issueNumber={issue.issue_number}
+              status={issue.status === 'read' ? 'read' : 'unread'}
+              rating={issue.effective_rating}
+            />
             <Link
               to={threadIssueRoutePath(issue.thread_id, issue.issue_id)}
-              className="block hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)] rounded"
-              style={{ color: 'var(--theme-text-primary)' }}
-            >
-              <div className="font-semibold truncate">{issue.thread_title}</div>
-              <div className="text-sm mt-1">
-                #{issue.issue_number}
-              </div>
-            </Link>
+              className="text-xs underline text-[var(--theme-text-muted)]"
+            >Open issue</Link>
             
             <div className="mt-2 flex flex-wrap gap-2">
               <span

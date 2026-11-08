@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { KeyboardEvent } from 'react'
 import Modal from './Modal'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
 import { issuesApi } from '../services/api-issues'
 import type { IssueListParams } from '../services/api-issues'
 import type { Issue, IssueListResponse } from '../types'
@@ -50,6 +51,10 @@ export default function IssueCorrectionDialog({
   const [insertPosition, setInsertPosition] = useState<string>('end')
 
   const hasNumericSelection = /^\d+$/.test(selectedIssueNumber.trim())
+  // Only one exact owned canonical ID is safe. Repeated issue-number aliases
+  // must be disambiguated by the correction UI rather than guessing artwork.
+  const matchingIssues = allIssues.filter((issue) => issue.issue_number === selectedIssueNumber.trim())
+  const selectedOwnedIssue = matchingIssues.length === 1 ? matchingIssues[0] : null
 
   const loadAllIssues = useCallback(async () => {
     const loadedIssues: Issue[] = []
@@ -266,6 +271,20 @@ export default function IssueCorrectionDialog({
                 +
               </button>
             </div>
+            {selectedOwnedIssue && (
+              <div className="mt-3">
+                <CompactIssueCardTrigger
+                  issueId={selectedOwnedIssue.id}
+                  threadTitle={threadTitle}
+                  issueNumber={selectedOwnedIssue.issue_number}
+                  status={selectedOwnedIssue.status === 'read' ? 'read' : 'unread'}
+                  onMutated={() => {
+                    void fetchIssues()
+                    onSuccess()
+                  }}
+                />
+              </div>
+            )}
             {!allIssues.some((issue) => issue.issue_number === selectedIssueNumber.trim()) && (
               <div className="mt-4">
                 <label htmlFor="issue-position" className="block text-xs font-bold text-stone-400 mb-2">

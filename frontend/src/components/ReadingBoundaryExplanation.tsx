@@ -2,6 +2,8 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { threadIssueRoutePath } from '../utils/threadRoutes'
 import type { BoundaryEditorTarget, BoundaryIssue, ReadingBoundaryExplanation as Explanation } from '../services/api-reading-boundaries'
+import CompactIssueCardTrigger from './CompactIssueCardTrigger'
+import type { IssueCard } from '../services/issueCardsApi'
 
 /** Translate server-owned rule descriptors into the current editor routes. */
 function readingBoundaryEditorHref(editor: BoundaryEditorTarget): string | null {
@@ -16,8 +18,24 @@ function EditorLink({ editor }: { editor?: BoundaryEditorTarget | null }) {
   return href && editor ? <Link to={href} className="text-[var(--theme-continuity-accent)] underline">Edit {editor.label}</Link> : null
 }
 
+/** Existing exact issue deep link remains available independently of actions. */
 function IssueLabel({ issue }: { issue: BoundaryIssue }) {
-  return <Link to={threadIssueRoutePath(issue.thread_id, issue.issue_id)} aria-label={`Open ${issue.thread_title} issue #${issue.issue_number}`} className="text-[var(--theme-continuity-accent)] underline">{issue.label}{issue.volume_label && !issue.label.includes(issue.volume_label) ? ` · ${issue.volume_label}` : ''}</Link>
+  return <Link
+    to={threadIssueRoutePath(issue.thread_id, issue.issue_id)}
+    aria-label={`Open ${issue.thread_title} issue #${issue.issue_number}`}
+    className="text-[var(--theme-continuity-accent)] underline"
+  >{issue.label}{issue.volume_label && !issue.label.includes(issue.volume_label) ? ` · ${issue.volume_label}` : ''}</Link>
+}
+
+/** An owned issue gets a covered shared action that fetches only when opened. */
+function BoundaryIssueActions({ issue, card }: { issue: BoundaryIssue; card?: IssueCard | null }) {
+  return <CompactIssueCardTrigger
+    issueId={issue.issue_id}
+    card={card}
+    threadTitle={issue.thread_title}
+    issueNumber={issue.issue_number}
+    hideTitle
+  />
 }
 
 interface Props {
@@ -25,11 +43,11 @@ interface Props {
   isPending?: boolean
   isError?: boolean
   onRetry?: () => void
+  /** Cached owned issues from the owner surface's one bounded batch. */
+  cardsByIssue?: ReadonlyMap<number, IssueCard>
   /**
    * Legacy availability explanation for deployments where the canonical
-   * evaluator is switched off. The endpoint answers `state: "unavailable"` for
-   * every series in that mode, so callers supply the server's existing
-   * next-issue/blocker detail instead of dropping it.
+   * evaluator is switched off.
    */
   fallback?: ReactNode
   /** Queue-sized presentation: one actionable comic by default, complete reasoning on demand. */
@@ -39,18 +57,18 @@ interface Props {
 const UNAVAILABLE = <p className="text-sm text-[var(--theme-text-muted)]">Reading boundaries are unavailable.</p>
 
 function CompactReadingRequirements({
-  primaryIssue,
-  editor,
-  allRequirements,
+  primaryIssue, editor, allRequirements, cardsByIssue,
 }: {
   primaryIssue: BoundaryIssue
   editor?: BoundaryEditorTarget | null
   allRequirements: ReactNode
+  cardsByIssue?: ReadonlyMap<number, IssueCard>
 }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <>
       <p>Read <IssueLabel issue={primaryIssue} /> first.</p>
+      <BoundaryIssueActions issue={primaryIssue} card={cardsByIssue?.get(primaryIssue.issue_id)} />
       <EditorLink editor={editor} />
       <button
         type="button"
@@ -66,13 +84,13 @@ function CompactReadingRequirements({
 }
 
 /** Present the evaluator's result; only current canonical requirements are presented. */
-export function ReadingBoundaryExplanation({ explanation, isPending, isError, onRetry, fallback, compact = false }: Props) {
+export function ReadingBoundaryExplanation({
+  explanation, isPending, isError, onRetry, fallback, compact = false, cardsByIssue,
+}: Props) {
   if (isError) return <div role="alert" className="text-sm text-[var(--theme-error)]"><p>Reading boundaries could not be loaded.</p><button type="button" className="min-h-11 underline" onClick={onRetry}>Retry reading boundaries</button></div>
   if (isPending) return <p role="status" className="text-sm text-[var(--theme-text-muted)]">Loading reading boundaries…</p>
   if (!explanation || explanation.state === 'unavailable') return <>{fallback ?? UNAVAILABLE}</>
   const blockers = explanation.blockers ?? []
-  // Strict-list blockers enumerate every earlier unread issue. The first is the
-  // actionable reading frontier, while the full set still enforces eligibility.
   const primaryBlocker =
     blockers.find((blocker) => blocker.kind === 'strict_order' && (blocker.waiting_on?.length ?? 0) > 0) ??
     blockers.find((blocker) => (blocker.waiting_on?.length ?? 0) > 0)
@@ -83,7 +101,12 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
         <li key={`${blocker.kind}-${index}`}>
           <p>{blocker.reason}</p>
           <ul className="space-y-1" aria-label="Waiting on comics">
-            {blocker.waiting_on?.map((issue) => <li key={issue.issue_id}><IssueLabel issue={issue} /></li>)}
+            {blocker.waiting_on?.map((issue) => (
+              <li key={issue.issue_id}>
+                <IssueLabel issue={issue} />
+                <BoundaryIssueActions issue={issue} card={cardsByIssue?.get(issue.issue_id)} />
+              </li>
+            ))}
           </ul>
           <EditorLink editor={blocker.editor} />
         </li>
@@ -93,9 +116,15 @@ export function ReadingBoundaryExplanation({ explanation, isPending, isError, on
   return (
     <div className="min-w-0 space-y-2 break-words text-sm text-[var(--theme-text-muted)]" data-testid="canonical-reading-boundary">
       <p className={`font-semibold ${explanation.state === 'blocked' ? 'text-[var(--theme-warning)]' : 'text-[var(--theme-text-primary)]'}`}>{explanation.summary}</p>
-      {explanation.next && <div><p>Next: <IssueLabel issue={explanation.next.issue} /></p><EditorLink editor={explanation.next.editor} /></div>}
+      {explanation.next && (
+        <div>
+          <p>Next: <IssueLabel issue={explanation.next.issue} /></p>
+          <BoundaryIssueActions issue={explanation.next.issue} card={cardsByIssue?.get(explanation.next.issue.issue_id)} />
+          <EditorLink editor={explanation.next.editor} />
+        </div>
+      )}
       {compact && explanation.state === 'blocked' && primaryIssue ? (
-        <CompactReadingRequirements primaryIssue={primaryIssue} editor={primaryBlocker?.editor} allRequirements={allRequirements} />
+        <CompactReadingRequirements primaryIssue={primaryIssue} editor={primaryBlocker?.editor} allRequirements={allRequirements} cardsByIssue={cardsByIssue} />
       ) : allRequirements}
     </div>
   )

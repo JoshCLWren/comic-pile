@@ -88,6 +88,23 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
 
 def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
     """Persist recognizable OpenCode smoke errors for the registry reporter."""
+    if runtime_model.startswith(("mistral/", "ollama-cloud/")) and re.search(
+        r"budget[ _]exhausted|billing_api_budget_exhausted|monthly usage limit|"
+        r"reached your [a-z ]*usage limit", log_content, re.I,
+    ):
+        outcome_file.write_text(
+            f"provider_quota\tMonthly free provider quota exhausted for {runtime_model}\n",
+            encoding="utf-8",
+        )
+        return True
+    if runtime_model.startswith(("z-ai/", "kilo/")) and re.search(
+        r"(?<![0-9.])429(?!\d)|too many requests", log_content, re.I
+    ):
+        outcome_file.write_text(
+            f"provider_quota\tFree provider account rate limit for {runtime_model}\n",
+            encoding="utf-8",
+        )
+        return True
     if runtime_model.startswith("opencode/") and FREE_QUOTA_RE.search(log_content):
         outcome_file.write_text(
             f"provider_quota\tOpenCode free quota exhausted for {runtime_model}\n",

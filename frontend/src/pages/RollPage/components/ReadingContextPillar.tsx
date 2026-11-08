@@ -10,6 +10,8 @@ import { ReadingPathPanel } from './ReadingPathPanel'
 import { readingContextType } from '../readingContextTypography'
 import { hasReadingContextContent } from '../readingContextContent'
 import { ReadingContextStatusCard } from './ReadingContextStatusCard'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
 
 interface ReadingContextPillarProps {
   activeRatingThread: RatingThread | null
@@ -114,6 +116,8 @@ export function ReadingContextPillar({
     () => readerContext?.local_chain.issues.filter(i => i.relation === 'next' || i.relation === 'future') ?? [],
     [readerContext],
   )
+  const cards = useIssueCards(readerContext?.local_chain.issues.map((issue) => issue.issue_id) ?? [])
+  const cardsByIssue = indexIssueCards(cards.data)
 
   const dependencyEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'dependency') ?? [], [readerContext])
   const continuityEdges = useMemo(() => readerContext?.local_chain.edges.filter(e => e.kind === 'continuity') ?? [], [readerContext])
@@ -278,6 +282,14 @@ export function ReadingContextPillar({
                     </div>
                   </button>
 
+                  <CompactIssueCardTrigger
+                    issueId={issue.issue_id}
+                    card={cardsByIssue.get(issue.issue_id)}
+                    threadTitle={seriesName ?? threadTitle}
+                    issueNumber={issue.issue_number}
+                    status={issue.status === 'read' ? 'read' : 'unread'}
+                    rating={issue.rating}
+                  />
                   {isExpanded && (
                     <div
                       id={detailId}

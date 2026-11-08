@@ -8,6 +8,8 @@ import { CrossoverAnalytics } from './CrossoverAnalytics'
 import type { RatingThread } from '../types'
 import type { ReadingBoundaryExplanation as BoundaryExplanation } from '../../../services/api-reading-boundaries'
 import { ReadingBoundaryExplanation } from '../../../components/ReadingBoundaryExplanation'
+import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
+import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
 
 interface OptionalReadingCardsProps {
   activeRatingThread: RatingThread | null
@@ -199,6 +201,8 @@ function ReadingContextContent({
   const hasSeriesContent =
     readerContext?.series != null && readerContext.series.identity_source !== 'unavailable'
   const localIssues = readerContext?.local_chain.issues ?? []
+  const cards = useIssueCards(localIssues.map((issue) => issue.issue_id))
+  const cardsByIssue = indexIssueCards(cards.data)
   const hasLocalIssues = localIssues.some((issue) => issue.relation !== 'current')
   const crossovers = readerContext?.crossovers ?? []
   const hasCrossovers = crossovers.some(
@@ -240,12 +244,16 @@ function ReadingContextContent({
                 key={issue.issue_id}
                 className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]"
               >
-                <span className="shrink-0 font-mono text-[var(--theme-text-primary)]">
-                  #{issue.issue_number}
-                </span>
+                <CompactIssueCardTrigger
+                  issueId={issue.issue_id}
+                  card={cardsByIssue.get(issue.issue_id)}
+                  threadTitle={seriesName ?? 'Comic'}
+                  issueNumber={issue.issue_number}
+                  status={issue.status === 'read' ? 'read' : 'unread'}
+                  rating={issue.rating}
+                />
                 <span className="min-w-0 break-words text-stone-400">
                   {relationCopy(issue.relation, seriesName)}
-                  {issue.status === 'read' ? ' · Already read' : ' · Not read yet'}
                 </span>
               </li>
             ))}

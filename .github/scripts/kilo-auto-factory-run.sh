@@ -100,6 +100,31 @@ else
   echo 'Kilo telemetry: requested_route=kilo-auto/free resolved metadata unavailable'
 fi
 
+# Only structured model metadata counts as routing evidence. Never scrape model
+# names from assistant/tool prose. Route aliases do not prove an upstream model.
+served_models="$(jq -r '
+  select(.type == "step_finish") | .part.model.modelID // empty
+  | select(type == "string")
+  | select(test("^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$"))
+  | select(. != "unreported" and . != "kilo-auto/free" and . != "kilo/kilo-auto/free")
+' "$events_jsonl" | sort -u)"
+if [[ -n "${KILO_SERVED_MODELS_FILE:-}" ]]; then
+  # This path is created by the trusted wrapper outside the checkout before
+  # branch switching. Preserve models from earlier invocations in this run.
+  printf '%s\n' "$served_models" >> "$KILO_SERVED_MODELS_FILE"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo '### Kilo Auto Free served models'
+      echo
+      if [[ -n "$served_models" ]]; then
+        printf '%s\n' "$served_models" | sed 's/^/- /'
+      else
+        echo 'Underlying model unreported by Kilo CLI; requested route: kilo-auto/free.'
+      fi
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+fi
+
 # Keep raw JSON telemetry, then expose only actual assistant text to the shared
 # terminal-verdict parser. Tool arguments/output and reasoning metadata must
 # never be promoted into a review verdict.

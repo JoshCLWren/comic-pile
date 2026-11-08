@@ -549,7 +549,13 @@ export default function RollPage() {
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               selectedThreadId={state.selectedThreadId}
-              emptyPoolReason={bootstrap?.pool_reason}
+              // Empty-pool explanation migration (#4719): the scoped eligible
+              // resource carries the server-computed reason from the same
+              // Option E inputs as bootstrap, so it is authoritative once
+              // settled. Bootstrap remains the fallback while the scoped
+              // query is pending or failed. The copy and CTA stay exactly the
+              // same four-way variants `ThreadPool` already renders.
+              emptyPoolReason={scopedEligibleIssueIds?.pool_reason ?? bootstrap?.pool_reason}
 
               snoozedThreads={snoozedThreads}
               snoozedCount={bootstrap?.snoozed_count ?? snoozedThreads.length}
@@ -600,7 +606,7 @@ export default function RollPage() {
           setDiePending={setDieMutation.isPending}
           isActionSheetOpen={state.isActionSheetOpen}
           selectedThread={state.selectedThread}
-          pendingThreadId={bootstrap?.pending_thread_id ?? null}
+          pendingThreadId={bootstrap.pending_thread_id}
           onCloseActionSheet={() => state.setIsActionSheetOpen(false)}
           onAction={actions.handleAction}
           isSetCurrentIssueOpen={state.isSetCurrentIssueOpen}

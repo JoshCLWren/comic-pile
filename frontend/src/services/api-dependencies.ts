@@ -47,13 +47,13 @@ export function createDependenciesApi(client: HttpClient) {
     getConnectedThreads: (threadId: number) =>
       client.get<ConnectedDependenciesResponse>(`/v1/threads/${threadId}/connected`),
     createDependency: ({ sourceType = 'thread', sourceId, targetType = 'thread', targetId }: DependencyCreatePayload) =>
-      client.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v1/dependencies/', {
+      client.post<Dependency, { source_type: 'thread' | 'issue'; source_id: number; target_type: 'thread' | 'issue'; target_id: number }>('/v2/dependencies/', {
         source_type: sourceType,
         source_id: sourceId,
         target_type: targetType,
         target_id: targetId,
       }),
-    deleteDependency: (dependencyId: number) => client.delete<void>(`/v1/dependencies/${dependencyId}`),
+    deleteDependency: (dependencyId: number) => client.delete<void>(`/v2/dependencies/${dependencyId}`),
     updateDependency: (dependencyId: number, note: string | null) =>
       client.patch<Dependency, { note: string | null }>(`/v1/dependencies/${dependencyId}`, { note }),
   }

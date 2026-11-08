@@ -17,9 +17,9 @@ from app.models.reading_plan_release_source import ReadingPlanReleaseSource
 from app.models.thread import Thread
 from app.repositories import reading_plan_release_source_repository as repo
 from app.repositories import reading_plan_repository
-from app.schemas.reading_plan_reader import ReadingPlanReleaseSourceStatus
 from app.schemas.reading_plan_release_source import (
     ReadingPlanReleaseCandidate,
+    ReadingPlanReleaseSourceStatus,
     ReleaseSourceCreate,
     ReleaseSourceResponse,
     ReleaseSourceUpdate,

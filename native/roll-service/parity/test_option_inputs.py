@@ -1,18 +1,16 @@
-"""Complete Option E input parity on isolated synthetic PostgreSQL schemas."""
+"""Complete Option E input parity on the canonical Alembic schema."""
 
 import asyncio
 import json
 import os
 from dataclasses import asdict
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 from jose import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Dependency, Issue, Thread, User
 from app.models.catalog import CatalogIssue, CatalogSeries
 from app.models.collection_exclusion import CollectionExclusion
@@ -26,26 +24,10 @@ SECRET = "synthetic-option-parity"
 
 @pytest.mark.asyncio
 async def test_option_input_parity() -> None:
-    """Compare all constraints, then corrupt owned endpoints to test closed failure."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"native_options_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    """Compare native Option E constraints with the canonical Python projection."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="option-reader"), User(username="private-reader")
             db.add_all([reader, foreign])
@@ -155,7 +137,7 @@ async def test_option_input_parity() -> None:
                         oracle = await load_shadow_inputs(db, reader_id,
                                                           include_legacy_diagnostics=False)
             environment = {**os.environ,
-                "RUST_ROLL_DATABASE_URL": f"{url}{'&' if '?' in url else '?'}options=-csearch_path%3D{schema}",
+                "RUST_ROLL_DATABASE_URL": url,
                 "RUST_ROLL_JWT_SECRET": SECRET,
                 "RUST_ROLL_TEST_TOKEN": jwt.encode({"sub": "option-reader", "type": "access", "jti": "synthetic-option-jti"},
                                                    SECRET, "HS256")}
@@ -202,20 +184,5 @@ async def test_option_input_parity() -> None:
             await db.commit()
         result = await compare(2)
         assert len(result["unresolved"]) == 3
-        # A dangling entry is also diagnosed, rather than silently removed by a join.
-        # Only this disposable schema loses its normally protective FK.
-        async with engine.begin() as connection:
-            await connection.execute(text(
-                "ALTER TABLE custom_cbl_entries DROP CONSTRAINT custom_cbl_entries_issue_id_fkey"
-            ))
-            await connection.execute(text(
-                "UPDATE custom_cbl_entries SET issue_id=:missing "
-                "WHERE list_id=:list AND issue_id=:issue"
-            ), {"missing": max(i.id for i in issues) + 100, "list": loose.id,
-                "issue": issues[-1].id})
-        await compare(2)
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()

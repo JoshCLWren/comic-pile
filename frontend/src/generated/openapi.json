@@ -9344,6 +9344,33 @@
         "title": "DependencyCreate",
         "type": "object"
       },
+      "DependencyCreateRequest": {
+        "additionalProperties": false,
+        "description": "Flat wire request mirroring the Python `DependencyCreate` payload so the\nDependency Builder migrates without changing its semantics.",
+        "properties": {
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id"
+        ],
+        "type": "object"
+      },
       "DependencyGroupCreate": {
         "description": "Create a named dependency group.",
         "properties": {
@@ -13227,6 +13254,93 @@
           "needs_mapping_count",
           "needs_review_count",
           "metadata_missing_count"
+        ],
+        "type": "object"
+      },
+      "NativeDependencyResponse": {
+        "description": "Issue-level dependency response mirroring the Python `DependencyResponse`\nfields the Dependency Builder consumes (`warning`, labels, thread ids).",
+        "properties": {
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_issue_level": {
+            "type": "boolean"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_issue_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "target_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "target_issue_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "target_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "warning": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "is_issue_level",
+          "created_at"
         ],
         "type": "object"
       },
@@ -17799,40 +17913,6 @@
         "title": "ReadingOrderSummary",
         "type": "object"
       },
-      "ReadingPlanBlocker": {
-        "description": "One unread Issue required by the current execution authority.",
-        "properties": {
-          "explanation": {
-            "title": "Explanation",
-            "type": "string"
-          },
-          "issue_id": {
-            "title": "Issue Id",
-            "type": "integer"
-          },
-          "issue_number": {
-            "title": "Issue Number",
-            "type": "string"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          },
-          "thread_title": {
-            "title": "Thread Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "issue_id",
-          "thread_id",
-          "thread_title",
-          "issue_number",
-          "explanation"
-        ],
-        "title": "ReadingPlanBlocker",
-        "type": "object"
-      },
       "ReadingPlanDependencyLink": {
         "description": "One plan provenance reference to a canonical Dependency edge.",
         "properties": {
@@ -18033,351 +18113,6 @@
           "read_issues"
         ],
         "title": "ReadingPlanProgress",
-        "type": "object"
-      },
-      "ReadingPlanReaderIssue": {
-        "description": "One plan occurrence with display identity and canonical availability.",
-        "properties": {
-          "availability": {
-            "enum": [
-              "read",
-              "available",
-              "blocked",
-              "later",
-              "excluded",
-              "inactive"
-            ],
-            "title": "Availability",
-            "type": "string"
-          },
-          "blockers": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanBlocker"
-            },
-            "title": "Blockers",
-            "type": "array"
-          },
-          "display_position": {
-            "title": "Display Position",
-            "type": "integer"
-          },
-          "is_checkpoint": {
-            "default": false,
-            "title": "Is Checkpoint",
-            "type": "boolean"
-          },
-          "issue_id": {
-            "title": "Issue Id",
-            "type": "integer"
-          },
-          "issue_number": {
-            "title": "Issue Number",
-            "type": "string"
-          },
-          "label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Label"
-          },
-          "lane_id": {
-            "title": "Lane Id",
-            "type": "string"
-          },
-          "occurrence_id": {
-            "title": "Occurrence Id",
-            "type": "string"
-          },
-          "reader_optional": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reader Optional"
-          },
-          "reader_role": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reader Role"
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Paths",
-            "type": "array"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          },
-          "thread_title": {
-            "title": "Thread Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "occurrence_id",
-          "issue_id",
-          "lane_id",
-          "display_position",
-          "issue_number",
-          "thread_id",
-          "thread_title",
-          "status",
-          "availability"
-        ],
-        "title": "ReadingPlanReaderIssue",
-        "type": "object"
-      },
-      "ReadingPlanReaderLane": {
-        "description": "One reading lane of ordered plan issues.",
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanReaderIssue"
-            },
-            "title": "Issues",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "order": {
-            "title": "Order",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "order",
-          "issues"
-        ],
-        "title": "ReadingPlanReaderLane",
-        "type": "object"
-      },
-      "ReadingPlanReaderResponse": {
-        "description": "Primary reader view for one Reading Plan.",
-        "properties": {
-          "available_now": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanReaderIssue"
-            },
-            "title": "Available Now",
-            "type": "array"
-          },
-          "blocked_next": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanReaderIssue"
-            },
-            "title": "Blocked Next",
-            "type": "array"
-          },
-          "execution_mode": {
-            "default": "legacy",
-            "enum": [
-              "legacy",
-              "option_e"
-            ],
-            "title": "Execution Mode",
-            "type": "string"
-          },
-          "lanes": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanReaderLane"
-            },
-            "title": "Lanes",
-            "type": "array"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "ordering_mode": {
-            "title": "Ordering Mode",
-            "type": "string"
-          },
-          "plan_id": {
-            "title": "Plan Id",
-            "type": "integer"
-          },
-          "progress": {
-            "$ref": "#/components/schemas/ReadingPlanProgress"
-          },
-          "release_candidates": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanReleaseCandidate"
-            },
-            "title": "Release Candidates",
-            "type": "array"
-          },
-          "release_sources": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanReleaseSourceStatus"
-            },
-            "title": "Release Sources",
-            "type": "array"
-          },
-          "sources": {
-            "items": {
-              "$ref": "#/components/schemas/ReadingPlanSourceSnapshot"
-            },
-            "title": "Sources",
-            "type": "array"
-          }
-        },
-        "required": [
-          "plan_id",
-          "name",
-          "ordering_mode",
-          "progress",
-          "available_now",
-          "blocked_next",
-          "lanes",
-          "sources"
-        ],
-        "title": "ReadingPlanReaderResponse",
-        "type": "object"
-      },
-      "ReadingPlanReleaseCandidate": {
-        "description": "One ComicVine volume a reader may follow for a Reading Plan thread.\n\n``enableable`` is true only for a confirmed series mapping that is not\nalready followed. Ambiguous and unmapped threads are reported so the\nreader is routed to mapping repair instead of being offered a volume\nwhose identity is still undecided.",
-        "properties": {
-          "enableable": {
-            "default": false,
-            "title": "Enableable",
-            "type": "boolean"
-          },
-          "external_identity_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "External Identity Id"
-          },
-          "followed": {
-            "default": false,
-            "title": "Followed",
-            "type": "boolean"
-          },
-          "mapping_state": {
-            "enum": [
-              "confirmed",
-              "ambiguous",
-              "unmapped"
-            ],
-            "title": "Mapping State",
-            "type": "string"
-          },
-          "mapping_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mapping Status"
-          },
-          "provider_issue_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Issue Count"
-          },
-          "provider_publisher": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Publisher"
-          },
-          "provider_start_year": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Start Year"
-          },
-          "provider_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Title"
-          },
-          "provider_volume_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Volume Id"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          },
-          "thread_title": {
-            "title": "Thread Title",
-            "type": "string"
-          }
-        },
-        "required": [
-          "thread_id",
-          "thread_title",
-          "mapping_state"
-        ],
-        "title": "ReadingPlanReleaseCandidate",
         "type": "object"
       },
       "ReadingPlanReleaseSourceStatus": {
@@ -19430,6 +19165,10 @@
             },
             "type": "array"
           },
+          "pool_reason": {
+            "$ref": "#/components/schemas/PoolReason",
+            "description": "Why an empty in-play pool has no faces, when it does.\nDerived from the already-loaded Option E inputs and the eligible\nfrontiers before the die bound and browser snoozes, exactly as\n`GET /api/v2/roll/bootstrap` reports it. `ready` means at least one\nfrontier is eligible; the other variants name why an empty pool has\nno in-play faces (`no_series`, `all_blocked`, `all_completed`,\n`all_out_of_pool`). It never carries a list or whole-library report."
+          },
           "thread_ids": {
             "description": "The owning thread identifiers, parallel to `issue_ids`.",
             "items": {
@@ -19442,7 +19181,8 @@
         "required": [
           "die",
           "issue_ids",
-          "thread_ids"
+          "thread_ids",
+          "pool_reason"
         ],
         "type": "object"
       },
@@ -26530,56 +26270,6 @@
           }
         ],
         "summary": "Get Continuity Plan Membership",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "continuity-plans"
-        ]
-      }
-    },
-    "/api/v1/continuity-plans/{plan_id}/reader": {
-      "get": {
-        "description": "Return progress, available now, blocked next, and ordered lanes.\n\nAvailability uses the same guarded authority as Roll. Disabled readers retain\nlegacy dependencies; inspecting a plan never activates list execution.",
-        "operationId": "get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "plan_id",
-            "required": true,
-            "schema": {
-              "title": "Plan Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingPlanReaderResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Continuity Plan Reader",
         "tags": [
           "dependencies",
           "dependencies",
@@ -37054,6 +36744,99 @@
         ],
         "tags": [
           "continuity-plans"
+        ]
+      }
+    },
+    "/api/v2/dependencies/": {
+      "post": {
+        "description": "Create one owner-scoped issue-level reader dependency after combined reading-graph preflight. The complete projected Option E graph is validated inside the write transaction before commit; a cyclic edge is rejected with the named series/issues and nothing is changed.",
+        "operationId": "create_dependency_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeDependencyResponse"
+                }
+              }
+            },
+            "description": "Created dependency"
+          },
+          "400": {
+            "description": "Invalid or duplicate dependency"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Reading constraint cycle: nothing was changed"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted dependency create.",
+        "tags": [
+          "dependencies"
+        ]
+      }
+    },
+    "/api/v2/dependencies/{dependency_id}": {
+      "delete": {
+        "description": "Delete one owner-scoped dependency and refresh denormalized blocked flags. Issues, read state, ratings and history are preserved.",
+        "operationId": "delete_dependency_documentation",
+        "parameters": [
+          {
+            "description": "Dependency id",
+            "in": "path",
+            "name": "dependency_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted dependency delete.",
+        "tags": [
+          "dependencies"
         ]
       }
     },

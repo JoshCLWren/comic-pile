@@ -13,6 +13,12 @@ vi.mock('../components/Tooltip', () => ({
   ),
 }))
 
+vi.mock('../pages/QueuePage/QueueNextIssueCard', () => ({
+  default: ({ threadId }: { threadId: number }) => (
+    <div data-testid="mock-queue-next-issue">Canonical issue lookup for {threadId}</div>
+  ),
+}))
+
 vi.mock('../components/MarqueeTitle', () => ({
   MarqueeTitle: ({ title }: { title: string }) => <span data-testid="mock-marquee">{title}</span>,
 }))
@@ -163,6 +169,27 @@ describe('QueueThreadCard', () => {
 
     expect(screen.getAllByTestId('mock-position-menu')).toHaveLength(1)
     expect(screen.queryByTestId('mobile-dependency-action')).not.toBeInTheDocument()
+  })
+
+  it('opens the shared exact-issue actions only when asked, without navigating to Thread', async () => {
+    const user = userEvent.setup()
+    const onCardClick = vi.fn()
+    renderCard(createMockThread(), { onCardClick })
+    expect(screen.queryByTestId('mock-queue-next-issue')).not.toBeInTheDocument()
+    const trigger = screen.getByRole('button', { name: 'Read / Rate / Map issue' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    await user.click(trigger)
+    expect(screen.getByTestId('mock-queue-next-issue')).toHaveTextContent('Canonical issue lookup for 1')
+    expect(onCardClick).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Hide issue actions' })).toHaveAttribute('aria-expanded', 'true')
+    await user.click(screen.getByRole('button', { name: 'Hide issue actions' }))
+    expect(screen.queryByTestId('mock-queue-next-issue')).not.toBeInTheDocument()
+  })
+
+  it('keeps exact-issue manual actions discoverable on a blocked series', () => {
+    renderCard(createMockThread({ is_blocked: true }), { isBlocked: true })
+    expect(screen.getByRole('button', { name: 'Read / Rate / Map issue' })).toBeEnabled()
+    expect(screen.getByText(/Automatic Roll waits for prerequisites/)).toBeVisible()
   })
 
   it('opens thread details when the card surface is clicked', async () => {
@@ -368,7 +395,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Read & Rate unlocks once the active reading requirements are satisfied.',
+      'Automatic Roll waits for prerequisites, but you can still read an exact issue manually.',
     )
 
     const actionsGroup = screen.getByRole('group', { name: 'Actions for Test Thread' })
@@ -396,7 +423,7 @@ describe('QueueThreadCard', () => {
 
     const detail = screen.getByTestId('queue-thread-blocked-detail')
     expect(detail).toHaveTextContent(
-      'Read & Rate unlocks once the active reading requirements are satisfied.',
+      'Automatic Roll waits for prerequisites, but you can still read an exact issue manually.',
     )
   })
 

@@ -28,10 +28,11 @@ Python oracle; nothing regenerates native output from it.
 
 ## Reproduce
 
-Use Python 3.14 and `uv sync --frozen --all-extras`. The Rust database-backed
-bootstrap tests read `RUST_ROLL_TEST_DATABASE_URL` and self-skip (reporting
-success without exercising SQL) when it is unset; CI sets the variable, so this
-is a local-only skip. Point it at a disposable local PostgreSQL test database.
+Use Python 3.14 and `uv sync --frozen --all-extras`. All Rust database-backed
+bootstrap tests require `RUST_ROLL_TEST_DATABASE_URL` and **fail** with setup
+instructions when it is unset; reporting success without exercising SQL is
+forbidden. Point it at a disposable local PostgreSQL test database. The
+`RUST_ROLL_ALLOW_DB_SKIP` override is deliberately unsupported and rejected.
 The Python checks below use `TEST_DATABASE_URL`
 and `DATABASE_URL` and refuse non-test database names. Never point either suite
 at a reader's library, a read-only testuser snapshot, or production.
@@ -227,8 +228,10 @@ adapter and contract coverage. Two residuals remain:
 
 ## Surface migration order (scoped resources, #4369)
 
-Bootstrap remains authoritative for session/pending/recovery, pool
-data, die size, and the 3D die model until those surfaces migrate. The
+Bootstrap remains authoritative for session/pending/recovery and supplies
+fallback pool metadata. The scoped die-state resource now owns die size
+and the 3D die model when its query succeeds; Bootstrap is the fallback
+while the scoped query is pending or fails. The
 callers in `frontend/src/hooks/useRollResources.ts` are now mounted
 incrementally: `RollPage` calls `useRollDieState` and passes the scoped
 value to `RollHeader`, calls `useRollEligibleIssueIds` with the
@@ -242,12 +245,12 @@ of its own.
 
 Migrate in this order, one surface per reviewable change:
 
-1. Die header — **selected die and readout mounted** from
-   `GET /v2/roll/die-state` (`die`), falling back to bootstrap
-   `current_die` while the scoped query settles or fails, and
-   invalidated after roll/set-die/reset. Remaining in this surface:
-   drive the ladder list, `default_die` and `last_roll` from the
-   scoped resource, and align die size and the 3D model with it.
+1. Die header — **selected die, ladder list, readout, die size and 3D model
+   mounted** from `GET /v2/roll/die-state` (`die`, `ladder`), falling back
+   to bootstrap `current_die` and the static ladder while the scoped query
+   settles or fails, and invalidated after roll/set-die/reset. Remaining in
+   this surface: drive `default_die` and `last_roll` from the scoped
+   resource.
 2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
    `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
    `thread_ids`), with browser-owned snoozes as the `snoozed` query
