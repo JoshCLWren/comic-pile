@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Prune stale Vercel deployments after a ComicPile production deploy.
 
-Keep policy (keep-N=1 production Ready)
+Keep policy (keep-N=2 production Ready)
 ---------------------------------------
-Never delete the live production alias target (``targets.production``).
-Delete every other terminal deployment, including the previous READY
-production, leftover preview rows, and ERROR/CANCELED/FAILED records that
-still consume Functions Storage. There is no rollback candidate.
+Never delete the live production alias target (``targets.production``) or
+its immediately previous READY production deployment (by creation time,
+excluding the live id). Keep in-progress deployments. Delete other terminal
+deployments, including older production, preview and failed deployments.
+The previous READY production is the bounded rollback candidate.
 
 Safety
 ------
@@ -22,8 +23,8 @@ Safety
 
 Usage::
 
-    python scripts/prune_vercel_deployments.py --keep-n 1 --dry-run
-    python scripts/prune_vercel_deployments.py --keep-n 1 --fail-soft
+    python scripts/prune_vercel_deployments.py --keep-n 2 --dry-run
+    python scripts/prune_vercel_deployments.py --keep-n 2 --fail-soft
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ from typing import Protocol
 
 API_BASE = "https://api.vercel.com"
 DEFAULT_PROJECT_NAME = "comic-pile"
-KEEP_N = 1
+KEEP_N = 2
 DELETE_BATCH_SIZE = 200
 LIST_PAGE_SIZE = 100
 REQUEST_TIMEOUT_SECONDS = 30.0
@@ -322,13 +323,27 @@ def select_keepers(live_id: str, deployments: Sequence[Deployment]) -> set[str]:
         deployments: All known deployments.
 
     Returns:
-        The production target and in-progress ids. Retain READY production
-        during unsettled rollouts; otherwise keep only the live target.
+        The live production target, one previous READY production rollback
+        candidate, and in-progress ids. Retain all READY production during
+        unsettled rollouts so a BUILDING alias target cannot prune its fallback.
     """
     keepers = {live_id}
     settled = any(item.uid == live_id and item.is_ready for item in deployments) and not any(
         item.is_production and item.is_in_progress for item in deployments
     )
+    # The rollback candidate is the most recent successfully READY production
+    # deployment other than the live alias target, not the most recent row in
+    # any state (which could be an ERROR, preview or still BUILDING).
+    previous_ready = sorted(
+        (
+            item for item in deployments
+            if item.is_production and item.is_ready and item.uid != live_id
+        ),
+        key=lambda item: (item.created, item.uid),
+        reverse=True,
+    )
+    if previous_ready:
+        keepers.add(previous_ready[0].uid)
     for item in deployments:
         if item.is_in_progress or (not settled and item.is_production and item.is_ready):
             keepers.add(item.uid)
@@ -653,7 +668,7 @@ def run_prune(
     in_progress = tuple(item.uid for item in deployments if item.is_in_progress)
     candidates = select_prune_candidates(deployments, keepers)
     emit(
-        f"Keep policy: live production alias only (keep-N={KEEP_N}). live={live_id}"
+        f"Keep policy: live production plus previous READY (keep-N={KEEP_N}). live={live_id}"
     )
     emit(f"Listed {len(deployments)} deployment(s); keeping {len(keepers)}.")
     if in_progress:
@@ -755,8 +770,8 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=KEEP_N,
         help=(
-            "Production Ready deployments to keep. Default 1: live production "
-            "alias only; no rollback candidate."
+            "Production READY deployments to keep. Default 2: the live "
+            "alias and one previous READY production rollback candidate."
         ),
     )
     parser.add_argument(
@@ -791,7 +806,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.keep_n != KEEP_N:
         print(
             f"--keep-n {args.keep_n} is not supported; "
-            f"policy is keep-N={KEEP_N} (live production alias only).",
+            f"policy is keep-N={KEEP_N} (live plus previous READY production).",
             file=sys.stderr,
         )
         return prune_exit_code(fail_soft=args.fail_soft, failed=True)

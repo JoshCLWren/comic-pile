@@ -90,41 +90,53 @@ with `override_freeze=true` and a required `reason` after the fix is on
 the run summary. Factory workers must not use that override; they can label a
 fix PR `deploy-fix` instead. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
 
-## Deployment retention
+## Deployment retention and rollback candidate
 
-Hobby Functions Storage is charged per retained deployment. After a successful
-production deploy and `/health` smoke — and also when the exact-SHA preflight
-skips a duplicate deploy — Deploy Production runs
+Hobby Functions Storage is charged per retained deployment. After successful
+production deployment and `/api/v2/health` smoke, and when the exact-SHA
+preflight skips an already-ready deployment, Deploy Production invokes
 `scripts/prune_vercel_deployments.py`.
 
-Keep policy (keep-N=1 production Ready):
+**Keep-N=2 production READY policy:**
 
 1. Never delete the live production alias target (`targets.production`).
-2. Delete every other terminal deployment, including the previous READY
-   production, leftover preview rows, and ERROR/CANCELED/FAILED records.
-   There is no rollback candidate.
-3. Leave in-progress deployments untouched.
+2. Preserve the most recently created **READY production** deployment other
+   than the live alias target as the one rollback candidate. A failed,
+   canceled, building, or preview deployment must never displace that
+   candidate, even if created more recently.
+3. Leave in-progress deployments untouched. If an incoming rollout is
+   unsettled or the alias target is not READY, retain *all* READY production
+   deployments until a subsequent settled prune establishes the safe two.
+4. Prune other terminal rows, including older READY production, previews,
+   ERROR/CANCELED/FAILED, only after refreshing Vercel's project target and
+   deployment list immediately before each deletion. API-level alias-delete
+   protection remains a final safeguard.
 
-Deletes use `DELETE /v13/deployments/{dpl_...}` only, in batches of at most 200
-with backoff on rate limits. The script never calls `vercel remove comic-pile`
-and never deletes the Vercel project. Prune errors are `--fail-soft`: they are
-logged clearly and do not fail the migrate/deploy/smoke job.
+Prune uses only `DELETE /v13/deployments/{dpl_...}`, batches at most 200,
+and retries rate limits. Errors are `--fail-soft` so a completed
+migration/deploy/smoke does not become red solely because cleanup failed.
 
-Dry-run locally (requires `VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, and `VERCEL_ORG_ID`):
+The retained previous READY deployment provides a bounded recovery candidate
+in the Vercel dashboard. To verify recoverability without interrupting live
+traffic, confirm the prior deployment is still READY, its exact commit SHA
+and expected metadata are visible, and the dashboard offers an eligible
+production promotion/rollback action. A promotion is **not** automatic:
+verify the older application remains compatible with the *current* Neon
+schema before deliberately restoring it. A READY deployment is not proof of
+schema rollback compatibility; no Alembic downgrade is run by this policy.
+
+For a non-destructive listing (requires `VERCEL_TOKEN`,
+`VERCEL_PROJECT_ID` and `VERCEL_ORG_ID`):
 
 ```bash
-python scripts/prune_vercel_deployments.py --dry-run
+python scripts/prune_vercel_deployments.py --keep-n 2 --dry-run
 ```
 
-Manual emergency cleanup, if the automated path cannot run, must keep `--safe`:
-
-```bash
-vercel remove comic-pile --safe --yes --scope joshclwrens-projects
-```
-
-That CLI form also keeps only the current production alias. Prefer the script
-so cleanup stays on `DELETE /v13/deployments/{dpl_...}` and never invokes
-`vercel remove comic-pile`.
+**Do not run** `vercel remove comic-pile --safe` for maintenance: that
+CLI cleanup has a different retention policy and would discard our previous
+READY rollback candidate. Use the project-scoped script instead. If it cannot
+run, stop automatic deletion and investigate the credential/API failure rather
+than falling back to a project-level remove operation.
 
 ## Daily release-source sync (Vercel Cron)
 
@@ -248,4 +260,4 @@ After this change is merged:
 
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
 
-During an unsettled production rollout, pruning temporarily retains READY production deployments as well as the incoming build. Vercel can report the BUILDING deployment as `targets.production` before it serves the public alias. Pruning refreshes the protected set before every deletion. Once the production target is READY and no production build remains in progress, the normal keep-N=1 policy resumes.
+During an unsettled production rollout, pruning temporarily retains READY production deployments as well as the incoming build. Vercel can report the BUILDING deployment as `targets.production` before it serves the public alias. Pruning refreshes the protected set before every deletion. Once the production target is READY and no production build remains in progress, the normal keep-N=2 policy resumes.

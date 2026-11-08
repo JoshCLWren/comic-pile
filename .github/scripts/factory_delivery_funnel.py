@@ -173,6 +173,10 @@ def collect_delivery_funnel(
                           for key, value in counts.items()]
         retained[sha] = cache[sha]
         credits = records(cache[sha])
+        # A merged PR without advance commits still counts as a merge; it just
+        # supplies no worker/model contribution credit for that immutable SHA.
+        if not credits:
+            continue
         parsed_counts: list[float] = []
         for row in credits:
             raw_count = row.get('count')

@@ -21,7 +21,6 @@ from app.models.issue import Issue
 from app.models.reading_plan_membership import ReadingPlanIssue
 from app.models.thread import Thread
 from app.schemas.reading_plan_release_source import ReleaseSourceCreate
-from app.services import reading_plan_reader as reader_service
 from app.services import reading_plan_release_source_service as release_service
 from tests.conftest import get_or_create_user_async
 
@@ -348,7 +347,7 @@ async def test_candidates_are_scoped_to_the_plan_owner(
 async def test_reader_view_exposes_release_candidates(
     async_db: AsyncSession,
 ) -> None:
-    """The plan reader view carries the candidate volumes with the sources."""
+    """The release-source service carries the candidate volumes with the sources."""
     user = await get_or_create_user_async(async_db, "candidate-reader-view@test.com")
     plan = await _make_plan(async_db, user_id=user.id)
     thread = await _make_thread(async_db, user_id=user.id, title="Reader Candidate")
@@ -358,11 +357,11 @@ async def test_reader_view_exposes_release_candidates(
     await _add_mapping(async_db, thread_id=thread.id, identity_id=identity.id)
     await async_db.commit()
 
-    view = await reader_service.get_reading_plan_reader(
-        async_db, user_id=user.id, plan_id=plan.id
+    candidates = await release_service.list_release_candidates_for_reader(
+        async_db, plan_id=plan.id, user_id=user.id
     )
-    assert len(view.release_candidates) == 1
-    candidate = view.release_candidates[0]
+    assert len(candidates) == 1
+    candidate = candidates[0]
     assert candidate.thread_id == thread.id
     assert candidate.enableable is True
     assert candidate.provider_volume_id == identity.external_id
@@ -372,25 +371,11 @@ async def test_reader_view_exposes_release_candidates(
 async def test_reader_endpoint_serializes_release_candidates(
     auth_client: AsyncClient, async_db: AsyncSession
 ) -> None:
-    """The reader endpoint returns the candidate volumes a reader can enable."""
+    """The retired v1 plan reader no longer serves release candidates."""
     user = await get_or_create_user_async(async_db)
     plan = await _make_plan(async_db, user_id=user.id)
-    thread = await _make_thread(async_db, user_id=user.id, title="HTTP Candidate")
-    issue = await _add_issue(async_db, thread=thread)
-    await _add_plan_issue(async_db, plan=plan, issue=issue)
-    identity = await _make_identity(async_db, external_id="5150")
-    await _add_mapping(async_db, thread_id=thread.id, identity_id=identity.id)
     await async_db.commit()
 
     response = await auth_client.get(f"/api/v1/continuity-plans/{plan.id}/reader")
-    assert response.status_code == 200, response.text
-    body = response.json()
-    assert len(body["release_candidates"]) == 1
-    candidate = body["release_candidates"][0]
-    assert candidate["thread_id"] == thread.id
-    assert candidate["mapping_state"] == "confirmed"
-    assert candidate["enableable"] is True
-    assert candidate["provider_volume_id"] == identity.external_id
-    assert candidate["provider_title"] == "Ultimate Spider-Man"
-    assert body["release_sources"] == []
+    assert response.status_code == 404
 

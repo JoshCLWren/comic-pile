@@ -1391,29 +1391,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/continuity-plans/{plan_id}/reader": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Continuity Plan Reader
-         * @description Return progress, available now, blocked next, and ordered lanes.
-         *
-         *     Availability uses the same guarded authority as Roll. Disabled readers retain
-         *     legacy dependencies; inspecting a plan never activates list execution.
-         */
-        get: operations["get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/continuity-plans/{plan_id}/reading-orders/project": {
         parameters: {
             query?: never;
@@ -14842,22 +14819,6 @@ export interface components {
             total_items: number;
         };
         /**
-         * ReadingPlanBlocker
-         * @description One unread Issue required by the current execution authority.
-         */
-        ReadingPlanBlocker: {
-            /** Explanation */
-            explanation: string;
-            /** Issue Id */
-            issue_id: number;
-            /** Issue Number */
-            issue_number: string;
-            /** Thread Id */
-            thread_id: number;
-            /** Thread Title */
-            thread_title: string;
-        };
-        /**
          * ReadingPlanDependencyLink
          * @description One plan provenance reference to a canonical Dependency edge.
          */
@@ -14934,137 +14895,6 @@ export interface components {
             read_issues: number;
             /** Total Issues */
             total_issues: number;
-        };
-        /**
-         * ReadingPlanReaderIssue
-         * @description One plan occurrence with display identity and canonical availability.
-         */
-        ReadingPlanReaderIssue: {
-            /**
-             * Availability
-             * @enum {string}
-             */
-            availability: "read" | "available" | "blocked" | "later" | "excluded" | "inactive";
-            /** Blockers */
-            blockers?: components["schemas"]["ReadingPlanBlocker"][];
-            /** Display Position */
-            display_position: number;
-            /**
-             * Is Checkpoint
-             * @default false
-             */
-            is_checkpoint: boolean;
-            /** Issue Id */
-            issue_id: number;
-            /** Issue Number */
-            issue_number: string;
-            /** Label */
-            label?: string | null;
-            /** Lane Id */
-            lane_id: string;
-            /** Occurrence Id */
-            occurrence_id: string;
-            /** Reader Optional */
-            reader_optional?: boolean | null;
-            /** Reader Role */
-            reader_role?: string | null;
-            /** Source Paths */
-            source_paths?: string[];
-            /** Status */
-            status: string;
-            /** Thread Id */
-            thread_id: number;
-            /** Thread Title */
-            thread_title: string;
-        };
-        /**
-         * ReadingPlanReaderLane
-         * @description One reading lane of ordered plan issues.
-         */
-        ReadingPlanReaderLane: {
-            /** Id */
-            id: string;
-            /** Issues */
-            issues: components["schemas"]["ReadingPlanReaderIssue"][];
-            /** Name */
-            name: string;
-            /** Order */
-            order: number;
-        };
-        /**
-         * ReadingPlanReaderResponse
-         * @description Primary reader view for one Reading Plan.
-         */
-        ReadingPlanReaderResponse: {
-            /** Available Now */
-            available_now: components["schemas"]["ReadingPlanReaderIssue"][];
-            /** Blocked Next */
-            blocked_next: components["schemas"]["ReadingPlanReaderIssue"][];
-            /**
-             * Execution Mode
-             * @default legacy
-             * @enum {string}
-             */
-            execution_mode: "legacy" | "option_e";
-            /** Lanes */
-            lanes: components["schemas"]["ReadingPlanReaderLane"][];
-            /** Name */
-            name: string;
-            /** Ordering Mode */
-            ordering_mode: string;
-            /** Plan Id */
-            plan_id: number;
-            progress: components["schemas"]["ReadingPlanProgress"];
-            /** Release Candidates */
-            release_candidates?: components["schemas"]["ReadingPlanReleaseCandidate"][];
-            /** Release Sources */
-            release_sources?: components["schemas"]["ReadingPlanReleaseSourceStatus"][];
-            /** Sources */
-            sources: components["schemas"]["ReadingPlanSourceSnapshot"][];
-        };
-        /**
-         * ReadingPlanReleaseCandidate
-         * @description One ComicVine volume a reader may follow for a Reading Plan thread.
-         *
-         *     ``enableable`` is true only for a confirmed series mapping that is not
-         *     already followed. Ambiguous and unmapped threads are reported so the
-         *     reader is routed to mapping repair instead of being offered a volume
-         *     whose identity is still undecided.
-         */
-        ReadingPlanReleaseCandidate: {
-            /**
-             * Enableable
-             * @default false
-             */
-            enableable: boolean;
-            /** External Identity Id */
-            external_identity_id?: number | null;
-            /**
-             * Followed
-             * @default false
-             */
-            followed: boolean;
-            /**
-             * Mapping State
-             * @enum {string}
-             */
-            mapping_state: "confirmed" | "ambiguous" | "unmapped";
-            /** Mapping Status */
-            mapping_status?: string | null;
-            /** Provider Issue Count */
-            provider_issue_count?: number | null;
-            /** Provider Publisher */
-            provider_publisher?: string | null;
-            /** Provider Start Year */
-            provider_start_year?: number | null;
-            /** Provider Title */
-            provider_title?: string | null;
-            /** Provider Volume Id */
-            provider_volume_id?: string | null;
-            /** Thread Id */
-            thread_id: number;
-            /** Thread Title */
-            thread_title: string;
         };
         /**
          * ReadingPlanReleaseSourceStatus
@@ -15494,6 +15324,16 @@ export interface components {
             die: number;
             /** @description The eligible issue identifiers, in queue order. */
             issue_ids: number[];
+            /**
+             * @description Why an empty in-play pool has no faces, when it does.
+             *     Derived from the already-loaded Option E inputs and the eligible
+             *     frontiers before the die bound and browser snoozes, exactly as
+             *     `GET /api/v2/roll/bootstrap` reports it. `ready` means at least one
+             *     frontier is eligible; the other variants name why an empty pool has
+             *     no in-play faces (`no_series`, `all_blocked`, `all_completed`,
+             *     `all_out_of_pool`). It never carries a list or whole-library report.
+             */
+            pool_reason: components["schemas"]["PoolReason"];
             /** @description The owning thread identifiers, parallel to `issue_ids`. */
             thread_ids: number[];
         };
@@ -19147,37 +18987,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadingPlanMembershipResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_continuity_plan_reader_api_v1_continuity_plans__plan_id__reader_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                plan_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingPlanReaderResponse"];
                 };
             };
             /** @description Validation Error */

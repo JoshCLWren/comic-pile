@@ -147,3 +147,30 @@ def test_invalid_cached_count_is_not_a_zero_success_sample(
     }))
     with pytest.raises(ValueError, match='invalid funnel cache count'):
         funnel.collect_delivery_funnel(fetch, PINS, now=NOW, cache_path=cache)
+
+
+def test_merged_pr_without_advance_commits_keeps_delivery_counts(tmp_path: Path) -> None:
+    """Missing advance metadata means zero contributor credit, not a broken dashboard."""
+    pr = {
+        'number': 1, 'head': {'ref': 'factory/54-7-z-ai'}, 'labels': [],
+        'body': 'Model: glm-4.5-flash', 'created_at': '2026-11-06T00:00:00Z',
+        'updated_at': '2026-11-06T00:00:00Z', 'merged_at': '2026-11-06T00:00:00Z',
+        'closed_at': '2026-11-06T00:00:00Z', 'merge_commit_sha': SHA,
+    }
+
+    def fetch(endpoint: str) -> object:
+        if endpoint.startswith('pulls?'):
+            return [pr]
+        if endpoint.startswith('pulls/1/commits?'):
+            return [{'commit': {'message': 'implementation with no factory advance'}}]
+        if endpoint == f'commits/{SHA}':
+            return {'commit': {'message': 'Merge ordinary implementation'}}
+        raise AssertionError(endpoint)
+
+    cache = tmp_path / 'cache.json'
+    rows = funnel.collect_delivery_funnel(fetch, PINS, now=NOW, cache_path=cache)
+    by_key = {(row['group'], row['name'], row['days']): row for row in rows}
+    assert by_key[('worker', '54', 14)]['merged'] == 1
+    assert by_key[('worker', '54', 14)]['commit_share'] == 0
+    assert by_key[('model', 'glm-4.5-flash', 14)]['merged'] == 1
+    assert funnel.collect_delivery_funnel(fetch, PINS, now=NOW, cache_path=cache) == rows

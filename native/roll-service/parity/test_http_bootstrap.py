@@ -7,10 +7,8 @@ from uuid import uuid4
 
 import pytest
 from jose import jwt
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Event, Issue, ReadingSession, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.tag import Tag, TagAssignment
@@ -21,25 +19,9 @@ SECRET = "synthetic-native-http-secret"
 @pytest.mark.asyncio
 async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_candidate():
     """Exercise the mounted GET, its session writes, eligibility SQL and output fields."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_http_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
         now = datetime.now(UTC)
         username = f"nr_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -134,9 +116,8 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         token = jwt.encode({"sub":username,"jti":"native-http-fixture",
                             "type":"access","exp":int((now+timedelta(hours=1)).timestamp())},
                            SECRET,"HS256")
-        query = f"options=-csearch_path%3D{name}"
         env = {**os.environ,
-               "RUST_ROLL_DATABASE_URL":url+("&" if "?" in url else "?")+query,
+               "RUST_ROLL_DATABASE_URL":url,
                "RUST_ROLL_JWT_SECRET":SECRET,
                "RUST_ROLL_TEST_TOKEN":token,
                "RUST_ROLL_POOL_SIZE":"2"}
@@ -193,6 +174,3 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
         assert candidate["reader"]["issue_count"] == 15
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
-        await admin.dispose()
