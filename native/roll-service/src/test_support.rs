@@ -371,7 +371,10 @@ mod tests {
     #[test]
     fn required_db_config_accepts_a_disposable_url() {
         assert_eq!(
-            require_test_db_config(Some("postgresql://localhost/native_auth_test".into()), false),
+            require_test_db_config(
+                Some("postgresql://localhost/native_auth_test".into()),
+                false
+            ),
             "postgresql://localhost/native_auth_test"
         );
     }
