@@ -707,3 +707,18 @@ falls back to normal ranking when no preferred work is eligible. Manual
 issue/repair dispatch tries the corresponding eligible specialist first, then
 continues through normal workers if assignment declines (busy, paused or leased).
 Review independence, claims, quotas, and remote capacity gates remain unchanged.
+
+
+## Production deployment recovery
+
+`Production Deploy Recovery` maintains one GitHub repair issue for an unresolved
+attempted deployment failure, on completion and a 15-minute heartbeat. `deploy-fix`
+repairs use the protected priority lane alongside main-breakage. Existing remote
+factory WIP/review-backlog thresholds and all lease, CI, independent review and
+production gates still apply; this changes neither schedules nor capacity limits.
+
+A new `deploy-fix` merged onto main after the last failed attempted release permits
+one automatic recovery deployment with schema verification and both production
+smokes. A failed recovery consumes that repair; it cannot blindly retry unchanged
+code. The repository owner retains the explicit reasoned manual freeze override.
+A fully verified release closes managed repair issues when no live worker owns them.

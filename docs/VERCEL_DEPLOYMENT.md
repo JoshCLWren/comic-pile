@@ -261,3 +261,34 @@ After this change is merged:
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
 
 During an unsettled production rollout, pruning temporarily retains READY production deployments as well as the incoming build. Vercel can report the BUILDING deployment as `targets.production` before it serves the public alias. Pruning refreshes the protected set before every deletion. Once the production target is READY and no production build remains in progress, the normal keep-N=2 policy resumes.
+
+
+### Automatic deployment repair
+
+`Production Deploy Recovery` runs after Deploy Production and every 15 minutes.
+A real attempted release failure opens or refreshes one GitHub repair issue,
+including the failed run and step. Updates preserve active factory leases.
+The issue enters the ordinary factory queue as a critical `deploy-fix`; fixes
+retain normal exact-head CI and independent review requirements.
+
+A merged `deploy-fix` PR on current main, merged after the latest failed attempt,
+authorizes one automatic recovery through the complete schema/deploy/smoke path.
+An unchanged failing revision is never blindly retried. If that attempt fails,
+the old repair cannot authorize another attempt: a newer merged repair or an
+explicit repository owner `override_freeze` with a reason is required.
+Blocked deploy runs report failure and are excluded from attempted-deploy history.
+All freeze callers paginate completed run summaries and stop fetching job details at
+the latest actual attempt, so repeated blocked runs cannot erase the freeze.
+Preflight publishes a run-attempt-specific `deployment-attempt-N` artifact with the
+selected checkout SHA before dependency setup. Recovery incidents use that evidence;
+historical or expired metadata is explicitly unavailable, never guessed from the
+workflow trigger SHA. Missing exact-attempt evidence cannot reconcile a failed CLI
+deploy against the live alias.
+Only a successful actual deployment with both production probes passing closes
+the managed repair issue; live worker leases are left for that worker to finish.
+
+The health probe reports the executable name read from the OS, OS/architecture,
+and the package, compiler version and source revision captured during the build.
+Deploy Production supplies the exact SHA to the build and checks that revision
+in the live response. The compatibility `rust` label alone is not deployment
+proof. These fields provide operational evidence, not cryptographic attestation.

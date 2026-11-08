@@ -19,12 +19,29 @@ use std::{
 use tower::Service;
 use vercel_runtime::{axum::StreamingUtils, AppState as VercelState, Error, ResponseBody};
 
-async fn native_health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+async fn native_health() -> Response {
+    let mut response = Json(serde_json::json!({
         "status": "ok",
         "runtime": "rust",
-        "service": "roll"
+        "service": "roll",
+        "build": {
+            "revision": env!("COMICPILE_SOURCE_REVISION"),
+            "compiler": env!("COMICPILE_COMPILER"),
+            "package": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION")
+        },
+        "process": {
+            "executable": std::env::current_exe().ok()
+                .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned())),
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH
+        }
     }))
+    .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
 }
 
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
@@ -540,16 +557,36 @@ mod tests {
         let response = router.call(request).await.expect("health response");
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust"))
+        );
+        assert_eq!(
             response.headers().get(header::CONTENT_TYPE),
             Some(&axum::http::HeaderValue::from_static("application/json"))
         );
         let body = to_bytes(response.into_body(), 1024)
             .await
             .expect("health JSON");
+        let health: serde_json::Value = serde_json::from_slice(&body).expect("valid JSON");
+        assert_eq!(health["status"], "ok");
+        assert_eq!(health["runtime"], "rust");
+        assert_eq!(health["service"], "roll");
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON"),
-            serde_json::json!({"status": "ok", "runtime": "rust", "service": "roll"})
+            health["build"]["revision"],
+            env!("COMICPILE_SOURCE_REVISION")
         );
+        assert!(health["build"]["compiler"]
+            .as_str()
+            .unwrap()
+            .starts_with("rustc "));
+        assert_eq!(health["build"]["package"], env!("CARGO_PKG_NAME"));
+        let executable = std::env::current_exe().expect("current executable");
+        assert_eq!(
+            health["process"]["executable"],
+            executable.file_name().unwrap().to_string_lossy().as_ref()
+        );
+        assert_eq!(health["process"]["os"], std::env::consts::OS);
+        assert_eq!(health["process"]["arch"], std::env::consts::ARCH);
     }
 
     #[tokio::test]

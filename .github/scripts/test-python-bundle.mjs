@@ -13,7 +13,7 @@ const config = JSON.parse(await fs.readFile('vercel.json', 'utf8'));
 const pattern = config.builds.find(build => build.src === 'api/index.py').config.excludeFiles;
 const sources = [
   'api/index.py', 'app/main.py', 'comic_pile/reading_session.py',
-  'Cargo.toml', 'Cargo.lock', 'native/roll-service/Cargo.toml',
+  'Cargo.toml', 'Cargo.lock', 'build.rs', 'native/roll-service/Cargo.toml',
   'native/roll-service/Cargo.lock', 'native/roll-service/src/lib.rs',
 ];
 const artifacts = [
