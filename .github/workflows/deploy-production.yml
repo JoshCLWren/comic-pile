@@ -471,32 +471,42 @@ jobs:
           body_file="$(mktemp)"
           header_file="$(mktemp)"
           trap 'rm -f "$body_file" "$header_file"' EXIT
-          status="$(curl --silent --show-error --max-time 25 \
-            --retry 10 --retry-delay 2 --retry-all-errors \
-            --dump-header "$header_file" \
-            --output "$body_file" \
-            --write-out '%{http_code}' \
-            https://comic-pile.vercel.app/api/v2/health)"
           deploy_sha="$(git rev-parse HEAD)"
-          # Read build identity captured by the compiler and OS process metadata;
-          # the legacy language header alone is not runtime/revision evidence.
-          if ! jq -e --arg sha "$deploy_sha" '
-            .build.revision == $sha and
-            .build.package == "comicpile-vercel-native" and
-            (.build.compiler | startswith("rustc ")) and
-            .process.os == "linux" and
-            (.process.executable | type == "string" and length > 0)
-          ' "$body_file" >/dev/null; then
-            echo "::error::Production process/build identity does not match deployed revision" >&2
-            exit 1
-          fi
-          health="$(jq -r '.status // ""' "$body_file")"
-          runtime="$(awk 'tolower($1) == "x-comicpile-api-runtime:" {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
-          if [[ "$status" != "200" || "$health" != "ok" || "$runtime" != "rust" ]]; then
-            echo "::error::Production Rust health contract failed (HTTP $status, health=${health:-missing}, runtime=${runtime:-missing})" >&2
-            exit 1
-          fi
-          echo "Production health contract passed (HTTP 200, status ok, runtime rust)"
+          # A READY alias can briefly serve a prior revision during propagation.
+          # Retry the FULL strict Rust identity contract, never just HTTP 200
+          # or a language header. A permanently stale or wrong runtime stays red.
+          for attempt in $(seq 1 8); do
+            status="$(curl --silent --show-error --max-time 25 \
+              --retry 5 --retry-delay 2 --retry-all-errors \
+              --header 'cache-control: no-cache' \
+              --dump-header "$header_file" \
+              --output "$body_file" \
+              --write-out '%{http_code}' \
+              https://comic-pile.vercel.app/api/v2/health)"
+            runtime="$(awk 'tolower($1) == "x-comicpile-api-runtime:" {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
+            if [[ "$status" == "200" && "$runtime" == "rust" ]] &&
+               jq -e --arg sha "$deploy_sha" '
+                 .status == "ok" and
+                 .build.revision == $sha and
+                 .build.package == "comicpile-vercel-native" and
+                 (.build.compiler | startswith("rustc ")) and
+                 .process.os == "linux" and
+                 (.process.executable | type == "string" and length > 0)
+               ' "$body_file" >/dev/null 2>&1; then
+              echo "Production Rust identity confirmed for $deploy_sha (attempt $attempt/8)"
+              exit 0
+            fi
+            # Log only the public build identity fields, never a raw response,
+            # tokens, authentication headers or other body contents.
+            observed_sha="$(jq -r '.build.revision // "missing"' "$body_file" 2>/dev/null || echo invalid-json)"
+            observed_package="$(jq -r '.build.package // "missing"' "$body_file" 2>/dev/null || echo invalid-json)"
+            echo "Rust health not converged ($attempt/8): HTTP $status, runtime=$runtime, revision=$observed_sha, package=$observed_package" >&2
+            if [[ "$attempt" -lt 8 ]]; then
+              sleep 5
+            fi
+          done
+          echo "::error::Production health never matched the exact Rust build/process revision $deploy_sha" >&2
+          exit 1
 
       - name: Smoke production unknown API returns native Rust 404
         run: |

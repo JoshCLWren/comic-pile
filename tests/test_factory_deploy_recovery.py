@@ -208,6 +208,19 @@ def test_recovery_workflow_uses_trusted_main_and_heartbeat() -> None:
     assert "--recover-reviewed-fix" in deploy
     assert "--build-env COMICPILE_BUILD_SHA=" in deploy
     assert ".build.revision == $sha" in deploy
+    smoke = deploy.split("- name: Smoke production Rust health", 1)[1].split(
+        "- name: Smoke production unknown API returns native Rust 404", 1
+    )[0]
+    assert "for attempt in $(seq 1 8)" in smoke
+    assert "--header 'cache-control: no-cache'" in smoke
+    assert '[[ "$status" == "200" && "$runtime" == "rust" ]]' in smoke
+    assert '.build.revision == $sha' in smoke
+    assert '.build.package == "comicpile-vercel-native"' in smoke
+    assert '(.build.compiler | startswith("rustc "))' in smoke
+    assert '.process.os == "linux"' in smoke
+    assert "if [[ \"$attempt\" -lt 8 ]]" in smoke
+    assert "exit 1" in smoke
+
 
 
 def test_recovered_incident_keeps_active_worker_lease(
