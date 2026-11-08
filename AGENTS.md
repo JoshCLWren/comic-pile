@@ -4,6 +4,17 @@ Guidelines for AI agents working in this codebase.
 
 ## Engineering objective completion
 
+For Comic Pile local factory delivery in Codex, use
+[the Codex Crouton adapter](.agents/skills/crouton-factory-codex/SKILL.md).
+Carry authorized work through CI repair, actual independent review (including
+the owner-selected OpenCode ACP Crouton Alpha lane), gated merge, deployment and
+real acceptance. Start eligible local reviewers instead of waiting for scheduled
+pickup and record actual identity and exact-head evidence. Read only ACP
+checkpoints/model-selection metadata and final reports/verdicts, never full logs
+or transcripts. See [the executable review path](docs/LOCAL_FACTORY_REVIEW.md).
+Existing authorization, leases, independent review and exact-head CI gates remain;
+remote factory WIP/backpressure limits do not block locals.
+
 Follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md) for original user intent, reviewable PR boundaries, rollout decisions, deployment proof, and continuation handoffs. The owner's requested behavior, not a self-authored partial issue or PR, defines completion. Keep all existing security, ownership, CI, review, and deployment gates.
 
 
