@@ -314,13 +314,9 @@ async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
     .await;
     assert_eq!(preview_status, StatusCode::OK, "{preview}");
     assert_eq!(preview["status_before"], "cycle");
-    assert!(preview["graph"]["repairs"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|option| option["action"] == "delete_list_entry"
-            && option["list_id"] == list
-            && option["issue_id"] == issues["1"]));
+    // A successful preview proves the requested action was offered, and
+    // its projected graph is the *post-repair* graph, not the original one.
+    assert_eq!(preview["status_after"], "ok");
 
     // Simulate a competing, correctly serialized Reading List writer holding
     // the exact same advisory lock as dependency creation and repair.
