@@ -144,9 +144,36 @@ pub async fn truncate_application_tables(state: &AppState) {
 const TEST_ROLE: &str = "roll_test_dml";
 const TEST_ROLE_PASSWORD: &str = "roll-test-dml";
 
+/// Require a disposable database for every database-backed Rust test.
+///
+/// Do not offer an implicit or opt-in "skip" path. Tests returning success
+/// without executing their SQL made missing local DB configuration look green.
+fn require_test_db_config(url: Option<String>, skip_requested: bool) -> String {
+    assert!(
+        !skip_requested,
+        "RUST_ROLL_ALLOW_DB_SKIP is forbidden: database-backed Rust tests must execute"
+    );
+    url.expect(
+        "RUST_ROLL_TEST_DATABASE_URL is required for database-backed Rust tests. \
+         Set it to a disposable PostgreSQL database provisioned for the canonical \
+         Alembic schema (see native/roll-service/README.md), then rerun cargo test --locked.",
+    )
+}
+
+/// Require the test admin DSN; never allow a missing env var to silently skip.
+pub fn required_test_admin_url() -> String {
+    require_test_db_config(
+        std::env::var("RUST_ROLL_TEST_DATABASE_URL").ok(),
+        std::env::var_os("RUST_ROLL_ALLOW_DB_SKIP").is_some(),
+    )
+}
+
 /// The admin DSN, used only to apply the Alembic fixture and provision the role.
+///
+/// Keep the existing Option signature for callers, but never return None:
+/// this lets existing test-state consumers fail loudly instead of self-skipping.
 fn admin_url() -> Option<String> {
-    std::env::var("RUST_ROLL_TEST_DATABASE_URL").ok()
+    Some(required_test_admin_url())
 }
 
 /// Rewrite a DSN to connect as the DML-only role.
@@ -316,8 +343,10 @@ pub async fn reset(state: &AppState) {
 /// instead of a per-test approximation.
 pub(crate) static DB_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// Build the canonical test [`AppState`], or `None` when no disposable database
-/// is configured so the caller can skip.
+/// Build the canonical test [`AppState`] and require a disposable database.
+///
+/// Existing Option-returning callers now panic with setup instructions when
+/// RUST_ROLL_TEST_DATABASE_URL is missing instead of reporting a passing test.
 pub async fn test_state(pool_size: usize) -> Option<std::sync::Arc<AppState>> {
     admin_url()?;
     let url = database_url().await;
@@ -338,6 +367,26 @@ pub async fn reset_for_test(state: &AppState) -> tokio::sync::MutexGuard<'static
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn required_db_config_accepts_a_disposable_url() {
+        assert_eq!(
+            require_test_db_config(Some("postgresql://localhost/native_auth_test".into()), false),
+            "postgresql://localhost/native_auth_test"
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "RUST_ROLL_TEST_DATABASE_URL is required")]
+    fn required_db_config_rejects_missing_database() {
+        require_test_db_config(None, false);
+    }
+
+    #[test]
+    #[should_panic(expected = "RUST_ROLL_ALLOW_DB_SKIP is forbidden")]
+    fn required_db_config_rejects_any_skip_override() {
+        require_test_db_config(Some("postgresql://localhost/native_auth_test".into()), true);
+    }
 
     #[test]
     fn canonical_schema_fixture_is_available_in_test_checkout() {
