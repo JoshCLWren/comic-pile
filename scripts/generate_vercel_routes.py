@@ -49,6 +49,7 @@ def python_operations(app: FastAPI | None = None) -> list[tuple[str, str]]:
     documented = {
         (method.upper(), path)
         for path, paths in schema["paths"].items()
+        if path.startswith("/api/")
         for method in paths
         if method.upper() in HTTP_METHODS
     }
