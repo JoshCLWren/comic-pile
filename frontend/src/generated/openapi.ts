@@ -3532,99 +3532,6 @@ export interface paths {
         patch: operations["update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch"];
         trace?: never;
     };
-    "/api/v1/queue/shuffle/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Shuffle Threads
-         * @description Randomize all active queue positions for the authenticated user.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         Empty response with HTTP 204 status.
-         */
-        post: operations["shuffle_threads_api_v1_queue_shuffle__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/queue/threads/{thread_id}/back/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Move Thread Back
-         * @description Move thread to the back.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         thread_id: The ID of the thread to move.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         ThreadResponse with the updated thread information.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found.
-         */
-        put: operations["move_thread_back_api_v1_queue_threads__thread_id__back__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/queue/threads/{thread_id}/position/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Move Thread Position
-         * @description Move thread to specific position.
-         *
-         *     Args:
-         *         request: FastAPI request object for rate limiting.
-         *         thread_id: The ID of the thread to move.
-         *         position_request: Request containing the new position.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         ThreadResponse with the updated thread information.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found or position invalid.
-         */
-        put: operations["move_thread_position_api_v1_queue_threads__thread_id__position__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/reading-boundaries": {
         parameters: {
             query?: never;
@@ -5060,26 +4967,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Active Threads
-         * @description Render active threads as radio buttons for the override modal.
-         */
-        get: operations["list_active_threads_api_v1_threads_active_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/check-duplicates": {
         parameters: {
             query?: never;
@@ -5109,26 +4996,6 @@ export interface paths {
          *         Possible existing volumes, strongest match first.
          */
         post: operations["check_potential_duplicates_api_v1_threads_check_duplicates_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/threads/completed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Completed Threads Html
-         * @description Render completed threads as options for the reactivation modal.
-         */
-        get: operations["list_completed_threads_html_api_v1_threads_completed_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -13560,14 +13427,6 @@ export interface components {
          */
         PoolReason: "ready" | "no_series" | "all_blocked" | "all_completed" | "all_out_of_pool";
         /**
-         * PositionRequest
-         * @description Schema for position update request.
-         */
-        PositionRequest: {
-            /** New Position */
-            new_position: number;
-        };
-        /**
          * PotentialDuplicateMatch
          * @description One existing series that may already represent the proposed series.
          *
@@ -21766,90 +21625,6 @@ export interface operations {
             };
         };
     };
-    shuffle_threads_api_v1_queue_shuffle__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    move_thread_back_api_v1_queue_threads__thread_id__back__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    move_thread_position_api_v1_queue_threads__thread_id__position__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PositionRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ThreadResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_reading_boundary_batch_api_v1_reading_boundaries_post: {
         parameters: {
             query?: never;
@@ -23558,26 +23333,6 @@ export interface operations {
             };
         };
     };
-    list_active_threads_api_v1_threads_active_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
-    };
     check_potential_duplicates_api_v1_threads_check_duplicates_post: {
         parameters: {
             query?: never;
@@ -23607,26 +23362,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_completed_threads_html_api_v1_threads_completed_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
                 };
             };
         };

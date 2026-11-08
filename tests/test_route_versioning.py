@@ -108,19 +108,13 @@ def test_v1_undo_aliases_match_legacy_route_methods() -> None:
         assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
 
 
-def test_v1_queue_aliases_match_legacy_route_methods() -> None:
-    """Canonical /api/v1/queue aliases reuse the same queue handler contracts."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
-
-    alias_pairs = (
-        ("/api/queue/shuffle/", "/api/v1/queue/shuffle/"),
-        ("/api/queue/threads/{thread_id}/back/", "/api/v1/queue/threads/{thread_id}/back/"),
-        ("/api/queue/threads/{thread_id}/position/", "/api/v1/queue/threads/{thread_id}/position/"),
-    )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+def test_retired_queue_move_routes_are_absent() -> None:
+    """Pruned queue shuffle/back/position aliases have no Python handler."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/shuffle/" not in methods_by_path
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in methods_by_path
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in methods_by_path
 
 
 def test_v1_admin_aliases_match_legacy_route_methods() -> None:

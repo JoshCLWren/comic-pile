@@ -7,70 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_queue_move_creates_event(
-    auth_client: AsyncClient,
-    sample_data: dict,
-    async_db: AsyncSession,
-) -> None:
-    """Test that moving a thread in queue creates a reorder event.
-
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-        sample_data: Sample data dictionary containing threads, sessions, events, user.
-        async_db: Async database session for direct database queries.
-    """
-    from app.models import Event
-
-    thread_id = sample_data["threads"][0].id
-
-    response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": 3}
-    )
-    assert response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event).where(Event.type == "reorder").order_by(Event.timestamp.desc())
-    )
-    events = result.scalars().all()
-
-    assert len(events) >= 1
-    reorder_event = next((e for e in events if e.thread_id == thread_id), None)
-    assert reorder_event is not None
-    assert reorder_event.type == "reorder"
-
-
-@pytest.mark.asyncio
-async def test_move_to_back_creates_event(
-    auth_client: AsyncClient,
-    sample_data: dict,
-    async_db: AsyncSession,
-) -> None:
-    """Test that moving thread to back creates a reorder event.
-
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-        sample_data: Sample data dictionary containing threads, sessions, events, user.
-        async_db: Async database session for direct database queries.
-    """
-    from app.models import Event
-
-    thread_id = sample_data["threads"][2].id
-
-    response = await auth_client.put(f"/api/v1/queue/threads/{thread_id}/back/")
-    assert response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event).where(Event.type == "reorder").order_by(Event.timestamp.desc())
-    )
-    events = result.scalars().all()
-
-    assert len(events) >= 1
-    reorder_event = next((e for e in events if e.thread_id == thread_id), None)
-    assert reorder_event is not None
-    assert reorder_event.type == "reorder"
-
-
-@pytest.mark.asyncio
 async def test_delete_thread_creates_event(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -109,33 +45,3 @@ async def test_delete_thread_creates_event(
 
     db_thread = await async_db.get(Thread, thread_id)
     assert db_thread is None
-
-
-@pytest.mark.asyncio
-async def test_no_duplicate_event_on_no_movement(
-    auth_client: AsyncClient,
-    sample_data: dict,
-    async_db: AsyncSession,
-) -> None:
-    """Test that moving to same position does not create event.
-
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-        sample_data: Sample data dictionary containing threads, sessions, events, user.
-        async_db: Async database session for direct database queries.
-    """
-    from app.models import Event
-
-    thread_id = sample_data["threads"][0].id
-    result = await async_db.execute(select(Event).where(Event.thread_id == thread_id))
-    initial_event_count = len(result.scalars().all())
-
-    response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": 1}
-    )
-    assert response.status_code == 200
-
-    result = await async_db.execute(select(Event).where(Event.thread_id == thread_id))
-    final_event_count = len(result.scalars().all())
-
-    assert initial_event_count == final_event_count
