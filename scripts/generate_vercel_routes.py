@@ -16,9 +16,15 @@ import argparse
 import json
 from pathlib import Path
 import re
+import sys
 from typing import Any, Final
 
+from fastapi import FastAPI
 from fastapi.routing import APIRoute
+
+ROOT: Final = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT)
 
 VERCEL_CONFIG: Final = Path("vercel.json")
 PYTHON_DESTINATION: Final = "/api/index.py"
@@ -28,7 +34,7 @@ HTTP_METHODS: Final = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS
 PARAMETER: Final = re.compile(r"\{([^{}]+)\}")
 
 
-def python_operations(app: Any | None = None) -> list[tuple[str, str]]:
+def python_operations(app: FastAPI | None = None) -> list[tuple[str, str]]:
     """Enumerate the complete real FastAPI method/path surface offline.
 
     The raw OpenAPI contract is authoritative for schema-visible operations.
