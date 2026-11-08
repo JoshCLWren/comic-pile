@@ -187,6 +187,85 @@ it('renders the scoped eligible order and passes browser snoozes to the resource
   expect(screen.queryByText('Saga')).not.toBeInTheDocument()
 })
 
+it('backfills an eligible face missing from bootstrap from scoped cards (#4719)', () => {
+  // Independent reads can disagree: thread 3 is Rust-eligible but absent
+  // from the stale bootstrap slice. It must appear from the scoped card
+  // identity instead of being silently dropped from the UI pool.
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 6, issue_ids: [301, 101], thread_ids: [3, 1] },
+  })
+  mockedUseRollIssueCards.mockReturnValue({
+    data: {
+      items: [
+        {
+          issue_id: 301,
+          thread_id: 3,
+          thread_title: 'Card-only comic',
+          issue_number: '4',
+          status: 'unread',
+          has_confirmed_identity: true,
+          mapping_state: 'confirmed',
+        },
+        {
+          issue_id: 101,
+          thread_id: 1,
+          thread_title: 'Saga',
+          issue_number: '1',
+          status: 'unread',
+          has_confirmed_identity: false,
+          mapping_state: 'unmapped',
+        },
+      ],
+    },
+  })
+
+  renderRollPage()
+
+  expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face 1: Card-only comic/i })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Die face 2: Saga/i })).toBeInTheDocument()
+  expect(screen.queryByText('X-Men')).not.toBeInTheDocument()
+})
+
+it('dedupes repeated eligible thread ids and caps the visible pool at the die (#4719)', () => {
+  mockedUseRollDieState.mockReturnValue({ data: { die: 2, default_die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], last_roll: null } })
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 2, issue_ids: [201, 202, 101], thread_ids: [2, 2, 1] },
+  })
+  mockedUseRollIssueCards.mockReturnValue({
+    data: {
+      items: [
+        {
+          issue_id: 201,
+          thread_id: 2,
+          thread_title: 'X-Men',
+          issue_number: '5',
+          status: 'unread',
+          has_confirmed_identity: false,
+          mapping_state: 'unmapped',
+        },
+        {
+          issue_id: 101,
+          thread_id: 1,
+          thread_title: 'Saga',
+          issue_number: '1',
+          status: 'unread',
+          has_confirmed_identity: false,
+          mapping_state: 'unmapped',
+        },
+      ],
+    },
+  })
+
+  renderRollPage()
+
+  // One authoritative visible-pool projection: ThreadPool gets the same
+  // filtered, die-capped pool the header counts, so a repeated eligible
+  // thread id never renders as two faces.
+  expect(screen.getByLabelText(/2 in play, 2 mapped results/i)).toBeInTheDocument()
+  expect(screen.getAllByRole('button', { name: /Die face \d+:/i })).toHaveLength(2)
+})
+
 it('requests one scoped card batch and prefers its title and issue number (#4719)', () => {
   mockedUseRollBootstrap.mockReturnValue({
     data: {

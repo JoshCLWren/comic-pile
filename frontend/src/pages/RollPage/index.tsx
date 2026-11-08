@@ -74,10 +74,12 @@ export default function RollPage() {
   } = useRollBootstrap()
 
   // Die-header surface migration (#4719): the scoped die resource is
-  // authoritative for the selected die and ladder readout. Bootstrap remains
-  // the fallback while the query settles or fails, and the rest of the header
-  // (die size, 3D model) stays bootstrap-derived until the next surface slice.
-  const { data: scopedDieState } = useRollDieState()
+  // authoritative for the selected die, ladder readout, die size and 3D
+  // model. Bootstrap remains the fallback while the query settles or fails.
+  const { data: cachedScopedDieState, isError: isScopedDieStateError } = useRollDieState()
+  // TanStack Query preserves previously successful data after a failed refetch.
+  // A failed scoped refresh must not overrule the newly reconciled bootstrap die.
+  const scopedDieState = isScopedDieStateError ? undefined : cachedScopedDieState
 
   // Eligible-pool surface migration (#4719): the scoped resource owns the
   // ordered thread ids for the current die, with the browser snooze cookie
@@ -149,6 +151,7 @@ export default function RollPage() {
   useRollBootstrapSync({
     state,
     bootstrap,
+    scopedDieState: scopedDieState ?? null,
     isBootstrapError,
     bootstrapError,
     navigate,
@@ -173,21 +176,40 @@ export default function RollPage() {
     }
   }, [resetDiceMutation, state])
 
-  // Use scoped eligible issue IDs to determine the authoritative pool order
-  // instead of bootstrap roll_pool. Bootstrap remains fallback while scoped queries settle.
+  // Scoped eligible ids own the pool order (#4719). Bootstrap rows remain
+  // the display-metadata source, but an eligible id absent from the bootstrap
+  // slice (e.g. a die/eligibility update between the two independent reads)
+  // is backfilled from the scoped issue cards instead of being silently
+  // dropped: cards carry the thread identity (title, issue) needed to render
+  // the face. Until the cards query settles, that face is simply not row
+  // source yet — the same fallback-while-settling pattern as die-state.
+  // thread_ids are parallel to issue_ids, so a thread may repeat; dedupe.
   const scopedPool = useMemo(() => {
-    if (!scopedEligibleIssueIds || scopedEligibleIssueIds.thread_ids == null) {
-      return bootstrap?.roll_pool ?? []
-    }
-    
-    // Map eligible thread IDs to the full thread objects, preserving order
-    const eligibleIds = scopedEligibleIssueIds.thread_ids
     const poolThreads = bootstrap?.roll_pool ?? []
-    
-    return poolThreads
-      .filter(thread => eligibleIds.includes(thread.id))
-      .sort((a, b) => eligibleIds.indexOf(a.id) - eligibleIds.indexOf(b.id))
-  }, [scopedEligibleIssueIds, bootstrap?.roll_pool])
+    if (!scopedEligibleIssueIds || scopedEligibleIssueIds.thread_ids == null) {
+      return poolThreads
+    }
+    const byId = new Map(poolThreads.map((thread) => [thread.id, thread]))
+    const cardByThreadId = new Map(
+      (scopedIssueCards?.items ?? []).map((card) => [card.thread_id, card]),
+    )
+    return [...new Set(scopedEligibleIssueIds.thread_ids)]
+      .map((id) => {
+        const bootstrapThread = byId.get(id)
+        if (bootstrapThread) return bootstrapThread
+        const card = cardByThreadId.get(id)
+        if (!card) return null
+        return {
+          id,
+          title: card.thread_title,
+          format: '',
+          issue_id: card.issue_id,
+          issue_number: card.issue_number,
+          tags: [],
+        }
+      })
+      .filter((thread): thread is NonNullable<typeof thread> => thread != null)
+  }, [scopedEligibleIssueIds, scopedIssueCards, bootstrap?.roll_pool])
 
   useRollPendingSession({ state, bootstrap, rollPool: scopedPool })
 
@@ -346,13 +368,16 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  const dieSize = state.currentDie || 6
+  // Scoped die drives the pool cutoff and 3D model when present; the
+  // bootstrap-synced state remains the fallback while it settles or fails.
+  const effectiveDie = scopedDieState?.die ?? state.currentDie
+  const dieSize = effectiveDie || 6
   const filteredThreads = scopedPool.filter(
     (thread) =>
       !state.isRatingView || thread.id !== (state.selectedThreadId ? Number(state.selectedThreadId) : null),
   )
   const pool = filteredThreads.slice(0, dieSize)
-  const displayDie = isDiceSide(state.currentDie) ? state.currentDie : 6
+  const displayDie = isDiceSide(effectiveDie) ? effectiveDie : 6
   const hasRollableContent = pool.length > 0 || snoozedThreads.length > 0
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
@@ -520,7 +545,7 @@ export default function RollPage() {
             )}
 
             <ThreadPool
-              pool={scopedPool}
+              pool={pool}
               dieSize={dieSize}
               isRatingView={state.isRatingView}
               selectedThreadId={state.selectedThreadId}
@@ -567,7 +592,7 @@ export default function RollPage() {
           onCloseOverride={modals.closeOverrideModal}
           isDieModalOpen={state.isDieModalOpen}
           onCloseDieModal={() => state.setIsDieModalOpen(false)}
-          currentDie={state.currentDie}
+          currentDie={effectiveDie}
           onSetDie={actions.handleSetDie}
           onResetDice={handleResetDice}
           resetDicePending={resetDiceMutation.isPending}
