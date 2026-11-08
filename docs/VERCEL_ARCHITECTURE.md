@@ -1,64 +1,72 @@
 # Vercel production architecture
 
-ComicPile deploys one static frontend and one Python API function from the same repository.
+ComicPile deploys a static React frontend, native Rust API handlers, and a
+transitional Python/FastAPI function from the same repository. The Rust-only
+`/api/v2` cutover is tracked by #4335; this document describes deployed ingress,
+not a claim that every route has already migrated.
 
 ## Production request boundary
 
-Vercel builds the React application from the repository root `package.json` and publishes
-`static/react` as static output. Requests for `/` and client-side application routes are served
-from that output without importing or starting FastAPI.
+Vercel builds the React application from the root `package.json` and publishes
+`static/react` as static output. Requests for `/` and client-side application
+routes are served without starting an API runtime.
 
-The following paths are routed to the API-only Python entry point in `api/index.py`:
+In `vercel.json`, explicit native routes, including
+`GET /api/v2/health`, `POST /api/v2/auth/login`, and supported Rust Roll,
+issue, queue, and reading resources, route to `api/native_roll.rs` or
+`api/native_issue.rs`. Remaining transitional `/api/*` requests still fall
+through to `api/index.py` until their own cutover steps ship. A URL's v1/v2
+segment does not by itself prove the executing language.
 
-- `/api` and every `/api/*` route, including `/api/v1/*`
-- `/openapi.json`
-- `/docs`
-- `/redoc`
-- `/health`
+The public bare `/health`, `/docs`, `/redoc`, and `/openapi.json` URLs
+return **404 at Vercel ingress**. They neither start Python nor return
+`index.html` from the SPA fallback. Use `/api/v2/health` for production
+liveness, and read the checked-in generated OpenAPI schema at
+`native/contracts/v2-runtime.openapi.json` or the merged contract at
+`frontend/src/generated/openapi.json`. Local FastAPI still exposes Swagger
+and ReDoc for development.
 
-Backend routes are declared before the filesystem and SPA fallback rules so an unknown API path
-cannot return `index.html`. Static assets are served by Vercel's filesystem boundary. All remaining
-non-file paths return the static SPA shell for React Router navigation.
+Backend routes precede filesystem and SPA fallback rules, so unknown API
+paths never return `index.html`. Static assets use Vercel's filesystem
+boundary; non-file client-side routes return the SPA shell for React Router.
 
-The static HTML response includes `X-ComicPile-Frontend: vercel-static`. This is the production
-evidence that `/` did not pass through the FastAPI function. The API function is created with
-`create_app(serve_frontend=False)`, so it does not mount frontend files or register SPA routes.
+The root HTML response includes `X-ComicPile-Frontend: vercel-static`; native
+API responses include `X-ComicPile-API-Runtime: rust`. These headers distinguish
+actual frontend and Rust execution from a matching HTTP status alone.
 
 ## Security and caching
 
-Static HTML receives the same browser-facing security policy used by FastAPI, including CSP, HSTS,
-frame protection, content-type protection, referrer policy, and permissions policy. HTML is always
-revalidated so a new deployment is visible promptly. Vercel serves fingerprinted Vite assets from
-the static output boundary and can cache them independently.
+Static HTML receives the browser-facing CSP, HSTS, frame protection,
+content-type protection, referrer and permissions policies. HTML is revalidated
+so a new deployment is visible promptly. Fingerprinted Vite assets can be
+cached independently.
 
 ## Local development
 
-Local development remains unchanged:
+Local development is unchanged:
 
 ```bash
 make dev
 ```
 
-Vite serves the frontend and proxies `/api` to FastAPI. The normal `app.main:app` application still
-uses `serve_frontend=True`, preserving built-SPA serving for local production-build tests and other
-non-Vercel runtimes.
+Vite proxies `/api` to local FastAPI; `app.main:app` may serve built SPA
+files and the local `/health` and documentation surfaces. These local
+endpoints are not the production ingress contract.
 
 ## Verification
 
-After deploying a branch or main, compare static and API paths independently:
+After deploying `main`, inspect the static and native paths independently:
 
 ```bash
-curl --silent --show-error --location --output /dev/null \
-  --dump-header - \
-  --write-out 'ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
+curl --silent --show-error --location --dump-header - --output /dev/null \
   https://comic-pile.vercel.app/
 
-curl --silent --show-error --location --output /dev/null \
-  --dump-header - \
-  --write-out 'ttfb=%{time_starttransfer}s total=%{time_total}s\n' \
-  https://comic-pile.vercel.app/openapi.json
+curl --silent --show-error --location --dump-header - \
+  https://comic-pile.vercel.app/api/v2/health
 ```
 
-The root response must include `X-ComicPile-Frontend: vercel-static`. The API response must not.
-After an idle period, root TTFB should remain materially below the former 8.5-second Python cold
-start baseline, with a target below one second from a nearby Vercel edge.
+The first response must include `X-ComicPile-Frontend: vercel-static`.
+The second must return HTTP 200, `{"status":"ok"}`, and
+`X-ComicPile-API-Runtime: rust`. The production deploy workflow independently
+checks the rejected-login contract and Rust marker. Bare legacy health/docs
+paths must return HTTP 404 without invoking either API runtime.
