@@ -17,79 +17,20 @@ from comic_pile.queue import (
 
 
 @pytest.mark.asyncio
-async def test_move_to_position_clamps_to_max(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+async def test_retired_position_route_answers_404_for_beyond_queue_rank(
+    auth_client: AsyncClient,
 ) -> None:
-    """Moving to position > max_position returns HTTP 400 with error message."""
-    thread_id = sample_data["threads"][0].id
+    """Retired position action answers 404 instead of the former 400/clamp.
 
-    max_position = sum(
-        1
-        for thread in sample_data["threads"]
-        if thread.status == "active" and thread.queue_position >= 1
-    )
-
+    The v1 HTTP contract returned 400 for a rank beyond the queue end; the
+    v2 resource (``PATCH /api/v2/queue-entries/{thread_id}``) places ranks
+    beyond the end last by design. The Python action is retired, so the
+    request falls through to 404 rather than applying either behavior.
+    """
     response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
+        "/api/v1/queue/threads/1/position/", json={"new_position": 999}
     )
-    # Should return HTTP 400, not 200 (no silent clamping)
-    assert response.status_code == 400
-    # Should have an error message about position being out of range
-    assert "detail" in response.json()
-    detail = response.json()["detail"]
-    assert "out of range" in detail.lower() or "maximum position" in detail.lower()
-
-
-@pytest.mark.asyncio
-async def test_move_to_position_returns_400_for_position_beyond_queue(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
-) -> None:
-    """Moving to position > max_position returns HTTP 400 with error message."""
-    thread_id = sample_data["threads"][0].id
-
-    max_position = sum(
-        1
-        for thread in sample_data["threads"]
-        if thread.status == "active" and thread.queue_position >= 1
-    )
-
-    # Attempt to move to position beyond the queue length
-    response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": max_position + 10}
-    )
-    # Should return HTTP 400, not 200
-    assert response.status_code == 400
-    # Should have an error message
-    assert "detail" in response.json()
-    assert "position" in str(response.json()["detail"]).lower()
-
-
-@pytest.mark.asyncio
-async def test_move_to_position_when_no_threads(
-    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
-) -> None:
-    """Moving to position when no threads handles gracefully."""
-    from app.models import Thread as ThreadModel
-
-    thread = ThreadModel(
-        title="Test Thread",
-        format="Comic",
-        issues_remaining=10,
-        queue_position=1,
-        user_id=default_user.id,
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread.id}/position/", json={"new_position": 1}
-    )
-    assert response.status_code == 200
-
-    thread = await async_db.get(ThreadModel, thread.id)
-    assert thread is not None
-    assert thread.queue_position == 1
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
