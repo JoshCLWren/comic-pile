@@ -108,6 +108,26 @@ describe('shared direct issue card', () => {
     expect(patch.mock.calls[1]?.[1].rating).toBe(5)
   })
 
+  it('keeps unread correction locked while its direct write is pending', async () => {
+    let finish: (value: IssueReadRateResponse) => void = () => {}
+    patch.mockImplementationOnce(() => new Promise<IssueReadRateResponse>((resolve) => { finish = resolve }))
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByRole('button', { name: 'Saving…' })).toBeDisabled()
+    expect(patch).toHaveBeenCalledExactlyOnceWith(75, expect.objectContaining({ status: 'unread' }))
+    finish(receipt)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark unread' })).toBeEnabled())
+    expect(patch).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows explicit fallback recovery copy when a failed correction has no error detail', async () => {
+    patch.mockRejectedValueOnce(new Error(''))
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save. Your rating was not recorded')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
+  })
+
   it('keeps external unowned entries free of personal read and correction controls', () => {
     render(<ComicIssueCard issueId={75} threadTitle="Cable" issueNumber="75" status="unread" isOwned={false} showMapping={false} variant="compact" advisory="Add this exact issue to your library." />, { wrapper })
     expect(screen.getByText('Add this exact issue to your library.')).toBeVisible()
