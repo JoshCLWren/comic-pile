@@ -499,6 +499,7 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("GET", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
         ("PATCH", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
         ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
+        ("POST", "/api/v2/reading-boundaries", "/api/native_roll.rs"),
         ("GET", "/health", None),
         ("GET", "/", "/index.html"),
     )
