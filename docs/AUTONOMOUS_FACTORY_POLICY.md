@@ -522,7 +522,9 @@ When an autonomous Factory implementation PR crosses the stale threshold:
 3. Route recovery through the existing PR review, CI repair, conflict repair and implementation queue. The owner or next worker should fix the actual blocker on the same PR rather than throw away partial work.
 4. Close an unfinished PR only via a separate, explicit and evidenced decision that its work is completely merged, superseded, duplicate or irrecoverable. Record exactly what happened to its unique commits and how the owner objective will finish. Age, repeated provider failures, a stalled review, or a partial migration slice are not adequate reasons by themselves.
 
-Scheduled `factory-work-controller.py stale` is **diagnostic only**. It must never reset the linked issue or close its canonical PR based solely on age. Its `expired_count` remains zero for compatibility, and `stale_preserved_count` tracks recoverable aged PRs. Dry-run and ordinary evaluation both preserve work.
+The existing dispatcher consults **Jev** for aged, non-deferred PRs using `OPENROUTER_JEV_API_KEY` in bounded batches. Jev selects `preserve` or `closure_review` using trusted current-head metadata and the issue/PR context. A high-confidence `closure_review` recommendation is **advice to investigate**, never approval to close. A worker must independently establish that all unique behavior and tests are merged, superseded, redundant, or irrecoverably invalid and preserve a durable handoff before an explicit close. If Jev is missing, returns invalid output, or is uncertain, the PR remains open.
+
+Scheduled `factory-work-controller.py stale` is **diagnostic only**. It must never reset the linked issue or close its canonical PR based solely on age or a Jev score. Its `expired_count` remains zero for compatibility, and `stale_preserved_count` tracks recoverable aged PRs. Dry-run and ordinary evaluation both preserve work.
 
 The older age-driven stale-expiration markers remain interpretable for historical audit and reopened PRs, but the scheduled decay check no longer produces them. Semantic review strikes are a separate policy and do not authorize treating age as a semantic defect.
 
