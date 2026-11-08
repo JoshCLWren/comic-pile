@@ -3,9 +3,7 @@
 //! Preview token verification and plan/state-digest revalidation must remain
 //! compatible with the Python preview implementation until #4842 migrates preview.
 
-use crate::{
-    auth::AuthenticatedUser, db, ApiError, AppState,
-};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Json as AxumJson, State},
     http::StatusCode,
@@ -97,8 +95,8 @@ fn hex_digest(bytes: &[u8]) -> String {
 }
 
 fn hmac_sha256_hex(secret: &str, message: &str) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(message.as_bytes());
     hex_digest(&mac.finalize().into_bytes())
 }
@@ -155,8 +153,8 @@ fn verify_preview_token(
     token: &str,
     expected_user_id: i32,
 ) -> Result<Value, ApiError> {
-    let token_data: Value = serde_json::from_str(token)
-        .map_err(|_| unauthorized("invalid_preview_token"))?;
+    let token_data: Value =
+        serde_json::from_str(token).map_err(|_| unauthorized("invalid_preview_token"))?;
     let payload = token_data
         .get("payload")
         .cloned()
@@ -180,7 +178,10 @@ fn verify_preview_token(
     if expires_at < now_f64() {
         return Err(conflict(ERROR_PREVIEW_EXPIRED));
     }
-    let uid = payload.get("user_id").and_then(|v| v.as_i64()).unwrap_or(-1);
+    let uid = payload
+        .get("user_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(-1);
     if uid != i64::from(expected_user_id) {
         return Err(unauthorized("invalid_preview_token"));
     }
@@ -263,11 +264,7 @@ pub async fn commit_series_mapping_handler(
     let canonical_rows = canonical_row_ids(&req.approved_row_ids);
     let fingerprint = request_fingerprint(&req.preview_token, &canonical_rows);
 
-    let payload = verify_preview_token(
-        &state.preview_token_secret,
-        &req.preview_token,
-        user.id(),
-    )?;
+    let payload = verify_preview_token(&state.preview_token_secret, &req.preview_token, user.id())?;
 
     let mut conn = db::checkout(&state).await?;
 
@@ -326,7 +323,10 @@ pub async fn commit_series_mapping_handler(
 
     let scope_status = plan_scope_status(&plan);
     let plan_scope_key = plan.get("scope_key").and_then(|v| v.as_str()).unwrap_or("");
-    let plan_digest = plan.get("state_digest").and_then(|v| v.as_str()).unwrap_or("");
+    let plan_digest = plan
+        .get("state_digest")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     if scope_status != "available"
         || plan_scope_key != token_scope_key
@@ -394,15 +394,27 @@ fn plan_rows_vec(plan: &Value) -> Vec<Value> {
         .unwrap_or_default()
 }
 
-fn resolve_approved_row(row_id: &str, rows_by_id: &HashMap<String, Value>) -> Result<Value, ApiError> {
+fn resolve_approved_row(
+    row_id: &str,
+    rows_by_id: &HashMap<String, Value>,
+) -> Result<Value, ApiError> {
     let row = rows_by_id
         .get(row_id)
         .ok_or_else(|| unprocessable(ERROR_INVALID_APPROVED_ROW))?;
-    let classification = row.get("classification").and_then(|v| v.as_str()).unwrap_or("");
+    let classification = row
+        .get("classification")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let ok = classification == BULK_SAFE_CLASSIFICATION
         || (classification == "already_confirmed"
-            && row.get("metadata_refresh_required").and_then(|v| v.as_bool()).unwrap_or(false)
-            && row.get("_roster_verified").and_then(|v| v.as_bool()).unwrap_or(false));
+            && row
+                .get("metadata_refresh_required")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            && row
+                .get("_roster_verified")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false));
     if !ok {
         return Err(unprocessable(ERROR_INVALID_APPROVED_ROW));
     }
@@ -428,7 +440,11 @@ async fn assert_issues_owned(
 ) -> Result<(), ApiError> {
     let issue_ids: Vec<i32> = approved_rows
         .iter()
-        .filter_map(|r| r.get("issue_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()))
+        .filter_map(|r| {
+            r.get("issue_id")
+                .and_then(|v| v.as_i64())
+                .and_then(|v| i32::try_from(v).ok())
+        })
         .collect();
     if issue_ids.is_empty() {
         return Ok(());
@@ -456,7 +472,11 @@ async fn assert_no_confirmed_mapping_conflict(
 ) -> Result<(), ApiError> {
     let issue_ids: Vec<i32> = approved_rows
         .iter()
-        .filter_map(|r| r.get("issue_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()))
+        .filter_map(|r| {
+            r.get("issue_id")
+                .and_then(|v| v.as_i64())
+                .and_then(|v| i32::try_from(v).ok())
+        })
         .collect();
     if issue_ids.is_empty() {
         return Ok(());
@@ -476,12 +496,29 @@ async fn assert_no_confirmed_mapping_conflict(
         let issue_id: i32 = row.get(0);
         let provider: String = row.get(1);
         let external_id: String = row.get(2);
-        confirmed.entry(issue_id).or_default().insert((provider, external_id));
+        confirmed
+            .entry(issue_id)
+            .or_default()
+            .insert((provider, external_id));
     }
     for row in approved_rows {
-        let Some(issue_id) = row.get("issue_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()) else { continue };
-        let target_provider = row.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let target_eid = row.get("external_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let Some(issue_id) = row
+            .get("issue_id")
+            .and_then(|v| v.as_i64())
+            .and_then(|v| i32::try_from(v).ok())
+        else {
+            continue;
+        };
+        let target_provider = row
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let target_eid = row
+            .get("external_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if let Some(existing) = confirmed.get(&issue_id) {
             let target = (target_provider, target_eid);
             if existing.iter().any(|e| e != &target) {
@@ -507,7 +544,15 @@ async fn build_plan_for_commit(
     // This is a focused implementation covering the confirmed_origin/queue_thread_bootstrap
     // flows as exercised by existing tests. It queries the same tables Python queries.
     // The digest format must match _plan_state_digest exactly.
-    build_plan_db(conn, user_id, origin_issue_id, provider, provider_series_external_id, scope_mode).await
+    build_plan_db(
+        conn,
+        user_id,
+        origin_issue_id,
+        provider,
+        provider_series_external_id,
+        scope_mode,
+    )
+    .await
 }
 
 fn plan_state_digest(
@@ -529,25 +574,45 @@ fn plan_state_digest(
     ];
     for row in rows {
         let row_id = row.get("row_id").and_then(|v| v.as_str()).unwrap_or("");
-        let issue_number = row.get("issue_number").and_then(|v| v.as_str()).unwrap_or("");
-        let classification = row.get("classification").and_then(|v| v.as_str()).unwrap_or("");
+        let issue_number = row
+            .get("issue_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let classification = row
+            .get("classification")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let current_mapping_status = match row.get("current_mapping_status") {
             Some(Value::Null) | None => String::new(),
             Some(v) => v.as_str().map(|s| s.to_string()).unwrap_or_else(|| {
-                if v.is_null() { String::new() } else { v.to_string().trim_matches('"').to_string() }
+                if v.is_null() {
+                    String::new()
+                } else {
+                    v.to_string().trim_matches('"').to_string()
+                }
             }),
         };
         let rprovider = row.get("provider").and_then(|v| v.as_str()).unwrap_or("");
-        let external_id = row.get("external_id").and_then(|v| v.as_str()).unwrap_or("");
+        let external_id = row
+            .get("external_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let thread_id = match row.get("thread_id") {
             Some(Value::Null) | None => String::new(),
             Some(v) => {
-                if let Some(i) = v.as_i64() { i.to_string() }
-                else if let Some(s) = v.as_str() { s.to_string() }
-                else { String::new() }
+                if let Some(i) = v.as_i64() {
+                    i.to_string()
+                } else if let Some(s) = v.as_str() {
+                    s.to_string()
+                } else {
+                    String::new()
+                }
             }
         };
-        let meta_refresh = row.get("metadata_refresh_required").and_then(|v| v.as_bool()).unwrap_or(false);
+        let meta_refresh = row
+            .get("metadata_refresh_required")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let meta_str = if meta_refresh { "True" } else { "False" }; // Python bool str
         parts.push(format!("{row_id}|{issue_number}|{classification}|{current_mapping_status}|{rprovider}|{external_id}|{thread_id}|{meta_str}"));
     }
@@ -616,10 +681,17 @@ async fn build_plan_db(
         .await
         .map_err(db::query_error)?;
     let Some(origin) = origin else {
-        return Ok(unavailable_plan(origin_issue_id, "origin_issue_not_found", scope_mode));
+        return Ok(unavailable_plan(
+            origin_issue_id,
+            "origin_issue_not_found",
+            scope_mode,
+        ));
     };
     let origin_thread_id: Option<i32> = origin.try_get(3).ok();
-    let origin_issue_number: String = origin.try_get::<_, Option<String>>(1).map_err(db::query_error)?.unwrap_or_default();
+    let origin_issue_number: String = origin
+        .try_get::<_, Option<String>>(1)
+        .map_err(db::query_error)?
+        .unwrap_or_default();
     let origin_mapping_status: Option<String> = origin.try_get(5).ok();
     let origin_mapping_provider: Option<String> = origin.try_get(6).ok();
     let origin_mapping_eid: Option<String> = origin.try_get(7).ok();
@@ -639,7 +711,10 @@ async fn build_plan_db(
     let mut series_info: Option<Value> = None;
 
     if let Some(sr) = series_row {
-        let meta: Value = sr.try_get::<_, Option<Value>>(2).map_err(db::query_error)?.unwrap_or(Value::Null);
+        let meta: Value = sr
+            .try_get::<_, Option<Value>>(2)
+            .map_err(db::query_error)?
+            .unwrap_or(Value::Null);
         series_info = Some(series_info_from_meta(provider_series_external_id, &meta));
         // Load mapped issues for this series
         let mapped = conn
@@ -672,20 +747,37 @@ async fn build_plan_db(
     } else {
         // No local series - would need ComicVine. Cannot rebuild identically.
         // Return unavailable; commit will see digest mismatch -> stale, which is safe.
-        return Ok(unavailable_plan(origin_issue_id, "series_not_found", scope_mode));
+        return Ok(unavailable_plan(
+            origin_issue_id,
+            "series_not_found",
+            scope_mode,
+        ));
     }
 
     // Check origin confirmed for this series
     let origin_has_confirmed = has_confirmed_series_mapping(
-        conn, provider, provider_series_external_id, origin_issue_id, origin_thread_id
-    ).await?;
+        conn,
+        provider,
+        provider_series_external_id,
+        origin_issue_id,
+        origin_thread_id,
+    )
+    .await?;
 
     // If queue_thread_bootstrap, use that flow
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
-            conn, user_id, origin_issue_id, provider, provider_series_external_id,
-            origin_thread_id, &origin_issue_number, &origin, series_info,
-        ).await;
+            conn,
+            user_id,
+            origin_issue_id,
+            provider,
+            provider_series_external_id,
+            origin_thread_id,
+            &origin_issue_number,
+            &origin,
+            series_info,
+        )
+        .await;
     }
 
     // Include origin if it has a confirmed mapping not already in list
@@ -693,7 +785,9 @@ async fn build_plan_db(
         && origin_mapping_provider.is_some()
         && origin_mapping_eid.is_some()
     {
-        let in_list = issues_with_mappings.iter().any(|r| r.get("issue_id").and_then(|v| v.as_i64()) == Some(i64::from(origin_issue_id)));
+        let in_list = issues_with_mappings.iter().any(|r| {
+            r.get("issue_id").and_then(|v| v.as_i64()) == Some(i64::from(origin_issue_id))
+        });
         if !in_list {
             issues_with_mappings.push(serde_json::json!({
                 "issue_id": origin_issue_id,
@@ -716,16 +810,45 @@ async fn build_plan_db(
         "already_confirmed": 0i64, "safe_exact_match": 0i64, "needs_review_ambiguous": 0i64,
         "needs_review_conflict": 0i64, "unresolved": 0i64, "excluded_special": 0i64,
     });
-    let mut classified = classify_rows(&issues_with_mappings, provider, &origin_issue_number, &mut counts);
+    let mut classified = classify_rows(
+        &issues_with_mappings,
+        provider,
+        &origin_issue_number,
+        &mut counts,
+    );
     let scope_key = derive_scope_key(&classified, origin_issue_id);
-    let scope_status = if scope_key.is_some() { "available" } else { "unavailable" };
-    let scope_basis = if scope_key.is_some() { "exact_match_found" } else { "insufficient_non_thread_evidence" };
+    let scope_status = if scope_key.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
+    let scope_basis = if scope_key.is_some() {
+        "exact_match_found"
+    } else {
+        "insufficient_non_thread_evidence"
+    };
     if scope_status == "unavailable" {
         counts = empty_counts();
         classified = vec![];
     }
-    let issue_numbers: Vec<String> = classified.iter().filter_map(|r| r.get("issue_number").and_then(|v| v.as_str()).map(|s| s.to_string())).filter(|s| !s.is_empty()).collect();
-    let digest = plan_state_digest(provider, provider_series_external_id, origin_issue_id, scope_key.as_deref(), scope_basis, &classified, scope_mode);
+    let issue_numbers: Vec<String> = classified
+        .iter()
+        .filter_map(|r| {
+            r.get("issue_number")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .filter(|s| !s.is_empty())
+        .collect();
+    let digest = plan_state_digest(
+        provider,
+        provider_series_external_id,
+        origin_issue_id,
+        scope_key.as_deref(),
+        scope_basis,
+        &classified,
+        scope_mode,
+    );
     let si = series_info.clone();
     Ok(serde_json::json!({
         "scope": {
@@ -774,7 +897,9 @@ async fn has_confirmed_series_mapping(
         )
         .await
         .map_err(db::query_error)?;
-    if row.is_some() { return Ok(true); }
+    if row.is_some() {
+        return Ok(true);
+    }
     if let Some(tid) = origin_thread_id {
         let row = conn
             .query_opt(
@@ -797,21 +922,52 @@ fn normalize_issue_number(value: &str) -> String {
     if stripped.chars().all(|c| c.is_ascii_digit() || c == ',') && !stripped.is_empty() {
         // matches (?:\d+|\d{1,3}(?:,\d{3})+)
         stripped.replace(',', "")
-    } else { String::new() }
+    } else {
+        String::new()
+    }
 }
 fn is_special_issue(issue_number: &str) -> bool {
     let stripped = issue_number.trim().to_lowercase();
-    if stripped.is_empty() { return true; }
+    if stripped.is_empty() {
+        return true;
+    }
     // roman numerals are ambiguous, not special
-    if stripped.chars().all(|c| matches!(c, 'i'|'v'|'x')) && !stripped.is_empty() { return false; }
-    let keywords = ["annual","special","hc","tpb","gn","omnibus","deluxe","absolute","hardcover","trade paperback","graphic novel"];
-    for k in keywords { if stripped.contains(k) { return true; } }
-    if !stripped.chars().any(|c| c.is_ascii_digit()) { return true; }
+    if stripped.chars().all(|c| matches!(c, 'i' | 'v' | 'x')) && !stripped.is_empty() {
+        return false;
+    }
+    let keywords = [
+        "annual",
+        "special",
+        "hc",
+        "tpb",
+        "gn",
+        "omnibus",
+        "deluxe",
+        "absolute",
+        "hardcover",
+        "trade paperback",
+        "graphic novel",
+    ];
+    for k in keywords {
+        if stripped.contains(k) {
+            return true;
+        }
+    }
+    if !stripped.chars().any(|c| c.is_ascii_digit()) {
+        return true;
+    }
     false
 }
-fn is_ambiguous(_s: &str) -> bool { false } // simplified; full logic in Python
+fn is_ambiguous(_s: &str) -> bool {
+    false
+} // simplified; full logic in Python
 
-fn classify_rows(issues: &[Value], provider: &str, origin_issue_number: &str, counts: &mut Value) -> Vec<Value> {
+fn classify_rows(
+    issues: &[Value],
+    provider: &str,
+    origin_issue_number: &str,
+    counts: &mut Value,
+) -> Vec<Value> {
     let mut result = Vec::new();
     // dedupe by issue_id (simplified)
     let mut seen: HashMap<i64, Value> = HashMap::new();
@@ -824,19 +980,26 @@ fn classify_rows(issues: &[Value], provider: &str, origin_issue_number: &str, co
     candidates.sort_by_key(|(id, _)| *id);
 
     for (_id, info) in candidates {
-        let issue_number = info.get("issue_number").and_then(|v| v.as_str()).unwrap_or("");
+        let issue_number = info
+            .get("issue_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let classification = if is_special_issue(issue_number) {
             "excluded_special"
         } else if info.get("current_mapping_status").and_then(|v| v.as_str()) == Some("confirmed") {
             "already_confirmed"
-        } else if normalize_issue_number(issue_number) == normalize_issue_number(origin_issue_number) && !normalize_issue_number(issue_number).is_empty() {
+        } else if normalize_issue_number(issue_number)
+            == normalize_issue_number(origin_issue_number)
+            && !normalize_issue_number(issue_number).is_empty()
+        {
             "safe_exact_match"
         } else {
             "unresolved"
         };
         let issue_id = info.get("issue_id").and_then(|v| v.as_i64()).unwrap_or(0);
         let row_id = format!("issue:{issue_id}");
-        let proposed = classification == "safe_exact_match" || classification == "already_confirmed";
+        let proposed =
+            classification == "safe_exact_match" || classification == "already_confirmed";
         let default_selected = classification == "safe_exact_match";
         if let Some(c) = counts.get_mut(classification).and_then(|v| v.as_i64()) {
             counts[classification] = serde_json::json!(c + 1);
@@ -844,12 +1007,27 @@ fn classify_rows(issues: &[Value], provider: &str, origin_issue_number: &str, co
         let mut row = info.clone();
         if let Some(obj) = row.as_object_mut() {
             obj.insert("row_id".to_string(), serde_json::json!(row_id));
-            obj.insert("classification".to_string(), serde_json::json!(classification));
+            obj.insert(
+                "classification".to_string(),
+                serde_json::json!(classification),
+            );
             obj.insert("proposed_mapping".to_string(), serde_json::json!(proposed));
-            obj.insert("default_selected".to_string(), serde_json::json!(default_selected));
-            obj.insert("provider".to_string(), serde_json::json!(info.get("provider").and_then(|v| v.as_str()).unwrap_or(provider)));
+            obj.insert(
+                "default_selected".to_string(),
+                serde_json::json!(default_selected),
+            );
+            obj.insert(
+                "provider".to_string(),
+                serde_json::json!(info
+                    .get("provider")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(provider)),
+            );
             if info.get("metadata_refresh_required").is_none() {
-                obj.insert("metadata_refresh_required".to_string(), serde_json::json!(false));
+                obj.insert(
+                    "metadata_refresh_required".to_string(),
+                    serde_json::json!(false),
+                );
             }
         }
         result.push(row);
@@ -860,11 +1038,18 @@ fn classify_rows(issues: &[Value], provider: &str, origin_issue_number: &str, co
 fn derive_scope_key(rows: &[Value], origin_issue_id: i32) -> Option<String> {
     for row in rows {
         if row.get("classification").and_then(|v| v.as_str()) == Some("safe_exact_match") {
-            let num = row.get("issue_number").and_then(|v| v.as_str()).unwrap_or("");
+            let num = row
+                .get("issue_number")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             return Some(format!("exact:{origin_issue_id}:{num}"));
         }
     }
-    if rows.iter().any(|r| r.get("_roster_verified").and_then(|v| v.as_bool()).unwrap_or(false)) {
+    if rows.iter().any(|r| {
+        r.get("_roster_verified")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    }) {
         return Some(format!("verified:{origin_issue_id}"));
     }
     None
@@ -886,7 +1071,11 @@ async fn build_queue_bootstrap_plan_db(
 ) -> Result<Value, ApiError> {
     // Queue bootstrap requires live ComicVine roster; DB-only rebuild cannot
     // produce an identical plan. Return unavailable -> commit will be stale-safe.
-    Ok(unavailable_plan(origin_issue_id, "provider_roster_unavailable", "queue_thread_bootstrap"))
+    Ok(unavailable_plan(
+        origin_issue_id,
+        "provider_roster_unavailable",
+        "queue_thread_bootstrap",
+    ))
 }
 
 async fn apply_identity_writes(
@@ -905,9 +1094,21 @@ async fn apply_identity_writes(
     let mut thread_ids: Vec<i32> = Vec::new();
 
     for row in approved_rows {
-        let Some(issue_id) = row.get("issue_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()) else { continue };
-        let row_provider = row.get("provider").and_then(|v| v.as_str()).unwrap_or(provider);
-        let row_eid = row.get("external_id").and_then(|v| v.as_str()).unwrap_or("");
+        let Some(issue_id) = row
+            .get("issue_id")
+            .and_then(|v| v.as_i64())
+            .and_then(|v| i32::try_from(v).ok())
+        else {
+            continue;
+        };
+        let row_provider = row
+            .get("provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or(provider);
+        let row_eid = row
+            .get("external_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         // upsert external identity
         let identity = tx
             .query_one(
@@ -932,7 +1133,11 @@ async fn apply_identity_writes(
         .await
         .map_err(db::query_error)?;
         confirmed_issue_ids.push(issue_id);
-        if let Some(tid) = row.get("thread_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()) {
+        if let Some(tid) = row
+            .get("thread_id")
+            .and_then(|v| v.as_i64())
+            .and_then(|v| i32::try_from(v).ok())
+        {
             thread_ids.push(tid);
         }
     }
@@ -967,20 +1172,33 @@ async fn apply_identity_writes(
 
     let already_confirmed: Vec<i32> = all_rows
         .iter()
-        .filter(|r| r.get("classification").and_then(|v| v.as_str()) == Some("already_confirmed")
-            && r.get("issue_id").and_then(|v| v.as_i64()).is_some()
-            && r.get("thread_id").and_then(|v| v.as_i64()).is_some())
-        .filter_map(|r| r.get("issue_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()))
+        .filter(|r| {
+            r.get("classification").and_then(|v| v.as_str()) == Some("already_confirmed")
+                && r.get("issue_id").and_then(|v| v.as_i64()).is_some()
+                && r.get("thread_id").and_then(|v| v.as_i64()).is_some()
+        })
+        .filter_map(|r| {
+            r.get("issue_id")
+                .and_then(|v| v.as_i64())
+                .and_then(|v| i32::try_from(v).ok())
+        })
         .collect();
     let needs_review: Vec<i32> = all_rows
         .iter()
         .filter(|r| {
-            let c = r.get("classification").and_then(|v| v.as_str()).unwrap_or("");
+            let c = r
+                .get("classification")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             LEFTOVER_CLASSIFICATIONS.contains(&c)
                 && r.get("issue_id").and_then(|v| v.as_i64()).is_some()
                 && r.get("thread_id").and_then(|v| v.as_i64()).is_some()
         })
-        .filter_map(|r| r.get("issue_id").and_then(|v| v.as_i64()).and_then(|v| i32::try_from(v).ok()))
+        .filter_map(|r| {
+            r.get("issue_id")
+                .and_then(|v| v.as_i64())
+                .and_then(|v| i32::try_from(v).ok())
+        })
         .collect();
 
     let response = CommitResponse {
@@ -997,20 +1215,32 @@ async fn apply_identity_writes(
         },
     };
     let response_json = serde_json::to_value(&response).map_err(|_| {
-        ApiError(StatusCode::INTERNAL_SERVER_ERROR, "serialization failed".to_string())
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "serialization failed".to_string(),
+        )
     })?;
 
     tx.execute(
         "INSERT INTO catalog_commit_receipts
          (user_id, idempotency_key, endpoint, request_fingerprint, response_json, created_at)
          VALUES ($1, $2, $3, $4, $5, EXTRACT(EPOCH FROM NOW()))",
-        &[&user_id, &idempotency_key, &COMMIT_ENDPOINT, &request_fingerprint, &response_json],
+        &[
+            &user_id,
+            &idempotency_key,
+            &COMMIT_ENDPOINT,
+            &request_fingerprint,
+            &response_json,
+        ],
     )
     .await
     .map_err(|e| {
         // check for unique violation -> replay
         let msg = e.to_string();
-        if msg.contains("unique") || msg.contains("duplicate") || e.code() == Some(&tokio_postgres::error::SqlState::UNIQUE_VIOLATION) {
+        if msg.contains("unique")
+            || msg.contains("duplicate")
+            || e.code() == Some(&tokio_postgres::error::SqlState::UNIQUE_VIOLATION)
+        {
             // will be handled by caller? but we're in tx
             return conflict(ERROR_IDEMPOTENCY_CONFLICT);
         }
@@ -1046,7 +1276,15 @@ mod tests {
             "current_mapping_status": null, "provider": "comicvine", "external_id": "99",
             "thread_id": 5, "metadata_refresh_required": false
         })];
-        let d = plan_state_digest("comicvine", "123", 1, Some("exact:1:1"), "exact_match_found", &rows, "confirmed_origin");
+        let d = plan_state_digest(
+            "comicvine",
+            "123",
+            1,
+            Some("exact:1:1"),
+            "exact_match_found",
+            &rows,
+            "confirmed_origin",
+        );
         let expected_parts = "mode=confirmed_origin\nprovider=comicvine\nseries=123\norigin=1\nscope=exact:1:1\nbasis=exact_match_found\nissue:1|1|safe_exact_match||comicvine|99|5|False";
         assert_eq!(d, sha256_hex(expected_parts));
     }
