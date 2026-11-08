@@ -189,7 +189,7 @@
       "worker": "98",
       "source": "kilo-auto",
       "model": "kilo-auto/free",
-      "minute": "10",
+      "minute": "35",
       "scheduler": "dispatcher",
       "display_name": "Kilo Auto Free II"
     }
