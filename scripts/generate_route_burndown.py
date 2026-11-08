@@ -28,12 +28,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
-import sys
 from typing import Final
-
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 INVENTORY_PATH: Final = Path("docs/api/v2-route-inventory.json")
 VERCEL_PATH: Final = Path("vercel.json")
@@ -508,7 +503,6 @@ def _validated_full_surface(
         raise BurndownGenerationError("inventory must define a full_surface object")
     full = _object(raw_full, "full_surface")
     catch_all = _object(full.get("catch_all"), "full_surface.catch_all")
-    catch_all["src"] = CATCH_ALL_SRC
     catch_all["dest"] = CATCH_ALL_DEST
     orphan = _object(full.get("orphan"), "full_surface.orphan")
     _string(catch_all.get("src"), "full_surface.catch_all.src")
@@ -557,7 +551,7 @@ def _verify_full_surface_entries(
     destination = _resolve_destination(method, path, routes)
     if destination != "/api/index.py":
         raise BurndownGenerationError(
-            f"orphan {method} {path} must ingress to Python explicitly"
+            f"orphan {method} {path} must ingress to /api/index.py"
         )
     matches = [
         item
@@ -604,36 +598,13 @@ def _render_full_surface(
     raw_full = inventory.get("full_surface")
     assert isinstance(raw_full, dict)
     raw_full_map = {str(key): item for key, item in raw_full.items()}
-    # Derive the legacy operation universe from real FastAPI registration,
-    # not from the previous checked-in inventory. Preserve only metadata for
-    # unchanged paths. Deleted Python routes disappear on the next run.
-    from scripts.generate_vercel_routes import python_operations
-
-    previous = {
-        (item["method"], item["path"]): item
-        for bucket in ("v1_operations", "unversioned_operations")
-        for item in _validated_named_operations(
-            raw_full_map.get(bucket), f"full_surface.{bucket}"
-        )
-    }
-    v1_raw: list[dict[str, object]] = []
-    unversioned_raw: list[dict[str, object]] = []
-    for method, path in sorted(python_operations(), key=lambda entry: (entry[1], entry[0])):
-        if path.startswith("/api/v2/"):
-            continue
-        old = previous.get((method, path), {})
-        operation: dict[str, object] = {
-            "method": method,
-            "path": path,
-            "runtime": "python-fastapi",
-            "status": old.get("status", "transitional"),
-            "owning_issue": old.get("owning_issue"),
-            "consumers": old.get("consumers", []),
-        }
-        if path.startswith("/api/v1/"):
-            v1_raw.append(operation)
-        elif path.startswith("/api/"):
-            unversioned_raw.append(operation)
+    v1_raw = _validated_named_operations(
+        raw_full_map.get("v1_operations"), "full_surface.v1_operations"
+    )
+    unversioned_raw = _validated_named_operations(
+        raw_full_map.get("unversioned_operations"),
+        "full_surface.unversioned_operations",
+    )
     v1_operations = _enrich_named_operations(
         v1_raw, routes, "full_surface.v1_operations"
     )
@@ -797,12 +768,12 @@ def _render_agents_block(
             f"v1 active {v1_live} live Python / {v1_shadowed} migrated "
             f"(shadowed by Rust); unversioned active {unversioned_live} live "
             f"Python / {unversioned_shadowed} migrated (shadowed by Rust); "
-            "all remaining declared methods use generated Python exceptions."
+            "remaining declared methods use explicit Python exceptions."
         )
         lines.append(
             "- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); "
-            "orphan `GET /api/v2/reading-boundaries/{thread_id}` has a "
-            "generated explicit Python exception."
+            "orphan `GET /api/v2/reading-boundaries/{thread_id}` has an "
+            "explicit Python exception."
         )
         lines.append(
             "- Full-surface inventory (v2 + v1 + unversioned + catch-all + "
