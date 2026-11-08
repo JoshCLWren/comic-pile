@@ -56,7 +56,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     isRolling: false,
     rolledResult: null,
     selectedThreadId: null,
-    currentDie: 6,
     diceState: 'idle',
     isOverrideOpen: false,
     overrideThreadId: '',
@@ -81,7 +80,6 @@ function mockState(overrides: Partial<RollPageState & RollPageStateSetters> = {}
     setIsRolling: vi.fn(),
     setRolledResult: vi.fn(),
     setSelectedThreadId: vi.fn(),
-    setCurrentDie: vi.fn(),
     setDiceState: vi.fn(),
     setIsOverrideOpen: vi.fn(),
     setOverrideThreadId: vi.fn(),
@@ -131,6 +129,7 @@ function renderRatingView(initialScopes: ScopeOverrides = {}) {
   const state = mockState({ activeRatingThread: ACTIVE_THREAD })
   const params = {
     state,
+    currentDie: 6,
     readerContextRequested: false,
     readingContextRequested: false,
     readingBoundariesRequested: false,
@@ -240,6 +239,7 @@ it('a failed reader-context request stays out of the shared rating error channel
     () =>
       useRatingView({
         state,
+        currentDie: 6,
         readerContextRequested: true,
         readingContextRequested: true,
         readingBoundariesRequested: false,

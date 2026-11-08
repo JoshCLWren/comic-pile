@@ -47,7 +47,6 @@ function mockState(
     isRolling: false,
     rolledResult: null,
     selectedThreadId: null,
-    currentDie: 6,
     diceState: 'idle',
     isOverrideOpen: false,
     overrideThreadId: '',
@@ -72,7 +71,6 @@ function mockState(
     setIsRolling: noop,
     setRolledResult: noop,
     setSelectedThreadId: noop,
-    setCurrentDie: noop,
     setDiceState: noop,
     setIsOverrideOpen: noop,
     setOverrideThreadId: noop,
@@ -139,12 +137,13 @@ function testClient(): QueryClient {
 
 function renderUseRatingView(
   bootstrap?: RollBootstrapResponse | null,
-  stateOverrides: Partial<RollPageState & RollPageStateSetters> = {},
+  currentDie = 6,
 ) {
   return renderHook(
     () =>
       useRatingView({
-        state: mockState(stateOverrides),
+        state: mockState(),
+        currentDie,
         bootstrap,
         readerContextRequested: false,
         readingContextRequested: false,
@@ -191,9 +190,9 @@ describe('rating view manual-die projection', () => {
   // Issue #3144: the rating card needs this projection to drop the ladder
   // readout that manual mode suppresses.
   it('reports the pinned die so the card can drop the ladder readout (#3144)', () => {
-    // `useRollBootstrapSync` projects `bootstrap.current_die` onto page state, so
-    // the card sees the same die from both props in a real session.
-    const { result } = renderUseRatingView(bootstrapWithManualDie(20), { currentDie: 20 })
+    // `RollPage` derives the selected die during render (#4352) and passes it
+    // to `useRatingView`, so the card sees the same die from both props.
+    const { result } = renderUseRatingView(bootstrapWithManualDie(20), 20)
 
     expect(result.current.manualDie).toBe(20)
     expect(result.current.currentDie).toBe(20)
@@ -226,6 +225,38 @@ describe('die-mode mutations refresh the manual_die projection', () => {
     })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
+      exact: true,
+    })
+    // #4352: the header is render-derived from the scoped die-state query, so
+    // the mutation must invalidate it or the header keeps showing the old
+    // die until the stale window elapses.
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
+      exact: true,
+    })
+
+    invalidateQueries.mockRestore()
+  })
+
+  it('die-scoped invalidation covers the header update without a bootstrap-only refetch', async () => {
+    // `handleSetDie` in `useRollActions` no longer calls `setCurrentDie`; the
+    // only signal the header needs is the die-state query being invalidated
+    // and refetched. Asserting the die-state key is in the invalidation set
+    // (and not relying solely on the bootstrap key) proves the header path.
+    const invalidateQueries = vi
+      .spyOn(queryClient, 'invalidateQueries')
+      .mockResolvedValue(undefined)
+    const { result } = renderHook(() => useSetDie(rollApi), {
+      wrapper: wrapper(testClient()),
+    })
+
+    await act(async () => {
+      await result.current.mutate(12)
+    })
+
+    expect(setDie).toHaveBeenCalledWith(12)
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      queryKey: queryKeys.roll.dieState(),
       exact: true,
     })
 

@@ -10,6 +10,7 @@ import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
+  currentDie: number
   bootstrap?: RollBootstrapResponse | null
   readerContextRequested: boolean
   readingContextRequested: boolean
@@ -96,6 +97,7 @@ export interface RatingViewData {
  */
 export function useRatingView({
   state,
+  currentDie,
   bootstrap,
   readerContextRequested,
   readingContextRequested,
@@ -120,7 +122,6 @@ export function useRatingView({
 }: UseRatingViewParams): RatingViewData {
   const {
     activeRatingThread,
-    currentDie,
     rolledResult,
     rating: ratingValue,
     errorMessage,

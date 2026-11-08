@@ -41,6 +41,7 @@ import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -80,6 +81,9 @@ export default function RollPage() {
   // TanStack Query preserves previously successful data after a failed refetch.
   // A failed scoped refresh must not overrule the newly reconciled bootstrap die.
   const scopedDieState = isScopedDieStateError ? undefined : cachedScopedDieState
+  // #4352: derive during render, no effect/no state. Scoped wins, then the
+  // bootstrap manual pin, then the event-derived die, defaulting to d6.
+  const selectedDie = resolveRollSelectedDie(scopedDieState, bootstrap)
 
   // Eligible-pool surface migration (#4719): the scoped resource owns the
   // ordered thread ids for the current die, with the browser snooze cookie
@@ -151,7 +155,6 @@ export default function RollPage() {
   useRollBootstrapSync({
     state,
     bootstrap,
-    scopedDieState: scopedDieState ?? null,
     isBootstrapError,
     bootstrapError,
     navigate,
@@ -311,6 +314,7 @@ export default function RollPage() {
 
   const ratingViewData = useRatingView({
     state,
+    currentDie: selectedDie,
     bootstrap,
     readerContextRequested: rating.readerContextRequested,
     readingContextRequested: rating.readingContextRequested,
@@ -335,9 +339,9 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  // Scoped die drives the pool cutoff and 3D model when present; the
-  // bootstrap-synced state remains the fallback while it settles or fails.
-  const effectiveDie = scopedDieState?.die ?? state.currentDie
+  // Derived die drives the pool cutoff and 3D model; scoped wins over
+  // bootstrap with a d6 default (see `resolveRollSelectedDie` above).
+  const effectiveDie = selectedDie
   const dieSize = effectiveDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -414,7 +418,7 @@ export default function RollPage() {
     <div className="min-h-screen flex flex-col">
       <RollHeader
         bootstrap={bootstrap}
-        currentDie={state.currentDie}
+        currentDie={selectedDie}
         dieSize={dieSize}
         displayDie={displayDie}
         snoozedThreads={snoozedThreads}
