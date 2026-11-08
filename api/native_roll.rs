@@ -296,6 +296,31 @@ mod tests {
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
 
+    #[tokio::test]
+    async fn unknown_api_route_returns_rust_json_404_without_database() {
+        let mut router = app();
+        let response = router
+            .call(Request::builder()
+                .uri("/api/v2/definitely-not-registered")
+                .body(Body::empty())
+                .unwrap())
+            .await
+            .expect("router response");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 1024)
+            .await
+            .expect("body bytes");
+        assert_eq!(
+            serde_json::from_slice::<Value>(&bytes).expect("JSON"),
+            serde_json::json!({"detail": "Not Found"})
+        );
+    }
+
+
     async fn disposable_schema_url() -> String {
         let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
             .expect("disposable RUST_ROLL_TEST_DATABASE_URL required; tests never silently skip");
