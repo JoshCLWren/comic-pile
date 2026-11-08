@@ -457,7 +457,20 @@ def collect_snapshot() -> dict[str, Any]:
     for row in worker_rows:
         row["heartbeat"] = observations.get(row["worker"], {})
 
+    delivery = load_module("factory_delivery_funnel", SCRIPTS / "factory_delivery_funnel.py")
+    try:
+        delivery_rows = delivery.collect_delivery_funnel(
+            lambda endpoint: completion.gh_json(['api', f'repos/{REPO}/{endpoint}']),
+            load_manifest_rows(MANIFEST), now=datetime.now(timezone.utc),
+            cache_path=Path(os.environ.get('FACTORY_FUNNEL_CACHE', 'site/funnel-cache.json')),
+        )
+        delivery_error = ''
+    except (RuntimeError, ValueError, OSError) as exc:
+        delivery_rows, delivery_error = [], f'Delivery history unavailable: {type(exc).__name__}'
+
     return {
+        "delivery_funnel": delivery_rows,
+        "delivery_funnel_error": delivery_error,
         "heartbeat_health": heartbeat_report,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "open_prs": github_search_total(completion, "is:pr is:open"),
@@ -700,6 +713,34 @@ def render_roster_section(snapshot: Mapping[str, Any]) -> str:
 </section>"""
 
 
+def render_delivery_funnel(snapshot: Mapping[str, object]) -> str:
+    """Render comparable merged/unmerged outcomes using existing table vocabulary."""
+    error = snapshot.get('delivery_funnel_error')
+    if error:
+        return f'<section class="panel scoreboard"><h2>Delivery funnel</h2><p>{esc(error)}</p></section>'
+    rows = snapshot.get('delivery_funnel') or []
+    if not isinstance(rows, list) or not rows:
+        return ''
+    rendered = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        rendered.append('<tr>' + ''.join(f'<td>{esc(row.get(field, ""))}</td>' for field in (
+            'group', 'name', 'days', 'merged', 'closed', 'opened',
+        )) + f'<td>{float(row.get("commit_share", 0)):.2f}</td></tr>')
+    return (
+        '<section class="panel scoreboard"><h2>Delivery funnel · last 14 and 30 days</h2>'
+        '<p>Merged versus closed without merge is the delivery outcome. Opened, merged and closed '
+        'are events in each window, not a same-cohort conversion rate. PR counts belong to the '
+        'starter; commit share credits finishers, split among advance commits per merged PR. '
+        'Squash-body copies are not counted twice. Unattributed history stays explicit.</p>'
+        '<div class="table-wrap"><table><thead><tr><th>Group</th><th>Worker / model</th>'
+        '<th>Days</th><th>Merged</th><th>Closed without merge</th><th>Opened</th>'
+        '<th>Commit share (PR equivalents)</th></tr></thead><tbody>'
+        + ''.join(rendered) + '</tbody></table></div></section>'
+    )
+
+
 def render_dashboard(snapshot: Mapping[str, Any]) -> str:
     pipeline = snapshot["pipeline"]
     throughput = snapshot["throughput"]
@@ -760,6 +801,7 @@ def render_dashboard(snapshot: Mapping[str, Any]) -> str:
 <div class="panel"><h2>Throughput · last 24h</h2><div class="row"><span>Opened</span><strong>{esc(throughput['opened_day'])}</strong></div><div class="row"><span>Merged</span><strong>{esc(throughput['merged_day'])}</strong></div><div class="row"><span>Net PR change</span><strong class="{'good' if throughput['net_day'] < 0 else 'bad' if throughput['net_day'] > 0 else ''}">{signed(int(throughput['net_day']))}</strong></div><div class="row"><span>Factories with 7d merge credit</span><strong>{esc(snapshot.get('productive_workers_week', 0))}</strong></div></div>
 <div class="panel"><h2>Control plane</h2><a class="row" href="{REPO_URL}/issues/1093"><span>Heartbeat + allocator registry</span><strong>#1093 ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/factory-completion-drain.yml"><span>Completion drain</span><strong>workflow ↗</strong></a><a class="row" href="{REPO_URL}/actions/workflows/fixed-model-factory-dispatch.yml"><span>Main dispatcher</span><strong>workflow ↗</strong></a></div>
 </section>
+{render_delivery_funnel(snapshot)}
 {render_roster_section(snapshot)}
 <section class="panel scoreboard"><div class="score-head"><div><h2>Fleet scoreboard</h2><div class="sub">Current health, current work, latest classified attempt, and retained merge credit. Heartbeat freshness is observation age; quota-limited workers are not classified as crashed.</div></div><div class="filters"><input id="factory-search" type="search" placeholder="Factory, model, provider…" aria-label="Search factories"><select id="factory-filter" aria-label="Filter factories"><option value="">All factories</option><option value="working">Working now</option><option value="healthy">Healthy</option><option value="watch">Needs attention</option><option value="blocked">Blocked</option></select></div></div>
 {render_heartbeat_summary(snapshot)}<div class="table-wrap"><table><thead><tr><th>Verdict</th><th>Factory</th><th>Health</th><th>Latest runtime</th><th>Latest attempt</th><th>24h merges</th><th>7d merges</th><th>Current work</th><th>Seen</th></tr></thead><tbody id="factory-rows">{render_worker_rows(snapshot)}</tbody></table></div>

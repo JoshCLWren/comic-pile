@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/generate_factory_status_dashboard.py'
+      - '.github/scripts/factory_delivery_funnel.py'
       - '.github/scripts/probe_opencode_free_roster.py'
       - '.github/scripts/factory_capacity_policy.py'
       - '.github/scripts/factory_full_completion_controller.py'
@@ -34,6 +35,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+
+      - name: Restore immutable delivery attribution
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          if gh api "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json?ref=factory-status-live" \
+            --jq '.content' > "$RUNNER_TEMP/funnel-cache.b64"; then
+            base64 --decode "$RUNNER_TEMP/funnel-cache.b64" > site/funnel-cache.json
+          fi
 
       - name: Generate factory dashboard
         env:
@@ -72,6 +84,20 @@ jobs:
             args+=(-f "sha=${existing_sha}")
           fi
           gh api "${args[@]}" --jq '.commit.sha'
+
+          # Public normalized counts keyed by immutable merged SHA, never logs
+          # or credentials. Update only when attribution changed.
+          if [[ -f site/funnel-cache.json ]]; then
+            cache_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
+            local_sha="$(git hash-object site/funnel-cache.json)"
+            if [[ "$cache_sha" != "$local_sha" ]]; then
+              cache_args=(--method PUT "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json"
+                -f "branch=${branch}" -f 'message=chore: cache merged factory attribution'
+                -f "content=$(base64 -w0 site/funnel-cache.json)")
+              if [[ -n "$cache_sha" ]]; then cache_args+=(-f "sha=${cache_sha}"); fi
+              gh api "${cache_args[@]}" --jq '.commit.sha'
+            fi
+          fi
 
   build-pages-shell:
     if: github.event_name == 'push'

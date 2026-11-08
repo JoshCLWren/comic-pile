@@ -689,3 +689,10 @@ subject. The trusted wrapper aggregates distinct model IDs across invocations,
 keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
 from served-model evidence. Missing metadata is explicitly unreported; assistant
 and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+Delivery funnel reports use separate opened/merged/unmerged-close event windows
+of 14 and 30 days. Starter PR outcomes and advance-commit contribution shares
+are distinct. Each merged PR contributes one credit unit divided among its
+advance commits, including squash-body subjects without duplicate credit.
+Retired and unattributed history remain visible. Immutable merged attribution
+is cached on the existing status branch; unavailable history is not reported as zero.
+
