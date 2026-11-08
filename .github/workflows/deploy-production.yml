@@ -496,6 +496,25 @@ jobs:
           fi
           echo "Production health contract passed (HTTP 200, status ok, runtime rust)"
 
+      - name: Smoke production unknown API returns native Rust 404
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          header_file="$(mktemp)"
+          trap 'rm -f "$body_file" "$header_file"' EXIT
+          status="$(curl --silent --show-error --max-time 25 \
+            --dump-header "$header_file" \
+            --output "$body_file" \
+            --write-out '%{http_code}' \
+            https://comic-pile.vercel.app/api/v2/_unknown-rust-route-probe)"
+          runtime="$(awk 'tolower($1) == "x-comicpile-api-runtime:" {gsub(/\\r/,""); print $2}' "$header_file" | tail -1)"
+          if [[ "$status" != "404" || "$runtime" != "rust" ]] || \
+             ! jq -e '.detail == "Not Found"' "$body_file" >/dev/null; then
+            echo "::error::Unknown API route did not terminate in Rust (HTTP $status, runtime=${runtime:-missing})" >&2
+            exit 1
+          fi
+          echo "Unknown API route returned Rust JSON 404"
+
       - name: Smoke production rejected login on the Rust runtime
         run: |
           set -euo pipefail
