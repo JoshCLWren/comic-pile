@@ -174,7 +174,7 @@ def test_router_parser_sees_every_post_call() -> None:
     # Count whole Rust routing constructor tokens. A substring search would
     # mistakenly see `put(` inside unrelated code such as `.output()`.
     post_calls = len(re.findall(
-        r"(?<![A-Za-z0-9_])(?:post|patch|put|delete)\\s*\\(",
+        r"(?<![A-Za-z0-9_])(?:post|patch|put|delete)\s*\(",
         _lib_source(),
     ))
     assert len(parsed) == post_calls, (
