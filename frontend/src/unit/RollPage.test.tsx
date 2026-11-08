@@ -325,6 +325,53 @@ it('loads every active override page only after the modal opens', async () => {
   expect(await screen.findByRole('option', { name: 'Second Choice (Comic)' })).toBeInTheDocument()
 })
 
+it('uses the scoped die in the die-selection modal when bootstrap differs (#4719)', async () => {
+  const user = userEvent.setup()
+  mockedUseRollBootstrap.mockReturnValue({
+    data: { ...bootstrap, current_die: 8 },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollDieState.mockReturnValue({
+    data: { die: 2, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    isError: false,
+  })
+
+  renderRollPage()
+  await user.click(screen.getByRole('button', { name: /^current die d2$/i }))
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
+  expect(within(dieModal).getByText(/die is currently d2/i)).toBeInTheDocument()
+  for (const die of screen.getAllByTestId('lazy-dice')) {
+    expect(die).toHaveAttribute('data-sides', '2')
+  }
+})
+
+it('falls back to the reconciled bootstrap die after a scoped refetch error (#4719)', async () => {
+  const user = userEvent.setup()
+  mockedUseRollBootstrap.mockReturnValue({
+    data: { ...bootstrap, current_die: 8 },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  // TanStack retains stale successful data alongside isError on a failed refetch.
+  mockedUseRollDieState.mockReturnValue({
+    data: { die: 2, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+    isError: true,
+  })
+
+  renderRollPage()
+  await user.click(screen.getByRole('button', { name: /^current die d8$/i }))
+  const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
+  expect(within(dieModal).getByText(/die is currently d8/i)).toBeInTheDocument()
+  for (const die of screen.getAllByTestId('lazy-dice')) {
+    expect(die).toHaveAttribute('data-sides', '8')
+  }
+})
+
 it('names the mobile die control for the event-derived die without an Auto mode (#4353)', async () => {
   const user = userEvent.setup()
   renderRollPage()
