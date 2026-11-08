@@ -31,6 +31,7 @@ export function ComicIssueCover({
   frameClassName,
   frameStyle,
   imageClassName = 'h-full w-full',
+  altText,
   testId = 'comic-issue-cover',
   placeholderTestId = 'comic-issue-cover-placeholder',
   onImageLoad,
@@ -44,6 +45,8 @@ export function ComicIssueCover({
   frameClassName?: string
   frameStyle?: CSSProperties
   imageClassName?: string
+  /** Featured Roll art is decorative because the exact title is adjacent. */
+  altText?: string
   testId?: string
   placeholderTestId?: string
   onImageLoad?: (img: HTMLImageElement) => void
@@ -69,7 +72,7 @@ export function ComicIssueCover({
       {hasCover ? (
         <ImageWithLoading
           src={coverImageUrl}
-          alt={`Cover for ${issueLabel}`}
+          alt={altText ?? `Cover for ${issueLabel}`}
           loading={eager ? 'eager' : 'lazy'}
           className={imageClassName}
           onLoad={onImageLoad}
