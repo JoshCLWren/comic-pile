@@ -14,12 +14,17 @@ use std::sync::{Arc, OnceLock};
 use tower::{Service, ServiceBuilder};
 use vercel_runtime::{axum::VercelLayer, Error};
 
-async fn native_health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+async fn native_health() -> Response {
+    let mut response = Json(serde_json::json!({
         "status": "ok",
         "runtime": "rust",
         "service": "issue"
     }))
+    .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
 }
 
 static ISSUE_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
@@ -347,6 +352,11 @@ mod tests {
             .expect("valid request");
         let response = router.call(request).await.expect("health response");
         assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust")),
+            "native health probe requires the Rust runtime marker"
+        );
         assert_eq!(
             response.headers().get(header::CONTENT_TYPE),
             Some(&axum::http::HeaderValue::from_static("application/json"))
