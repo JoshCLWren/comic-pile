@@ -263,6 +263,48 @@ it('backfills an eligible face missing from bootstrap from scoped cards (#4719)'
   expect(screen.queryByText('X-Men')).not.toBeInTheDocument()
 })
 
+it('uses scoped issue identity when bootstrap still points at an older issue (#4719)', () => {
+  mockedUseRollBootstrap.mockReturnValue({
+    data: {
+      ...bootstrap,
+      roll_pool: [{
+        id: 1,
+        title: 'Stale bootstrap issue',
+        format: 'Comic',
+        issue_id: 11,
+        issue_number: '1',
+      }],
+    },
+    refetch: vi.fn().mockResolvedValue(bootstrap),
+    isPending: false,
+    isError: false,
+    error: null,
+  })
+  mockedUseRollEligibleIssueIds.mockReturnValue({
+    data: { die: 6, issue_ids: [12], thread_ids: [1], pool_reason: 'ready' },
+  })
+  mockedUseRollIssueCards.mockReturnValue({
+    data: {
+      items: [{
+        issue_id: 12,
+        thread_id: 1,
+        thread_title: 'Current scoped issue',
+        issue_number: '2',
+        status: 'unread',
+        has_confirmed_identity: true,
+        mapping_state: 'confirmed',
+      }],
+    },
+  })
+
+  renderRollPage()
+
+  expect(screen.getByRole('button', { name: /Die face 1: Current scoped issue/i })).toBeInTheDocument()
+  expect(screen.getByText('#2')).toBeInTheDocument()
+  expect(screen.queryByText('#1')).not.toBeInTheDocument()
+  expect(screen.queryByText('Stale bootstrap issue')).not.toBeInTheDocument()
+})
+
 it('dedupes repeated eligible thread ids and caps the visible pool at the die (#4719)', () => {
   mockedUseRollDieState.mockReturnValue({ data: { die: 2, default_die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], last_roll: null } })
   mockedUseRollEligibleIssueIds.mockReturnValue({
