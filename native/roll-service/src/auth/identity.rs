@@ -175,7 +175,10 @@ fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
         .get("sub")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty());
-    if username.is_none() || payload.get("type").and_then(Value::as_str) != Some("access") {
+    let Some(username) = username else {
+        return Err(unauthorized("Invalid authentication credentials"));
+    };
+    if payload.get("type").and_then(Value::as_str) != Some("access") {
         return Err(unauthorized("Invalid authentication credentials"));
     }
     let jti = payload
@@ -185,7 +188,7 @@ fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
         .ok_or_else(|| unauthorized("Token has been revoked"))?;
     let password_epoch = payload.get("pc").cloned().unwrap_or(Value::Null);
     Ok(AccessClaims {
-        username: username.unwrap().into(),
+        username: username.into(),
         jti: jti.into(),
         password_epoch,
     })

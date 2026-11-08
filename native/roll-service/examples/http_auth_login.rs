@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Native HTTP auth contract against the canonical application PostgreSQL schema.
 use axum::{
     body::{to_bytes, Body},

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Emit the canonical native v2 OpenAPI contract for every deployed operation.
 use comicpile_roll_service::openapi::canonical_openapi;
 

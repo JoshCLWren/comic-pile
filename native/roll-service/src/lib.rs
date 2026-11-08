@@ -1,4 +1,6 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
@@ -209,6 +211,34 @@ async fn bound_request(
     response
 }
 
+/// Map a handler panic to the standard 500 JSON body without leaking details.
+///
+/// The panic payload and location are deliberately never logged: payloads can
+/// carry user data or secrets. Only a fixed message is emitted so the failure
+/// stays attributable without exposing request content (#4742).
+async fn catch_panic(request: Request, next: Next) -> Response {
+    let future = next.run(request);
+    let mut future = Box::pin(future);
+    std::future::poll_fn(|context| {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            future.as_mut().poll(context)
+        })) {
+            Ok(poll) => poll,
+            Err(_) => {
+                tracing::error!("request handler panicked");
+                std::task::Poll::Ready(
+                    ApiError(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Internal Server Error".to_string(),
+                    )
+                    .into_response(),
+                )
+            }
+        }
+    })
+    .await
+}
+
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
@@ -379,6 +409,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
+        .layer(axum::middleware::from_fn(catch_panic))
         .with_state(state)
 }
 
@@ -415,6 +446,88 @@ mod tests {
         assert_eq!(
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Request timed out"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn panic_maps_to_standard_500_json_without_leaking_payload() {
+        async fn panicking() -> Response {
+            panic!("secret canary in panic payload");
+        }
+        let app = Router::new()
+            .route("/panic", get(panicking))
+            .route(
+                "/ok",
+                get(|| async { Json(serde_json::json!({"ok": true})) }),
+            )
+            .layer(middleware::from_fn(catch_panic));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/panic")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        assert_eq!(body, r#"{"detail":"Internal Server Error"}"#);
+        assert!(
+            !String::from_utf8_lossy(&body).contains("canary"),
+            "panic payload must never reach the response body"
+        );
+        let response = app
+            .oneshot(Request::builder().uri("/ok").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn production_router_keeps_normal_statuses_unchanged() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/no-such-route")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            to_bytes(response.into_body(), 4096).await.unwrap(),
+            r#"{"detail":"Not Found"}"#
+        );
+    }
+
+    #[test]
+    fn lints_forbid_unwrap_in_production_code() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let manifest = std::fs::read_to_string(&path).expect("read service manifest");
+        assert!(
+            manifest.contains("unwrap_used") && manifest.contains("expect_used"),
+            "manifest must deny unwrap/expect so a new production panic fails CI (see #4742)"
         );
     }
 }

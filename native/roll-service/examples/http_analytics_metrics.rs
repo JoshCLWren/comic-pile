@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Disposable-schema HTTP regression runner for native v2 analytics metrics.
 use axum::{
     body::{to_bytes, Body},
