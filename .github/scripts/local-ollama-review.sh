@@ -10,10 +10,12 @@ PR="${PR_INPUT:-${PR_PAYLOAD:-}}"
 : "${REVIEW_PROVIDER_KEY:=${LOCAL_OLLAMA_KEY:-ollama}}"
 : "${REVIEW_PROVIDER_MODEL:=qwen2.5-coder:7b}"
 if [ -z "${REVIEW_PROVIDER_URL:-}" ]; then echo "REVIEW_PROVIDER_URL secret missing; skipping"; exit 0; fi
-HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
+# Installation rate limits are transient; retry gh calls 3x with backoff.
+gh_retry() { for i in 1 2 3; do "$@" && return 0; echo "gh call failed (attempt $i), retrying in 10s" >&2; sleep 10; done; return 1; }
+HEAD="$(gh_retry gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
 ISSUE="$(gh pr view "$PR" --json body --jq .body | grep -oE 'Closes #[0-9]+|Fixes #[0-9]+|Resolves #[0-9]+' | grep -oE '[0-9]+' | head -1 || true)"
 [ -n "$ISSUE" ] || ISSUE="4825"
-gh pr diff "$PR" > /tmp/p.patch
+gh_retry gh pr diff "$PR" > /tmp/p.patch
 truncate -s 8000 /tmp/p.patch || true
 # call provider via OpenAI-compatible chat (bounded, single message, standard scheme)
 python3 -c "import json; patch=open('/tmp/p.patch').read(); open('/tmp/req.json','w').write(json.dumps({'model': '${REVIEW_PROVIDER_MODEL}', 'messages': [{'role':'user','content': f'Review PR head ${HEAD}. Reply APPROVE or REJECT plus reason. Patch: {patch[:6000]}'}], 'max_tokens': 80}))"
