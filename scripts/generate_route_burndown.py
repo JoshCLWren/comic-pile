@@ -28,7 +28,12 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 import re
+import sys
 from typing import Final
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 INVENTORY_PATH: Final = Path("docs/api/v2-route-inventory.json")
 VERCEL_PATH: Final = Path("vercel.json")
