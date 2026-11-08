@@ -481,6 +481,13 @@ jobs:
           echo "PostgreSQL failed to start"
           exit 1
 
+      - name: Regenerate actual Rust-first Python ingress
+        run: |
+          python scripts/generate_vercel_routes.py
+          python scripts/generate_route_burndown.py
+          python scripts/generate_vercel_routes.py --check
+          python scripts/generate_route_burndown.py --check
+
       - name: Run backend tests (shard ${{ matrix.shard }})
         run: |
           FILES=$(python scripts/ci_backend_shard.py \
