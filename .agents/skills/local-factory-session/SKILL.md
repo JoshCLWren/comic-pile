@@ -10,6 +10,18 @@ metadata:
 Everything a local session must set up once, and the exact state it must leave the
 issue/PR in, so review fleet machinery can recognize and pick up the work.
 
+The local factory owns authorized continuation through CI repair, actual
+independent review, gated merge, deployment and real acceptance. A ready PR or
+fleet handoff is not ordinary completion. In Codex, use
+[the Crouton adapter](../crouton-factory-codex/SKILL.md) and
+[the executable ACP review path](../../../docs/LOCAL_FACTORY_REVIEW.md) to start
+eligible local reviewers instead of waiting for scheduled pickup. Record actual
+review identity/model/session/head and `factory:review` + `factory:local` only
+while local review runs; release to `factory:unowned` afterward. Never fabricate
+controller identity or approval. Read ACP checkpoints/model-selection metadata
+and final reports/verdicts only, never full logs. Existing authorization/gates
+remain; remote factory backpressure does not constrain locals.
+
 ## Bootstrap (once per session, before the first commit)
 
 1. Install hooks so commit tooling exists at all:

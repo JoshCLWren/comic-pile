@@ -128,6 +128,27 @@ A substantive implementation PR changes product behavior, correctness, performan
 
 ## Lease semantics
 
+### Local factory delivery roles
+
+Local orchestration owns the authorized objective through implementation,
+targeted local verification, exact-head CI repair, actual independent review,
+gated merge, authorized deployment and real production acceptance. A PR or
+scheduled-review handoff alone is not ordinary completion. When an eligible
+local independent reviewer can run, start it rather than waiting for scheduled
+pickup; use [the executable ACP review path](LOCAL_FACTORY_REVIEW.md).
+
+Implementation and CI-repair workers are contributors and cannot independently
+approve their resulting head. Record actual reviewer identity, confirmed ACP
+session/model and exact head; never fabricate controller markers or approvals.
+Manually tag actual active local review with the canonical `factory:review` +
+`factory:local` lease, preserving other live ownership and unrelated labels via
+atomic replacement, then release when the session ends. Read only ACP checkpoints,
+model-selection metadata and final reports/verdicts, never full logs/transcripts.
+The coordinator checks all existing merge and production authorization gates;
+this workflow grants no additional authority. Remote PR/backlog intake thresholds
+do not apply to local sessions. Detailed Codex routing lives in
+`.agents/skills/crouton-factory-codex/SKILL.md`.
+
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
