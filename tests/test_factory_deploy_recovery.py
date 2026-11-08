@@ -3,8 +3,10 @@
 import importlib.util
 import io
 import json
-import sys
+import os
 import subprocess
+import sys
+import textwrap
 from pathlib import Path
 from types import ModuleType
 
@@ -221,6 +223,68 @@ def test_recovery_workflow_uses_trusted_main_and_heartbeat() -> None:
     assert "if [[ \"$attempt\" -lt 8 ]]" in smoke
     assert "exit 1" in smoke
 
+
+
+
+@pytest.mark.parametrize("always_fail", [False, True])
+def test_rust_health_smoke_retries_curl_errors_without_weakening_identity(
+    tmp_path: Path, always_fail: bool
+) -> None:
+    """A failed curl retries; a permanently failed probe still blocks deployment."""
+    workflow = (SCRIPTS.parent / "workflows" / "deploy-production.yml").read_text()
+    smoke = workflow.split("      - name: Smoke production Rust health\\n", 1)[1].split(
+        "      - name: Smoke production unknown API returns native Rust 404\\n", 1
+    )[0]
+    shell = textwrap.dedent(smoke.split("        run: |\\n", 1)[1])
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    counter = tmp_path / "curl-count"
+    fake_curl = bin_dir / "curl"
+    fake_curl.write_text(r"""#!/usr/bin/env bash
+set -euo pipefail
+count="$(cat "$FAKE_CURL_COUNT" 2>/dev/null || echo 0)"
+printf '%s' "$((count + 1))" > "$FAKE_CURL_COUNT"
+if [[ "$FAKE_CURL_ALWAYS_FAIL" == "1" || "$count" == "0" ]]; then
+  exit 7
+fi
+body=""
+headers=""
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --output) body="$2"; shift 2 ;;
+    --dump-header) headers="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+printf 'HTTP/1.1 200 OK\\r\\nx-comicpile-api-runtime: rust\\r\\n' > "$headers"
+printf '{"status":"ok","build":{"revision":"%s","package":"comicpile-vercel-native","compiler":"rustc 1.99.0"},"process":{"os":"linux","executable":"native_roll"}}' "$FAKE_SHA" > "$body"
+printf 200
+""")
+    fake_curl.chmod(0o755)
+    fake_sleep = bin_dir / "sleep"
+    fake_sleep.write_text("#!/bin/sh\\nexit 0\\n")
+    fake_sleep.chmod(0o755)
+    root = SCRIPTS.parents[1]
+    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    env = dict(os.environ)
+    env.update({
+        "FAKE_CURL_COUNT": str(counter),
+        "FAKE_CURL_ALWAYS_FAIL": "1" if always_fail else "0",
+        "FAKE_SHA": sha,
+        "PATH": f"{bin_dir}:{env['PATH']}",
+    })
+    result = subprocess.run(
+        ["bash", "-c", shell], cwd=root, env=env,
+        capture_output=True, text=True, check=False, timeout=30,
+    )
+    if always_fail:
+        assert result.returncode != 0
+        assert counter.read_text() == "8"
+        assert "never matched the exact Rust build/process revision" in result.stderr
+    else:
+        assert result.returncode == 0, result.stderr
+        assert counter.read_text() == "2"
+        assert f"Production Rust identity confirmed for {sha}" in result.stdout
 
 
 def test_recovered_incident_keeps_active_worker_lease(
