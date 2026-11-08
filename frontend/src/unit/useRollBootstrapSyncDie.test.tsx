@@ -93,6 +93,7 @@ describe('useRollBootstrapSync redirect-only (#4352)', () => {
       useRollBootstrapSync({
         isBootstrapError: false,
         bootstrapError: null,
+        // SAFETY: minimal vi.fn stub satisfying the navigate type; no navigation behavior is exercised here.
         navigate: navigate as never,
       }),
     )
