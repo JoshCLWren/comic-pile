@@ -17,7 +17,6 @@ from app.schemas.reading_plan_release_source import (
     ReleaseSourceUpdate,
 )
 from app.services import reading_plan_release_source_service as release_service
-from app.services import reading_plan_reader as reader_service
 from tests.conftest import get_or_create_user_async
 
 
@@ -105,11 +104,11 @@ async def test_reader_includes_release_source_status(async_db: AsyncSession) -> 
         user_id=user.id,
     )
 
-    view = await reader_service.get_reading_plan_reader(
-        async_db, user_id=user.id, plan_id=plan.id
+    statuses = await release_service.list_release_sources_for_reader(
+        async_db, plan_id=plan.id, user_id=user.id
     )
-    assert len(view.release_sources) == 1
-    status = view.release_sources[0]
+    assert len(statuses) == 1
+    status = statuses[0]
     assert status.source_id == created.id
     assert status.thread_id == thread.id
     assert status.provider_volume_id == identity.external_id
@@ -129,10 +128,10 @@ async def test_reader_release_source_status_is_empty_without_subscriptions(
     plan = await _make_plan(async_db, user_id=user.id)
     await async_db.commit()
 
-    view = await reader_service.get_reading_plan_reader(
-        async_db, user_id=user.id, plan_id=plan.id
+    statuses = await release_service.list_release_sources_for_reader(
+        async_db, plan_id=plan.id, user_id=user.id
     )
-    assert view.release_sources == []
+    assert statuses == []
 
 
 @pytest.mark.asyncio
