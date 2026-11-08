@@ -659,6 +659,28 @@ then automatically permits a new probe. A quota-limited smoke ends immediately
 instead of continuing into an expensive coding session. Worker 46's historical
 static-pause protection does not exempt it from this shared runtime quota backoff.
 
+### Monthly provider quotas pause; they do not retire a lane
+
+Mistral and Ollama Cloud monthly-quota failures record `provider_quota` during
+smoke and sessions. Assignment pauses that source until the next UTC calendar
+month as a configured fallback when no account reset date is supplied; expiry
+permits another smoke automatically. Another quota failure renews the pause.
+This fallback is not evidence of a provider's actual account billing date.
+Monthly quota alone cannot justify roster retirement. Retirement requires
+separate non-quota evidence, such as model removal, revoked authentication or
+repeated invalid output, recorded in its PR. Catalog discovery already protects
+these runtime-only providers from catalog-absence retirement.
+
+The earlier retired identities 48 and 55 remain retired. Post-reset runs
+[41774076436](https://github.com/JoshCLWren/comic-pile/actions/runs/41774076436)
+and [41774209074](https://github.com/JoshCLWren/comic-pile/actions/runs/41774209074)
+on November 4, before #4622 merged, still reported Mistral API budget exhaustion
+and Ollama monthly usage exhaustion respectively. Their terminal registry
+records said `unknown_failure`; smoke classification now preserves that quota
+cause. Josh confirmed on November 7 that quotas remain exhausted. No new live
+probe was run and no recovery is claimed. Only a later successful existing-key
+probe can justify restoring a provider under a fresh, unused worker number.
+
 ### Kilo served-model attribution
 
 For Kilo sessions, structured `step_finish.part.model.modelID` values feed the

@@ -223,3 +223,34 @@ def test_free_session_429_records_quota(tmp_path: Path, source: str) -> None:
         assert outcome.read_text().startswith('provider_quota\t')
     finally:
         log.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize('observed,reset', [
+    ('2026-11-04T04:35:40Z', '2026-12-01T00:00:00Z'),
+    ('2026-12-31T23:59:59Z', '2027-01-01T00:00:00Z'),
+    ('2028-02-29T12:00:00Z', '2028-03-01T00:00:00Z'),
+])
+@pytest.mark.parametrize('provider', ['mistral', 'ollama-cloud'])
+def test_monthly_quota_uses_next_utc_month(provider: str, observed: str, reset: str) -> None:
+    """Calendar fallback handles December and leap years without a fixed day count."""
+    timestamp = int(datetime.fromisoformat(observed.replace('Z', '+00:00')).timestamp())
+    expected = int(datetime.fromisoformat(reset.replace('Z', '+00:00')).timestamp())
+    assert qp.quota_reset_epoch(provider, timestamp) == expected
+    assert qp.quota_reset_epoch('z-ai', timestamp) == timestamp + 1800
+
+
+@pytest.mark.parametrize('runtime,message', [
+    ('mistral/codestral-latest', 'Error: API budget exhausted.'),
+    ('ollama-cloud/nemotron-3-nano:30b', 'You have reached your monthly usage limit'),
+])
+def test_monthly_smoke_produces_durable_quota_outcome(
+    tmp_path: Path, runtime: str, message: str,
+) -> None:
+    """Post-reset quota errors must reach the trusted registry, not unknown_failure."""
+    spec = importlib.util.spec_from_file_location('monthly_smoke', SCRIPTS / 'factory_live_opencode.py')
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    target = tmp_path / 'outcome'
+    assert module.record_smoke_failure(message, runtime, target)
+    assert target.read_text().startswith('provider_quota\t')

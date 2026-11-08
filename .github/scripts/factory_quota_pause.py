@@ -32,6 +32,20 @@ class QuotaPause:
     reset_source: str
 
 
+def quota_reset_epoch(provider: str, observed_epoch: int) -> int:
+    """Use the next UTC month for monthly providers, thirty minutes otherwise.
+
+    Calendar reset is the configured fallback, not a claim about a provider's
+    account-specific billing date. Repeated quota evidence renews the pause.
+    """
+    if provider not in {"mistral", "ollama-cloud"}:
+        return observed_epoch + 30 * 60
+    observed = datetime.fromtimestamp(observed_epoch, timezone.utc)
+    year = observed.year + (observed.month == 12)
+    month = observed.month % 12 + 1
+    return int(datetime(year, month, 1, tzinfo=timezone.utc).timestamp())
+
+
 def _parse_until(value: object) -> datetime:
     if not isinstance(value, str) or not value.endswith("Z"):
         raise ValueError(f"paused_until must be an ISO-8601 UTC timestamp ending in Z: {value!r}")
