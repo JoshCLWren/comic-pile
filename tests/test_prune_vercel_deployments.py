@@ -414,6 +414,7 @@ def test_prune_refreshes_protection_when_rollout_starts_after_planning() -> None
                     "targets": {"production": "dpl_incoming"},
                 }
                 self.deployments = [
+                    _deployment("dpl_ancient", created=50),
                     _deployment("dpl_serving", created=100),
                     _deployment("dpl_incoming", created=300, state="BUILDING"),
                 ]
@@ -421,7 +422,7 @@ def test_prune_refreshes_protection_when_rollout_starts_after_planning() -> None
 
     client = RolloutVercel(
         {"id": "prj_expected", "name": "comic-pile", "targets": {"production": "dpl_previous"}},
-        [_deployment("dpl_serving", created=100), _deployment("dpl_previous", created=200)],
+        [_deployment("dpl_ancient", created=50), _deployment("dpl_serving", created=100), _deployment("dpl_previous", created=200)],
     )
     result = run_prune(client, project_id="prj_expected", project_name="comic-pile", dry_run=False, log=lambda _: None)
     assert client.deleted == []
@@ -437,7 +438,7 @@ def test_previous_ready_ignores_newer_failed_preview_and_building() -> None:
         _deployment("dpl_live", created=300),
         _deployment("dpl_failed", created=400, state="ERROR"),
         _deployment("dpl_preview", created=500, target="preview"),
-        _deployment("dpl_building", created=600, state="BUILDING"),
+        _deployment("dpl_building", created=600, state="BUILDING", target=None),
     ]
     keepers = select_keepers("dpl_live", rows)
 
