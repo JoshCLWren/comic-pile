@@ -522,7 +522,10 @@ pub async fn load_option_diagnostics(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError::DatabaseUnavailable),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::DatabaseUnavailable)
+        }
         Ok(Err(error)) => Err(error),
         Ok(Ok(inputs)) => {
             drop(pending.0.take());

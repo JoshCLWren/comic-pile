@@ -84,7 +84,10 @@ pub async fn dismiss_pending(
     )
     .await;
     match result {
-        Err(_) => Err(ApiError::database_unavailable()),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::database_unavailable())
+        }
         Ok(Ok(())) => {
             drop(pending.0.take());
             Ok(StatusCode::NO_CONTENT)

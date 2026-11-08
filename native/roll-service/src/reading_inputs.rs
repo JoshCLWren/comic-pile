@@ -112,7 +112,10 @@ pub async fn load_core_inputs(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError::DatabaseUnavailable),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::DatabaseUnavailable)
+        }
         Ok(Err(error)) => Err(db::query_error(error)),
         Ok(Ok(inputs)) => {
             drop(pending.0.take());

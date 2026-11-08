@@ -102,7 +102,10 @@ async fn probe(state: &AppState, connection: Object) -> Result<Object, ApiError>
     )
     .await;
     match result {
-        Err(_) => Err(ApiError::database_unavailable()),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::database_unavailable())
+        }
         Ok(Ok(_)) => Ok(pending.0.take().expect("checked-out PostgreSQL client")),
         Ok(Err(error)) => Err(query_error_for("database.checkout_probe", error)),
     }
@@ -132,7 +135,10 @@ pub(crate) async fn query_one_optional(
     )
     .await;
     match result {
-        Err(_) => Err(ApiError::database_unavailable()),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::database_unavailable())
+        }
         Ok(result) => {
             drop(pending.0.take()); // Complete response consumed: safe to recycle.
             result.map_err(query_error)

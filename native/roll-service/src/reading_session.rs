@@ -432,7 +432,10 @@ async fn bootstrap_once(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError::DatabaseUnavailable),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::DatabaseUnavailable)
+        }
         Ok(result) => {
             if result.is_ok() {
                 drop(pending.0.take());
@@ -635,7 +638,10 @@ async fn initialize_once(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError::DatabaseUnavailable),
+        Err(e) => {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::DatabaseUnavailable)
+        }
         Ok(result) => {
             if result.is_ok() {
                 drop(pending.0.take());
