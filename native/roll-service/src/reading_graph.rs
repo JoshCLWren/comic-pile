@@ -497,38 +497,7 @@ pub async fn reading_graph(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
 ) -> Result<Json<ReadingGraphResponse>, crate::ApiError> {
-    // A confirmed repair must validate the *same* graph it will modify.
-    // Lock before taking its snapshot, so a concurrent list/dependency write
-    // cannot invalidate an offered action between preflight and deletion.
-    // Preview remains a read-only diagnostic and never locks a writer.
-    let mut connection = if request.confirm {
-        Some(db::checkout(&state).await?)
-    } else {
-        None
-    };
-    let transaction = if let Some(connection) = connection.as_mut() {
-        let transaction = connection
-            .build_transaction()
-            .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
-            .start()
-            .await
-            .map_err(db::query_error)?;
-        transaction
-            .execute(
-                "SELECT pg_advisory_xact_lock($1,$2)",
-                &[&699001, &user.id()],
-            )
-            .await
-            .map_err(db::query_error)?;
-        Some(transaction)
-    } else {
-        None
-    };
-    let inputs = if let Some(transaction) = transaction.as_ref() {
-        option_inputs::load_inputs_in_transaction(transaction, user).await?
-    } else {
-        option_inputs::load_option_diagnostics(&state, user).await?
-    };
+    let inputs = option_inputs::load_option_diagnostics(&state, user).await?;
     if !inputs.unresolved.is_empty() {
         return Ok(Json(invalid_response(&inputs)));
     }
@@ -628,7 +597,38 @@ pub async fn repair(
     user: AuthenticatedUser,
     Json(request): Json<ReadingGraphRepairRequest>,
 ) -> Result<Json<ReadingGraphRepairResponse>, crate::ApiError> {
-    let inputs = option_inputs::load_option_diagnostics(&state, user).await?;
+    // A confirmed repair must validate the *same* graph it will modify.
+    // Lock before taking its snapshot, so a concurrent list/dependency write
+    // cannot invalidate an offered action between preflight and deletion.
+    // Preview remains a read-only diagnostic and never locks a writer.
+    let mut connection = if request.confirm {
+        Some(db::checkout(&state).await?)
+    } else {
+        None
+    };
+    let transaction = if let Some(connection) = connection.as_mut() {
+        let transaction = connection
+            .build_transaction()
+            .isolation_level(tokio_postgres::IsolationLevel::ReadCommitted)
+            .start()
+            .await
+            .map_err(db::query_error)?;
+        transaction
+            .execute(
+                "SELECT pg_advisory_xact_lock($1,$2)",
+                &[&699001, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?;
+        Some(transaction)
+    } else {
+        None
+    };
+    let inputs = if let Some(transaction) = transaction.as_ref() {
+        option_inputs::load_inputs_in_transaction(transaction, user).await?
+    } else {
+        option_inputs::load_option_diagnostics(&state, user).await?
+    };
     if !inputs.unresolved.is_empty() {
         if request.confirm {
             return Err(crate::ApiError(
