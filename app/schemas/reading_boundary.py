@@ -109,9 +109,3 @@ class ReadingBoundaryExplanationV2(BaseModel):
     summary: str
     next: ReadingBoundaryNext | None = None
     blockers: list[ReadingBoundaryBlocker] = Field(default_factory=list)
-
-
-class ReadingBoundaryBatchResponseV2(BaseModel):
-    """Only canonical reading requirements for the requested owned series."""
-
-    threads: dict[int, ReadingBoundaryExplanationV2]

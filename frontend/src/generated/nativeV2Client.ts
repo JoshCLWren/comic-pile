@@ -219,7 +219,7 @@ export interface ReadingBoundaryBatchRequest {
   body: components['schemas']['NativeReadingBoundaryBatchRequest']
 }
 
-export type ReadingBoundaryBatchResponse = components['schemas']['NativeReadingBoundaryBatchResponseV2']
+export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']
 
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
