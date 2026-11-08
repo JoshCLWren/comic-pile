@@ -170,26 +170,10 @@
       "display_name": "OrcaRouter GLM 5.3 Flash Free"
     },
     {
-      "worker": "92",
-      "source": "requesty",
-      "model": "nvidia/nemotron-3-ultra-550b-a55b",
-      "minute": "35",
-      "scheduler": "dispatcher",
-      "display_name": "Requesty Nemotron 3 Ultra"
-    },
-    {
-      "worker": "93",
-      "source": "requesty",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
-      "minute": "45",
-      "scheduler": "dispatcher",
-      "display_name": "Requesty Nemotron 3 Super"
-    },
-    {
       "worker": "96",
       "source": "openrouter-free",
       "model": "stealth/crouton-alpha",
-      "minute": "50",
+      "minute": "45",
       "scheduler": "dispatcher",
       "display_name": "OpenRouter Crouton Alpha Free"
     },
@@ -205,7 +189,7 @@
       "worker": "98",
       "source": "kilo-auto",
       "model": "kilo-auto/free",
-      "minute": "10",
+      "minute": "35",
       "scheduler": "dispatcher",
       "display_name": "Kilo Auto Free II"
     }
@@ -232,8 +216,6 @@
     82,
     86,
     91,
-    92,
-    93,
     96,
     97,
     98
@@ -283,6 +265,8 @@
     88,
     89,
     90,
+    92,
+    93,
     94,
     95
   ],

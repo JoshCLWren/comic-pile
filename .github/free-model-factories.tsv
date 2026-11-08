@@ -21,8 +21,6 @@
 82	z-ai	glm-4.7-flash	55	dispatcher	Z.AI GLM 4.7 Flash
 86	nvidia	meta/muse-glimmer-30b	0	dispatcher	NVIDIA Muse Glimmer 30B
 91	orcarouter	z-ai/glm-5.3-flash-free	5	dispatcher	OrcaRouter GLM 5.3 Flash Free
-92	requesty	nvidia/nemotron-3-ultra-550b-a55b	35	dispatcher	Requesty Nemotron 3 Ultra
-93	requesty	nvidia/nemotron-3-super-120b-a12b	45	dispatcher	Requesty Nemotron 3 Super
-96	openrouter-free	stealth/crouton-alpha	50	dispatcher	OpenRouter Crouton Alpha Free
+96	openrouter-free	stealth/crouton-alpha	45	dispatcher	OpenRouter Crouton Alpha Free
 97	z-ai	glm-4.5-flash	50	dispatcher	Z.AI GLM 4.5 Flash II
-98	kilo-auto	kilo-auto/free	10	dispatcher	Kilo Auto Free II
+98	kilo-auto	kilo-auto/free	35	dispatcher	Kilo Auto Free II
