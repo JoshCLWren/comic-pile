@@ -443,23 +443,15 @@ def record_stale_expiration(
     age_seconds: float,
     baseline: dict[str, Any],
 ) -> str:
-    """Legacy explicit expiration helper, never called by scheduled stale checks.
+    """Refuse legacy age-only expiration, including direct callers.
 
-    Do not invoke this without independently verified supersession and a
-    durable work-preservation handoff. Age alone cannot justify PR closure.
-
-    The issue reset happens before PR close so a partial failure remains safe:
-    an open canonical PR still suppresses duplicate issue intake, while a
-    successful close cannot strand its issue behind a stale factory owner.
-    The durable marker is written last so it never suppresses a retry of an
-    incomplete expiration.
+    Jev advice alone cannot prove supersession. An independent reviewer must
+    verify exact-head replacement evidence before a distinct manual closure.
     """
-    marker = build_stale_expiration_marker(pr_number, issue_number, age_seconds, baseline)
-    if issue_number:
-        reset_issue_to_unowned(issue_number)
-    close_pr_implementation(pr_number)
-    run_gh(["issue", "comment", str(pr_number), "--repo", REPO, "--body", marker])
-    return marker
+    raise RuntimeError(
+        "age-based PR expiration is disabled; consult Jev and independently "
+        "verify supersession before any separate explicit closure"
+    )
 
 
 def consult_jev_on_aged_prs(
