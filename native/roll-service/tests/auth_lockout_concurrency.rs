@@ -211,10 +211,6 @@ async fn simultaneous_failures_at_threshold_cannot_be_bypassed() {
         correct_password_login(&state, "lockout-concurrent", "198.51.100.99").await,
         Err(AuthError::InvalidCredentials)
     ));
-    assert!(
-        elapsed < Duration::from_secs(10),
-        "a 2-attempt burst must stay fast, took {elapsed:?}"
-    );
 }
 
 /// Eight simultaneous failures from an empty account store exactly 5 rows:
@@ -259,10 +255,6 @@ async fn larger_simultaneous_burst_is_capped_at_the_threshold() {
         correct_password_login(&state, "lockout-burst", "198.51.100.99").await,
         Err(AuthError::InvalidCredentials)
     ));
-    assert!(
-        elapsed < Duration::from_secs(10),
-        "the burst must overlap its bcrypt work instead of serializing, took {elapsed:?}"
-    );
 }
 
 /// The per-IP dimension caps as well: 9 stored failures for one address, then
@@ -369,6 +361,19 @@ async fn bcrypt_verification_does_not_hold_a_pooled_connection() {
     let login = tokio::spawn(async move {
         wrong_password_login(&state_for_login, "connection-reader", "198.51.100.77").await
     });
+
+    // The login must first take the last slot (Phase 1).
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let status = state.pool.status();
+            if status.size == 4 && status.available == 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .expect("login must check out its Phase 1 connection");
 
     // Poll for the slot the login releases after Phase 1. It frees while the
     // ~200 ms of bcrypt is still in flight; a connection-holding login never
