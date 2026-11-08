@@ -9,7 +9,6 @@ from pathlib import Path
 
 from fastapi.routing import APIRoute
 
-import app.schemas.roll_v2 as roll_v2_schemas
 import app.services.roll_service as roll_service_module
 from app.main import app
 from app.repositories import roll_repository
@@ -55,7 +54,6 @@ def test_python_bootstrap_projection_stays_deleted() -> None:
     assert not hasattr(roll_service_module, "BootstrapLibrarySummary")
     assert not hasattr(roll_service_module, "_classify_library")
     assert not hasattr(roll_service_module, "_summary_thread")
-    assert not hasattr(roll_v2_schemas, "RollV2BootstrapResponse")
     assert [
         name for name in dir(roll_repository) if name.startswith("fetch_bootstrap_")
     ] == []

@@ -4,9 +4,8 @@
 > `GET /api/v2/roll/bootstrap`, served by `api/native_roll.rs` from the contract
 > in `native/contracts/v2-runtime.openapi.json`. Python has no Roll bootstrap GET
 > handler: the v1/legacy aliases were removed by #4397, and #4350 removed the
-> dead Python v1 read model and the unused Python v2 response DTO. The Python
-> v2 projection and parity services and repositories remain test/script-only
-> tooling. The `v1`
+> dead Python v1 read model and the unused Python v2 response DTO. The frozen
+> Python v2 projection and parity oracle was retired by #4738. The `v1`
 > directory in `tests/fixtures/roll-v2/v1/` is a
 > golden-fixture revision, **not** the public API v1 route. Do not change the URL
 > or treat one endpoint as the implementation of another.
@@ -40,8 +39,8 @@ at a reader's library, a read-only testuser snapshot, or production.
 ```sh
 RUST_ROLL_TEST_DATABASE_URL=postgresql://... \
   cargo test --manifest-path native/roll-service/Cargo.toml --locked bootstrap
-uv run pytest tests/test_roll_v2_contract.py tests/test_option_e_runtime.py \
-  tests/test_roll_v2_projection.py -q --no-cov
+uv run pytest tests/test_option_e_runtime.py \
+  tests/test_roll_bootstrap_rust_only.py -q --no-cov
 bash scripts/check-python-ci-lint.sh
 ```
 
@@ -118,11 +117,11 @@ positions, counters, cached frontier, read progress, rating and activity time.
 5. The live GET is served by `native/roll-service/src/bootstrap.rs`: it consumes
    validated Option E eligibility, applies exclusions before die limiting, and
    reads issue identities, canonical metadata, direct provider artwork URLs,
-   reader stats, group routes and session-scoped last-read. The Python
-   projection and parity services and repositories
+   reader stats, group routes and session-scoped last-read. The frozen Python
+   v2 projection and parity oracle
    (`app/services/roll_v2_projection.py`, `app/repositories/roll_v2_projection.py`,
    `app/services/roll_v2_parity.py`, `app/repositories/roll_v2_parity.py`)
-   remain test/script-only tooling. Stored blocked/frontier flags are not
+   was retired by #4738. Stored blocked/frontier flags are not
    authority.
 6. Summary-section derivation for the retired Python payload lived in
    `RollService.load_bootstrap_thread_data`; that reference implementation and
@@ -133,7 +132,7 @@ positions, counters, cached frontier, read progress, rating and activity time.
 GET can create reading history, initialize bandwidth, capture timezone and write
 an undo snapshot. It does not rate/read an issue, roll/select a new target,
 change queue positions, rotate refresh credentials or emit a reading Event.
-The parity harnesses seed their own scenarios; the frozen golden JSON is not
+The native parity suite seeds its own scenarios; the frozen golden JSON is not
 read by any test.
 
 ## Error boundary and remaining campaign work
@@ -144,7 +143,7 @@ Dependency outages use the application's stable 503 boundary (see
 `tests/test_database_unavailability_contract.py`); unforeseen failures use its
 500 handler. Cyclic/missing-reference Option E inputs fail closed; they must
 never become successful partial candidate sets. Existing auth, recovery,
-projection, route-versioning and Option E tests remain authoritative alongside
+route-versioning and Option E tests remain authoritative alongside
 these examples.
 
 These fixtures are synthetic examples, not proof of full native parity. They do
