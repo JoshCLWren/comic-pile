@@ -321,7 +321,6 @@ mod tests {
         );
     }
 
-
     async fn disposable_schema_url() -> String {
         let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
             .expect("disposable RUST_ROLL_TEST_DATABASE_URL required; tests never silently skip");
