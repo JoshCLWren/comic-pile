@@ -62,6 +62,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/catalog/series\\-mappings/commit$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
       "methods": [
         "GET"
@@ -359,14 +366,6 @@
       "src": "^/api/threads/stale$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/catalog/series\\-mappings/commit$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

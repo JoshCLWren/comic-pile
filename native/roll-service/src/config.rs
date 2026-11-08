@@ -34,6 +34,9 @@ pub struct Config {
     pub bind: SocketAddr,
     pub database: PostgresConfig,
     pub jwt_secret: JwtSecret,
+    /// HMAC secret for series-mapping preview tokens. Matches Python:
+    /// PREVIEW_TOKEN_SECRET_KEY first, then SECRET_KEY/auth secret.
+    pub preview_token_secret: String,
     pub log_filter: EnvFilter,
     pub pool_size: usize,
     pub pool_timeout: Duration,
@@ -128,6 +131,10 @@ impl Config {
         let jwt_secret = get("RUST_ROLL_JWT_SECRET")
             .filter(|value| !value.trim().is_empty())
             .ok_or(ConfigError("RUST_ROLL_JWT_SECRET required"))?;
+        let preview_token_secret = get("PREVIEW_TOKEN_SECRET_KEY")
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| jwt_secret.clone());
         let log_filter = EnvFilter::try_new(get("RUST_ROLL_LOG").unwrap_or_else(|| "info".into()))
             .map_err(|_| ConfigError("invalid RUST_ROLL_LOG"))?;
         fn number(
@@ -151,6 +158,7 @@ impl Config {
             bind,
             database,
             jwt_secret: JwtSecret(jwt_secret),
+            preview_token_secret,
             log_filter,
             pool_size: number(&get, "RUST_ROLL_POOL_SIZE", 4, 32)? as usize,
             pool_timeout: Duration::from_millis(number(

@@ -3,6 +3,7 @@ pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
+pub mod catalog_commit;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
@@ -72,6 +73,7 @@ use std::{
 pub struct AppState {
     pub pool: Pool,
     pub jwt_secret: JwtSecret,
+    pub preview_token_secret: String,
     pub request_timeout: Duration,
     pub access_token_expire_minutes: i64,
     pub refresh_token_expire_days: i64,
@@ -111,6 +113,7 @@ impl AppState {
         Ok(Self {
             pool,
             jwt_secret: config.jwt_secret,
+            preview_token_secret: config.preview_token_secret,
             request_timeout: config.request_timeout,
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
@@ -257,6 +260,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/auth/reset-password",
             post(auth::handlers::reset_password),
+        )
+        .route(
+            "/api/v1/catalog/series-mappings/commit",
+            post(catalog_commit::commit_series_mapping_handler),
         )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
