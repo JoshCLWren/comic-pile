@@ -56,7 +56,6 @@ REQUIRED_V1_FAMILIES = frozenset(
         "continuity-rules",
         "dependencies",
         "issues",
-        "queue",
         "reading-order-groups",
         "releases",
         "roll",
@@ -154,6 +153,19 @@ def test_retained_families_expose_canonical_v1_routes() -> None:
 
     missing = REQUIRED_V1_FAMILIES - v1_families
     assert not missing, f"Retained families missing canonical /api/v1 routes: {sorted(missing)}"
+
+
+def test_retired_queue_routes_are_replaced_by_native_v2_resources() -> None:
+    """Retired v1/bare queue actions are absent and Rust owns queue ordering (#4458)."""
+    schema = _load_schema()
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in schema["paths"]
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in schema["paths"]
+        assert f"{prefix}/shuffle/" not in schema["paths"]
+    assert "PositionRequest" not in schema["components"]["schemas"]
+    # The native v2 resources remain the replacement surface.
+    assert "/api/v2/queue-entries/{thread_id}" in schema["paths"]
+    assert "/api/v2/queue-orders" in schema["paths"]
 
 
 def test_retired_rate_route_is_replaced_by_native_v2_issue_patch() -> None:
