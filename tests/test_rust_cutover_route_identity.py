@@ -151,7 +151,7 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
     expected = {
         ("GET", "/api/v1/roll/bootstrap"): "/api/native_roll.rs",
         ("GET", "/api/roll/bootstrap"): "/api/native_roll.rs",
-        ("POST", "/api/v1/roll/"): "/api/index.py",
+        ("POST", "/api/v1/roll/"): "/api/native_roll.rs",
         ("GET", "/api/v2/roll/bootstrap"): "/api/native_roll.rs",
         ("POST", "/api/v2/reading-boundaries"): "/api/native_roll.rs",
         ("GET", "/api/v2/threads"): "/api/native_roll.rs",
