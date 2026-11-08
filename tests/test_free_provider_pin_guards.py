@@ -324,7 +324,11 @@ def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
     _assert_committed_pin(by_worker, lock, "80", source="nvidia", model="z-ai/glm-5.3-flash")
     assert "81" not in by_worker
     assert 81 in lock["retired_workers"]
-    assert "deepseek-ai/deepseek-v4.1-flash" in lock["retired_models"]
+    # Owner-authorized (Josh) un-retirement 2026-11-08: this NVIDIA model
+    # is live again at 0/0 and now pinned as worker 106. Worker 81 stays
+    # retired; only the permanently-retired model seal is lifted.
+    assert "deepseek-ai/deepseek-v4.1-flash" not in lock["retired_models"]
+    assert by_worker["106"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
     z_ai_pin = _assert_committed_pin(
         by_worker, lock, "82", source="z-ai", model="glm-4.7-flash"
     )
@@ -392,15 +396,16 @@ def test_workers_94_95_retired_after_catalog_discovery(validate) -> None:
     assert "94" not in by_worker
     assert 94 in lock["retired_workers"]
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
-    _assert_committed_pin(
-        by_worker,
-        lock,
-        "95",
-        source="nvidia",
-        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
-    )
-    # The OpenRouter :free Super VL id was not smoked (daily free cap), so it is not pinned.
-    assert "nvidia/nemotron-3.5-super-vl:free" not in {row["model"] for row in rows}
+    # Worker 95 stays retired, but its model is live again at 0/0 and is
+    # now pinned as worker 104 (owner-authorized 2026-11-08). The sealed
+    # model id is lifted for reuse; the ghost worker itself stays retired.
+    assert "95" not in by_worker
+    assert 95 not in lock["expected_workers"]
+    assert 95 in lock["retired_workers"]
+    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
+    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    # OpenRouter :free Super VL is now pinned as worker 102 (expansion PR).
+    assert by_worker["102"]["model"] == "nvidia/nemotron-3.5-super-vl:free"
 
 
 def test_ghost_workers_49_58_63_73_83_94_are_retired(validate) -> None:
