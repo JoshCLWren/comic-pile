@@ -459,5 +459,15 @@ mod tests {
             "ReadingSessionCreatedResponse",
             &["session_id", "created"],
         );
+        assert_fields(
+            &document,
+            "RollDieStateResponse",
+            &["die", "ladder", "default_die", "last_roll"],
+        );
+        assert_fields(
+            &document,
+            "RollEligibleIssueIdsResponse",
+            &["die", "issue_ids", "thread_ids", "pool_reason"],
+        );
     }
 }

@@ -303,7 +303,6 @@ def mount_subrouters() -> None:
     from app.api import dependency_group_batch
     from app.api import issue_dependency_batch
     from app.api import reading_order_projection
-    from app.api import reading_plan_reader
     from app.api import reading_plan_release_source
     from app.api import prerequisite
     from app.api import releases
@@ -314,7 +313,6 @@ def mount_subrouters() -> None:
     router.include_router(dependency_group_batch.router)
     router.include_router(continuity_rule.router)
     router.include_router(continuity_plan.router)
-    router.include_router(reading_plan_reader.router)
     router.include_router(continuity_template.router)
     router.include_router(reading_order_projection.router)
     router.include_router(reading_plan_release_source.router)

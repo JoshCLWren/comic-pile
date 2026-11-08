@@ -1,7 +1,7 @@
 """Native v2 reader threads collection against the canonical Python oracle.
 
-The synthetic schema comes from the canonical SQLAlchemy models, so the Rust
-handler runs against the same tables production migrations create. Every query
+The Rust handler runs against the canonical Alembic schema used by production.
+Every query
 variant compares the mounted Rust route with ``thread_service.list_queue_threads``
 on identical data: ordering, cursor paging, search, tags, mapping health, series
 metadata, manual credits, next-unread identity, counts and ownership.
@@ -18,6 +18,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TypeGuard
 from urllib.parse import urlencode
 from uuid import uuid4
 
@@ -27,7 +28,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import get_reading_execution_settings
-from app.database import Base
 from app.models import Dependency, Issue, Thread, User
 from app.models.custom_cbl import CustomCBLList
 from app.models.custom_cbl import CustomCBLEntry
@@ -47,6 +47,10 @@ EXAMPLE = (
     Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
     / "debug/examples/http_threads_list"
 )
+
+
+def _is_thread_row(value: object) -> TypeGuard[dict[str, object]]:
+    return isinstance(value, dict) and all(isinstance(key, str) for key in value)
 
 
 def _token(username: str, *, jti: str, password_epoch: int | None = None) -> str:
@@ -75,8 +79,8 @@ async def _run_example(env: dict[str, str]) -> dict[str, object]:
     return json.loads(out)
 
 
-async def _db_transactions(admin) -> tuple[int, int]:
-    async with admin.connect() as connection:
+async def _db_transactions(engine) -> tuple[int, int]:
+    async with engine.connect() as connection:
         row = await connection.execute(
             text(
                 "SELECT xact_commit, xact_rollback FROM pg_stat_database "
@@ -112,25 +116,9 @@ async def test_native_threads_collection_matches_python_oracle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Preserve every real Queue/threads consumer field and one-statement budget."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"rust_threads_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # The schema is new; keep public on the path for the pg_trgm
-            # operator class without reusing tables created by other tests.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         owner_name = f"threads_{uuid4().hex[:12]}"
         stranger_name = f"stranger_{uuid4().hex[:12]}"
         token = _token(owner_name, jti=f"jti-{uuid4().hex}")
@@ -450,9 +438,7 @@ async def test_native_threads_collection_matches_python_oracle(
 
             env = {
                 **os.environ,
-                "RUST_ROLL_DATABASE_URL": url
-                + ("&" if "?" in url else "?")
-                + f"options=-csearch_path%3D{schema}",
+                "RUST_ROLL_DATABASE_URL": url,
                 "RUST_ROLL_JWT_SECRET": SECRET,
                 "RUST_ROLL_TEST_TOKEN": token,
                 "RUST_ROLL_POOL_SIZE": "2",
@@ -482,9 +468,9 @@ async def test_native_threads_collection_matches_python_oracle(
                 request_env["RUST_ROLL_TEST_URI"] = (
                     "/api/v2/threads?" + urlencode(params)
                 )
-                before = await _db_transactions(admin)
+                before = await _db_transactions(engine)
                 result = await _run_example(request_env)
-                after = await _db_transactions(admin)
+                after = await _db_transactions(engine)
                 assert result["status"] == 200, result
                 # The default path issues its one page statement, with the
                 # token revocation and credential-epoch check folded into that
@@ -504,9 +490,17 @@ async def test_native_threads_collection_matches_python_oracle(
 
             # The full first page, every consumer field and one statement.
             first = await compare()
-            rows = {row["title"]: row for row in first["threads"]}  # type: ignore[index]
+            first_threads = first.get("threads")
+            assert isinstance(first_threads, list)
+            thread_rows = [row for row in first_threads if _is_thread_row(row)]
+            assert len(thread_rows) == len(first_threads)
+            rows: dict[str, dict[str, object]] = {}
+            for row in thread_rows:
+                title = row.get("title")
+                assert isinstance(title, str)
+                rows[title] = row
             assert first["active_count"] == 6  # Omega (position 0) stays out
-            assert [row["title"] for row in first["threads"]] == [  # type: ignore[index]
+            assert [row.get("title") for row in thread_rows] == [
                 "Omega Pending",
                 "Alpha Saga",
                 "Gamma Mapped",
@@ -667,9 +661,9 @@ async def test_native_threads_collection_matches_python_oracle(
             option_env["OPTION_E_APPROVED_PREVIEW"] = "native-parity-threads-fixture"
             option_expected = await _expected(db, owner.id)
             option_env["RUST_ROLL_TEST_URI"] = "/api/v2/threads?sort=position"
-            before = await _db_transactions(admin)
+            before = await _db_transactions(engine)
             option_result = await _run_example(option_env)
-            after = await _db_transactions(admin)
+            after = await _db_transactions(engine)
             assert option_result["status"] == 200, option_result
             # Preview mode adds the auth lookup and the read-only eligibility
             # snapshot around the same single page statement.
@@ -732,6 +726,3 @@ async def test_native_threads_collection_matches_python_oracle(
     finally:
         get_reading_execution_settings.cache_clear()
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()

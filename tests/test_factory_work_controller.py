@@ -2106,3 +2106,10 @@ def test_starter_finisher_preferences_keep_normal_fallback(
     assert controller.order_candidates_for_worker(fallback, worker) == fallback
     urgent = controller.Candidate('issue', 1003, 0, 4, '2026-11-07T00:00:00Z')
     assert controller.order_candidates_for_worker([*candidates, urgent], worker)[0] == urgent
+    # A protected review must not be demoted by review-capacity or role preferences.
+    protected_review = controller.Candidate(
+        'pr', 1005, 0, 0, '2026-11-07T00:00:00Z', stage='factory:review',
+    )
+    assert controller.order_candidates_for_worker(
+        [*candidates, protected_review], worker,
+    )[0] == protected_review

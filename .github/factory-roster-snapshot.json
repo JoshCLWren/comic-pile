@@ -192,6 +192,14 @@
       "minute": "50",
       "scheduler": "dispatcher",
       "display_name": "OpenRouter Crouton Alpha Free"
+    },
+    {
+      "worker": "97",
+      "source": "z-ai",
+      "model": "glm-4.5-flash",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "Z.AI GLM 4.5 Flash II"
     }
   ],
   "expected_workers": [
@@ -218,7 +226,8 @@
     91,
     92,
     93,
-    96
+    96,
+    97
   ],
   "retired_workers": [
     9,

@@ -870,6 +870,9 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
     role = worker_delivery_role(worker)
 
     def role_preference(candidate: Candidate) -> int:
+        # Protected main-breakage and user-reported lanes outrank role preferences.
+        if candidate.lane <= 1:
+            return candidate.lane
         if (
             review_first
             and candidate.kind == 'pr'
@@ -877,8 +880,6 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
             and not candidate.conflicted
         ):
             return 1
-        if candidate.lane <= 1:
-            return candidate.lane
         if role == 'starter' and candidate.kind == 'issue':
             return 2
         if role == 'finisher' and candidate.kind == 'pr' and candidate.stage in {
