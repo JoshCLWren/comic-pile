@@ -160,7 +160,10 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
             for route in vercel
             if route.get("dest") in NATIVE_INGRESSES
             and route.get("src") != "/api(?:/.*)?"
-            and (not (methods := route.get("methods")) or (isinstance(methods, list) and method in methods))
+            and (
+                not (methods := route.get("methods"))
+                or (isinstance(methods, list) and method in methods)
+            )
             and isinstance(route.get("src"), str)
             and re.fullmatch(str(route["src"]), _concrete_path(path))
         ]
