@@ -637,6 +637,9 @@ A start update records current UTC and `Outcome: running`. A completion update p
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
+Worker prompts put stable policy before run identity, targets and findings.
+Trim duplicated instructions; preserve source/issue security and exact-head review context.
+
 ### Kilo served-model attribution
 
 For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
