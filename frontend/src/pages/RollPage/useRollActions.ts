@@ -93,7 +93,6 @@ export function useRollActions({
     setIsShuffleOpen,
     setShuffleError,
     setErrorMessage,
-    setCurrentDie,
     setThreadToMigrate,
     setShowMigrationDialog,
     setIsRolling,
@@ -229,9 +228,12 @@ export function useRollActions({
   }
 
   async function handleSetDie(die: number) {
+    // Die selection is render-derived from the scoped die-state query; the
+    // `useSetDie` mutation invalidates that query (via
+    // `invalidateAfterRollDieModeUpdate`), so the header picks up the new
+    // die after the invalidated refetch without a bootstrap round-trip.
     try {
       await setDieMutation.mutate(die)
-      setCurrentDie(die)
       return true
     } catch (error: unknown) {
       setErrorMessage(getApiErrorDetail(error))

@@ -1,11 +1,16 @@
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { DieStateResponse } from '../generated/nativeV2Client'
 import { useRollBootstrapSync } from '../pages/RollPage/useRollBootstrapSync'
 import type { RollBootstrapResponse } from '../types/rollBootstrap'
 import type { RollPageStateSetters } from '../pages/RollPage/useRollPageState'
 
-const setCurrentDie = vi.fn<(die: number) => void>()
+// Die selection is render-derived in `RollPage` (#4352); this hook only
+// projects the bootstrap pending roll. `setCurrentDie` no longer exists on
+// the page state (removed from `useRollPageState`), so the rolled-projection
+// cases below assert the hook never touches any die setter — the type
+// itself is the guard, and the absence of a die argument is asserted by
+// `renderSync` below.
+
 const setRolledResult = vi.fn<(result: number | null) => void>()
 const setDiceState = vi.fn<(state: string) => void>()
 const navigate = vi.fn()
@@ -43,18 +48,7 @@ function bootstrapWith(
   }
 }
 
-function dieStateWith(overrides: Partial<DieStateResponse> = {}): DieStateResponse {
-  return {
-    die: 20,
-    ladder: [2, 4, 6, 8, 10, 12, 20],
-    default_die: 6,
-    last_roll: null,
-    ...overrides,
-  }
-}
-
 function stateSetters(): RollPageStateSetters {
-  setCurrentDie.mockClear()
   setRolledResult.mockClear()
   setDiceState.mockClear()
   navigate.mockClear()
@@ -62,7 +56,6 @@ function stateSetters(): RollPageStateSetters {
     setIsRolling: vi.fn(),
     setRolledResult,
     setSelectedThreadId: vi.fn(),
-    setCurrentDie,
     setDiceState,
     setIsOverrideOpen: vi.fn(),
     setOverrideThreadId: vi.fn(),
@@ -86,14 +79,12 @@ function stateSetters(): RollPageStateSetters {
 
 function renderSync(
   bootstrap: RollBootstrapResponse | null | undefined,
-  scopedDieState: DieStateResponse | null | undefined,
 ) {
-  // SAFETY: these die-sync cases never pass isBootstrapError true, so the hook never calls navigate (it only navigates on a 401); a no-op stub is safe.
+  // SAFETY: these cases never pass isBootstrapError true, so the hook never calls navigate (it only navigates on a 401); a no-op stub is safe.
   return renderHook(() =>
     useRollBootstrapSync({
       state: stateSetters(),
       bootstrap,
-      scopedDieState,
       isBootstrapError: false,
       bootstrapError: null,
       navigate: navigate as never,
@@ -101,74 +92,24 @@ function renderSync(
   )
 }
 
-describe('useRollBootstrapSync die surface (#4719)', () => {
-  it('prefers the scoped die over bootstrap manual/current die', () => {
-    renderSync(
-      bootstrapWith({ manual_die: 12, current_die: 8 }),
-      dieStateWith({ die: 20 }),
-    )
+describe('useRollBootstrapSync rolled projection (#4352)', () => {
+  it('keeps the rolled projection bootstrap-only and never syncs a die', () => {
+    renderSync(bootstrapWith({ last_rolled_result: null }))
 
-    expect(setCurrentDie).toHaveBeenCalledWith(20)
-  })
-
-  it('falls back to bootstrap manual die while scoped state is unsettled', () => {
-    renderSync(bootstrapWith({ manual_die: 12, current_die: 8 }), undefined)
-
-    expect(setCurrentDie).toHaveBeenCalledWith(12)
-  })
-
-  it('falls back to bootstrap current die when no manual die is pinned', () => {
-    renderSync(bootstrapWith({ manual_die: null, current_die: 8 }), null)
-
-    expect(setCurrentDie).toHaveBeenCalledWith(8)
-  })
-
-  it('keeps the rolled projection bootstrap-only so a stale cross-session roll never lights', () => {
-    renderSync(
-      bootstrapWith({ last_rolled_result: null }),
-      dieStateWith({
-        die: 20,
-        last_roll: {
-          thread_id: 30,
-          issue_id: 300,
-          issue_number: '1',
-          result: 5,
-          die: 20,
-          rolled_at: '2026-11-01T10:00:00.000Z',
-        },
-      }),
-    )
-
-    expect(setCurrentDie).toHaveBeenCalledWith(20)
     expect(setRolledResult).not.toHaveBeenCalled()
     expect(setDiceState).not.toHaveBeenCalled()
   })
 
   it('still projects the bootstrap pending roll when one exists', () => {
-    renderSync(
-      bootstrapWith({ last_rolled_result: 3 }),
-      dieStateWith({
-        die: 20,
-        last_roll: {
-          thread_id: 30,
-          issue_id: 300,
-          issue_number: '1',
-          result: 5,
-          die: 20,
-          rolled_at: '2026-11-01T10:00:00.000Z',
-        },
-      }),
-    )
+    renderSync(bootstrapWith({ last_rolled_result: 3 }))
 
-    expect(setCurrentDie).toHaveBeenCalledWith(20)
     expect(setRolledResult).toHaveBeenCalledWith(3)
     expect(setDiceState).toHaveBeenCalledWith('rolled')
   })
 
-  it('does not synthesize a die when both surfaces are absent', () => {
-    renderSync(undefined, undefined)
+  it('does not synthesize a rolled state when bootstrap is absent', () => {
+    renderSync(undefined)
 
-    expect(setCurrentDie).not.toHaveBeenCalled()
     expect(setRolledResult).not.toHaveBeenCalled()
     expect(setDiceState).not.toHaveBeenCalled()
   })
