@@ -630,8 +630,8 @@ def test_stale_pr_cutover_deferral_preserves_open_pr(monkeypatch) -> None:
     assert closed == []
 
 
-def test_stale_pr_cutover_issue_is_not_exempt(monkeypatch) -> None:
-    """Genuinely active Rust attempts retain adaptive stale expiry."""
+def test_stale_pr_cutover_issue_is_reported_without_closing(monkeypatch) -> None:
+    """Even active Rust attempts keep their exact-head code when old."""
     now = 1_800_000_000
     created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
@@ -656,8 +656,9 @@ def test_stale_pr_cutover_issue_is_not_exempt(monkeypatch) -> None:
         lambda pr_number, *_args: closed.append(pr_number) or "marker",
     )
     result = module.process_stale_prs(prs=[pr], now_epoch=now)
-    assert result[0]["status"] == "expired"
-    assert closed == [4703]
+    assert result[0]["status"] == "stale-preserved"
+    assert result[0]["issue"] == 4589
+    assert closed == []
 
 
 def test_stale_pr_cutover_state_lookup_failure_cannot_close_pr(monkeypatch) -> None:
@@ -735,5 +736,78 @@ def test_process_stale_prs_does_not_close_manual_only_pr(monkeypatch) -> None:
     assert by_pr[7]["status"] == "manual-only"
     assert 7 not in closed
     assert 7 not in comment_fetches
-    assert 8 in closed
-    assert by_pr[8]["status"] == "expired"
+    assert closed == []
+    assert by_pr[8]["status"] == "stale-preserved"
+    assert by_pr[8]["dry_run"] is False
+
+
+def test_age_only_preserves_review_claim_commit_and_issue_even_in_normal_mode(monkeypatch) -> None:
+    """Age-based cleanup must not erase a repairable Rust PR or its worker lease."""
+    now = 1_800_000_000
+    created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    labels = ["factory", "factory:changes-requested", "factory:80", "rust"]
+    pr = make_pr(
+        4727,
+        created=created,
+        state="OPEN",
+        branch="factory/54-4719-opencode-free",
+        labels=labels,
+        body="Part of #4719. Retain this scoped migration PR.",
+    )
+    baseline = {"sample_size": 50, "threshold_seconds": 90_000}
+    monkeypatch.setattr(module, "get_staleness_baseline", lambda *_a, **_kw: baseline)
+    monkeypatch.setattr(module, "get_pr_comments", lambda _n: [])
+    monkeypatch.setattr(module, "stale_pr_is_cutover_deferred", lambda _pr: False)
+
+    def forbid_destructive_call(*_args, **_kwargs) -> None:
+        raise AssertionError("age-only stale evaluation must never write or close")
+
+    for destructive in (
+        "record_stale_expiration",
+        "reset_issue_to_unowned",
+        "close_pr_implementation",
+        "replace_factory_labels",
+        "run_gh",
+    ):
+        monkeypatch.setattr(module, destructive, forbid_destructive_call)
+
+    for dry_run in (False, True):
+        result = module.process_stale_prs(prs=[pr], now_epoch=now, dry_run=dry_run)
+        assert result == [{
+            "pr": 4727,
+            "status": "stale-preserved",
+            "age_seconds": 700_000,
+            "issue": 4719,
+            "baseline": baseline,
+            "dry_run": dry_run,
+        }]
+        assert [label["name"] for label in pr["labels"]] == labels
+
+
+def test_stale_report_preserves_branch_without_linked_issue(monkeypatch) -> None:
+    """A local factory PR without a closing keyword keeps its actual patch."""
+    now = 1_800_000_000
+    created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    pr = make_pr(
+        4778, created=created, state="OPEN",
+        branch="local/issue-card-roll-featured-parity-20261107",
+        body="Part of #4445",
+    )
+    monkeypatch.setattr(
+        module, "get_staleness_baseline",
+        lambda *_a, **_kw: {"sample_size": 20, "threshold_seconds": 90_000},
+    )
+    monkeypatch.setattr(module, "get_pr_comments", lambda _n: [])
+    monkeypatch.setattr(module, "stale_pr_is_cutover_deferred", lambda _pr: False)
+    monkeypatch.setattr(
+        module,
+        "record_stale_expiration",
+        lambda *_a: (_ for _ in ()).throw(AssertionError("closed valuable code")),
+    )
+    result = module.process_stale_prs(prs=[pr], now_epoch=now)
+    assert result[0]["status"] == "stale-preserved"
+    assert result[0]["issue"] is None
