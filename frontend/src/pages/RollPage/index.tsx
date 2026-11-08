@@ -177,36 +177,44 @@ export default function RollPage() {
     }
   }, [resetDiceMutation, state])
 
-  // Scoped eligible ids own the pool order (#4719). Bootstrap rows remain
-  // the display-metadata source, but an eligible id absent from the bootstrap
-  // slice (e.g. a die/eligibility update between the two independent reads)
-  // is backfilled from the scoped issue cards instead of being silently
-  // dropped: cards carry the thread identity (title, issue) needed to render
-  // the face. Until the cards query settles, that face is simply not row
-  // source yet — the same fallback-while-settling pattern as die-state.
-  // thread_ids are parallel to issue_ids, so a thread may repeat; dedupe.
+  // The Rust issue_ids and thread_ids are parallel and authoritative. A
+  // bootstrap row may have an older next issue for the same thread, so pair
+  // each scoped thread with its scoped issue ID before using card metadata.
+  // Preserve the first eligible issue when one thread appears more than once,
+  // and keep bootstrap-only rendering while the cards query is in flight.
   const scopedPool = useMemo(() => {
     const poolThreads = bootstrap?.roll_pool ?? []
     if (!scopedEligibleIssueIds || scopedEligibleIssueIds.thread_ids == null) {
       return poolThreads
     }
     const byId = new Map(poolThreads.map((thread) => [thread.id, thread]))
-    const cardByThreadId = new Map(
-      (scopedIssueCards?.items ?? []).map((card) => [card.thread_id, card]),
+    const cardByIssueId = new Map(
+      (scopedIssueCards?.items ?? []).map((card) => [card.issue_id, card]),
     )
-    return [...new Set(scopedEligibleIssueIds.thread_ids)]
-      .flatMap((id): RollBootstrapThread[] => {
+    const seen = new Set<number>()
+    return scopedEligibleIssueIds.thread_ids
+      .flatMap((id, index): RollBootstrapThread[] => {
+        if (seen.has(id)) return []
+        seen.add(id)
         const bootstrapThread = byId.get(id)
-        if (bootstrapThread) return [bootstrapThread]
-        const card = cardByThreadId.get(id)
-        if (!card) return []
+        const scopedIssueId = scopedEligibleIssueIds.issue_ids[index]
+        const card = cardByIssueId.get(scopedIssueId)
+        if (!bootstrapThread && !card) return []
         return [{
-          id,
-          title: card.thread_title,
-          format: '',
-          issue_id: card.issue_id,
-          issue_number: card.issue_number,
-          tags: [],
+          ...(bootstrapThread ?? {
+            id,
+            title: card?.thread_title ?? '',
+            format: '',
+            tags: [],
+          }),
+          // Never keep a stale bootstrap issue identity for a scoped face.
+          issue_id: scopedIssueId,
+          issue_number: card?.issue_number ?? (
+            bootstrapThread?.issue_id === scopedIssueId
+              ? bootstrapThread.issue_number
+              : null
+          ),
+          title: card?.thread_title ?? bootstrapThread?.title ?? '',
         }]
       })
   }, [scopedEligibleIssueIds, scopedIssueCards, bootstrap?.roll_pool])
