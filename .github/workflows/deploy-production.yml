@@ -285,6 +285,14 @@ jobs:
       - name: Install locked runtime dependencies
         run: uv sync --locked --no-dev
 
+      - name: Generate Rust-default ingress from registered Python OpenAPI
+        run: |
+          set -euo pipefail
+          .venv/bin/python scripts/generate_vercel_routes.py
+          .venv/bin/python scripts/generate_route_burndown.py
+          .venv/bin/python scripts/generate_vercel_routes.py --check
+          .venv/bin/python scripts/generate_route_burndown.py --check
+
       - name: Get production database connection string
         id: neon
         env:
