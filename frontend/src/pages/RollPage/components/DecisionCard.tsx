@@ -19,7 +19,6 @@ interface DecisionCardProps {
   rateIsPending: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onReroll?: () => Promise<void>
@@ -34,13 +33,6 @@ interface DecisionCardProps {
  * - Rating slider with visual feedback based on rating value
  * - Die readout that reports the truthful die outcome for the active mode
  * - Action buttons for saving, rolling again, and canceling
- *
- * Manual die mode:
- * - When `manualDie` is not null the die is pinned, so the ladder move never
- *   happens and the card says so instead of promising one (#3144). The wording
- *   matches the die-mode copy the die selector already uses.
- * - In automatic mode (`manualDie` is null) the card keeps the ladder move
- *   `d{currentDie} -> d{predictedDie}` and its die-size glossary link.
  */
 export function DecisionCard({
   activeRatingThread,
@@ -50,7 +42,6 @@ export function DecisionCard({
   errorMessage,
   rateIsPending,
   dismissIsPending,
-  manualDie,
   onUpdateRating,
   onSubmitRating,
   onReroll,
@@ -132,15 +123,9 @@ export function DecisionCard({
           <p id="rating-value" className={`text-5xl font-black ${getRatingColorClass(rating)}`}>
             {rating.toFixed(1)}
           </p>
-          {manualDie !== null ? (
-            <p className="text-[11px] font-bold text-stone-400">
-              Manual mode is active at d{currentDie}
-            </p>
-          ) : (
-            <p className="text-[11px] font-bold text-stone-400">
-              <GlossaryLink id="die-size">d{currentDie} → d{predictedDie}</GlossaryLink>
-            </p>
-          )}
+          <p className="text-[11px] font-bold text-stone-400">
+            <GlossaryLink id="die-size">d{currentDie} → d{predictedDie}</GlossaryLink>
+          </p>
         </div>
       </div>
 

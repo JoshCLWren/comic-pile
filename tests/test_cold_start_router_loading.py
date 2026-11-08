@@ -7,7 +7,7 @@ see. These guards exercise the deferred registry instead:
 
 * every eager ``/api/*`` route is reachable after selecting mounts for its own
   path (the route-coverage guard promised by ``app.router_mounts``);
-* the retired v1 snooze route (#4338) answers the JSON 404 without catalog/delivery;
+* the retired v1 snooze route (#4338) answers the JSON 404 without catalog;
 * ``POST /api/v1/roll/switch-prerequisite`` (composed into the dependency mount)
   answers on the first request instead of falling through to the fallback; and
 * ``import api.index`` stays inside the cold-start import budget.
@@ -39,13 +39,12 @@ IMPORT_BUDGET_MS = 600
 #: measured about 3.5x that floor; the deferred entry path costs about 2x.
 IMPORT_FRAMEWORK_RATIO = 3.0
 #: Modules a cold ``api.index`` must not pay to import (#3479). The eager
-#: catalog and delivery routers and their backends (comicvine, httpx,
+#: catalog router and its backends (comicvine, httpx,
 #: PyGithub) belong behind the per-resource deferred mounts.
 FORBIDDEN_COLD_IMPORTS: tuple[str, ...] = (
     "app.api.catalog",
     "app.services.comicvine_provider",
     "httpx",
-    "app.api.delivery",
     "github",
 )
 
@@ -172,7 +171,7 @@ async def test_retired_snooze_request_hits_json_404_without_heavy_mounts() -> No
     assert response.status_code == 404
     loaded_paths = set(_route_paths(app))
     assert SNOOZE_PATH not in loaded_paths
-    for heavy_path in ("/api/v1/catalog/series", "/api/v1/delivery"):
+    for heavy_path in ("/api/v1/catalog/series-mappings/preview",):
         assert heavy_path not in loaded_paths
 
 
@@ -233,7 +232,7 @@ def test_api_index_import_stays_within_the_cold_start_budget() -> None:
     costs about 490 ms at full speed measured 2471 ms there); the ratio stays
     stable because both measurements scale with the same interpreter and
     filesystem. Heavy cold imports are also caught structurally: the
-    catalog, comicvine, images, delivery, httpx, and PyGithub top-level
+    catalog, comicvine, images, httpx, and PyGithub top-level
     modules must not appear in the importtime report at all.
     """
     api_report = _importtime_modules("import api.index")

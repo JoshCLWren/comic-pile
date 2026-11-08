@@ -6,11 +6,10 @@ import type { RollPageState, RollPageStateSetters } from './useRollPageState'
 import type { RatingThread, ThreadMetadata } from './types'
 import type { ConnectedThreadInfo, ReaderContextResponse } from '../../types'
 import type { ReadingOrder } from '../../services/api-reading-orders'
-import type { RollBootstrapResponse } from '../../types/rollBootstrap'
 
 interface UseRatingViewParams {
   state: RollPageState & RollPageStateSetters
-  bootstrap?: RollBootstrapResponse | null
+  currentDie: number
   readerContextRequested: boolean
   readingContextRequested: boolean
   readingBoundariesRequested: boolean
@@ -50,7 +49,6 @@ export interface RatingViewData {
   snoozeIsPending?: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onSnooze?: () => void
@@ -96,7 +94,7 @@ export interface RatingViewData {
  */
 export function useRatingView({
   state,
-  bootstrap,
+  currentDie,
   readerContextRequested,
   readingContextRequested,
   readingBoundariesRequested,
@@ -120,7 +118,6 @@ export function useRatingView({
 }: UseRatingViewParams): RatingViewData {
   const {
     activeRatingThread,
-    currentDie,
     rolledResult,
     rating: ratingValue,
     errorMessage,
@@ -150,7 +147,6 @@ export function useRatingView({
     rateIsPending: rateMutation.isPending,
     snoozeIsPending: (rerollMutation ?? snoozeMutation).isPending,
     dismissIsPending: dismissPendingMutation.isPending,
-    manualDie: bootstrap?.manual_die ?? null,
     onUpdateRating: rating.updateRatingUI,
     onSubmitRating: rating.handleSubmitRating,
     onSnooze: snooze.handleSnooze,

@@ -4,6 +4,17 @@ Guidelines for AI agents working in this codebase.
 
 ## Engineering objective completion
 
+For Comic Pile local factory delivery in Codex, use
+[the Codex Crouton adapter](.agents/skills/crouton-factory-codex/SKILL.md).
+Carry authorized work through CI repair, actual independent review (including
+the owner-selected OpenCode ACP Crouton Alpha lane), gated merge, deployment and
+real acceptance. Start eligible local reviewers instead of waiting for scheduled
+pickup and record actual identity and exact-head evidence. Read only ACP
+checkpoints/model-selection metadata and final reports/verdicts, never full logs
+or transcripts. See [the executable review path](docs/LOCAL_FACTORY_REVIEW.md).
+Existing authorization, leases, independent review and exact-head CI gates remain;
+remote factory WIP/backpressure limits do not block locals.
+
 Follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md) for original user intent, reviewable PR boundaries, rollout decisions, deployment proof, and continuation handoffs. The owner's requested behavior, not a self-authored partial issue or PR, defines completion. Keep all existing security, ownership, CI, review, and deployment gates.
 
 
@@ -20,7 +31,7 @@ Follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](docs/OBJECTIVE_FIRST_ENG
 
 **These are per-operation observations, not promises about an entire API version.** Never refer to "v2 is Rust," "all v2 migrated," "v1 is Python," or "migrate the v2 API" as if one version has a single language. For every migration decision, report **HTTP method + exact path + current destination + observed runtime + client consumers**. Read the current deployment rather than treating this historical snapshot as authoritative after additional deploys. The only approved API-version consolidation here concerns **Roll bootstrap GET**; it does not remove or rewrite either reading-boundaries v2 operation.
 
-**Current checked-in state (after #4383, `main`):** both live clients request `GET /api/v2/roll/bootstrap` — `frontend/src/services/rollBootstrapApi.ts` and `frontend/src/services/protectedRollMutationApi.ts` — and `vercel.json` routes that method/path to `api/native_roll.rs`. That is route configuration and client wiring, not production runtime proof. The Python v1/legacy bootstrap GET handlers are already removed, so those retired paths fall through to the Python catch-all; the cleanup PR (#4350) removes the remaining dead Python v1 bootstrap projection code, the unused Python v2 response DTO, dead aliases and obsolete tests. The Python v2 projection and parity services and repositories remain test/script-only tooling, preserved for native parity until #4299 retires native v2. Production runtime proof of native v2 execution is still required before #4350 closes.
+**Current checked-in state (after #4383, `main`):** both live clients request `GET /api/v2/roll/bootstrap` — `frontend/src/services/rollBootstrapApi.ts` and `frontend/src/services/protectedRollMutationApi.ts` — and `vercel.json` routes that method/path to `api/native_roll.rs`. That is route configuration and client wiring, not production runtime proof. The Python v1/legacy bootstrap GET handlers are already removed, so those retired paths fall through to the Python catch-all; the cleanup PR (#4350) removes the remaining dead Python v1 bootstrap projection code, the unused Python v2 response DTO, dead aliases and obsolete tests. The frozen Python v2 projection and parity oracle was retired by #4738 independent of #4299, which retains native v2. Production runtime proof of native v2 execution is still required before #4350 closes.
 
 For **Roll bootstrap GET only**, the owner explicitly chose to retire the old public operations `GET /api/v1/roll/bootstrap` and `GET /api/roll/bootstrap` and standardize on a **single `GET /api/v2/roll/bootstrap` implemented in native Rust**. This is a deliberate, approved API consolidation, not evidence that v1 implies Python or v2 implies Rust. It is the sole exception to the same-path language-port restriction below, and takes precedence over its prohibitions **for bootstrap only**. See #4335, #4299 and #4350. Other v1 operations (including `POST /api/v1/roll/`) remain unchanged until their own separate migration.
 
@@ -34,6 +45,34 @@ The `v1`, `v2`, etc. segments in public HTTP paths refer **only to API contract 
 
 PR A must verify the same-path routing, generated contract, focused caller transport and SQL/bind/transaction semantics. After deployment, verify a successful real authenticated production request ran in Rust rather than Python, not just a health check, 401, response header, or READY deployment. PR B removes the **same-path** Python implementation only after proof, with exact-head green required CI and independent factory semantic/acceptance review for both PRs. Greptile is optional: its availability, credits, check, and confidence score are not merge gates. Existing actionable findings still require fixes or evidence-backed rebuttals. Do not infer runtime from a URL version, and do not claim migration from an unused parallel endpoint. Coordinate with active factory claims and permitted production bug fixes; do not bundle unrelated API refactors.
 
+<!-- route-burndown:begin (generated by scripts/generate_route_burndown.py, issue #4739) -->
+
+## Current deployed v2 runtime (generated from `vercel.json`)
+
+> Generated by `scripts/generate_route_burndown.py` (issue #4739).
+> Do not hand-edit; run `python3 scripts/generate_route_burndown.py`
+> after changing `vercel.json` or `docs/api/v2-route-inventory.json`.
+> API version is not implementation language.
+
+- Live v2 operations: 41 (40 native-rust + 1 python orphan).
+- Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
+- Full Python-handler surface: 257 operations (v1 214 + unversioned 43) plus 1 v2 orphan = 258 Python-handler operations; v1 active 180 live Python / 9 migrated (shadowed by Rust); unversioned active 22 live Python / 9 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); orphan `GET /api/v2/reading-boundaries/{thread_id}` has an explicit Python exception.
+- Full-surface inventory (v2 + v1 + unversioned + catch-all + orphan) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
+- Python orphan: `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi` via `/api/index.py` (owner #4335, no callers).
+- Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
+
+Deployed runtime by cutover owner (`METHOD path -> runtime`):
+
+- #4335 (10): `GET /api/v2/queue-entries/{thread_id} -> native-rust`; `PATCH /api/v2/queue-entries/{thread_id} -> native-rust`; `POST /api/v2/queue-orders -> native-rust`; `POST /api/v2/reading-boundaries -> native-rust`; `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`; `POST /api/v2/reading-sessions -> native-rust`; `GET /api/v2/roll/bootstrap -> native-rust`; `POST /api/v2/roll/dice-command -> native-rust`; `POST /api/v2/roll/offer -> native-rust`; `POST /api/v2/roll/reset -> native-rust`
+- #4342 (1): `GET /api/v2/threads -> native-rust`
+- #4348 (1): `GET /api/v2/analytics/metrics -> native-rust`
+- #4443 (2): `POST /api/v2/issues/cards -> native-rust`; `PATCH /api/v2/issues/{issue_id} -> native-rust`
+- #4459 (8): `GET /api/v2/auth/csrf -> native-rust`; `POST /api/v2/auth/forgot-password -> native-rust`; `POST /api/v2/auth/login -> native-rust`; `POST /api/v2/auth/logout -> native-rust`; `GET /api/v2/auth/me -> native-rust`; `POST /api/v2/auth/refresh -> native-rust`; `POST /api/v2/auth/register -> native-rust`; `POST /api/v2/auth/reset-password -> native-rust`
+- #4595 (2): `GET /api/v2/roll/die-state -> native-rust`; `GET /api/v2/roll/eligible-issue-ids -> native-rust`
+- #4623 (1): `GET /api/v2/issues/{issue_id}/comicvine -> native-rust`
+- #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`
+<!-- route-burndown:end -->
 
 ## MANDATORY: Frontend Visual Policy
 

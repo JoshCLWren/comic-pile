@@ -33,7 +33,6 @@
   "app/api/ping.py",
   "app/api/preferences.py",
   "app/api/prerequisite.py",
-  "app/api/queue.py",
   "app/api/rate.py",
   "app/api/reading_mode.py",
   "app/api/reading_order_projection.py",

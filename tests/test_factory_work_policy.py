@@ -1464,3 +1464,20 @@ def test_review_cooldown_reports_counts_by_reason(capsys: pytest.CaptureFixture[
         for comment in comments
     ]
     assert not policy.parse_no_diff_attempts_from_comments(issue_comments, now_epoch=now)
+
+
+def test_deploy_fix_repairs_have_protected_priority_without_capacity_bypass() -> None:
+    """A deployment repair is prioritized while normal intake gates still apply."""
+    issue = issue_fixture(4815)
+    issue["labels"] = [
+        {"name": label}
+        for label in (
+            "factory:unowned",
+            "deploy-fix",
+            "infrastructure",
+            "priority:P0",
+        )
+    ]
+    assert policy.provenance_lane(label_names(issue)) == 0
+    assert policy.issue_bypasses_wip_limit(issue)
+    assert not policy.issue_bypasses_wip_limit(issue, review_backlog_saturated=True)

@@ -181,8 +181,6 @@ pub struct BootstrapRollRecovery {
 pub struct BootstrapResponseV2 {
     pub session_id: i32,
     pub user_id: i32,
-    pub current_die: i32,
-    pub manual_die: Option<i32>,
     pub pending_thread_id: Option<i32>,
     pub last_rolled_result: Option<i64>,
     pub session_mode: BootstrapSessionMode,
@@ -975,12 +973,8 @@ pub async fn bootstrap_v2(
     })?;
     let conn = db::checkout(&state).await?;
     let native_die = crate::dice_state::bootstrap_die_after_native_command(&conn, user).await?;
+    // The die is no longer serialized; it still bounds the offer pool.
     let current_die = native_die.unwrap_or(active.current_die);
-    let manual_die = if native_die.is_some() {
-        None
-    } else {
-        session.manual_die
-    };
     // Match the offer's browser-owned exclusions before the die limit.
     // GET remains read-only; legacy durable backoff is display-only below.
     let excluded = crate::roll_pool::browser_snoozes(&headers);
@@ -1106,8 +1100,6 @@ pub async fn bootstrap_v2(
     let response = BootstrapResponseV2 {
         session_id: session.id,
         user_id: user.id(),
-        current_die,
-        manual_die,
         pending_thread_id: session.pending_thread_id,
         last_rolled_result: last_roll_result,
         session_mode: BootstrapSessionMode {
@@ -1146,7 +1138,7 @@ pub async fn bootstrap_v2(
 
 /// Documentation-only operation for the mounted v2 Roll bootstrap read.
 ///
-/// The published response is the actual handler DTO, so known session, die,
+/// The published response is the actual handler DTO, so known session,
 /// pending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and
 /// timezone fields stay in the live contract. Stored tag records, recovery
 /// nodes and mode-guidance JSON remain explicitly extensible.

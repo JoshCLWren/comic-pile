@@ -61,8 +61,6 @@ describe('useRollPendingSync', () => {
     const mockBootstrap: RollBootstrapResponse = {
       session_id: 1,
       user_id: 1,
-      current_die: 6,
-      manual_die: null,
       pending_thread_id: 99,
       last_rolled_result: 3,
       // SAFETY: 'manual' is a valid session mode for test data
@@ -104,8 +102,6 @@ describe('useRollPendingSync', () => {
     const mockBootstrap: RollBootstrapResponse = {
       session_id: 1,
       user_id: 1,
-      current_die: 6,
-      manual_die: null,
       pending_thread_id: null, // Bootstrap reports no pending thread after dismissal
       last_rolled_result: null,
       // SAFETY: 'manual' is a valid session mode for test data
@@ -138,8 +134,6 @@ describe('useRollPendingSync', () => {
     const mockBootstrap: RollBootstrapResponse = {
       session_id: 1,
       user_id: 1,
-      current_die: 6,
-      manual_die: null,
       pending_thread_id: 99,
       last_rolled_result: 3,
       // SAFETY: 'manual' is a valid session mode for test data

@@ -19,12 +19,29 @@ use std::{
 use tower::Service;
 use vercel_runtime::{axum::StreamingUtils, AppState as VercelState, Error, ResponseBody};
 
-async fn native_health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+async fn native_health() -> Response {
+    let mut response = Json(serde_json::json!({
         "status": "ok",
         "runtime": "rust",
-        "service": "roll"
+        "service": "roll",
+        "build": {
+            "revision": env!("COMICPILE_SOURCE_REVISION"),
+            "compiler": env!("COMICPILE_COMPILER"),
+            "package": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION")
+        },
+        "process": {
+            "executable": std::env::current_exe().ok()
+                .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned())),
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH
+        }
     }))
+    .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
 }
 
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
@@ -161,6 +178,19 @@ where
     }
 }
 
+/// Unknown API paths must terminate in Rust without initializing Python or Neon.
+async fn native_not_found() -> Response {
+    let mut response = (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({"detail": "Not Found"})),
+    )
+        .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
@@ -242,6 +272,7 @@ fn app() -> Router {
         .route("/api/auth/csrf", get(native_dispatch))
         .route("/api/auth/forgot-password", post(native_dispatch))
         .route("/api/auth/reset-password", post(native_dispatch))
+        .fallback(native_not_found)
 }
 
 #[tokio::main]
@@ -266,6 +297,32 @@ mod tests {
     use vercel_runtime::{AppState as VercelState, LogContext};
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
+
+    #[tokio::test]
+    async fn unknown_api_route_returns_rust_json_404_without_database() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .uri("/api/v2/definitely-not-registered")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 1024)
+            .await
+            .expect("body bytes");
+        assert_eq!(
+            serde_json::from_slice::<Value>(&bytes).expect("JSON"),
+            serde_json::json!({"detail": "Not Found"})
+        );
+    }
 
     async fn disposable_schema_url() -> String {
         let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
@@ -543,16 +600,36 @@ mod tests {
         let response = router.call(request).await.expect("health response");
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust"))
+        );
+        assert_eq!(
             response.headers().get(header::CONTENT_TYPE),
             Some(&axum::http::HeaderValue::from_static("application/json"))
         );
         let body = to_bytes(response.into_body(), 1024)
             .await
             .expect("health JSON");
+        let health: serde_json::Value = serde_json::from_slice(&body).expect("valid JSON");
+        assert_eq!(health["status"], "ok");
+        assert_eq!(health["runtime"], "rust");
+        assert_eq!(health["service"], "roll");
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON"),
-            serde_json::json!({"status": "ok", "runtime": "rust", "service": "roll"})
+            health["build"]["revision"],
+            env!("COMICPILE_SOURCE_REVISION")
         );
+        assert!(health["build"]["compiler"]
+            .as_str()
+            .unwrap()
+            .starts_with("rustc "));
+        assert_eq!(health["build"]["package"], env!("CARGO_PKG_NAME"));
+        let executable = std::env::current_exe().expect("current executable");
+        assert_eq!(
+            health["process"]["executable"],
+            executable.file_name().unwrap().to_string_lossy().as_ref()
+        );
+        assert_eq!(health["process"]["os"], std::env::consts::OS);
+        assert_eq!(health["process"]["arch"], std::env::consts::ARCH);
     }
 
     #[tokio::test]

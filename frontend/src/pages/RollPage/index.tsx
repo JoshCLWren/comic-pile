@@ -41,6 +41,7 @@ import { useRollLastRead } from '../../hooks/useRollLastRead'
 import { useSnapshots, useUndo } from '../../hooks/useUndo'
 import { useToast } from '../../contexts/useToast'
 import { invalidateAfterUndo, invalidateRollBootstrapOnNavigation } from '../../query/cacheEffects'
+import { resolveRollSelectedDie } from './selectedDie'
 import { ThreadPool } from './components/ThreadPool'
 import { RollHeader } from './components/RollHeader'
 import { RollFooter } from './components/RollFooter'
@@ -75,11 +76,15 @@ export default function RollPage() {
 
   // Die-header surface migration (#4719): the scoped die resource is
   // authoritative for the selected die, ladder readout, die size and 3D
-  // model. Bootstrap remains the fallback while the query settles or fails.
+  // model. Bootstrap no longer carries die fields; the scoped query is the
+  // only die source with a d6 default while it settles or fails.
   const { data: cachedScopedDieState, isError: isScopedDieStateError } = useRollDieState()
   // TanStack Query preserves previously successful data after a failed refetch.
-  // A failed scoped refresh must not overrule the newly reconciled bootstrap die.
+  // A failed scoped refresh must not overrule the reconciled scoped die.
   const scopedDieState = isScopedDieStateError ? undefined : cachedScopedDieState
+  // #4352: derive during render, no effect/no state. Scoped-only, defaulting
+  // to d6 while pending or failed.
+  const selectedDie = resolveRollSelectedDie(scopedDieState)
 
   // Eligible-pool surface migration (#4719): the scoped resource owns the
   // ordered thread ids for the current die, with the browser snooze cookie
@@ -149,9 +154,6 @@ export default function RollPage() {
   }, [showToast, retrySnoozeRefresh])
 
   useRollBootstrapSync({
-    state,
-    bootstrap,
-    scopedDieState: scopedDieState ?? null,
     isBootstrapError,
     bootstrapError,
     navigate,
@@ -311,7 +313,7 @@ export default function RollPage() {
 
   const ratingViewData = useRatingView({
     state,
-    bootstrap,
+    currentDie: selectedDie,
     readerContextRequested: rating.readerContextRequested,
     readingContextRequested: rating.readingContextRequested,
     readingBoundariesRequested: rating.readingBoundariesRequested,
@@ -335,9 +337,9 @@ export default function RollPage() {
   })
 
   const snoozedThreads = bootstrap?.snoozed_threads ?? []
-  // Scoped die drives the pool cutoff and 3D model when present; the
-  // bootstrap-synced state remains the fallback while it settles or fails.
-  const effectiveDie = scopedDieState?.die ?? state.currentDie
+  // Derived die drives the pool cutoff and 3D model; scoped-only with a d6
+  // default (see `resolveRollSelectedDie` above).
+  const effectiveDie = selectedDie
   const dieSize = effectiveDie || 6
   const filteredThreads = rollPool.filter(
     (thread) =>
@@ -346,6 +348,10 @@ export default function RollPage() {
   const pool = filteredThreads.slice(0, dieSize)
   const displayDie = isDiceSide(effectiveDie) ? effectiveDie : 6
   const hasRollableContent = pool.length > 0 || snoozedThreads.length > 0
+  // Rolled state is derived from the pending roll itself, not tracked
+  // separately. Clearing the pending roll (rate/snooze/cancel/reset-dice)
+  // nulls `rolledResult`, so the die and CTA fall back to idle/"Begin".
+  const hasRolled = state.rolledResult != null
  
   if (isBootstrapLoading && !bootstrap && !isBootstrapError) {
     // A timed-out bootstrap stays pending through the shared retry policy
@@ -414,7 +420,7 @@ export default function RollPage() {
     <div className="min-h-screen flex flex-col">
       <RollHeader
         bootstrap={bootstrap}
-        currentDie={state.currentDie}
+        currentDie={selectedDie}
         dieSize={dieSize}
         displayDie={displayDie}
         snoozedThreads={snoozedThreads}
@@ -454,7 +460,7 @@ export default function RollPage() {
                   role="button"
                   tabIndex={0}
                   aria-label={displayDie === 2 ? "Flip the coin" : "Roll the dice"}
-                  className={`dice-state-${state.diceState} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
+                  className={`${hasRolled ? 'dice-state-rolled' : 'dice-state-idle'} relative z-10 cursor-pointer shrink-0 flex items-center justify-center rounded-full transition-all mt-4 md:mt-8 mx-auto active:scale-95`}
                   style={{ width: '200px', height: '200px' }}
                   data-testid="main-die-3d"
                 >
@@ -465,13 +471,12 @@ export default function RollPage() {
                       isRolling={state.isRolling}
                       showValue={false}
                       color={0xffffff}
-                      onRollComplete={() => state.setDiceState('rolled')}
                     />
                   </div>
                 </div>
                 <RollCta
                   isRolling={state.isRolling}
-                  hasRolled={state.diceState !== 'idle'}
+                  hasRolled={hasRolled}
                   onRoll={actions.handleRoll}
                 />
               </>

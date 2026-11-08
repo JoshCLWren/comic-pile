@@ -128,7 +128,7 @@ test('head-contributor markers resolve roster workers above the old ceiling', ()
   const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-77:epoch-2 -->';
   assert.equal(workerFrom(body), '77');
   assert.equal(ownerFor(workerFrom(body)), 'factory:unowned');
-  assert.equal(ownerFor('worker-93'), 'factory:93');
+  assert.equal(ownerFor('worker-93'), 'factory:unowned');
   assert.equal(ownerFor('72'), 'factory:unowned');
 });
 

@@ -42,6 +42,7 @@ interface BootstrapData {
 
 const sessionHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
 const bootstrapHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
+const dieStateHook = vi.hoisted((): HoistedMockValue => ({ value: null }))
 const relatedApi = vi.hoisted(() => ({ readingOrders: vi.fn(), connectedThreads: vi.fn(), blockingInfo: vi.fn(), batchBlockingInfo: vi.fn() }))
 const sessionData: SessionData = { current_die: 6, snoozed_threads: [] }
 const bootstrapData: BootstrapData = { current_die: 6, snoozed_threads: [], roll_pool: [{ id: 1, title: 'Saga', format: 'Comic' }], manual_die: null, last_rolled_result: null, pending_thread_id: null, active_thread: null, snoozed_count: 0 }
@@ -68,6 +69,11 @@ vi.mock('../contexts/useBugReportRestore', () => ({
 }))
 vi.mock('../hooks/useSession', () => ({ useSession: () => sessionHook.value ?? ({ data: sessionData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: () => bootstrapHook.value ?? ({ data: bootstrapData, refetch: spies.refetch, isPending: false, isError: false, error: null }) }))
+vi.mock('../hooks/useRollResources', () => ({
+  useRollDieState: () => dieStateHook.value ?? ({ data: undefined, isError: false }),
+  useRollEligibleIssueIds: () => ({ data: undefined }),
+  useRollIssueCards: () => ({ data: undefined }),
+}))
 vi.mock('../hooks/useThread', () => ({ useStaleThreads: () => ({ data: staleData, refetch: spies.refetch }) }))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: spies.setDie, isPending: false }),
@@ -150,6 +156,7 @@ describe('RollPage parent handlers', () => {
     vi.clearAllMocks()
     sessionHook.value = null
     bootstrapHook.value = null
+    dieStateHook.value = null
     relatedApi.readingOrders.mockResolvedValue({ reading_orders: [] })
     relatedApi.connectedThreads.mockResolvedValue({ connected_threads: [] })
     relatedApi.blockingInfo.mockResolvedValue({ blocking_reasons: ['Read the prerequisite first'] })
@@ -519,6 +526,11 @@ describe('RollPage parent handlers', () => {
   it('shows the maximum-die snooze guidance', () => {
     sessionData.current_die = 20
     bootstrapData.current_die = 20
+    dieStateHook.value = {
+      // Selected die is scoped-only (#4352): drive d20 from die-state.
+      data: { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+      isError: false,
+    }
     sessionData.snoozed_threads = [{ id: 9, title: 'Snoozed', format: 'Comic' }]
     bootstrapData.snoozed_threads = [{ id: 9, title: 'Snoozed', format: 'Comic' }]
     bootstrapData.snoozed_count = 1
@@ -1177,6 +1189,11 @@ describe('RollPage parent handlers', () => {
 
   it('renders a manual die choice and a failed die change in the modal', async () => {
     bootstrapData.manual_die = 4
+    dieStateHook.value = {
+      // Selected die is scoped-only (#4352): drive d4 from die-state.
+      data: { die: 4, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+      isError: false,
+    }
     render(<RollPage />)
     expect(screen.queryByRole('button', { name: 'Auto' })).not.toBeInTheDocument()
 

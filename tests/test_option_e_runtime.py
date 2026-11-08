@@ -262,13 +262,10 @@ async def test_v2_identity_fanout_does_not_shrink_thread_die_pool(
 ) -> None:
     """Multiple stored mappings must not consume another eligible Thread's slot."""
     from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
-    from app.services.roll_v2_projection import get_v2_rollable_projection
 
     user = await get_or_create_user_async(async_db)
     one, issues = await _series(async_db, user.id, "Multiple identities", 1)
     two, _ = await _series(async_db, user.id, "Other series", 2)
-    session = ReadingSession(user_id=user.id)
-    async_db.add(session)
     for external_id in ["4000-111", "4000-222"]:
         identity = ExternalIdentity(
             provider="comicvine",
@@ -286,14 +283,9 @@ async def test_v2_identity_fanout_does_not_shrink_thread_die_pool(
             )
         )
     await async_db.flush()
-    items, _, _ = await get_v2_rollable_projection(
-        async_db,
-        user_id=user.id,
-        die_size=2,
-        excluded_thread_ids=[],
-        session_id=session.id,
-    )
-    assert [item.thread.id for item in items] == [one.id, two.id]
+    live = await get_execution_eligibility(async_db, user.id)
+    assert live is not None
+    assert live.candidate_ids() == {one.id, two.id}
 
 
 @pytest.mark.parametrize("stored_id,excluded_id", [("4050-123", "123"), ("123", "4050-123")])
