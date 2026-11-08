@@ -41,7 +41,10 @@ if database_url:
         database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
     elif database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
-    config.set_main_option("sqlalchemy.url", database_url)
+    # Alembic uses ConfigParser interpolation: percent-encoded DSN query
+    # options (including search_path) must escape '%' before assignment.
+    # ConfigParser unescapes these on read, preserving the actual PostgreSQL URL.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
