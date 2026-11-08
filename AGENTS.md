@@ -56,7 +56,7 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 
 - Live v2 operations: 41 (40 native-rust + 1 python orphan).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 257 operations (v1 214 + unversioned 43) plus 1 v2 orphan = 258 Python-handler operations; v1 active 172 live Python / 21 migrated (shadowed by Rust); unversioned active 22 live Python / 13 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 257 operations (v1 214 + unversioned 43) plus 1 v2 orphan = 258 Python-handler operations; v1 active 171 live Python / 22 migrated (shadowed by Rust); unversioned active 22 live Python / 13 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); orphan `GET /api/v2/reading-boundaries/{thread_id}` has an explicit Python exception.
 - Full-surface inventory (v2 + v1 + unversioned + catch-all + orphan) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Python orphan: `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi` via `/api/index.py` (owner #4335, no callers).

@@ -586,16 +586,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 214,
-      "v1_shadowed_by_rust": 21,
-      "v1_live_python": 172,
+      "v1_shadowed_by_rust": 22,
+      "v1_live_python": 171,
       "v1_orphaned": 21,
       "unversioned_total": 43,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 22,
       "unversioned_orphaned": 8,
       "total_python_surface": 257,
-      "total_shadowed_by_rust": 34,
-      "total_live_python": 194,
+      "total_shadowed_by_rust": 35,
+      "total_live_python": 193,
       "total_orphaned": 29
     },
     "catch_all": {
@@ -1413,8 +1413,8 @@
           "frontend/src/services/creatorTeamChemistryApi.ts",
           "frontend/src/services/creatorsApi.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
