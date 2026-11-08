@@ -252,7 +252,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 2,
+        "total_statements": 4,
+        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1"
+      }
     },
     {
       "method": "POST",
@@ -403,7 +409,13 @@
       "owning_issue": 4342,
       "consumers": [
         "frontend/src/services/api-threads.ts"
-      ]
+      ],
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "default legacy path: one page statement including auth, total, lists and rows; option_e preview adds auth 1 + one-statement Option E snapshot 1 (+2 tx control) when activated; set-based, independent of library size, no per-row N+1"
+      }
     },
     {
       "method": "PUT",
