@@ -653,22 +653,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/threads/active$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/threads/completed$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/threads/reactivate$",
       "methods": [
         "POST",
@@ -2125,25 +2109,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/active$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/check\\-duplicates$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/completed$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

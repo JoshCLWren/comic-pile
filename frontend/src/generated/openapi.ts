@@ -4429,26 +4429,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/threads/active": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Active Threads
-         * @description Render active threads as radio buttons for the override modal.
-         */
-        get: operations["list_active_threads_api_v1_threads_active_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/threads/check-duplicates": {
         parameters: {
             query?: never;
@@ -4478,26 +4458,6 @@ export interface paths {
          *         Possible existing volumes, strongest match first.
          */
         post: operations["check_potential_duplicates_api_v1_threads_check_duplicates_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/threads/completed": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Completed Threads Html
-         * @description Render completed threads as options for the reactivation modal.
-         */
-        get: operations["list_completed_threads_html_api_v1_threads_completed_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -21286,26 +21246,6 @@ export interface operations {
             };
         };
     };
-    list_active_threads_api_v1_threads_active_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
-                };
-            };
-        };
-    };
     check_potential_duplicates_api_v1_threads_check_duplicates_post: {
         parameters: {
             query?: never;
@@ -21335,26 +21275,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_completed_threads_html_api_v1_threads_completed_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/html": string;
                 };
             };
         };

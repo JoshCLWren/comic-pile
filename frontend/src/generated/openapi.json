@@ -30826,34 +30826,6 @@
         ]
       }
     },
-    "/api/v1/threads/active": {
-      "get": {
-        "description": "Render active threads as radio buttons for the override modal.",
-        "operationId": "list_active_threads_api_v1_threads_active_get",
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Active Threads",
-        "tags": [
-          "threads",
-          "threads"
-        ]
-      }
-    },
     "/api/v1/threads/check-duplicates": {
       "post": {
         "description": "Report the reader's series that may already be this volume (#3612).\n\nAdvisory only. A confirmed ComicVine volume is reported as a strong match;\ntitle resemblance is reported as an uncertain suggestion so same-titled\nvolumes remain creatable and renameable. Nothing is written, merged, or\ndeleted by checking.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    check_data: Proposed title, format, optional ComicVine volume, and the\n        thread to exclude when checking a rename.\n    current_user: The authenticated reader.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Possible existing volumes, strongest match first.",
@@ -30896,34 +30868,6 @@
           }
         ],
         "summary": "Check Potential Duplicates",
-        "tags": [
-          "threads",
-          "threads"
-        ]
-      }
-    },
-    "/api/v1/threads/completed": {
-      "get": {
-        "description": "Render completed threads as options for the reactivation modal.",
-        "operationId": "list_completed_threads_html_api_v1_threads_completed_get",
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Completed Threads Html",
         "tags": [
           "threads",
           "threads"
