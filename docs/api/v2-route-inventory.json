@@ -1,7 +1,19 @@
 {
   "schema_version": 1,
   "description": "Method/path/runtime/caller inventory for every live /api/v2 operation. Runtime is the implementation observed behind the deployed ingress, not the API version. Update this file in the cutover PR that changes a runtime, and regenerate the native contract first.",
-  "updated_by_issue": 4456,
+  "updated_by_issue": 4739,
+  "burndown": {
+    "generated_by": "scripts/generate_route_burndown.py",
+    "issue": 4739,
+    "ingress_source": "vercel.json",
+    "total_live_operations": 41,
+    "native_rust": 40,
+    "python_fastapi": 1,
+    "native_rust_status": 40,
+    "shadowed_by_rust": 0,
+    "live_transitional_python_with_callers": 0,
+    "unreferenced_or_orphaned": 1
+  },
   "operations": [
     {
       "method": "GET",
@@ -11,7 +23,10 @@
       "owning_issue": 4348,
       "consumers": [
         "frontend/src/services/api-tasks.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -21,7 +36,10 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -32,7 +50,10 @@
       "consumers": [
         "frontend/src/services/api-auth.ts",
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -42,7 +63,10 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -50,7 +74,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -58,7 +85,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4459,
-      "consumers": []
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -68,7 +98,10 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -78,7 +111,10 @@
       "owning_issue": 4459,
       "consumers": [
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -89,7 +125,10 @@
       "consumers": [
         "frontend/src/services/api-auth.ts",
         "frontend/src/services/api.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -105,7 +144,10 @@
         "transaction_control_statements": 2,
         "total_statements": 10,
         "basis": "auth 1 + plan/sources/release reads 4 + authoritative list read 2 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -115,7 +157,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-plan-recovery.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -125,7 +170,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-plan-recovery.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -135,7 +183,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "DELETE",
@@ -145,7 +196,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "DELETE",
@@ -157,7 +211,10 @@
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/nativeRollMutationApi.ts",
         "frontend/src/services/issueCardsApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "PATCH",
@@ -169,7 +226,10 @@
         "frontend/src/services/nativeRollMutationApi.ts",
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/issueCardsApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_issue.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -179,7 +239,10 @@
       "owning_issue": 4623,
       "consumers": [
         "frontend/src/services/api-comicvine.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -190,7 +253,10 @@
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts",
         "frontend/src/services/issueCardsApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_issue.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -198,7 +264,10 @@
       "runtime": "native-rust",
       "status": "target",
       "owning_issue": 4335,
-      "consumers": []
+      "consumers": [],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "PATCH",
@@ -208,7 +277,10 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-queue.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -218,7 +290,10 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-queue.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -234,7 +309,10 @@
         "transaction_control_statements": 2,
         "total_statements": 11,
         "basis": "auth 1 + boundary label reads 7 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -242,7 +320,10 @@
       "runtime": "python-fastapi",
       "status": "transitional",
       "owning_issue": 4335,
-      "consumers": []
+      "consumers": [],
+      "ingress_destination": "/api/index.py",
+      "burndown_status": "unreferenced/orphaned",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -258,7 +339,10 @@
         "transaction_control_statements": 2,
         "total_statements": 4,
         "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -268,7 +352,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-reading-graph.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -278,7 +365,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -288,7 +378,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "DELETE",
@@ -298,7 +391,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -308,7 +404,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "PUT",
@@ -318,7 +417,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -328,7 +430,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-custom-cbl.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -338,7 +443,10 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -349,7 +457,10 @@
       "consumers": [
         "frontend/src/services/rollBootstrapApi.ts",
         "frontend/src/services/protectedRollMutationApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -359,7 +470,10 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -369,7 +483,10 @@
       "owning_issue": 4595,
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -379,7 +496,10 @@
       "owning_issue": 4595,
       "consumers": [
         "frontend/src/services/rollResourcesApi.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -389,7 +509,10 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -399,7 +522,10 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-roll.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "GET",
@@ -415,7 +541,10 @@
         "transaction_control_statements": 0,
         "total_statements": 1,
         "basis": "default legacy path: one page statement including auth, total, lists and rows; option_e preview adds auth 1 + one-statement Option E snapshot 1 (+2 tx control) when activated; set-based, independent of library size, no per-row N+1"
-      }
+      },
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "PUT",
@@ -425,7 +554,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     },
     {
       "method": "POST",
@@ -435,7 +567,10 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-issues.ts"
-      ]
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
     }
   ],
   "retired_legacy_operations": [
