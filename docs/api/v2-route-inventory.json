@@ -99,7 +99,13 @@
       "owning_issue": 4684,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts"
-      ]
+      ],
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "basis": "auth 1 + plan/sources/release reads 4 + authoritative list read 2 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1"
+      }
     },
     {
       "method": "GET",
@@ -415,6 +421,13 @@
     }
   ],
   "retired_legacy_operations": [
+    {
+      "method": "GET",
+      "path": "/api/v1/continuity-plans/{plan_id}/reader",
+      "runtime": "python-fastapi",
+      "retired_by_issue": 4346,
+      "replacement": "GET /api/v2/continuity-plans/{plan_id}/reader"
+    },
     {
       "method": "POST",
       "path": "/api/v1/roll/set-die",
