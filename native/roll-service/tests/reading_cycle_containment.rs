@@ -363,7 +363,7 @@ async fn confirmed_repair_revalidates_after_waiting_for_a_graph_writer() {
                 .query_one(
                     "SELECT EXISTS(SELECT 1 FROM pg_locks
                      WHERE locktype='advisory' AND NOT granted
-                       AND classid=$1::oid AND objid=$2::oid)",
+                       AND classid::integer=$1 AND objid::integer=$2)",
                     &[&699001_i32, &owner],
                 )
                 .await
