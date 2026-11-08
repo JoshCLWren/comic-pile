@@ -77,14 +77,16 @@ def python_operations(app: FastAPI | None = None) -> list[tuple[str, str]]:
                 seen.add(key)
             if route.include_in_schema:
                 visible.add(key)
-    if visible != documented:
-        missing = sorted(visible - documented)
-        extra = sorted(documented - visible)
+    # FastAPI's OpenAPI may contain valid operations on routes omitted from
+    # APIRoute.include_in_schema through router composition. The raw contract
+    # still owns those methods: never silently drop them from Python ingress.
+    missing = sorted(visible - documented)
+    if missing:
         raise ValueError(
-            f"Raw Python OpenAPI differs from FastAPI registration: "
-            f"missing={missing[:10]} extra={extra[:10]}"
+            "Registered schema-visible Python routes missing from raw OpenAPI: "
+            f"{missing[:10]}"
         )
-    return registered
+    return sorted(set(registered) | documented, key=lambda entry: (entry[1], entry[0]))
 
 
 def route_regex(path: str) -> str:
