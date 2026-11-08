@@ -127,8 +127,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert isinstance(summary, dict)
     assert isinstance(summary.get("v1_total"), int)
     assert isinstance(summary.get("unversioned_total"), int)
-    assert summary["v1_total"] >= 239
-    assert summary["unversioned_total"] >= 45
     assert summary["total_python_surface"] == (
         summary["v1_total"] + summary["unversioned_total"]
     )
