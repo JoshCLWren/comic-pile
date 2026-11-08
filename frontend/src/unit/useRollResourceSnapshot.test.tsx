@@ -31,6 +31,7 @@ function api(eligible: number[] = [101, 102]): RollResourcesApi {
         die: 20,
         issue_ids: eligible,
         thread_ids: eligible.map((_, index) => index + 1),
+        pool_reason: eligible.length > 0 ? 'ready' : 'no_series',
       }),
     ),
     issueCards: vi.fn(async (): Promise<IssueCardsResponse> => ({ items: [] })),
@@ -51,7 +52,12 @@ describe('useRollResourceSnapshot', () => {
     const fake = api([])
     const { result } = renderHook(() => useRollResourceSnapshot([], fake), { wrapper: wrapper() })
     await waitFor(() =>
-      expect(result.current.eligibleIssueIds).toEqual({ die: 20, issue_ids: [], thread_ids: [] }),
+      expect(result.current.eligibleIssueIds).toEqual({
+        die: 20,
+        issue_ids: [],
+        thread_ids: [],
+        pool_reason: 'no_series',
+      }),
     )
 
     await act(async () => {
