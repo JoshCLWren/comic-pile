@@ -13,7 +13,7 @@ use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, 
 use crate::auth::{
     dto::{Claims, LoginRequest, RegisterRequest, TokenResponse, UserData, UserResponse},
     error::{AuthError, AuthResult},
-    utils::{generate_token, hash_password, token_digest, verify_password},
+    utils::{generate_token, hash_password_blocking, token_digest, verify_password_blocking},
 };
 use crate::db::{checkout, query_error, query_one_optional};
 use crate::AppState;
@@ -25,12 +25,16 @@ const MAX_IP_FAILURES: i64 = 10;
 /// Static synthetic bcrypt cost-12 hash for unknown accounts. There is no
 /// account using this digest. Avoid lazy generation, which would make the
 /// very first missing-user login measurably slower than every later request.
-const UNKNOWN_ACCOUNT_BCRYPT_HASH: &str =
+pub(crate) const UNKNOWN_ACCOUNT_BCRYPT_HASH: &str =
     "$2b$12$r0ZbLBzmr2toxR/aBGO75uh1uNrTLhTHJjce/iCVup/sztzLEyTUy";
 
 /// Known and unknown usernames each perform one password verification.
-fn verify_unknown_account_password(password: &str) -> AuthResult<()> {
-    let _ = verify_password(password, UNKNOWN_ACCOUNT_BCRYPT_HASH)?;
+async fn verify_unknown_account_password(password: &str) -> AuthResult<()> {
+    let _ = verify_password_blocking(
+        password.to_string(),
+        UNKNOWN_ACCOUNT_BCRYPT_HASH.to_string(),
+    )
+    .await?;
     Ok(())
 }
 
@@ -50,7 +54,7 @@ impl AuthService {
         if request.username.contains('@') {
             return Err(AuthError::InvalidUsername);
         }
-        let password_hash = hash_password(&request.password)?;
+        let password_hash = hash_password_blocking(request.password.clone()).await?;
 
         let connection = checkout(&self.state).await?;
         let existing = connection
@@ -120,18 +124,18 @@ impl AuthService {
             .user_by_username(&connection, &request.username)
             .await?;
         let Some(user) = user else {
-            verify_unknown_account_password(&request.password)?;
+            verify_unknown_account_password(&request.password).await?;
             self.record_failed_attempt(&connection, &request.username, client_ip)
                 .await?;
             return Err(AuthError::InvalidCredentials);
         };
         let Some(password_hash) = user.password_hash.as_deref() else {
-            verify_unknown_account_password(&request.password)?;
+            verify_unknown_account_password(&request.password).await?;
             self.record_failed_attempt(&connection, &request.username, client_ip)
                 .await?;
             return Err(AuthError::InvalidCredentials);
         };
-        if !verify_password(&request.password, password_hash)? {
+        if !verify_password_blocking(request.password.clone(), password_hash.to_string()).await? {
             self.record_failed_attempt(&connection, &request.username, client_ip)
                 .await?;
             return Err(AuthError::InvalidCredentials);
@@ -445,7 +449,7 @@ impl PasswordResetService {
             return Err(AuthError::InvalidResetToken);
         };
         let user_id: i32 = row.get(0);
-        let password_hash = hash_password(new_password)?;
+        let password_hash = hash_password_blocking(new_password.to_string()).await?;
         transaction
             .execute(
                 "UPDATE users SET password_hash = $1, password_changed_at = NOW() WHERE id = $2",

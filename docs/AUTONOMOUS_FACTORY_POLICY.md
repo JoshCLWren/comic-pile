@@ -637,6 +637,18 @@ A start update records current UTC and `Outcome: running`. A completion update p
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
+Worker prompts put stable policy before run identity, targets and findings.
+Trim duplicated instructions; preserve source/issue security and exact-head review context.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+
 ### Second Kilo free lane
 
 Worker 98 runs `kilo-auto/free` at :10, thirty minutes from worker 46 at :40.
@@ -668,3 +680,12 @@ records said `unknown_failure`; smoke classification now preserves that quota
 cause. Josh confirmed on November 7 that quotas remain exhausted. No new live
 probe was run and no recovery is claimed. Only a later successful existing-key
 probe can justify restoring a provider under a fresh, unused worker number.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.

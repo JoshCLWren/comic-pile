@@ -464,7 +464,7 @@ jobs:
           fi
           echo "Production rejected-login contract passed (HTTP 401, runtime rust)"
 
-  # Keep-N=1: live production alias only. No rollback candidate.
+  # Keep-N=2: live production alias plus previous READY rollback candidate.
   # Fail-soft so prune errors do not fail a finished migrate/deploy/smoke.
   prune:
     name: Prune older Vercel deployments
@@ -494,7 +494,7 @@ jobs:
             exit 1
           fi
 
-      - name: Keep only the live production alias
+      - name: Keep live and previous READY production
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
@@ -502,5 +502,5 @@ jobs:
             --project-id "$VERCEL_PROJECT_ID" \
             --project-name comic-pile \
             --team-id "$VERCEL_ORG_ID" \
-            --keep-n 1 \
+            --keep-n 2 \
             --fail-soft
