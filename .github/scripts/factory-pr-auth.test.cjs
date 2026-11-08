@@ -37,6 +37,7 @@ function run(credential, extraEnv = {}) {
     export PR_REBASE_TOKEN="$1"
     reject_out_of_scope_diff() { return 0; }
     factory_run_fast_checks() { return 0; }
+    find_overlapping_factory_pr() { printf '{}'; }
     git() {
       printf 'git:%s\\n' "$*" >&2
       case "$1" in
