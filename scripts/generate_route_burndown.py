@@ -792,12 +792,12 @@ def _render_agents_block(
             f"v1 active {v1_live} live Python / {v1_shadowed} migrated "
             f"(shadowed by Rust); unversioned active {unversioned_live} live "
             f"Python / {unversioned_shadowed} migrated (shadowed by Rust); "
-            "rest via `/api/index.py` catch-all."
+            "all remaining declared methods use generated Python exceptions."
         )
         lines.append(
-            "- Catch-all: `/api(?:/.*)? -> /api/index.py` (Python); "
-            "orphan `GET /api/v2/reading-boundaries/{thread_id}` is the "
-            "same v2 operation above, also served via `/api/index.py`."
+            "- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); "
+            "orphan `GET /api/v2/reading-boundaries/{thread_id}` has a "
+            "generated explicit Python exception."
         )
         lines.append(
             "- Full-surface inventory (v2 + v1 + unversioned + catch-all + "
