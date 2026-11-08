@@ -406,7 +406,8 @@ def evaluate_freeze(
             "Last attempted Deploy Production run on main is "
             f"{conclusion}: {run_url or f'run {run_id}'}. "
             "Factory merges are frozen except PRs labeled "
-            f"{DEPLOY_FIX_LABEL}. Re-run Deploy Production with "
+            f"{DEPLOY_FIX_LABEL}. A new merged deploy-fix on main permits one recovery "
+            "attempt through normal deployment and smoke gates. Re-run Deploy Production with "
             "workflow_dispatch override_freeze=true and a reason after the fix "
             "is on main. Only the repository owner may override."
         )
@@ -521,6 +522,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Load jobs for each run so gate-blocked runs can be skipped.",
     )
+    parser.add_argument(
+        "--recover-reviewed-fix", action="store_true",
+        help="Permit a new merged deploy-fix on current main to retry the full pipeline.",
+    )
     return parser.parse_args(argv)
 
 
@@ -548,6 +553,23 @@ def main(argv: list[str] | None = None) -> int:
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"invalid workflow-runs response: {exc}", file=sys.stderr)
         return 2
+    if decision["blocked"] and args.recover_reviewed_fix:
+        from factory_deploy_recovery import merged_repair
+
+        latest = latest_attempted_deploy_run(payload, jobs_loader=fetch_run_jobs)
+        if latest is not None:
+            try:
+                repair = merged_repair(latest, os.environ["GITHUB_REPOSITORY"])
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                print(f"Repair proof unavailable; preserving freeze: {exc}", file=sys.stderr)
+                repair = None
+            if repair is not None:
+                decision["blocked"] = False
+                decision["frozen"] = False
+                decision["reason"] = (
+                    f"New merged deploy-fix PR #{repair} permits one recovery attempt "
+                    "through normal schema, deployment and smoke verification."
+                )
     print(json.dumps(decision, sort_keys=True))
     print(str(decision["reason"]), file=sys.stderr)
     return 1 if decision["blocked"] else 0
