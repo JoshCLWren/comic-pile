@@ -286,6 +286,10 @@ jobs:
         run: uv sync --locked --no-dev
 
       - name: Generate Rust-default ingress from registered Python OpenAPI
+        env:
+          ENVIRONMENT: production
+          SECRET_KEY: synthetic-route-inspection-only
+          CORS_ORIGINS: https://comic-pile.vercel.app
         run: |
           set -euo pipefail
           .venv/bin/python scripts/generate_vercel_routes.py
