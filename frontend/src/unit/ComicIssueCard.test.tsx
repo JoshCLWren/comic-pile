@@ -117,6 +117,55 @@ describe('shared direct issue card', () => {
 })
 
 describe('issue-specific cover and shared rating input', () => {
+  it('uses the shared cover for Roll geometry without changing the CDN URL or zoom access', () => {
+    const image = 'https://comicvine.gamespot.com/a/uploads/original/cover.jpg'
+    const onLoad = vi.fn()
+    const { rerender } = render(
+      <ComicIssueCover
+        coverImageUrl={image}
+        threadTitle="Hellboy"
+        issueNumber="1"
+        variant="featured"
+        testId="roll-shared-cover"
+        placeholderTestId="cover-placeholder"
+        frameClassName="h-full w-full"
+        frameStyle={{ aspectRatio: 'auto' }}
+        imageClassName="h-full w-full object-contain"
+        onImageLoad={onLoad}
+      >
+        <button type="button">View cover larger</button>
+      </ComicIssueCover>,
+    )
+    expect(screen.getByTestId('roll-shared-cover')).toHaveStyle({ aspectRatio: 'auto' })
+    expect(screen.getByRole('img', { name: 'Cover for Hellboy #1' })).toHaveAttribute('src', image)
+    expect(screen.getByRole('button', { name: 'View cover larger' })).toBeVisible()
+    fireEvent.load(screen.getByRole('img'))
+    expect(onLoad).toHaveBeenCalledOnce()
+    fireEvent.error(screen.getByRole('img'))
+    expect(screen.getByTestId('cover-placeholder')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'View cover larger' })).not.toBeInTheDocument()
+    rerender(<ComicIssueCover coverImageUrl={null} threadTitle="Hellboy" issueNumber="2" />)
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute('aria-label', 'No cover for Hellboy #2')
+  })
+
+  it('lets the shared featured identity be a Roll heading without inventing read status', () => {
+    render(
+      <ComicIssueIdentity
+        threadTitle="Hellboy"
+        issueNumber="12"
+        status="unread"
+        rating={null}
+        variant="featured"
+        heading
+        headingTestId="comic-header-title"
+        showStatus={false}
+      />,
+    )
+    expect(screen.getByTestId('comic-header-title').tagName).toBe('H2')
+    expect(screen.getByRole('heading', { name: 'Hellboy #12' })).toBeVisible()
+    expect(screen.queryByText('Unread')).not.toBeInTheDocument()
+  })
+
   it('keeps the provider URL unchanged, replaces broken art, and recovers on mapping change', () => {
     const first = 'https://comicvine.gamespot.com/a/cover.jpg?size=original'
     const second = 'https://comicvine.gamespot.com/b/annual.jpg'
