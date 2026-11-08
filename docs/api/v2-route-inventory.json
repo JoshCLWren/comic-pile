@@ -420,14 +420,16 @@
       "path": "/api/v1/roll/set-die",
       "runtime": "python-fastapi",
       "retired_by_issue": 4352,
-      "replacement": "POST /api/v2/roll/dice-command"
+      "replacement": "POST /api/v2/roll/dice-command",
+      "migration_status": "completed"
     },
     {
       "method": "POST",
       "path": "/api/v1/roll/clear-manual-die",
       "runtime": "python-fastapi",
       "retired_by_issue": 4353,
-      "replacement": "POST /api/v2/roll/reset"
+      "replacement": "POST /api/v2/roll/reset",
+      "migration_status": "completed"
     },
     {
       "method": "PATCH",
