@@ -88,11 +88,11 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
 
 def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
     """Persist recognizable OpenCode smoke errors for the registry reporter."""
-    if runtime_model.startswith("z-ai/") and re.search(
+    if runtime_model.startswith(("z-ai/", "kilo/")) and re.search(
         r"(?<![0-9.])429(?!\d)|too many requests", log_content, re.I
     ):
         outcome_file.write_text(
-            f"provider_quota\tZ.AI free account rate limit for {runtime_model}\n",
+            f"provider_quota\tFree provider account rate limit for {runtime_model}\n",
             encoding="utf-8",
         )
         return True

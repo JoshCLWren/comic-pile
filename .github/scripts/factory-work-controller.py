@@ -1158,9 +1158,10 @@ def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
 
 
 def runtime_quota_block_reason(worker: str) -> str | None:
-    """Pause Z.AI's shared free account for 30 minutes after a trusted quota error."""
+    """Pause a shared free account for 30 minutes after a trusted quota error."""
     sources = worker_sources()
-    if sources.get(worker) != 'z-ai':
+    source = sources.get(worker)
+    if source not in {'z-ai', 'kilo-auto'}:
         return None
     from factory_completion_controller import (
         RATE_LIMIT_COOLDOWN_SECONDS, latest_worker_health, registry_comments,
@@ -1172,9 +1173,9 @@ def runtime_quota_block_reason(worker: str) -> str | None:
     )
     for peer, (outcome, updated) in health.items():
         until = updated + RATE_LIMIT_COOLDOWN_SECONDS
-        if sources.get(peer) == 'z-ai' and outcome == 'provider_quota' and updated <= now < until:
+        if sources.get(peer) == source and outcome == 'provider_quota' and updated <= now < until:
             reset = datetime.fromtimestamp(until, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-            return f'Factory {worker} paused until {reset}: provider_quota on shared Z.AI account'
+            return f'Factory {worker} paused until {reset}: provider_quota on shared {source} account'
     return None
 
 

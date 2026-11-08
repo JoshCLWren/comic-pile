@@ -636,3 +636,13 @@ Scheduled ChatGPT workers must update their assigned permanent comment on regist
 A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
+
+### Second Kilo free lane
+
+Worker 98 runs `kilo-auto/free` at :10, thirty minutes from worker 46 at :40.
+It uses the same anonymous Kilo CLI free route and existing `PR_REBASE_TOKEN`;
+there is no second account or credential. A smoke or session HTTP 429 records
+`provider_quota` and pauses assignment for both Kilo workers for thirty minutes,
+then automatically permits a new probe. A quota-limited smoke ends immediately
+instead of continuing into an expensive coding session. Worker 46's historical
+static-pause protection does not exempt it from this shared runtime quota backoff.
