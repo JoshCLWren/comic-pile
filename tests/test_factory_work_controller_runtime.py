@@ -996,3 +996,24 @@ def test_kilo_quota_pauses_both_existing_free_routes(
     assert controller.runtime_quota_block_reason('97') is None
     monkeypatch.setattr(controller.time, 'time', lambda: updated + 1800)
     assert controller.runtime_quota_block_reason(worker) is None
+
+
+@pytest.mark.parametrize('source', ['mistral', 'ollama-cloud'])
+def test_monthly_quota_blocks_assignment_until_calendar_reset(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, source: str,
+) -> None:
+    """A future restored lane pauses through the month without reusing retired IDs."""
+    completion = __import__('factory_completion_controller')
+    monkeypatch.setattr(controller, 'worker_sources', lambda: {'99': source})
+    monkeypatch.setattr(completion, 'registry_comments', lambda: [{
+        'author_association': 'OWNER',
+        'body': 'Worker: opencode-free-model-factory-99\nAttempt outcome: provider_quota\n'
+                'Updated: 2026-11-04T04:35:40Z\n',
+    }])
+    observed = completion.parse_time('2026-11-04T04:35:40Z')
+    reset = completion.parse_time('2026-12-01T00:00:00Z')
+    assert observed is not None and reset is not None
+    monkeypatch.setattr(controller.time, 'time', lambda: observed + 86400)
+    assert '2026-12-01T00:00:00Z' in controller.runtime_quota_block_reason('99')
+    monkeypatch.setattr(controller.time, 'time', lambda: reset)
+    assert controller.runtime_quota_block_reason('99') is None

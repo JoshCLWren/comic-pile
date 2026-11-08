@@ -25,7 +25,7 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FA
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
-from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
+from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
@@ -1158,13 +1158,13 @@ def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
 
 
 def runtime_quota_block_reason(worker: str) -> str | None:
-    """Pause a shared free account for 30 minutes after a trusted quota error."""
+    """Pause a shared free account until quota reset after a trusted quota error."""
     sources = worker_sources()
     source = sources.get(worker)
-    if source not in {'z-ai', 'kilo-auto'}:
+    if source not in {'z-ai', 'kilo-auto', 'mistral', 'ollama-cloud'}:
         return None
     from factory_completion_controller import (
-        RATE_LIMIT_COOLDOWN_SECONDS, latest_worker_health, registry_comments,
+        latest_worker_health, registry_comments,
     )
 
     now = int(time.time())
@@ -1172,7 +1172,7 @@ def runtime_quota_block_reason(worker: str) -> str | None:
         registry_comments(), trusted=comment_is_trusted, candidates=[], now_epoch=now,
     )
     for peer, (outcome, updated) in health.items():
-        until = updated + RATE_LIMIT_COOLDOWN_SECONDS
+        until = quota_reset_epoch(source, updated)
         if sources.get(peer) == source and outcome == 'provider_quota' and updated <= now < until:
             reset = datetime.fromtimestamp(until, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
             return f'Factory {worker} paused until {reset}: provider_quota on shared {source} account'
