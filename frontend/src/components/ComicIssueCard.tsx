@@ -119,7 +119,7 @@ export function ComicIssueIdentity({
   const Title = heading ? 'h2' : 'p'
   return (
     <div className="min-w-0">
-      <Title data-testid={headingTestId} className={`break-words font-bold leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
+      <Title data-testid={headingTestId} className={`break-words ${heading ? 'font-black' : 'font-bold'} leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
         {threadTitle} <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
       </Title>
       {showStatus && <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
