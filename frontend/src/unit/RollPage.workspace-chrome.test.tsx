@@ -150,6 +150,7 @@ describe('Roll rating header chrome (#2712)', () => {
     // `useSetDie` invalidates the scoped die-state query; the header must
     // track the refetched `dieState` while `bootstrap` (and thus the derived
     // fallback) stays byte-identical.
+    // SAFETY: minimal stub carrying only the fields the pure derivation reads; missing fields are never accessed.
     const bootstrap = { manual_die: null, current_die: 6 } as RollBootstrapResponse
     const before = resolveRollSelectedDie(
       { die: 6, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
