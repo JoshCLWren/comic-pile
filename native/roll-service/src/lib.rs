@@ -550,7 +550,11 @@ mod tests {
         // Never replace the hook of this shared test process: the child is
         // isolated so parallel Rust tests retain their normal failure output.
         let output = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "tests::panic_hook_child_never_logs_sensitive_payload", "--nocapture"])
+            .args([
+                "--exact",
+                "tests::panic_hook_child_never_logs_sensitive_payload",
+                "--nocapture",
+            ])
             .env("COMICPILE_PANIC_HOOK_CHILD", "1")
             .output()
             .unwrap();
