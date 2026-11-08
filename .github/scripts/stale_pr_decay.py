@@ -22,9 +22,9 @@ from datetime import datetime
 from typing import Any, Callable, cast
 
 import factory_eligibility as eligibility
+from factory_jev_shadow import MODEL as JEV_MODEL, call_jev
 from factory_review_policy import performed_via_untrusted_app
 from factory_work_policy import is_manual_only
-from factory_jev_shadow import MODEL as JEV_MODEL, call_jev
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 STALE_PR_GUARD_MARKER_RE = re.compile(
