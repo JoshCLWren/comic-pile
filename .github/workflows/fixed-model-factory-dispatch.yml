@@ -446,11 +446,12 @@ jobs:
           gh workflow run factory-ready-merge-drain.yml \
             --repo "$GITHUB_REPOSITORY" --ref main
 
-      - name: Expire stale factory PR attempts
+      - name: Review aged PRs with Jev without discarding code
         if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}
         run: |
           set -Eeuo pipefail
           python3 .github/scripts/factory-work-controller.py stale

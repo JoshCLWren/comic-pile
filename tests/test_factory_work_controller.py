@@ -62,6 +62,25 @@ def test_stale_check_uses_merged_history_for_baseline(controller, monkeypatch) -
     assert seen == {"baseline": [merged, opened], "process": [merged, opened]}
 
 
+def test_stale_check_reports_recoverable_prs_without_expiration(controller, monkeypatch) -> None:
+    """Controller visibility reports recoverable stale work, never closures."""
+    class Guard:
+        def get_baseline(self, prs: list[dict[str, Any]]) -> dict[str, Any]:
+            return {"threshold_seconds": 90_000, "sample_size": 100}
+
+        def process_stale_prs(
+            self, prs: list[dict[str, Any]] | None = None, dry_run: bool = False
+        ) -> list[dict[str, Any]]:
+            return [{"pr": 4727, "status": "stale-preserved", "issue": 4719}]
+
+    monkeypatch.setattr(controller, "StalePRGuard", lambda: Guard())
+    monkeypatch.setattr(controller, "list_factory_prs", lambda: [])
+    report = controller.check_stale_prs()
+    assert report["stale_preserved_count"] == 1
+    assert report["expired_count"] == 0
+    assert report["results"][0]["issue"] == 4719
+
+
 def issue(
     number: int,
     *labels: str,

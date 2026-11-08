@@ -1875,23 +1875,23 @@ def render_explain_report(report: dict[str, Any]) -> str:
 
 
 def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
-    """Evaluate open Factory PRs for staleness and expire any that cross the threshold.
+    """Report stale open PRs for recovery without discarding their work.
 
-    Returns a dict with the baseline statistics and expiration results.
-    This integrates the adaptive stale-PR decay guard into the controller.
+    Returns the baseline and non-destructive diagnostic results.
     """
     guard = StalePRGuard()
-    # The staleness baseline is defined by the rolling population of *merged*
-    # Factory PRs. Passing only open PRs made every baseline empty, forced the
-    # 24h cold-start fallback, and expired active attempts older than a day.
+    # The staleness baseline includes *merged* Factory PRs; otherwise the
+    # cold-start 24h fallback reports misleadingly stale work. No stale-age
+    # result authorizes closing an unfinished PR or resetting its issue.
     prs = list_factory_prs()
     baseline = guard.get_baseline(prs)
     results = guard.process_stale_prs(prs=prs, dry_run=dry_run)
-    expired = [r for r in results if r.get("status") == "expired"]
+    preserved = [r for r in results if r.get("status") == "stale-preserved"]
     return {
         "baseline": baseline,
         "results": results,
-        "expired_count": len(expired),
+        "expired_count": 0,
+        "stale_preserved_count": len(preserved),
         "dry_run": dry_run,
     }
 
