@@ -1,5 +1,6 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
-import { ReaderIssueActions, ReadNowIssueButton } from '../components/ReaderIssueActions'
+import { ReaderIssueActions } from '../components/ReaderIssueActions'
+import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import type { IssueCard } from '../services/issueCardsApi'
 import { ReadingPlanRecovery } from '../components/ReadingPlanRecovery'
@@ -282,16 +283,15 @@ export default function ReadingPlanDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {continueIssue && (
-            <ReadNowIssueButton
+            <CompactIssueCardTrigger
               issueId={continueIssue.issue_id}
-              threadId={continueIssue.thread_id}
-              label="Read next issue"
-              primary
               threadTitle={continueIssue.thread_title}
               issueNumber={continueIssue.issue_number}
-              isRead={continueIssue.availability === 'read'}
+              status={continueIssue.availability === 'read' ? 'read' : 'unread'}
+              card={cardsByIssue.get(continueIssue.issue_id)}
+              actionLabel="Read next issue"
             />
-          )}
+          )
           {editableListId != null ? (
             <button
               type="button"
