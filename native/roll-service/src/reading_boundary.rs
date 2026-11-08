@@ -10,12 +10,12 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use tokio_postgres::{IsolationLevel, Transaction};
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct ReadingBoundaryBatchRequest {
@@ -408,7 +408,7 @@ pub struct ReadingEligibilitySnapshot {
 }
 
 async fn load_boundary_labels(
-    db: &Object,
+    db: &Transaction<'_>,
     user: AuthenticatedUser,
     requested_thread_ids: &HashSet<i32>,
 ) -> Result<BoundaryShadowLabels, ApiError> {
@@ -620,7 +620,7 @@ async fn load_boundary_labels(
 }
 
 async fn _volume_labels_by_thread(
-    db: &Object,
+    db: &Transaction<'_>,
     user_id: i32,
     thread_ids: &HashSet<i32>,
 ) -> Result<HashMap<i32, String>, ApiError> {
@@ -735,20 +735,49 @@ async fn get_reading_boundary_explanations(
 ) -> Result<ReadingBoundaryBatchResponseV2, ApiError> {
     validate_thread_ids(&thread_ids)?;
     let requested: HashSet<i32> = thread_ids.iter().copied().collect();
-    let labels = load_boundary_labels(&db::checkout(state).await?, user, &requested).await?;
-
-    let missing = thread_ids
-        .iter()
-        .copied()
-        .find(|id| !labels.threads.contains_key(id));
-    if let Some(thread_id) = missing {
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            format!("Thread {thread_id} not found"),
-        ));
-    }
-
-    let validated = option_inputs::load_option_inputs_contained(state, user).await?;
+    // One RepeatableRead read-only snapshot for labels + Option E inputs so a
+    // concurrent reading-list mutation cannot produce an internally
+    // inconsistent explanation (#4347).
+    let mut pending = crate::dice_api::Pending::new(db::checkout(state).await?);
+    let result = tokio::time::timeout(state.request_timeout, async {
+        let tx = pending
+            .connection()
+            .build_transaction()
+            .isolation_level(IsolationLevel::RepeatableRead)
+            .read_only(true)
+            .start()
+            .await
+            .map_err(db::query_error)?;
+        let labels = load_boundary_labels(&tx, user, &requested).await?;
+        let missing = thread_ids
+            .iter()
+            .copied()
+            .find(|id| !labels.threads.contains_key(id));
+        if let Some(thread_id) = missing {
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(ApiError(
+                StatusCode::NOT_FOUND,
+                format!("Thread {thread_id} not found"),
+            ));
+        }
+        let validated = option_inputs::load_validated_contained_in_transaction(&tx, user).await?;
+        tx.rollback().await.map_err(db::query_error)?;
+        Ok::<_, ApiError>((labels, validated))
+    })
+    .await;
+    let (labels, validated) = match result {
+        Err(_) => {
+            return Err(ApiError(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Database temporarily unavailable".to_string(),
+            ));
+        }
+        Ok(Err(error)) => return Err(error),
+        Ok(Ok(values)) => {
+            pending.release();
+            values
+        }
+    };
     let snapshot = build_eligibility_snapshot(&validated, &labels, &requested)?;
 
     let mut threads = HashMap::new();
