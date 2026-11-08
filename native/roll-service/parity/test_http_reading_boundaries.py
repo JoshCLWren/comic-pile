@@ -4,18 +4,14 @@ The handler runs against the canonical Alembic schema used by production. The
 expected payload comes from the canonical Python service on that same data, then the
 mounted Rust route must return it byte-for-byte.
 """
-import asyncio
 import json
 import os
-import resource
-import time
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
 from jose import jwt
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import get_reading_execution_settings
 from app.models import Dependency, Issue, Thread, User
@@ -32,36 +28,19 @@ from app.schemas.reading_boundary import (
 from app.services.errors import NotFoundError
 from app.services.reading_boundary_service import get_reading_boundary_explanations
 
+from route_harness import db_counters, run_rust_example
+
 SECRET = "synthetic-native-reading-boundary-secret"
+BINARY = "native/roll-service/target/debug/examples/http_reading_boundaries"
 
 
 async def _run_example(env: dict[str, str]) -> tuple[dict[str, object], bytes, float, float]:
     """Run the mounted Rust route and return body, bytes, wall, and child CPU."""
-    before = resource.getrusage(resource.RUSAGE_CHILDREN)
-    started = time.perf_counter()
-    proc = await asyncio.create_subprocess_exec(
-        "native/roll-service/target/debug/examples/http_reading_boundaries",
-        env=env,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    out, err = await asyncio.wait_for(proc.communicate(), 25)
-    wall = time.perf_counter() - started
-    after = resource.getrusage(resource.RUSAGE_CHILDREN)
-    cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
-    assert proc.returncode == 0, err.decode()
-    return json.loads(out), out, wall, cpu
+    return await run_rust_example(BINARY, env)
 
 
-async def _db_bytes(engine) -> tuple[int, int]:
-    async with engine.connect() as connection:
-        row = await connection.execute(
-            text(
-                "SELECT xact_commit + xact_rollback, blks_read + blks_hit "
-                "FROM pg_stat_database WHERE datname = current_database()"
-            )
-        )
-        return tuple(int(value) for value in row.one())
+async def _db_bytes(engine: AsyncEngine) -> tuple[int, int, int | None]:
+    return await db_counters(engine)
 
 
 @pytest.mark.asyncio
