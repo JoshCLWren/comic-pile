@@ -221,6 +221,8 @@ def latest_attempted_deploy_run(
     eligible: list[Mapping[str, object]] = []
     for run in workflow_runs(payload):
         status = str(run.get("status") or "").lower()
+        if run.get("head_branch", "main") != "main":
+            continue
         if not is_deploy_production_run(run):
             continue
         if status and status != "completed":
@@ -279,7 +281,7 @@ def duplicate_deploy_recovered(
     CLI deploy step. Migration and post-deploy smoke failures never qualify.
     Missing job/step evidence fails closed.
     """
-    if not verified_live_sha or str(run.get("head_sha") or "") != verified_live_sha:
+    if not verified_live_sha or str(run.get("attempt_sha") or "") != verified_live_sha:
         return False
 
     jobs = _jobs_from_run(run)
@@ -547,6 +549,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         payload = json.load(sys.stdin)
+        if args.verified_live_sha:
+            from factory_deploy_recovery import attempt_revision
+
+            latest = latest_attempted_deploy_run(payload, jobs_loader=fetch_run_jobs)
+            if isinstance(latest, dict):
+                latest["attempt_sha"] = attempt_revision(
+                    latest, os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
+                )
         decision = evaluate_freeze(
             payload,
             override=bool(args.override),

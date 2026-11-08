@@ -7,6 +7,8 @@ import argparse
 import json
 import os
 import subprocess
+import tempfile
+from pathlib import Path
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
@@ -118,19 +120,62 @@ def successful_smokes(run: Mapping[str, object]) -> bool:
     return False
 
 
-def incident_body(run: Mapping[str, object]) -> str:
+def attempt_revision(run: Mapping[str, object], repository: str) -> str | None:
+    """Read selected SHA evidence for this exact run attempt, never its trigger SHA.
+
+    Historical/expired artifacts and failed pre-checkout runs have no trustworthy
+    selected revision. Missing evidence is reported explicitly, without guessing.
+    """
+    run_id = run.get("id")
+    attempt = run.get("run_attempt")
+    if not isinstance(run_id, int) or not isinstance(attempt, int):
+        return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="deployment-attempt-") as directory:
+            subprocess.run(
+                [
+                    "gh", "run", "download", str(run_id), "--repo", repository,
+                    "--name", f"deployment-attempt-{attempt}", "--dir", directory,
+                ],
+                check=True, capture_output=True, text=True, timeout=60,
+            )
+            path = Path(directory) / "deployment-attempt.json"
+            if path.stat().st_size > 4096:
+                return None
+            payload = json.loads(path.read_text())
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    sha = payload.get("sha")
+    if (
+        payload.get("run_id") == str(run_id)
+        and payload.get("run_attempt") == str(attempt)
+        and isinstance(sha, str)
+        and len(sha) == 40
+        and all(char in "0123456789abcdef" for char in sha)
+    ):
+        return sha
+    return None
+
+
+def incident_body(run: Mapping[str, object], selected_sha: str | None = None) -> str:
     """Build sanitized repair instructions from run metadata, never raw logs."""
     failures: list[str] = []
     for job in mappings(run.get("jobs")):
         for step in mappings(job.get("steps", [])):
             if step.get("conclusion") in RED_CONCLUSIONS:
                 failures.append(str(step.get("name")))
+    revision = (
+        f"`{selected_sha}`" if selected_sha else
+        "unavailable (no valid exact-attempt revision artifact; do not infer from trigger SHA)"
+    )
     return (
         f"{MARKER}\n\nOwner objective: restore verified production delivery automatically through "
         "a reviewed repair.\n\n"
         f"Failed attempt: {run.get('html_url')}\n"
-        f"Workflow trigger SHA: `{run.get('head_sha')}` (the run may check out newer main; "
-        "read the exact deployed SHA in its verification step).\n"
+        f"Selected deployment attempt SHA: {revision}.\n"
+        f"Workflow trigger SHA: `{run.get('head_sha')}`.\n"
         f"Failed steps: {', '.join(failures) or 'inspect linked job'}.\n\n"
         "Investigate the linked run and actual live deployment. Fix the cause; do not weaken "
         "smoke assertions or bypass schema, CI, independent review, or production gates. "
@@ -151,7 +196,7 @@ def reconcile(repository: str) -> None:
             "--paginate",
             "--slurp",
             f"repos/{repository}/actions/workflows/deploy-production.yml/runs"
-            "?branch=main&status=completed&per_page=100",
+            "?per_page=100",
         ]
     )
     latest = latest_attempted_deploy_run(
@@ -179,7 +224,7 @@ def reconcile(repository: str) -> None:
     )
     incidents = [issue for issue in issues if MARKER in str(issue.get("body") or "")]
     if latest.get("conclusion") in RED_CONCLUSIONS:
-        body = incident_body(latest)
+        body = incident_body(latest, attempt_revision(latest, repository))
         if incidents:
             # Body-only updates keep active leases and review state untouched.
             for issue in incidents:

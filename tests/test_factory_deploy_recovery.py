@@ -261,3 +261,54 @@ def test_freeze_cli_requires_successful_repair_proof(
     decision = json.loads(capsys.readouterr().out)
     assert result == (0 if proof_available else 1)
     assert decision["blocked"] is not proof_available
+
+
+@pytest.mark.parametrize("invalid", [None, "sha", "run_id", "run_attempt"])
+def test_exact_attempt_revision_artifact(
+    recovery: ModuleType, monkeypatch: pytest.MonkeyPatch, invalid: str | None
+) -> None:
+    """Only matching run/attempt metadata supplies the selected main revision."""
+    run = failed_run()
+    run["run_attempt"] = 2
+    payload = {"sha": "b" * 40, "run_id": "11", "run_attempt": "2"}
+    if invalid:
+        payload[invalid] = "invalid"
+
+    def download(arguments: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert "deployment-attempt-2" in arguments
+        Path(arguments[-1], "deployment-attempt.json").write_text(json.dumps(payload))
+        return subprocess.CompletedProcess(arguments, 0, "", "")
+
+    monkeypatch.setattr(recovery.subprocess, "run", download)
+    selected = recovery.attempt_revision(run, "example/repo")
+    assert selected == (None if invalid else "b" * 40)
+    body = recovery.incident_body(run, selected)
+    assert f"Workflow trigger SHA: `{'a' * 40}`" in body
+    assert ("unavailable" in body) is bool(invalid)
+    if not invalid:
+        assert f"Selected deployment attempt SHA: `{'b' * 40}`" in body
+
+
+def test_missing_historical_attempt_artifact_is_truthful(
+    recovery: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Expired/missing/API-unavailable evidence is never replaced by trigger SHA."""
+    run = failed_run()
+    run["run_attempt"] = 1
+
+    def missing(*args: object, **kwargs: object) -> None:
+        raise subprocess.CalledProcessError(1, ["gh", "run", "download"])
+
+    monkeypatch.setattr(recovery.subprocess, "run", missing)
+    assert recovery.attempt_revision(run, "example/repo") is None
+    assert "unavailable" in recovery.incident_body(run)
+
+
+def test_revision_is_published_before_preflight_dependencies() -> None:
+    """A selected checkout remains attributable even when setup/preflight fails."""
+    deploy = (SCRIPTS.parent / "workflows" / "deploy-production.yml").read_text()
+    preflight = deploy.split("  preflight:")[1].split("  deploy:")[0]
+    assert preflight.index("Publish selected deployment revision") < preflight.index("Require Vercel token")
+    assert "deployment-attempt-${{ github.run_attempt }}" in preflight
+    assert 'run_attempt: $run_attempt' in preflight
+    assert "steps.revision.outputs.deploy_sha" in preflight

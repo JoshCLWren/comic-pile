@@ -277,6 +277,13 @@ An unchanged failing revision is never blindly retried. If that attempt fails,
 the old repair cannot authorize another attempt: a newer merged repair or an
 explicit repository owner `override_freeze` with a reason is required.
 Blocked deploy runs report failure and are excluded from attempted-deploy history.
+All freeze callers paginate completed run summaries and stop fetching job details at
+the latest actual attempt, so repeated blocked runs cannot erase the freeze.
+Preflight publishes a run-attempt-specific `deployment-attempt-N` artifact with the
+selected checkout SHA before dependency setup. Recovery incidents use that evidence;
+historical or expired metadata is explicitly unavailable, never guessed from the
+workflow trigger SHA. Missing exact-attempt evidence cannot reconcile a failed CLI
+deploy against the live alias.
 Only a successful actual deployment with both production probes passing closes
 the managed repair issue; live worker leases are left for that worker to finish.
 
