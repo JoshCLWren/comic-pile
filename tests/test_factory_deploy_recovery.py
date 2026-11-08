@@ -232,15 +232,16 @@ def test_rust_health_smoke_retries_curl_errors_without_weakening_identity(
 ) -> None:
     """A failed curl retries; a permanently failed probe still blocks deployment."""
     workflow = (SCRIPTS.parent / "workflows" / "deploy-production.yml").read_text()
-    smoke = workflow.split("      - name: Smoke production Rust health\\n", 1)[1].split(
-        "      - name: Smoke production unknown API returns native Rust 404\\n", 1
+    smoke = workflow.split("      - name: Smoke production Rust health\n", 1)[1].split(
+        "      - name: Smoke production unknown API returns native Rust 404\n", 1
     )[0]
-    shell = textwrap.dedent(smoke.split("        run: |\\n", 1)[1])
+    shell = textwrap.dedent(smoke.split("        run: |\n", 1)[1])
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     counter = tmp_path / "curl-count"
     fake_curl = bin_dir / "curl"
-    fake_curl.write_text(r"""#!/usr/bin/env bash
+    fake_curl.write_text(
+        r"""#!/usr/bin/env bash
 set -euo pipefail
 count="$(cat "$FAKE_CURL_COUNT" 2>/dev/null || echo 0)"
 printf '%s' "$((count + 1))" > "$FAKE_CURL_COUNT"
@@ -256,26 +257,36 @@ while [[ "$#" -gt 0 ]]; do
     *) shift ;;
   esac
 done
-printf 'HTTP/1.1 200 OK\\r\\nx-comicpile-api-runtime: rust\\r\\n' > "$headers"
+printf 'HTTP/1.1 200 OK\r\nx-comicpile-api-runtime: rust\r\n' > "$headers"
 printf '{"status":"ok","build":{"revision":"%s","package":"comicpile-vercel-native","compiler":"rustc 1.99.0"},"process":{"os":"linux","executable":"native_roll"}}' "$FAKE_SHA" > "$body"
 printf 200
-""")
+"""
+    )
     fake_curl.chmod(0o755)
     fake_sleep = bin_dir / "sleep"
-    fake_sleep.write_text("#!/bin/sh\\nexit 0\\n")
+    fake_sleep.write_text("#!/bin/sh\nexit 0\n")
     fake_sleep.chmod(0o755)
     root = SCRIPTS.parents[1]
-    sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=root, text=True
+    ).strip()
     env = dict(os.environ)
-    env.update({
-        "FAKE_CURL_COUNT": str(counter),
-        "FAKE_CURL_ALWAYS_FAIL": "1" if always_fail else "0",
-        "FAKE_SHA": sha,
-        "PATH": f"{bin_dir}:{env['PATH']}",
-    })
+    env.update(
+        {
+            "FAKE_CURL_COUNT": str(counter),
+            "FAKE_CURL_ALWAYS_FAIL": "1" if always_fail else "0",
+            "FAKE_SHA": sha,
+            "PATH": f"{bin_dir}:{env['PATH']}",
+        }
+    )
     result = subprocess.run(
-        ["bash", "-c", shell], cwd=root, env=env,
-        capture_output=True, text=True, check=False, timeout=30,
+        ["bash", "-c", shell],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
     )
     if always_fail:
         assert result.returncode != 0
