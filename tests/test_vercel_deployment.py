@@ -292,7 +292,11 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
 def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> None:
     """Adding a new Rust endpoint cannot shift unrelated route assertions."""
     routes = _routes(_load_vercel_config())
-    insertion = _route_index(routes, src="/api(?:/.*)?")
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
+    insertion = next(
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
+    )
     expanded = [
         *routes[:insertion],
         {
@@ -312,7 +316,11 @@ def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> No
 def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]) -> None:
     """Reject a native rewrite whose method and source overlap an existing one."""
     routes = _routes(_load_vercel_config())
-    insertion = _route_index(routes, src="/api(?:/.*)?")
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
+    insertion = next(
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
+    )
     duplicate = {
         "src": "/api/v2/auth/register",
         "methods": list(methods),
@@ -326,7 +334,11 @@ def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]
 def test_disjoint_methods_can_use_same_native_source() -> None:
     """Two handlers sharing a path but not its HTTP method are not duplicates."""
     routes = _routes(_load_vercel_config())
-    insertion = _route_index(routes, src="/api(?:/.*)?")
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
+    insertion = next(
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
+    )
     distinct_method = {
         "src": "/api/v2/auth/register",
         "methods": ["GET"],
