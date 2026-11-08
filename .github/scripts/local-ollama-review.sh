@@ -14,11 +14,12 @@ HEAD="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
 ISSUE="$(gh pr view "$PR" --json body --jq .body | grep -oE 'Closes #[0-9]+|Fixes #[0-9]+|Resolves #[0-9]+' | grep -oE '[0-9]+' | head -1 || true)"
 [ -n "$ISSUE" ] || ISSUE="4825"
 gh pr diff "$PR" > /tmp/p.patch
-truncate -s 40000 /tmp/p.patch || true
+truncate -s 8000 /tmp/p.patch || true
 # call provider via OpenAI-compatible chat (bounded, single message, standard scheme)
+python3 -c "import json; patch=open('/tmp/p.patch').read(); open('/tmp/req.json','w').write(json.dumps({'model': '${REVIEW_PROVIDER_MODEL}', 'messages': [{'role':'user','content': f'Review PR head ${HEAD}. Reply APPROVE or REJECT plus reason. Patch: {patch[:6000]}'}], 'max_tokens': 80}))"
 curl -fsS -m 120 -X POST "${REVIEW_PROVIDER_URL%/}/chat/completions" \
   -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
-  -d "{\"model\":\"${REVIEW_PROVIDER_MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"Review PR head ${HEAD}. Reply APPROVE or REJECT plus reason. Patch: $(cat /tmp/p.patch | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')\"}],\"max_tokens\":80}" > /tmp/resp.json 2>/tmp/curl.err \
+  --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err \
   || { echo "REVIEW_PROVIDER_URL unreachable; skipping"; cat /tmp/curl.err; exit 0; }
 VERDICT="$(python3 -c "import json; print(json.load(open('/tmp/resp.json'))['choices'][0]['message']['content'][:200])")"
 echo "local verdict: $VERDICT"
