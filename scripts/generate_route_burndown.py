@@ -35,7 +35,7 @@ VERCEL_PATH: Final = Path("vercel.json")
 AGENTS_PATH: Final = Path("AGENTS.md")
 NATIVE_DESTINATIONS: Final = frozenset({"/api/native_roll.rs", "/api/native_issue.rs"})
 CATCH_ALL_SRC: Final = "/api(?:/.*)?"
-CATCH_ALL_DEST: Final = "/api/index.py"
+CATCH_ALL_DEST: Final = "/api/native_roll.rs"
 ORPHAN_METHOD: Final = "GET"
 ORPHAN_PATH: Final = "/api/v2/reading-boundaries/{thread_id}"
 BURN_DOWN_ISSUE: Final = 4739
@@ -548,9 +548,9 @@ def _verify_full_surface_entries(
             f"orphan must be {ORPHAN_METHOD} {ORPHAN_PATH}"
         )
     destination = _resolve_destination(method, path, routes)
-    if destination != CATCH_ALL_DEST:
+    if destination != "/api/index.py":
         raise BurndownGenerationError(
-            f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
+            f"orphan {method} {path} must ingress to Python explicitly"
         )
     matches = [
         item
@@ -564,7 +564,7 @@ def _verify_full_surface_entries(
     match = matches[0]
     if match.get("runtime") != "python-fastapi":
         raise BurndownGenerationError(f"orphan {method} {path} must be python-fastapi")
-    if match.get("ingress_destination") != CATCH_ALL_DEST:
+    if match.get("ingress_destination") != "/api/index.py":
         raise BurndownGenerationError(
             f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
         )
@@ -597,13 +597,36 @@ def _render_full_surface(
     raw_full = inventory.get("full_surface")
     assert isinstance(raw_full, dict)
     raw_full_map = {str(key): item for key, item in raw_full.items()}
-    v1_raw = _validated_named_operations(
-        raw_full_map.get("v1_operations"), "full_surface.v1_operations"
-    )
-    unversioned_raw = _validated_named_operations(
-        raw_full_map.get("unversioned_operations"),
-        "full_surface.unversioned_operations",
-    )
+    # Derive the legacy operation universe from real FastAPI registration,
+    # not from the previous checked-in inventory. Preserve only metadata for
+    # unchanged paths. Deleted Python routes disappear on the next run.
+    from scripts.generate_vercel_routes import python_operations
+
+    previous = {
+        (item["method"], item["path"]): item
+        for bucket in ("v1_operations", "unversioned_operations")
+        for item in _validated_named_operations(
+            raw_full_map.get(bucket), f"full_surface.{bucket}"
+        )
+    }
+    v1_raw: list[dict[str, object]] = []
+    unversioned_raw: list[dict[str, object]] = []
+    for method, path in sorted(python_operations(), key=lambda entry: (entry[1], entry[0])):
+        if path.startswith("/api/v2/"):
+            continue
+        old = previous.get((method, path), {})
+        operation: dict[str, object] = {
+            "method": method,
+            "path": path,
+            "runtime": "python-fastapi",
+            "status": old.get("status", "transitional"),
+            "owning_issue": old.get("owning_issue"),
+            "consumers": old.get("consumers", []),
+        }
+        if path.startswith("/api/v1/"):
+            v1_raw.append(operation)
+        elif path.startswith("/api/"):
+            unversioned_raw.append(operation)
     v1_operations = _enrich_named_operations(
         v1_raw, routes, "full_surface.v1_operations"
     )
