@@ -228,7 +228,13 @@
       "owning_issue": 4335,
       "consumers": [
         "frontend/src/services/api-reading-boundaries.ts"
-      ]
+      ],
+      "sql_budget": {
+        "application_statements": 9,
+        "transaction_control_statements": 2,
+        "total_statements": 11,
+        "basis": "auth 1 + boundary label reads 7 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1"
+      }
     },
     {
       "method": "GET",
