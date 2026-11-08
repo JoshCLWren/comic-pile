@@ -362,6 +362,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
         .route(
+            "/api/v1/threads/completed/threads",
+            get(threads::list_completed_threads),
+        )
+        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )

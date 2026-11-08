@@ -99,14 +99,15 @@ async def _expected(
     sort: str = "position",
     page_size: int = 50,
     page_token: str | None = None,
+    completed: bool = False,
 ) -> dict[str, object]:
-    response = await thread_service.list_queue_threads(
-        db,
-        user_id,
-        search=search,
-        sort=sort,
-        page_size=page_size,
-        page_token=page_token,
+    list_method = (
+        thread_service.list_completed_threads
+        if completed
+        else thread_service.list_queue_threads
+    )
+    response = await list_method(
+        db, user_id, search=search, sort=sort, page_size=page_size, page_token=page_token
     )
     return response.model_dump(mode="json")
 
@@ -490,6 +491,18 @@ async def test_native_threads_collection_matches_python_oracle(
 
             # The full first page, every consumer field and one statement.
             first = await compare()
+
+            completed_env = dict(env)
+            completed_env["RUST_ROLL_TEST_URI"] = (
+                "/api/v1/threads/completed/threads?sort=position&page_size=1"
+            )
+            completed_result = await _run_example(completed_env)
+            completed_expected = await _expected(
+                db, owner.id, sort="position", page_size=1, completed=True
+            )
+            assert completed_result["status"] == 200, completed_result
+            assert completed_result["body"] == completed_expected
+            assert completed_result["page_statements"] == 1
             first_threads = first.get("threads")
             assert isinstance(first_threads, list)
             thread_rows = [row for row in first_threads if _is_thread_row(row)]
