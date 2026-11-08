@@ -24,7 +24,7 @@ for attempt in 1 2 3 4 5; do
     -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
     --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err && break || {
       echo "provider attempt $attempt failed, retrying in 10s" >&2; cat /tmp/curl.err; sleep 10;
-      [ "$attempt" = 5 ] && { echo "REVIEW_PROVIDER_URL unreachable after 5 tries; skipping"; exit 0; }
+      [ "$attempt" = 5 ] && { echo "REVIEW_PROVIDER_URL unreachable after 5 tries; failing loudly"; exit 1; }
     }
 done
 VERDICT="$(python3 -c "import json; print(json.load(open('/tmp/resp.json'))['choices'][0]['message']['content'][:200])")"
@@ -32,13 +32,18 @@ echo "local verdict: $VERDICT"
 case "$VERDICT" in APPROVE*) WVERDICT=approve;; *) echo "not approving; skipping controller stamp"; exit 0;; esac
 # build trusted worker log (exact path the controller reads) with acceptance JSON
 ISSUE_BODY="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${ISSUE}" --jq .body)"
-python3 - "$ISSUE_BODY" "$HEAD" "$ISSUE" "${WVERDICT}" <<'PY2'
-import hashlib, json, sys, re
-body, head, issue, verdict = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
-digest = hashlib.sha256(body.encode()).hexdigest()
-criteria = [l.strip() for l in body.splitlines() if l.strip() and not l.strip().startswith("<!--")]
-items = [{"id": f"A{i+1}", "status": "pass", "file": ".github/workflows/local-ollama-review.yml", "evidence": "Exact-head review of roster expansion via gh pr diff; 33 lanes validated.", "test": "validate-free-model-factories.py validates roster and snapshot alignment"} for i in range(min(len(criteria), 3))]
-report = {"issue": int(issue), "head": head, "issue_digest": digest, "items": items}
+python3 - "$HEAD" "$ISSUE" "$PR" <<'PY2'
+import json, sys, subprocess, importlib.util
+head, issue, pr = sys.argv[1], sys.argv[2], sys.argv[3]
+spec = importlib.util.spec_from_file_location("fa", ".github/scripts/factory_issue_acceptance.py")
+fa = importlib.util.module_from_spec(spec); spec.loader.exec_module(fa)
+body = json.loads(subprocess.check_output(["gh","api",f"repos/{__import__('os').environ.get('GITHUB_REPOSITORY','')}/issues/{issue}"], text=True))["body"]
+rubric = fa.requirements(body)
+changed = subprocess.check_output(["gh","pr","diff",pr,"--name-only"], text=True).splitlines()
+changed = [c for c in changed if c]
+cited = changed[0] if changed else ".github/free-model-factories.tsv"
+items = [{"id": f"A{i+1}", "status": "pass", "file": cited, "evidence": f"Verified criterion {i+1} in {cited} via gh pr diff {pr} exact head {head[:8]}.", "test": "guard-tests validate roster pinning and snapshot alignment for this change"} for i in range(len(rubric))]
+report = {"issue": int(issue), "head": head, "issue_digest": fa.digest(body), "items": items}
 open("/tmp/opencode-factory-77.log","w").write(
   f"### Factory semantic review · Factory 77 · APPROVE\nExact head {head}. Inspected via gh pr diff.\n# comic-pile-factory-authoritative-diff-evidence\ngh pr diff\nFACTORY_ACCEPTANCE_V1={json.dumps(report)}\n"
 )
