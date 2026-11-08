@@ -6491,7 +6491,7 @@ export interface paths {
         };
         /**
          * Documentation-only operation for the mounted v2 Roll bootstrap read.
-         * @description The published response is the actual handler DTO, so known session, die,
+         * @description The published response is the actual handler DTO, so known session,
          *     pending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and
          *     timezone fields stay in the live contract. Stored tag records, recovery
          *     nodes and mode-guidance JSON remain explicitly extensible.
@@ -7102,13 +7102,9 @@ export interface components {
         BootstrapResponseV2: {
             active_thread?: null | components["schemas"]["BootstrapActiveThread"];
             bandwidth: components["schemas"]["BootstrapBandwidth"];
-            /** Format: int32 */
-            current_die: number;
             last_read?: null | components["schemas"]["BootstrapLastRead"];
             /** Format: int64 */
             last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
             /** Format: int32 */
             pending_thread_id?: number | null;
             pool_reason: components["schemas"]["PoolReason"];

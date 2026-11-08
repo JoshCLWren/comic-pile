@@ -751,10 +751,6 @@
           "bandwidth": {
             "$ref": "#/components/schemas/BootstrapBandwidth"
           },
-          "current_die": {
-            "format": "int32",
-            "type": "integer"
-          },
           "last_read": {
             "oneOf": [
               {
@@ -767,13 +763,6 @@
           },
           "last_rolled_result": {
             "format": "int64",
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "manual_die": {
-            "format": "int32",
             "type": [
               "integer",
               "null"
@@ -849,7 +838,6 @@
         "required": [
           "session_id",
           "user_id",
-          "current_die",
           "session_mode",
           "bandwidth",
           "rollable",
@@ -37702,7 +37690,7 @@
     },
     "/api/v2/roll/bootstrap": {
       "get": {
-        "description": "The published response is the actual handler DTO, so known session, die,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
+        "description": "The published response is the actual handler DTO, so known session,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
         "operationId": "bootstrap_documentation",
         "parameters": [
           {

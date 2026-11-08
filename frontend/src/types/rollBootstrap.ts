@@ -134,8 +134,6 @@ export function formatSessionMode(mode: SessionModeState | null | undefined): st
 export interface RollBootstrapResponse {
   session_id: number
   user_id: number
-  current_die: number
-  manual_die: number | null
   pending_thread_id: number | null
   last_rolled_result: number | null
   session_mode: SessionMode

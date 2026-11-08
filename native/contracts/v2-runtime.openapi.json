@@ -1365,7 +1365,7 @@
           "roll"
         ],
         "summary": "Documentation-only operation for the mounted v2 Roll bootstrap read.",
-        "description": "The published response is the actual handler DTO, so known session, die,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
+        "description": "The published response is the actual handler DTO, so known session,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
         "operationId": "bootstrap_documentation",
         "parameters": [
           {
@@ -2196,7 +2196,6 @@
         "required": [
           "session_id",
           "user_id",
-          "current_die",
           "session_mode",
           "bandwidth",
           "rollable",
@@ -2220,10 +2219,6 @@
           "bandwidth": {
             "$ref": "#/components/schemas/BootstrapBandwidth"
           },
-          "current_die": {
-            "type": "integer",
-            "format": "int32"
-          },
           "last_read": {
             "oneOf": [
               {
@@ -2240,13 +2235,6 @@
               "null"
             ],
             "format": "int64"
-          },
-          "manual_die": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
           },
           "pending_thread_id": {
             "type": [

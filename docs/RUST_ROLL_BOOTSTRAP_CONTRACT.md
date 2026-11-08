@@ -229,8 +229,10 @@ adapter and contract coverage. Two residuals remain:
 
 Bootstrap remains authoritative for session/pending/recovery and supplies
 fallback pool metadata. The scoped die-state resource now owns die size
-and the 3D die model when its query succeeds; Bootstrap is the fallback
-while the scoped query is pending or fails. The
+and the 3D die model; (#4352 contract-after) bootstrap no longer carries
+`current_die`/`manual_die`, so the selected die is scoped-only
+(`DieStateResponse.die`, defaulting to d6 while pending or failed) and
+there is no bootstrap die fallback. The
 callers in `frontend/src/hooks/useRollResources.ts` are now mounted
 incrementally: `RollPage` calls `useRollDieState` and passes the scoped
 value to `RollHeader`, calls `useRollEligibleIssueIds` with the
@@ -245,11 +247,13 @@ of its own.
 Migrate in this order, one surface per reviewable change:
 
 1. Die header — **selected die, ladder list, readout, die size and 3D model
-   mounted** from `GET /v2/roll/die-state` (`die`, `ladder`), falling back
-   to bootstrap `current_die` and the static ladder while the scoped query
-   settles or fails, and invalidated after roll/dice-command/reset. Remaining in
-   this surface: drive `default_die` and `last_roll` from the scoped
-   resource.
+   mounted** from `GET /v2/roll/die-state` (`die`, `ladder`), with the
+   static ladder as the only fallback while the scoped query settles or
+   fails, and invalidated after roll/dice-command/reset. The bootstrap
+   `current_die`/`manual_die` projections were removed (#4352
+   contract-after); the selected die is scoped-only with a d6 default.
+   Remaining in this surface: drive `default_die` and `last_roll` from the
+   scoped resource.
 2. Eligible pool — **mounted** in `ThreadPool` in-play faces from
    `GET /v2/roll/eligible-issue-ids` (`die`, `issue_ids`,
    `thread_ids`), with browser-owned snoozes as the `snoozed` query
@@ -264,6 +268,9 @@ Migrate in this order, one surface per reviewable change:
 
 Only after all three surfaces settle on scoped resources with green
 exact-head CI and independent review should the legacy Rust v2
-bootstrap be retired under #4369. Deleting bootstrap before that
-point would regress session/pending/recovery, which the scoped
-resources do not yet own.
+bootstrap be retired under #4369 (tracked as #4299, blocked on #4343/#4405).
+Deleting bootstrap before that point would regress session/pending/recovery,
+which the scoped resources do not yet own. `last_rolled_result` is retained
+in bootstrap for pending hydration (session-scoped; the scoped
+`DieStateResponse.last_roll` is global and must not light a stale rolled
+state).

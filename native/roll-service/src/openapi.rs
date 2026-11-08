@@ -304,8 +304,6 @@ mod tests {
             &[
                 "session_id",
                 "user_id",
-                "current_die",
-                "manual_die",
                 "pending_thread_id",
                 "last_rolled_result",
                 "session_mode",
