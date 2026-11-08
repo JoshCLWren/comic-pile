@@ -14,6 +14,8 @@ interface Props {
   onMutated?: (response: IssueReadRateResponse) => void
   /** Parent already displays the exact issue name in an adjacent named link. */
   hideTitle?: boolean
+  /** Context-specific label for the same covered issue action, e.g. a Plan's next issue. */
+  actionLabel?: string
 }
 
 /** On-demand detail loader: a dense collapsed list does not mount a query per row. */
@@ -63,7 +65,7 @@ function ExpandedIssueCard({
  */
 export default function CompactIssueCardTrigger({
   issueId, threadTitle, issueNumber, status = 'unread',
-  rating = null, card, onMutated, hideTitle = false,
+  rating = null, card, onMutated, hideTitle = false, actionLabel,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [loadedCard, setLoadedCard] = useState<IssueCard | null>(null)
@@ -79,7 +81,7 @@ export default function CompactIssueCardTrigger({
     <div className="min-w-0" data-testid={`issue-card-trigger-${issueId}`}>
       <button
         type="button"
-        aria-label={`Reading and mapping actions for ${title} #${number}`}
+        aria-label={actionLabel ? `${actionLabel}: ${title} #${number}` : `Reading and mapping actions for ${title} #${number}`}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 max-w-full items-center gap-2 rounded-lg p-1 text-left text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -95,7 +97,7 @@ export default function CompactIssueCardTrigger({
           <span className="block text-[11px] text-[var(--theme-text-muted)]">
             {isRead ? 'Read' : 'Unread'}
             {(resolved?.rating ?? rating) != null ? ` · Rated ${resolved?.rating ?? rating}` : ''}
-            {' · '}{open ? 'Close actions' : 'Read / Rate / Map'}
+            {' · '}{open ? 'Close actions' : actionLabel ?? 'Read / Rate / Map'}
           </span>
         </span>
       </button>
