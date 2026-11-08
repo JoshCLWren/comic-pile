@@ -841,6 +841,23 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
     return worker not in candidate.head_contributors
 
 
+def worker_delivery_role(worker: str) -> str:
+    """Read starter/finisher preference from the live free roster, never worker IDs."""
+    from factory_roster import load_roster_rows
+
+    try:
+        row = next((row for row in load_roster_rows() if row['worker'] == worker), None)
+    except (OSError, ValueError):
+        return ''
+    if row is None:
+        return ''
+    if row['source'] == 'z-ai' and row['model'] == 'glm-4.5-flash':
+        return 'starter'
+    if row['source'] == 'kilo-auto' and row['model'] == 'kilo-auto/free':
+        return 'finisher'
+    return ''
+
+
 def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> list[Candidate]:
     """Balance completion pressure with a deterministic fresh-issue intake lane."""
     eligible = [
@@ -850,6 +867,18 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
     ]
     review_backlog = sum(1 for c in candidates if c.kind == "pr" and c.stage in ("factory:review", "factory:ci", "factory:changes-requested"))
     review_first = review_capacity_worker(worker, review_backlog=review_backlog)
+    role = worker_delivery_role(worker)
+
+    def role_preference(candidate: Candidate) -> int:
+        if candidate.lane <= 1:
+            return candidate.lane
+        if role == 'starter' and candidate.kind == 'issue':
+            return 2
+        if role == 'finisher' and candidate.kind == 'pr' and candidate.stage in {
+            'factory:changes-requested', 'factory:ci',
+        }:
+            return 2
+        return 3
 
     def work_class(candidate: Candidate) -> int:
         if candidate.lane == 0:
@@ -873,7 +902,7 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
 
     return sorted(
         eligible,
-        key=lambda candidate: (work_class(candidate), candidate.sort_key()),
+        key=lambda candidate: (role_preference(candidate), work_class(candidate), candidate.sort_key()),
     )
 
 

@@ -624,3 +624,15 @@ Scheduled ChatGPT workers must update their assigned permanent comment on regist
 A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
+
+### Measured starter/finisher preference
+
+Within otherwise eligible work, lanes pinned to `z-ai` / `glm-4.5-flash`
+prefer fresh issues and lanes pinned to `kilo-auto` / `kilo-auto/free` prefer
+PR changes-requested and CI-repair work. The role comes from source/model in
+the current roster, including future duplicate slots, not worker numbers.
+Main-breakage and user-reported bugs retain protected priority. Every lane
+falls back to normal ranking when no preferred work is eligible. Manual
+issue/repair dispatch tries the corresponding eligible specialist first, then
+continues through normal workers if assignment declines (busy, paused or leased).
+Review independence, claims, quotas, and remote capacity gates remain unchanged.

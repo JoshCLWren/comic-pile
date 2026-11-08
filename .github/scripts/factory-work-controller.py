@@ -1885,7 +1885,15 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
     manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
     capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
     workers = cast(list[dict[str, str]], capacity['executable_candidates'])
-    for worker in sorted({row['worker'] for row in workers}, key=int):
+    preferred_role = 'starter' if kind == 'issue' else (
+        'finisher' if action in {'review-findings', 'ci-repair'} else ''
+    )
+    from factory_work_policy import worker_delivery_role
+
+    for worker in sorted(
+        {row['worker'] for row in workers},
+        key=lambda worker: (worker_delivery_role(worker) != preferred_role, int(worker)),
+    ):
         candidate = assign(worker, target=(kind, number), requested_action=action)
         if candidate is None:
             continue
