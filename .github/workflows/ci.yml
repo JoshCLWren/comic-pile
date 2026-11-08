@@ -482,6 +482,10 @@ jobs:
           exit 1
 
       - name: Regenerate actual Rust-first Python ingress
+        env:
+          ENVIRONMENT: production
+          SECRET_KEY: synthetic-route-inspection-only
+          CORS_ORIGINS: https://comic-pile.vercel.app
         run: |
           python scripts/generate_vercel_routes.py
           python scripts/generate_route_burndown.py
