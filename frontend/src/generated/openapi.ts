@@ -2634,64 +2634,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/issue-identity/anomalies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api List Anomalies
-         * @description List duplicate physical-issue anomalies for the authenticated user.
-         *
-         *     Args:
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *         page: Page number (starting from 1).
-         *         size: Number of items per page (maximum 100).
-         *
-         *     Returns:
-         *         Paginated list of duplicated ComicVine identities.
-         */
-        get: operations["api_list_anomalies_api_v1_issue_identity_anomalies_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issue-identity/canonical/{comicvine_issue_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Canonical Resolution
-         * @description Resolve the canonical Issue for one ComicVine physical-issue identity.
-         *
-         *     CBL reconciliation uses this same path so external CBL entries that carry
-         *     the same ComicVine issue ID resolve to the canonical read/history holder,
-         *     not whichever duplicate happens to be queried first.
-         *
-         *     Args:
-         *         comicvine_issue_id: ComicVine external_id string.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        get: operations["api_canonical_resolution_api_v1_issue_identity_canonical__comicvine_issue_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issue-identity/cbl-sources": {
         parameters: {
             query?: never;
@@ -2980,121 +2922,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/issue-identity/cbl/{list_id}/reconciliation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Cbl Reconciliation
-         * @description Reconcile one CBL source list to canonical physical-issue identities.
-         *
-         *     For every source position the response reports the ComicVine issue ID,
-         *     resolved canonical Issue, read state, and whether the entry is affected
-         *     by a duplicate identity. This is the same report the repair workflow uses
-         *     to verify that CBL adoption uses canonical identity.
-         *
-         *     Args:
-         *         list_id: CBLSourceList identifier.
-         *         current_user: Authenticated owner whose issues are eligible.
-         *         db: Async database session.
-         *         page: Page number (starting from 1).
-         *         size: Number of items per page (maximum 200).
-         */
-        get: operations["api_cbl_reconciliation_api_v1_issue_identity_cbl__list_id__reconciliation_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issue-identity/conflicts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api List Conflicts
-         * @description List ambiguous conflicting provider identities for the user.
-         *
-         *     Args:
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *         page: Page number (starting from 1).
-         *         size: Number of items per page (maximum 100).
-         *
-         *     Returns:
-         *         Paginated list of Issues with multiple confirmed ComicVine IDs.
-         */
-        get: operations["api_list_conflicts_api_v1_issue_identity_conflicts_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issue-identity/consolidate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Consolidate
-         * @description Consolidate duplicate Issue rows for one physical comic without losing history.
-         *
-         *     Read state, earliest read_at, and event/rating facts are preserved on the
-         *     canonical row. Ambiguous read/unread divergence requires explicit
-         *     keep_issue_id rather than destructive automatic merge.
-         *
-         *     Args:
-         *         request: ComicVine identity and optional explicit keeper.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_consolidate_api_v1_issue_identity_consolidate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issue-identity/preview-consolidation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Api Preview Consolidation
-         * @description Preview a history-preserving consolidation without mutating rows.
-         *
-         *     Args:
-         *         request: ComicVine identity and optional explicit keeper issue.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         */
-        post: operations["api_preview_consolidation_api_v1_issue_identity_preview_consolidation_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/issue-identity/reading-lists/{list_id}/cbl-candidates": {
         parameters: {
             query?: never;
@@ -3122,36 +2949,6 @@ export interface paths {
          *         Every list entry's identity state plus ranked source comparisons.
          */
         get: operations["find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/issue-identity/report": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Api Identity Report
-         * @description Report existing duplicate physical-issue rows before mutation.
-         *
-         *     Surfaces groups where one confirmed ComicVine identity maps to multiple
-         *     user-owned Issue rows, plus any conflicting provider identity cases.
-         *
-         *     Args:
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Structured anomaly report for the authenticated user.
-         */
-        get: operations["api_identity_report_api_v1_issue_identity_report_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -7772,84 +7569,6 @@ export interface components {
             series_name: string;
         };
         /**
-         * CBLReconciliationEntryResponse
-         * @description Typed reconciliation and read-state data for one CBL source position.
-         */
-        CBLReconciliationEntryResponse: {
-            /** Canonical Issue Id */
-            canonical_issue_id: number | null;
-            /** Cbl Entry Id */
-            cbl_entry_id: number;
-            /** Cbl Position */
-            cbl_position: number;
-            /**
-             * Collection Excluded
-             * @default false
-             */
-            collection_excluded: boolean;
-            /** Collection Exclusion Ids */
-            collection_exclusion_ids?: number[];
-            /** Collection Exclusion Reason */
-            collection_exclusion_reason?: string | null;
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string | null;
-            /** Comicvine Series Id */
-            comicvine_series_id: string | null;
-            /** External Issue Identity Id */
-            external_issue_identity_id: number | null;
-            /** External Series Identity Id */
-            external_series_identity_id: number | null;
-            /** Is Duplicate Identity */
-            is_duplicate_identity: boolean;
-            /** Issue Number */
-            issue_number: string;
-            /** Read At */
-            read_at: string | null;
-            /** Read Status */
-            read_status: string | null;
-            /** Resolution Status */
-            resolution_status: string;
-            /** Resolved Issue Id */
-            resolved_issue_id: number | null;
-            /** Series External Id */
-            series_external_id: string | null;
-            /** Series Name */
-            series_name: string;
-            /** Series Provider */
-            series_provider: string | null;
-        };
-        /**
-         * CBLReconciliationResponse
-         * @description Reconciled CBL source list with paginated entries.
-         */
-        CBLReconciliationResponse: {
-            /** Ambiguous Count */
-            ambiguous_count: number;
-            /** Duplicate Identity Groups */
-            duplicate_identity_groups: number;
-            /** Entries */
-            entries: components["schemas"]["CBLReconciliationEntryResponse"][];
-            first_unread_entry: components["schemas"]["CBLReconciliationEntryResponse"] | null;
-            /** First Unread Position */
-            first_unread_position: number | null;
-            /** Has Next */
-            has_next: boolean;
-            /** Has Prev */
-            has_prev: boolean;
-            /** List Id */
-            list_id: number;
-            /** Page */
-            page: number;
-            /** Resolved Count */
-            resolved_count: number;
-            /** Size */
-            size: number;
-            /** Total Positions */
-            total_positions: number;
-            /** Unresolved Count */
-            unresolved_count: number;
-        };
-        /**
          * CBLSourceComparisonMatch
          * @description Coverage and order comparison for one shared CBL source list.
          */
@@ -8215,26 +7934,6 @@ export interface components {
             provenance: string;
             /** Provider Value */
             provider_value?: string | null;
-        };
-        /**
-         * CanonicalResolutionResponse
-         * @description Canonical physical-issue resolution for a ComicVine identity.
-         */
-        CanonicalResolutionResponse: {
-            /** All Issue Ids */
-            all_issue_ids: number[];
-            /** Canonical Issue Id */
-            canonical_issue_id: number | null;
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string;
-            /** External Identity Id */
-            external_identity_id: number;
-            /** Is Ambiguous */
-            is_ambiguous: boolean;
-            /** Is Duplicate */
-            is_duplicate: boolean;
-            /** Reason */
-            reason: string;
         };
         /**
          * CatalogIssueSearchResponse
@@ -8670,24 +8369,6 @@ export interface components {
             comicvine_issue_id: number;
         };
         /**
-         * ConflictResponse
-         * @description One issue with conflicting confirmed ComicVine identities.
-         */
-        ConflictResponse: {
-            /** Comicvine Ids */
-            comicvine_ids: string[];
-            /** Distinct Identities */
-            distinct_identities: number;
-            /** Issue Id */
-            issue_id: number;
-            /** Issue Number */
-            issue_number: string;
-            /** Thread Id */
-            thread_id: number;
-            /** Thread Title */
-            thread_title: string;
-        };
-        /**
          * ConnectedThreadInfo
          * @description Lightweight info about a thread connected via dependencies.
          */
@@ -8707,40 +8388,6 @@ export interface components {
             thread_id: number;
             /** Title */
             title: string;
-        };
-        /**
-         * ConsolidationPreviewResponse
-         * @description Dry-run or applied consolidation result.
-         */
-        ConsolidationPreviewResponse: {
-            /** Canonical Issue Id */
-            canonical_issue_id: number;
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string;
-            /** Events To Move */
-            events_to_move: number;
-            /** Is Ambiguous */
-            is_ambiguous: boolean;
-            /** Ratings To Preserve */
-            ratings_to_preserve: boolean;
-            /** Read At To Preserve */
-            read_at_to_preserve: string | null;
-            /** Read State To Preserve */
-            read_state_to_preserve: boolean;
-            /** Reason */
-            reason: string;
-            /** Source Issue Ids */
-            source_issue_ids: number[];
-        };
-        /**
-         * ConsolidationRequest
-         * @description Request to consolidate duplicate physical-issue rows.
-         */
-        ConsolidationRequest: {
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string;
-            /** Keep Issue Id */
-            keep_issue_id?: number | null;
         };
         /**
          * ContinuityPlanLane
@@ -11632,28 +11279,6 @@ export interface components {
             event_id: number;
             replayed: boolean;
         };
-        /**
-         * DuplicateAnomalyResponse
-         * @description One duplicated ComicVine physical identity across user issues.
-         */
-        DuplicateAnomalyResponse: {
-            /** Comicvine Issue Id */
-            comicvine_issue_id: string;
-            /** External Identity Id */
-            external_identity_id: number;
-            /** Has Read */
-            has_read: boolean;
-            /** Has Unread */
-            has_unread: boolean;
-            /** Issue Details */
-            issue_details: components["schemas"]["IssueDetailResponse"][];
-            /** Issue Ids */
-            issue_ids: number[];
-            /** Statuses */
-            statuses: string[];
-            /** Thread Ids */
-            thread_ids: number[];
-        };
         /** @enum {string} */
         EditorKind: "reading_list" | "prerequisite" | "issue";
         /**
@@ -12103,20 +11728,6 @@ export interface components {
             volume_name?: string | null;
         };
         /**
-         * IdentityReportResponse
-         * @description Focused report of identity anomalies for the authenticated user.
-         */
-        IdentityReportResponse: {
-            /** Anomalies */
-            anomalies: components["schemas"]["DuplicateAnomalyResponse"][];
-            /** Conflicting Provider Ids */
-            conflicting_provider_ids: components["schemas"]["ConflictResponse"][];
-            /** Total Affected Issues */
-            total_affected_issues: number;
-            /** Total Duplicate Groups */
-            total_duplicate_groups: number;
-        };
-        /**
          * ImportIssueRequest
          * @description Request to import a ComicVine issue as a new identity-preserving thread.
          *
@@ -12512,24 +12123,6 @@ export interface components {
             source_thread_id: number;
             /** Source Thread Title */
             source_thread_title: string;
-        };
-        /**
-         * IssueDetailResponse
-         * @description Read and ownership context for one issue in a duplicate identity group.
-         */
-        IssueDetailResponse: {
-            /** Issue Id */
-            issue_id: number;
-            /** Issue Number */
-            issue_number: string | null;
-            /** Read At */
-            read_at: string | null;
-            /** Status */
-            status: string | null;
-            /** Thread Id */
-            thread_id: number | null;
-            /** Thread Title */
-            thread_title: string | null;
         };
         /**
          * IssueExternalIdentityMappingResponse
@@ -13194,42 +12787,6 @@ export interface components {
         OverrideRequest: {
             /** Thread Id */
             thread_id: number;
-        };
-        /**
-         * PaginatedConflictsResponse
-         * @description Paginated list of conflict responses.
-         */
-        PaginatedConflictsResponse: {
-            /** Has Next */
-            has_next: boolean;
-            /** Has Prev */
-            has_prev: boolean;
-            /** Items */
-            items: components["schemas"]["ConflictResponse"][];
-            /** Page */
-            page: number;
-            /** Size */
-            size: number;
-            /** Total */
-            total: number;
-        };
-        /**
-         * PaginatedDuplicateAnomaliesResponse
-         * @description Paginated list of duplicate anomaly responses.
-         */
-        PaginatedDuplicateAnomaliesResponse: {
-            /** Has Next */
-            has_next: boolean;
-            /** Has Prev */
-            has_prev: boolean;
-            /** Items */
-            items: components["schemas"]["DuplicateAnomalyResponse"][];
-            /** Page */
-            page: number;
-            /** Size */
-            size: number;
-            /** Total */
-            total: number;
         };
         /**
          * PasswordResetResponse
@@ -20536,71 +20093,6 @@ export interface operations {
             };
         };
     };
-    api_list_anomalies_api_v1_issue_identity_anomalies_get: {
-        parameters: {
-            query?: {
-                /** @description Page number */
-                page?: number;
-                /** @description Page size (max 100) */
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedDuplicateAnomaliesResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_canonical_resolution_api_v1_issue_identity_canonical__comicvine_issue_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                comicvine_issue_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CanonicalResolutionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     discover_cbl_source_lists_api_v1_issue_identity_cbl_sources_get: {
         parameters: {
             query?: {
@@ -20956,142 +20448,6 @@ export interface operations {
             };
         };
     };
-    api_cbl_reconciliation_api_v1_issue_identity_cbl__list_id__reconciliation_get: {
-        parameters: {
-            query?: {
-                /** @description Page number */
-                page?: number;
-                /** @description Page size (max 200) */
-                size?: number;
-            };
-            header?: never;
-            path: {
-                list_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CBLReconciliationResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_list_conflicts_api_v1_issue_identity_conflicts_get: {
-        parameters: {
-            query?: {
-                /** @description Page number */
-                page?: number;
-                /** @description Page size (max 100) */
-                size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaginatedConflictsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_consolidate_api_v1_issue_identity_consolidate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConsolidationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsolidationPreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_preview_consolidation_api_v1_issue_identity_preview_consolidation_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConsolidationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConsolidationPreviewResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     find_cbl_candidates_for_reading_list_api_v1_issue_identity_reading_lists__list_id__cbl_candidates_get: {
         parameters: {
             query?: {
@@ -21121,26 +20477,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    api_identity_report_api_v1_issue_identity_report_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["IdentityReportResponse"];
                 };
             };
         };
