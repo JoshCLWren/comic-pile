@@ -239,6 +239,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
           frameClassName="h-full w-full"
           frameStyle={{ aspectRatio: 'auto' }}
           imageClassName="h-full w-full object-contain"
+          altText=""
           placeholderTestId="cover-placeholder"
           onImageLoad={(img) => {
             const { naturalWidth, naturalHeight } = img
