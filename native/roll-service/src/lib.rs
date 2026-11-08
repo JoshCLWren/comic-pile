@@ -76,8 +76,10 @@ pub struct AppState {
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
     pub fn new(config: Config) -> Result<Self, ConfigError> {
-        let tls = native_tls::TlsConnector::new()
-            .map_err(|_| ConfigError("TLS initialization failed"))?;
+        let tls = native_tls::TlsConnector::new().map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ConfigError("TLS initialization failed")
+        })?;
         let manager = Manager::from_config(
             config.database,
             MakeTlsConnector::new(tls),
@@ -98,7 +100,10 @@ impl AppState {
                 recycle: Some(config.pool_timeout),
             })
             .build()
-            .map_err(|_| ConfigError("pool configuration failed"))?;
+            .map_err(|e| {
+                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                ConfigError("pool configuration failed")
+            })?;
         Ok(Self {
             pool,
             jwt_secret: config.jwt_secret,
@@ -131,10 +136,10 @@ pub async fn serve(
         .into_future();
     tokio::pin!(server);
     let result = tokio::select! {
-        result = &mut server => result.map_err(|_| "HTTP server failed"),
+        result = &mut server => result.map_err(|e| { tracing::debug!(error = ?e, "preserved underlying error before mapping"); "HTTP server failed" }),
         _ = shutdown_receive.changed() => {
             match tokio::time::timeout(drain_timeout, &mut server).await {
-                Ok(result) => result.map_err(|_| "HTTP server failed"),
+                Ok(result) => result.map_err(|e| { tracing::debug!(error = ?e, "preserved underlying error before mapping"); "HTTP server failed" }),
                 Err(_) => Err("shutdown drain deadline exceeded"),
             }
         }
@@ -146,22 +151,123 @@ pub async fn serve(
 
 /// Python-compatible JSON detail boundary; never serialize a dependency error.
 ///
-/// The detail is owned so per-request validation and lookup messages never leak
-/// memory through `'static` borrows. Static messages still allocate on the error
-/// path, which is bounded by request volume and always freed when the response is
-/// sent; it is cheaper than leaking every dynamic message for the life of the process.
+/// Typed error taxonomy: behavior branches (Retry-After, deadlock retry) must
+/// match on variants, never on message text (#4766). Construct with the
+/// most specific variant; `Detail` is the explicit escape hatch for statuses
+/// without a dedicated variant. The detail is owned so per-request validation
+/// and lookup messages never leak memory through `'static` borrows. Static
+/// messages still allocate on the error path, which is bounded by request
+/// volume and always freed when the response is sent; it is cheaper than
+/// leaking every dynamic message for the life of the process.
 #[derive(Debug)]
-pub struct ApiError(pub StatusCode, pub String);
+pub enum ApiError {
+    /// 503 with `Retry-After: 30` and the `database_unavailable` envelope.
+    DatabaseUnavailable,
+    /// A PostgreSQL deadlock victim (`40P01`). Retryable by variant.
+    DeadlockDetected,
+    /// 503 request deadline was exceeded by the outer middleware.
+    RequestTimeout,
+    /// Generic 500 (internal/corrupt/projection failure).
+    Internal(String),
+    /// Generic 503 for statuses without a dedicated availability variant.
+    ServiceUnavailable(String),
+    /// 404.
+    NotFound(String),
+    /// 400.
+    BadRequest(String),
+    /// 401 (also emits `WWW-Authenticate: Bearer`).
+    Unauthorized(String),
+    /// 403.
+    Forbidden(String),
+    /// 409.
+    Conflict(String),
+    /// 422.
+    Unprocessable(String),
+    /// 405.
+    MethodNotAllowed(String),
+    /// Fallback: explicit status + detail for statuses without a variant.
+    Detail {
+        /// HTTP status to emit.
+        status: StatusCode,
+        /// Wire detail message.
+        detail: String,
+    },
+}
+
+impl ApiError {
+    /// Retryable database-availability error. Always the same variant so the
+    /// `Retry-After` header survives message rewording.
+    pub fn database_unavailable() -> Self {
+        Self::DatabaseUnavailable
+    }
+
+    /// HTTP status for this error. Branches on the variant, never the message.
+    pub fn status(&self) -> StatusCode {
+        match self {
+            ApiError::DatabaseUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            ApiError::DeadlockDetected => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::RequestTimeout => StatusCode::SERVICE_UNAVAILABLE,
+            ApiError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            ApiError::ServiceUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            ApiError::NotFound(_) => StatusCode::NOT_FOUND,
+            ApiError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            ApiError::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            ApiError::Forbidden(_) => StatusCode::FORBIDDEN,
+            ApiError::Conflict(_) => StatusCode::CONFLICT,
+            ApiError::Unprocessable(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            ApiError::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
+            ApiError::Detail { status, .. } => *status,
+        }
+    }
+
+    /// Wire detail for this error. Stable strings are returned as `&'static`
+    /// where the variant carries no payload; owned details borrow the payload.
+    pub fn detail(&self) -> &str {
+        match self {
+            ApiError::DatabaseUnavailable => "Database temporarily unavailable",
+            ApiError::DeadlockDetected => "Reading session deadlock",
+            ApiError::RequestTimeout => "Request timed out",
+            ApiError::Internal(detail)
+            | ApiError::ServiceUnavailable(detail)
+            | ApiError::NotFound(detail)
+            | ApiError::BadRequest(detail)
+            | ApiError::Unauthorized(detail)
+            | ApiError::Forbidden(detail)
+            | ApiError::Conflict(detail)
+            | ApiError::Unprocessable(detail)
+            | ApiError::MethodNotAllowed(detail) => detail.as_str(),
+            ApiError::Detail { detail, .. } => detail.as_str(),
+        }
+    }
+
+    /// True only for the `DatabaseUnavailable` variant (not message text).
+    pub fn is_database_unavailable(&self) -> bool {
+        matches!(self, ApiError::DatabaseUnavailable)
+    }
+
+    /// True only for the `DeadlockDetected` variant (not message text).
+    pub fn is_deadlock(&self) -> bool {
+        matches!(self, ApiError::DeadlockDetected)
+    }
+}
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.detail())
+    }
+}
+
+impl std::error::Error for ApiError {}
+
 #[derive(Serialize)]
 struct ErrorBody<'a> {
     detail: &'a str,
 }
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        if self.0 == StatusCode::SERVICE_UNAVAILABLE && self.1 == "Database temporarily unavailable"
-        {
+        if self.is_database_unavailable() {
             return (
-                self.0,
+                self.status(),
                 [("Retry-After", "30")],
                 Json(serde_json::json!({"error": {
                     "code": "database_unavailable",
@@ -171,8 +277,16 @@ impl IntoResponse for ApiError {
             )
                 .into_response();
         }
-        let mut response = (self.0, Json(ErrorBody { detail: &self.1 })).into_response();
-        if self.0 == StatusCode::UNAUTHORIZED {
+        let status = self.status();
+        let detail_owned = self.detail().to_string();
+        let mut response = (
+            status,
+            Json(ErrorBody {
+                detail: &detail_owned,
+            }),
+        )
+            .into_response();
+        if status == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
                 axum::http::header::WWW_AUTHENTICATE,
                 axum::http::HeaderValue::from_static("Bearer"),
@@ -197,13 +311,7 @@ async fn bound_request(
     };
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
-        .unwrap_or_else(|_| {
-            ApiError(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Request timed out".to_string(),
-            )
-            .into_response()
-        });
+        .unwrap_or_else(|_| ApiError::RequestTimeout.into_response());
     // No URI, query, headers, credentials, SQL or upstream error strings in request logs.
     tracing::info!(method = %method, status = response.status().as_u16(), elapsed_ms = started.elapsed().as_millis() as u64, "request completed");
     response
@@ -370,12 +478,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
-        .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
+        .fallback(|| async { ApiError::NotFound("Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
-            ApiError(
-                StatusCode::METHOD_NOT_ALLOWED,
-                "Method Not Allowed".to_string(),
-            )
+            ApiError::MethodNotAllowed("Method Not Allowed".to_string())
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
@@ -416,5 +521,153 @@ mod tests {
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Request timed out"}"#
         );
+    }
+
+    #[test]
+    fn api_error_variants_carry_typed_status_and_detail() {
+        let cases = [
+            (
+                ApiError::DatabaseUnavailable,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Database temporarily unavailable",
+            ),
+            (
+                ApiError::DeadlockDetected,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Reading session deadlock",
+            ),
+            (
+                ApiError::RequestTimeout,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Request timed out",
+            ),
+            (
+                ApiError::Internal("boom".to_string()),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "boom",
+            ),
+            (
+                ApiError::NotFound("gone".to_string()),
+                StatusCode::NOT_FOUND,
+                "gone",
+            ),
+            (
+                ApiError::BadRequest("bad".to_string()),
+                StatusCode::BAD_REQUEST,
+                "bad",
+            ),
+            (
+                ApiError::Unauthorized("no".to_string()),
+                StatusCode::UNAUTHORIZED,
+                "no",
+            ),
+            (
+                ApiError::Forbidden("stop".to_string()),
+                StatusCode::FORBIDDEN,
+                "stop",
+            ),
+            (
+                ApiError::Conflict("clash".to_string()),
+                StatusCode::CONFLICT,
+                "clash",
+            ),
+            (
+                ApiError::Unprocessable("bad shape".to_string()),
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "bad shape",
+            ),
+            (
+                ApiError::MethodNotAllowed("nope".to_string()),
+                StatusCode::METHOD_NOT_ALLOWED,
+                "nope",
+            ),
+            (
+                ApiError::ServiceUnavailable("down".to_string()),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "down",
+            ),
+            (
+                ApiError::Detail {
+                    status: StatusCode::TOO_MANY_REQUESTS,
+                    detail: "slow down".to_string(),
+                },
+                StatusCode::TOO_MANY_REQUESTS,
+                "slow down",
+            ),
+        ];
+        for (error, status, detail) in cases {
+            assert_eq!(error.status(), status);
+            assert_eq!(error.detail(), detail);
+        }
+    }
+
+    #[test]
+    fn api_error_behavior_branches_on_variant_not_message_text() {
+        // Rewording a message must not change behavior. Only the dedicated
+        // variants are database-unavailable or deadlock; other variants that
+        // happen to carry the same text (or 503/500 statuses) are neither.
+        assert!(ApiError::DatabaseUnavailable.is_database_unavailable());
+        assert!(
+            !ApiError::Internal("Database temporarily unavailable".to_string())
+                .is_database_unavailable()
+        );
+        assert!(
+            !ApiError::ServiceUnavailable("Database temporarily unavailable".to_string())
+                .is_database_unavailable()
+        );
+        assert!(
+            !ApiError::NotFound("Database temporarily unavailable".to_string())
+                .is_database_unavailable()
+        );
+
+        assert!(ApiError::DeadlockDetected.is_deadlock());
+        assert!(!ApiError::Internal("Reading session deadlock".to_string()).is_deadlock());
+        assert!(
+            !ApiError::Internal("Reading session deadlock".to_string()).is_database_unavailable()
+        );
+
+        // RequestTimeout is not conflated with DatabaseUnavailable.
+        assert!(!ApiError::RequestTimeout.is_database_unavailable());
+        assert_eq!(
+            ApiError::RequestTimeout.status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
+    }
+
+    #[tokio::test]
+    async fn database_unavailable_response_keeps_retry_after_and_wire_body() {
+        let response = ApiError::DatabaseUnavailable.into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let retry_after = response
+            .headers()
+            .get("Retry-After")
+            .and_then(|value| value.to_str().ok());
+        assert_eq!(retry_after, Some("30"));
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        let text = std::str::from_utf8(&body).unwrap();
+        assert!(text.contains("\"code\":\"database_unavailable\""));
+        assert!(text.contains("Database temporarily unavailable. Please retry."));
+    }
+
+    #[tokio::test]
+    async fn non_database_503_does_not_get_retry_after() {
+        let response = ApiError::RequestTimeout.into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert!(response.headers().get("Retry-After").is_none());
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        assert_eq!(&body[..], b"{\"detail\":\"Request timed out\"}");
+    }
+
+    #[tokio::test]
+    async fn unauthorized_keeps_wire_body_and_bearer_challenge() {
+        let response = ApiError::Unauthorized("User not found".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        let challenge = response
+            .headers()
+            .get(axum::http::header::WWW_AUTHENTICATE)
+            .and_then(|value| value.to_str().ok());
+        assert_eq!(challenge, Some("Bearer"));
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        assert_eq!(&body[..], b"{\"detail\":\"User not found\"}");
     }
 }

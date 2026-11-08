@@ -25,7 +25,6 @@ use crate::{
 };
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
     Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -128,11 +127,11 @@ struct QueueCursor {
 }
 
 fn bad_request(detail: &str) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail.to_string())
+    ApiError::BadRequest(detail.to_string())
 }
 
 fn unprocessable(detail: &str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
+    ApiError::Unprocessable(detail.to_string())
 }
 
 fn normalize_search(search: Option<&str>) -> String {
@@ -184,8 +183,14 @@ fn decode_cursor(
 ) -> Result<QueueCursor, ApiError> {
     let invalid = || bad_request("Invalid Queue page token");
     let padded = token.trim_end_matches('=');
-    let raw = URL_SAFE_NO_PAD.decode(padded).map_err(|_| invalid())?;
-    let payload: Value = serde_json::from_slice(&raw).map_err(|_| invalid())?;
+    let raw = URL_SAFE_NO_PAD.decode(padded).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        invalid()
+    })?;
+    let payload: Value = serde_json::from_slice(&raw).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        invalid()
+    })?;
     let Some(object) = payload.as_object() else {
         return Err(invalid());
     };
@@ -355,16 +360,12 @@ pub async fn list_threads(
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
     let auth = auth
         .as_ref()
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "User not found".to_string()))?;
+        .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
     if auth.revoked {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
-            "Token has been revoked".to_string(),
-        ));
+        return Err(ApiError::Unauthorized("Token has been revoked".to_string()));
     }
     if claims.expected_epoch()? < auth.password_epoch {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
+        return Err(ApiError::Unauthorized(
             "Password changed; please sign in again.".to_string(),
         ));
     }
@@ -971,18 +972,11 @@ async fn query_page(
     PAGE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
     let row = db::query_one_optional(state, connection, &sql, &bindings)
         .await?
-        .ok_or_else(|| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error".to_string(),
-            )
-        })?;
+        .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
-    let payload: PagePayload = serde_json::from_str(&payload).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_string(),
-        )
+    let payload: PagePayload = serde_json::from_str(&payload).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        ApiError::Internal("Internal Server Error".to_string())
     })?;
     Ok((
         payload.auth,
@@ -1132,13 +1126,13 @@ mod tests {
         assert_eq!(
             decode_cursor(&token, "title", "saga", "legacy")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Queue page token does not match current search or sort"
         );
         assert_eq!(
             decode_cursor(&token, "position", "saga", "option_e")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Queue ordering changed; reload the Queue"
         );
     }
@@ -1150,13 +1144,13 @@ mod tests {
         assert_eq!(
             decode_cursor(&token, "position", "", "legacy")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Invalid Queue page token values"
         );
         assert_eq!(
             decode_cursor("not-base64", "position", "", "legacy")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Invalid Queue page token"
         );
     }

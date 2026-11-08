@@ -226,8 +226,7 @@ async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError>
 fn validate_name(name: &str) -> Result<String, ApiError> {
     let name = name.trim();
     if name.is_empty() || name.chars().count() > 200 {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
+        return Err(ApiError::BadRequest(
             "Reading List name must be between 1 and 200 characters".to_string(),
         ));
     }
@@ -238,8 +237,7 @@ fn validate_mode(mode: Option<&str>) -> Result<String, ApiError> {
     match mode.unwrap_or("loose") {
         "strict" => Ok("strict".to_string()),
         "loose" => Ok("loose".to_string()),
-        _ => Err(ApiError(
-            StatusCode::BAD_REQUEST,
+        _ => Err(ApiError::BadRequest(
             "mode must be strict or loose".to_string(),
         )),
     }
@@ -387,10 +385,7 @@ pub async fn get_reading_list(
 ) -> Result<Json<ReadingList>, ApiError> {
     let conn = db::checkout(&state).await?;
     let Some(row) = load_list(&conn, list_id, user.id()).await? else {
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            "Reading List not found".to_string(),
-        ));
+        return Err(ApiError::NotFound("Reading List not found".to_string()));
     };
     let entries = load_entries_conn(&conn, list_id).await?;
     Ok(Json(list_from_row(row, user.id(), entries)))
@@ -403,8 +398,7 @@ pub async fn create_reading_list(
     Json(request): Json<ReadingListWrite>,
 ) -> Result<(StatusCode, Json<ReadingList>), ApiError> {
     if request.confirmed_predecessor_changes.is_some() {
-        return Err(ApiError(
-            StatusCode::UNPROCESSABLE_ENTITY,
+        return Err(ApiError::Unprocessable(
             "reading_list_confirmation_put_only".to_string(),
         ));
     }
@@ -422,18 +416,12 @@ pub async fn create_reading_list(
     let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
     if unique.len() != request.issue_ids.len() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
-            "issue_ids must be unique".to_string(),
-        ));
+        return Err(ApiError::BadRequest("issue_ids must be unique".to_string()));
     }
     let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
     if owned.len() != request.issue_ids.len() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            "Issue not found".to_string(),
-        ));
+        return Err(ApiError::NotFound("Issue not found".to_string()));
     }
 
     let row = tx
@@ -465,10 +453,7 @@ pub async fn create_reading_list(
         let gate = intent.map(|value| value.gate.as_str()).unwrap_or("none");
         if !matches!(gate, "none" | "hold" | "after_previous") {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError(
-                StatusCode::BAD_REQUEST,
-                "Invalid gate".to_string(),
-            ));
+            return Err(ApiError::BadRequest("Invalid gate".to_string()));
         }
         let skipped = intent.is_some_and(|value| value.skipped);
         let targets = request
@@ -487,11 +472,9 @@ pub async fn create_reading_list(
                 issue_id,
                 &(position as i32),
                 &checkpoints.contains(issue_id),
-                &serde_json::to_string(&targets).map_err(|_| {
-                    ApiError(
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "Invalid checkpoint".to_string(),
-                    )
+                &serde_json::to_string(&targets).map_err(|e| {
+                    tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                    ApiError::Internal("Invalid checkpoint".to_string())
                 })?,
                 &gate,
                 &skipped,
@@ -555,12 +538,9 @@ pub(crate) async fn ensure_list_unlinked(
     if let Some(row) = linked_plan {
         let plan_id: i32 = row.get(0);
         let plan_name: String = row.get(1);
-        return Err(ApiError(
-            StatusCode::CONFLICT,
-            format!(
+        return Err(ApiError::Conflict(format!(
                 "Reading List is authoritative for Reading Plan \"{plan_name}\" (#{plan_id}). Relink that plan before deleting the list; nothing was changed."
-            ),
-        ));
+            )));
     }
     Ok(())
 }
@@ -687,7 +667,7 @@ pub async fn update_reading_list(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".to_string()))?;
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
     let current_mode: String = row.get(2);
     let mode = validate_mode(request.mode.as_deref().or(Some(&current_mode)))?;
     let old_entries = load_entries(&tx, list_id).await?;
@@ -700,14 +680,11 @@ pub async fn update_reading_list(
 
     let unique: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
     if unique.len() != request.issue_ids.len() {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
-            "issue_ids must be unique".into(),
-        ));
+        return Err(ApiError::BadRequest("issue_ids must be unique".into()));
     }
     let owned = owned_issue_ids(&tx, user.id(), &request.issue_ids).await?;
     if owned != unique {
-        return Err(ApiError(StatusCode::NOT_FOUND, "Issue not found".into()));
+        return Err(ApiError::NotFound("Issue not found".into()));
     }
     let checkpoints: BTreeSet<i32> = request
         .checkpoint_issue_ids
@@ -721,8 +698,7 @@ pub async fn update_reading_list(
                 .collect()
         });
     if !checkpoints.is_subset(&unique) {
-        return Err(ApiError(
-            StatusCode::UNPROCESSABLE_ENTITY,
+        return Err(ApiError::Unprocessable(
             "custom_cbl_invalid_checkpoint_targets".to_string(),
         ));
     }
@@ -752,7 +728,7 @@ pub async fn update_reading_list(
             .or_else(|| old.map(|entry| entry.gate.as_str()))
             .unwrap_or("none");
         if !matches!(gate, "none" | "hold" | "after_previous") {
-            return Err(ApiError(StatusCode::BAD_REQUEST, "Invalid gate".into()));
+            return Err(ApiError::BadRequest("Invalid gate".into()));
         }
         let skipped = intent
             .map(|entry| entry.skipped)
@@ -789,16 +765,13 @@ pub async fn update_reading_list(
             || valid.contains(issue_id)
             || (!checkpoints.contains(issue_id) && !targets.is_empty())
         {
-            return Err(ApiError(
-                StatusCode::UNPROCESSABLE_ENTITY,
+            return Err(ApiError::Unprocessable(
                 "custom_cbl_invalid_checkpoint_targets".to_string(),
             ));
         }
-        let targets_json = serde_json::to_string(&targets).map_err(|_| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid checkpoint".into(),
-            )
+        let targets_json = serde_json::to_string(&targets).map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::Internal("Invalid checkpoint".into())
         })?;
         tx.execute(
             "INSERT INTO custom_cbl_entries
@@ -827,11 +800,9 @@ pub async fn update_reading_list(
         .confirmed_predecessor_changes
         .as_ref()
         .map_or(Ok(Vec::new()), |value| {
-            serde_json::from_value(value.clone()).map_err(|_| {
-                ApiError(
-                    StatusCode::UNPROCESSABLE_ENTITY,
-                    "Invalid predecessor confirmation".into(),
-                )
+            serde_json::from_value(value.clone()).map_err(|e| {
+                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                ApiError::Unprocessable("Invalid predecessor confirmation".into())
             })
         })?;
     if !changes.is_empty() && !confirmed_changes_match(&changes, &confirmation) {
@@ -860,11 +831,9 @@ pub async fn update_reading_list(
         user.id(),
         entries,
     );
-    let mut json = serde_json::to_value(&list).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading List serialization failed".into(),
-        )
+    let mut json = serde_json::to_value(&list).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        ApiError::Internal("Reading List serialization failed".into())
     })?;
     json["predecessor_changes"] = serde_json::to_value(&changes).unwrap_or_default();
     json["warnings"] = serde_json::json!([]);
@@ -920,10 +889,7 @@ pub async fn delete_reading_list(
         .map_err(db::query_error)?;
     if deleted == 0 {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            "Reading List not found".to_string(),
-        ));
+        return Err(ApiError::NotFound("Reading List not found".to_string()));
     }
     tx.commit().await.map_err(db::query_error)?;
     Ok(StatusCode::NO_CONTENT)
@@ -937,10 +903,7 @@ pub async fn read_reading_list(
 ) -> Result<Json<ReadingListReader>, ApiError> {
     let conn = db::checkout(&state).await?;
     let Some(row) = load_list(&conn, list_id, user.id()).await? else {
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            "Reading List not found".to_string(),
-        ));
+        return Err(ApiError::NotFound("Reading List not found".to_string()));
     };
     let entries = load_entries_conn(&conn, list_id).await?;
     drop(conn);

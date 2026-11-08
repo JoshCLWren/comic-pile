@@ -8,7 +8,7 @@ use crate::{
 };
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -204,13 +204,6 @@ pub struct BootstrapResponseV2 {
 pub struct ReadingSessionCreatedResponse {
     pub session_id: i32,
     pub created: bool,
-}
-
-fn unavailable() -> ApiError {
-    ApiError(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid native Roll response".to_string(),
-    )
 }
 
 fn thread_value(row: &tokio_postgres::Row) -> Result<BootstrapThreadSummary, ApiError> {
@@ -476,7 +469,7 @@ async fn current_active_thread(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(unavailable)?;
+        .ok_or_else(|| ApiError::Internal("Invalid native Roll response".to_string()))?;
     let id: i32 = row.try_get(0).map_err(db::query_error)?;
     let title: String = row.try_get(1).map_err(db::query_error)?;
     let format: String = row.try_get(2).map_err(db::query_error)?;
@@ -504,7 +497,10 @@ async fn current_active_thread(
         .into_iter()
         .map(|row| {
             let value: String = row.try_get(0).map_err(db::query_error)?;
-            serde_json::from_str(&value).map_err(|_| unavailable())
+            serde_json::from_str(&value).map_err(|e| {
+                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                ApiError::Internal("Invalid native Roll response".to_string())
+            })
         })
         .collect::<Result<_, ApiError>>()?;
     Ok(Some(BootstrapActiveThread {
@@ -671,7 +667,10 @@ async fn canonical_series_stats(
     for row in catalog {
         let id: String = row.try_get(0).map_err(db::query_error)?;
         let encoded: String = row.try_get(1).map_err(db::query_error)?;
-        let metadata: Value = serde_json::from_str(&encoded).map_err(|_| unavailable())?;
+        let metadata: Value = serde_json::from_str(&encoded).map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::Internal("Invalid native Roll response".to_string())
+        })?;
         let count = metadata.get("count_of_issues").and_then(|value| {
             value
                 .as_u64()
@@ -808,7 +807,10 @@ fn pending_roll_recovery(
     let Some(target) = pending_issues.first() else {
         return Ok(None);
     };
-    let edges = validated.unsatisfied_edges().map_err(|_| unavailable())?;
+    let edges = validated.unsatisfied_edges().map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        ApiError::Internal("Invalid native Roll response".to_string())
+    })?;
     let direct: Vec<_> = edges
         .iter()
         .filter(|edge| edge.target_issue_id == target.id)
@@ -920,7 +922,10 @@ async fn visible_thread_tags(
     for row in rows {
         let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
         let raw: String = row.try_get(1).map_err(db::query_error)?;
-        let tag: BootstrapTag = serde_json::from_str(&raw).map_err(|_| unavailable())?;
+        let tag: BootstrapTag = serde_json::from_str(&raw).map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::Internal("Invalid native Roll response".to_string())
+        })?;
         by_id.entry(thread_id).or_default().push(tag);
     }
     Ok(by_id)
@@ -967,11 +972,9 @@ pub async fn bootstrap_v2(
     .await?;
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let session = &active.session;
-    let candidates = validated.eligible_frontiers().map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading constraints".to_string(),
-        )
+    let candidates = validated.eligible_frontiers().map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        ApiError::Internal("Invalid reading constraints".to_string())
     })?;
     let conn = db::checkout(&state).await?;
     let native_die = crate::dice_state::bootstrap_die_after_native_command(&conn, user).await?;
@@ -1013,7 +1016,9 @@ pub async fn bootstrap_v2(
     let canonical_stats = canonical_series_stats(&conn, user, &volumes).await?;
     let mut rollable = vec![];
     for item in eligible {
-        let mut projected = by_thread.remove(&item.thread_id).ok_or_else(unavailable)?;
+        let mut projected = by_thread
+            .remove(&item.thread_id)
+            .ok_or_else(|| ApiError::Internal("Invalid native Roll response".to_string()))?;
         if let Some(volume) = projected.identity.canonical_series_id.as_deref() {
             let volume = volume.to_owned();
             projected.reader =

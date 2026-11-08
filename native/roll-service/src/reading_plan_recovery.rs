@@ -6,7 +6,6 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -107,7 +106,7 @@ pub async fn preview(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
+        .ok_or_else(|| ApiError::NotFound("Reading Plan not found".to_string()))?;
     let source_rows = conn
         .query(
             "SELECT DISTINCT s.custom_cbl_list_id FROM reading_plan_sources s
@@ -159,11 +158,9 @@ pub async fn preview(
     let mut candidates = Vec::with_capacity(lists.len());
     for row in lists {
         let steps_text: String = row.get(4);
-        let steps: Vec<RecoveryStep> = serde_json::from_str(&steps_text).map_err(|_| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid Reading List snapshot".to_string(),
-            )
+        let steps: Vec<RecoveryStep> = serde_json::from_str(&steps_text).map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::Internal("Invalid Reading List snapshot".to_string())
         })?;
         let (added_steps, removed_steps, order_changed) = candidate_diff(&retained_steps, &steps);
         candidates.push(RecoveryCandidate {
@@ -210,8 +207,7 @@ pub async fn relink(
     Json(request): Json<PlanRelinkRequest>,
 ) -> Result<Json<PlanRelinkResult>, ApiError> {
     if !request.confirm {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
+        return Err(ApiError::BadRequest(
             "Preview and confirm the Reading List before relinking".to_string(),
         ));
     }
@@ -234,11 +230,10 @@ pub async fn relink(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
+        .ok_or_else(|| ApiError::NotFound("Reading Plan not found".to_string()))?;
     let updated_at: String = plan.get(0);
     if updated_at != request.expected_plan_updated_at {
-        return Err(ApiError(
-            StatusCode::CONFLICT,
+        return Err(ApiError::Conflict(
             "Reading Plan changed; refresh the repair preview".to_string(),
         ));
     }
@@ -249,11 +244,10 @@ pub async fn relink(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".to_string()))?;
+        .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
     let list_updated_at: String = list.get(0);
     if list_updated_at != request.expected_list_updated_at {
-        return Err(ApiError(
-            StatusCode::CONFLICT,
+        return Err(ApiError::Conflict(
             "Reading List changed; refresh the repair preview".to_string(),
         ));
     }
@@ -277,8 +271,7 @@ pub async fn relink(
                 status: "already_linked".to_string(),
             }));
         }
-        return Err(ApiError(
-            StatusCode::CONFLICT,
+        return Err(ApiError::Conflict(
             "Reading Plan is already linked to another authoritative Reading List".to_string(),
         ));
     }
@@ -344,6 +337,7 @@ pub fn relink_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     #[test]
     fn preview_reports_changed_membership_without_replacing_identity() {
         let original = vec![
@@ -471,7 +465,7 @@ mod tests {
         )
         .await
         .expect_err("another owner cannot relink Plan A");
-        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
         let count_after: i64 = conn
             .query_one(
                 "SELECT count(*) FROM reading_plan_sources WHERE plan_id=101",

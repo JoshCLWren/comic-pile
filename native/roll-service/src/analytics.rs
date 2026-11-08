@@ -15,7 +15,7 @@
 //! event types; there is no whole-history JSON snapshot and no per-row N+1.
 
 use crate::{auth::VerifiedAccessClaims, db, ApiError, AppState};
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -91,10 +91,7 @@ struct MetricsPayload {
 }
 
 fn internal_error() -> ApiError {
-    ApiError(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Internal Server Error".to_string(),
-    )
+    ApiError::Internal("Internal Server Error".to_string())
 }
 
 /// Validate the revocation/credential-epoch fields folded into the metrics
@@ -103,16 +100,12 @@ fn internal_error() -> ApiError {
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
     let auth = auth
         .as_ref()
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "User not found".to_string()))?;
+        .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
     if auth.revoked {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
-            "Token has been revoked".to_string(),
-        ));
+        return Err(ApiError::Unauthorized("Token has been revoked".to_string()));
     }
     if claims.expected_epoch()? < auth.password_epoch {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
+        return Err(ApiError::Unauthorized(
             "Password changed; please sign in again.".to_string(),
         ));
     }
@@ -306,8 +299,10 @@ pub async fn metrics(
         .await?
         .ok_or_else(internal_error)?;
     let payload_text: String = row.try_get(0).map_err(db::query_error)?;
-    let payload: MetricsPayload =
-        serde_json::from_str(&payload_text).map_err(|_| internal_error())?;
+    let payload: MetricsPayload = serde_json::from_str(&payload_text).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        internal_error()
+    })?;
 
     validate_auth(&claims, &payload.auth)?;
 

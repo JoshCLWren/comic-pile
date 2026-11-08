@@ -2,7 +2,6 @@
 //! All writes share Python's per-user advisory transaction lock and commit atomically
 //! with the full-library undo checkpoint. Pure resolution never changes durable state.
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
-use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -78,10 +77,7 @@ pub struct SessionBootstrap {
     pub created: bool,
 }
 fn corrupt() -> ApiError {
-    ApiError(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid reading session state".to_string(),
-    )
+    ApiError::Internal("Invalid reading session state".to_string())
 }
 fn decode_session(row: &tokio_postgres::Row) -> Result<ReadingSession, ApiError> {
     let json = row.try_get::<_, &str>(0).map_err(session_error)?;
@@ -101,12 +97,18 @@ fn decode_session_json(json: &str) -> Result<ReadingSession, ApiError> {
     match serde_json::from_str(json) {
         Ok(session) => Ok(session),
         Err(_) => {
-            let mut value: Value = serde_json::from_str(json).map_err(|_| corrupt())?;
+            let mut value: Value = serde_json::from_str(json).map_err(|e| {
+                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                corrupt()
+            })?;
             let repaired = repair_session_value(&mut value);
             if repaired.is_empty() {
                 return Err(corrupt());
             }
-            let session: ReadingSession = serde_json::from_value(value).map_err(|_| corrupt())?;
+            let session: ReadingSession = serde_json::from_value(value).map_err(|e| {
+                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                corrupt()
+            })?;
             tracing::warn!(
                 session_id = session.id,
                 fields = ?repaired,
@@ -296,7 +298,10 @@ pub async fn bootstrap(
 ) -> Result<SessionBootstrap, ApiError> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| corrupt())?
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            corrupt()
+        })?
         .as_secs_f64();
     bootstrap_at(state, user, timezone, policy, now).await
 }
@@ -315,17 +320,14 @@ pub async fn bootstrap_at(
         retry_deadlock(|| bootstrap_once(state, user, timezone, policy, now)),
     )
     .await
-    .unwrap_or(Err(ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable".to_string(),
-    )))
+    .unwrap_or(Err(ApiError::DatabaseUnavailable))
 }
 
 /// Total attempts for a deadlock-detected bootstrap or initialization.
 const DEADLOCK_ATTEMPTS: u32 = 3;
 
 fn is_deadlock<T>(result: &Result<T, ApiError>) -> bool {
-    matches!(result, Err(error) if error.1 == "Reading session deadlock")
+    matches!(result, Err(ApiError::DeadlockDetected))
 }
 
 /// Retry a transaction body when PostgreSQL chose it as a deadlock victim.
@@ -351,10 +353,7 @@ where
 }
 fn session_error(error: tokio_postgres::Error) -> ApiError {
     if error.code() == Some(&tokio_postgres::error::SqlState::T_R_DEADLOCK_DETECTED) {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading session deadlock".to_string(),
-        )
+        ApiError::DeadlockDetected
     } else {
         db::query_error(error)
     }
@@ -366,7 +365,10 @@ async fn bootstrap_once(
     policy: SessionPolicy,
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
-    SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|_| corrupt())?;
+    SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        corrupt()
+    })?;
     if !now.is_finite() {
         return Err(corrupt());
     }
@@ -391,20 +393,14 @@ async fn bootstrap_once(
             .map_err(session_error)?
             .is_none()
         {
-            return Err(ApiError(
-                StatusCode::UNAUTHORIZED,
+            return Err(ApiError::Unauthorized(
                 "Could not validate credentials".to_string(),
             ));
         }
         let existing = resolve_current_session(&tx, user, now, policy).await?;
         let mut session = match existing {
             Some(s) => s,
-            None => {
-                return Err(ApiError(
-                    StatusCode::NOT_FOUND,
-                    "No active session".to_string(),
-                ))
-            }
+            None => return Err(ApiError::NotFound("No active session".to_string())),
         };
         // Pending selection is disposable UI state. Return a nulled projection for
         // stale pointers without persisting any repair; write paths repair on offer/reset/dismiss.
@@ -436,10 +432,7 @@ async fn bootstrap_once(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable".to_string(),
-        )),
+        Err(_) => Err(ApiError::DatabaseUnavailable),
         Ok(result) => {
             if result.is_ok() {
                 drop(pending.0.take());
@@ -458,7 +451,10 @@ pub async fn initialize(
 ) -> Result<SessionBootstrap, ApiError> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| corrupt())?
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            corrupt()
+        })?
         .as_secs_f64();
     initialize_at(state, user, timezone, policy, now).await
 }
@@ -477,10 +473,7 @@ pub async fn initialize_at(
         retry_deadlock(|| initialize_once(state, user, timezone, policy, now)),
     )
     .await
-    .unwrap_or(Err(ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable".to_string(),
-    )))
+    .unwrap_or(Err(ApiError::DatabaseUnavailable))
 }
 async fn initialize_once(
     state: &AppState,
@@ -489,7 +482,10 @@ async fn initialize_once(
     policy: SessionPolicy,
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
-    SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|_| corrupt())?;
+    SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        corrupt()
+    })?;
     if !now.is_finite() {
         return Err(corrupt());
     }
@@ -523,8 +519,7 @@ async fn initialize_once(
             .map_err(session_error)?
             .is_none()
         {
-            return Err(ApiError(
-                StatusCode::UNAUTHORIZED,
+            return Err(ApiError::Unauthorized(
                 "Could not validate credentials".to_string(),
             ));
         }
@@ -640,10 +635,7 @@ async fn initialize_once(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable".to_string(),
-        )),
+        Err(_) => Err(ApiError::DatabaseUnavailable),
         Ok(result) => {
             if result.is_ok() {
                 drop(pending.0.take());
@@ -721,7 +713,10 @@ async fn checkpoint(
         .await.map_err(session_error)?;
     let mut by_thread = std::collections::HashMap::<i64, Vec<Value>>::new();
     for row in issues {
-        let mut i: Value = serde_json::from_str(row.get(0)).map_err(|_| corrupt())?;
+        let mut i: Value = serde_json::from_str(row.get(0)).map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            corrupt()
+        })?;
         python_timestamp(&mut i["read_at"]);
         by_thread
             .entry(i["thread_id"].as_i64().ok_or_else(corrupt)?)
@@ -732,7 +727,10 @@ async fn checkpoint(
     }
     let mut threads = serde_json::Map::new();
     for row in rows {
-        let mut t: Value = serde_json::from_str(row.get(0)).map_err(|_| corrupt())?;
+        let mut t: Value = serde_json::from_str(row.get(0)).map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            corrupt()
+        })?;
         for key in ["last_activity_at", "created_at"] {
             python_timestamp(&mut t[key]);
         }
@@ -778,7 +776,10 @@ async fn checkpoint(
         }
         threads.insert(t["id"].to_string(), Value::Object(capture));
     }
-    let mut session_state = serde_json::to_value(session).map_err(|_| corrupt())?;
+    let mut session_state = serde_json::to_value(session).map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        corrupt()
+    })?;
     let keys = [
         "start_die",
         "manual_die",
@@ -810,6 +811,7 @@ async fn checkpoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use serde_json::json;
     #[test]
     fn timezone_validation_and_manual_ladder() {
@@ -910,7 +912,7 @@ mod tests {
         let mut value = session_json();
         value["id"] = json!("not-an-integer");
         let error = decode_session_json(&value.to_string()).unwrap_err();
-        assert_eq!(error.1, "Invalid reading session state");
+        assert_eq!(error.detail(), "Invalid reading session state");
     }
 
     #[tokio::test]
@@ -968,10 +970,7 @@ mod tests {
     }
 
     fn deadlock() -> ApiError {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading session deadlock".to_string(),
-        )
+        ApiError::DeadlockDetected
     }
 
     #[tokio::test]
@@ -1002,7 +1001,7 @@ mod tests {
         })
         .await;
         let error = result.err().unwrap();
-        assert_eq!(error.1, "Reading session deadlock");
+        assert!(error.is_deadlock());
         assert_eq!(calls.get(), DEADLOCK_ATTEMPTS);
     }
 
@@ -1012,13 +1011,10 @@ mod tests {
         let calls = Cell::new(0_u32);
         let result: Result<u8, ApiError> = retry_deadlock(|| {
             calls.set(calls.get() + 1);
-            std::future::ready(Err(ApiError(
-                StatusCode::BAD_REQUEST,
-                "not a deadlock".to_string(),
-            )))
+            std::future::ready(Err(ApiError::BadRequest("not a deadlock".to_string())))
         })
         .await;
-        assert_eq!(result.err().unwrap().0, StatusCode::BAD_REQUEST);
+        assert_eq!(result.err().unwrap().status(), StatusCode::BAD_REQUEST);
         assert_eq!(calls.get(), 1);
     }
 }

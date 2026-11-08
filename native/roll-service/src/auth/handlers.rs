@@ -172,7 +172,10 @@ pub async fn register(
     headers: HeaderMap,
     Json(request): Json<RegisterRequest>,
 ) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
-    request.validate().map_err(|_| AuthError::Validation)?;
+    request.validate().map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        AuthError::Validation
+    })?;
     let ip = client_ip(&headers);
     limiter().check(&format!("register:{ip}"), 5, Duration::from_secs(60))?;
     let refresh_max_age = refresh_cookie_max_age_seconds(&state);
@@ -187,7 +190,10 @@ pub async fn login(
     headers: HeaderMap,
     Json(request): Json<LoginRequest>,
 ) -> AuthResult<(HeaderMap, Json<TokenResponse>)> {
-    request.validate().map_err(|_| AuthError::Validation)?;
+    request.validate().map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        AuthError::Validation
+    })?;
     let ip = client_ip(&headers);
     limiter().check(&format!("login:{ip}"), 5, Duration::from_secs(60))?;
     let refresh_max_age = refresh_cookie_max_age_seconds(&state);
@@ -278,7 +284,10 @@ pub async fn forgot_password(
     tasks: BackgroundTasks,
     Json(request): Json<ForgotPasswordRequest>,
 ) -> AuthResult<Json<PasswordResetResponse>> {
-    request.validate().map_err(|_| AuthError::Validation)?;
+    request.validate().map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        AuthError::Validation
+    })?;
     let ip = client_ip(&headers);
     limiter().check(&format!("forgot:{ip}"), 3, Duration::from_secs(60))?;
     if let Some(delivery) = PasswordResetService::new(state)
@@ -302,7 +311,10 @@ pub async fn reset_password(
     headers: HeaderMap,
     Json(request): Json<ResetPasswordRequest>,
 ) -> AuthResult<Json<PasswordResetResponse>> {
-    request.validate().map_err(|_| AuthError::Validation)?;
+    request.validate().map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        AuthError::Validation
+    })?;
     let ip = client_ip(&headers);
     limiter().check(
         &format!("reset:{ip}"),

@@ -65,11 +65,11 @@ pub struct DependencyResponse {
 }
 
 fn bad_request(detail: &str) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail.to_string())
+    ApiError::BadRequest(detail.to_string())
 }
 
 fn not_found(detail: &str) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, detail.to_string())
+    ApiError::NotFound(detail.to_string())
 }
 
 fn validate_create_request(request: &DependencyCreateRequest) -> Result<(i32, i32), ApiError> {
@@ -377,16 +377,16 @@ mod tests {
             (10, 20)
         );
         let mixed = validate_create_request(&request("issue", 10, "thread", 20)).unwrap_err();
-        assert_eq!(mixed.0, StatusCode::BAD_REQUEST);
-        assert!(mixed.1.contains("Mixed thread/issue"));
+        assert_eq!(mixed.status(), StatusCode::BAD_REQUEST);
+        assert!(mixed.detail().contains("Mixed thread/issue"));
         let thread = validate_create_request(&request("thread", 1, "thread", 2)).unwrap_err();
-        assert_eq!(thread.0, StatusCode::BAD_REQUEST);
-        assert!(thread.1.contains("no longer supported"));
+        assert_eq!(thread.status(), StatusCode::BAD_REQUEST);
+        assert!(thread.detail().contains("no longer supported"));
         let self_edge = validate_create_request(&request("issue", 10, "issue", 10)).unwrap_err();
-        assert_eq!(self_edge.0, StatusCode::BAD_REQUEST);
-        assert_eq!(self_edge.1, "Cannot create dependency on self");
+        assert_eq!(self_edge.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(self_edge.detail(), "Cannot create dependency on self");
         let unknown = validate_create_request(&request("volume", 10, "issue", 20)).unwrap_err();
-        assert_eq!(unknown.0, StatusCode::BAD_REQUEST);
+        assert_eq!(unknown.status(), StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

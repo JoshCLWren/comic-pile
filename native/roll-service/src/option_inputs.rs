@@ -7,7 +7,6 @@ use crate::{
     },
     ApiError, AppState,
 };
-use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -76,8 +75,7 @@ impl OptionInputs {
             || !self.unresolved.is_empty()
             || !reading_inputs::valid_references(&self.core)
         {
-            Err(ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
+            Err(ApiError::Internal(
                 "Unresolved reading reference".to_string(),
             ))
         } else {
@@ -323,10 +321,7 @@ async fn load_transaction(
     let encoded: String = row.try_get(0).map_err(db::query_error)?;
     let snapshot: SnapshotRows = serde_json::from_str(&encoded).map_err(|error| {
         tracing::error!(%error, "Invalid Option E snapshot response");
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading snapshot".to_string(),
-        )
+        ApiError::Internal("Invalid reading snapshot".to_string())
     })?;
     assemble_snapshot(snapshot)
 }
@@ -391,10 +386,9 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
                 object_id: row.id,
             });
         }
-        let list = lists.get_mut(&row.list_id).ok_or(ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading snapshot".to_string(),
-        ))?;
+        let list = lists
+            .get_mut(&row.list_id)
+            .ok_or(ApiError::Internal("Invalid reading snapshot".to_string()))?;
         list.entries.push(ReadingEntry {
             issue_id: row.issue_id,
             gate: row.gate,
@@ -445,10 +439,9 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
             volume_key(&row.continuing_provider, &row.continuing_external_id),
             volume_key(&row.waiting_provider, &row.waiting_external_id),
         ) {
-            let list = lists.get_mut(&row.list_id).ok_or(ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid reading snapshot".to_string(),
-            ))?;
+            let list = lists
+                .get_mut(&row.list_id)
+                .ok_or(ApiError::Internal("Invalid reading snapshot".to_string()))?;
             list.overlap_decisions.push(OverlapDecision {
                 continuing_volume_id: c,
                 waiting_volume_id: w,
@@ -529,10 +522,7 @@ pub async fn load_option_diagnostics(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable".to_string(),
-        )),
+        Err(_) => Err(ApiError::DatabaseUnavailable),
         Ok(Err(error)) => Err(error),
         Ok(Ok(inputs)) => {
             drop(pending.0.take());
@@ -553,14 +543,12 @@ pub(crate) fn validated(
     let names = list_names(&inputs);
     crate::reading_constraints::ValidatedReadingInputs::new(inputs, &names).map_err(|error| {
         match error {
-            crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Reading constraint cycle".to_string(),
-            ),
-            crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Unresolved reading reference".to_string(),
-            ),
+            crate::reading_constraints::ValidationError::Cycle { .. } => {
+                ApiError::Internal("Reading constraint cycle".to_string())
+            }
+            crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => {
+                ApiError::Internal("Unresolved reading reference".to_string())
+            }
         }
     })
 }
@@ -580,14 +568,12 @@ pub(crate) fn validated_contained(
     let names = list_names(&inputs);
     crate::reading_constraints::ValidatedReadingInputs::contained(inputs, &names).map_err(|error| {
         match error {
-            crate::reading_constraints::ValidationError::Cycle { .. } => ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Reading constraint cycle".to_string(),
-            ),
-            crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Unresolved reading reference".to_string(),
-            ),
+            crate::reading_constraints::ValidationError::Cycle { .. } => {
+                ApiError::Internal("Reading constraint cycle".to_string())
+            }
+            crate::reading_constraints::ValidationError::InvalidSnapshot { .. } => {
+                ApiError::Internal("Unresolved reading reference".to_string())
+            }
         }
     })
 }

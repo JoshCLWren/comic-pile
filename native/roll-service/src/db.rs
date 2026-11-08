@@ -5,13 +5,6 @@ use deadpool_postgres::Object;
 use std::time::Duration;
 use tokio_postgres::{types::ToSql, Row};
 
-fn unavailable() -> ApiError {
-    ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable".to_string(),
-    )
-}
-
 /// Physical connections one checkout may try before reporting unavailability.
 ///
 /// A single idle socket is the production failure (#4732); a few attempts also
@@ -46,7 +39,7 @@ pub async fn checkout(state: &AppState) -> Result<Object, ApiError> {
     }
     tokio::time::timeout(state.request_timeout, recover(state))
         .await
-        .unwrap_or_else(|_| Err(unavailable()))
+        .unwrap_or_else(|_| Err(ApiError::database_unavailable()))
 }
 
 /// Replace pooled sockets that cannot carry a statement, bounded to
@@ -57,9 +50,7 @@ async fn recover(state: &AppState) -> Result<Object, ApiError> {
         let connection = acquire(state).await?;
         match probe(state, connection).await {
             Ok(connection) => return Ok(connection),
-            Err(error)
-                if error.0 == StatusCode::SERVICE_UNAVAILABLE && attempt < CHECKOUT_ATTEMPTS =>
-            {
+            Err(error) if error.is_database_unavailable() && attempt < CHECKOUT_ATTEMPTS => {
                 tracing::warn!(
                     attempt,
                     max_attempts = CHECKOUT_ATTEMPTS,
@@ -76,8 +67,14 @@ async fn recover(state: &AppState) -> Result<Object, ApiError> {
 async fn acquire(state: &AppState) -> Result<Object, ApiError> {
     tokio::time::timeout(state.request_timeout, state.pool.get())
         .await
-        .map_err(|_| unavailable())?
-        .map_err(|_| unavailable())
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::database_unavailable()
+        })?
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::database_unavailable()
+        })
 }
 
 /// Prove a checked-out connection can carry a statement.
@@ -105,7 +102,7 @@ async fn probe(state: &AppState, connection: Object) -> Result<Object, ApiError>
     )
     .await;
     match result {
-        Err(_) => Err(unavailable()),
+        Err(_) => Err(ApiError::database_unavailable()),
         Ok(Ok(_)) => Ok(pending.0.take().expect("checked-out PostgreSQL client")),
         Ok(Err(error)) => Err(query_error_for("database.checkout_probe", error)),
     }
@@ -135,7 +132,7 @@ pub(crate) async fn query_one_optional(
     )
     .await;
     match result {
-        Err(_) => Err(unavailable()),
+        Err(_) => Err(ApiError::database_unavailable()),
         Ok(result) => {
             drop(pending.0.take()); // Complete response consumed: safe to recycle.
             result.map_err(query_error)
@@ -211,7 +208,7 @@ pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Er
                 closed = error.is_closed(),
                 "database connection unavailable"
             );
-            unavailable()
+            ApiError::database_unavailable()
         }
         _ => {
             tracing::error!(
@@ -219,10 +216,7 @@ pub(crate) fn query_error_for(operation: &'static str, error: tokio_postgres::Er
                 sqlstate = sqlstate.unwrap_or("none"),
                 "database statement failed"
             );
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error".to_string(),
-            )
+            ApiError::Internal("Internal Server Error".to_string())
         }
     }
 }
@@ -245,10 +239,7 @@ pub async fn require_owned_thread(
         &[&id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(
-        StatusCode::NOT_FOUND,
-        "Thread not found".to_string(),
-    ))?;
+    .ok_or(ApiError::NotFound("Thread not found".to_string()))?;
     Ok(())
 }
 
@@ -266,10 +257,7 @@ pub async fn require_owned_reading_session(
         &[&id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(
-        StatusCode::NOT_FOUND,
-        "Session not found".to_string(),
-    ))?;
+    .ok_or(ApiError::NotFound("Session not found".to_string()))?;
     Ok(())
 }
 
@@ -327,20 +315,20 @@ mod tests {
         .await
         .err()
         .unwrap();
-        assert_eq!(error.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(error.status(), StatusCode::INTERNAL_SERVER_ERROR);
         let connection = checkout(&state).await.ok().unwrap();
         let error = query_one_optional(&state, connection, "SELECT $1::int4", &[&"wrong type"])
             .await
             .err()
             .unwrap();
-        assert_eq!(error.0, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(error.status(), StatusCode::INTERNAL_SERVER_ERROR);
         let connection = checkout(&state).await.ok().unwrap();
         state.request_timeout = Duration::from_millis(20);
         let error = query_one_optional(&state, connection, "SELECT pg_sleep(5)", &[])
             .await
             .err()
             .unwrap();
-        assert_eq!(error.0, StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(error.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(state.pool.status().size, 0);
         state.request_timeout = Duration::from_secs(2);
         let connection = checkout(&state).await.ok().unwrap();

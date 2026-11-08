@@ -94,7 +94,7 @@ async fn main() {
     match result {
         Ok(s) => println!("{s}"),
         Err(e) => {
-            eprintln!("session failed: {} {}", e.0, e.1);
+            eprintln!("session failed: {} {}", e.status(), e.detail());
             std::process::exit(1);
         }
     }

@@ -160,7 +160,10 @@ impl AuthService {
             self.state.jwt_secret.as_bytes(),
             Some("refresh"),
         )
-        .map_err(|_| AuthError::InvalidRefreshToken)?;
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            AuthError::InvalidRefreshToken
+        })?;
         let connection = checkout(&self.state).await?;
         let row = query_one_optional(
             &self.state,
@@ -346,7 +349,10 @@ pub fn decode_claims(
     validation.validate_nbf = false;
     validation.validate_aud = false;
     let claims = decode::<Claims>(token, &DecodingKey::from_secret(secret), &validation)
-        .map_err(|_| AuthError::InvalidToken)?
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            AuthError::InvalidToken
+        })?
         .claims;
     if claims.sub.is_empty() || claims.jti.is_empty() {
         return Err(AuthError::InvalidToken);

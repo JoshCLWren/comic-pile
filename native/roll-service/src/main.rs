@@ -19,11 +19,15 @@ async fn run() -> Result<(), &'static str> {
         .json()
         .with_env_filter(config.log_filter.clone())
         .try_init()
-        .map_err(|_| "log initialization failed")?;
+        .map_err(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            "log initialization failed"
+        })?;
     let state = Arc::new(AppState::new(config).map_err(|error| error.0)?);
-    let listener = tokio::net::TcpListener::bind(bind)
-        .await
-        .map_err(|_| "listener bind failed")?;
+    let listener = tokio::net::TcpListener::bind(bind).await.map_err(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        "listener bind failed"
+    })?;
     tracing::info!(address = %bind, "native Roll listener started");
     serve(listener, router(state.clone()), state, shutdown_signal()).await
 }
