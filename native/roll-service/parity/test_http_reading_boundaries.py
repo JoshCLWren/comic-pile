@@ -1,8 +1,7 @@
 """Authenticated native reading-boundaries POST against the real app schema.
 
-The synthetic schema is created from the canonical SQLAlchemy models, so the
-handler runs against the same tables production migrations create. The expected
-payload comes from the canonical Python service on that same data, then the
+The handler runs against the canonical Alembic schema used by production. The
+expected payload comes from the canonical Python service on that same data, then the
 mounted Rust route must return it byte-for-byte.
 """
 import asyncio
@@ -19,7 +18,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import get_reading_execution_settings
-from app.database import Base
 from app.models import Dependency, Issue, Thread, User
 from app.models.custom_cbl import (
     CustomCBLEntry,
@@ -55,8 +53,8 @@ async def _run_example(env: dict[str, str]) -> tuple[dict[str, object], bytes, f
     return json.loads(out), out, wall, cpu
 
 
-async def _db_bytes(admin) -> tuple[int, int]:
-    async with admin.connect() as connection:
+async def _db_bytes(engine) -> tuple[int, int]:
+    async with engine.connect() as connection:
         row = await connection.execute(
             text(
                 "SELECT xact_commit + xact_rollback, blks_read + blks_hit "
@@ -77,26 +75,9 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
     )
     get_reading_execution_settings.cache_clear()
 
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    name = f"rust_boundary_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{name}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{name},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
-
         now = datetime.now(UTC)
         username = f"rb_{uuid4().hex[:16]}"
         async with AsyncSession(engine, expire_on_commit=False) as db:
@@ -321,19 +302,18 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
             SECRET,
             "HS256",
         )
-        query = f"options=-csearch_path%3D{name}"
         env = {
             **os.environ,
-            "RUST_ROLL_DATABASE_URL": url + ("&" if "?" in url else "?") + query,
+            "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_POOL_SIZE": "2",
             "RUST_ROLL_TEST_BODY": json.dumps({"thread_ids": requested}),
         }
 
-        db_before = await _db_bytes(admin)
+        db_before = await _db_bytes(engine)
         result, raw, wall, cpu = await _run_example(env)
-        db_after = await _db_bytes(admin)
+        db_after = await _db_bytes(engine)
         print(
             "native reading-boundaries parity: "
             f"http_bytes={len(raw)} wall_ms={wall * 1000:.2f} "
@@ -363,6 +343,3 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
     finally:
         get_reading_execution_settings.cache_clear()
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{name}" CASCADE'))
-        await admin.dispose()
