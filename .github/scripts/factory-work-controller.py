@@ -962,6 +962,10 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
     pairs = paired_owned_targets(issue_items, pr_items)
     released: list[int] = []
     for number, owner in owned_targets(issue_items, pr_items):
+        # Manual-only holds cannot be changed by replace_factory_labels.
+        # Avoid paginating their comment histories on every dispatch pass.
+        if is_manual_only(targets[number].get('body')):
+            continue
         fixed_owner = FIXED_OWNER_RE.fullmatch(owner)
         if fixed_owner and (unresolved_runs or int(fixed_owner.group("worker")) in active):
             continue
