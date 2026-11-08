@@ -624,3 +624,10 @@ Scheduled ChatGPT workers must update their assigned permanent comment on regist
 A start update records current UTC and `Outcome: running`. A completion update preserves the start time and records current UTC, the actual work item or items, and truthful outcome. If an update fails, retry once through another available GitHub path and continue delivery; telemetry failure is not authority to stop.
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
+
+Delivery funnel reports use separate opened/merged/unmerged-close event windows
+of 14 and 30 days. Starter PR outcomes and advance-commit contribution shares
+are distinct. Each merged PR contributes one credit unit divided among its
+advance commits, including squash-body subjects without duplicate credit.
+Retired and unattributed history remain visible. Immutable merged attribution
+is cached on the existing status branch; unavailable history is not reported as zero.

@@ -346,15 +346,17 @@ def test_system_verdict_flags_capacity_without_claims():
 
 
 def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ):
     """Use allocator capacity while enriching it with worker telemetry and merge credit."""
+    monkeypatch.setenv('FACTORY_FUNNEL_CACHE', str(tmp_path / 'funnel-cache.json'))
     work = SimpleNamespace(list_issues=lambda: [], list_prs=lambda: [])
     policy = SimpleNamespace(comment_is_trusted=lambda _comment: True)
     completion = SimpleNamespace(
         load_controller=lambda: work,
         owned_worker_ids=lambda _items: {"39"},
         registry_comments=lambda: [],
+        gh_json=lambda _args: [],
         load_policy=lambda: policy,
     )
     demand = SimpleNamespace(
@@ -402,7 +404,7 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     original_load_module = dashboard.load_module
 
     def fake_load_module(_name: str, path: Path):
-        if path.name == "factory_heartbeat_health.py":
+        if path.name in {"factory_heartbeat_health.py", "factory_delivery_funnel.py"}:
             return original_load_module(_name, path)
         return full if path.name == "factory_full_completion_controller.py" else completion
 
@@ -494,3 +496,18 @@ def test_dashboard_exposes_stale_and_quota_limited_worker_with_fresh_peer() -> N
     assert "Heartbeat: stale" in rendered
     assert "/actions/runs/456" in rendered
     assert "quota-limited workers are not classified as crashed" in rendered
+
+
+def test_delivery_funnel_render_prioritizes_outcomes_and_escapes_metadata() -> None:
+    """Compare merged versus unmerged closes without trusting model-name HTML."""
+    rendered = dashboard.render_delivery_funnel({'delivery_funnel': [{
+        'group': 'model', 'name': '<script>bad</script>', 'days': 14,
+        'merged': 3, 'closed': 2, 'opened': 8, 'commit_share': 1.5,
+    }]})
+    assert 'Closed without merge' in rendered
+    assert rendered.index('<th>Merged') < rendered.index('<th>Opened')
+    assert '&lt;script&gt;' in rendered and '<script>bad' not in rendered
+    assert '1.50' in rendered
+    assert 'same-cohort conversion' in rendered
+    failed = dashboard.render_delivery_funnel({'delivery_funnel_error': 'API unavailable'})
+    assert 'API unavailable' in failed and '<table' not in failed
