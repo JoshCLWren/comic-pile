@@ -26,6 +26,14 @@ const view: ReaderView = {
   ],
 }
 function cardFor(issueId: number): IssueCard {
+  if (issueId === 30) {
+    return {
+      issue_id: 30, thread_id: 3, thread_title: 'Starman', issue_number: '55',
+      status: 'unread', rating: null, mapping_state: 'confirmed',
+      has_confirmed_identity: true,
+      cover_image_url: 'https://comicvine.gamespot.com/starman-55.jpg',
+    }
+  }
   const entry = view.entries?.find((row) => row.issue_id === issueId) ?? view.entries?.[0]
   if (!entry) throw new Error('Missing fixture')
   return { issue_id: issueId, thread_id: entry.thread_id, thread_title: entry.series_name,
@@ -47,9 +55,9 @@ async function openFirstEditor() {
   await screen.findByText('Julix · Strict order')
   await userEvent.click(firstCard().getByRole('button', { name: 'Rate / Mark read' }))
 }
-function mount() {
+function mount(backTo?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter><ReadingListReader listId={2} /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter><ReadingListReader listId={2} backTo={backTo} /></MemoryRouter></QueryClientProvider>)
   return client
 }
 beforeEach(() => {
@@ -73,7 +81,7 @@ it('shows every blocker, exact issue links and list-local skip while keeping blo
   expect(screen.getAllByRole('button', { name: 'Rate / Mark read' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   expect(screen.getAllByRole('button', { name: 'Move to front' })).toHaveLength(1)
-  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20]))
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20, 30]))
 })
 
 it('marks the exact offered issue and refreshes the reader plus other eligibility surfaces', async () => {
@@ -221,17 +229,54 @@ it('shows a single bounded card-load failure and restores issue-specific covers 
   fetchCards.mockRejectedValueOnce(new Error('metadata offline')).mockResolvedValueOnce([
     { ...cardFor(10), cover_image_url: 'https://comicvine.gamespot.com/issue-10.jpg', rating: 4 },
     { ...cardFor(20), cover_image_url: 'https://comicvine.gamespot.com/issue-20.jpg' },
+    cardFor(30),
   ])
   mount()
   expect(await screen.findByRole('alert')).toHaveTextContent('Unable to load issue cards.')
-  expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20])
+  expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20, 30])
   expect(screen.getAllByRole('button', { name: 'Read now' })).toHaveLength(2)
   await userEvent.click(screen.getByRole('button', { name: 'Retry cards' }))
   await waitFor(() => expect(fetchCards).toHaveBeenCalledTimes(2))
-  expect(await screen.findByRole('img', { name: 'Cover for The Dead Remembered #2' })).toHaveAttribute(
+  expect(await within(firstCard().getByTestId('comic-issue-cover')).findByRole('img', { name: 'Cover for The Dead Remembered #2' })).toHaveAttribute(
     'src', 'https://comicvine.gamespot.com/issue-10.jpg',
   )
   expect(screen.getByRole('img', { name: 'Cover for King of Fear #1' })).toHaveAttribute(
     'src', 'https://comicvine.gamespot.com/issue-20.jpg',
   )
+})
+
+it('does not guess an issue ID or fetch an issue cover for thread-only prerequisites', async () => {
+  vi.mocked(customCBLApi.getReader).mockResolvedValue({
+    ...view,
+    entries: (view.entries ?? []).map((entry) => entry.issue_id !== 20 ? entry : {
+      ...entry,
+      explanation: {
+        ...entry.explanation,
+        is_blocked: true,
+        blocking_reasons: [],
+        blocking_dependencies: [
+          { thread_id: 3, thread_title: 'Starman', issue_number: '55', label: 'Reader prerequisite: Starman #55' },
+          { issue_id: 10, thread_id: 1, thread_title: 'The Dead Remembered', issue_number: '2', label: 'Strict order: The Dead Remembered #2' },
+        ],
+      },
+    }),
+  })
+  mount('/queue')
+  expect(await screen.findByText('Julix · Strict order')).toBeVisible()
+  expect(screen.getByRole('link', { name: 'Open Starman' })).toHaveAttribute('href', '/thread/3')
+  expect(screen.queryByRole('button', { name: 'Reading and mapping actions for Starman #55' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Reading and mapping actions for The Dead Remembered #2' })).toBeEnabled()
+  await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([10, 20]))
+})
+
+it('renders a safe empty list when a stale reader response omits entries', async () => {
+  // Preserve the generated response type while modeling a stale server
+  // payload that omitted `entries`. Do not weaken the runtime boundary.
+  const missingEntries = Object.assign({}, view, { entries: undefined })
+  vi.mocked(customCBLApi.getReader).mockResolvedValue(missingEntries)
+  mount()
+  expect(await screen.findByText('This Reading List is empty.')).toBeVisible()
+  expect(screen.getByText('Julix · Strict order')).toBeVisible()
+  expect(fetchCards).not.toHaveBeenCalled()
+  expect(screen.queryByTestId('comic-issue-card')).not.toBeInTheDocument()
 })

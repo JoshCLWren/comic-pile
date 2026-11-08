@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { ReadingBoundaryExplanation } from '../components/ReadingBoundaryExplanation'
+import type { IssueCard } from '../services/issueCardsApi'
 import type {
   BoundaryEditorTarget,
   BoundaryIssue,
@@ -342,4 +343,75 @@ describe('ReadingBoundaryExplanation', () => {
 
     expect(screen.queryByRole('link', { name: 'Edit Detached issue' })).not.toBeInTheDocument()
   })
+  it('reuses owner-batched covers for both canonical blocked and next issues without hiding source links', async () => {
+    const blocked = issue({ issue_id: 9, thread_title: 'One Year In', issue_number: '1' })
+    const next = issue({ issue_id: 12, thread_id: 3, thread_title: 'Saga', issue_number: '7', label: 'Saga #7' })
+    const card = (item: BoundaryIssue, coverImageUrl: string): IssueCard => ({
+      issue_id: item.issue_id,
+      thread_id: item.thread_id,
+      thread_title: item.thread_title,
+      issue_number: item.issue_number,
+      status: 'unread',
+      rating: null,
+      mapping_state: 'confirmed',
+      has_confirmed_identity: true,
+      cover_image_url: coverImageUrl,
+    })
+    renderExplanation({
+      compact: true,
+      cardsByIssue: new Map([
+        [9, card(blocked, 'https://comicvine.example/one-year-in.jpg')],
+        [12, card(next, 'https://comicvine.example/saga.jpg')],
+      ]),
+      explanation: explanation({
+        state: 'blocked',
+        summary: 'Saga #6 is waiting.',
+        blockers: [{
+          kind: 'strict_order',
+          origin: 'reading_list',
+          reason: 'Read One Year In #1 first.',
+          waiting_on: [blocked],
+        }],
+        next: { issue: next, editor: { kind: 'issue', thread_id: 3, issue_id: 12, label: 'Saga #7' } },
+      }),
+    })
+
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toHaveAttribute(
+      'href', '/thread/2?issue=9#issue-9',
+    )
+    expect(screen.getByRole('link', { name: 'Open Saga issue #7' })).toHaveAttribute(
+      'href', '/thread/3?issue=12#issue-12',
+    )
+    expect(screen.getByRole('img', { name: 'Cover for One Year In #1' })).toHaveAttribute(
+      'src', 'https://comicvine.example/one-year-in.jpg',
+    )
+    expect(screen.getByRole('img', { name: 'Cover for Saga #7' })).toHaveAttribute(
+      'src', 'https://comicvine.example/saga.jpg',
+    )
+    const disclosure = screen.getByRole('button', { name: 'Show all reading requirements' })
+    await userEvent.click(disclosure)
+    expect(screen.getAllByRole('img', { name: 'Cover for One Year In #1' })).toHaveLength(2)
+    await userEvent.click(screen.getByRole('button', { name: 'Hide all reading requirements' }))
+    expect(screen.getAllByRole('img', { name: 'Cover for One Year In #1' })).toHaveLength(1)
+  })
+
+  it('keeps manual blocker action for a named issue even when its batch projection is absent', () => {
+    renderExplanation({
+      compact: true,
+      cardsByIssue: new Map(),
+      explanation: explanation({
+        state: 'blocked',
+        blockers: [{
+          kind: 'hold', origin: 'reading_list', reason: 'Read the required issue first.',
+          waiting_on: [issue({ issue_id: 9 })],
+        }],
+      }),
+    })
+    expect(screen.getByRole('link', { name: 'Open One Year In issue #1' })).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Reading and mapping actions for One Year In #1' })).toBeEnabled()
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute(
+      'aria-label', 'No cover for One Year In #1',
+    )
+  })
+
 })

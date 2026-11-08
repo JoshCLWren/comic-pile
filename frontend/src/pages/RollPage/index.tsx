@@ -151,6 +151,7 @@ export default function RollPage() {
   useRollBootstrapSync({
     state,
     bootstrap,
+    scopedDieState: scopedDieState ?? null,
     isBootstrapError,
     bootstrapError,
     navigate,

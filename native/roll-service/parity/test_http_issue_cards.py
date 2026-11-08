@@ -177,8 +177,10 @@ async def test_authenticated_issue_cards_are_owner_scoped_and_bounded() -> None:
                     provider="comicvine",
                     entity_type="issue",
                     external_id="4000-45",
+                    # Regression #4722: confirmed mappings frequently store
+                    # only primary_image without nested image-size fields.
                     metadata_json={
-                        "image": {"original_url": "https://comicvine.example/original/4000-45.jpg"}
+                        "primary_image": "https://comicvine.example/original/4000-45.jpg"
                     },
                 ),
                 "foreign": ExternalIdentity(
@@ -252,7 +254,7 @@ async def test_authenticated_issue_cards_are_owner_scoped_and_bounded() -> None:
                     "mapping_state": "confirmed",
                     "comicvine_issue_id": "4000-42",
                     "cover_image_url": (
-                        "https://comicvine.example/medium/4000-42.jpg"
+                        "https://comicvine.example/original/4000-42.jpg"
                     ),
                 },
                 {
