@@ -260,7 +260,7 @@ export function CblComicFinder({
                 card={ownedCard}
                 threadTitle={ownedCard.thread_title}
                 issueNumber={ownedCard.issue_number}
-                status={ownedCard.status}
+                status={ownedCard.status === 'read' ? 'read' : 'unread'}
                 rating={ownedCard.rating}
               />
             </div>
