@@ -49,14 +49,12 @@ LEGACY_ONLY_TOOLING = frozenset({"admin", "debug", "metrics", "ping"})
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
 REQUIRED_V1_FAMILIES = frozenset(
     {
-        "analytics",
         "auth",
         "bug-reports",
         "continuity-plans",
         "continuity-rules",
         "dependencies",
         "issues",
-        "queue",
         "reading-order-groups",
         "releases",
         "roll",
@@ -112,33 +110,23 @@ def test_openapi_has_no_duplicate_operation_ids() -> None:
 
 
 def test_openapi_has_no_supported_collections_surface() -> None:
-    """Collections were removed; no Collections route, schema, or operation."""
+    """Collections and collection-exclusions were pruned; no route or schema remains."""
     schema = _load_schema()
     violations: list[str] = []
 
     for path in schema.get("paths", {}):
-        if "collection" in path.lower() and path not in {
-            "/api/v1/collection-exclusions",
-            "/api/v1/collection-exclusions/{exclusion_id}",
-        }:
+        if "collection" in path.lower():
             violations.append(f"path:{path}")
 
     for name in schema.get("components", {}).get("schemas", {}):
-        if "collection" in name.lower() and name not in {
-            "CollectionExclusionCreate",
-            "CollectionExclusionResponse",
-        }:
+        if "collection" in name.lower():
             violations.append(f"schema:{name}")
 
     for methods in schema.get("paths", {}).values():
         for operation in methods.values():
             if isinstance(operation, dict):
                 operation_id = operation.get("operationId", "")
-                if "collection" in operation_id.lower() and operation_id not in {
-                    "list_exclusions_api_v1_collection_exclusions_get",
-                    "create_exclusion_api_v1_collection_exclusions_post",
-                    "delete_exclusion_api_v1_collection_exclusions__exclusion_id__delete",
-                }:
+                if "collection" in operation_id.lower():
                     violations.append(f"operation:{operation_id}")
 
     assert not violations, f"Collections surface detected: {violations}"

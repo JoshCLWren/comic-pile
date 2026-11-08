@@ -9,23 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.release import (
-    MinimalReleaseResponse,
     PublicReleaseResponse,
     ReleaseListResponse,
     ReleaseResponse,
-    ReleaseSourceResponse,
     ReleaseUpsertRequest,
 )
 from app.services.release_ledger import (
     ReleaseSourceConflictError,
-    find_release_minimal_by_source,
-    get_published_release,
     list_published_releases,
     public_release_payload,
     upsert_release,
-    # Kept as a trailing entry so adding the retraction helper only appends to
-    # this import group instead of rewriting the shared lines above it.
-    retract_published_release,
 )
 
 router = APIRouter(tags=["releases"])
@@ -62,53 +55,6 @@ async def require_release_writer_token(
 
 
 @router.get(
-    "/source",
-    response_model=ReleaseSourceResponse,
-    description="Resolve whether trusted automation already published a GitHub source.",
-)
-async def reconcile_release_source(
-    _: Annotated[None, Depends(require_release_writer_token)],
-    db: AsyncSession = Depends(get_db),
-    source_repository: str = Query(min_length=1, max_length=255),
-    source_pr_number: int | None = Query(default=None, ge=1),
-    source_merge_sha: str | None = Query(default=None, min_length=7, max_length=64),
-) -> ReleaseSourceResponse:
-    """Resolve whether trusted automation already published a GitHub source.
-
-    Args:
-        _: Successful release-writer authorization dependency.
-        db: Async database session.
-        source_repository: Repository containing the source pull request.
-        source_pr_number: Source pull request number when known.
-        source_merge_sha: Source merge commit SHA when known.
-
-    Returns:
-        Reconciliation result containing any matching durable release.
-
-    Raises:
-        HTTPException: If no source identity is supplied or the identities conflict.
-    """
-    if source_pr_number is None and source_merge_sha is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="source_pr_number or source_merge_sha is required",
-        )
-    try:
-        release = await find_release_minimal_by_source(
-            db,
-            source_repository=source_repository,
-            source_pr_number=source_pr_number,
-            source_merge_sha=source_merge_sha,
-        )
-    except ReleaseSourceConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    release_obj = (
-        MinimalReleaseResponse.model_validate(dict(release)) if release is not None else None
-    )
-    return ReleaseSourceResponse(exists=release is not None, release=release_obj)
-
-
-@router.get(
     "/",
     response_model=ReleaseListResponse,
     description="List public published releases newest-first.",
@@ -138,33 +84,6 @@ async def list_releases(
         limit=limit,
         offset=offset,
     )
-
-
-@router.get(
-    "/{release_id}",
-    response_model=PublicReleaseResponse,
-    description="Fetch one public published release.",
-)
-async def get_release(
-    release_id: int,
-    db: AsyncSession = Depends(get_db),
-) -> PublicReleaseResponse:
-    """Fetch one public published release.
-
-    Args:
-        release_id: Release primary key.
-        db: Async database session.
-
-    Returns:
-        The requested public published release.
-
-    Raises:
-        HTTPException: If the release is unavailable to public readers.
-    """
-    release = await get_published_release(db, release_id)
-    if release is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
-    return PublicReleaseResponse.model_validate(public_release_payload(release))
 
 
 @router.put(
@@ -198,49 +117,3 @@ async def publish_release(
     return ReleaseResponse.model_validate(release)
 
 
-@router.post(
-    "/{release_id}/retract",
-    response_model=ReleaseResponse,
-    description="Retract a release so it leaves the public What's New list.",
-)
-async def retract_release(
-    release_id: int,
-    _: Annotated[None, Depends(require_release_writer_token)],
-    db: AsyncSession = Depends(get_db),
-    x_release_writer_token: Annotated[str | None, Header()] = None,
-) -> ReleaseResponse:
-    """Retract a release so it leaves the public What's New list.
-
-    Args:
-        release_id: The release to retract.
-        _: Successful release-writer authorization dependency.
-        db: Async database session.
-        x_release_writer_token: Release-writer credential supplied by trusted automation.
-
-    Returns:
-        The retracted release.
-
-    Raises:
-        HTTPException: If release writing is unconfigured, the credential is invalid,
-            or the release is not found.
-    """
-    expected = os.getenv("RELEASE_WRITER_TOKEN", "").strip()
-    if not expected:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Release writer authorization is not configured",
-        )
-    if x_release_writer_token is None or not secrets.compare_digest(
-        x_release_writer_token,
-        expected,
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid release writer credential",
-        )
-
-    release = await retract_published_release(db, release_id)
-    if release is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Release not found")
-
-    return ReleaseResponse.model_validate(release)

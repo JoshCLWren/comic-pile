@@ -16,44 +16,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.repositories.taste_signal import get_user_signals, upsert_signal
+from app.repositories.taste_signal import upsert_signal
 from app.schemas.taste_verdict import (
-    TasteSignalListResponse,
     TasteSignalResponse,
     TasteSignalType,
     TasteVerdictRequest,
 )
 
 router = APIRouter(prefix="/users/me/taste-signals", tags=["taste-signals"])
-
-
-@router.get(
-    "",
-    response_model=TasteSignalListResponse,
-    summary="List the authenticated user's Taste Bank signals.",
-    description=(
-        "Return every persisted Taste Bank signal owned by the authenticated "
-        "user, ordered by signal type then external key. The list is empty "
-        "before any discovery or verdict exists."
-    ),
-)
-async def list_taste_signals(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> TasteSignalListResponse:
-    """List every Taste Bank signal owned by the authenticated user.
-
-    Args:
-        current_user: The authenticated user making the request.
-        db: Async database session.
-
-    Returns:
-        All canonical signals for the caller, sorted deterministically.
-    """
-    signals = await get_user_signals(db, current_user.id)
-    return TasteSignalListResponse(
-        signals=[TasteSignalResponse.model_validate(signal) for signal in signals]
-    )
 
 
 @router.put(

@@ -183,7 +183,7 @@ export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['NativeUserResponse']
 
-export type MetricsResponse = components['schemas']['NativeAnalyticsMetricsResponse']
+export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
 
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']
@@ -216,7 +216,7 @@ export interface ReadReadingListRequest {
 export type ReadReadingListResponse = components['schemas']['ReadingListReader']
 
 export interface ReadingBoundaryBatchRequest {
-  body: components['schemas']['NativeReadingBoundaryBatchRequest']
+  body: components['schemas']['ReadingBoundaryBatchRequest']
 }
 
 export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']

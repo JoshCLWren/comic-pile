@@ -17,7 +17,6 @@ from app.models import Event, ReadingSession, Snapshot, Thread, User
 from app.models.thread import normalize_format_value
 from app.schemas import (
     ActiveThreadInfo,
-    CorrectionSheetExamplesResponse,
     SessionDetailsResponse,
     SessionHistoryListResponse,
     SessionListItem,
@@ -46,16 +45,9 @@ from app.services.session_history_projection import (
 )
 from app.services.tag_inheritance_service import TagInheritanceService
 from app.services.thread_issue_stats import load_issue_stats
-from app.services.correction_examples import generate_correction_examples
 from comic_pile.reading_session import get_current_die, get_or_create, is_active
 
 router = APIRouter(tags=["sessions"])
-#: Versioned-only surface for new session client resources. ``app.main`` mounts
-#: this router *before* :data:`router` at the ``/api/v1/sessions`` prefix so a
-#: literal path always wins over the ``/{session_id}`` parameter route, and it
-#: is never mounted under bare ``/api/*`` (see docs/API.md and the convention
-#: comment in app/main.py).
-v1_router = APIRouter(tags=["sessions"])
 
 
 class _RateAggregate(TypedDict):
@@ -718,29 +710,4 @@ async def restore_reading_session_start(
             mode_version=session.intent_version,
         ),
     )
-
-
-@v1_router.get("/correction-examples", response_model=CorrectionSheetExamplesResponse)
-@limiter.limit("60/minute")
-async def get_correction_sheet_examples(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> CorrectionSheetExamplesResponse:
-    """Get personalized examples for the correction sheet steering choices.
-
-    Returns compact examples drawn from the user's own rated/read history for
-    each correction sheet option. Examples are explanatory only and do not
-    constrain the canonical recommendation behavior. Returns null for options
-    where no honest example exists.
-
-    Args:
-        request: FastAPI request object for rate limiting.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        CorrectionSheetExamplesResponse with examples for each choice.
-    """
-    return await generate_correction_examples(db, current_user.id)
 

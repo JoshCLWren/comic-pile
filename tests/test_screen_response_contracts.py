@@ -308,20 +308,10 @@ def test_routes_publish_the_screen_specific_openapi_contracts() -> None:
 
 
 def test_no_legacy_collection_contracts_remain_in_openapi() -> None:
-    """Reject removed collection endpoints while allowing Option E exclusions."""
+    """Reject removed collection endpoints including pruned exclusions."""
     schema = app.openapi()
     collection_paths = {path for path in schema["paths"] if "collection" in path.lower()}
-    assert collection_paths == {
-        "/api/v1/collection-exclusions",
-        "/api/v1/collection-exclusions/{exclusion_id}",
-    }
-    collection_schemas = {
-        name for name in schema["components"]["schemas"] if "collection" in name.lower()
-    }
-    assert collection_schemas == {
-        "CollectionExclusionCreate",
-        "CollectionExclusionResponse",
-    }
+    assert collection_paths == set()
 
 
 def test_component_schemas_expose_exact_screen_contracts() -> None:

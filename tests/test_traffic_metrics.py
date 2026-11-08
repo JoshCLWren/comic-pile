@@ -3,9 +3,7 @@
 from collections.abc import Iterator
 
 import pytest
-from httpx import AsyncClient
 
-from app.schemas.traffic_metrics import TrafficMetricsSnapshot
 from app.traffic_metrics import (
     _MAX_TRACKED_KEYS,
     get_traffic_instance_id,
@@ -86,46 +84,3 @@ def test_counter_keys_are_capped_against_cardinality_explosion() -> None:
     assert overflow[0].count == 25
 
 
-async def test_traffic_endpoint_requires_authentication(client: AsyncClient) -> None:
-    """Unauthenticated callers must not read traffic aggregates."""
-    response = await client.get("/api/v1/traffic-metrics")
-    assert response.status_code == 401
-
-
-async def test_traffic_endpoint_reports_route_counters(auth_client: AsyncClient) -> None:
-    """Authenticated callers see counters for previously completed requests."""
-    listed = await auth_client.get("/api/v1/threads/stale")
-    assert listed.status_code == 200
-
-    # The snapshot cannot contain its own request: middleware records each
-    # hit only after the response completes. Assert on the earlier call.
-    response = await auth_client.get("/api/v1/traffic-metrics")
-    assert response.status_code == 200
-
-    payload = TrafficMetricsSnapshot.model_validate(response.json())
-    assert payload.instance_id == get_traffic_instance_id()
-    counted = {
-        (counter.method, counter.route, counter.status_class): counter.count
-        for counter in payload.counters
-    }
-    assert counted[("GET", "/api/v1/threads/stale", "2xx")] == 1
-
-
-async def test_unmatched_api_paths_collapse_into_catch_all_template(
-    auth_client: AsyncClient,
-) -> None:
-    """Unknown API paths record under the registered catch-all template."""
-    missing = await auth_client.get("/api/v1/does-not-exist")
-    assert missing.status_code == 404
-
-    response = await auth_client.get("/api/v1/traffic-metrics")
-    assert response.status_code == 200
-
-    payload = TrafficMetricsSnapshot.model_validate(response.json())
-    catch_all_404 = [
-        counter
-        for counter in payload.counters
-        if counter.route == "/api/{path:path}" and counter.status_class == "4xx"
-    ]
-    assert len(catch_all_404) == 1
-    assert catch_all_404[0].count >= 1

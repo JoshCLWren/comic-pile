@@ -29,7 +29,6 @@ from app.schemas import (
     ThreadResponse,
     ThreadUpdate,
 )
-from app.schemas.migration import MigrateToIssuesSimpleRequest
 from app.services import thread_service
 from app.services.errors import (
     ConflictError,
@@ -398,32 +397,6 @@ async def set_pending_thread(
         raise _map_service_error(exc) from exc
 
 
-@router.put("/{thread_id}/test-backdate", response_model=ThreadResponse)
-async def backdate_thread_for_testing(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    days_ago: int = Query(..., ge=1, le=3650, description="Number of days to backdate the thread"),
-) -> ThreadResponse:
-    """Backdate a thread's last_activity_at (test environments only).
-
-    Args:
-        thread_id: The thread ID to backdate.
-        current_user: The authenticated user making the request.
-        db: SQLAlchemy session for database operations.
-        days_ago: Number of days to backdate last_activity_at (1-3650).
-
-    Returns:
-        ThreadResponse with updated thread details.
-    """
-    try:
-        return await thread_service.backdate_thread_for_testing(
-            db, current_user.id, thread_id, days_ago
-        )
-    except ServiceError as exc:
-        raise _map_service_error(exc) from exc
-
-
 @router.post("/{thread_id}:migrateToIssues", response_model=ThreadResponse)
 async def migrate_thread_to_issues(
     thread_id: int,
@@ -446,32 +419,6 @@ async def migrate_thread_to_issues(
             thread_id,
             last_issue_read=request.last_issue_read,
             total_issues=request.total_issues,
-        )
-    except ServiceError as exc:
-        raise _map_service_error(exc) from exc
-
-
-@router.post("/{thread_id}:migrateToIssuesSimple", response_model=ThreadResponse)
-async def migrate_thread_to_issues_simple(
-    thread_id: int,
-    request: MigrateToIssuesSimpleRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> ThreadResponse:
-    """Simplified migration inferred from the issue just rated.
-
-    Marks earlier issues read, keeps the rated issue unread so the rating
-    flow can mark it read, and points ``next_unread_issue_id`` at it.
-
-    Raises:
-        HTTPException: 404 if thread not found, 400 if validation fails.
-    """
-    try:
-        return await thread_service.migrate_thread_to_issues_simple(
-            db,
-            current_user.id,
-            thread_id,
-            issue_number=request.issue_number,
         )
     except ServiceError as exc:
         raise _map_service_error(exc) from exc

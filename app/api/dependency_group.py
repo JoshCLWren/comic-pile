@@ -22,7 +22,6 @@ from app.schemas.dependency_group import (
     DependencyGroupIssueRangeResponse,
     DependencyGroupMemberCreate,
     DependencyGroupMemberResponse,
-    DependencyGroupOrderUpdate,
     DependencyGroupResponse,
     DependencyGroupSummary,
     DependencyGroupUpdate,
@@ -290,43 +289,6 @@ async def add_member(
     """
     try:
         return await DependencyGroupService(db).add_member(current_user.id, group_id, payload)
-    except ServiceError as exc:
-        raise _map_service_error(exc) from exc
-
-
-@router.put(
-    "/{group_id}/order",
-    response_model=DependencyGroupResponse,
-    description=(
-        "Set the authoritative ordered reading sequence of a crossover's issue-level members."
-    ),
-)
-async def set_group_order(
-    group_id: int,
-    payload: DependencyGroupOrderUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> DependencyGroupResponse:
-    """Replace the authoritative reading order of one owned crossover.
-
-    The payload enumerates issue-level members in their intended reading order;
-    each listed issue's ``sequence_order`` is persisted verbatim (the provided
-    order is the canonical source, never re-derived from membership ids or
-    per-series issue positions). Any issue-level member not listed is cleared to
-    unordered. Thread-level memberships are never sequence entries and are left
-    untouched.
-
-    Args:
-        group_id: The dependency group identifier.
-        payload: The ordered issue list for the crossover.
-        current_user: The authenticated owner of the group and referenced issues.
-        db: The asynchronous database session.
-
-    Returns:
-        The updated group with memberships resolved to comic metadata.
-    """
-    try:
-        return await DependencyGroupService(db).set_group_order(current_user.id, group_id, payload)
     except ServiceError as exc:
         raise _map_service_error(exc) from exc
 

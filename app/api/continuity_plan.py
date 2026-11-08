@@ -21,11 +21,6 @@ from app.schemas.continuity_plan import (
     ContinuityPlanWrite,
 )
 from app.schemas.reading_order import ReadingOrderAdoptRequest
-from app.schemas.reading_plan_membership import (
-    ReadingPlanDependencyLink,
-    ReadingPlanDependencyLinkRequest,
-    ReadingPlanMembershipResponse,
-)
 from app.schemas.tags import TagTargetType
 from app.services.continuity import _refresh_blocked_state
 from app.services.continuity_plan_writer import (
@@ -43,10 +38,7 @@ from app.services.continuity_plan_writer import (
 from app.services.reading_plan_normalization import (
     editor_nodes_for_plan,
     editor_plan_response,
-    get_plan_membership,
     is_identity_editor_payload,
-    link_dependency_to_plan,
-    unlink_dependency_from_plan,
 )
 from app.services.tag_service import purge_target_assignments
 from app.services.reading_plan_list_link import (
@@ -138,94 +130,6 @@ async def get_continuity_plan(
     return await editor_plan_response(
         db, await _get_owned_plan(db, current_user.id, plan_id)
     )
-
-
-@router.get(
-    "/continuity-plans/{plan_id}/membership",
-    response_model=ReadingPlanMembershipResponse,
-)
-async def get_continuity_plan_membership(
-    plan_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ReadingPlanMembershipResponse:
-    """Return the normalized membership view for one owned plan.
-
-    Membership, Dependency provenance, source snapshots, placements, and
-    progress derived from global Issue read state are read through the
-    normalized relational representation.
-    """
-    return await get_plan_membership(db, user_id=current_user.id, plan_id=plan_id)
-
-
-@router.post(
-    "/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-    response_model=ReadingPlanDependencyLink,
-    status_code=status.HTTP_201_CREATED,
-)
-async def link_plan_dependency_edge(
-    plan_id: int,
-    dependency_id: int,
-    payload: ReadingPlanDependencyLinkRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ReadingPlanDependencyLink:
-    """Reference one canonical Dependency edge from one owned plan.
-
-    Linking records provenance only; it never creates, modifies, or deletes
-    the canonical edge and never changes Roll eligibility.
-    """
-    _, linked_id, source_id, target_id, explanation_value = (
-        await link_dependency_to_plan(
-            db,
-            user_id=current_user.id,
-            plan_id=plan_id,
-            dependency_id=dependency_id,
-            explanation=payload.explanation,
-        )
-    )
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
-    return ReadingPlanDependencyLink(
-        dependency_id=linked_id,
-        source_issue_id=source_id,
-        target_issue_id=target_id,
-        explanation=explanation_value,
-    )
-
-
-@router.delete(
-    "/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_plan_dependency_edge(
-    plan_id: int,
-    dependency_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> Response:
-    """Remove one plan's reference to a Dependency edge.
-
-    Only this plan's link is removed; the canonical edge and every other
-    plan's references are untouched.
-    """
-    removed = await unlink_dependency_from_plan(
-        db, user_id=current_user.id, plan_id=plan_id, dependency_id=dependency_id
-    )
-    if not removed:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Dependency {dependency_id} is not referenced by plan {plan_id}",
-        )
-    try:
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        raise
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.put("/continuity-plans/{plan_id}", response_model=ContinuityPlanResponse)

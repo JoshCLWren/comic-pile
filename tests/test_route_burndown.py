@@ -125,18 +125,18 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert isinstance(full_surface, dict)
     summary = full_surface.get("summary")
     assert isinstance(summary, dict)
-    assert summary.get("v1_total") == 221
+    assert summary.get("v1_total") == 161
     assert summary.get("v1_shadowed_by_rust") == 9
-    assert summary.get("v1_live_python") == 187
-    assert summary.get("v1_orphaned") == 25
-    assert summary.get("unversioned_total") == 43
+    assert summary.get("v1_live_python") == 151
+    assert summary.get("v1_orphaned") == 1
+    assert summary.get("unversioned_total") == 11
     assert summary.get("unversioned_shadowed_by_rust") == 9
-    assert summary.get("unversioned_live_python") == 22
-    assert summary.get("unversioned_orphaned") == 12
-    assert summary.get("total_python_surface") == 264
+    assert summary.get("unversioned_live_python") == 1
+    assert summary.get("unversioned_orphaned") == 1
+    assert summary.get("total_python_surface") == 172
     assert summary.get("total_shadowed_by_rust") == 18
-    assert summary.get("total_live_python") == 209
-    assert summary.get("total_orphaned") == 37
+    assert summary.get("total_live_python") == 152
+    assert summary.get("total_orphaned") == 2
     assert summary.get("catch_all_src") == "/api(?:/.*)?"
     assert summary.get("catch_all_dest") == "/api/index.py"
     assert summary.get("orphan_method") == "GET"
@@ -154,8 +154,8 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert isinstance(raw_unversioned, list)
     v1_ops = [item for item in raw_v1 if isinstance(item, dict)]
     unversioned_ops = [item for item in raw_unversioned if isinstance(item, dict)]
-    assert len(v1_ops) == 221
-    assert len(unversioned_ops) == 43
+    assert len(v1_ops) == 161
+    assert len(unversioned_ops) == 11
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
@@ -191,7 +191,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
         if item.get("burndown_status")
         == "live transitional Python with callers"
     ]
-    assert len(live_v1) == 187
+    assert len(live_v1) == 151
     for item in live_v1:
         assert item.get("ingress_destination") == "/api/index.py"
         assert item.get("consumers")
@@ -276,10 +276,10 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     assert "`POST /api/v2/reading-boundaries -> native-rust`" in agents
     assert "`GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`" in agents
     assert "see `docs/api/v2-route-inventory.json` (authoritative)" in agents
-    assert "Full Python-handler surface: 264 operations" in agents
-    assert "v1 221 + unversioned 43" in agents
-    assert "v1 active 187 live Python / 9 migrated (shadowed by Rust)" in agents
-    assert "unversioned active 22 live Python / 9 migrated" in agents
+    assert "Full Python-handler surface: 172 operations" in agents
+    assert "v1 161 + unversioned 11" in agents
+    assert "v1 active 151 live Python / 9 migrated (shadowed by Rust)" in agents
+    assert "unversioned active 1 live Python / 9 migrated" in agents
     assert "`/api(?:/.*)? -> /api/index.py` (Python)" in agents
     assert "`docs/api/v2-route-inventory.json` `full_surface` (authoritative)" in agents
     assert "Deployed runtime by cutover owner" in agents

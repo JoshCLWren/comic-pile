@@ -40,20 +40,17 @@ _BARE_API_EXCEPTIONS = frozenset(
 
 @pytest.mark.asyncio
 async def test_api_v1_alias_session_endpoint_matches_legacy(auth_client: AsyncClient) -> None:
-    """Verify /api/v1/sessions/current/ mirrors /api/sessions/current/.
+    """The bare /api/sessions/current/ alias was pruned; only v1 remains.
 
-    This ensures that aliasing does not change behavior and both routes
-    return identical responses when authenticated.
+    The browser calls /api/v1/sessions/current/ (see frontend services). The
+    unversioned twin has zero literal frontend matches and was deleted in the
+    zero-browser sweep, so it must 404 while v1 stays live.
     """
     resp_v1 = await auth_client.get("/api/v1/sessions/current/")
     resp_legacy = await auth_client.get("/api/sessions/current/")
 
-    assert resp_v1.status_code == resp_legacy.status_code
-
-    if resp_legacy.status_code == 200:
-        assert resp_v1.json() == resp_legacy.json()
-    else:
-        assert resp_v1.text == resp_legacy.text
+    assert resp_v1.status_code != 404
+    assert resp_legacy.status_code == 404
 
 
 def _collect_routes(app) -> dict[str, frozenset[str]]:
@@ -92,61 +89,66 @@ def test_collect_routes_unions_methods_on_the_same_path() -> None:
 
 
 def test_v1_undo_aliases_match_legacy_route_methods() -> None:
-    """Canonical aliases reuse the same undo handler contracts (v1 snooze retired, #4338)."""
+    """Bare /api/undo twins were pruned; only the v1 undo routes remain (v1 snooze retired, #4338)."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    alias_pairs = (
-        (
-            "/api/undo/{session_id}/undo/{snapshot_id}",
-            "/api/v1/undo/{session_id}/undo/{snapshot_id}",
-        ),
-        ("/api/undo/{session_id}/snapshots", "/api/v1/undo/{session_id}/snapshots"),
+    canonical_paths = (
+        "/api/v1/undo/{session_id}/undo/{snapshot_id}",
+        "/api/v1/undo/{session_id}/snapshots",
     )
-    for legacy_path, canonical_path in alias_pairs:
+    for canonical_path in canonical_paths:
         assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+    for legacy_path in (
+        "/api/undo/{session_id}/undo/{snapshot_id}",
+        "/api/undo/{session_id}/snapshots",
+    ):
+        assert legacy_path not in methods_by_path
 
 
 def test_v1_queue_aliases_match_legacy_route_methods() -> None:
-    """Canonical /api/v1/queue aliases reuse the same queue handler contracts."""
+    """Queue shuffle/position handlers were pruned on both prefixes."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    alias_pairs = (
-        ("/api/queue/shuffle/", "/api/v1/queue/shuffle/"),
-        ("/api/queue/threads/{thread_id}/back/", "/api/v1/queue/threads/{thread_id}/back/"),
-        ("/api/queue/threads/{thread_id}/position/", "/api/v1/queue/threads/{thread_id}/position/"),
-    )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+    for path in (
+        "/api/queue/shuffle/",
+        "/api/v1/queue/shuffle/",
+        "/api/queue/threads/{thread_id}/back/",
+        "/api/v1/queue/threads/{thread_id}/back/",
+        "/api/queue/threads/{thread_id}/position/",
+        "/api/v1/queue/threads/{thread_id}/position/",
+    ):
+        assert path not in methods_by_path
 
 
 def test_v1_admin_aliases_match_legacy_route_methods() -> None:
-    """Canonical /api/v1/admin aliases reuse the same admin handler contracts."""
+    """Admin CSV/test-data handlers were pruned on both prefixes."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    alias_pairs = (
-        ("/api/admin/import/csv/", "/api/v1/admin/import/csv/"),
-        ("/api/admin/export/csv/", "/api/v1/admin/export/csv/"),
-        ("/api/admin/export/json/", "/api/v1/admin/export/json/"),
-        ("/api/admin/export/summary/", "/api/v1/admin/export/summary/"),
-        ("/api/admin/delete-test-data/", "/api/v1/admin/delete-test-data/"),
-    )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+    for path in (
+        "/api/admin/import/csv/",
+        "/api/v1/admin/import/csv/",
+        "/api/admin/export/csv/",
+        "/api/v1/admin/export/csv/",
+        "/api/admin/export/json/",
+        "/api/v1/admin/export/json/",
+        "/api/admin/export/summary/",
+        "/api/v1/admin/export/summary/",
+        "/api/admin/delete-test-data/",
+        "/api/v1/admin/delete-test-data/",
+    ):
+        assert path not in methods_by_path
 
 
 def test_v1_bug_reports_alias_matches_legacy_route_methods() -> None:
-    """Canonical /api/v1/bug-reports alias reuses the same handler contract."""
+    """Bare /api/bug-reports/ twin was pruned; only v1 remains."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
     assert "/api/v1/bug-reports/" in methods_by_path
-    assert methods_by_path["/api/v1/bug-reports/"] == methods_by_path["/api/bug-reports/"]
+    assert "/api/bug-reports/" not in methods_by_path
 
 
 def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
@@ -159,12 +161,12 @@ def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
 
 
 def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> None:
-    """Canonical /api/v1/debug alias reuses the same handler contract (non-prod)."""
+    """Debug log handlers were pruned on both prefixes (non-prod tooling, zero browser use)."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    assert "/api/v1/debug/log" in methods_by_path
-    assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
+    assert "/api/v1/debug/log" not in methods_by_path
+    assert "/api/debug/log" not in methods_by_path
 
 
 def test_retired_zero_browser_delivery_routes_are_absent() -> None:
@@ -261,17 +263,18 @@ def test_no_new_bare_api_client_routes() -> None:
 
 
 def test_threads_collection_is_only_the_native_v2_resource() -> None:
-    """The retired v1/bare Python collection no longer has an HTTP handler."""
+    """The retired v1/bare Python collection read has no HTTP handler; bare twins are pruned."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    # Creation remains a POST on the same prefix; only the collection read was
-    # retired to the native v2 resource.
+    # Creation remains a POST on the v1 prefix; only the collection read was
+    # retired to the native v2 resource. The bare /api/threads/* twins have
+    # zero literal frontend matches and are gone.
     assert "GET" not in methods_by_path["/api/v1/threads/"]
-    assert "GET" not in methods_by_path["/api/threads/"]
+    assert "/api/threads/" not in methods_by_path
     assert "POST" in methods_by_path["/api/v1/threads/"]
-    assert "POST" in methods_by_path["/api/threads/"]
     assert "/api/v1/threads/stale" in methods_by_path
+    assert "/api/threads/stale" not in methods_by_path
 
 
 def test_retired_move_to_front_routes_are_absent() -> None:
@@ -305,14 +308,13 @@ def test_retired_roll_skip_routes_are_absent() -> None:
 
 
 def test_analytics_legacy_routes_remain_until_production_proof() -> None:
-    """Keep the Python v1/bare metrics handlers until the Rust cutover is proven.
+    """Python analytics handlers were pruned; the v2 resource is the only metrics API.
 
-    #4348 requires deletion only after the native v2 resource is deployed and
-    authenticated production proof exists. The transition guard keeps the real
-    legacy handler visible rather than silently removing a supported API.
+    The browser calls the native v2 resource. Both Python twins have zero
+    literal frontend matches and are gone.
     """
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
 
-    assert "GET" in methods_by_path["/api/v1/analytics/metrics"]
-    assert "GET" in methods_by_path["/api/analytics/metrics"]
+    assert "/api/v1/analytics/metrics" not in methods_by_path
+    assert "/api/analytics/metrics" not in methods_by_path

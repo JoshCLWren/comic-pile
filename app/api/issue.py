@@ -18,48 +18,20 @@ from app.schemas import (
     IssueCreateRange,
     IssueListResponse,
     IssueMoveRequest,
-    IssueOrderValidationResponse,
-    IssueReorderRequest,
     IssueResponse,
     ThreadIssueCreatorsResponse,
 )
-from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
 from app.services import issue as issue_service
 from app.services.comicvine_intelligence import (
-    get_issue_intelligence,
     get_thread_issue_creators,
 )
 from app.services.reader_context import get_reader_context
-from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
-from comic_pile.dependencies import validate_position_dependency_consistency
+from app.services.ownership import get_owned_issue_or_404
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
-
-
-@router.get(
-    "/issues/{issue_id}/comicvine",
-    response_model=ComicVineIssueIntelligence | None,
-)
-async def get_issue_comicvine_intelligence(
-    issue_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> ComicVineIssueIntelligence | None:
-    """Return curated ComicVine intelligence for a user-owned ComicPile issue.
-
-    Args:
-        issue_id: ComicPile issue identifier.
-        current_user: Authenticated owner of the requested issue.
-        db: Async database session.
-
-    Returns:
-        Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
-    """
-    await get_owned_issue_or_404(db, current_user.id, issue_id)
-    return await get_issue_intelligence(db, issue_id, current_user.id)
 
 
 @router.get(
@@ -193,34 +165,6 @@ async def list_issues(
     )
 
 
-@router.get(
-    "/threads/{thread_id}/issues:validateOrder",
-    response_model=IssueOrderValidationResponse,
-)
-async def validate_issue_order(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> IssueOrderValidationResponse:
-    """Report dependency edges that disagree with canonical issue positions.
-
-    Args:
-        thread_id: The thread ID whose in-thread ordering should be validated.
-        current_user: The authenticated user requesting the validation report.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        IssueOrderValidationResponse containing human-readable ordering warnings.
-
-    Raises:
-        HTTPException: If the thread does not exist or is not owned by the user.
-    """
-    await get_owned_thread_or_404(db, current_user.id, thread_id)
-
-    warnings = await validate_position_dependency_consistency(thread_id, current_user.id, db)
-    return IssueOrderValidationResponse(warnings=warnings)
-
-
 @router.post(
     "/threads/{thread_id}/issues",
     response_model=IssueListResponse,
@@ -344,34 +288,6 @@ async def move_issue(
     """
     await issue_service.move_issue(
         db, issue_id, current_user.id, request.after_issue_id
-    )
-
-    await db.commit()
-
-
-@router.post("/threads/{thread_id}/issues:reorder", status_code=status.HTTP_204_NO_CONTENT)
-async def reorder_issues(
-    thread_id: int,
-    request: IssueReorderRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> None:
-    """Rewrite all issue positions in a thread from an explicit ordered ID list.
-
-    Args:
-        thread_id: The thread whose issue order should be rewritten.
-        request: Ordered issue IDs representing the desired canonical order.
-        current_user: The authenticated user making the reorder request.
-        db: SQLAlchemy session for database operations.
-
-    Returns:
-        None. The response is HTTP 204 on success.
-
-    Raises:
-        HTTPException: If the thread is not found or the issue IDs are invalid.
-    """
-    await issue_service.reorder_issues(
-        db, thread_id, current_user.id, request.issue_ids
     )
 
     await db.commit()

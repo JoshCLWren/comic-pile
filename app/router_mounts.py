@@ -34,7 +34,6 @@ RegisterMount = Callable[[FastAPI], None]
 #: is consulted.
 EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "metrics", "keepalive"})
 
-
 @dataclass(frozen=True)
 class RouterMount:
     """One deferred router registration unit.
@@ -49,7 +48,6 @@ class RouterMount:
     key: str
     segments: frozenset[str]
     register: RegisterMount
-
 
 def request_segment(path: str) -> str:
     """Return the resource segment a request path addresses.
@@ -72,7 +70,6 @@ def request_segment(path: str) -> str:
     if not segments:
         return ""
     return segments[0].split(":", 1)[0]
-
 
 def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[RouterMount, ...]:
     """Return the mounts that must be registered to route ``path``.
@@ -102,30 +99,12 @@ def select_mounts_for_path(path: str, mounts: Sequence[RouterMount]) -> tuple[Ro
         )
     return tuple(mount for mount in mounts if segment in mount.segments)
 
-
 def _register_roll(app: FastAPI) -> None:
     """Register the Python Roll mutation routers, never the native v2 bootstrap."""
     from app.api import roll
 
-    app.include_router(roll.router, prefix="/api/roll", tags=["roll"])
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
-
-
-def _register_admin(app: FastAPI) -> None:
-    """Register internal admin routers."""
-    from app.api import admin
-
-    app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
-
-
-def _register_analytics(app: FastAPI) -> None:
-    """Register analytics routers."""
-    from app.api import analytics
-
-    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
-    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
-
+    app.include_router(roll.legacy_router, prefix="/api/roll", tags=["roll"])
 
 def _register_health(app: FastAPI) -> None:
     """Register bounded health probes."""
@@ -134,14 +113,11 @@ def _register_health(app: FastAPI) -> None:
     app.include_router(health.router, prefix="/api", tags=["health"])
     app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
-
 def _register_bug_reports(app: FastAPI) -> None:
     """Register bug-report routers."""
     from app.api import bug_report
 
-    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
     app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
-
 
 def _register_auth(app: FastAPI) -> None:
     """Register authentication routers."""
@@ -150,17 +126,14 @@ def _register_auth(app: FastAPI) -> None:
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 
-
 def _register_threads(app: FastAPI) -> None:
     """Register thread routers."""
     from app.api import thread
 
-    app.include_router(thread.router, prefix="/api/threads", tags=["threads"])
     app.include_router(thread.router, prefix="/api/v1/threads", tags=["threads"])
     # New client resources (e.g. paginated completed threads for issue #2567)
     # are versioned-only: no bare /api/* twin.
     app.include_router(thread.v1_router, prefix="/api/v1/threads", tags=["threads"])
-
 
 def _register_issues(app: FastAPI) -> None:
     """Register thread-issue routers (absolute ``/api/v1`` paths)."""
@@ -168,13 +141,11 @@ def _register_issues(app: FastAPI) -> None:
 
     app.include_router(issue.router, tags=["issues"])
 
-
 def _register_comicvine_resolution(app: FastAPI) -> None:
     """Register ComicVine resolution routers (absolute ``/api/v1`` paths)."""
     from app.api import comicvine_resolution
 
     app.include_router(comicvine_resolution.router, tags=["comicvine-resolution"])
-
 
 def _register_creators(app: FastAPI) -> None:
     """Register creator routers (absolute ``/api/v1`` paths)."""
@@ -182,13 +153,11 @@ def _register_creators(app: FastAPI) -> None:
 
     app.include_router(creators.router, tags=["creators"])
 
-
 def _register_taste(app: FastAPI) -> None:
     """Register taste-discovery routers."""
     from app.api import taste
 
     app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
-
 
 def _register_tags(app: FastAPI) -> None:
     """Register tag routers (absolute ``/api/v1`` paths)."""
@@ -196,36 +165,23 @@ def _register_tags(app: FastAPI) -> None:
 
     app.include_router(tags.router)
 
-
-def _register_queue(app: FastAPI) -> None:
-    """Register queue routers."""
-    from app.api import queue
-
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
-
-
 def _register_reading_orders(app: FastAPI) -> None:
     """Register reading-order routers (absolute ``/api/v1`` paths)."""
     from app.api import reading_orders
 
     app.include_router(reading_orders.router, tags=["reading-orders"])
 
-
 def _register_reading_boundary(app: FastAPI) -> None:
     """Register versioned Reading Boundaries explanation routers."""
     from app.api import reading_boundary
 
-    app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
     app.include_router(reading_boundary.v2_router, prefix="/api/v2", tags=["reading-boundaries-v2"])
-
 
 def _register_reading_plan_sync(app: FastAPI) -> None:
     """Register reading-plan sync routers."""
     from app.api import reading_plan_sync
 
     app.include_router(reading_plan_sync.router, prefix="/api/v1", tags=["reading-plan-sync"])
-
 
 def _register_cron(app: FastAPI) -> None:
     """Register the secret-gated Vercel Cron endpoint."""
@@ -235,25 +191,11 @@ def _register_cron(app: FastAPI) -> None:
     # the generated client schema, and delegates all work to the sync service.
     app.include_router(cron.router, prefix="/api/v1", tags=["cron"])
 
-
-def _register_recommendations(app: FastAPI) -> None:
-    """Register recommendation diagnostics routers."""
-    from app.api import recommendation_diagnostics
-
-    app.include_router(recommendation_diagnostics.router, prefix="/api", tags=["recommendations"])
-
-
 def _register_sessions(app: FastAPI) -> None:
     """Register session routers."""
     from app.api import session
 
-    app.include_router(session.router, prefix="/api/sessions", tags=["session"])
-    # Versioned-only new client resources (e.g. the #2744 correction-sheet
-    # examples) have no bare /api/* twin. The v1 router is registered before the
-    # legacy twin so its literal paths resolve ahead of /{session_id}.
-    app.include_router(session.v1_router, prefix="/api/v1/sessions", tags=["session"])
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
-
 
 def _register_reading_mode(app: FastAPI) -> None:
     """Register reading-mode routers (absolute ``/api/v1`` paths)."""
@@ -261,14 +203,11 @@ def _register_reading_mode(app: FastAPI) -> None:
 
     app.include_router(reading_mode.router, tags=["reading-mode"])
 
-
 def _register_undo(app: FastAPI) -> None:
     """Register undo routers."""
     from app.api import undo
 
-    app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
-
 
 def _register_preferences(app: FastAPI) -> None:
     """Register user-preference routers."""
@@ -276,27 +215,11 @@ def _register_preferences(app: FastAPI) -> None:
 
     app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
 
-
 def _register_taste_signals(app: FastAPI) -> None:
     """Register user taste-signal routers."""
     from app.api import taste_signal
 
     app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
-
-
-def _register_traffic_metrics(app: FastAPI) -> None:
-    """Register traffic-metrics routers."""
-    from app.api import traffic_metrics
-
-    app.include_router(traffic_metrics.router, prefix="/api", tags=["traffic"])
-
-
-def _register_bootstrap_telemetry(app: FastAPI) -> None:
-    """Register bootstrap-alias telemetry routers."""
-    from app.api import bootstrap_telemetry
-
-    app.include_router(bootstrap_telemetry.router, prefix="/api", tags=["bootstrap-telemetry"])
-
 
 def _register_dependencies(app: FastAPI) -> None:
     """Register dependency and continuity routers, composing sub-routers first."""
@@ -309,7 +232,6 @@ def _register_dependencies(app: FastAPI) -> None:
     dependency.mount_subrouters()
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
-
 def _register_demo(app: FastAPI) -> None:
     """Register the unauthenticated guest demo router."""
     from app.api import demo
@@ -318,13 +240,11 @@ def _register_demo(app: FastAPI) -> None:
     # /api/* twin. It is intentionally unauthenticated and read-only.
     app.include_router(demo.router, prefix="/api/v1/demo", tags=["demo"])
 
-
 def _register_catalog(app: FastAPI) -> None:
     """Register catalog series-mapping routers (absolute ``/api/v1`` paths)."""
     from app.api import catalog
 
     app.include_router(catalog.router, tags=["catalog"])
-
 
 def _register_identity_inbox(app: FastAPI) -> None:
     """Register identity-inbox routers (absolute ``/api/v1`` paths)."""
@@ -332,13 +252,11 @@ def _register_identity_inbox(app: FastAPI) -> None:
 
     app.include_router(identity_inbox.router, tags=["identity-inbox"])
 
-
 def _register_issue_identity(app: FastAPI) -> None:
     """Register issue-identity routers (absolute ``/api/v1`` paths)."""
     from app.api import issue_identity
 
     app.include_router(issue_identity.router, tags=["issue-identity"])
-
 
 def _register_cbl_adoption(app: FastAPI) -> None:
     """Register CBL adoption-commit routers (absolute ``/api/v1`` paths)."""
@@ -346,29 +264,17 @@ def _register_cbl_adoption(app: FastAPI) -> None:
 
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
 
-
-def _register_debug(app: FastAPI) -> None:
-    """Register the non-production debug router."""
-    from app.api import debug
-
-    app.include_router(debug.router, prefix="/api", tags=["debug"])
-    app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
-
-
 def _register_test_helpers(app: FastAPI) -> None:
     """Register the test-helper router."""
     from app.api.test_helpers import router as test_helpers_router
 
     app.include_router(test_helpers_router, prefix="/api", tags=["test"])
 
-
 #: Deferred mounts in historical ``include_router`` order. Segments were derived
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
 _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("roll", frozenset({"roll"}), _register_roll),
-    RouterMount("admin", frozenset({"admin"}), _register_admin),
-    RouterMount("analytics", frozenset({"analytics"}), _register_analytics),
     RouterMount("health", frozenset({"health"}), _register_health),
     RouterMount("bug-reports", frozenset({"bug-reports"}), _register_bug_reports),
     RouterMount("auth", frozenset({"auth"}), _register_auth),
@@ -382,7 +288,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("creators", frozenset({"creators"}), _register_creators),
     RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount("tags", frozenset({"tags"}), _register_tags),
-    RouterMount("queue", frozenset({"queue"}), _register_queue),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
@@ -391,31 +296,21 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("reading-boundaries", frozenset({"reading-boundaries"}), _register_reading_boundary),
     RouterMount("reading-plan-sync", frozenset({"reading-plan-sync"}), _register_reading_plan_sync),
     RouterMount("cron", frozenset({"cron"}), _register_cron),
-    RouterMount("recommendations", frozenset({"recommendations"}), _register_recommendations),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
     RouterMount("reading-mode", frozenset({"reading-mode"}), _register_reading_mode),
     RouterMount("undo", frozenset({"undo"}), _register_undo),
     RouterMount("preferences", frozenset({"users"}), _register_preferences),
     RouterMount("taste-signals", frozenset({"users"}), _register_taste_signals),
-    RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
-    RouterMount(
-        "bootstrap-telemetry",
-        frozenset({"bootstrap-alias-metrics"}),
-        _register_bootstrap_telemetry,
-    ),
     RouterMount(
         "dependencies",
         frozenset(
             {
-                "collection-exclusions",
                 "continuity-plans",
                 "continuity-rules",
-                "crossover-templates",
                 "custom-cbls",
                 "dependencies",
                 "issue-identity",
                 "issues",
-                "prerequisites",
                 "reading-order-groups",
                 "releases",
                 # roll_recovery_switch composes under /roll in mount_subrouters().
@@ -432,7 +327,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
 )
 
-
 def build_router_mounts(environment: str) -> tuple[RouterMount, ...]:
     """Return the deferred mounts for the current environment.
 
@@ -446,8 +340,6 @@ def build_router_mounts(environment: str) -> tuple[RouterMount, ...]:
         Ordered mounts, production-safe debug/test filtering applied.
     """
     mounts = list(_CORE_MOUNTS)
-    if environment != "production":
-        mounts.append(RouterMount("debug", frozenset({"debug"}), _register_debug))
     if os.getenv("TEST_ENVIRONMENT") == "true":
         mounts.append(RouterMount("test-helpers", frozenset({"test"}), _register_test_helpers))
     return tuple(mounts)

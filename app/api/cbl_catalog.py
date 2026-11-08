@@ -29,14 +29,12 @@ from app.schemas.cbl_catalog import (
     CBLCatalogBrowseResponse,
     CBLDatabaseUnavailableResponse,
     CBLErrorResponse,
-    CBLFolderListingResponse,
 )
 from app.services.cbl_catalog import (
     CBLFolderNotFoundError,
     InvalidCBLFolderPathError,
     InvalidCBLSearchQueryError,
     browse_cbl_catalog,
-    list_cbl_catalog_folders,
 )
 
 router = APIRouter(prefix="/issue-identity", tags=["issue-identity"])
@@ -52,58 +50,6 @@ CATALOG_UNAVAILABLE_MESSAGE = "The shared CBL catalog is temporarily unavailable
 def _error_detail(code: str, message: str) -> dict[str, str]:
     """Build the stable machine-readable error envelope used by catalog routes."""
     return {"code": code, "message": message}
-
-
-@router.get(
-    "/cbl-sources/folders",
-    response_model=CBLFolderListingResponse,
-    responses={
-        400: {"model": CBLErrorResponse, "description": "Invalid folder path."},
-        404: {"model": CBLErrorResponse, "description": "Folder not found."},
-        503: {
-            "model": CBLErrorResponse | CBLDatabaseUnavailableResponse,
-            "description": "Catalog query or database connection temporarily unavailable.",
-        },
-    },
-)
-async def list_cbl_source_folders(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    folder: Annotated[str, Query(max_length=1000)] = "",
-) -> CBLFolderListingResponse:
-    """List immediate subfolders of one shared CBL catalog folder.
-
-    The root folder is addressed with an empty ``folder`` value. A request for a
-    folder with no active CBLs or subfolders returns a stable 404 envelope; a
-    malformed path returns 400.
-
-    Args:
-        current_user: The authenticated user (injected by dependency).
-        db: The async database session (injected by dependency).
-        folder: The catalog folder path to list. Empty string for root.
-
-    Returns:
-        CBLFolderListingResponse: The folder listing containing subfolders.
-    """
-    del current_user
-    try:
-        return await list_cbl_catalog_folders(db, folder=folder)
-    except InvalidCBLFolderPathError as error:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=_error_detail(INVALID_FOLDER_CODE, str(error)),
-        ) from error
-    except CBLFolderNotFoundError as error:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_detail(FOLDER_NOT_FOUND_CODE, str(error)),
-        ) from error
-    except SQLAlchemyError as error:
-        logger.exception("CBL folder listing query failed")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CATALOG_UNAVAILABLE_CODE, CATALOG_UNAVAILABLE_MESSAGE),
-        ) from error
 
 
 @router.get(

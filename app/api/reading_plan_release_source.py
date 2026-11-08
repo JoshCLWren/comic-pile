@@ -34,19 +34,6 @@ async def create_release_source(
 
 
 @router.get(
-    "/continuity-plans/{plan_id}/release-sources/",
-    response_model=list[ReleaseSourceResponse],
-)
-async def list_release_sources(
-    plan_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> list[ReleaseSourceResponse]:
-    """List release sources for one plan."""
-    return await service.list_sources(db, plan_id=plan_id, user_id=current_user.id)
-
-
-@router.get(
     "/continuity-plans/{plan_id}/release-sources/reader",
     response_model=list[ReadingPlanReleaseSourceStatus],
 )

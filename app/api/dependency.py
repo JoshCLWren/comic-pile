@@ -12,14 +12,10 @@ from app.schemas.dependency import (
     BatchBlockingExplanationRequest,
     BatchBlockingExplanationResponse,
     BlockingExplanation,
-    DependencyCreate,
     DependencyNoteUpdate,
-    DependencyOrderConflict,
-    DependencyOrderRequirement,
     DependencyResponse,
     IssueDependenciesResponse,
     ThreadConnectedResponse,
-    ThreadDependencyOrderCheckResponse,
     ThreadDependenciesResponse,
 )
 from app.services import dependency_service
@@ -103,55 +99,6 @@ async def get_threads_blocking_info(
     return BatchBlockingExplanationResponse(threads=threads_result)
 
 
-@router.post(
-    "/dependencies/", response_model=DependencyResponse, status_code=status.HTTP_201_CREATED
-)
-async def create_dependency(
-    dependency_data: DependencyCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> DependencyResponse:
-    """Create a hard-block dependency between owned threads or owned issues."""
-    if dependency_data.source_type != dependency_data.target_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mixed thread/issue dependencies are not supported",
-        )
-
-    if dependency_data.source_id == dependency_data.target_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot create dependency on self",
-        )
-
-    if dependency_data.source_type == "thread":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Thread-level dependencies are no longer supported. "
-                "Create an issue-level dependency instead: use the last issue "
-                "of the source thread and the first issue of the target thread."
-        ),
-    )
-
-    result, warning = await dependency_service.create_dependency(
-        dependency_data.source_id, dependency_data.target_id, current_user.id, db
-    )
-
-    if not result:
-        if warning == "Issue not found" or warning is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Issue not found",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=warning,
-        )
-
-    return result
-
-
 @router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
 async def get_dependency(
     dependency_id: int,
@@ -204,48 +151,6 @@ async def delete_dependency(
 
 
 @router.get(
-    "/threads/{thread_id}/dependency-order-check",
-    response_model=ThreadDependencyOrderCheckResponse,
-)
-async def check_thread_dependency_order(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> ThreadDependencyOrderCheckResponse:
-    """Check for conflicts between dependency order and issue position order.
-
-    Returns a list of conflicts where dependencies imply issue X should come
-    before issue Y, but the current position order disagrees.
-    """
-    raw_conflicts = await dependency_service.check_thread_dependency_order(
-        thread_id, current_user.id, db
-    )
-    if raw_conflicts is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
-
-    if not raw_conflicts:
-        return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=[])
-
-    conflicts: list[DependencyOrderConflict] = []
-    for conflict in raw_conflicts:
-        conflict_obj = DependencyOrderConflict(
-            issue_id=conflict["issue_id"],
-            issue_number=conflict["issue_number"],
-            position=conflict["position"],
-            dependency_requires_before=[
-                DependencyOrderRequirement(**req) for req in conflict["dependency_requires_before"]
-            ],
-            conflict=conflict["conflict"],
-        )
-        conflicts.append(conflict_obj)
-
-    return ThreadDependencyOrderCheckResponse(thread_id=thread_id, conflicts=conflicts)
-
-
-@router.get(
     "/threads/{thread_id}/connected",
     response_model=ThreadConnectedResponse,
 )
@@ -291,20 +196,17 @@ def mount_subrouters() -> None:
     if _subrouters_mounted:
         return
 
-    from app.api import collection_exclusions
     from app.api import cbl_comicvine_lookup
     from app.api import cbl_catalog
     from app.api import cbl_sources
     from app.api import continuity_plan
     from app.api import continuity_rule
-    from app.api import continuity_template
     from app.api import custom_cbl
     from app.api import dependency_group
     from app.api import dependency_group_batch
     from app.api import issue_dependency_batch
     from app.api import reading_order_projection
     from app.api import reading_plan_release_source
-    from app.api import prerequisite
     from app.api import releases
     from app.api import roll_recovery_switch
 
@@ -313,19 +215,15 @@ def mount_subrouters() -> None:
     router.include_router(dependency_group_batch.router)
     router.include_router(continuity_rule.router)
     router.include_router(continuity_plan.router)
-    router.include_router(continuity_template.router)
     router.include_router(reading_order_projection.router)
     router.include_router(reading_plan_release_source.router)
-    router.include_router(collection_exclusions.router)
     router.include_router(cbl_catalog.router)
     router.include_router(cbl_comicvine_lookup.router)
     router.include_router(cbl_sources.router)
     router.include_router(custom_cbl.router)
     router.include_router(roll_recovery_switch.router, prefix="/roll")
-    router.include_router(prerequisite.router)
     router.include_router(releases.router, prefix="/releases")
 
     _subrouters_mounted = True
-
 
 

@@ -57,7 +57,7 @@ export function ReadingListReader({ listId, backTo }: { listId: number; backTo?:
       {(view.entries ?? []).map((entry) => <li key={entry.issue_id} className="surface-panel rounded-xl p-3">
         <Link to={`/thread/${entry.thread_id}`} className="text-sm font-semibold text-[var(--theme-text-primary)]">{entry.series_name} #{entry.issue_number}</Link>
         {entry.skipped && <p className="text-xs text-[var(--theme-text-muted)]">Skipped only in this list; other lists and Roll may still offer it.</p>}
-        <EligibilityExplanation isBlocked={entry.availability === 'blocked'} emptyLabel={AVAILABILITY[entry.availability]} reasons={entry.explanation?.blocking_reasons} dependencies={entry.explanation?.blocking_dependencies} cardsByIssue={cardsByIssue} />
+        <EligibilityExplanation isBlocked={entry.availability === 'blocked'} emptyLabel={AVAILABILITY[entry.availability as keyof typeof AVAILABILITY] ?? entry.availability} reasons={entry.explanation?.blocking_reasons} dependencies={entry.explanation?.blocking_dependencies} cardsByIssue={cardsByIssue} />
         <ReaderIssueActions issueId={entry.issue_id} threadId={entry.thread_id} issueNumber={entry.issue_number} isRead={entry.status === 'read'} available={entry.availability === 'available'} availability={entry.availability} seriesTitle={entry.series_name} card={cardsByIssue.get(entry.issue_id)} />
       </li>)}
     </ol>}
