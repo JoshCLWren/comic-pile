@@ -347,13 +347,11 @@ fn project_blocker(
     let blocker = &gate.blocker;
     ReadingBoundaryBlocker {
         kind: blocker_kind_from_str(&blocker.kind),
-        origin: blocker_origin_from_str(
-            if blocker.list_id.is_some() {
-                "reading_list"
-            } else {
-                "reader_prerequisite"
-            },
-        ),
+        origin: blocker_origin_from_str(if blocker.list_id.is_some() {
+            "reading_list"
+        } else {
+            "reader_prerequisite"
+        }),
         reason: blocker_reason(snapshot, labels, gate),
         waiting_on: gate
             .described_issue_ids
