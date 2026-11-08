@@ -18,8 +18,9 @@ import re
 import statistics
 import subprocess
 import time
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any, Callable, cast
+from typing import Any, cast
 
 import factory_eligibility as eligibility
 from factory_jev_shadow import MODEL as JEV_MODEL, call_jev
