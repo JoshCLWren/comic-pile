@@ -617,6 +617,18 @@ Record observed facts, distinguish local checks from CI, include no secrets, and
 
 Review leases last 45 minutes. Repair and implementation leases last 60 minutes after the latest real progress. Lease expiry permits another worker to continue that issue but does not require a peer to choose it over higher-priority work.
 
+## Z.AI free account quota backoff
+
+Worker 97 adds a second `z-ai` / `glm-4.5-flash` lane at :50, thirty minutes
+from worker 54 at :20, using the existing `Z_AI_API_KEY` and `PR_REBASE_TOKEN`.
+HTTP 429 from either smoke or the coding session records `provider_quota`.
+Before assigning work, the controller reads trusted registry attempt evidence
+and pauses the shared Z.AI account for thirty minutes from the recorded error.
+All Z.AI workers share this backoff; expiry automatically permits another probe.
+A rate limit is not evidence that a model has been removed and does not retire
+any worker. Failure to read the quota evidence aborts assignment rather than
+assuming the account is available.
+
 ## External scheduled-factory heartbeat
 
 Scheduled ChatGPT workers must update their assigned permanent comment on registry issue #1093 at the start and completion of every run, following `docs/FACTORY_GITHUB_VISIBILITY.md`. The registry and the watchdog's alert issue are operational telemetry, not executable backlog work. Workers must never claim, implement, label, or close them.
