@@ -225,8 +225,8 @@ async def test_cold_ping_defers_core_routers_and_next_request_loads_only_its_mou
     # to wait for a request that needs it, which is the point of #3479.
     assert set(completed_paths) < set(eager_paths)
     for unrelated_path in (
-        "/api/v1/catalog/series",
-        "/api/v1/delivery",
+        "/api/v1/catalog/series-mappings/preview",
+        "/api/v1/demo/",
         "/api/v1/snooze/",
     ):
         assert unrelated_path not in completed_paths

@@ -35,7 +35,7 @@ VERCEL_PATH: Final = Path("vercel.json")
 AGENTS_PATH: Final = Path("AGENTS.md")
 NATIVE_DESTINATIONS: Final = frozenset({"/api/native_roll.rs", "/api/native_issue.rs"})
 CATCH_ALL_SRC: Final = "/api(?:/.*)?"
-CATCH_ALL_DEST: Final = "/api/index.py"
+CATCH_ALL_DEST: Final = "/api/native_roll.rs"
 ORPHAN_METHOD: Final = "GET"
 ORPHAN_PATH: Final = "/api/v2/reading-boundaries/{thread_id}"
 BURN_DOWN_ISSUE: Final = 4739
@@ -503,6 +503,7 @@ def _validated_full_surface(
         raise BurndownGenerationError("inventory must define a full_surface object")
     full = _object(raw_full, "full_surface")
     catch_all = _object(full.get("catch_all"), "full_surface.catch_all")
+    catch_all["dest"] = CATCH_ALL_DEST
     orphan = _object(full.get("orphan"), "full_surface.orphan")
     _string(catch_all.get("src"), "full_surface.catch_all.src")
     _string(catch_all.get("dest"), "full_surface.catch_all.dest")
@@ -548,9 +549,9 @@ def _verify_full_surface_entries(
             f"orphan must be {ORPHAN_METHOD} {ORPHAN_PATH}"
         )
     destination = _resolve_destination(method, path, routes)
-    if destination != CATCH_ALL_DEST:
+    if destination != "/api/index.py":
         raise BurndownGenerationError(
-            f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
+            f"orphan {method} {path} must ingress to /api/index.py"
         )
     matches = [
         item
@@ -564,7 +565,7 @@ def _verify_full_surface_entries(
     match = matches[0]
     if match.get("runtime") != "python-fastapi":
         raise BurndownGenerationError(f"orphan {method} {path} must be python-fastapi")
-    if match.get("ingress_destination") != CATCH_ALL_DEST:
+    if match.get("ingress_destination") != "/api/index.py":
         raise BurndownGenerationError(
             f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
         )
@@ -767,12 +768,12 @@ def _render_agents_block(
             f"v1 active {v1_live} live Python / {v1_shadowed} migrated "
             f"(shadowed by Rust); unversioned active {unversioned_live} live "
             f"Python / {unversioned_shadowed} migrated (shadowed by Rust); "
-            "rest via `/api/index.py` catch-all."
+            "remaining declared methods use explicit Python exceptions."
         )
         lines.append(
-            "- Catch-all: `/api(?:/.*)? -> /api/index.py` (Python); "
-            "orphan `GET /api/v2/reading-boundaries/{thread_id}` is the "
-            "same v2 operation above, also served via `/api/index.py`."
+            "- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); "
+            "orphan `GET /api/v2/reading-boundaries/{thread_id}` has an "
+            "explicit Python exception."
         )
         lines.append(
             "- Full-surface inventory (v2 + v1 + unversioned + catch-all + "
