@@ -31,6 +31,15 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface ConfirmRequest {
+  path: {
+    mapping_id: number
+  }
+  body: components['schemas']['ActionRequest']
+}
+
+export type ConfirmResponse = components['schemas']['NativeIdentityInboxActionResponse']
+
 export interface CreateDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
@@ -59,6 +68,14 @@ export interface CreateReadingListRequest {
 export type CreateReadingListResponse = components['schemas']['ReadingList']
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
+
+export interface DeferRequest {
+  path: {
+    mapping_id: number
+  }
+}
+
+export type DeferResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
 export interface DeleteDependencyRequest {
   path: {
@@ -99,6 +116,14 @@ export interface ForgotPasswordRequest {
 }
 
 export type ForgotPasswordResponse = components['schemas']['NativePasswordResetResponse']
+
+export interface GetRequest {
+  path: {
+    mapping_id: number
+  }
+}
+
+export type GetResponse = components['schemas']['NativeIdentityInboxResponse']
 
 export interface GetQueueEntryRequest {
   path: {
@@ -153,6 +178,8 @@ export interface IssueReadRateRequest {
 }
 
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
+
+export type ListResponse = components['schemas']['NativeIdentityInboxResponse']
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
@@ -235,6 +262,15 @@ export interface RegisterRequest {
 
 export type RegisterResponse = components['schemas']['NativeTokenResponse']
 
+export interface RejectRequest {
+  path: {
+    mapping_id: number
+  }
+  body: components['schemas']['ActionRequest']
+}
+
+export type RejectResponse = components['schemas']['NativeIdentityInboxActionResponse']
+
 export interface RelinkRequest {
   path: {
     plan_id: number
@@ -262,6 +298,16 @@ export interface ResetPasswordRequest {
 
 export type ResetPasswordResponse = components['schemas']['NativePasswordResetResponse']
 
+export type SearchResponse = components['schemas']['NativeIdentityInboxSearchResponse']
+
+export interface SkipRequest {
+  path: {
+    mapping_id: number
+  }
+}
+
+export type SkipResponse = components['schemas']['NativeIdentityInboxActionResponse']
+
 export interface UpdateQueueEntryRequest {
   path: {
     thread_id: number
@@ -282,17 +328,20 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  confirm(args: ConfirmRequest): Promise<ConfirmResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   csrf(): Promise<CsrfResponse>
+  defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   dieState(): Promise<DieStateResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
+  get(args: GetRequest): Promise<GetResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
@@ -300,6 +349,7 @@ export interface NativeV2Client {
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
+  list(): Promise<ListResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -315,10 +365,13 @@ export interface NativeV2Client {
   readingGraph(): Promise<ReadingGraphResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
+  reject(args: RejectRequest): Promise<RejectResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
+  search(): Promise<SearchResponse>
+  skip(args: SkipRequest): Promise<SkipResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
 }
@@ -329,6 +382,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
         { params: compactQuery(args.query) },
+      )
+    },
+    confirm(args: ConfirmRequest) {
+      return client.post<ConfirmResponse, ConfirmRequest['body']>(
+        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        args.body,
       )
     },
     createDependency(args: CreateDependencyRequest) {
@@ -358,6 +417,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
     },
+    defer(args: DeferRequest) {
+      return client.post<DeferResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/defer`)
+    },
     deleteDependency(args: DeleteDependencyRequest) {
       return client.delete<DeleteDependencyResponse>(
         `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
@@ -386,6 +448,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<ForgotPasswordResponse, ForgotPasswordRequest['body']>(
         "/v2/auth/forgot-password",
         args.body,
+      )
+    },
+    get(args: GetRequest) {
+      return client.get<GetResponse>(
+        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
       )
     },
     getQueueEntry(args: GetQueueEntryRequest) {
@@ -426,6 +493,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
         args.body,
       )
+    },
+    list() {
+      return client.get<ListResponse>("/v1/identity-inbox")
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
@@ -499,6 +569,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    reject(args: RejectRequest) {
+      return client.post<RejectResponse, RejectRequest['body']>(
+        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
+        args.body,
+      )
+    },
     relink(args: RelinkRequest) {
       return client.post<RelinkResponse, RelinkRequest['body']>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
@@ -522,6 +598,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         "/v2/auth/reset-password",
         args.body,
       )
+    },
+    search() {
+      return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
+    },
+    skip(args: SkipRequest) {
+      return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
     },
     updateQueueEntry(args: UpdateQueueEntryRequest) {
       return client.patch<UpdateQueueEntryResponse, UpdateQueueEntryRequest['body']>(

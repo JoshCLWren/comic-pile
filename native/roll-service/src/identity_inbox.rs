@@ -1087,4 +1087,39 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["total"], 0);
     }
+
+    #[tokio::test]
+    async fn mutation_handlers_reach_database_write_boundary() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        let user = AuthenticatedUser::for_test(1);
+        let request = ActionRequest {
+            external_identity_id: Some(1),
+            rejection_reason: Some("not a match".to_string()),
+            search_query: None,
+        };
+
+        let _ = confirm(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(request),
+        )
+        .await;
+        let _ = reject(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+            Json(ActionRequest {
+                external_identity_id: Some(1),
+                rejection_reason: Some("not a match".to_string()),
+                search_query: None,
+            }),
+        )
+        .await;
+        let _ = defer(State(state.clone()), AuthenticatedUser::for_test(1), Path(1)).await;
+        let _ = skip(State(state), AuthenticatedUser::for_test(1), Path(1)).await;
+    }
 }
