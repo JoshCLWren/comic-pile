@@ -94,12 +94,21 @@ identity and scope SQL by `user_id`. Missing and foreign rows both return 404.
 These are foundations for later Roll handlers; no new public probe or partial
 bootstrap endpoint is mounted. Reading-history sessions do not authenticate users.
 
-Pool acquisition and query execution have bounded deadlines with no automatic
-retries. Completed queries return connections to the pool; canceled/timed-out
-queries discard the physical connection so pending PostgreSQL work cannot leak
-into subsequent requests. Query/programming errors stay 500, while connection,
-resource and pool failures return the sanitized Python database-unavailable 503
-envelope and `Retry-After: 30`. Credentials and dependency messages are never logged.
+Pool acquisition and query execution have bounded deadlines. Every checkout
+first proves the physical socket can carry a statement with a bounded read-only
+probe (`SELECT 1`), because an idle-frozen or platform-paused socket can be
+half-open: `is_closed` is false and the driver only learns otherwise on the first
+statement. A connection that cannot carry the probe is discarded rather than
+returned to the pool, and recovery is bounded to three attempts inside the
+request deadline. The probe is the request's first statement, so handler SQL,
+writes and audit events are never replayed; ordinary SQL errors never reach this
+path and keep their existing status. The probe adds one round trip per checkout
+(0.28–0.88 ms median against the disposable test database locally). Completed
+queries return connections to the pool; canceled/timed-out queries discard the
+physical connection so pending PostgreSQL work cannot leak into subsequent
+requests. Query/programming errors stay 500, while connection, resource and pool
+failures return the sanitized Python database-unavailable 503 envelope and
+`Retry-After: 30`. Credentials and dependency messages are never logged.
 
 Tests require a **disposable local PostgreSQL** connection. The native Roll
 service never creates or alters schema, so its integration tests run against the
