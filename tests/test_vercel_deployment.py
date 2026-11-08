@@ -130,7 +130,9 @@ def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
             )
             seen_native.add(identity)
 
-    docs = _route_index(routes, src="/(?:openapi\\.json|docs|redoc|health)")
+    docs = _route_index(routes, src="^/(?:openapi\\.json|docs|redoc|health)$")
+    assert routes[docs].get("status") == 404
+    assert "dest" not in routes[docs]
     landing = _route_index(routes, src="/")
     assets = _route_index(routes, src="/assets/.+")
     html = _route_index(routes, src=_route_html_src_pattern())
@@ -259,9 +261,9 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "src": "/api(?:/.*)?",
         "dest": "/api/index.py",
     }
-    assert _route(routes, "/(?:openapi\\.json|docs|redoc|health)") == {
-        "src": "/(?:openapi\\.json|docs|redoc|health)",
-        "dest": "/api/index.py",
+    assert _route(routes, "^/(?:openapi\\.json|docs|redoc|health)$") == {
+        "src": "^/(?:openapi\\.json|docs|redoc|health)$",
+        "status": 404,
     }
     assert _route(routes, "/")["dest"] == "/index.html"
     assert _route(routes, "/assets/.+") == {
@@ -497,7 +499,7 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("GET", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
         ("PATCH", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
         ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
-        ("GET", "/health", "/api/index.py"),
+        ("GET", "/health", None),
         ("GET", "/", "/index.html"),
     )
     for method, path, expected in probes:
@@ -508,7 +510,11 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
             if method not in methods:
                 continue
             if re.fullmatch(str(route["src"]), path):
-                assert route.get("dest") == expected, (method, path)
+                if expected is None:
+                    assert route.get("status") == 404, (method, path)
+                    assert "dest" not in route, (method, path)
+                else:
+                    assert route.get("dest") == expected, (method, path)
                 break
         else:
             raise AssertionError(f"No route for {method} {path}")

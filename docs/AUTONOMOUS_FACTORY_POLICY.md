@@ -637,6 +637,36 @@ A start update records current UTC and `Outcome: running`. A completion update p
 
 Heartbeat telemetry never counts as substantive progress, never satisfies a valid heartbeat outcome while executable work exists, never outranks executable product work, never extends a lease, and never justifies ending a run early. The external watchdog may report missing or stuck heartbeats, but only Josh or an interactive session acting on his direct instruction may change a scheduled task.
 
+Worker prompts put stable policy before run identity, targets and findings.
+Trim duplicated instructions; preserve source/issue security and exact-head review context.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+
+### Second Kilo free lane
+
+Worker 98 runs `kilo-auto/free` at :10, thirty minutes from worker 46 at :40.
+It uses the same anonymous Kilo CLI free route and existing `PR_REBASE_TOKEN`;
+there is no second account or credential. A smoke or session HTTP 429 records
+`provider_quota` and pauses assignment for both Kilo workers for thirty minutes,
+then automatically permits a new probe. A quota-limited smoke ends immediately
+instead of continuing into an expensive coding session. Worker 46's historical
+static-pause protection does not exempt it from this shared runtime quota backoff.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
 ### Measured starter/finisher preference
 
 Within otherwise eligible work, lanes pinned to `z-ai` / `glm-4.5-flash`
@@ -649,11 +679,3 @@ issue/repair dispatch tries the corresponding eligible specialist first, then
 continues through normal workers if assignment declines (busy, paused or leased).
 Review independence, claims, quotas, and remote capacity gates remain unchanged.
 
-### Kilo served-model attribution
-
-For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
-Actions run summary and the `factory: advance ... with ... (served: ...)` commit
-subject. The trusted wrapper aggregates distinct model IDs across invocations,
-keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
-from served-model evidence. Missing metadata is explicitly unreported; assistant
-and tool prose cannot supply model attribution. The zero-cost guard remains in force.

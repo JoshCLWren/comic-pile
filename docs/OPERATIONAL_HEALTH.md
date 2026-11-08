@@ -2,16 +2,30 @@
 
 ComicPile exposes separate bounded endpoints so monitoring can distinguish process startup from dependency availability.
 
-## Endpoint selection
+## Production Rust liveness
+
+`GET /api/v2/health` is the production liveness probe. It returns HTTP 200
+with `{"status":"ok"}` and the `X-ComicPile-API-Runtime: rust` response
+header, without opening a PostgreSQL connection. Production deployment smoke
+checks status, body and runtime marker, as well as a separate rejected-login
+request. The public bare `/health`, `/docs`, `/redoc` and `/openapi.json`
+endpoints return 404 at Vercel ingress instead of waking Python; the checked-in
+generated OpenAPI contracts remain available for developers.
+
+## Transitional and local FastAPI probes
+
+The following legacy endpoints are still registered in local FastAPI and may
+remain on transitional versioned production paths until their migration under
+#4335. **Do not use them for production deployment smoke or new uptime checks.**
 
 - `GET /api/v1/health/live` confirms only that the FastAPI process can serve a request. It does not query Neon or Upstash and is the correct liveness probe.
 - `GET /api/v1/health/dependencies` checks Neon and Upstash independently with a two-second timeout per dependency. Use it for dependency alerts and diagnosis.
 - `GET /api/v1/health/warmup` exercises the same cheap, read-only database and cache path used by dependency monitoring. Use it when intentionally warming an idle deployment.
 - `GET /api/v1/health/cache-quota` reports the monthly cache command budget snapshot (issue #1751): `status` (`ok` / `near-limit` / `over-budget`), `observed_commands`, `budget`, `remaining`, `usage_ratio`, `alerted`, and `throttling`. It is purely in-process — no database or cache connection and no alert side effects — so monitoring can poll it freely to watch for the near-limit band before the hard budget is reached. See `docs/CACHE_COMMAND_BUDGET.md` for the guardrail rules.
-- `GET /api/health` remains a hidden legacy liveness alias for existing callers. Its handler does not query Neon, but a cold staging or development app still opens the database during initialization. Use `/health` for dependency-free liveness in every environment.
-- `GET /health` and the legacy keepalive endpoint (`GET /api/v1/keepalive`, retained only for old clients and reported as `{"status": "disabled"}`) are public, dependency-free probes. Deployment smoke checks and uptime monitors may poll them without opening a billable Neon connection or postponing scale-to-zero (issue #4129). Use `/api/v1/health/dependencies` when a database readiness check is actually intended.
+- `GET /api/health` remains a hidden legacy liveness alias for existing callers. Its handler does not query Neon, but a cold staging or development app still opens the database during initialization. Use `/api/v2/health` for dependency-free liveness in production; the bare `/health` path is for local FastAPI development.
+- `GET /health` and the legacy keepalive endpoint (`GET /api/v1/keepalive`, retained only for old clients and reported as `{"status": "disabled"}`) are public, dependency-free probes. Local development/test probes may poll them without opening a billable Neon connection (issue #4129), but production monitors must use the native Rust `/api/v2/health` route. Use `/api/v1/health/dependencies` when a database readiness check is actually intended.
 
-Set `HEALTH_CHECK_TOKEN` in production and send it as `X-Health-Token` to access the detailed dependency, warm-up, and cache-quota endpoints. Missing or invalid tokens receive a generic 404 so operational detail is not advertised. The liveness endpoint remains public because it contains no infrastructure detail.
+For as long as transitional FastAPI operational routes remain deployed, set `HEALTH_CHECK_TOKEN` in production and send it as `X-Health-Token` to access the detailed dependency, warm-up, and cache-quota endpoints. Missing or invalid tokens receive a generic 404 so operational detail is not advertised. The liveness endpoint remains public because it contains no infrastructure detail.
 
 ## Response semantics
 
