@@ -57,185 +57,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/delete-test-data/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Delete Test Data
-         * @description Delete all test data (threads, sessions, events marked as test).
-         *
-         *     Args:
-         *         db: SQLAlchemy session for database operations.
-         *         current_user: Authenticated user making the request.
-         *
-         *     Returns:
-         *         Dictionary with counts of deleted threads, sessions, and events.
-         */
-        post: operations["delete_test_data_api_v1_admin_delete_test_data__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/export/csv/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Csv
-         * @description Export active threads as CSV file.
-         *
-         *     Format matches Google Sheets: title, format, issues_remaining
-         *
-         *     Args:
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         StreamingResponse with CSV file attachment.
-         */
-        get: operations["export_csv_api_v1_admin_export_csv__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/export/json/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Json
-         * @description Export full database as JSON for backups.
-         *
-         *     Includes all data: users, threads, sessions, events (excludes test data)
-         *
-         *     Args:
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         StreamingResponse with JSON file attachment.
-         */
-        get: operations["export_json_api_v1_admin_export_json__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/export/summary/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Export Summary
-         * @description Export narrative session summaries as markdown file.
-         *
-         *     Formats all sessions with read, skipped, and completed lists per PRD Section 11.
-         *     Excludes sessions that only involve test threads.
-         *
-         *     Args:
-         *         db: SQLAlchemy session for database operations.
-         *
-         *     Returns:
-         *         StreamingResponse with markdown file attachment.
-         */
-        get: operations["export_summary_api_v1_admin_export_summary__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/import/csv/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Import Csv
-         * @description Import threads from CSV file.
-         *
-         *     CSV format: title, format, issues_remaining
-         *     - title: Thread title (required)
-         *     - format: Thread format (required)
-         *     - issues_remaining: Number of issues remaining (required, integer)
-         *
-         *     Threads are inserted at position 1 (front of queue).
-         *
-         *     Args:
-         *         file: CSV file to import.
-         *         db: SQLAlchemy session for database operations.
-         *         current_user: Authenticated user importing the threads.
-         *
-         *     Returns:
-         *         Dictionary with "imported" count and "errors" list.
-         *
-         *     Raises:
-         *         HTTPException: If file is not a CSV.
-         */
-        post: operations["import_csv_api_v1_admin_import_csv__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/analytics/metrics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Metrics
-         * @description Get reading metrics and analytics for the current user.
-         *
-         *     Args:
-         *         current_user: The authenticated user making the request.
-         *         db: The database session for querying data.
-         *
-         *     Returns:
-         *         Typed analytics payload covering thread counts, completion rate,
-         *         average session length, recent sessions, event distribution, and
-         *         top-rated threads.
-         */
-        get: operations["get_metrics_api_v1_analytics_metrics_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/auth/csrf": {
         parameters: {
             query?: never;
@@ -1808,46 +1629,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/crossover-templates/adopt": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Adopt Crossover Template
-         * @description Adopt an external template into an editable continuity plan. Defaults to informational mode so no hard rules are created until the user explicitly selects blocking semantics.
-         */
-        post: operations["adopt_crossover_template_api_v1_crossover_templates_adopt_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/crossover-templates/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Preview Crossover Template
-         * @description Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.
-         */
-        post: operations["preview_crossover_template_api_v1_crossover_templates_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/custom-cbls": {
         parameters: {
             query?: never;
@@ -2055,29 +1836,6 @@ export interface paths {
          * @description Explicitly merge one custom CBL into an existing canonical Reading Plan.
          */
         post: operations["apply_custom_cbl_api_v1_custom_cbls__list_id__reading_plans__plan_id__apply_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/debug/log": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Log Message
-         * @description Receive client-side log messages and output to server terminal.
-         *
-         *     Gated by the ``enable_debug_routes`` flag via ``require_debug_routes`` —
-         *     returns 404 when the flag is off (default), regardless of environment.
-         */
-        post: operations["log_message_api_v1_debug_log_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2892,54 +2650,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/prerequisites/": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Prerequisites
-         * @description Read stable endpoints and their unmodified provenance.
-         */
-        get: operations["list_prerequisites_api_v1_prerequisites__get"];
-        put?: never;
-        /**
-         * Create Prerequisite
-         * @description Create one explicit reader prerequisite after combined cycle validation.
-         */
-        post: operations["create_prerequisite_api_v1_prerequisites__post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/prerequisites/{prerequisite_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete Prerequisite
-         * @description Remove a reader requirement without changing read state or list intent.
-         */
-        delete: operations["delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete"];
-        options?: never;
-        head?: never;
-        /**
-         * Update Prerequisite Note
-         * @description Edit the note of a new reader-authored requirement.
-         */
-        patch: operations["update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch"];
-        trace?: never;
-    };
     "/api/v1/reading-boundaries": {
         parameters: {
             query?: never;
@@ -3382,26 +3092,6 @@ export interface paths {
          *     adopted only when ComicVine reports a ``store_date`` on or before ``as_of``.
          */
         post: operations["sync_released_issues_endpoint_api_v1_reading_plan_sync_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/recommendations/diagnostics": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Recommendation-quality diagnostics summary
-         * @description Bounded, read-only recommendation-quality summary for the current user. This is a diagnostics endpoint and never runs during the normal Roll bootstrap path.
-         */
-        get: operations["get_recommendation_diagnostics_api_v1_recommendations_diagnostics_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6101,32 +5791,22 @@ export interface components {
             /** Total Issues */
             total_issues?: number | null;
         };
-        /**
-         * AnalyticsMetricsResponse
-         * @description Reading metrics and analytics for the current user.
-         *
-         *     ``completion_rate`` and ``average_session_hours`` keep the legacy
-         *     ``int | float`` shape because the aggregation returns either an exact
-         *     integer fallback (0) or a rounded float.
-         */
+        /** @description Reading metrics and analytics for the authenticated user. */
         AnalyticsMetricsResponse: {
-            /** Active Threads */
+            /** Format: int32 */
             active_threads: number;
-            /** Average Session Hours */
+            /** Format: double */
             average_session_hours: number;
-            /** Completed Threads */
+            /** Format: int32 */
             completed_threads: number;
-            /** Completion Rate */
+            /** Format: double */
             completion_rate: number;
-            /** Event Stats */
             event_stats: {
                 [key: string]: number;
             };
-            /** Recent Sessions */
             recent_sessions: components["schemas"]["RecentSession"][];
-            /** Top Rated Threads */
             top_rated_threads: components["schemas"]["TopRatedThread"][];
-            /** Total Threads */
+            /** Format: int32 */
             total_threads: number;
         };
         /**
@@ -6178,16 +5858,6 @@ export interface components {
             blocking_reasons: string[];
             /** Is Blocked */
             is_blocked: boolean;
-        };
-        /** Body_import_csv_api_admin_import_csv__post */
-        Body_import_csv_api_admin_import_csv__post: {
-            /** File */
-            file: string;
-        };
-        /** Body_import_csv_api_v1_admin_import_csv__post */
-        Body_import_csv_api_v1_admin_import_csv__post: {
-            /** File */
-            file: string;
         };
         /** Body_set_pending_thread_api_threads__thread_id__set_pending_post */
         Body_set_pending_thread_api_threads__thread_id__set_pending_post: {
@@ -8090,32 +7760,6 @@ export interface components {
             user_id: number;
         };
         /**
-         * ControlModeGroup
-         * @description One recommendation-quality grouping by control mode and algorithm version.
-         */
-        ControlModeGroup: {
-            /** Acceptance Rate */
-            acceptance_rate: number;
-            /** Accepted Rolls */
-            accepted_rolls: number;
-            /**
-             * Algorithm Version
-             * @description Canonical algorithm version attributed to this group
-             */
-            algorithm_version: string;
-            /**
-             * Control Mode
-             * @description Distinguishable control/intent class: contextual_auto, explicit_correction, blocked_recovery, or legacy
-             */
-            control_mode: string;
-            /** Rolls */
-            rolls: number;
-            /** Snooze Rate */
-            snooze_rate: number;
-            /** Snoozed Rolls */
-            snoozed_rolls: number;
-        };
-        /**
          * ConvergenceGateTarget
          * @description A node a convergence gate waits for.
          */
@@ -8175,32 +7819,6 @@ export interface components {
              * @description Example for 'Stay close to what I've liked' (similar to highly rated comics)
              */
             something_familiar?: string | null;
-        };
-        /**
-         * CoverageInfo
-         * @description Honest labeling of data completeness for the requested range.
-         */
-        CoverageInfo: {
-            /**
-             * Instrumented Event Count
-             * @description Events carrying a selection_method (full context)
-             */
-            instrumented_event_count: number;
-            /**
-             * Legacy Event Count
-             * @description Events without selection_method (pre-instrumentation)
-             */
-            legacy_event_count: number;
-            /**
-             * Note
-             * @description Human-readable explanation of coverage limitations
-             */
-            note: string;
-            /**
-             * Partial Coverage
-             * @description True when legacy events are mixed into the range
-             */
-            partial_coverage: boolean;
         };
         CreateIssuesRequest: {
             /** @description Explicit "At the end" choice. Distinct from an omitted anchor. */
@@ -9927,143 +9545,6 @@ export interface components {
              */
             thread_title: string;
         };
-        /**
-         * CrossoverTemplateAdoptRequest
-         * @description Adopt an external template into an editable continuity plan.
-         */
-        CrossoverTemplateAdoptRequest: {
-            /**
-             * Issue Node Id Prefix
-             * @default tpl-
-             */
-            issue_node_id_prefix: string;
-            /**
-             * Lane Id
-             * @default imported
-             */
-            lane_id: string;
-            /**
-             * Lane Name
-             * @default Imported
-             */
-            lane_name: string;
-            /**
-             * Ordering Mode
-             * @default informational
-             * @enum {string}
-             */
-            ordering_mode: "informational" | "strict_sequential";
-            /** Plan Name */
-            plan_name: string;
-            /** Source List Ids */
-            source_list_ids: number[];
-            /** Target Story Arc Id */
-            target_story_arc_id?: string | null;
-        };
-        /**
-         * CrossoverTemplateConflictPreview
-         * @description A pair whose reading-order evidence disagrees across source lists.
-         */
-        CrossoverTemplateConflictPreview: {
-            /** First Issue Id */
-            first_issue_id: number;
-            /** Second Issue Id */
-            second_issue_id: number;
-            /** Source Paths */
-            source_paths: string[];
-        };
-        /**
-         * CrossoverTemplateIntersectionPreview
-         * @description Consistent cross-thread ordering observation, never a hard dependency.
-         */
-        CrossoverTemplateIntersectionPreview: {
-            /** Explanation */
-            explanation: string;
-            /** First Issue Id */
-            first_issue_id: number;
-            /** Second Issue Id */
-            second_issue_id: number;
-            /** Source Paths */
-            source_paths: string[];
-        };
-        /**
-         * CrossoverTemplateItemPreview
-         * @description Suggested crossover member with full provenance and advisory metadata.
-         */
-        CrossoverTemplateItemPreview: {
-            /**
-             * Confidence
-             * @enum {string}
-             */
-            confidence: "high" | "medium" | "low";
-            /** Explanation */
-            explanation: string;
-            /** Issue Id */
-            issue_id: number;
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "core" | "context/prelude" | "epilogue" | "unknown";
-            /** Source Paths */
-            source_paths: string[];
-            /** Suggested Position */
-            suggested_position: number;
-            /** Target Story Arc Id */
-            target_story_arc_id: string | null;
-        };
-        /**
-         * CrossoverTemplateParallelCandidatePreview
-         * @description Advisory pair that may represent parallel branches.
-         */
-        CrossoverTemplateParallelCandidatePreview: {
-            /** First Issue Id */
-            first_issue_id: number;
-            /** Second Issue Id */
-            second_issue_id: number;
-            /** Source Paths */
-            source_paths: string[];
-        };
-        /**
-         * CrossoverTemplatePreviewRequest
-         * @description Request to preview a derived crossover template from persisted CBL evidence.
-         */
-        CrossoverTemplatePreviewRequest: {
-            /** Source List Ids */
-            source_list_ids: number[];
-            /** Target Story Arc Id */
-            target_story_arc_id?: string | null;
-        };
-        /**
-         * CrossoverTemplateSerialSpinePreview
-         * @description Same-thread issue order preserved as advisory series structure.
-         */
-        CrossoverTemplateSerialSpinePreview: {
-            /** Explanation */
-            explanation: string;
-            /** Issue Ids */
-            issue_ids: number[];
-            /** Source Paths */
-            source_paths: string[];
-            /** Thread Id */
-            thread_id: number;
-        };
-        /**
-         * CrossoverTemplateUnresolvedMatchPreview
-         * @description A source entry that could not be matched to a ComicPile issue.
-         */
-        CrossoverTemplateUnresolvedMatchPreview: {
-            /** Issue Number */
-            issue_number: string;
-            /** Position */
-            position: number;
-            /** Reason */
-            reason: string;
-            /** Series Name */
-            series_name: string;
-            /** Source Path */
-            source_path: string;
-        };
         /** @description Response body carrying a double-submit CSRF token. */
         CsrfResponse: {
             csrf_token: string;
@@ -10553,24 +10034,6 @@ export interface components {
             warning?: string | null;
         };
         /**
-         * DerivedCrossoverTemplatePreview
-         * @description Non-blocking preview of a derived external crossover template.
-         */
-        DerivedCrossoverTemplatePreview: {
-            /** Conflicts */
-            conflicts?: components["schemas"]["CrossoverTemplateConflictPreview"][];
-            /** Intersections */
-            intersections?: components["schemas"]["CrossoverTemplateIntersectionPreview"][];
-            /** Items */
-            items: components["schemas"]["CrossoverTemplateItemPreview"][];
-            /** Parallel Candidates */
-            parallel_candidates?: components["schemas"]["CrossoverTemplateParallelCandidatePreview"][];
-            /** Serial Spines */
-            serial_spines?: components["schemas"]["CrossoverTemplateSerialSpinePreview"][];
-            /** Unresolved */
-            unresolved?: components["schemas"]["CrossoverTemplateUnresolvedMatchPreview"][];
-        };
-        /**
          * DiagnosticError
          * @description A captured console error entry.
          */
@@ -10674,48 +10137,6 @@ export interface components {
             target_id: number;
             /** Target Type */
             target_type: string;
-        };
-        /**
-         * EffortBandOutcome
-         * @description Recommendation outcomes bucketed by effort band (die size).
-         */
-        EffortBandOutcome: {
-            /**
-             * Acceptance Rate
-             * @description accepted / rolls (0.0 when no rolls)
-             */
-            acceptance_rate: number;
-            /**
-             * Accepted
-             * @description Rolls whose thread was later rated in range
-             */
-            accepted: number;
-            /**
-             * Band
-             * @description Coarse effort band derived from the die size
-             * @enum {string}
-             */
-            band: "low" | "medium" | "high";
-            /**
-             * Die
-             * @description Die size that represents the effort band
-             */
-            die: number;
-            /**
-             * Rolls
-             * @description Number of roll events in this band
-             */
-            rolls: number;
-            /**
-             * Snooze Rate
-             * @description snoozed / rolls (0.0 when no rolls)
-             */
-            snooze_rate: number;
-            /**
-             * Snoozed
-             * @description Rolls whose thread was later snoozed in range
-             */
-            snoozed: number;
         };
         /**
          * EntryOverride
@@ -11611,24 +11032,6 @@ export interface components {
              */
             visibility: "public" | "internal";
         };
-        /** @description Reading metrics and analytics for the authenticated user. */
-        NativeAnalyticsMetricsResponse: {
-            /** Format: int32 */
-            active_threads: number;
-            /** Format: double */
-            average_session_hours: number;
-            /** Format: int32 */
-            completed_threads: number;
-            /** Format: double */
-            completion_rate: number;
-            event_stats: {
-                [key: string]: number;
-            };
-            recent_sessions: components["schemas"]["NativeRecentSession"][];
-            top_rated_threads: components["schemas"]["NativeTopRatedThread"][];
-            /** Format: int32 */
-            total_threads: number;
-        };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
@@ -11847,15 +11250,6 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
-        /** @description Summary of one recent reading session. */
-        NativeRecentSession: {
-            ended_at?: string | null;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-        };
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         NativeRefreshTokenRequest: {
             refresh_token: string;
@@ -11870,15 +11264,6 @@ export interface components {
             access_token: string;
             refresh_token: string;
             token_type: string;
-        };
-        /** @description Summary of one highly rated thread. */
-        NativeTopRatedThread: {
-            format: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: double */
-            rating: number;
-            title: string;
         };
         /** @description Response body for the current-user endpoint. */
         NativeUserResponse: {
@@ -12199,51 +11584,6 @@ export interface components {
          * @enum {string}
          */
         PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
-        /**
-         * PrerequisiteCreate
-         * @description Create one stable pair; provenance is server-controlled.
-         */
-        PrerequisiteCreate: {
-            /** Note */
-            note?: string | null;
-            /** Source Issue Id */
-            source_issue_id: number;
-            /** Target Issue Id */
-            target_issue_id: number;
-        };
-        /**
-         * PrerequisiteNoteUpdate
-         * @description Edit reader prose without changing endpoints or classification.
-         */
-        PrerequisiteNoteUpdate: {
-            /** Note */
-            note?: string | null;
-        };
-        /**
-         * PrerequisiteResponse
-         * @description Expose historical uncertainty without claiming approval.
-         */
-        PrerequisiteResponse: {
-            /** Classification */
-            classification: ("A" | "B" | "C" | "D") | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Id */
-            id: number;
-            /** Note */
-            note: string | null;
-            /** Origin */
-            origin: ("reader" | "converted") | null;
-            /** Provenance */
-            provenance: string | null;
-            /** Source Issue Id */
-            source_issue_id: number;
-            /** Target Issue Id */
-            target_issue_id: number;
-        };
         /**
          * PublicReleaseResponse
          * @description One release ledger record returned by public-facing endpoints.
@@ -13539,108 +12879,14 @@ export interface components {
             /** Format: int32 */
             session_id: number;
         };
-        /**
-         * RecentSession
-         * @description Summary of one recent reading session.
-         */
+        /** @description Summary of one recent reading session. */
         RecentSession: {
-            /** Ended At */
-            ended_at: string | null;
-            /** Id */
+            ended_at?: string | null;
+            /** Format: int32 */
             id: number;
-            /** Start Die */
+            /** Format: int32 */
             start_die: number;
-            /** Started At */
             started_at: string;
-        };
-        /**
-         * RecommendationDiagnosticsResponse
-         * @description Bounded, read-only recommendation-quality summary for one user.
-         */
-        RecommendationDiagnosticsResponse: {
-            /**
-             * Active Algorithm Version
-             * @description Algorithm version currently active for this user
-             */
-            active_algorithm_version: string;
-            /**
-             * Active Control Mode
-             * @description Control mode currently active for this user
-             */
-            active_control_mode: string;
-            /**
-             * Avg Consecutive Snoozes Before Acceptance
-             * @description Mean snooze run before acceptance (0.0 when none)
-             */
-            avg_consecutive_snoozes_before_acceptance: number;
-            /**
-             * Avg Time To Acceptance Seconds
-             * @description Mean session-start to first acceptance (None when none)
-             */
-            avg_time_to_acceptance_seconds: number | null;
-            /** @description Coverage/legacy labeling for the range */
-            coverage: components["schemas"]["CoverageInfo"];
-            /** Effort Band Outcomes */
-            effort_band_outcomes?: components["schemas"]["EffortBandOutcome"][];
-            /**
-             * First Roll Adoption Rate
-             * @description Sessions where the first roll was accepted
-             */
-            first_roll_adoption_rate: number;
-            /** Groups By Control Mode */
-            groups_by_control_mode?: components["schemas"]["ControlModeGroup"][];
-            /**
-             * Max Consecutive Snoozes Before Acceptance
-             * @description Longest snooze run before any acceptance in a session
-             */
-            max_consecutive_snoozes_before_acceptance: number;
-            /**
-             * Mode Corrections
-             * @description Explicit manual/override launch-mode corrections
-             */
-            mode_corrections: number;
-            /**
-             * Range End
-             * Format: date-time
-             * @description Exclusive upper bound of the range
-             */
-            range_end: string;
-            /**
-             * Range Start
-             * Format: date-time
-             * @description Inclusive lower bound of the range
-             */
-            range_start: string;
-            /**
-             * Rating Average
-             * @description Mean rating across rated sessions (None when none)
-             */
-            rating_average: number | null;
-            /**
-             * Rating Distribution
-             * @description Rating histogram by integer bucket
-             */
-            rating_distribution?: {
-                [key: string]: number;
-            };
-            /**
-             * Snoozes Per Completed Read
-             * @description total_snoozes / total_rates (0.0 when no reads)
-             */
-            snoozes_per_completed_read: number;
-            /** Total Rates */
-            total_rates: number;
-            /** Total Rolls */
-            total_rolls: number;
-            /** Total Sessions */
-            total_sessions: number;
-            /** Total Snoozes */
-            total_snoozes: number;
-            /**
-             * User Id
-             * @description Owner of the summarized data
-             */
-            user_id: number;
         };
         /**
          * RecommendationExplanationResponse
@@ -15582,18 +14828,13 @@ export interface components {
              */
             token_type: string;
         };
-        /**
-         * TopRatedThread
-         * @description Summary of one highly rated thread.
-         */
+        /** @description Summary of one highly rated thread. */
         TopRatedThread: {
-            /** Format */
             format: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Rating */
+            /** Format: double */
             rating: number;
-            /** Title */
             title: string;
         };
         /**
@@ -15789,143 +15030,6 @@ export interface operations {
                     "application/json": {
                         [key: string]: string;
                     };
-                };
-            };
-        };
-    };
-    delete_test_data_api_v1_admin_delete_test_data__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: number;
-                    };
-                };
-            };
-        };
-    };
-    export_csv_api_v1_admin_export_csv__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    export_json_api_v1_admin_export_json__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    export_summary_api_v1_admin_export_summary__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    import_csv_api_v1_admin_import_csv__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_import_csv_api_v1_admin_import_csv__post"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: number | string[];
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_metrics_api_v1_analytics_metrics_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
                 };
             };
         };
@@ -17916,72 +17020,6 @@ export interface operations {
             };
         };
     };
-    adopt_crossover_template_api_v1_crossover_templates_adopt_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CrossoverTemplateAdoptRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ContinuityPlanResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_crossover_template_api_v1_crossover_templates_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CrossoverTemplatePreviewRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DerivedCrossoverTemplatePreview"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_custom_cbl_lists_api_v1_custom_cbls_get: {
         parameters: {
             query?: never;
@@ -18327,28 +17365,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    log_message_api_v1_debug_log_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
                 };
             };
         };
@@ -19375,123 +18391,6 @@ export interface operations {
             };
         };
     };
-    list_prerequisites_api_v1_prerequisites__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrerequisiteResponse"][];
-                };
-            };
-        };
-    };
-    create_prerequisite_api_v1_prerequisites__post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PrerequisiteCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrerequisiteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                prerequisite_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                prerequisite_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PrerequisiteNoteUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PrerequisiteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_reading_boundary_batch_api_v1_reading_boundaries_post: {
         parameters: {
             query?: never;
@@ -20120,40 +19019,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_recommendation_diagnostics_api_v1_recommendations_diagnostics_get: {
-        parameters: {
-            query?: {
-                /** @description Inclusive lower bound (ISO 8601). Defaults to 30 days ago. */
-                range_start?: string | null;
-                /** @description Exclusive upper bound (ISO 8601). Defaults to now. */
-                range_end?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendationDiagnosticsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -22329,7 +21194,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeAnalyticsMetricsResponse"];
+                    "application/json": components["schemas"]["AnalyticsMetricsResponse"];
                 };
             };
             /** @description Not authenticated, revoked token, or stale credential epoch */
