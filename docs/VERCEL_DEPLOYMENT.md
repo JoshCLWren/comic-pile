@@ -7,7 +7,7 @@ ComicPile uses Vercel for production only. The production branch is `main`.
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
 - Pull requests and non-production branches must not create Vercel deployments.
 - Pull requests are validated locally and through GitHub Actions.
-- The React/Vite frontend is built as static output, while `/api/*` and the API documentation routes are served by FastAPI.
+- The React/Vite frontend is built as static output. Native `/api/v2` resources run in Rust, remaining transitional `/api/*` routes run in FastAPI, and bare production health/docs paths return 404 without invoking Python.
 - Neon is the production PostgreSQL provider.
 
 `vercel.json` disables Vercel Git deployments. The migration-aware
@@ -93,7 +93,7 @@ fix PR `deploy-fix` instead. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
 ## Deployment retention
 
 Hobby Functions Storage is charged per retained deployment. After a successful
-production deploy and `/health` smoke — and also when the exact-SHA preflight
+production deploy and `/api/v2/health` Rust-runtime smoke — and also when the exact-SHA preflight
 skips a duplicate deploy — Deploy Production runs
 `scripts/prune_vercel_deployments.py`.
 
