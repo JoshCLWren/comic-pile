@@ -261,9 +261,9 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
         "src": "/api(?:/.*)?",
         "dest": "/api/index.py",
     }
-    assert _route(routes, "/(?:openapi\\.json|docs|redoc|health)") == {
-        "src": "/(?:openapi\\.json|docs|redoc|health)",
-        "dest": "/api/index.py",
+    assert _route(routes, "^/(?:openapi\\.json|docs|redoc|health)$") == {
+        "src": "^/(?:openapi\\.json|docs|redoc|health)$",
+        "status": 404,
     }
     assert _route(routes, "/")["dest"] == "/index.html"
     assert _route(routes, "/assets/.+") == {
