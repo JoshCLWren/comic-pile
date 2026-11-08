@@ -19,68 +19,36 @@ from __future__ import annotations
 
 import argparse
 import os
-import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+from scripts.schema_normalization import (
+    normalize_schema,
+    qualify_extension_operator_classes,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_PATH = REPO_ROOT / "native/roll-service/tests/fixtures/schema/public_schema.sql"
-
-# pg_dump emits psql meta-commands and version banners that vary by client
-# version or per invocation. Dropping them keeps the fixture diffable and
-# loadable through a plain SQL batch (no psql required).
-DROPPED_PREFIXES = ("\\restrict", "\\unrestrict")
-DROPPED_COMMENT_PREFIXES = (
-    "-- Dumped from database version",
-    "-- Dumped by pg_dump version",
-)
-# pg_dump emits settings newer than the oldest server the suite supports
-# (PostgreSQL 16, the CI image). Loading them into 16 is a hard error.
-DROPPED_SETTINGS = ("SET transaction_timeout = 0;",)
-# `public` always exists; restoring the schema statement only breaks loading.
-# The fixture is a whole-database dump so extension creation (pg_trgm, created
-# by migration c40080000001) travels with the tables that index with it.
-DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
-# pg_dump always emits `SET search_path = ''`. Some client versions then leave
-# the pg_trgm GIN operator class unqualified. Qualify it so the fixture replays
-# against an empty search_path the same way production objects live in public.
-_UNQUALIFIED_GIN_TRGM_OPS = re.compile(r"(?<![\w.])gin_trgm_ops\b")
 
 
 def _qualify_extension_operator_classes(sql: str) -> str:
     """Qualify ``pg_trgm`` operator classes so empty ``search_path`` can replay.
 
-    Production creates ``pg_trgm`` in ``public`` (Alembic ``c40080000001``).
-    The dump must name ``public.gin_trgm_ops`` explicitly because pg_dump
-    clears ``search_path`` before emitting index DDL. Already-qualified names
-    are left unchanged so regeneration stays idempotent across pg_dump versions.
-
-    Args:
-        sql: Schema-only SQL, possibly with unqualified ``gin_trgm_ops``.
-
-    Returns:
-        The same SQL with every bare ``gin_trgm_ops`` token schema-qualified.
+    Retained as a compatibility name; the implementation lives in
+    :mod:`scripts.schema_normalization` so the production drift check
+    normalizes identically.
     """
-    return _UNQUALIFIED_GIN_TRGM_OPS.sub("public.gin_trgm_ops", sql)
+    return qualify_extension_operator_classes(sql)
 
 
 def _normalize(raw: str) -> str:
-    """Strip psql-only meta-commands and version-dependent banners."""
-    kept: list[str] = []
-    for line in raw.splitlines():
-        stripped = line.strip()
-        if stripped.startswith(DROPPED_PREFIXES):
-            continue
-        if stripped.startswith(DROPPED_COMMENT_PREFIXES):
-            continue
-        if stripped in DROPPED_SETTINGS:
-            continue
-        if stripped in DROPPED_STATEMENTS:
-            continue
-        kept.append(line)
-    return _qualify_extension_operator_classes("\n".join(kept).rstrip("\n") + "\n")
+    """Strip psql-only meta-commands and version-dependent banners.
+
+    Compatibility alias for :func:`scripts.schema_normalization.normalize_schema`.
+    """
+    return normalize_schema(raw)
 
 
 def _assert_at_head(database_url: str) -> None:
