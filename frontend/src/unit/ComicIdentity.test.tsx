@@ -1116,7 +1116,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
   })
 
-  it('shows "Credits not available" when metadata_status is deep_fetched_no_credits', async () => {
+  it('shows "ComicVine currently has no creator credits" when metadata_status is deep_fetched_no_credits', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '700',
       comicvine_url: null,
@@ -1138,7 +1138,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await waitForLoaded()
 
     expect(screen.getByTestId('creator-status-no-credits')).toBeInTheDocument()
-    expect(screen.getByTestId('creator-status-no-credits')).toHaveTextContent('Credits not available')
+    expect(screen.getByTestId('creator-status-no-credits')).toHaveTextContent('ComicVine currently has no creator credits')
   })
 
   it('does not show status when creators array is not empty', async () => {

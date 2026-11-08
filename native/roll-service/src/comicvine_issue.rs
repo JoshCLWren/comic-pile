@@ -39,16 +39,72 @@ WITH auth AS (
             'volume', 'person_credits', 'character_credits', 'team_credits',
             'story_arc_credits', 'date_last_updated'
           ], false) THEN TRUE
+      -- Provider revision newer than our deep fetch: always stale.
+      WHEN m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+        AND m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
+        AND LEFT(replace(
+          m.metadata->'raw_provider_payload'->>'date_last_updated', ' ', 'T'), 19) >
+          LEFT(m.metadata->>'deep_metadata_refreshed_at', 19)
+      THEN TRUE
+      -- A deep response with empty creator_credits / person_credits is a
+      -- genuine fetch but is not permanently healthy: recheck after 7 days,
+      -- materially sooner than the 30-day window for complete rows, so a
+      -- late-arriving or repaired provider roster is picked up without a
+      -- hot loop. Malformed/absent credit arrays count as empty (safe: a
+      -- repair is enqueued rather than suppressing it). Mirrors
+      -- comicvine_repair::needs_provider_fetch exactly.
       WHEN m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL THEN
         LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <=
-          to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+          CASE WHEN
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          THEN to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+          ELSE to_char(now() AT TIME ZONE 'UTC' - interval '7 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+          END
       WHEN m.provider_updated_at IS NOT NULL THEN
         (m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
           AND LEFT(replace(
             m.metadata->'raw_provider_payload'->>'date_last_updated', ' ', 'T'), 19) <
           to_char(m.provider_updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'))
-        OR m.provider_updated_at <= now()-interval '30 days'
-      ELSE m.updated_at <= now()-interval '30 days'
+        OR (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
+          AND m.provider_updated_at <= now()-interval '7 days'
+        )
+        OR (
+          (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
+          AND m.provider_updated_at <= now()-interval '30 days'
+        )
+      ELSE
+        (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
+          AND m.updated_at <= now()-interval '7 days'
+        )
+        OR (
+          (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
+          AND m.updated_at <= now()-interval '30 days'
+        )
     END AS needs_repair
   FROM mapped m
 ), enqueue AS (
@@ -62,9 +118,13 @@ WITH auth AS (
     SET state='pending', attempts=0, next_attempt_at=now(),
       lease_expires_at=NULL, last_error=NULL, completed_at=NULL, updated_at=now()
     WHERE (
-      comicvine_metadata_refresh_requests.state IN ('completed', 'no_credits')
+      comicvine_metadata_refresh_requests.state = 'completed'
       AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
         comicvine_metadata_refresh_requests.completed_at <= now()-interval '30 days')
+    ) OR (
+      comicvine_metadata_refresh_requests.state = 'no_credits'
+      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
+        comicvine_metadata_refresh_requests.completed_at <= now()-interval '7 days')
     ) OR (
       comicvine_metadata_refresh_requests.state='failed'
       AND comicvine_metadata_refresh_requests.next_attempt_at <= now()
@@ -613,6 +673,25 @@ mod tests {
         assert!(READ_SQL.contains("WHERE f.needs_repair"));
         assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
+    }
+    #[test]
+    fn empty_credits_use_seven_day_recheck_and_provider_revision() {
+        // Reader policy must mirror comicvine_repair::needs_provider_fetch.
+        assert!(
+            READ_SQL.contains("interval '7 days'"),
+            "empty credits need a 7-day recheck, not a 30-day lock"
+        );
+        assert!(READ_SQL.contains("state = 'no_credits'"));
+        assert!(
+            READ_SQL.contains("state = 'completed'"),
+            "completed rows keep the 30-day window"
+        );
+        assert!(
+            READ_SQL.contains("date_last_updated"),
+            "provider revision must be compared against the deep fetch"
+        );
+        // Malformed/absent credit arrays count as empty (safe direction).
+        assert!(READ_SQL.contains("jsonb_typeof"));
     }
     #[test]
     fn render_the_existing_issue_intelligence_shape() {
