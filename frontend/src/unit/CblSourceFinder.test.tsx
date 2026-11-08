@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CblComicFinder, CblReadingListFinder } from '../components/CblSourceFinder'
+import { issueCardsApi } from '../services/issueCardsApi'
 import type {
   CBLComicvineOccurrence,
   CBLReadingListCandidatesResponse,
@@ -30,6 +31,8 @@ vi.mock('../services/api-comicvine', () => ({
     getIssueIdentity: mocks.getIssueIdentity,
   },
 }))
+
+const fetchCards = vi.spyOn(issueCardsApi, 'fetchCards')
 
 function candidate(
   overrides: Partial<CBLSourceComparisonMatch> = {},
@@ -134,6 +137,7 @@ function renderFinder(node: React.ReactNode) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  fetchCards.mockResolvedValue([])
   mocks.compare.mockResolvedValue({
     comicvine_issue_ids: ['4000-1'],
     input_total: 1,
@@ -154,6 +158,45 @@ beforeEach(() => {
 })
 
 describe('CblComicFinder', () => {
+  it('shows exact owned issue cover/read/rate/map in source finder without a collapsed-row request', async () => {
+    mocks.getIssueIdentity.mockResolvedValue(identityResponse(['4000-1']))
+    fetchCards.mockResolvedValue([{
+      issue_id: 5,
+      thread_id: 3,
+      thread_title: 'Ultimate Spider-Man',
+      issue_number: '1',
+      status: 'unread',
+      rating: null,
+      mapping_state: 'confirmed',
+      has_confirmed_identity: true,
+      comicvine_issue_id: '4000-1',
+      cover_image_url: 'https://comicvine.gamespot.com/a/ultimate-spider-man-1.jpg',
+    }])
+    renderFinder(
+      <CblComicFinder
+        issueId={5}
+        comicLabel="Ultimate Spider-Man #1"
+        backTo="/thread/3"
+        backLabel="Series"
+        testIdPrefix="cbl-comic"
+      />,
+    )
+    expect(fetchCards).not.toHaveBeenCalled()
+    await userEvent.click(screen.getByTestId('cbl-comic-open'))
+    const actions = await screen.findByTestId('cbl-comic-owned-issue-actions')
+    const trigger = within(actions).getByRole('button', {
+      name: 'Reading and mapping actions for Ultimate Spider-Man #1',
+    })
+    expect(within(trigger).getByRole('img')).toHaveAttribute(
+      'src', 'https://comicvine.gamespot.com/a/ultimate-spider-man-1.jpg',
+    )
+    await userEvent.click(trigger)
+    expect(within(actions).getByTestId('comic-issue-card')).toHaveAttribute(
+      'aria-label', 'Issue Ultimate Spider-Man #1',
+    )
+    expect(fetchCards).toHaveBeenCalledExactlyOnceWith([5])
+  })
+
   it('lists every CBL source that holds the comic’s confirmed Comic Vine issue', async () => {
     const user = userEvent.setup()
     mocks.getIssueIdentity.mockResolvedValue(identityResponse(['4000-1']))
