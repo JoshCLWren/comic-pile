@@ -285,16 +285,14 @@ jobs:
       - name: Install locked runtime dependencies
         run: uv sync --locked --no-dev
 
-      - name: Generate Rust-default ingress from registered Python OpenAPI
+      - name: Generate Rust-default ingress from existing FastAPI OpenAPI
         env:
-          ENVIRONMENT: production
-          SECRET_KEY: synthetic-route-inspection-only
-          CORS_ORIGINS: https://comic-pile.vercel.app
+          ROUTE_PYTHON: .venv/bin/python
         run: |
           set -euo pipefail
-          .venv/bin/python scripts/generate_vercel_routes.py
+          node scripts/generate_vercel_routes.mjs
           .venv/bin/python scripts/generate_route_burndown.py
-          .venv/bin/python scripts/generate_vercel_routes.py --check
+          node scripts/generate_vercel_routes.mjs --check
           .venv/bin/python scripts/generate_route_burndown.py --check
 
       - name: Get production database connection string
