@@ -477,40 +477,22 @@ def test_get_staleness_baseline_sample_size_cap():
     assert baseline["sample_size"] <= 10
 
 
-def test_record_stale_expiration_releases_issue_before_closing_and_marks_last(
-    monkeypatch,
-) -> None:
-    """A stale PR cannot close before its linked issue is safely reusable."""
-    events: list[tuple[str, object]] = []
-    monkeypatch.setattr(
-        module,
-        "reset_issue_to_unowned",
-        lambda number: events.append(("reset", number)),
-    )
-    monkeypatch.setattr(
-        module,
-        "close_pr_implementation",
-        lambda number: events.append(("close", number)),
-    )
-    monkeypatch.setattr(
-        module,
-        "run_gh",
-        lambda args, **kwargs: events.append(("comment", tuple(args))),
-    )
+def test_record_stale_expiration_refuses_legacy_age_based_close(monkeypatch) -> None:
+    """Even an explicit legacy helper call cannot destroy work due to age."""
+    def forbidden(*_args, **_kwargs) -> None:
+        raise AssertionError("no GitHub write is allowed by stale-age cleanup")
 
-    marker = module.record_stale_expiration(
-        42,
-        100,
-        90_000,
-        {"sample_size": 50, "formula": "2x_p90", "threshold_seconds": 23_200},
-    )
-
-    assert events[0] == ("reset", 100)
-    assert events[1] == ("close", 42)
-    assert events[2][0] == "comment"
-    comment_args = events[2][1]
-    assert isinstance(comment_args, tuple)
-    assert marker in comment_args
+    for action in ("reset_issue_to_unowned", "close_pr_implementation", "run_gh"):
+        monkeypatch.setattr(module, action, forbidden)
+    try:
+        module.record_stale_expiration(
+            42, 100, 90_000,
+            {"sample_size": 50, "formula": "2x_p90", "threshold_seconds": 23_200},
+        )
+    except RuntimeError as exc:
+        assert "age-based PR expiration is disabled" in str(exc)
+    else:
+        raise AssertionError("the legacy expiration helper must fail closed")
 
 
 def test_reset_issue_to_unowned_makes_open_issue_executable(monkeypatch) -> None:
