@@ -168,6 +168,26 @@ describe('issue-specific cover and shared rating input', () => {
     expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute('aria-label', 'No cover for Hellboy #2')
   })
 
+  it('treats the Roll featured cover as decorative while preserving accessible zoom controls', () => {
+    const image = 'https://comicvine.gamespot.com/a/uploads/original/hellboy.jpg'
+    render(
+      <ComicIssueCover
+        coverImageUrl={image}
+        threadTitle="Hellboy"
+        issueNumber="3"
+        variant="featured"
+        altText=""
+        testId="roll-decorative-cover"
+      >
+        <button type="button" aria-label="View cover larger">Zoom</button>
+      </ComicIssueCover>,
+    )
+    expect(screen.getByTestId('roll-decorative-cover')).toBeVisible()
+    expect(screen.getByRole('img', { hidden: true })).toHaveAttribute('alt', '')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View cover larger' })).toBeEnabled()
+  })
+
   it('lets the shared featured identity be a Roll heading without inventing read status', () => {
     render(
       <ComicIssueIdentity
