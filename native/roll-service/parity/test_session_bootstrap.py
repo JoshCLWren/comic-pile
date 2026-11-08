@@ -1,4 +1,4 @@
-"""Native session state AND durable writes versus Python, using disposable schemas only."""
+"""Native session state and durable writes versus Python on the canonical schema."""
 
 import asyncio
 import json
@@ -14,7 +14,6 @@ from jose import jwt
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.database import Base
 from app.models import Event, Issue, ReadingSession, Snapshot, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from comic_pile.reading_session import get_current_die_for_session, get_or_create
@@ -52,26 +51,11 @@ def normalize(value):
     "invalid-zone", "preserve-zone", "inferred-history", "era-history", "boundary",
 ])
 async def test_session_bootstrap_parity(scenario):
-    """Compare every persisted field, dice, checkpoints, retry effects and foreign access."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"native_session_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as c:
-        await c.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    """Compare persisted fields, dice, checkpoints, transaction effects and foreign access."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    application_name = f"native_session_{uuid4().hex}"
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as c:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await c.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader, foreign = User(username="session-reader"), User(username="foreign")
             db.add_all([reader, foreign])
@@ -142,7 +126,7 @@ async def test_session_bootstrap_parity(scenario):
             reader_id, other_id = reader.id, other.id
         separator = "&" if "?" in url else "?"
         env = {**os.environ,
-               "RUST_ROLL_DATABASE_URL": f"{url}{separator}application_name={schema}&options=-csearch_path%3D{schema}",
+               "RUST_ROLL_DATABASE_URL": f"{url}{separator}application_name={application_name}",
                "RUST_ROLL_JWT_SECRET": SECRET,
                "RUST_ROLL_TEST_TOKEN": jwt.encode({"sub": "session-reader", "jti": "fixture", "type": "access"}, SECRET, "HS256"),
                "RUST_ROLL_TEST_NOW": str(NOW.timestamp()),
@@ -209,6 +193,47 @@ async def test_session_bootstrap_parity(scenario):
         # Sequence values are not transactional. Reset to the fixture's last identity.
         async with engine.begin() as c:
             await c.execute(text("SELECT setval(pg_get_serial_sequence('sessions','id'), (SELECT max(id) FROM sessions))"))
+        if scenario == "first":
+            async with engine.connect() as connection:
+                conflict_id = await connection.scalar(
+                    text("SELECT COALESCE(MAX(id), 0) + 1 FROM snapshots")
+                )
+            async with AsyncSession(engine) as db:
+                db.add(
+                    Snapshot(
+                        id=conflict_id,
+                        session_id=other_id,
+                        thread_states={},
+                    )
+                )
+                await db.commit()
+            async with engine.begin() as c:
+                await c.execute(
+                    text(
+                        "SELECT setval(pg_get_serial_sequence('snapshots','id'), :id, false)"
+                    ),
+                    {"id": conflict_id},
+                )
+            before_failure = await durable()
+            code, _, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
+            assert code != 0 and b"500 Internal Server Error" in err
+            assert await durable() == before_failure
+            async with engine.begin() as c:
+                await c.execute(
+                    text("DELETE FROM snapshots WHERE id=:id"), {"id": conflict_id}
+                )
+                await c.execute(
+                    text(
+                        "SELECT setval(pg_get_serial_sequence('snapshots','id'), :id, false)"
+                    ),
+                    {"id": conflict_id},
+                )
+                await c.execute(
+                    text(
+                        "SELECT setval(pg_get_serial_sequence('sessions','id'), "
+                        "(SELECT max(id) FROM sessions))"
+                    )
+                )
         code, actual, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
         assert code == 0, err.decode()
         assert normalize(actual["session"]) == normalize(expected)
@@ -251,108 +276,109 @@ async def test_session_bootstrap_parity(scenario):
             assert all(code == 0 for code, _, _ in results)
             assert len({result["session"]["id"] for _, result, _ in results}) == 1
             assert sum(result["created"] for _, result, _ in results) == 1
-            async with engine.begin() as c:
-                await c.execute(text("DELETE FROM sessions WHERE user_id=:reader"), {"reader": reader_id})
-                # A checkpoint failure must roll back the newly inserted session too.
-                await c.execute(text("""CREATE FUNCTION fail_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
-                    BEGIN RAISE EXCEPTION 'synthetic checkpoint failure'; END $$"""))
-                await c.execute(text("CREATE TRIGGER fail_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION fail_checkpoint()"))
-            before_failure = await durable()
-            code, _, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
-            assert code != 0 and b"500 Internal Server Error" in err
-            assert await durable() == before_failure
-            async with engine.begin() as c:
-                await c.execute(text("DROP TRIGGER fail_checkpoint ON snapshots"))
-                await c.execute(text("""CREATE FUNCTION wait_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
-                    BEGIN PERFORM pg_advisory_xact_lock(-731707); RETURN NEW; END $$"""))
-                await c.execute(text("CREATE TRIGGER wait_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION wait_checkpoint()"))
-            # Cancel bootstrap_at in Rust, not the child process: the future must
-            # drop its in-flight transaction while the pool stays alive.
-            # One connection forces the post-cancel checkout to encounter a busy
-            # connection if Pending fails to discard it.
-            async with engine.begin() as blocker:
-                await blocker.execute(text("SELECT pg_advisory_xact_lock(-731707)"))
-                p = await asyncio.create_subprocess_exec(
-                    str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
-                    env={**env, "RUST_ROLL_TEST_CANCEL_ON_STDIN": "1", "RUST_ROLL_POOL_SIZE": "1"},
-                    stdin=asyncio.subprocess.PIPE,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                )
-                try:
-                    for _ in range(200):
-                        async with admin.connect() as c:
-                            waiting = await c.scalar(text(
-                                "SELECT count(*) FROM pg_stat_activity "
-                                "WHERE application_name=:name AND wait_event='advisory'"
-                            ), {"name": schema})
-                        if waiting:
-                            break
-                        await asyncio.sleep(0.01)
-                    else:
-                        pytest.fail("native checkpoint did not reach controlled lock")
-                    assert p.stdin is not None
-                    p.stdin.write(b"x")
-                    await p.stdin.drain()
-                    out, err = await asyncio.wait_for(p.communicate(), 10)
-                    assert p.returncode == 0, err.decode()
-                    assert json.loads(out) == {"cancelled": True, "checkout_usable": True}
-                    # The process has exited without releasing the blocking lock.
-                    # No uncommitted session or snapshot can later become visible.
-                    assert await durable() == before_failure
-                finally:
-                    if p.returncode is None:
-                        p.kill()
-                        await p.wait()
-            assert await durable() == before_failure
-            async with engine.begin() as c:
-                await c.execute(text("DROP TRIGGER wait_checkpoint ON snapshots"))
-            # One synthetic deadlock rolls back; the next attempt creates one checkpoint.
-            async with engine.begin() as c:
-                await c.execute(text("CREATE SEQUENCE checkpoint_attempt"))
-                await c.execute(text("""CREATE FUNCTION retry_checkpoint() RETURNS trigger LANGUAGE plpgsql AS $$
-                    BEGIN
-                      IF nextval('checkpoint_attempt') = 1 THEN
-                        RAISE EXCEPTION 'synthetic deadlock' USING ERRCODE='40P01';
-                      END IF;
-                      RETURN NEW;
-                    END $$"""))
-                await c.execute(text("CREATE TRIGGER retry_checkpoint BEFORE INSERT ON snapshots FOR EACH ROW EXECUTE FUNCTION retry_checkpoint()"))
-            code, recovered, err = await native(RUST_ROLL_TEST_INITIALIZE="1")
-            assert code == 0 and recovered["created"], err.decode()
-            async with engine.connect() as c:
-                assert await c.scalar(text("SELECT last_value FROM checkpoint_attempt")) == 2
-                assert await c.scalar(text("SELECT count(*) FROM sessions WHERE user_id=:reader"), {"reader": reader_id}) == 1
-                assert await c.scalar(text("SELECT count(*) FROM snapshots")) == 1
     finally:
         await engine.dispose()
-        async with admin.begin() as c:
-            await c.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()
+
+
+@pytest.mark.asyncio
+async def test_initialize_cancellation_rolls_back_new_session_and_checkpoint():
+    """Cancelling while checkpoint rows are locked must not persist partial state."""
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    application_name = f"native_session_cancel_{uuid4().hex}"
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
+    process = None
+    try:
+        async with AsyncSession(engine) as db:
+            reader = User(username="cancel-reader")
+            db.add(reader)
+            await db.flush()
+            thread = Thread(
+                user_id=reader.id,
+                title="Locked checkpoint",
+                format="Comic",
+                queue_position=1,
+            )
+            db.add(thread)
+            await db.flush()
+            reader_id, thread_id = reader.id, thread.id
+            await db.commit()
+
+        separator = "&" if "?" in url else "?"
+        environment = {
+            **os.environ,
+            "RUST_ROLL_DATABASE_URL": f"{url}{separator}application_name={application_name}",
+            "RUST_ROLL_JWT_SECRET": SECRET,
+            "RUST_ROLL_TEST_TOKEN": jwt.encode(
+                {"sub": "cancel-reader", "jti": "cancel-jti", "type": "access"},
+                SECRET,
+                "HS256",
+            ),
+            "RUST_ROLL_TEST_INITIALIZE": "1",
+            "RUST_ROLL_TEST_NOW": str(NOW.timestamp()),
+            # Cancel the initialization future in Rust while the checkpoint query
+            # is still blocked; the process and its single-connection pool stay
+            # alive so the post-cancel checkout proves the connection was discarded.
+            "RUST_ROLL_TEST_CANCEL_ON_STDIN": "1",
+            "RUST_ROLL_POOL_SIZE": "1",
+        }
+        async with engine.begin() as blocker:
+            await blocker.execute(
+                text("SELECT id FROM threads WHERE id=:id FOR UPDATE"),
+                {"id": thread_id},
+            )
+            process = await asyncio.create_subprocess_exec(
+                str(ROOT / "native/roll-service/target/debug/examples/session_bootstrap"),
+                env=environment,
+                stdin=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            for _ in range(500):
+                if process.returncode is not None:
+                    _, stderr = await process.communicate()
+                    pytest.fail(f"native initializer exited before checkpoint lock: {stderr.decode()}")
+                async with engine.connect() as observer:
+                    blocked = await observer.scalar(
+                        text(
+                            "SELECT count(*) FROM pg_stat_activity "
+                            "WHERE application_name=:name AND wait_event_type='Lock' "
+                            "AND query LIKE 'SELECT row_to_json(t)%FOR UPDATE%'"
+                        ),
+                        {"name": application_name},
+                    )
+                if blocked:
+                    break
+                await asyncio.sleep(0.01)
+            else:
+                pytest.fail("native initializer did not reach the locked checkpoint query")
+            assert process.stdin is not None
+            process.stdin.write(b"x")
+            await process.stdin.drain()
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=10)
+            assert process.returncode == 0, stderr.decode()
+            assert json.loads(stdout) == {"cancelled": True, "checkout_usable": True}
+            process = None
+
+        async with engine.connect() as connection:
+            assert await connection.scalar(
+                text("SELECT count(*) FROM sessions WHERE user_id=:id"),
+                {"id": reader_id},
+            ) == 0
+            assert await connection.scalar(text("SELECT count(*) FROM snapshots")) == 0
+    finally:
+        if process is not None and process.returncode is None:
+            process.kill()
+            await process.wait()
+        await engine.dispose()
 
 
 @pytest.mark.asyncio
 async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
     """A session row with one unreadable field must not wedge Roll forever."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"native_session_corrupt_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as c:
-        await c.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    application_name = f"native_session_corrupt_{uuid4().hex}"
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as c:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await c.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             reader = User(username="corrupt-reader")
             db.add(reader)
@@ -407,8 +433,7 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
         env = {
             **os.environ,
             "RUST_ROLL_DATABASE_URL": (
-                f"{url}{separator}application_name={schema}"
-                "&options=-csearch_path%3D" + schema
+                f"{url}{separator}application_name={application_name}"
             ),
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": jwt.encode(
@@ -467,33 +492,15 @@ async def test_corrupt_session_json_recovers_in_place_and_keeps_pending_roll():
             assert await c.scalar(text("SELECT count(*) FROM snapshots")) == 0
     finally:
         await engine.dispose()
-        async with admin.begin() as c:
-            await c.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()
 
 
 @pytest.mark.asyncio
 async def test_read_only_get_projects_foreign_pending_issue_without_persisting_repair():
     """GET masks a foreign/mismatched pending issue; POST later repairs durable state."""
-    url = os.environ["RUST_ROLL_TEST_DATABASE_URL"]
-    schema = f"native_read_only_{uuid4().hex}"
-    admin = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
-    async with admin.begin() as connection:
-        await connection.execute(text(f'CREATE SCHEMA "{schema}"'))
-    engine = create_async_engine(
-        url.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"server_settings": {"search_path": f"{schema},public"}},
-    )
+    url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
+    application_name = f"native_read_only_{uuid4().hex}"
+    engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
-        async with engine.begin() as connection:
-            # Isolated schema first; keep public on the path for pg_trgm's
-            # gin_trgm_ops operator class (Alembic c40080000001).
-            # Skip catalog checks so public tables are not mistaken for isolated tables.
-            await connection.run_sync(
-                lambda sync_connection: Base.metadata.create_all(
-                    sync_connection, checkfirst=False
-                )
-            )
         async with AsyncSession(engine, expire_on_commit=False) as db:
             owner = User(username="readonly-owner")
             other = User(username="readonly-other")
@@ -524,7 +531,7 @@ async def test_read_only_get_projects_foreign_pending_issue_without_persisting_r
         env = {
             **os.environ,
             "RUST_ROLL_DATABASE_URL": (
-                f"{url}{separator}application_name={schema}&options=-csearch_path%3D{schema}"
+                f"{url}{separator}application_name={application_name}"
             ),
             "RUST_ROLL_JWT_SECRET": SECRET,
             "RUST_ROLL_TEST_TOKEN": jwt.encode(
@@ -577,6 +584,3 @@ async def test_read_only_get_projects_foreign_pending_issue_without_persisting_r
         assert await durable() == after
     finally:
         await engine.dispose()
-        async with admin.begin() as connection:
-            await connection.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
-        await admin.dispose()

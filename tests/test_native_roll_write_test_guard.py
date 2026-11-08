@@ -31,9 +31,11 @@ WRITE_ROUTE_RE = re.compile(
 )
 # A write-path test is database-backed when it reaches the disposable database.
 # `test_support` is the canonical accessor and the raw env var is the legacy /
-# skip-guard spelling, so accept either.
+# skip-guard spelling, so accept either.  ``RUST_ROLL_PARITY_DATABASE_URL`` is
+# the restricted DML-role DSN used by the canonical-schema parity suite.
 DB_TEST_MARKERS = (
     "RUST_ROLL_TEST_DATABASE_URL",
+    "RUST_ROLL_PARITY_DATABASE_URL",
     "test_support::database_url",
     "test_support::test_state",
     "test_support::reset_for_test",
@@ -244,12 +246,22 @@ def test_read_only_post_handlers_are_proven_by_real_schema_http_tests() -> None:
             "against the canonical schema"
         )
         parity_source = parity.read_text(encoding="utf-8")
+        conftest = parity_root / "conftest.py"
+        conftest_source = conftest.read_text(encoding="utf-8") if conftest.is_file() else ""
         assert any(marker in parity_source for marker in DB_TEST_MARKERS), (
-            f"{parity.name} must run against the disposable PostgreSQL database "
-            "(RUST_ROLL_TEST_DATABASE_URL or a test_support accessor)"
+            f"{parity.name} must run against the canonical PostgreSQL database "
+            "(RUST_ROLL_PARITY_DATABASE_URL, RUST_ROLL_TEST_DATABASE_URL, or a "
+            "test_support accessor)"
         )
-        assert "Base.metadata.create_all" in parity_source, (
-            f"{parity.name} must build the canonical app schema"
+        # The canonical Alembic schema is proven by the shared autouse fixture,
+        # which serializes tests and resets rows and sequences via TRUNCATE + setval.
+        schema_proven = (
+            "reset_canonical_schema" in conftest_source
+            and "autouse=True" in conftest_source
+        )
+        assert schema_proven, (
+            f"{parity.name} must use the canonical app schema via the parity conftest "
+            "reset_canonical_schema autouse fixture"
         )
 
 

@@ -348,6 +348,21 @@ describe('ReadingPlanDetailPage', () => {
     expect(screen.queryByText('Source reading order: Custom Reading List')).not.toBeInTheDocument()
   })
 
+  it('offers the exact shared comic cover and actions from a named prerequisite without extra metadata requests', async () => {
+    renderPage()
+    const blocked = await screen.findByTestId('blocked-next')
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95]))
+    const trigger = within(blocked).getByRole('button', {
+      name: 'Reading and mapping actions for X-Men #95',
+    })
+    expect(trigger).toBeVisible()
+    fireEvent.click(trigger)
+    const card = within(blocked).getByRole('article', { name: 'Issue X-Men #95' })
+    expect(within(card).getByRole('button', { name: 'Read now' })).toBeEnabled()
+    expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95])
+    expect(mockSetPending).not.toHaveBeenCalled()
+  })
+
   it('shows progress, available now, and the actual blocker', async () => {
     renderPage()
 

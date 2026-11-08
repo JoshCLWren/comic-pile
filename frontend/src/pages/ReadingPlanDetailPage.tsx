@@ -41,7 +41,10 @@ function availabilityLabel(issue: ReadingPlanReaderIssue): string {
 }
 
 /** Keep the first actionable prerequisite visible; never eagerly render 400+ dependency links. */
-function PlanIssueBlockers({ blockers }: { blockers: ReadingPlanReaderIssue['blockers'] }) {
+function PlanIssueBlockers({ blockers, blockerCards }: {
+  blockers: ReadingPlanReaderIssue['blockers']
+  blockerCards: ReadonlyMap<number, IssueCard>
+}) {
   const [expanded, setExpanded] = useState(false)
   const first = blockers[0]
   if (!first) return null
@@ -59,6 +62,14 @@ function PlanIssueBlockers({ blockers }: { blockers: ReadingPlanReaderIssue['blo
         </Link>{' '}
         first.
       </p>
+      <CompactIssueCardTrigger
+        issueId={first.issue_id}
+        threadTitle={first.thread_title}
+        issueNumber={first.issue_number}
+        status="unread"
+        card={blockerCards.get(first.issue_id)}
+        hideTitle
+      />
       {remaining > 0 && (
         <>
           <button
@@ -80,6 +91,14 @@ function PlanIssueBlockers({ blockers }: { blockers: ReadingPlanReaderIssue['blo
                   >
                     {blocker.thread_title} #{blocker.issue_number}
                   </Link>
+                  <CompactIssueCardTrigger
+                    issueId={blocker.issue_id}
+                    threadTitle={blocker.thread_title}
+                    issueNumber={blocker.issue_number}
+                    status="unread"
+                    card={blockerCards.get(blocker.issue_id)}
+                    hideTitle
+                  />
                 </li>
               ))}
             </ul>
@@ -90,7 +109,12 @@ function PlanIssueBlockers({ blockers }: { blockers: ReadingPlanReaderIssue['blo
   )
 }
 
-function IssueRow({ issue, sourceNames, card }: { issue: ReadingPlanReaderIssue; sourceNames: Readonly<Record<string, string>>; card?: IssueCard | null }) {
+function IssueRow({ issue, sourceNames, card, blockerCards }: {
+  issue: ReadingPlanReaderIssue
+  sourceNames: Readonly<Record<string, string>>
+  card?: IssueCard | null
+  blockerCards: ReadonlyMap<number, IssueCard>
+}) {
   const isRead = issue.availability === 'read'
   const isBlocked = issue.availability === 'blocked'
   const isAvailable = issue.availability === 'available'
@@ -120,7 +144,7 @@ function IssueRow({ issue, sourceNames, card }: { issue: ReadingPlanReaderIssue;
           {issue.issue_number}
           {issue.is_checkpoint ? ' · Checkpoint' : ''}
         </p>
-        {issue.blockers.length > 0 && <PlanIssueBlockers blockers={issue.blockers} />}
+        {issue.blockers.length > 0 && <PlanIssueBlockers blockers={issue.blockers} blockerCards={blockerCards} />}
         <ReaderIssueActions issueId={issue.issue_id} threadId={issue.thread_id} issueNumber={issue.issue_number} isRead={isRead} available={isAvailable} availability={issue.availability} seriesTitle={issue.thread_title} card={card ?? null} />
         {issue.source_paths.length > 0 && (
           <p className="mt-1 text-xs text-[var(--theme-text-dim)]">
@@ -182,18 +206,18 @@ export default function ReadingPlanDetailPage() {
   const planCardsQuery = useIssueCards(
     planView
       ? [
-          ...planView.available_now.map((issue) => issue.issue_id),
-          ...planView.blocked_next.slice(0, visibleBlockedCount).map((issue) => issue.issue_id),
+          ...planView.available_now.flatMap((issue) => [issue.issue_id, ...issue.blockers.slice(0, 1).map((blocker) => blocker.issue_id)]),
+          ...planView.blocked_next.slice(0, visibleBlockedCount).flatMap((issue) => [issue.issue_id, ...issue.blockers.slice(0, 1).map((blocker) => blocker.issue_id)]),
           ...(showUpcoming
             ? planView.lanes.flatMap((lane) => lane.issues)
                 .filter((issue) => issue.availability === 'later')
                 .slice(0, visibleUpcomingCount)
-                .map((issue) => issue.issue_id)
+                .flatMap((issue) => [issue.issue_id, ...issue.blockers.slice(0, 1).map((blocker) => blocker.issue_id)])
             : []),
           ...(showReadingOrder
             ? planView.lanes.flatMap((lane) => lane.issues)
                 .slice(0, visibleOrderCount)
-                .map((issue) => issue.issue_id)
+                .flatMap((issue) => [issue.issue_id, ...issue.blockers.slice(0, 1).map((blocker) => blocker.issue_id)])
             : []),
         ]
       : [],
@@ -359,7 +383,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.available_now.map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} blockerCards={cardsByIssue} />
             ))}
           </ul>
         )}
@@ -377,7 +401,7 @@ export default function ReadingPlanDetailPage() {
         ) : (
           <ul className="mt-3 space-y-2">
             {view.blocked_next.slice(0, visibleBlockedCount).map((issue) => (
-              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
+              <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} blockerCards={cardsByIssue} />
             ))}
           </ul>
         )}
@@ -415,7 +439,7 @@ export default function ReadingPlanDetailPage() {
           {showUpcoming && (
             <ul className="mt-3 space-y-2">
               {upcoming.slice(0, visibleUpcomingCount).map((issue) => (
-                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
+                <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} blockerCards={cardsByIssue} />
               ))}
             </ul>
           )}
@@ -537,7 +561,7 @@ export default function ReadingPlanDetailPage() {
                 ) : (
                   <ul className="space-y-2">
                     {lane.issues.map((issue) => (
-                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} />
+                      <IssueRow key={issue.occurrence_id} issue={issue} sourceNames={sourceNames} card={cardsByIssue.get(issue.issue_id)} blockerCards={cardsByIssue} />
                     ))}
                   </ul>
                 )}
