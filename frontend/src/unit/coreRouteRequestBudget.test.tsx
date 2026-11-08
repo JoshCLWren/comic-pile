@@ -494,7 +494,7 @@ describe('core route request budgets', () => {
         return { die: 20, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 20, last_roll: null }
       }
       if (call.url === '/v2/roll/eligible-issue-ids') {
-        return { die: 20, issue_ids: [401], thread_ids: [44] }
+        return { die: 20, issue_ids: [401], thread_ids: [44], pool_reason: 'ready' }
       }
       if (call.url === '/v2/issues/cards') {
         return { items: [] }

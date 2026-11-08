@@ -745,6 +745,19 @@ post_readable_handoff() {
   return 0
 }
 
+factory_advance_display() {
+  local served=''
+  if [[ "$SOURCE" == kilo-auto && -n "${KILO_SERVED_MODELS_FILE:-}" && -f "$KILO_SERVED_MODELS_FILE" ]]; then
+    served="$(grep -E '^[A-Za-z0-9][A-Za-z0-9._:/@+-]{0,199}$' "$KILO_SERVED_MODELS_FILE" \
+      | sort -u | paste -sd ',' - || true)"
+  fi
+  if [[ -n "$served" ]]; then
+    printf '%s (served: %s)' "$DISPLAY" "$served"
+  else
+    printf '%s' "$DISPLAY"
+  fi
+}
+
 persist_issue_pr() {
   # The push credential (possibly a minted installation token) lives in locals
   # below. Suspend xtrace for the whole persistence step so `set -x` cannot
@@ -773,7 +786,7 @@ _persist_issue_pr_untraced() {
     return 1
   fi
   git add -A >&2
-  git commit -m "factory: advance #${number} with ${DISPLAY}" >&2
+  git commit -m "factory: advance #${number} with $(factory_advance_display)" >&2
   # The agent may be running on a local worktree branch whose name differs from
   # the target branch. Push the exact commit we just created, then verify that
   # GitHub's branch ref is actually at that commit before reporting success.
@@ -836,7 +849,7 @@ _persist_pr_changes_untraced() {
     return 1
   fi
   git add -A
-  git commit -m "factory: advance PR #${pr} with ${DISPLAY}"
+  git commit -m "factory: advance PR #${pr} with $(factory_advance_display)"
   local pushed_head remote_head push_credential
   pushed_head="$(git rev-parse HEAD)"
   if [[ -n "$FACTORY_PUSH_REPOSITORY" ]]; then

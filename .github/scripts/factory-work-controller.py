@@ -26,7 +26,7 @@ from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
-from factory_source_budget import budget_block_reason
+from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -1157,6 +1157,27 @@ def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
     }
 
 
+def runtime_quota_block_reason(worker: str) -> str | None:
+    """Pause Z.AI's shared free account for 30 minutes after a trusted quota error."""
+    sources = worker_sources()
+    if sources.get(worker) != 'z-ai':
+        return None
+    from factory_completion_controller import (
+        RATE_LIMIT_COOLDOWN_SECONDS, latest_worker_health, registry_comments,
+    )
+
+    now = int(time.time())
+    health = latest_worker_health(
+        registry_comments(), trusted=comment_is_trusted, candidates=[], now_epoch=now,
+    )
+    for peer, (outcome, updated) in health.items():
+        until = updated + RATE_LIMIT_COOLDOWN_SECONDS
+        if sources.get(peer) == 'z-ai' and outcome == 'provider_quota' and updated <= now < until:
+            reset = datetime.fromtimestamp(until, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            return f'Factory {worker} paused until {reset}: provider_quota on shared Z.AI account'
+    return None
+
+
 def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
@@ -1176,6 +1197,10 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     quota_pause = quota_pause_for(worker)
     if quota_pause is not None:
         print(f'[factory-controller] {describe_quota_pause(quota_pause)}; skipping dispatch', file=sys.stderr)
+        return None
+    runtime_pause = runtime_quota_block_reason(worker)
+    if runtime_pause is not None:
+        print(f'[factory-controller] {runtime_pause}; skipping dispatch', file=sys.stderr)
         return None
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
