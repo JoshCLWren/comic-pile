@@ -197,14 +197,6 @@ def _register_tags(app: FastAPI) -> None:
     app.include_router(tags.router)
 
 
-def _register_queue(app: FastAPI) -> None:
-    """Register queue routers."""
-    from app.api import queue
-
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
-
-
 def _register_reading_orders(app: FastAPI) -> None:
     """Register reading-order routers (absolute ``/api/v1`` paths)."""
     from app.api import reading_orders
@@ -401,7 +393,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("creators", frozenset({"creators"}), _register_creators),
     RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount("tags", frozenset({"tags"}), _register_tags),
-    RouterMount("queue", frozenset({"queue"}), _register_queue),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
