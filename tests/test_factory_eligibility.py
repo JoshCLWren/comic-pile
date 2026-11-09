@@ -31,6 +31,16 @@ def _policy():
     return module
 
 
+def test_negated_closure_and_part_of_references_fail_closed() -> None:
+    """Shared parser never turns explicit noncompletion into issue completion."""
+    partial = "Part of #4719. This PR does not close #4719."
+    assert eligibility.explicit_closing_issue(partial) is None
+    assert eligibility.nonclosing_issue_numbers(partial) == {4719}
+    assert eligibility.explicit_closing_issue("Will not fix #4719.") is None
+    assert eligibility.explicit_closing_issue("Closes #4740. Part of #4335.") == 4740
+    assert eligibility.explicit_closing_issue("Fixes #7. Resolves #8.") == 7
+
+
 def test_manual_only_standalone_directive_excludes() -> None:
     """A standalone directive line disallows autonomous execution."""
     assert eligibility.is_manual_only("<!-- factory-execution:manual-only -->\nGate.")

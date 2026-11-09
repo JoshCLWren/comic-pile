@@ -105,11 +105,6 @@ BLOCKED_STATUS_LABELS = frozenset({"ralph-status:blocked"})
 RALPH_STATUS_RE = re.compile(r"^ralph-status:")
 
 BRANCH_ISSUE_RE = re.compile(r"^factory/[0-9]+-(?P<issue>[0-9]+)-")
-CLOSING_RE = re.compile(
-    r"\b(?:closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve)\s+#(?P<issue>[0-9]+)",
-    re.IGNORECASE,
-)
-
 MERGE_CLOSURE_MARKER = "comic-pile-factory-merge-closure-v1"
 UNREADABLE_WARNING_MARKER = "comic-pile-factory-dependency-unreadable-v1"
 SWEEP_MAX_AGE_HOURS = 26
@@ -131,12 +126,15 @@ def linked_issue(branch: str, body: str | None) -> int | None:
         The explicit closing-reference issue when present, otherwise the issue
         encoded by the factory branch, or None when neither is available.
     """
-    closing = CLOSING_RE.search(body or "")
-    if closing is not None:
-        return int(closing.group("issue"))
+    closing_issue = eligibility.explicit_closing_issue(body)
+    if closing_issue is not None:
+        return closing_issue
     match = BRANCH_ISSUE_RE.match(branch or "")
     if match is not None:
-        return int(match.group("issue"))
+        issue_number = int(match.group("issue"))
+        if issue_number in eligibility.nonclosing_issue_numbers(body):
+            return None
+        return issue_number
     return None
 
 
@@ -1192,6 +1190,22 @@ class FactoryPostMergeClosureTests(unittest.TestCase):
         self.assertEqual(linked_issue("factory/11-4353-work", "Part of #4348."), 4353)
         self.assertEqual(
             linked_issue("local/acp-4348", "Closes #4348.\nPart of #4335."), 4348
+        )
+
+    def test_partial_factory_branch_and_negated_reference_never_close(self) -> None:
+        """PR #4753 was a slice, not completion of its factory/86-4719 issue."""
+        partial = (
+            "Part of #4719 (parent #4335). Bootstrap deletion is not claimed; "
+            "this PR does not close #4719."
+        )
+        self.assertIsNone(linked_issue("factory/86-4719-kilo-auto", partial))
+        self.assertIsNone(linked_issue("local/partial-work", partial))
+        self.assertIsNone(linked_issue("factory/86-4719-kilo-auto", "Part of #4719."))
+        self.assertIsNone(linked_issue("local/partial-work", "Does not close #4719."))
+        # An unrelated parent reference does not block a real closing claim.
+        self.assertEqual(
+            linked_issue("factory/96-4740-work", "Closes #4740. Part of #4335."),
+            4740,
         )
 
     def test_unlinkable_pr_returns_none(self) -> None:
