@@ -2,6 +2,7 @@
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
+pub mod bug_reports;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
@@ -426,6 +427,8 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
             post(taste_discoveries::dismiss_taste_discovery),
         )
+        .route("/api/bug-reports/", post(bug_reports::create))
+        .route("/api/v1/bug-reports/", post(bug_reports::create))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

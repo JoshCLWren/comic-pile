@@ -555,10 +555,16 @@
     {
       "src": "^/api/bug\\-reports/$",
       "methods": [
-        "POST",
-        "OPTIONS"
+        "POST"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/bug\\-reports/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/metrics$",
@@ -734,14 +740,6 @@
       "src": "^/api/v1/bootstrap\\-alias\\-metrics$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/bug\\-reports/$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

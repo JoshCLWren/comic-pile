@@ -309,6 +309,8 @@ fn app() -> Router {
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
             post(native_dispatch),
         )
+        .route("/api/bug-reports/", post(native_dispatch))
+        .route("/api/v1/bug-reports/", post(native_dispatch))
         .fallback(native_not_found)
 }
 
@@ -406,6 +408,34 @@ mod tests {
             !text.contains("Wrong number of path arguments"),
             "numeric signal ids must not fail Path extraction: {text}"
         );
+    }
+
+    #[tokio::test]
+    async fn bug_report_ingress_preserves_same_paths_and_requires_auth() {
+        for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("POST")
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"title":"Bug","description":"Details"}"#))
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
     }
 
     #[tokio::test]
