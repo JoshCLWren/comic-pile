@@ -987,25 +987,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/continuity\\-rules/$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "methods": [
-        "GET",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/creators/[^/]+$",
       "methods": [
         "GET",
