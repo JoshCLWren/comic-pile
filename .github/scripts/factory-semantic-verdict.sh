@@ -89,15 +89,66 @@ factory_sanitize_review_log() {
     > "$output"
 }
 
+factory_has_acceptance_report() {
+  local review_log="$1" acceptance_script="$2"
+  python3 - "$review_log" "$acceptance_script" <<'PY'
+import importlib.util
+import sys
+from pathlib import Path
+
+spec = importlib.util.spec_from_file_location("factory_issue_acceptance", sys.argv[2])
+if spec is None or spec.loader is None:
+    raise SystemExit(1)
+policy = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(policy)
+report = policy.report_from_text(Path(sys.argv[1]).read_text(encoding="utf-8"))
+raise SystemExit(0 if report is not None else 1)
+PY
+}
+
+factory_append_recovered_acceptance_report() {
+  local primary_log="$1" recovery_log="$2" acceptance_script="$3" expected_head="$4"
+  python3 - "$primary_log" "$recovery_log" "$acceptance_script" "$expected_head" <<'PY'
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+primary_path, recovery_path = Path(sys.argv[1]), Path(sys.argv[2])
+spec = importlib.util.spec_from_file_location("factory_issue_acceptance", sys.argv[3])
+if spec is None or spec.loader is None:
+    raise SystemExit(1)
+policy = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(policy)
+
+primary = primary_path.read_text(encoding="utf-8")
+if policy.report_from_text(primary) is not None:
+    # A unique primary report already exists: never duplicate or replace it.
+    raise SystemExit(0)
+if any(line.startswith(policy.PREFIX) for line in primary.splitlines()):
+    # Malformed/multiple primary reports are a real ambiguity, not a blank slot
+    # that can be overwritten with a second model answer.
+    raise SystemExit(1)
+recovered = policy.report_from_text(recovery_path.read_text(encoding="utf-8"))
+if recovered is None or recovered.get("head") != sys.argv[4]:
+    raise SystemExit(1)
+# This is still just model evidence. The trusted controller independently
+# validates issue identity, digest, criteria, changed files, and all gates.
+with primary_path.open("a", encoding="utf-8") as target:
+    target.write("\n" + policy.PREFIX + json.dumps(recovered, separators=(",", ":")) + "\n")
+PY
+}
+
 factory_recover_semantic_verdict() {
   local runtime_model="$1" workspace="$2" timeout_seconds="$3" recovery_log="$4"
-  local status=0
+  local pr="$5" head="$6" acceptance_mission="$7" status=0 prompt
+  [[ "$pr" =~ ^[1-9][0-9]*$ && "$head" =~ ^[0-9a-f]{40}$ ]] || return 2
+  prompt="Perform a fresh bounded, independent semantic review of ComicPile pull request #${pr} at exact head ${head}. Do not inspect or approve a different PR/head. Inspect the diff, issue, code and tests; do not edit code or push. Use gh pr view ${pr} --json ... for PR details, never gh pr status <number>. Review every Greptile (greptile-apps[bot]) finding, including unresolved review threads and the PR-body summary; an unaddressed finding requires FACTORY_GATE_BLOCKED. PR-Agent advice is not independent approval. ${acceptance_mission} For READY, give the complete single-line FACTORY_ACCEPTANCE_V1 JSON record independently grounded in the changed files and observed checks, followed by the final bare line FACTORY_GATE_READY. If the report cannot be substantiated or any criterion is missing, do not invent evidence: finish with FACTORY_GATE_BLOCKED. The final line must be exactly one bare verdict marker."
   set +e
-  # OpenCode 2 rejects `opencode run --dir`; run from the workspace instead.
+  # OpenCode 2 rejects opencode run --dir; run from the workspace instead.
   ( cd "$workspace" && exec timeout --signal=TERM --kill-after=15s "${timeout_seconds}s" \
     opencode run -m "$runtime_model" --agent build --auto \
-    --title 'ComicPile semantic verdict recovery' \
-    'Perform a fresh bounded semantic review of the assigned pull request at its exact current head. Inspect the PR and repository as needed, but do not use `gh pr status <number>`; this runner supports `gh pr view <number> --json ...` for PR details. Resolve no code in this recovery pass. Greptile (greptile-apps[bot]) review findings are HIGH PRIORITY: list the PR review threads with `gh api graphql` (reviewThreads with isResolved, isOutdated, path, line, and comment author/body) and the Greptile review and PR-body summary, and confirm that EVERY Greptile finding was either fixed in code at this exact head or answered on its thread with a concrete, evidence-backed rebuttal reply. A Greptile thread resolved without a fix or a rebuttal reply counts as unaddressed. If any Greptile finding is unaddressed, the verdict must be FACTORY_GATE_BLOCKED and never FACTORY_GATE_READY. PR-Agent check output is advisory only. Return exactly one bare line and nothing else: FACTORY_GATE_READY if no semantic blocker remains, or FACTORY_GATE_BLOCKED if any blocker remains. The final line must be the marker itself.' \
+    --title "ComicPile PR ${pr} semantic verdict recovery" "$prompt"
   ) 2>&1 | tee "$recovery_log"
   status=${PIPESTATUS[0]}
   set -e
