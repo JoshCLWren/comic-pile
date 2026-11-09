@@ -33,6 +33,7 @@ pub mod reading_eligibility;
 pub mod reading_graph;
 pub mod reading_inputs;
 pub mod reading_list;
+pub mod reading_mode;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_session;
@@ -525,6 +526,16 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/releases/{release_id}/retract",
             post(releases::retract),
+        )
+        .route("/api/v1/reading-mode", get(reading_mode::get_reading_mode))
+        .route("/api/v1/reading-mode", post(reading_mode::set_reading_mode))
+        .route(
+            "/api/v1/reading-mode/dismiss-suggestion",
+            post(reading_mode::dismiss_reading_mode_suggestion),
+        )
+        .route(
+            "/api/v1/reading-mode/suggest",
+            post(reading_mode::suggest_reading_mode),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
