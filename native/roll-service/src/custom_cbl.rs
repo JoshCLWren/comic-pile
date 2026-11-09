@@ -653,4 +653,60 @@ mod tests {
             .get(0);
         assert_eq!(remaining, 0);
     }
+
+    #[tokio::test]
+    async fn put_overlap_decision_persists_the_decision() {
+        let (state, _db_guard) = state_and_connection().await;
+        let conn = db::checkout(&state)
+            .await
+            .expect("disposable Postgres connection");
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at)
+             VALUES (1, 'custom-cbl-owner', false, NOW());
+             INSERT INTO custom_cbl_lists (id, user_id, name, mode, created_at, updated_at)
+             VALUES (201, 1, 'Custom CBL', 'strict', NOW(), NOW());
+             INSERT INTO external_identities
+               (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES (701, 'comicvine', 'series', '1001', '{}'::json, NOW(), NOW()),
+                    (702, 'comicvine', 'series', '1002', '{}'::json, NOW(), NOW());",
+        )
+        .await
+        .expect("seed overlap decision put fixture");
+        drop(conn);
+
+        let response = put_overlap_decision(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(201),
+            Json(OverlapDecisionWrite {
+                continuing_volume_id: "comicvine:1001".to_string(),
+                waiting_volume_id: "comicvine:1002".to_string(),
+                expected_updated_at: None,
+            }),
+        )
+        .await
+        .expect("put overlap decision");
+
+        assert_eq!(response.0.decisions.len(), 1);
+        assert_eq!(
+            response.0.decisions[0].continuing_volume_id,
+            "comicvine:1001"
+        );
+        assert_eq!(response.0.decisions[0].waiting_volume_id, "comicvine:1002");
+        let conn = db::checkout(&state)
+            .await
+            .expect("read put decision connection");
+        let stored: i64 = conn
+            .query_one(
+                "SELECT count(*) FROM custom_cbl_overlap_decisions
+                 WHERE list_id=201 AND user_id=1
+                   AND continuing_external_identity_id=701
+                   AND waiting_external_identity_id=702",
+                &[],
+            )
+            .await
+            .expect("read put decision")
+            .get(0);
+        assert_eq!(stored, 1);
+    }
 }
