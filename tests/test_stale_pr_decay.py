@@ -880,3 +880,21 @@ def test_stale_jev_weak_closure_decision_is_preservation() -> None:
         },
     )
     assert result[4727]["status"] == "preserve"
+
+
+def test_stale_guard_standalone_imports_shared_policy(tmp_path: Path) -> None:
+    """A fresh process loads shared eligibility without another test priming imports."""
+    import os
+    import subprocess
+
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "stale_pr_decay.py"), "--help"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout

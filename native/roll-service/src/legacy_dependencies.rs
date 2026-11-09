@@ -225,3 +225,109 @@ pub fn update_documentation() {}
     security(("HTTPBearer" = []))
 )]
 pub fn delete_documentation() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn owner_mutations_persist_and_foreign_reader_cannot_change_edge() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable Postgres is required");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let connection = state.pool.get().await.expect("fixture connection");
+        connection.batch_execute(
+            "INSERT INTO users (id,username) VALUES (1,'legacy-owner'),(2,'legacy-other');
+             INSERT INTO threads (id,title,format,issues_remaining,queue_position,status,user_id,created_at)
+             VALUES (11,'Source','comic',1,1,'active',1,NOW()),(12,'Target','comic',1,2,'active',1,NOW());
+             INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
+             VALUES (101,11,'1','unread',NOW(),1),(201,12,'1','unread',NOW(),1);"
+        ).await.expect("dependency fixtures");
+        drop(connection);
+        let owner = AuthenticatedUser::for_test(1);
+        let other = AuthenticatedUser::for_test(2);
+        let (status, Json(created)) = create(
+            State(state.clone()),
+            owner,
+            Json(DependencyCreateRequest {
+                source_type: "issue".into(),
+                source_id: 101,
+                target_type: "issue".into(),
+                target_id: 201,
+            }),
+        )
+        .await
+        .expect("create persists edge");
+        assert_eq!(status, StatusCode::CREATED);
+        let edge = created.id;
+        let denied = update(
+            State(state.clone()),
+            other,
+            Path(edge),
+            Json(DependencyNoteUpdate {
+                note: Some("foreign".into()),
+            }),
+        )
+        .await
+        .err()
+        .expect("foreign update denied");
+        assert_eq!(denied.0, StatusCode::NOT_FOUND);
+        let denied = delete(State(state.clone()), other, Path(edge))
+            .await
+            .err()
+            .expect("foreign delete denied");
+        assert_eq!(denied.0, StatusCode::NOT_FOUND);
+        let Json(updated) = update(
+            State(state.clone()),
+            owner,
+            Path(edge),
+            Json(DependencyNoteUpdate {
+                note: Some("reader note".into()),
+            }),
+        )
+        .await
+        .expect("owner update persists");
+        assert_eq!(updated.note.as_deref(), Some("reader note"));
+        let connection = state.pool.get().await.expect("read persisted edge");
+        let note: Option<String> = connection
+            .query_one("SELECT note FROM dependencies WHERE id=$1", &[&edge])
+            .await
+            .expect("persisted note")
+            .get(0);
+        assert_eq!(note.as_deref(), Some("reader note"));
+        drop(connection);
+        let invalid = update(
+            State(state.clone()),
+            owner,
+            Path(edge),
+            Json(DependencyNoteUpdate {
+                note: Some("x".repeat(256)),
+            }),
+        )
+        .await
+        .err()
+        .expect("oversized note denied");
+        assert_eq!(invalid.0, StatusCode::UNPROCESSABLE_ENTITY);
+        let Json(cleared) = update(
+            State(state.clone()),
+            owner,
+            Path(edge),
+            Json(DependencyNoteUpdate { note: None }),
+        )
+        .await
+        .expect("owner clears note");
+        assert_eq!(cleared.note, None);
+        let Json(deleted) = delete(State(state.clone()), owner, Path(edge))
+            .await
+            .expect("owner deletes edge");
+        assert_eq!(deleted["message"], "Dependency deleted");
+        let connection = state.pool.get().await.expect("read deleted edge");
+        let count: i64 = connection
+            .query_one("SELECT count(*) FROM dependencies WHERE id=$1", &[&edge])
+            .await
+            .expect("deletion persisted")
+            .get(0);
+        assert_eq!(count, 0);
+    }
+}
