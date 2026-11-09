@@ -9,6 +9,174 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/api/v1/continuity-rules/": {
+      "get": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-rules/{rule_id}": {
+      "get": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_get",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_update",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_delete",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/identity-inbox": {
       "get": {
         "tags": [
@@ -3012,6 +3180,154 @@
             "format": "int32"
           }
         }
+      },
+      "ContinuityRuleRequest": {
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type"
+        ],
+        "properties": {
+          "checkpoint_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "convergence_targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            }
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityRuleResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type",
+          "convergence_targets",
+          "selected_member_issue_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "checkpoint_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "convergence_targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ConvergenceTarget": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "CreateIssuesRequest": {
         "type": "object",

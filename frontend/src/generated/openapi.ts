@@ -1162,17 +1162,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Continuity Rules
-         * @description List the authenticated user's continuity rules.
-         */
-        get: operations["list_continuity_rules_api_v1_continuity_rules__get"];
+        get: operations["continuity_rules_list"];
         put?: never;
-        /**
-         * Create Continuity Rule
-         * @description Create an owned continuity rule after validating references and cycles.
-         */
-        post: operations["create_continuity_rule_api_v1_continuity_rules__post"];
+        post: operations["continuity_rules_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1186,22 +1178,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Continuity Rule
-         * @description Return one owned continuity rule.
-         */
-        get: operations["get_continuity_rule_api_v1_continuity_rules__rule_id__get"];
-        /**
-         * Update Continuity Rule
-         * @description Replace an owned continuity rule.
-         */
-        put: operations["update_continuity_rule_api_v1_continuity_rules__rule_id__put"];
+        get: operations["continuity_rules_get"];
+        put: operations["continuity_rules_update"];
         post?: never;
-        /**
-         * Delete Continuity Rule
-         * @description Delete one owned continuity rule.
-         */
-        delete: operations["delete_continuity_rule_api_v1_continuity_rules__rule_id__delete"];
+        delete: operations["continuity_rules_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7712,6 +7692,20 @@ export interface components {
              */
             target_type: "issue" | "crossover";
         };
+        ContinuityRuleRequest: {
+            /** Format: int32 */
+            checkpoint_issue_id?: number | null;
+            convergence_targets?: components["schemas"]["NativeConvergenceTarget"][];
+            note?: string | null;
+            satisfaction_type: string;
+            selected_member_issue_ids?: number[];
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+        };
         /**
          * ContinuityRuleResponse
          * @description Schema for a persisted generalized continuity rule.
@@ -11074,6 +11068,31 @@ export interface components {
             status: string;
             /** Format: int32 */
             tracked_issue_count: number;
+        };
+        NativeContinuityRuleResponse: {
+            /** Format: int32 */
+            checkpoint_issue_id?: number | null;
+            convergence_targets: components["schemas"]["NativeConvergenceTarget"][];
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            note?: string | null;
+            satisfaction_type: string;
+            selected_member_issue_ids: number[];
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
+        };
+        NativeConvergenceTarget: {
+            /** Format: int32 */
+            id: number;
+            type: string;
         };
         /**
          * @description Issue-level dependency response mirroring the Python `DependencyResponse`
@@ -16505,7 +16524,7 @@ export interface operations {
             };
         };
     };
-    list_continuity_rules_api_v1_continuity_rules__get: {
+    continuity_rules_list: {
         parameters: {
             query?: never;
             header?: never;
@@ -16514,18 +16533,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"][];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"][];
                 };
             };
         };
     };
-    create_continuity_rule_api_v1_continuity_rules__post: {
+    continuity_rules_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -16534,31 +16552,21 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ContinuityRuleCreate"];
+                "application/json": components["schemas"]["ContinuityRuleRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"];
                 };
             };
         };
     };
-    get_continuity_rule_api_v1_continuity_rules__rule_id__get: {
+    continuity_rules_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -16569,27 +16577,17 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"];
                 };
             };
         };
     };
-    update_continuity_rule_api_v1_continuity_rules__rule_id__put: {
+    continuity_rules_update: {
         parameters: {
             query?: never;
             header?: never;
@@ -16600,31 +16598,21 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ContinuityRuleCreate"];
+                "application/json": components["schemas"]["ContinuityRuleRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"];
                 };
             };
         };
     };
-    delete_continuity_rule_api_v1_continuity_rules__rule_id__delete: {
+    continuity_rules_delete: {
         parameters: {
             query?: never;
             header?: never;
@@ -16635,21 +16623,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };

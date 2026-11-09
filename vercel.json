@@ -529,6 +529,23 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/continuity\\-rules/$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-rules/[^/]+$",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST",
