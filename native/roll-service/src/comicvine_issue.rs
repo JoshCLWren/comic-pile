@@ -310,6 +310,7 @@ pub struct IssueIntelligence {
     refresh_retry_after_seconds: Option<i64>,
 }
 
+/// Convert a JSON value to a string if it's non-empty.
 fn as_string(value: &Value) -> Option<String> {
     match value {
         Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
@@ -318,12 +319,14 @@ fn as_string(value: &Value) -> Option<String> {
     }
 }
 
+/// Convert a JSON value to an i64 ID if possible.
 fn as_id(value: &Value) -> Option<i64> {
     value
         .as_i64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok()))
 }
 
+/// Get references from metadata, trying primary field first then fallback.
 fn refs<'a>(metadata: &'a Value, primary: &str, fallback: &str) -> &'a [Value] {
     metadata
         .get(primary)
@@ -333,6 +336,10 @@ fn refs<'a>(metadata: &'a Value, primary: &str, fallback: &str) -> &'a [Value] {
         .unwrap_or(&[])
 }
 
+/// Extract and merge creator credits from metadata.
+///
+/// Creates a unified list of creators by merging duplicate IDs while
+/// preserving all roles. Uses person_credits first, then creator_credits.
 fn creators(metadata: &Value) -> Vec<Creator> {
     let mut result: Vec<Creator> = Vec::new();
     for credit in refs(metadata, "person_credits", "creator_credits") {
@@ -368,6 +375,9 @@ fn creators(metadata: &Value) -> Vec<Creator> {
     result
 }
 
+/// Extract series ID and name from metadata.
+///
+/// Handles both modern volume object format and legacy volume_id fields.
 fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
     if metadata["volume"].is_object() {
         (
@@ -382,6 +392,9 @@ fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
     }
 }
 
+/// Extract the best available image URL from metadata.
+///
+/// Tries image_url, primary_image, then various image sizes in order of preference.
 fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
@@ -392,6 +405,10 @@ fn image(metadata: &Value) -> Option<String> {
         })
 }
 
+/// Convert HTML text to plain text by removing tags and decoding entities.
+///
+/// Strips HTML tags, decodes HTML entities, and normalizes whitespace.
+/// Returns None if the result is empty.
 fn plain_text(value: &Value) -> Option<String> {
     let source = value.as_str()?.trim();
     if source.is_empty() {
@@ -424,6 +441,10 @@ fn plain_text(value: &Value) -> Option<String> {
     }
 }
 
+/// Determine the metadata status based on repair state and content.
+///
+/// Returns a status string and optional retry delay in seconds.
+/// Priority order: repair state > deep fetch status > credit availability.
 fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
     if let Some(repair) = repair {
         let active = match repair.state.as_str() {
@@ -470,6 +491,10 @@ fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
     }
 }
 
+/// Build the complete issue intelligence response from mapped data.
+///
+/// Constructs the IssueIntelligence struct by processing metadata,
+/// story arcs, and related issues. Sorts and limits related issues.
 fn response(
     mapped: Mapped,
     repair: Option<Repair>,
