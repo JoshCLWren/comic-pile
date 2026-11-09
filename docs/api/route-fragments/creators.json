@@ -18,21 +18,89 @@
     ]
   },
   "operations": [
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/compare"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/discoveries"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/summaries"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/team-chemistry"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}"},
-    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues"},
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/compare",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/compare$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/discoveries",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/discoveries$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/summaries",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/creators/summaries$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/team-chemistry",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/team\\-chemistry$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/[^/]+/metrics/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/[^/]+/metrics/rating\\-distribution/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/[^/]+/metrics/role\\-stats/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/[^/]+/metrics/series\\-stats/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/creators/[^/]+/series/[^/]+/issues$"
+    },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues/creators",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues/creators$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-dependency-groups.ts",

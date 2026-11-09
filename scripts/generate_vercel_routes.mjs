@@ -4,7 +4,7 @@
  * No new Python modules or database calls are introduced.
  */
 import {execFileSync} from 'node:child_process';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {readFileSync, readdirSync, writeFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 
 const PYTHON = '/api/index.py';
@@ -80,23 +80,144 @@ function alreadyNative(method, path, native) {
   return native.some(route =>
     (!route.methods || route.methods.includes(method)) && new RegExp(route.src).test(concrete));
 }
-export function generateVercel(config, operations) {
+function compareCodeUnits(left, right) {
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+function compareRoutes(left, right) {
+  const src = compareCodeUnits(left.src, right.src);
+  if (src !== 0) return src;
+  const dest = compareCodeUnits(left.dest, right.dest);
+  if (dest !== 0) return dest;
+  return compareCodeUnits(left.methods.join(','), right.methods.join(','));
+}
+function findPreviousRoute(method, path, previousRoutes) {
+  const concrete = path.replace(PARAM, '1');
+  for (const route of previousRoutes) {
+    if (!route.src) continue;
+    if (route.methods && !route.methods.includes(method)) continue;
+    try {
+      const matched = new RegExp(`^(?:${route.src})$`).test(concrete);
+      if (matched) return route;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+export function fragmentVercelRoutes(fragments, previousRoutes = []) {
+  const grouped = new Map();
+  for (const fragment of fragments) {
+    const defaults = fragment.defaults || {};
+    for (const rawOperation of fragment.operations) {
+      const effective = {...defaults, ...rawOperation};
+      const method = effective.method;
+      const path = effective.path;
+      let dest = effective.dest;
+      let src = effective.src;
+      const previous = findPreviousRoute(method, path, previousRoutes);
+      if (!dest) {
+        if (!previous || !previous.dest) {
+          throw new Error(`${method} ${path} needs dest; previous vercel.json has no matching route`);
+        }
+        dest = previous.dest;
+      }
+      if (!src) {
+        src = (previous && previous.src) || routeRegex(path);
+      }
+      if (dest !== PYTHON && !NATIVE.has(dest)) {
+        throw new Error(`unknown destination ${dest} for ${method} ${path}`);
+      }
+      const key = `${src}|${dest}`;
+      if (!grouped.has(key)) grouped.set(key, {src, dest, methods: new Set()});
+      grouped.get(key).methods.add(method);
+    }
+  }
+  const routes = [...grouped.values()].map(group => {
+    const methods = new Set(group.methods);
+    if (group.dest === PYTHON) methods.add('OPTIONS');
+    return {src: group.src, methods: METHODS.filter(m => methods.has(m)), dest: group.dest};
+  });
+  const native = routes.filter(r => NATIVE.has(r.dest)).sort(compareRoutes);
+  const python = routes.filter(r => r.dest === PYTHON).sort(compareRoutes);
+  const ordered = [...native, ...python];
+  const seen = new Set();
+  for (const route of ordered) {
+    for (const method of route.methods) {
+      const identity = `${route.src}|${method}`;
+      if (NATIVE.has(route.dest) && seen.has(identity)) {
+        throw new Error(`duplicate native ingress rewrite for ${method} ${route.src}`);
+      }
+      seen.add(identity);
+    }
+  }
+  return ordered;
+}
+export function generateVercel(config, operations, fragments = null) {
   const native = config.routes.filter(route => NATIVE.has(route.dest) && route.src !== FALLBACK);
   if (!native.length) throw new Error('Cannot generate without explicit native Rust routes');
+  if (!fragments || fragments.length === 0) {
+    const byPath = new Map();
+    for (const [method, path] of operations) {
+      if (alreadyNative(method, path, native)) continue;
+      if (!byPath.has(path)) byPath.set(path, new Set());
+      byPath.get(path).add(method);
+    }
+    const exceptions = [...byPath].sort(([a], [b]) => a.localeCompare(b))
+      .map(([path, methods]) => {
+        methods.add('OPTIONS');
+        return {src: routeRegex(path), methods: METHODS.filter(m => methods.has(m)), dest: PYTHON};
+      });
+    const rest = config.routes.filter(route => !native.includes(route) && route.dest !== PYTHON
+      && !(route.src === FALLBACK && NATIVE.has(route.dest)));
+    return {...config, routes: [...native, ...exceptions, {src: FALLBACK, dest: RUST}, ...rest]};
+  }
+  // Fragment-derived generation: fragments own their paths' dest/src.
+  const fragmentRoutes = fragmentVercelRoutes(fragments, config.routes);
+  const fragmentSrcs = new Set(fragmentRoutes.map(r => r.src));
+  const fragmentOps = new Set(
+    fragments.flatMap(f => f.operations.map(o => `${o.method} ${o.path}`)),
+  );
+  const baselineNatives = config.routes.filter(
+    route => NATIVE.has(route.dest) && route.src !== FALLBACK && !fragmentSrcs.has(route.src),
+  );
   const byPath = new Map();
   for (const [method, path] of operations) {
+    if (fragmentOps.has(`${method} ${path}`)) continue;
     if (alreadyNative(method, path, native)) continue;
     if (!byPath.has(path)) byPath.set(path, new Set());
     byPath.get(path).add(method);
   }
-  const exceptions = [...byPath].sort(([a], [b]) => a.localeCompare(b))
+  const baselineExceptions = [...byPath].sort(([a], [b]) => a.localeCompare(b))
     .map(([path, methods]) => {
       methods.add('OPTIONS');
       return {src: routeRegex(path), methods: METHODS.filter(m => methods.has(m)), dest: PYTHON};
     });
+  const fragmentNatives = fragmentRoutes.filter(r => NATIVE.has(r.dest));
+  const fragmentPythons = fragmentRoutes.filter(r => r.dest === PYTHON);
   const rest = config.routes.filter(route => !native.includes(route) && route.dest !== PYTHON
     && !(route.src === FALLBACK && NATIVE.has(route.dest)));
-  return {...config, routes: [...native, ...exceptions, {src: FALLBACK, dest: RUST}, ...rest]};
+  // Deterministic native-before-Python order: baseline natives (preserved
+  // order) + fragment natives (sorted) + fragment pythons (sorted) +
+  // baseline exceptions (sorted by path) + catch-all + non-API tail.
+  return {
+    ...config,
+    routes: [
+      ...baselineNatives,
+      ...fragmentNatives,
+      ...fragmentPythons,
+      ...baselineExceptions,
+      {src: FALLBACK, dest: RUST},
+      ...rest,
+    ],
+  };
+}
+export function loadFragmentFiles(directory = 'docs/api/route-fragments') {
+  return readdirSync(directory)
+    .filter(name => name.endsWith('.json') && name !== 'vercel-rewrites.json')
+    .sort()
+    .map(name => JSON.parse(readFileSync(`${directory}/${name}`, 'utf8')));
 }
 
 export function updateInventory(inventory, operations) {
@@ -145,7 +266,8 @@ function run() {
   const original = JSON.parse(readFileSync('vercel.json', 'utf8'));
   const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
   const operations = pythonOperations(inspect());
-  const nextVercel = JSON.stringify(generateVercel(original, operations), null, 2) + '\n';
+  const fragments = loadFragmentFiles();
+  const nextVercel = JSON.stringify(generateVercel(original, operations, fragments), null, 2) + '\n';
   const nextInventory = updateInventory(inventory, inventoryOperations(operations));
   if (check) {
     const full = inventory.full_surface;

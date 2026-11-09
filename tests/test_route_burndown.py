@@ -19,6 +19,8 @@ from scripts.generate_route_burndown import (
     FRAGMENT_DIR,
     RouteFragment,
     _classify_burndown,
+    _fragment_vercel_groups,
+    _generate_vercel_document,
     _load_route_fragments,
     _load_routes,
     _merge_route_fragments,
@@ -26,6 +28,9 @@ from scripts.generate_route_burndown import (
     _render_agents_text,
     _render_inventory,
     _render_rewrite_fragment,
+    _render_vercel_text,
+    _resolve_destination,
+    _routes_from_document,
     load_json,
 )
 
@@ -340,15 +345,46 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
     assert [fragment.name for fragment in fragments] == [
+        "bug-reports",
+        "catalog",
+        "comicvine",
+        "completed-threads",
+        "continuity-rules",
         "creators",
+        "custom-cbl",
         "dependencies",
+        "issues",
+        "preferences",
+        "reading-mode",
         "releases",
+        "sessions",
+        "tags",
+        "taste-discoveries",
+        "threads",
     ]
+
+
+def _fragment_named(name: str) -> RouteFragment:
+    """Find one family fragment by name.
+
+    Args:
+        name: Family name to find.
+
+    Returns:
+        The matching fragment.
+
+    Raises:
+        AssertionError: When no fragment matches.
+    """
+    for fragment in _load_route_fragments(FRAGMENT_DIR):
+        if fragment.name == name:
+            return fragment
+    raise AssertionError(f"missing fragment {name}")
 
 
 def test_creator_fragment_covers_creator_and_creator_adjacent_metadata() -> None:
     """The creators pilot owns all of its v1 route declarations."""
-    fragment = _load_route_fragments(FRAGMENT_DIR)[0]
+    fragment = _fragment_named("creators")
     paths = {operation["path"] for operation in fragment.operations}
     assert "/api/v1/creators" in paths
     assert "/api/v1/threads/{thread_id}/issues/creators" in paths
@@ -356,7 +392,7 @@ def test_creator_fragment_covers_creator_and_creator_adjacent_metadata() -> None
 
 def test_dependency_fragment_covers_native_and_python_metadata() -> None:
     """The dependencies pilot owns both API versions and legacy routes."""
-    fragment = _load_route_fragments(FRAGMENT_DIR)[1]
+    fragment = _fragment_named("dependencies")
     buckets = {operation["bucket"] for operation in fragment.operations}
     assert buckets == {"operations", "v1_operations"}
     assert any(
@@ -367,10 +403,7 @@ def test_dependency_fragment_covers_native_and_python_metadata() -> None:
 
 def test_release_fragment_covers_every_browser_called_release_route() -> None:
     """The releases family owns all five browser-called operations."""
-    fragments = _load_route_fragments(FRAGMENT_DIR)
-    release_fragment = next(
-        fragment for fragment in fragments if fragment.name == "releases"
-    )
+    release_fragment = _fragment_named("releases")
     methods_paths = {
         (operation["method"], operation["path"])
         for operation in release_fragment.operations
@@ -460,3 +493,123 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     assert "- #4335 (10):" in agents
     assert "- #4684 (16):" in agents
     assert agents.count("<!-- route-burndown:end -->") == 1
+
+
+def test_new_family_fragment_merges_without_touching_other_family() -> None:
+    """One family's fragment merge never alters another family's routes."""
+    inventory = load_json(INVENTORY_PATH)
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    tags = next(f for f in fragments if f.name == "tags")
+    creators = next(f for f in fragments if f.name == "creators")
+
+    merged_tags_only = _merge_route_fragments(inventory, [tags])
+    merged_full = _merge_route_fragments(inventory, fragments)
+
+    def _method_path_set(
+        merged: dict[str, object], keys: set[tuple[str, str]]
+    ) -> set[tuple[str, str]]:
+        full = merged["full_surface"]
+        assert isinstance(full, dict)
+        v1 = full["v1_operations"]
+        assert isinstance(v1, list)
+        found: set[tuple[str, str]] = set()
+        for operation in v1:
+            assert isinstance(operation, dict)
+            key = (str(operation["method"]), str(operation["path"]))
+            if key in keys:
+                found.add(key)
+        return found
+
+    creators_keys = {(str(op["method"]), str(op["path"])) for op in creators.operations}
+    # Merging tags alone must not remove or alter any creators route.
+    assert _method_path_set(merged_tags_only, creators_keys) == creators_keys
+    assert _method_path_set(merged_full, creators_keys) == creators_keys
+    tags_keys = {(str(op["method"]), str(op["path"])) for op in tags.operations}
+    assert tags_keys
+    assert tags_keys.isdisjoint(creators_keys)
+    assert _method_path_set(merged_tags_only, tags_keys) == tags_keys
+
+
+def test_generators_are_idempotent() -> None:
+    """Re-rendering inventory and vercel from fragments yields identical bytes."""
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    previous = load_json(VERCEL_PATH)
+    first_doc = _generate_vercel_document(previous, fragments)
+    first_text = _render_vercel_text(first_doc)
+    first_inventory = load_json(INVENTORY_PATH)
+    _, first_inventory_text = _render_inventory(
+        first_inventory, _routes_from_document(first_doc), fragments
+    )
+    second_doc = _generate_vercel_document(first_doc, fragments)
+    second_text = _render_vercel_text(second_doc)
+    assert first_text == second_text
+    second_inventory = json.loads(first_inventory_text)
+    assert isinstance(second_inventory, dict)
+    _, second_inventory_text = _render_inventory(
+        second_inventory, _routes_from_document(second_doc), fragments
+    )
+    assert first_inventory_text == second_inventory_text
+    assert VERCEL_PATH.read_text(encoding="utf-8") == first_text
+
+
+def test_vercel_is_fully_derived_from_fragments() -> None:
+    """Checked-in vercel matches fragment derivation in native-before-Python order."""
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    previous = load_json(VERCEL_PATH)
+    generated = _generate_vercel_document(previous, fragments)
+    assert _render_vercel_text(generated) == VERCEL_PATH.read_text(encoding="utf-8")
+    routes = _routes_from_document(generated)
+    native_indices = [
+        index
+        for index, route in enumerate(routes)
+        if route.dest in {"/api/native_roll.rs", "/api/native_issue.rs"}
+        and route.src != "/api(?:/.*)?"
+    ]
+    python_indices = [
+        index for index, route in enumerate(routes) if route.dest == "/api/index.py"
+    ]
+    assert native_indices and python_indices
+    assert max(native_indices) < min(python_indices)
+    # Every fragment operation resolves to its declared dest.
+    for fragment in fragments:
+        for operation in fragment.operations:
+            method = str(operation["method"])
+            path = str(operation["path"])
+            dest = _resolve_destination(method, path, routes)
+            assert dest == operation["dest"]
+
+
+def test_hidden_cron_exception_is_preserved() -> None:
+    """The hidden cron release-sync route stays on Python after derivation."""
+    routes = _load_routes(VERCEL_PATH)
+    assert _resolve_destination("GET", "/api/v1/cron/release-sync", routes) == "/api/index.py"
+    document = load_json(VERCEL_PATH)
+    crons = document.get("crons")
+    assert isinstance(crons, list)
+    assert any(
+        isinstance(cron, dict) and cron.get("path") == "/api/v1/cron/release-sync"
+        for cron in crons
+    )
+    assert any(
+        isinstance(cron, dict)
+        and cron.get("path") == "/api/v2/maintenance/comicvine-metadata-repairs"
+        for cron in crons
+    )
+
+
+def test_fragment_groups_preserve_exact_dest_and_methods() -> None:
+    """Fragment Vercel groups group methods per src/dest without losing OPTIONS."""
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    previous = load_json(VERCEL_PATH)
+    previous_routes = _routes_from_document(previous)
+    groups = _fragment_vercel_groups(fragments, previous_routes)
+    for route in groups:
+        dest = str(route["dest"])
+        raw_methods = route["methods"]
+        assert isinstance(raw_methods, list)
+        methods = [str(item) for item in raw_methods if isinstance(item, str)]
+        assert methods
+        if dest == "/api/index.py":
+            assert "OPTIONS" in methods
+        else:
+            assert "OPTIONS" not in methods

@@ -1,0 +1,28 @@
+{
+  "family": "completed-threads",
+  "owned_path_patterns": [
+    "^/api/v1/threads/completed/threads$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-dependencies.ts",
+      "frontend/src/services/api-dependency-groups.ts",
+      "frontend/src/services/api-issues.ts",
+      "frontend/src/services/api-migration.ts",
+      "frontend/src/services/api-reading-orders.ts",
+      "frontend/src/services/api-threads.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/completed/threads",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/completed/threads$"
+    }
+  ]
+}

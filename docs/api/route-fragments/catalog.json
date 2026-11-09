@@ -1,0 +1,30 @@
+{
+  "family": "catalog",
+  "owned_path_patterns": [
+    "^/api/v1/catalog(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-series-mapping.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/catalog/series-mappings/commit",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/catalog/series\\-mappings/commit$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/catalog/series-mappings/preview",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/catalog/series\\-mappings/preview$"
+    }
+  ]
+}
