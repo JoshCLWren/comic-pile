@@ -373,20 +373,16 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
         .map_err(query_error)?;
     let mut owned_issues = HashMap::new();
     let mut issue_thread_ids: HashMap<i32, i32> = HashMap::new();
-    let mut issue_numbers: HashMap<i32, String> = HashMap::new();
     let mut thread_ids: HashSet<i32> = HashSet::new();
     for row in &rows {
         let id: i32 = row.get(0);
         let status: String = row.get(1);
         let thread_id: i32 = row.get(2);
-        let issue_number: String = row.get(3);
         owned_issues.insert(id, status);
         issue_thread_ids.insert(id, thread_id);
-        issue_numbers.insert(id, issue_number);
         thread_ids.insert(thread_id);
     }
     // 2. thread titles and manual credits
-    let mut thread_titles: HashMap<i32, String> = HashMap::new();
     let mut thread_manual: HashMap<i32, Value> = HashMap::new();
     if !thread_ids.is_empty() {
         let rows = conn
@@ -398,8 +394,6 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
             .map_err(query_error)?;
         for row in &rows {
             let tid: i32 = row.get(0);
-            let title: String = row.get(1);
-            thread_titles.insert(tid, title);
             let mc: Option<String> = row.try_get(2).ok();
             if let Some(text) = mc {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
@@ -409,17 +403,6 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
                 }
             }
         }
-    }
-    let mut issue_thread: HashMap<i32, (i32, String, String)> = HashMap::new();
-    for (iid, tid) in &issue_thread_ids {
-        issue_thread.insert(
-            *iid,
-            (
-                *tid,
-                thread_titles.get(tid).cloned().unwrap_or_default(),
-                issue_numbers.get(iid).cloned().unwrap_or_default(),
-            ),
-        );
     }
     // 3. confirmed ComicVine creator credits (projected)
     let rows = conn
@@ -454,7 +437,7 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
         }
     }
     // 4. manual credits for issues without ComicVine metadata
-    for (iid, (tid, _, _)) in &issue_thread {
+    for (iid, tid) in &issue_thread_ids {
         if issues_with_creator_metadata.contains(iid) {
             continue;
         }
