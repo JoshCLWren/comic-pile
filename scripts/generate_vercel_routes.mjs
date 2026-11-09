@@ -21,9 +21,17 @@ const METADATA_QUERY = [
   'from app.main import create_app',
   'from fastapi.routing import APIRoute',
   'app = create_app(serve_frontend=False, defer_router_imports=False)',
+  'routes = []',
+  'def collect(rs, prefix=""):',
+  '    for r in rs:',
+  '        if hasattr(r, "original_router"):',
+  '            collect(r.original_router.routes, prefix + getattr(getattr(r, "include_context", None), "prefix", ""))',
+  '        elif hasattr(r, "path"):',
+  '            routes.append((prefix + r.path, r))',
+  'collect(app.routes)',
   'print(json.dumps({"paths": app.openapi()["paths"], "registered": [',
-  '{"path": r.path, "methods": sorted(r.methods), "visible": r.include_in_schema}',
-  'for r in app.routes if isinstance(r, APIRoute)]}))',
+  '{"path": p, "methods": sorted(getattr(r, "methods", []) or []), "visible": getattr(r, "include_in_schema", True)}',
+  'for p, r in routes if p.startswith("/api/")]}))',
 ].join('\n');
 
 export function pythonOperations(data) {
