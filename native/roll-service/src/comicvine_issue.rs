@@ -76,7 +76,6 @@ WITH auth AS (
               AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
-          AND m.updated_at <= now()-interval '7 days'
         )
         OR (
           NOT (
@@ -116,7 +115,6 @@ WITH auth AS (
               AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
-          AND m.updated_at <= now()-interval '30 days'
         )
     END AS needs_repair
   FROM mapped m
@@ -733,9 +731,10 @@ mod tests {
         // Both freshness branches (provider_updated_at and updated_at) must use
         // the same NOT (has credits) predicate: a row has credits iff either
         // creator_credits or person_credits is non-empty (R1 regression).
+        // Three NOT (has credits) sub-conditions per branch x 2 branches.
         assert_eq!(
             READ_SQL.matches("NOT (").count(),
-            2,
+            6,
             "both branches must use NOT (has credits)"
         );
     }
