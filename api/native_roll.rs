@@ -270,14 +270,8 @@ fn app() -> Router {
         )
         .route("/api/v1/continuity-rules/", get(native_dispatch))
         .route("/api/v1/continuity-rules/", post(native_dispatch))
-        .route(
-            "/api/v1/continuity-rules/{rule_id}",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/continuity-rules/{rule_id}",
-            put(native_dispatch),
-        )
+        .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
+        .route("/api/v1/continuity-rules/{rule_id}", put(native_dispatch))
         .route(
             "/api/v1/continuity-rules/{rule_id}",
             delete(native_dispatch),
