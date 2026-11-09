@@ -529,6 +529,18 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
                                 existing["creator_credits"].clone(),
                             );
                         }
+                    } else if existing["raw_provider_payload"]["person_credits"]
+                        .as_array()
+                        .is_some_and(|v| !v.is_empty())
+                    {
+                        // Normalize cached raw credits into creator_credits when
+                        // the cached normalized array is empty
+                        if let Some(obj) = patch.as_object_mut() {
+                            obj.insert(
+                                "creator_credits".to_owned(),
+                                existing["raw_provider_payload"]["person_credits"].clone(),
+                            );
+                        }
                     }
                 }
             }

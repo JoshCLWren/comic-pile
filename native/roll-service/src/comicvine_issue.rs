@@ -65,16 +65,28 @@ WITH auth AS (
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
               AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
           )
-          AND m.provider_updated_at <= now()-interval '7 days'
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '7 days'
         )
         OR (
-          (
+          NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
               AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
               AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
           )
-          AND m.provider_updated_at <= now()-interval '30 days'
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
+          AND m.updated_at <= now()-interval '7 days'
+        )
+        OR (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '30 days'
         )
       ELSE
         (
@@ -87,12 +99,23 @@ WITH auth AS (
           AND m.updated_at <= now()-interval '7 days'
         )
         OR (
-          (
+          NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
               AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
               AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
           )
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '30 days'
+        )
+        OR (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
           AND m.updated_at <= now()-interval '30 days'
         )
     END AS needs_repair
