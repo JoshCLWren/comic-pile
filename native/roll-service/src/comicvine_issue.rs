@@ -61,9 +61,9 @@ WITH auth AS (
         OR (
           NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
           AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '7 days'
@@ -71,18 +71,18 @@ WITH auth AS (
         OR (
           NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
         )
         OR (
           NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
           AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '30 days'
@@ -91,18 +91,18 @@ WITH auth AS (
         (
           NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.updated_at <= now()-interval '7 days'
         )
         OR (
           NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
           AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '30 days'
@@ -110,9 +110,9 @@ WITH auth AS (
         OR (
           NOT (
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
         )
@@ -710,6 +710,28 @@ mod tests {
         assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
+    #[test]
+    fn malformed_credit_fields_never_reach_jsonb_array_length() {
+        // PostgreSQL does not guarantee short-circuit evaluation of AND.
+        // jsonb_array_length on JSON null, an object, or a scalar raises an
+        // error and turns the ComicVine intelligence endpoint into HTTP 500.
+        // Every call must receive CASE-normalized arrays, including when
+        // provider metadata is missing or malformed.
+        assert_eq!(
+            READ_SQL.matches("jsonb_array_length(CASE WHEN jsonb_typeof(").count(),
+            12,
+            "all credit-length checks must handle non-array JSON safely"
+        );
+        assert!(
+            !READ_SQL.contains("jsonb_array_length(COALESCE("),
+            "COALESCE cannot protect against non-array JSON values"
+        );
+        assert!(
+            !READ_SQL.contains("jsonb_array_length(m.metadata->"),
+            "never call array_length directly on untrusted provider JSON"
+        );
+    }
+
     #[test]
     fn empty_credits_use_seven_day_recheck_and_provider_revision() {
         // Reader policy must mirror comicvine_repair::needs_provider_fetch.
