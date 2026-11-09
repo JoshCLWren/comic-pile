@@ -557,6 +557,54 @@
         }
       }
     },
+    "/api/v1/threads/{thread_id}/issue-dependencies": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for the mounted thread issue-dependencies batch read.",
+        "description": "Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
+        "operationId": "get_thread_issue_dependencies_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread issue dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueDependenciesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/analytics/metrics": {
       "get": {
         "tags": [
@@ -4079,6 +4127,64 @@
           }
         }
       },
+      "IssueDependenciesResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `IssueDependenciesResponse`.",
+        "required": [
+          "issue_id",
+          "incoming",
+          "outgoing"
+        ],
+        "properties": {
+          "incoming": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDependencyEdge"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outgoing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDependencyEdge"
+            }
+          }
+        }
+      },
+      "IssueDependencyEdge": {
+        "type": "object",
+        "description": "Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`).",
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "source_issue_number",
+          "source_thread_id",
+          "source_thread_title"
+        ],
+        "properties": {
+          "dependency_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_number": {
+            "type": "string"
+          },
+          "source_thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_thread_title": {
+            "type": "string"
+          }
+        }
+      },
       "IssueIntelligence": {
         "type": "object",
         "description": "Wire parity with Python's ComicVineIssueIntelligence.",
@@ -6495,6 +6601,26 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadIssueDependenciesResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDependenciesResponse"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }

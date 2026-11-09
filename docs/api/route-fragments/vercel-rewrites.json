@@ -171,6 +171,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/dependencies/[0-9]+$",
       "methods": [
         "DELETE"
@@ -913,14 +920,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
         "GET",
@@ -1094,22 +1093,6 @@
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
       "methods": [
         "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/[^/]+$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

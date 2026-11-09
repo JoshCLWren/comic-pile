@@ -50,6 +50,7 @@ use utoipa::OpenApi;
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
+        crate::issue_read::get_thread_issue_dependencies_documentation,
         crate::reading_list::list_reading_lists_documentation,
         crate::reading_list::get_reading_list_documentation,
         crate::reading_list::create_reading_list_documentation,
@@ -146,6 +147,9 @@ use utoipa::OpenApi;
         crate::identity_inbox::IdentityInboxResponse,
         crate::identity_inbox::IdentityInboxSearchResponse,
         crate::identity_inbox::IdentityInboxActionResponse,
+        crate::issue_read::IssueDependencyEdge,
+        crate::issue_read::IssueDependenciesResponse,
+        crate::issue_read::ThreadIssueDependenciesResponse,
         crate::identity_inbox::IdentityInboxSearchResult,
         crate::continuity_rules::ContinuityRuleRequest,
         crate::continuity_rules::ContinuityRuleResponse,
@@ -180,7 +184,7 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 55] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 56] = [
     ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
@@ -196,6 +200,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 55] = [
     ("get", "/api/v1/identity-inbox/{mapping_id}"),
     ("get", "/api/v1/releases/"),
     ("get", "/api/v1/releases/{release_id}"),
+    ("get", "/api/v1/threads/{thread_id}/issue-dependencies"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),

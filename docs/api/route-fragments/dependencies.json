@@ -139,7 +139,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issue-dependencies",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",

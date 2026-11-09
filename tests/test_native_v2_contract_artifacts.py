@@ -45,6 +45,7 @@ _RUNTIME_LEGACY_PATHS: Final = frozenset(
         "/api/v1/releases/",
         "/api/v1/releases/{release_id}",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+        "/api/v1/threads/{thread_id}/issue-dependencies",
     }
 )
 
