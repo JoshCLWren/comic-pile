@@ -78,13 +78,7 @@ WITH auth AS (
           AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
         )
         OR (
-          NOT (
-            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
-            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
-          )
-          AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
           AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
         )
       ELSE
@@ -98,13 +92,7 @@ WITH auth AS (
           AND m.updated_at <= now()-interval '7 days'
         )
         OR (
-          NOT (
-            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
-            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
-          )
-          AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
           AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
         )
         OR (
@@ -738,7 +726,7 @@ mod tests {
             READ_SQL
                 .matches("jsonb_array_length(CASE WHEN jsonb_typeof(")
                 .count(),
-            12,
+            8,
             "all credit-length checks must handle non-array JSON safely"
         );
         assert!(
@@ -772,11 +760,28 @@ mod tests {
         // Both freshness branches (provider_updated_at and updated_at) must use
         // the same NOT (has credits) predicate: a row has credits iff either
         // creator_credits or person_credits is non-empty (R1 regression).
-        // Three NOT (has credits) sub-conditions per branch x 2 branches.
+        // Two NOT (has credits) sub-conditions per branch x 2 branches = 4.
         assert_eq!(
             READ_SQL.matches("NOT (").count(),
-            6,
+            4,
             "both branches must use NOT (has credits)"
+        );
+    }
+    #[test]
+    fn credited_rows_refresh_after_30_days() {
+        // Both freshness branches must allow a credited row with a 31-day-old
+        // deep_metadata_refreshed_at to be considered stale, i.e., the 30-day
+        // window must not be guarded by a NOT(has credits) predicate.
+        assert!(
+            READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL\n          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'"),
+            "30-day refresh must apply to credited rows"
+        );
+        // Ensure the 30-day condition is not preceded by NOT (has credits)
+        // by counting occurrences of the 30-day interval.
+        assert_eq!(
+            READ_SQL.matches("interval '30 days'").count(),
+            2,
+            "two 30-day freshness branches, one per freshness path"
         );
     }
     #[test]

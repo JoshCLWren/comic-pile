@@ -538,7 +538,7 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
                         if let Some(obj) = patch.as_object_mut() {
                             obj.insert(
                                 "creator_credits".to_owned(),
-                                existing["raw_provider_payload"]["person_credits"].clone(),
+                                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
                             );
                         }
                     }
