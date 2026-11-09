@@ -301,6 +301,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
         .route(
+            "/api/v1/threads/{thread_id}",
+            get(threads::get_thread_detail),
+        )
+        .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
+        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )

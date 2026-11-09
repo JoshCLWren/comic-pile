@@ -553,6 +553,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/threads/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST"
@@ -657,7 +671,6 @@
     {
       "src": "^/api/threads/[^/]+$",
       "methods": [
-        "GET",
         "PUT",
         "DELETE",
         "OPTIONS"
@@ -1687,7 +1700,6 @@
     {
       "src": "^/api/v1/threads/[^/]+$",
       "methods": [
-        "GET",
         "PUT",
         "DELETE",
         "OPTIONS"
