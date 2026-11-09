@@ -9,8 +9,6 @@ import subprocess
 from pathlib import Path
 from types import ModuleType
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / ".github" / "scripts" / "factory_main_health.py"
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -137,8 +135,7 @@ def test_all_main_health_gates_use_product_ci_workflow_runs() -> None:
 def test_main_health_gate_only_targets_its_own_issues_and_respects_leases() -> None:
     """Run both real workflow jq selectors against mixed issue fixtures."""
     jq = shutil.which("jq")
-    if jq is None:
-        pytest.skip("jq is required to exercise workflow selectors")
+    assert jq is not None, "jq is required to exercise workflow selectors; install jq"
 
     workflow = (WORKFLOWS / "main-health-gate.yml").read_text(encoding="utf-8")
     opener = workflow.split("      - name: Open or refresh main-breakage P0", 1)[1].split(
