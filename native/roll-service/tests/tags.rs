@@ -6,7 +6,14 @@ use axum::{
 };
 use comicpile_roll_service::{config::Config, router, AppState};
 use serde_json::Value;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
+
+// Distinct proxied clients for registration: the production limiter is
+// intentionally process-global even when each test resets PostgreSQL.
+static NEXT_TEST_CLIENT: AtomicUsize = AtomicUsize::new(1);
 use tower::ServiceExt;
 
 async fn setup() -> (
@@ -35,6 +42,13 @@ async fn setup() -> (
         Request::builder()
             .method("POST")
             .uri("/api/v1/auth/register")
+            .header(
+                "x-forwarded-for",
+                format!(
+                    "2001:db8::{:x}",
+                    NEXT_TEST_CLIENT.fetch_add(1, Ordering::Relaxed)
+                ),
+            )
             .header(header::CONTENT_TYPE, "application/json")
             .body(Body::from(
                 serde_json::json!({
