@@ -305,6 +305,10 @@ fn app() -> Router {
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route(
+            "/api/v1/taste/discoveries/{signal_id}/dismiss",
+            post(native_dispatch),
+        )
         .fallback(native_not_found)
 }
 
@@ -368,6 +372,40 @@ mod tests {
                 "numeric issue ids must not fail Path extraction for {uri}: {text}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn v1_taste_dismiss_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/taste/discoveries/7/dismiss")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                || response.status() == StatusCode::FORBIDDEN,
+            "taste dismiss must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains("Wrong number of path arguments"),
+            "numeric signal ids must not fail Path extraction: {text}"
+        );
     }
 
     #[tokio::test]
