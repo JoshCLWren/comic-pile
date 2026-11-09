@@ -64,7 +64,7 @@ json.dump({"model": model, "messages": [{"role": "user", "content": prompt}], "m
 PY
 
 for attempt in 1 2 3 4 5; do
-  if curl -fsS -m 120 -X POST "${REVIEW_PROVIDER_URL%/}/chat/completions" \
+  if curl -fsS -m 120 -X POST "${REVIEW_PROVIDER_URL%/}/v1/chat/completions" \
     -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
     --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err; then
     break
