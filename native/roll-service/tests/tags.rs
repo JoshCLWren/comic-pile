@@ -119,9 +119,44 @@ async fn mutation(
     .await
 }
 
+async fn assignment_count(state: &Arc<AppState>, tag_id: i32) -> i64 {
+    state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM tag_assignments WHERE tag_id = $1",
+            &[&tag_id],
+        )
+        .await
+        .unwrap()
+        .get(0)
+}
+
 #[tokio::test]
 async fn create_tag_writes_database_row() {
-    let (_state, _token, _tag_id, _guard) = setup().await;
+    let (state, token, _tag_id, _guard) = setup().await;
+    let result = mutation(
+        &state,
+        &token,
+        "POST",
+        "/api/v1/tags/",
+        serde_json::json!({"name":"Additional","color":"red"}),
+    )
+    .await;
+    assert_eq!(result.0, StatusCode::OK, "{result:?}");
+    let tag_id = result.1["tag"]["id"].as_i64().unwrap() as i32;
+    let name: String = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT name FROM tags WHERE id = $1", &[&tag_id])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(name, "Additional");
 }
 
 #[tokio::test]
@@ -137,6 +172,16 @@ async fn update_tag_persists_name_and_color() {
     .await;
     assert_eq!(result.0, StatusCode::OK, "{result:?}");
     assert_eq!(result.1["name"], "Renamed");
+    let name: String = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT name FROM tags WHERE id = $1", &[&tag_id])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(name, "Renamed");
 }
 
 #[tokio::test]
@@ -151,6 +196,7 @@ async fn assign_tag_inserts_assignment() {
     )
     .await;
     assert_eq!(result.0, StatusCode::OK, "{result:?}");
+    assert_eq!(assignment_count(&state, tag_id).await, 1);
 }
 
 #[tokio::test]
@@ -177,6 +223,7 @@ async fn unassign_tag_removes_assignment() {
     )
     .await;
     assert_eq!(result.0, StatusCode::OK, "{result:?}");
+    assert_eq!(assignment_count(&state, tag_id).await, 0);
 }
 
 #[tokio::test]
@@ -192,6 +239,7 @@ async fn bulk_assign_tag_writes_unique_assignments() {
     .await;
     assert_eq!(result.0, StatusCode::OK, "{result:?}");
     assert_eq!(result.1["affected_ids"], serde_json::json!([1]));
+    assert_eq!(assignment_count(&state, tag_id).await, 1);
 }
 
 #[tokio::test]
@@ -218,11 +266,22 @@ async fn bulk_unassign_tag_removes_assignments() {
     )
     .await;
     assert_eq!(result.0, StatusCode::OK, "{result:?}");
+    assert_eq!(assignment_count(&state, tag_id).await, 0);
 }
 
 #[tokio::test]
 async fn delete_tag_cascades_assignments() {
     let (state, token, tag_id, _guard) = setup().await;
+    let assigned = mutation(
+        &state,
+        &token,
+        "POST",
+        &format!("/api/v1/tags/{tag_id}/assign/"),
+        serde_json::json!({"target_type":"Thread","target_id":1}),
+    )
+    .await;
+    assert_eq!(assigned.0, StatusCode::OK, "{assigned:?}");
+    assert_eq!(assignment_count(&state, tag_id).await, 1);
     let result = mutation(
         &state,
         &token,
@@ -232,4 +291,15 @@ async fn delete_tag_cascades_assignments() {
     )
     .await;
     assert_eq!(result.0, StatusCode::OK, "{result:?}");
+    let remaining: i64 = state
+        .pool
+        .get()
+        .await
+        .unwrap()
+        .query_one("SELECT COUNT(*)::bigint FROM tags WHERE id = $1", &[&tag_id])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(remaining, 0);
+    assert_eq!(assignment_count(&state, tag_id).await, 0);
 }
