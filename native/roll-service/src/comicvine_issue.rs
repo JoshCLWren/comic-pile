@@ -776,10 +776,12 @@ mod tests {
             READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL\n          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'"),
             "30-day refresh must apply to credited rows"
         );
-        // Ensure the 30-day condition is not preceded by NOT (has credits)
-        // by counting occurrences of the 30-day interval.
+        // Count only the deep-metadata freshness branches; the enqueue
+        // completed_at window is a separate 30-day retry guard.
         assert_eq!(
-            READ_SQL.matches("interval '30 days'").count(),
+            READ_SQL
+                .matches("LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'")
+                .count(),
             2,
             "two 30-day freshness branches, one per freshness path"
         );
