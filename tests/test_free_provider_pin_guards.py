@@ -300,12 +300,13 @@ def test_worker_76_fledge_alpha_free_is_retired_by_discovery(validate) -> None:
 
 
 def test_discovered_nvidia_410_retires_kimi_and_glm_workers(validate) -> None:
-    """NVIDIA 410 discovery retires worker 77 and the later-dead GLM 5.3 pin."""
+    """NVIDIA 410 discovery retires the historical Kimi and GLM pins."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     by_worker = {row["worker"]: row for row in rows}
-    assert "77" not in by_worker
-    assert 77 in lock["retired_workers"]
+    assert by_worker["77"]["source"] == "nvidia"
+    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
+    assert 77 in lock["expected_workers"]
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
 

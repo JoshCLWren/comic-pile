@@ -1101,13 +1101,7 @@ mod tests {
             search_query: None,
         };
 
-        let _ = confirm(
-            State(state.clone()),
-            user,
-            Path(1),
-            Json(request),
-        )
-        .await;
+        let _ = confirm(State(state.clone()), user, Path(1), Json(request)).await;
         let _ = reject(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
@@ -1119,7 +1113,12 @@ mod tests {
             }),
         )
         .await;
-        let _ = defer(State(state.clone()), AuthenticatedUser::for_test(1), Path(1)).await;
+        let _ = defer(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+        )
+        .await;
         let _ = skip(State(state), AuthenticatedUser::for_test(1), Path(1)).await;
     }
 }

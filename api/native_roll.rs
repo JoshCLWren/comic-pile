@@ -192,14 +192,8 @@ fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
         .route("/api/v1/identity-inbox", get(native_dispatch))
-        .route(
-            "/api/v1/identity-inbox/search/issues",
-            get(native_dispatch),
-        )
-        .route(
-            "/api/v1/identity-inbox/{mapping_id}",
-            get(native_dispatch),
-        )
+        .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
+        .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
         .route(
             "/api/v1/identity-inbox/{mapping_id}/confirm",
             post(native_dispatch),
