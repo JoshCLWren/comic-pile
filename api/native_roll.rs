@@ -292,6 +292,10 @@ fn app() -> Router {
             "/api/v1/releases/{release_id}/retract",
             post(native_dispatch),
         )
+        .route(
+            "/api/v1/threads/{thread_id}/issue-dependencies",
+            get(native_dispatch),
+        )
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))
