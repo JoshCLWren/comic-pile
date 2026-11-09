@@ -452,22 +452,25 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     session_result = await db.execute(select(ReadingSession).where(ReadingSession.id == session_id))
     session = session_result.scalar_one_or_none()
 
-    result = await db.execute(
-        select(Event)
-        .where(Event.session_id == session_id)
-        .where(Event.type.in_(("rate", "snooze", "undo")))
-        .where(Event.die_after.is_not(None))
-        .order_by(Event.timestamp.desc(), Event.id.desc())
-        .limit(1)
-    )
-    last_die_event = result.scalars().first()
-    if last_die_event and last_die_event.die_after is not None:
-        return automatic_die_after(last_die_event.die_after, last_die_event.context)
+    if session:
+        result = await db.execute(
+            select(Event)
+            .where(or_(Event.user_id == session.user_id, Event.session_id == session.id))
+            .where(Event.type.in_(("rate", "snooze", "undo", "reset_dice", "manual_die")))
+            .where(Event.die_after.is_not(None))
+            .order_by(Event.timestamp.desc(), Event.id.desc())
+            .limit(1)
+        )
+        last_die_event = result.scalars().first()
+        if last_die_event and last_die_event.die_after is not None:
+            return automatic_die_after(last_die_event.die_after, last_die_event.context)
 
-    if session and session.manual_die:
-        return session.manual_die
+        if session.manual_die:
+            return session.manual_die
 
-    return session.start_die if session else start_die
+        return session.start_die
+
+    return start_die
 
 
 async def get_current_die_for_session(
