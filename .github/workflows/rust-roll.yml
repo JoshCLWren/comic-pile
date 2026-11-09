@@ -91,7 +91,7 @@ jobs:
         run: uv run alembic upgrade head
       - name: Verify native Roll test schema fixture
         working-directory: .
-        run: uv run python scripts/export_roll_test_schema.py --check
+        run: uv run python -m scripts.export_roll_test_schema --check
       - name: Unit and integration tests
         run: cargo test --locked --all-targets
       - name: Assert missing database URL fails, not skips
