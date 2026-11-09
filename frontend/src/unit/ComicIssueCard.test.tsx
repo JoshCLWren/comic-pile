@@ -56,6 +56,21 @@ function mount(status: 'read' | 'unread' = 'read') {
 beforeEach(() => { patch.mockReset(); patch.mockResolvedValue(receipt) })
 
 describe('shared direct issue card', () => {
+  it('shows a pending save state until the write settles', async () => {
+    let resolvePatch!: (value: IssueReadRateResponse) => void
+    patch.mockImplementationOnce(
+      () => new Promise<IssueReadRateResponse>((resolve) => { resolvePatch = resolve }),
+    )
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit rating' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save rating' }))
+    expect(await screen.findByRole('button', { name: 'Saving…' })).toBeDisabled()
+    resolvePatch(receipt)
+    await waitFor(() =>
+      expect(screen.queryByTestId('comic-issue-rating-editor')).not.toBeInTheDocument(),
+    )
+  })
+
   it('edits a persisted rating without sending a read status or another read', async () => {
     const onMutated = mount()
     expect(screen.getByText(/Rated 4/)).toBeVisible()
