@@ -726,13 +726,15 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
     fi
 
     if (( recovery_status == 0 )); then
-      recovered_verdict="$(factory_extract_semantic_verdict "$recovery_log" || true)"
+      sanitized_recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.sanitized.log"
+      factory_sanitize_review_log "$recovery_log" "$sanitized_recovery_log"
+      recovered_verdict="$(factory_extract_semantic_verdict "$sanitized_recovery_log" || true)"
       if [[ "$recovered_verdict" == 'repair' || "$recovered_verdict" == 'reject' ]]; then
         verdict="$recovered_verdict"
         log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered conservative verdict for PR #${NUMBER}"
       elif [[ "$recovered_verdict" == 'approve' ]] && ! factory_primary_review_denies_ready_recovery "$review_log"; then
         if factory_append_recovered_acceptance_report \
-          "$sanitized_review_log" "$recovery_log" "$acceptance_policy" "$EXPECTED_HEAD"; then
+          "$sanitized_review_log" "$sanitized_recovery_log" "$acceptance_policy" "$EXPECTED_HEAD"; then
           verdict='approve'
           log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered approval with acceptance evidence for PR #${NUMBER}"
         else
