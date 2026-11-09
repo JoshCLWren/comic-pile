@@ -1,0 +1,108 @@
+{
+  "family": "sessions",
+  "owned_path_patterns": [
+    "^/api/v1/sessions(?:/.*)?$",
+    "^/api/sessions(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-sessions.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/sessions/",
+      "dest": "/api/index.py",
+      "src": "^/api/sessions/$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/sessions/current/",
+      "dest": "/api/index.py",
+      "src": "^/api/sessions/current/$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/sessions/{session_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/sessions/[^/]+$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/sessions/{session_id}/details",
+      "dest": "/api/index.py",
+      "src": "^/api/sessions/[^/]+/details$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/sessions/{session_id}/restore-session-start",
+      "dest": "/api/index.py",
+      "src": "^/api/sessions/[^/]+/restore\\-session\\-start$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/sessions/{session_id}/snapshots",
+      "dest": "/api/index.py",
+      "src": "^/api/sessions/[^/]+/snapshots$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/sessions/",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/sessions/correction-examples",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/correction\\-examples$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/sessions/current/",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/current/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/sessions/{session_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/sessions/{session_id}/details",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/[^/]+/details$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/sessions/{session_id}/restore-session-start",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/sessions/{session_id}/snapshots",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/sessions/[^/]+/snapshots$"
+    }
+  ]
+}

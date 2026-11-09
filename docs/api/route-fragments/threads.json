@@ -1,0 +1,329 @@
+{
+  "family": "threads",
+  "owned_path_patterns": [
+    "^/api/v1/threads(?::.*|/.*)?$",
+    "^/api/threads(?:/.*)?$",
+    "^/api/v2/threads(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-dependencies.ts",
+      "frontend/src/services/api-dependency-groups.ts",
+      "frontend/src/services/api-issues.ts",
+      "frontend/src/services/api-migration.ts",
+      "frontend/src/services/api-reading-orders.ts",
+      "frontend/src/services/api-threads.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/threads",
+      "dest": "/api/native_roll.rs",
+      "src": "/api/v2/threads",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4342,
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ],
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "default legacy path: one page statement including auth, total, lists and rows; option_e preview adds auth 1 + one-statement Option E snapshot 1 (+2 tx control) when activated; set-based, independent of library size, no per-row N+1"
+      }
+    },
+    {
+      "bucket": "operations",
+      "method": "PUT",
+      "path": "/api/v2/threads/{thread_id}/issue-order",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+/issue-order$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}/issues",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/threads/[0-9]+/issues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/threads/",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/threads/reactivate",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/reactivate$",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/threads/stale",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/stale$",
+      "consumers": [
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "DELETE",
+      "path": "/api/threads/{thread_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/threads/{thread_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/threads/[0-9]+$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "PUT",
+      "path": "/api/threads/{thread_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/threads/{thread_id}/set-pending",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+/set\\-pending$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "PUT",
+      "path": "/api/threads/{thread_id}/test-backdate",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+/test\\-backdate$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/threads/{thread_id}:migrateToIssues",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+:migrateToIssues$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/threads/{thread_id}:migrateToIssuesSimple",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+:migrateToIssuesSimple$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/threads/{thread_id}:setCurrentIssue",
+      "dest": "/api/index.py",
+      "src": "^/api/threads/[^/]+:setCurrentIssue$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/check-duplicates",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/check\\-duplicates$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/excluded/threads",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/excluded/threads$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/groups:batch",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/groups:batch$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/reactivate",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/reactivate$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/stale",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/stale$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[0-9]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/connected",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/connected$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/dependency-order-check",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/dependency\\-order\\-check$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/exclude",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/exclude$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/issues:reorder",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues:reorder$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues:validateOrder",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/issues:validateOrder$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/reading-orders",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/reading\\-orders$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/restore",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/restore$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}/set-pending",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/set\\-pending$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/threads/{thread_id}/test-backdate",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/test\\-backdate$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:getBlockingInfo",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:getBlockingInfo$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:migrateToIssues",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssues$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:migrateToIssuesSimple$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+:setCurrentIssue$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/threads:getBlockingInfo",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads:getBlockingInfo$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    }
+  ]
+}

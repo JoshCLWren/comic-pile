@@ -1,0 +1,114 @@
+{
+  "family": "comicvine",
+  "owned_path_patterns": [
+    "^/api/v1/comicvine(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-comicvine.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity:confirm",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity:confirm$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/identity:replace",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/identity:replace$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:correct",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:correct$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:corrections",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:corrections$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:refresh",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:refresh$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues/{issue_id}/metadata:revert",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues/[^/]+/metadata:revert$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/issues:import",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/issues:import$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/comicvine/resolve",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/resolve$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/comicvine/search/series",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/search/series$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/comicvine/series/{comicvine_volume_id}/issues",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/series/[^/]+/issues$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/comicvine/series:import",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/comicvine/series:import$"
+    }
+  ]
+}
