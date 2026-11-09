@@ -5,7 +5,10 @@
 //! their established URLs can be moved as one ingress slice without deleting
 //! the Python implementation before production evidence exists.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
+    ApiError, AppState,
+};
 use axum::{
     extract::{Path, Query, State},
     http::{header, HeaderValue, StatusCode},
@@ -13,7 +16,93 @@ use axum::{
     Json,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, sync::Arc};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
+use tokio_postgres::Transaction;
+
+/// Same advisory-lock namespace the other constraint writers use to serialize
+/// one reader's cross-list writes within a transaction.
+const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+
+/// Serialize one reader's cross-list constraint writes for the transaction.
+async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
+    tx.execute(
+        "SELECT pg_advisory_xact_lock($1,$2)",
+        &[&QUEUE_LOCK_NAMESPACE, &user_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+    Ok(())
+}
+
+/// Combined-graph preflight: the projected graph after this write must be
+/// acyclic, or the transaction rolls back and nothing is changed.
+async fn graph_preflight(tx: &Transaction<'_>, user: AuthenticatedUser) -> Result<(), ApiError> {
+    let inputs = option_inputs::load_inputs_in_transaction(tx, user).await?;
+    let names: BTreeMap<i32, String> = inputs
+        .lists
+        .iter()
+        .map(|list| (list.list_id, list.name.clone()))
+        .collect();
+    ValidatedReadingInputs::new(inputs.clone(), &names)
+        .map_err(|error| crate::reading_graph::cycle_conflict(error, &inputs))?;
+    Ok(())
+}
+
+fn strip_source_provenance(node: &mut serde_json::Value, source_path: &str) {
+    if let Some(paths) = node
+        .get_mut("source_paths")
+        .and_then(|value| value.as_array_mut())
+    {
+        paths.retain(|path| path.as_str() != Some(source_path));
+    }
+    if let Some(placements) = node
+        .get_mut("source_cbl_placements")
+        .and_then(|value| value.as_array_mut())
+    {
+        placements.retain(|placement| {
+            placement.get("source_path").and_then(|path| path.as_str()) != Some(source_path)
+        });
+    }
+}
+
+fn add_source_provenance(
+    node: &mut serde_json::Value,
+    source_path: &str,
+    position: i32,
+    list_name: &str,
+) {
+    if let Some(object) = node.as_object_mut() {
+        let paths = object
+            .entry("source_paths".to_string())
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+        if let Some(array) = paths.as_array_mut() {
+            if !array.iter().any(|path| path.as_str() == Some(source_path)) {
+                array.push(serde_json::Value::String(source_path.to_string()));
+            }
+        }
+        let placements = object
+            .entry("source_cbl_placements".to_string())
+            .or_insert_with(|| serde_json::Value::Array(Vec::new()));
+        if let Some(array) = placements.as_array_mut() {
+            array.push(serde_json::json!({
+                "source_path": source_path,
+                "position": position,
+            }));
+        }
+        if object
+            .get("source_explanation")
+            .is_none_or(|value| value.is_null())
+        {
+            object.insert(
+                "source_explanation".to_string(),
+                serde_json::Value::String(format!("Added from custom CBL '{list_name}'.")),
+            );
+        }
+    }
+}
 
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]
@@ -125,8 +214,15 @@ pub async fn search_issues(
     user: AuthenticatedUser,
     Query(query): Query<IssueSearchQuery>,
 ) -> Result<Json<Vec<IssueSearchResult>>, ApiError> {
-    let limit = query.limit.unwrap_or(30).clamp(1, 100);
-    let text = query.q.unwrap_or_default().trim().to_string();
+    let raw_query = query.q.unwrap_or_default();
+    if raw_query.chars().count() > 200 {
+        return Err(bad_request("q must be at most 200 characters"));
+    }
+    let limit = query.limit.unwrap_or(30);
+    if !(1..=100).contains(&limit) {
+        return Err(bad_request("limit must be between 1 and 100"));
+    }
+    let text = raw_query.trim().to_string();
     let pattern = format!("%{text}%");
     let conn = db::checkout(&state).await?;
     let rows = conn
@@ -311,6 +407,7 @@ pub async fn put_overlap_decision(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
     let current = tx.query_opt("SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&list_id, &user.id()]).await.map_err(db::query_error)?.ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
     let current_at: String = current.get(0);
     if request
@@ -342,6 +439,7 @@ pub async fn put_overlap_decision(
     )
     .await
     .map_err(db::query_error)?;
+    graph_preflight(&tx, user).await?;
     tx.commit().await.map_err(db::query_error)?;
     let conn = db::checkout(&state).await?;
     Ok(Json(decision_set(&conn, user.id(), list_id).await?))
@@ -351,7 +449,7 @@ pub async fn delete_overlap_decision(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path((list_id, decision_id)): Path<(i32, i32)>,
-    Query(_query): Query<std::collections::HashMap<String, String>>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<OverlapDecisionSetResponse>, ApiError> {
     let mut conn = db::checkout(&state).await?;
     let tx = conn
@@ -359,6 +457,24 @@ pub async fn delete_overlap_decision(
         .start()
         .await
         .map_err(db::query_error)?;
+    lock_reader(&tx, user.id()).await?;
+    let current = tx
+        .query_opt(
+            "SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            &[&list_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
+    let current_at: String = current.get(0);
+    if let Some(expected) = query.get("expected_updated_at") {
+        if expected != &current_at {
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                "The Reading List's overlap decisions changed since they were read".into(),
+            ));
+        }
+    }
     let deleted = tx
         .execute(
             "DELETE FROM custom_cbl_overlap_decisions WHERE id=$1 AND list_id=$2 AND user_id=$3",
@@ -378,6 +494,7 @@ pub async fn delete_overlap_decision(
     )
     .await
     .map_err(db::query_error)?;
+    graph_preflight(&tx, user).await?;
     tx.commit().await.map_err(db::query_error)?;
     let conn = db::checkout(&state).await?;
     Ok(Json(decision_set(&conn, user.id(), list_id).await?))
@@ -400,6 +517,9 @@ pub async fn apply(
         .parse()
         .map_err(|_| ApiError(StatusCode::NOT_FOUND, "Not Found".into()))?;
     let lane_id = request.get("lane_id").and_then(|value| value.as_str());
+    let expected_updated_at = request
+        .get("expected_updated_at")
+        .and_then(|value| value.as_str());
     let mut conn = db::checkout(&state).await?;
     let tx = conn
         .build_transaction()
@@ -417,23 +537,43 @@ pub async fn apply(
     let list_name: String = list.get(0);
     let plan = tx
         .query_opt(
-            "SELECT name,ordering_mode,nodes_json::text,lanes_json::text FROM continuity_plans
-             WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            "SELECT id,user_id,name,ordering_mode,nodes_json::text,lanes_json::text,created_at::text,updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE",
             &[&plan_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Continuity plan not found".into()))?;
-    let plan_name: String = plan.get(0);
-    let ordering_mode: String = plan.get(1);
+    let plan_pk: i32 = plan.get(0);
+    let plan_user_id: i32 = plan.get(1);
+    let plan_name: String = plan.get(2);
+    let ordering_mode: String = plan.get(3);
+    let plan_created_at: String = plan.get(6);
+    let plan_updated_at: String = plan.get(7);
     let mut lanes: Vec<serde_json::Value> =
-        serde_json::from_str::<serde_json::Value>(&plan.get::<_, String>(3))
-            .unwrap_or(serde_json::Value::Array(vec![]))
+        serde_json::from_str::<serde_json::Value>(&plan.get::<_, String>(5))
+            .unwrap_or(serde_json::Value::Array(Vec::new()))
             .as_array()
             .cloned()
             .unwrap_or_default();
     if lanes.is_empty() {
         lanes.push(serde_json::json!({"id":"custom-cbl","name":"Custom CBL","order":0}));
+    }
+    let entries = tx
+        .query(
+            "SELECT e.id,e.position,e.issue_id,t.title,i.issue_number,e.is_checkpoint,
+                    e.checkpoint_target_issue_ids::text
+             FROM custom_cbl_entries e JOIN issues i ON i.id=e.issue_id
+             JOIN threads t ON t.id=i.thread_id WHERE e.list_id=$1 ORDER BY e.position,e.id",
+            &[&list_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if entries.is_empty() {
+        return Err(ApiError(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            serde_json::json!({"code":"custom_cbl_empty","message":"Custom CBL has no issues"})
+                .to_string(),
+        ));
     }
     let target = if let Some(requested) = lane_id {
         if !lanes
@@ -458,53 +598,135 @@ pub async fn apply(
             .unwrap_or("custom-cbl")
             .to_string()
     };
-    let mut nodes = serde_json::from_str::<serde_json::Value>(&plan.get::<_, String>(2))
-        .unwrap_or(serde_json::Value::Array(vec![]))
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-    let entries = tx
-        .query(
-            "SELECT e.id,e.position,e.issue_id,t.title,i.issue_number,e.is_checkpoint,
-                    e.checkpoint_target_issue_ids::text
-             FROM custom_cbl_entries e JOIN issues i ON i.id=e.issue_id
-             JOIN threads t ON t.id=i.thread_id WHERE e.list_id=$1 ORDER BY e.position,e.id",
-            &[&list_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    if entries.is_empty() {
-        return Err(ApiError(
-            StatusCode::UNPROCESSABLE_ENTITY,
-            serde_json::json!({"code":"custom_cbl_empty","message":"Custom CBL has no issues"})
-                .to_string(),
-        ));
+    if let Some(expected) = expected_updated_at {
+        if expected != plan_updated_at {
+            return Err(ApiError(
+                StatusCode::CONFLICT,
+                "plan_version_conflict".into(),
+            ));
+        }
     }
+    let mut nodes: Vec<serde_json::Value> =
+        serde_json::from_str::<serde_json::Value>(&plan.get::<_, String>(4))
+            .unwrap_or(serde_json::Value::Array(Vec::new()))
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
     let source_path = format!("custom-cbl:{list_id}");
     let source_ids: BTreeSet<i32> = entries.iter().map(|row| row.get(2)).collect();
-    let mut added = Vec::new();
-    let mut skipped = Vec::new();
-    nodes.retain(|node| {
-        let issue_id = node
+    // Source issues already sitting in another lane stay put; every other node
+    // loses this list's provenance so it can be re-merged cleanly in the target
+    // lane without ever moving an issue across lanes.
+    for node in &mut nodes {
+        let node_issue = node
             .get("ref_id")
             .and_then(|value| value.as_i64())
             .and_then(|value| i32::try_from(value).ok());
-        let same_source = node
-            .get("source_paths")
-            .and_then(|paths| paths.as_array())
-            .is_some_and(|paths| {
-                paths
-                    .iter()
-                    .any(|path| path.as_str() == Some(source_path.as_str()))
-            });
-        !(same_source && issue_id.is_some_and(|id| source_ids.contains(&id)))
+        let cross_lane_source = node.get("node_type").and_then(|value| value.as_str())
+            == Some("issue")
+            && node_issue.is_some_and(|issue_id| source_ids.contains(&issue_id))
+            && node.get("lane_id").and_then(|value| value.as_str()) != Some(target.as_str());
+        if !cross_lane_source {
+            strip_source_provenance(node, &source_path);
+        }
+    }
+    let mut seen: BTreeSet<i32> = BTreeSet::new();
+    for node in &nodes {
+        if node.get("lane_id").and_then(|value| value.as_str()) != Some(target.as_str()) {
+            continue;
+        }
+        if node.get("node_type").and_then(|value| value.as_str()) != Some("issue") {
+            continue;
+        }
+        if let Some(issue_id) = node
+            .get("ref_id")
+            .and_then(|value| value.as_i64())
+            .and_then(|value| i32::try_from(value).ok())
+        {
+            if source_ids.contains(&issue_id) && !seen.insert(issue_id) {
+                return Err(ApiError(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    format!("custom_cbl_duplicate_plan_issue: {issue_id}"),
+                ));
+            }
+        }
+    }
+    let mut existing_by_issue: std::collections::HashMap<i32, serde_json::Value> =
+        std::collections::HashMap::new();
+    for node in &nodes {
+        if node.get("node_type").and_then(|value| value.as_str()) != Some("issue") {
+            continue;
+        }
+        if let Some(issue_id) = node
+            .get("ref_id")
+            .and_then(|value| value.as_i64())
+            .and_then(|value| i32::try_from(value).ok())
+        {
+            if source_ids.contains(&issue_id) {
+                existing_by_issue.insert(issue_id, node.clone());
+            }
+        }
+    }
+    let mut target_nodes: Vec<serde_json::Value> = nodes
+        .iter()
+        .filter(|node| {
+            node.get("lane_id").and_then(|value| value.as_str()) == Some(target.as_str())
+        })
+        .cloned()
+        .collect();
+    target_nodes.sort_by_key(|node| {
+        node.get("position")
+            .and_then(|value| value.as_i64())
+            .unwrap_or(0)
     });
-    for row in entries {
-        let issue_id: i32 = row.get(2);
-        if nodes.iter().any(|node| {
+    let anchor = target_nodes
+        .iter()
+        .position(|node| {
             node.get("node_type").and_then(|value| value.as_str()) == Some("issue")
-                && node.get("ref_id").and_then(|value| value.as_i64()) == Some(i64::from(issue_id))
-        }) {
+                && node
+                    .get("ref_id")
+                    .and_then(|value| value.as_i64())
+                    .and_then(|value| i32::try_from(value).ok())
+                    .is_some_and(|issue_id| source_ids.contains(&issue_id))
+        })
+        .unwrap_or(target_nodes.len());
+    let mut before_anchor: Vec<serde_json::Value> = Vec::new();
+    let mut after_anchor: Vec<serde_json::Value> = Vec::new();
+    for (index, node) in target_nodes.iter().enumerate() {
+        let is_source_issue = node.get("node_type").and_then(|value| value.as_str())
+            == Some("issue")
+            && node
+                .get("ref_id")
+                .and_then(|value| value.as_i64())
+                .and_then(|value| i32::try_from(value).ok())
+                .is_some_and(|issue_id| source_ids.contains(&issue_id));
+        if !is_source_issue {
+            if index < anchor {
+                before_anchor.push(node.clone());
+            } else {
+                after_anchor.push(node.clone());
+            }
+        }
+    }
+    let mut ordered_source: Vec<serde_json::Value> = Vec::new();
+    let mut added = Vec::new();
+    let mut skipped = Vec::new();
+    for row in &entries {
+        let issue_id: i32 = row.get(2);
+        let checkpoint: bool = row.get(5);
+        let targets: Vec<i32> = serde_json::from_str(&row.get::<_, String>(6)).unwrap_or_default();
+        if let Some(existing) = existing_by_issue.get(&issue_id) {
+            if existing.get("lane_id").and_then(|value| value.as_str()) != Some(target.as_str()) {
+                skipped.push(issue_id);
+                continue;
+            }
+            let mut node = existing.clone();
+            node["is_checkpoint"] = serde_json::json!(checkpoint);
+            node["checkpoint_target_ref_ids"] = serde_json::json!(targets);
+            node["checkpoint_target_ref_id"] = serde_json::Value::Null;
+            let entry_position: i32 = row.get(1);
+            add_source_provenance(&mut node, &source_path, entry_position, &list_name);
+            ordered_source.push(node);
             skipped.push(issue_id);
             continue;
         }
@@ -512,9 +734,7 @@ pub async fn apply(
         let position: i32 = row.get(1);
         let title: String = row.get(3);
         let number: String = row.get(4);
-        let checkpoint: bool = row.get(5);
-        let targets: Vec<i32> = serde_json::from_str(&row.get::<_, String>(6)).unwrap_or_default();
-        nodes.push(serde_json::json!({
+        ordered_source.push(serde_json::json!({
             "id":format!("custom-cbl-{list_id}-{entry_id}"),"node_type":"issue","ref_id":issue_id,
             "lane_id":target,"position":position,"label":format!("{title} #{number}"),
             "source_paths":[source_path],"source_cbl_placements":[{"source_path":format!("custom-cbl:{list_id}"),"position":position}],
@@ -523,7 +743,22 @@ pub async fn apply(
         }));
         added.push(issue_id);
     }
-    let nodes_json = serde_json::Value::Array(nodes.clone());
+    let mut merged_target: Vec<serde_json::Value> = Vec::new();
+    merged_target.extend(before_anchor);
+    merged_target.extend(ordered_source);
+    merged_target.extend(after_anchor);
+    for (position, node) in merged_target.iter_mut().enumerate() {
+        node["position"] = serde_json::json!(position);
+    }
+    let mut final_nodes: Vec<serde_json::Value> = nodes
+        .iter()
+        .filter(|node| {
+            node.get("lane_id").and_then(|value| value.as_str()) != Some(target.as_str())
+        })
+        .cloned()
+        .collect();
+    final_nodes.extend(merged_target);
+    let nodes_json = serde_json::Value::Array(final_nodes.clone());
     let lanes_json = serde_json::Value::Array(lanes.clone());
     let nodes_json = tokio_postgres::types::Json(nodes_json);
     let lanes_json = tokio_postgres::types::Json(lanes_json);
@@ -533,9 +768,19 @@ pub async fn apply(
     )
     .await
     .map_err(db::query_error)?;
+    let fresh_updated_at: String = tx
+        .query_one(
+            "SELECT updated_at::text FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .get(0);
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(serde_json::json!({
-        "name":plan_name,"ordering_mode":ordering_mode,"lanes":lanes,"nodes":nodes,
+        "id":plan_pk,"user_id":plan_user_id,"name":plan_name,"ordering_mode":ordering_mode,
+        "created_at":plan_created_at,"updated_at":fresh_updated_at,
+        "lanes":lanes,"nodes":final_nodes,
         "added_issue_ids":added,"skipped_existing_issue_ids":skipped
     }))
     .into_response())
