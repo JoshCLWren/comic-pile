@@ -66,7 +66,7 @@ WITH auth AS (
               AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
-          AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '7 days'
+          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '7 days', 'YYYY-MM-DD"T"HH24:MI:SS')
         )
         OR (
           NOT (
@@ -85,7 +85,7 @@ WITH auth AS (
               AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
-          AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '30 days'
+          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
         )
       ELSE
         (
@@ -105,7 +105,7 @@ WITH auth AS (
               AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
           )
           AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
-          AND m.metadata->>'deep_metadata_refreshed_at' <= now()-interval '30 days'
+          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
         )
         OR (
           NOT (
@@ -710,6 +710,23 @@ mod tests {
         assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
     }
+    #[test]
+    fn deep_refresh_timestamp_comparisons_use_utc_text_on_both_sides() {
+        // Metadata is JSON text, but now() yields timestamptz.
+        // Mixing them is a PostgreSQL 42883 error on every intelligence read.
+        assert_eq!(
+            READ_SQL
+                .matches("LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char(")
+                .count(),
+            3,
+            "both fallback freshness branches must use UTC text thresholds"
+        );
+        assert!(
+            !READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' <= now()"),
+            "never compare JSON text directly with a PostgreSQL timestamp"
+        );
+    }
+
     #[test]
     fn malformed_credit_fields_never_reach_jsonb_array_length() {
         // PostgreSQL does not guarantee short-circuit evaluation of AND.
