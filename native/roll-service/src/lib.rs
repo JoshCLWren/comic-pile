@@ -32,6 +32,7 @@ pub mod reading_list;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_session;
+pub mod releases;
 pub mod roll_exclusions;
 pub mod roll_offer;
 pub mod roll_pool;
@@ -434,6 +435,16 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/bug-reports/", post(bug_reports::create))
         .route("/api/v1/bug-reports/", post(bug_reports::create))
+        .route(
+            "/api/v1/releases/",
+            get(releases::list).put(releases::publish),
+        )
+        .route("/api/v1/releases/source", get(releases::reconcile))
+        .route("/api/v1/releases/{release_id}", get(releases::get))
+        .route(
+            "/api/v1/releases/{release_id}/retract",
+            post(releases::retract),
+        )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(
