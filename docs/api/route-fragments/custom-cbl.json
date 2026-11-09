@@ -77,77 +77,77 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/custom-cbls",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/custom-cbls",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/custom-cbls/issue-search",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/issue\\-search$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/custom-cbls/{list_id}",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/custom-cbls/{list_id}",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/custom-cbls/{list_id}/export",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+/export$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$"
     },
     {
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$"
     },
     {
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/custom-cbls/{list_id}/reader",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+/reader$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$"
     }
   ]
