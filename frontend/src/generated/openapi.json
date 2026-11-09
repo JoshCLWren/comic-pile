@@ -4633,6 +4633,62 @@
         "title": "ContinuityRuleCreate",
         "type": "object"
       },
+      "ContinuityRuleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/NativeConvergenceTarget"
+            },
+            "type": "array"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type"
+        ],
+        "type": "object"
+      },
       "ContinuityRuleResponse": {
         "description": "Schema for a persisted generalized continuity rule.",
         "properties": {
@@ -11221,6 +11277,98 @@
           "needs_mapping_count",
           "needs_review_count",
           "metadata_missing_count"
+        ],
+        "type": "object"
+      },
+      "NativeContinuityRuleResponse": {
+        "properties": {
+          "checkpoint_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/NativeConvergenceTarget"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type",
+          "convergence_targets",
+          "selected_member_issue_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NativeConvergenceTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
         ],
         "type": "object"
       },
@@ -23329,22 +23477,20 @@
     },
     "/api/v1/continuity-rules/": {
       "get": {
-        "description": "List the authenticated user's continuity rules.",
-        "operationId": "list_continuity_rules_api_v1_continuity_rules__get",
+        "operationId": "continuity_rules_list",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ContinuityRuleResponse"
+                    "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                   },
-                  "title": "Response List Continuity Rules Api V1 Continuity Rules  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           }
         },
         "security": [
@@ -23352,21 +23498,17 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Continuity Rules",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       },
       "post": {
-        "description": "Create an owned continuity rule after validating references and cycles.",
-        "operationId": "create_continuity_rule_api_v1_continuity_rules__post",
+        "operationId": "continuity_rules_create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ContinuityRuleCreate"
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
               }
             }
           },
@@ -23377,21 +23519,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -23399,42 +23531,28 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       }
     },
     "/api/v1/continuity-rules/{rule_id}": {
       "delete": {
-        "description": "Delete one owned continuity rule.",
-        "operationId": "delete_continuity_rule_api_v1_continuity_rules__rule_id__delete",
+        "operationId": "continuity_rules_delete",
         "parameters": [
           {
             "in": "path",
             "name": "rule_id",
             "required": true,
             "schema": {
-              "title": "Rule Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -23442,23 +23560,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       },
       "get": {
-        "description": "Return one owned continuity rule.",
-        "operationId": "get_continuity_rule_api_v1_continuity_rules__rule_id__get",
+        "operationId": "continuity_rules_get",
         "parameters": [
           {
             "in": "path",
             "name": "rule_id",
             "required": true,
             "schema": {
-              "title": "Rule Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -23468,21 +23582,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -23490,23 +23594,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       },
       "put": {
-        "description": "Replace an owned continuity rule.",
-        "operationId": "update_continuity_rule_api_v1_continuity_rules__rule_id__put",
+        "operationId": "continuity_rules_update",
         "parameters": [
           {
             "in": "path",
             "name": "rule_id",
             "required": true,
             "schema": {
-              "title": "Rule Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -23515,7 +23615,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ContinuityRuleCreate"
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
               }
             }
           },
@@ -23526,21 +23626,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -23548,10 +23638,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       }

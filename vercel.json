@@ -529,6 +529,23 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/continuity\\-rules/$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/continuity\\-rules/[^/]+$",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST",
@@ -964,25 +981,6 @@
       "src": "^/api/v1/continuity\\-plans/release\\-sources/[^/]+$",
       "methods": [
         "PATCH",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-rules/$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "methods": [
-        "GET",
-        "PUT",
         "DELETE",
         "OPTIONS"
       ],

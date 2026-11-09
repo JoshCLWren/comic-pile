@@ -5,6 +5,7 @@ pub mod bootstrap;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
+pub mod continuity_rules;
 pub mod creators;
 pub mod db;
 pub mod dependencies;
@@ -410,6 +411,16 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators", get(creators::list_creators))
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        .route(
+            "/api/v1/continuity-rules/",
+            get(continuity_rules::list).post(continuity_rules::create),
+        )
+        .route(
+            "/api/v1/continuity-rules/{rule_id}",
+            get(continuity_rules::get)
+                .put(continuity_rules::update)
+                .delete(continuity_rules::delete),
+        )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

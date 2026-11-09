@@ -40,6 +40,39 @@ export interface ConfirmRequest {
 
 export type ConfirmResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
+export interface ContinuityRulesCreateRequest {
+  body: components['schemas']['ContinuityRuleRequest']
+}
+
+export type ContinuityRulesCreateResponse = components['schemas']['NativeContinuityRuleResponse']
+
+export interface ContinuityRulesDeleteRequest {
+  path: {
+    rule_id: number
+  }
+}
+
+export type ContinuityRulesDeleteResponse = void
+
+export interface ContinuityRulesGetRequest {
+  path: {
+    rule_id: number
+  }
+}
+
+export type ContinuityRulesGetResponse = components['schemas']['NativeContinuityRuleResponse']
+
+export type ContinuityRulesListResponse = Array<components['schemas']['NativeContinuityRuleResponse']>
+
+export interface ContinuityRulesUpdateRequest {
+  path: {
+    rule_id: number
+  }
+  body: components['schemas']['ContinuityRuleRequest']
+}
+
+export type ContinuityRulesUpdateResponse = components['schemas']['NativeContinuityRuleResponse']
+
 export interface CreateDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
@@ -329,6 +362,11 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
+  continuityRulesCreate(args: ContinuityRulesCreateRequest): Promise<ContinuityRulesCreateResponse>
+  continuityRulesDelete(args: ContinuityRulesDeleteRequest): Promise<ContinuityRulesDeleteResponse>
+  continuityRulesGet(args: ContinuityRulesGetRequest): Promise<ContinuityRulesGetResponse>
+  continuityRulesList(): Promise<ContinuityRulesListResponse>
+  continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
@@ -387,6 +425,31 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     confirm(args: ConfirmRequest) {
       return client.post<ConfirmResponse, ConfirmRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        args.body,
+      )
+    },
+    continuityRulesCreate(args: ContinuityRulesCreateRequest) {
+      return client.post<ContinuityRulesCreateResponse, ContinuityRulesCreateRequest['body']>(
+        "/v1/continuity-rules/",
+        args.body,
+      )
+    },
+    continuityRulesDelete(args: ContinuityRulesDeleteRequest) {
+      return client.delete<ContinuityRulesDeleteResponse>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+      )
+    },
+    continuityRulesGet(args: ContinuityRulesGetRequest) {
+      return client.get<ContinuityRulesGetResponse>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+      )
+    },
+    continuityRulesList() {
+      return client.get<ContinuityRulesListResponse>("/v1/continuity-rules/")
+    },
+    continuityRulesUpdate(args: ContinuityRulesUpdateRequest) {
+      return client.put<ContinuityRulesUpdateResponse, ContinuityRulesUpdateRequest['body']>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
         args.body,
       )
     },

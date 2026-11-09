@@ -193,7 +193,7 @@ fn manual_creator_id(name: &str) -> i64 {
     let mut acc: u64 = 0;
     let base = MANUAL_CREATOR_ID_BASE as u64;
     // process full 32 bytes as a big-endian number mod base
-    let hex = format!("{:x}", digest);
+    let hex = format!("{digest:x}");
     // hex is 64 chars
     for ch in hex.chars() {
         let digit = ch.to_digit(16).unwrap() as u64;
