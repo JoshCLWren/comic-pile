@@ -112,6 +112,14 @@ export function updateInventory(inventory, operations) {
     catch_all: {src: FALLBACK, dest: RUST},
     v1_operations: v1, unversioned_operations: unversioned}};
 }
+export function normalizeOperationIds(operations) {
+  return operations.map(operation => [operation.method, operation.path])
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]));
+}
+export function sameOperationIds(operations, expected) {
+  return JSON.stringify(normalizeOperationIds(operations))
+    === JSON.stringify(normalizeOperationIds(expected));
+}
 function inspect() {
   const env = {...process.env, ENVIRONMENT: 'production',
     SECRET_KEY: process.env.SECRET_KEY || 'synthetic-route-inspection-only',
@@ -129,11 +137,9 @@ function run() {
   const nextInventory = updateInventory(inventory, operations);
   if (check) {
     const full = inventory.full_surface;
-    const sameIds = (ops, expected) => JSON.stringify(ops.map(x => [x.method, x.path]))
-      === JSON.stringify(expected.map(x => [x.method, x.path]));
     if (readFileSync('vercel.json', 'utf8') !== nextVercel
-        || !sameIds(full.v1_operations, nextInventory.full_surface.v1_operations)
-        || !sameIds(full.unversioned_operations, nextInventory.full_surface.unversioned_operations)
+        || !sameOperationIds(full.v1_operations, nextInventory.full_surface.v1_operations)
+        || !sameOperationIds(full.unversioned_operations, nextInventory.full_surface.unversioned_operations)
         || full.catch_all.dest !== RUST) {
       throw new Error('Stale Vercel Python allowlist. Run node scripts/generate_vercel_routes.mjs');
     }

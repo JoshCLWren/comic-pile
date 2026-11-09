@@ -585,24 +585,22 @@
       "catch_all_dest": "/api/native_roll.rs",
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
-      "v1_total": 214,
-      "v1_shadowed_by_rust": 26,
+      "v1_total": 197,
+      "v1_shadowed_by_rust": 21,
       "v1_live_python": 168,
-      "v1_orphaned": 20,
-      "unversioned_total": 43,
-      "unversioned_shadowed_by_rust": 14,
+      "v1_orphaned": 8,
+      "unversioned_total": 33,
+      "unversioned_shadowed_by_rust": 9,
       "unversioned_live_python": 22,
-      "unversioned_orphaned": 7,
-      "total_python_surface": 257,
-      "total_shadowed_by_rust": 40,
+      "unversioned_orphaned": 2,
+      "total_python_surface": 230,
+      "total_shadowed_by_rust": 30,
       "total_live_python": 190,
-      "total_orphaned": 27
+      "total_orphaned": 10
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
-      "dest": "/api/native_roll.rs",
-      "runtime": "python-fastapi",
-      "note": "Vercel catch-all routes every remaining /api/* request to the Python FastAPI app."
+      "dest": "/api/native_roll.rs"
     },
     "orphan": {
       "method": "GET",
@@ -611,72 +609,6 @@
       "note": "Same v2 operation as operations[]; verifies the single Python orphan via catch-all."
     },
     "v1_operations": [
-      {
-        "method": "POST",
-        "path": "/api/v1/admin/delete-test-data/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/admin/export/csv/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/admin/export/json/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/admin/export/summary/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/admin/import/csv/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/analytics/metrics",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
       {
         "method": "GET",
         "path": "/api/v1/auth/csrf",
@@ -1544,28 +1476,6 @@
         "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/crossover-templates/adopt",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/crossover-templates/preview",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "GET",
         "path": "/api/v1/custom-cbls",
         "runtime": "python-fastapi",
@@ -1706,17 +1616,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/debug/log",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -2171,83 +2070,6 @@
         "verified_against": "vercel.json"
       },
       {
-        "method": "GET",
-        "path": "/api/v1/prerequisites/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/prerequisites/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "DELETE",
-        "path": "/api/v1/prerequisites/{prerequisite_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "PATCH",
-        "path": "/api/v1/prerequisites/{prerequisite_id}",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/v1/queue/shuffle/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/queue/threads/{thread_id}/back/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "PUT",
-        "path": "/api/v1/queue/threads/{thread_id}/position/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "POST",
         "path": "/api/v1/reading-boundaries",
         "runtime": "python-fastapi",
@@ -2527,17 +2349,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/recommendations/diagnostics",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {
@@ -3573,72 +3384,6 @@
     ],
     "unversioned_operations": [
       {
-        "method": "POST",
-        "path": "/api/admin/delete-test-data/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/admin/export/csv/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/admin/export/json/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/admin/export/summary/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/admin/import/csv/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/analytics/metrics",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "GET",
         "path": "/api/auth/csrf",
         "runtime": "python-fastapi",
@@ -3754,17 +3499,6 @@
         "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/debug/log",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "GET",
         "path": "/api/metrics",
         "runtime": "python-fastapi",
@@ -3786,39 +3520,6 @@
         "consumers": [],
         "ingress_destination": "/api/index.py",
         "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "POST",
-        "path": "/api/queue/shuffle/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "PUT",
-        "path": "/api/queue/threads/{thread_id}/back/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "PUT",
-        "path": "/api/queue/threads/{thread_id}/position/",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {

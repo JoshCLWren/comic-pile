@@ -34,17 +34,17 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issues/[0-9]+/dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
       "methods": [
         "POST",
         "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators$",
-      "methods": [
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -114,13 +114,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/creators/summaries$",
-      "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/creators/team\\-chemistry$",
       "methods": [
         "GET",
@@ -148,14 +141,6 @@
     },
     {
       "src": "^/api/v1/dependencies/blocked$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+/dependencies$",
       "methods": [
         "GET",
         "OPTIONS"

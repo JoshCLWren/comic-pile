@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {generateVercel, pythonOperations, routeRegex, updateInventory} from './generate_vercel_routes.mjs';
+import {
+  generateVercel,
+  normalizeOperationIds,
+  pythonOperations,
+  routeRegex,
+  sameOperationIds,
+  updateInventory,
+} from './generate_vercel_routes.mjs';
 
 function metadata(withOrphan = true) {
   return {
@@ -29,6 +36,18 @@ test('raw OpenAPI plus hidden API routes, excluding the synthetic FastAPI 404', 
   const ops = pythonOperations(metadata());
   assert(ops.some(x => x[1] === '/api/v1/cron/release-sync'));
   assert(!ops.some(x => x[1] === '/api/{path:path}'));
+});
+test('full surface operation comparison ignores reordered operations', () => {
+  const expected = [
+    {method: 'GET', path: '/api/v1/threads/{id}'},
+    {method: 'POST', path: '/api/v1/threads/{id}'},
+  ];
+  const reordered = [...expected].reverse();
+  assert(sameOperationIds(reordered, expected));
+  assert.deepEqual(normalizeOperationIds(reordered), [
+    ['GET', '/api/v1/threads/{id}'],
+    ['POST', '/api/v1/threads/{id}'],
+  ]);
 });
 test('deleting Python routes automatically removes exceptions and returns Rust 404', () => {
   const before = generateVercel(config, pythonOperations(metadata()));
