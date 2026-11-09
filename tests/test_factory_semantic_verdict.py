@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -112,7 +113,10 @@ def test_worker_recovery_is_fresh_bounded_and_fail_closed() -> None:
 
     assert "opencode run -m \"$runtime_model\"" in helper
     assert "gh pr status <number>" in helper
-    assert "Return exactly one bare line" in helper
+    assert "The final line must be exactly one bare verdict marker" in helper
+    assert "pull request #${pr} at exact head ${head}" in helper
+    assert '"$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission"' in worker
+    assert "factory_append_recovered_acceptance_report" in worker
     assert "FACTORY_GATE_BLOCKED" in helper
     assert "recovery_timeout=90" in worker
     assert "current_head" in worker
@@ -152,3 +156,92 @@ def test_status_vocabulary_is_canonical_and_includes_recovery_failure() -> None:
     }
     for status in expected:
         assert helper.count(status) == 1
+
+
+POLICY = ROOT / ".github/scripts/factory_issue_acceptance.py"
+RECOVERY_HEAD = "a" * 40
+
+
+def recovery_report(head: str = RECOVERY_HEAD) -> dict:
+    """Model evidence fixture; the trusted controller validates issue criteria."""
+    return {
+        "issue": 4916,
+        "head": head,
+        "issue_digest": "b" * 64,
+        "items": [{
+            "id": "A1",
+            "status": "pass",
+            "file": ".github/scripts/factory-semantic-verdict.sh",
+            "evidence": "Inspected actual review recovery handling and preserved acceptance",
+            "test": "pytest tests/test_factory_semantic_verdict.py verifies evidence handoff",
+        }],
+    }
+
+
+def test_recovery_appends_one_model_report_when_original_has_none(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    primary.write_text("Inspected current PR diff and issue; conclusion pending.\n")
+    recovery.write_text(
+        "Inspected the current PR, review findings and source.\n"
+        + "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
+        + "FACTORY_GATE_READY\n"
+    )
+    call = (
+        f"factory_append_recovered_acceptance_report "
+        f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
+    )
+    assert run_bash(call).returncode == 0
+    assert run_bash(call).returncode == 0
+    assert primary.read_text().count("FACTORY_ACCEPTANCE_V1=") == 1
+    assert run_bash(f"factory_has_acceptance_report {primary} {POLICY}").returncode == 0
+
+
+def test_recovery_preserves_existing_primary_report(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    original = "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
+    primary.write_text(original)
+    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n")
+    call = (
+        f"factory_append_recovered_acceptance_report "
+        f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
+    )
+    assert run_bash(call).returncode == 0
+    assert primary.read_text() == original
+
+
+def test_recovery_rejects_malformed_primary_and_multiple_reports(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    valid = "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
+    primary.write_text("FACTORY_ACCEPTANCE_V1=not-json\n")
+    recovery.write_text(valid)
+    call = (
+        f"factory_append_recovered_acceptance_report "
+        f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
+    )
+    assert run_bash(call).returncode != 0
+    assert primary.read_text() == "FACTORY_ACCEPTANCE_V1=not-json\n"
+
+    primary.write_text("No report present.\n")
+    recovery.write_text(valid + valid)
+    assert run_bash(call).returncode != 0
+    assert primary.read_text() == "No report present.\n"
+
+
+def test_recovery_rejects_stale_head_and_absent_evidence(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    primary.write_text("Only unverified prose.\n")
+    recovery.write_text(
+        "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n"
+    )
+    call = (
+        f"factory_append_recovered_acceptance_report "
+        f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
+    )
+    assert run_bash(call).returncode != 0
+    recovery.write_text("FACTORY_GATE_READY\n")
+    assert run_bash(call).returncode != 0
+    assert run_bash(f"factory_has_acceptance_report {primary} {POLICY}").returncode != 0
