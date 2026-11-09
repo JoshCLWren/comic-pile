@@ -44,9 +44,9 @@ pub mod roll_reset;
 pub mod roll_resources;
 mod session_bandwidth;
 pub mod session_detail;
+pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
-pub mod tags;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -549,9 +549,18 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/tags/{tag_id}/", put(tags::update_tag))
         .route("/api/v1/tags/{tag_id}/", delete(tags::delete_tag))
         .route("/api/v1/tags/{tag_id}/assign/", post(tags::assign_tag))
-        .route("/api/v1/tags/{tag_id}/bulk-assign/", post(tags::bulk_assign_tag))
-        .route("/api/v1/tags/{tag_id}/bulk-unassign/", post(tags::bulk_unassign_tag))
-        .route("/api/v1/tags/{tag_id}/unassign/", delete(tags::unassign_tag))
+        .route(
+            "/api/v1/tags/{tag_id}/bulk-assign/",
+            post(tags::bulk_assign_tag),
+        )
+        .route(
+            "/api/v1/tags/{tag_id}/bulk-unassign/",
+            post(tags::bulk_unassign_tag),
+        )
+        .route(
+            "/api/v1/tags/{tag_id}/unassign/",
+            delete(tags::unassign_tag),
+        )
         .route("/api/v1/tags/{tag_id}/usage/", get(tags::get_tag_usage))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {

@@ -178,21 +178,45 @@ fn conflict(detail: &str) -> ApiError {
 }
 
 fn normalize_tag_name(name: &str) -> String {
-    name.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 const PALETTE: &[(&str, &str)] = &[
-    ("red", "#DC2626"), ("orange", "#F97316"), ("amber", "#F59E0B"),
-    ("yellow", "#EAB308"), ("lime", "#84CC16"), ("green", "#22C55E"),
-    ("emerald", "#10B981"), ("teal", "#14B8A6"), ("cyan", "#06B6D4"),
-    ("sky", "#0EA5E9"), ("blue", "#3B82F6"), ("indigo", "#6366F1"),
-    ("violet", "#8B5CF6"), ("purple", "#A855F7"), ("fuchsia", "#D946EF"),
-    ("pink", "#EC4899"), ("rose", "#F43F5E"), ("crimson", "#B91C1C"),
-    ("burgundy", "#7F1D1D"), ("maroon", "#78350F"), ("brown", "#92400E"),
-    ("gold", "#D97706"), ("bronze", "#B45309"), ("khaki", "#A16207"),
-    ("olive", "#65A30D"), ("forest", "#15803D"), ("mint", "#34D399"),
-    ("ice", "#22D3EE"), ("cobalt", "#2563EB"), ("royal", "#4F46E5"),
-    ("violet-deep", "#7C3AED"), ("magenta", "#E879F9"),
+    ("red", "#DC2626"),
+    ("orange", "#F97316"),
+    ("amber", "#F59E0B"),
+    ("yellow", "#EAB308"),
+    ("lime", "#84CC16"),
+    ("green", "#22C55E"),
+    ("emerald", "#10B981"),
+    ("teal", "#14B8A6"),
+    ("cyan", "#06B6D4"),
+    ("sky", "#0EA5E9"),
+    ("blue", "#3B82F6"),
+    ("indigo", "#6366F1"),
+    ("violet", "#8B5CF6"),
+    ("purple", "#A855F7"),
+    ("fuchsia", "#D946EF"),
+    ("pink", "#EC4899"),
+    ("rose", "#F43F5E"),
+    ("crimson", "#B91C1C"),
+    ("burgundy", "#7F1D1D"),
+    ("maroon", "#78350F"),
+    ("brown", "#92400E"),
+    ("gold", "#D97706"),
+    ("bronze", "#B45309"),
+    ("khaki", "#A16207"),
+    ("olive", "#65A30D"),
+    ("forest", "#15803D"),
+    ("mint", "#34D399"),
+    ("ice", "#22D3EE"),
+    ("cobalt", "#2563EB"),
+    ("royal", "#4F46E5"),
+    ("violet-deep", "#7C3AED"),
+    ("magenta", "#E879F9"),
 ];
 
 fn validate_color(color: &str) -> Result<(String, String), ApiError> {
@@ -271,7 +295,10 @@ fn row_to_tag(row: &tokio_postgres::Row) -> Tag {
 
 const TAG_SELECT: &str = "SELECT id, name, normalized_name, scope, owner_user_id, color, created_at::text, updated_at::text FROM tags";
 
-async fn load_tag_conn(conn: &deadpool_postgres::Object, tag_id: i32) -> Result<Option<Tag>, ApiError> {
+async fn load_tag_conn(
+    conn: &deadpool_postgres::Object,
+    tag_id: i32,
+) -> Result<Option<Tag>, ApiError> {
     let row = conn
         .query_opt(&format!("{} WHERE id = $1", TAG_SELECT), &[&tag_id])
         .await
@@ -279,7 +306,10 @@ async fn load_tag_conn(conn: &deadpool_postgres::Object, tag_id: i32) -> Result<
     Ok(row.as_ref().map(row_to_tag))
 }
 
-async fn load_tag_tx(tx: &tokio_postgres::Transaction<'_>, tag_id: i32) -> Result<Option<Tag>, ApiError> {
+async fn load_tag_tx(
+    tx: &tokio_postgres::Transaction<'_>,
+    tag_id: i32,
+) -> Result<Option<Tag>, ApiError> {
     let row = tx
         .query_opt(&format!("{} WHERE id = $1", TAG_SELECT), &[&tag_id])
         .await
@@ -307,9 +337,15 @@ async fn validate_target_conn(
             } else {
                 vec![&target_id]
             };
-            let row = conn.query_opt(sql, &params).await.map_err(db::query_error)?;
+            let row = conn
+                .query_opt(sql, &params)
+                .await
+                .map_err(db::query_error)?;
             if row.is_none() {
-                return Err(not_found(&format!("Issue with id {} does not exist", target_id)));
+                return Err(not_found(&format!(
+                    "Issue with id {} does not exist",
+                    target_id
+                )));
             }
         }
         "Thread" => {
@@ -323,9 +359,15 @@ async fn validate_target_conn(
             } else {
                 vec![&target_id]
             };
-            let row = conn.query_opt(sql, &params).await.map_err(db::query_error)?;
+            let row = conn
+                .query_opt(sql, &params)
+                .await
+                .map_err(db::query_error)?;
             if row.is_none() {
-                return Err(not_found(&format!("Thread with id {} does not exist", target_id)));
+                return Err(not_found(&format!(
+                    "Thread with id {} does not exist",
+                    target_id
+                )));
             }
         }
         "ContinuityPlan" => {
@@ -339,7 +381,10 @@ async fn validate_target_conn(
             } else {
                 vec![&target_id]
             };
-            let row = conn.query_opt(sql, &params).await.map_err(db::query_error)?;
+            let row = conn
+                .query_opt(sql, &params)
+                .await
+                .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
                     "ContinuityPlan with id {} does not exist",
@@ -379,7 +424,10 @@ async fn validate_target_tx(
             }
             .map_err(db::query_error)?;
             if row.is_none() {
-                return Err(not_found(&format!("Issue with id {} does not exist", target_id)));
+                return Err(not_found(&format!(
+                    "Issue with id {} does not exist",
+                    target_id
+                )));
             }
         }
         "Thread" => {
@@ -395,7 +443,10 @@ async fn validate_target_tx(
             }
             .map_err(db::query_error)?;
             if row.is_none() {
-                return Err(not_found(&format!("Thread with id {} does not exist", target_id)));
+                return Err(not_found(&format!(
+                    "Thread with id {} does not exist",
+                    target_id
+                )));
             }
         }
         "ContinuityPlan" => {
@@ -444,7 +495,11 @@ async fn visible_assignments_conn(
     // target conditions
     let mut cond_strs: Vec<String> = Vec::new();
     for (tt, tid) in targets {
-        cond_strs.push(format!("(a.target_type = ${} AND a.target_id = ${})", idx, idx + 1));
+        cond_strs.push(format!(
+            "(a.target_type = ${} AND a.target_id = ${})",
+            idx,
+            idx + 1
+        ));
         params.push(Box::new(tt.clone()));
         params.push(Box::new(*tid));
         idx += 2;
@@ -459,9 +514,14 @@ async fn visible_assignments_conn(
         cond_strs.join(" OR "),
         user_param
     );
-    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> =
-        params.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let rows = conn.query(&sql, &param_refs).await.map_err(db::query_error)?;
+    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params
+        .iter()
+        .map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync))
+        .collect();
+    let rows = conn
+        .query(&sql, &param_refs)
+        .await
+        .map_err(db::query_error)?;
     let mut out = Vec::new();
     for row in rows {
         let tag = Tag {
@@ -525,8 +585,16 @@ async fn visible_assignments_tx(
     }
     // dedup? Python orders by scope/name/target_type. We'll sort.
     out.sort_by(|a, b| {
-        (a.0.scope.as_str(), a.0.normalized_name.as_str(), a.1.as_str())
-            .cmp(&(b.0.scope.as_str(), b.0.normalized_name.as_str(), b.1.as_str()))
+        (
+            a.0.scope.as_str(),
+            a.0.normalized_name.as_str(),
+            a.1.as_str(),
+        )
+            .cmp(&(
+                b.0.scope.as_str(),
+                b.0.normalized_name.as_str(),
+                b.1.as_str(),
+            ))
     });
     // reverse scope? scope desc: global before private. String desc: "global" > "private", so descending. Our sort ascending would private first. Need descending scope. Let's sort with scope descending.
     out.sort_by(|a, b| {
@@ -598,7 +666,10 @@ async fn find_near_global_tags(
 ) -> Result<Vec<Tag>, ApiError> {
     let rows = conn
         .query(
-            &format!("{} WHERE scope = 'global' ORDER BY normalized_name", TAG_SELECT),
+            &format!(
+                "{} WHERE scope = 'global' ORDER BY normalized_name",
+                TAG_SELECT
+            ),
             &[],
         )
         .await
@@ -633,7 +704,11 @@ pub async fn list_tags(
 ) -> Result<Json<TagListResponse>, ApiError> {
     let mut conn = db::checkout(&state).await?;
     let user_id = user.id();
-    let normalized_search = q.search.as_deref().map(normalize_tag_name).unwrap_or_default();
+    let normalized_search = q
+        .search
+        .as_deref()
+        .map(normalize_tag_name)
+        .unwrap_or_default();
     let sql = if normalized_search.is_empty() {
         format!(
             "{} WHERE (scope = 'global' OR owner_user_id = $1) ORDER BY scope DESC, normalized_name",
@@ -708,7 +783,10 @@ pub async fn create_tag(
     // exact global match
     let existing_global = conn
         .query_opt(
-            &format!("{} WHERE normalized_name = $1 AND scope = 'global'", TAG_SELECT),
+            &format!(
+                "{} WHERE normalized_name = $1 AND scope = 'global'",
+                TAG_SELECT
+            ),
             &[&normalized],
         )
         .await
@@ -835,13 +913,19 @@ pub async fn update_tag(
             // global collision
             let existing = conn
                 .query_opt(
-                    &format!("{} WHERE normalized_name = $1 AND scope = 'global'", TAG_SELECT),
+                    &format!(
+                        "{} WHERE normalized_name = $1 AND scope = 'global'",
+                        TAG_SELECT
+                    ),
                     &[&normalized],
                 )
                 .await
                 .map_err(db::query_error)?;
             if existing.is_some() {
-                return Err(conflict(&format!("A global tag named '{}' already exists", name)));
+                return Err(conflict(&format!(
+                    "A global tag named '{}' already exists",
+                    name
+                )));
             }
             if tag.scope == "private" && tag.owner_user_id.is_some() {
                 let dup = conn
@@ -1298,7 +1382,8 @@ pub async fn bulk_unassign_tag(
 
     let mut still_inherited: Vec<i32> = Vec::new();
     if req.target_type == "Issue" {
-        still_inherited = issues_still_inheriting_tag(&conn, user.id(), tag_id, &requested_ids).await?;
+        still_inherited =
+            issues_still_inheriting_tag(&conn, user.id(), tag_id, &requested_ids).await?;
     }
 
     Ok(Json(BulkAssignResponse {
@@ -1344,8 +1429,14 @@ async fn issues_still_inheriting_tag(
         params.push(Box::new(*id));
     }
     params.push(Box::new(user_id));
-    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let rows = conn.query(&sql, &param_refs).await.map_err(db::query_error)?;
+    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params
+        .iter()
+        .map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync))
+        .collect();
+    let rows = conn
+        .query(&sql, &param_refs)
+        .await
+        .map_err(db::query_error)?;
     for row in rows {
         let iid: i32 = row.get(0);
         let tid: i32 = row.get(1);
@@ -1368,8 +1459,14 @@ async fn issues_still_inheriting_tag(
         params2.push(Box::new(*id));
     }
     params2.push(Box::new(user_id));
-    let param_refs2: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params2.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let rows2 = conn.query(&sql2, &param_refs2).await.map_err(db::query_error)?;
+    let param_refs2: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params2
+        .iter()
+        .map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync))
+        .collect();
+    let rows2 = conn
+        .query(&sql2, &param_refs2)
+        .await
+        .map_err(db::query_error)?;
     for row in rows2 {
         let iid: i32 = row.get(0);
         let pid: i32 = row.get(1);
@@ -1402,7 +1499,11 @@ async fn issues_still_inheriting_tag(
         let mut params3: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
         let mut idx = 1;
         for (tt, tid) in &targets {
-            cond_strs.push(format!("(target_type = ${} AND target_id = ${})", idx, idx + 1));
+            cond_strs.push(format!(
+                "(target_type = ${} AND target_id = ${})",
+                idx,
+                idx + 1
+            ));
             params3.push(Box::new(tt.clone()));
             params3.push(Box::new(*tid));
             idx += 2;
@@ -1414,8 +1515,14 @@ async fn issues_still_inheriting_tag(
             tag_param,
             cond_strs.join(" OR ")
         );
-        let param_refs3: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params3.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-        let rows3 = conn.query(&sql3, &param_refs3).await.map_err(db::query_error)?;
+        let param_refs3: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params3
+            .iter()
+            .map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync))
+            .collect();
+        let rows3 = conn
+            .query(&sql3, &param_refs3)
+            .await
+            .map_err(db::query_error)?;
         for row in rows3 {
             let tt: String = row.get(0);
             let tid: i32 = row.get(1);
@@ -1478,7 +1585,10 @@ pub async fn effective_for_issue(
     };
     // thread owned (already by join)
     let thread_row = conn
-        .query_opt("SELECT title FROM threads WHERE id=$1 AND user_id=$2", &[&thread_id, &user_id])
+        .query_opt(
+            "SELECT title FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user_id],
+        )
         .await
         .map_err(db::query_error)?;
     let thread_title: String = match thread_row {
@@ -1499,7 +1609,10 @@ pub async fn effective_for_issue(
         plan_names.insert(r.get(0), r.get(1));
     }
 
-    let mut targets: Vec<(String, i32)> = vec![("Issue".to_string(), issue_id), ("Thread".to_string(), thread_id)];
+    let mut targets: Vec<(String, i32)> = vec![
+        ("Issue".to_string(), issue_id),
+        ("Thread".to_string(), thread_id),
+    ];
     for pid in plan_names.keys() {
         targets.push(("ContinuityPlan".to_string(), *pid));
     }
@@ -1507,7 +1620,10 @@ pub async fn effective_for_issue(
     let assignments = visible_assignments_conn(&conn, user_id, &targets).await?;
 
     let mut display_names: BTreeMap<(String, i32), String> = BTreeMap::new();
-    display_names.insert(("Issue".to_string(), issue_id), format!("#{}", issue_number));
+    display_names.insert(
+        ("Issue".to_string(), issue_id),
+        format!("#{}", issue_number),
+    );
     display_names.insert(("Thread".to_string(), thread_id), thread_title.clone());
     for (pid, pname) in &plan_names {
         display_names.insert(("ContinuityPlan".to_string(), *pid), pname.clone());
@@ -1535,7 +1651,10 @@ pub async fn effective_for_thread(
     let mut conn = db::checkout(&state).await?;
     let user_id = user.id();
     let thread_row = conn
-        .query_opt("SELECT title FROM threads WHERE id=$1 AND user_id=$2", &[&thread_id, &user_id])
+        .query_opt(
+            "SELECT title FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user_id],
+        )
         .await
         .map_err(db::query_error)?;
     let thread_title: String = match thread_row {
@@ -1563,12 +1682,20 @@ pub async fn effective_for_plan(
     let mut conn = db::checkout(&state).await?;
     let user_id = user.id();
     let plan_row = conn
-        .query_opt("SELECT name FROM continuity_plans WHERE id=$1 AND user_id=$2", &[&plan_id, &user_id])
+        .query_opt(
+            "SELECT name FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&plan_id, &user_id],
+        )
         .await
         .map_err(db::query_error)?;
     let plan_name: String = match plan_row {
         Some(r) => r.get(0),
-        None => return Err(not_found(&format!("Reading Plan {} does not exist", plan_id))),
+        None => {
+            return Err(not_found(&format!(
+                "Reading Plan {} does not exist",
+                plan_id
+            )))
+        }
     };
 
     let targets = vec![("ContinuityPlan".to_string(), plan_id)];
@@ -1591,7 +1718,10 @@ pub async fn thread_issues_effective(
     let mut conn = db::checkout(&state).await?;
     let user_id = user.id();
     let thread_row = conn
-        .query_opt("SELECT title FROM threads WHERE id=$1 AND user_id=$2", &[&thread_id, &user_id])
+        .query_opt(
+            "SELECT title FROM threads WHERE id=$1 AND user_id=$2",
+            &[&thread_id, &user_id],
+        )
         .await
         .map_err(db::query_error)?;
     let thread_title: String = match thread_row {
@@ -1634,8 +1764,14 @@ pub async fn thread_issues_effective(
         params.push(Box::new(*id));
     }
     params.push(Box::new(user_id));
-    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params.iter().map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync)).collect();
-    let plan_rows = conn.query(&plan_sql, &param_refs).await.map_err(db::query_error)?;
+    let param_refs: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = params
+        .iter()
+        .map(|p| p.as_ref() as &(dyn tokio_postgres::types::ToSql + Sync))
+        .collect();
+    let plan_rows = conn
+        .query(&plan_sql, &param_refs)
+        .await
+        .map_err(db::query_error)?;
 
     let mut plans_by_issue: BTreeMap<i32, Vec<i32>> = BTreeMap::new();
     let mut plan_names: BTreeMap<i32, String> = BTreeMap::new();
@@ -1671,13 +1807,21 @@ pub async fn thread_issues_effective(
 
     let mut all_rows: Vec<(Tag, String, i32, String)> = Vec::new();
     for (tag, tt, tid) in assignments {
-        let dn = display_names.get(&(tt.clone(), tid)).cloned().unwrap_or_default();
+        let dn = display_names
+            .get(&(tt.clone(), tid))
+            .cloned()
+            .unwrap_or_default();
         all_rows.push((tag, tt, tid, dn));
     }
 
     let mut results: Vec<EffectiveTagsResponse> = Vec::new();
     for iid in &issue_ids {
-        let plan_ids_for_issue: BTreeSet<i32> = plans_by_issue.get(iid).cloned().unwrap_or_default().into_iter().collect();
+        let plan_ids_for_issue: BTreeSet<i32> = plans_by_issue
+            .get(iid)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
         let contributing: Vec<(Tag, String, i32, String)> = all_rows
             .iter()
             .filter(|(_, tt, tid, _)| {
