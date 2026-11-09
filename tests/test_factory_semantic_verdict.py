@@ -202,7 +202,9 @@ def test_recovery_preserves_existing_primary_report(tmp_path: Path) -> None:
     recovery = tmp_path / "recovery.log"
     original = "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
     primary.write_text(original)
-    recovery.write_text(\n        "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n"\n    )
+    recovery.write_text(
+        "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n"
+    )
     call = (
         "factory_append_recovered_acceptance_report "
         f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
