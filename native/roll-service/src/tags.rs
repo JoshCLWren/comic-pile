@@ -237,8 +237,7 @@ fn validate_color(color: &str) -> Result<(String, String), ApiError> {
         }
     }
     Err(bad_request(&format!(
-        "Color '{}' is not in the fixed tag color palette",
-        color
+        "Color '{color}' is not in the fixed tag color palette"
     )))
 }
 
@@ -272,14 +271,6 @@ async fn is_admin_conn(conn: &deadpool_postgres::Object, user_id: i32) -> Result
     Ok(row.map(|r| r.get::<_, bool>(0)).unwrap_or(false))
 }
 
-async fn is_admin_tx(tx: &tokio_postgres::Transaction<'_>, user_id: i32) -> Result<bool, ApiError> {
-    let row = tx
-        .query_opt("SELECT is_admin FROM users WHERE id = $1", &[&user_id])
-        .await
-        .map_err(db::query_error)?;
-    Ok(row.map(|r| r.get::<_, bool>(0)).unwrap_or(false))
-}
-
 fn row_to_tag(row: &tokio_postgres::Row) -> Tag {
     Tag {
         id: row.get(0),
@@ -300,18 +291,7 @@ async fn load_tag_conn(
     tag_id: i32,
 ) -> Result<Option<Tag>, ApiError> {
     let row = conn
-        .query_opt(&format!("{} WHERE id = $1", TAG_SELECT), &[&tag_id])
-        .await
-        .map_err(db::query_error)?;
-    Ok(row.as_ref().map(row_to_tag))
-}
-
-async fn load_tag_tx(
-    tx: &tokio_postgres::Transaction<'_>,
-    tag_id: i32,
-) -> Result<Option<Tag>, ApiError> {
-    let row = tx
-        .query_opt(&format!("{} WHERE id = $1", TAG_SELECT), &[&tag_id])
+        .query_opt(&format!("{TAG_SELECT} WHERE id = $1"), &[&tag_id])
         .await
         .map_err(db::query_error)?;
     Ok(row.as_ref().map(row_to_tag))
@@ -343,8 +323,7 @@ async fn validate_target_conn(
                 .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
-                    "Issue with id {} does not exist",
-                    target_id
+                    "Issue with id {target_id} does not exist"
                 )));
             }
         }
@@ -365,8 +344,7 @@ async fn validate_target_conn(
                 .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
-                    "Thread with id {} does not exist",
-                    target_id
+                    "Thread with id {target_id} does not exist"
                 )));
             }
         }
@@ -387,15 +365,13 @@ async fn validate_target_conn(
                 .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
-                    "ContinuityPlan with id {} does not exist",
-                    target_id
+                    "ContinuityPlan with id {target_id} does not exist"
                 )));
             }
         }
         _ => {
             return Err(bad_request(&format!(
-                "Unsupported target type '{}'. Supported types: Issue, Thread, ContinuityPlan",
-                target_type
+                "Unsupported target type '{target_type}'. Supported types: Issue, Thread, ContinuityPlan"
             )))
         }
     }
@@ -425,8 +401,7 @@ async fn validate_target_tx(
             .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
-                    "Issue with id {} does not exist",
-                    target_id
+                    "Issue with id {target_id} does not exist"
                 )));
             }
         }
@@ -444,8 +419,7 @@ async fn validate_target_tx(
             .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
-                    "Thread with id {} does not exist",
-                    target_id
+                    "Thread with id {target_id} does not exist"
                 )));
             }
         }
@@ -463,15 +437,13 @@ async fn validate_target_tx(
             .map_err(db::query_error)?;
             if row.is_none() {
                 return Err(not_found(&format!(
-                    "ContinuityPlan with id {} does not exist",
-                    target_id
+                    "ContinuityPlan with id {target_id} does not exist"
                 )));
             }
         }
         _ => {
             return Err(bad_request(&format!(
-                "Unsupported target type '{}'. Supported types: Issue, Thread, ContinuityPlan",
-                target_type
+                "Unsupported target type '{target_type}'. Supported types: Issue, Thread, ContinuityPlan"
             )))
         }
     }
@@ -488,7 +460,6 @@ async fn visible_assignments_conn(
         return Ok(vec![]);
     }
     // build where
-    let mut conditions: Vec<String> = Vec::new();
     let mut params: Vec<Box<dyn tokio_postgres::types::ToSql + Send + Sync>> = Vec::new();
     // We'll use positional params: first user_id? We'll put user_id last maybe. Simpler: params for targets then user_id.
     let mut idx = 1;
@@ -541,72 +512,6 @@ async fn visible_assignments_conn(
     Ok(out)
 }
 
-async fn visible_assignments_tx(
-    tx: &tokio_postgres::Transaction<'_>,
-    user_id: i32,
-    targets: &[(String, i32)],
-) -> Result<Vec<(Tag, String, i32)>, ApiError> {
-    if targets.is_empty() {
-        return Ok(vec![]);
-    }
-    let mut cond_strs: Vec<String> = Vec::new();
-    // We need params; use a Vec of owned values then refs. tokio tx query takes &[&(dyn ToSql+Sync)].
-    // Build sql with placeholders; params order targets then user.
-    let mut sql_params_count = 0;
-    // We'll construct query using a helper with Vec of types erased? tokio_postgres requires heterogeneous slice of references.
-    // Easier: handle small by building query with IN? Use (target_type,target_id) IN list via row constructors with literals? IDs ints safe, types strings need quotes. We'll instead do multiple queries per target (acceptable) to avoid dynamic param typing. But N small. Simpler: loop targets.
-    let mut out = Vec::new();
-    for (tt, tid) in targets {
-        let rows = tx
-            .query(
-                &format!(
-                    "{} WHERE a.target_type = $1 AND a.target_id = $2 AND (t.scope = 'global' OR t.owner_user_id = $3) ORDER BY t.scope DESC, t.normalized_name",
-                    "SELECT t.id, t.name, t.normalized_name, t.scope, t.owner_user_id, t.color, t.created_at::text, t.updated_at::text, a.target_type, a.target_id FROM tag_assignments a JOIN tags t ON t.id = a.tag_id"
-                ),
-                &[tt, tid, &user_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-        for row in rows {
-            let tag = Tag {
-                id: row.get(0),
-                name: row.get(1),
-                normalized_name: row.get(2),
-                scope: row.get(3),
-                owner_user_id: row.get(4),
-                color: row.get(5),
-                created_at: row.get(6),
-                updated_at: row.get(7),
-            };
-            let rtt: String = row.get(8);
-            let rtid: i32 = row.get(9);
-            out.push((tag, rtt, rtid));
-        }
-    }
-    // dedup? Python orders by scope/name/target_type. We'll sort.
-    out.sort_by(|a, b| {
-        (
-            a.0.scope.as_str(),
-            a.0.normalized_name.as_str(),
-            a.1.as_str(),
-        )
-            .cmp(&(
-                b.0.scope.as_str(),
-                b.0.normalized_name.as_str(),
-                b.1.as_str(),
-            ))
-    });
-    // reverse scope? scope desc: global before private. String desc: "global" > "private", so descending. Our sort ascending would private first. Need descending scope. Let's sort with scope descending.
-    out.sort_by(|a, b| {
-        b.0.scope
-            .cmp(&a.0.scope)
-            .then(a.0.normalized_name.cmp(&b.0.normalized_name))
-            .then(a.1.cmp(&b.1))
-    });
-    // dedup duplicate tag assignments? Each assignment row unique. Fine.
-    Ok(out)
-}
-
 // combine
 fn combine_assignments(
     self_type: &str,
@@ -617,15 +522,12 @@ fn combine_assignments(
     let mut by_id: BTreeMap<i32, EffectiveTag> = BTreeMap::new();
     let mut order: Vec<i32> = Vec::new();
     for (tag, source_type, source_id, display_name) in pairs {
-        if !by_id.contains_key(&tag.id) {
-            by_id.insert(
-                tag.id,
-                EffectiveTag {
-                    tag: tag.clone(),
-                    direct: false,
-                    sources: vec![],
-                },
-            );
+        if let std::collections::btree_map::Entry::Vacant(e) = by_id.entry(tag.id) {
+            e.insert(EffectiveTag {
+                tag: tag.clone(),
+                direct: false,
+                sources: vec![],
+            });
             order.push(tag.id);
         }
         let entry = by_id.get_mut(&tag.id).unwrap();
@@ -666,10 +568,7 @@ async fn find_near_global_tags(
 ) -> Result<Vec<Tag>, ApiError> {
     let rows = conn
         .query(
-            &format!(
-                "{} WHERE scope = 'global' ORDER BY normalized_name",
-                TAG_SELECT
-            ),
+            &format!("{TAG_SELECT} WHERE scope = 'global' ORDER BY normalized_name"),
             &[],
         )
         .await
@@ -702,7 +601,7 @@ pub async fn list_tags(
     user: AuthenticatedUser,
     Query(q): Query<ListQuery>,
 ) -> Result<Json<TagListResponse>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let user_id = user.id();
     let normalized_search = q
         .search
@@ -711,13 +610,11 @@ pub async fn list_tags(
         .unwrap_or_default();
     let sql = if normalized_search.is_empty() {
         format!(
-            "{} WHERE (scope = 'global' OR owner_user_id = $1) ORDER BY scope DESC, normalized_name",
-            TAG_SELECT
+            "{TAG_SELECT} WHERE (scope = 'global' OR owner_user_id = $1) ORDER BY scope DESC, normalized_name"
         )
     } else {
         format!(
-            "{} WHERE (scope = 'global' OR owner_user_id = $1) AND normalized_name LIKE '%' || $2 || '%' ORDER BY scope DESC, normalized_name",
-            TAG_SELECT
+            "{TAG_SELECT} WHERE (scope = 'global' OR owner_user_id = $1) AND normalized_name LIKE '%' || $2 || '%' ORDER BY scope DESC, normalized_name"
         )
     };
     let rows = if normalized_search.is_empty() {
@@ -736,14 +633,14 @@ pub async fn get_tag(
     user: AuthenticatedUser,
     Path(tag_id): Path<i32>,
 ) -> Result<Json<Tag>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     if tag.scope == "private" && tag.owner_user_id != Some(user.id()) {
-        return Err(not_found(&format!("Tag {} does not exist", tag_id)));
+        return Err(not_found(&format!("Tag {tag_id} does not exist")));
     }
     Ok(Json(tag))
 }
@@ -765,7 +662,7 @@ pub async fn create_tag(
     };
     let (_, color_hex) = validate_color(&color_input)?;
     let is_admin = {
-        let mut conn = db::checkout(&state).await?;
+        let conn = db::checkout(&state).await?;
         is_admin_conn(&conn, user.id()).await?
     };
     let effective_scope = match req.scope.as_str() {
@@ -776,17 +673,14 @@ pub async fn create_tag(
             "global"
         }
         "private" => "private",
-        other => return Err(bad_request(&format!("Unknown tag scope '{}'", other))),
+        other => return Err(bad_request(&format!("Unknown tag scope '{other}'"))),
     };
 
     let mut conn = db::checkout(&state).await?;
     // exact global match
     let existing_global = conn
         .query_opt(
-            &format!(
-                "{} WHERE normalized_name = $1 AND scope = 'global'",
-                TAG_SELECT
-            ),
+            &format!("{TAG_SELECT} WHERE normalized_name = $1 AND scope = 'global'"),
             &[&normalized],
         )
         .await
@@ -804,8 +698,7 @@ pub async fn create_tag(
         let existing_private = conn
             .query_opt(
                 &format!(
-                    "{} WHERE scope = 'private' AND owner_user_id = $1 AND normalized_name = $2",
-                    TAG_SELECT
+                    "{TAG_SELECT} WHERE scope = 'private' AND owner_user_id = $1 AND normalized_name = $2"
                 ),
                 &[&user.id(), &normalized],
             )
@@ -867,13 +760,10 @@ pub async fn create_tag(
             if e.code().map(|c| c.code()) == Some("23505") {
                 return Err(conflict("A tag with this name already exists"));
             }
-            return Err(db::query_error(e));
+            Err(db::query_error(e))
         }
     }
 }
-
-/// GET /api/v1/tags/{tag_id}/
-// (get_tag above)
 
 /// PUT /api/v1/tags/{tag_id}/
 pub async fn update_tag(
@@ -886,10 +776,10 @@ pub async fn update_tag(
     let tag = load_tag_conn(&conn, tag_id).await?;
     let mut tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     if tag.scope == "private" && tag.owner_user_id != Some(user.id()) {
-        return Err(not_found(&format!("Tag {} does not exist", tag_id)));
+        return Err(not_found(&format!("Tag {tag_id} does not exist")));
     }
     let is_admin = is_admin_conn(&conn, user.id()).await?;
     if tag.scope == "global" {
@@ -913,26 +803,21 @@ pub async fn update_tag(
             // global collision
             let existing = conn
                 .query_opt(
-                    &format!(
-                        "{} WHERE normalized_name = $1 AND scope = 'global'",
-                        TAG_SELECT
-                    ),
+                    &format!("{TAG_SELECT} WHERE normalized_name = $1 AND scope = 'global'"),
                     &[&normalized],
                 )
                 .await
                 .map_err(db::query_error)?;
             if existing.is_some() {
                 return Err(conflict(&format!(
-                    "A global tag named '{}' already exists",
-                    name
+                    "A global tag named '{name}' already exists"
                 )));
             }
             if tag.scope == "private" && tag.owner_user_id.is_some() {
                 let dup = conn
                     .query_opt(
                         &format!(
-                            "{} WHERE scope = 'private' AND owner_user_id = $1 AND normalized_name = $2",
-                            TAG_SELECT
+                            "{TAG_SELECT} WHERE scope = 'private' AND owner_user_id = $1 AND normalized_name = $2"
                         ),
                         &[&tag.owner_user_id.unwrap(), &normalized],
                     )
@@ -994,10 +879,10 @@ pub async fn delete_tag(
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     if tag.scope == "private" && tag.owner_user_id != Some(user.id()) {
-        return Err(not_found(&format!("Tag {} does not exist", tag_id)));
+        return Err(not_found(&format!("Tag {tag_id} does not exist")));
     }
     let is_admin = is_admin_conn(&conn, user.id()).await?;
     if tag.scope == "global" {
@@ -1024,10 +909,10 @@ pub async fn delete_tag(
         .map_err(db::query_error)?;
     if del_tag == 0 {
         let _ = tx.rollback().await;
-        return Err(not_found(&format!("Tag {} does not exist", tag_id)));
+        return Err(not_found(&format!("Tag {tag_id} does not exist")));
     }
     tx.commit().await.map_err(db::query_error)?;
-    let mut refs = BTreeMap::new();
+    let refs = BTreeMap::new();
     Ok(Json(TagDeleteResponse {
         tag_id,
         assignments_removed: del_assign as i64,
@@ -1041,14 +926,14 @@ pub async fn get_tag_usage(
     user: AuthenticatedUser,
     Path(tag_id): Path<i32>,
 ) -> Result<Json<TagUsageResponse>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     if tag.scope == "private" && tag.owner_user_id != Some(user.id()) {
-        return Err(not_found(&format!("Tag {} does not exist", tag_id)));
+        return Err(not_found(&format!("Tag {tag_id} does not exist")));
     }
     let total: i64 = conn
         .query_one(
@@ -1090,7 +975,7 @@ pub async fn assign_tag(
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     let is_global = tag.scope == "global";
     if is_global {
@@ -1166,7 +1051,7 @@ pub async fn unassign_tag(
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     if tag.scope == "global" {
         let is_admin = is_admin_conn(&conn, user.id()).await?;
@@ -1243,7 +1128,7 @@ pub async fn bulk_assign_tag(
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     let is_global = tag.scope == "global";
     if is_global {
@@ -1339,7 +1224,7 @@ pub async fn bulk_unassign_tag(
     let tag = load_tag_conn(&conn, tag_id).await?;
     let tag = match tag {
         Some(t) => t,
-        None => return Err(not_found(&format!("Tag {} does not exist", tag_id))),
+        None => return Err(not_found(&format!("Tag {tag_id} does not exist"))),
     };
     if tag.scope == "global" {
         let is_admin = is_admin_conn(&conn, user.id()).await?;
@@ -1418,7 +1303,7 @@ async fn issues_still_inheriting_tag(
     // thread_by_issue
     let mut thread_by_issue: BTreeMap<i32, i32> = BTreeMap::new();
     // build IN list
-    let placeholders: Vec<String> = (1..=unique.len()).map(|i| format!("${}", i)).collect();
+    let placeholders: Vec<String> = (1..=unique.len()).map(|i| format!("${i}")).collect();
     let sql = format!(
         "SELECT i.id, i.thread_id FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id IN ({}) AND t.user_id = ${}",
         placeholders.join(","),
@@ -1448,7 +1333,7 @@ async fn issues_still_inheriting_tag(
     for id in &unique {
         plans_by_issue.insert(*id, vec![]);
     }
-    let placeholders2: Vec<String> = (1..=unique.len()).map(|i| format!("${}", i)).collect();
+    let placeholders2: Vec<String> = (1..=unique.len()).map(|i| format!("${i}")).collect();
     let sql2 = format!(
         "SELECT rpi.issue_id, cp.id FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id IN ({}) AND cp.user_id = ${}",
         placeholders2.join(","),
@@ -1569,7 +1454,7 @@ pub async fn effective_for_issue(
     user: AuthenticatedUser,
     Path(issue_id): Path<i32>,
 ) -> Result<Json<EffectiveTagsResponse>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let user_id = user.id();
     // issue owned
     let row = conn
@@ -1581,7 +1466,7 @@ pub async fn effective_for_issue(
         .map_err(db::query_error)?;
     let (issue_number, thread_id): (String, i32) = match row {
         Some(r) => (r.get(0), r.get(1)),
-        None => return Err(not_found(&format!("Issue {} does not exist", issue_id))),
+        None => return Err(not_found(&format!("Issue {issue_id} does not exist"))),
     };
     // thread owned (already by join)
     let thread_row = conn
@@ -1593,7 +1478,7 @@ pub async fn effective_for_issue(
         .map_err(db::query_error)?;
     let thread_title: String = match thread_row {
         Some(r) => r.get(0),
-        None => return Err(not_found(&format!("Issue {} does not exist", issue_id))),
+        None => return Err(not_found(&format!("Issue {issue_id} does not exist"))),
     };
 
     // plans containing issue for user
@@ -1620,10 +1505,7 @@ pub async fn effective_for_issue(
     let assignments = visible_assignments_conn(&conn, user_id, &targets).await?;
 
     let mut display_names: BTreeMap<(String, i32), String> = BTreeMap::new();
-    display_names.insert(
-        ("Issue".to_string(), issue_id),
-        format!("#{}", issue_number),
-    );
+    display_names.insert(("Issue".to_string(), issue_id), format!("#{issue_number}"));
     display_names.insert(("Thread".to_string(), thread_id), thread_title.clone());
     for (pid, pname) in &plan_names {
         display_names.insert(("ContinuityPlan".to_string(), *pid), pname.clone());
@@ -1648,7 +1530,7 @@ pub async fn effective_for_thread(
     user: AuthenticatedUser,
     Path(thread_id): Path<i32>,
 ) -> Result<Json<EffectiveTagsResponse>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let user_id = user.id();
     let thread_row = conn
         .query_opt(
@@ -1659,7 +1541,7 @@ pub async fn effective_for_thread(
         .map_err(db::query_error)?;
     let thread_title: String = match thread_row {
         Some(r) => r.get(0),
-        None => return Err(not_found(&format!("Thread {} does not exist", thread_id))),
+        None => return Err(not_found(&format!("Thread {thread_id} does not exist"))),
     };
 
     let targets = vec![("Thread".to_string(), thread_id)];
@@ -1679,7 +1561,7 @@ pub async fn effective_for_plan(
     user: AuthenticatedUser,
     Path(plan_id): Path<i32>,
 ) -> Result<Json<EffectiveTagsResponse>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let user_id = user.id();
     let plan_row = conn
         .query_opt(
@@ -1690,12 +1572,7 @@ pub async fn effective_for_plan(
         .map_err(db::query_error)?;
     let plan_name: String = match plan_row {
         Some(r) => r.get(0),
-        None => {
-            return Err(not_found(&format!(
-                "Reading Plan {} does not exist",
-                plan_id
-            )))
-        }
+        None => return Err(not_found(&format!("Reading Plan {plan_id} does not exist"))),
     };
 
     let targets = vec![("ContinuityPlan".to_string(), plan_id)];
@@ -1715,7 +1592,7 @@ pub async fn thread_issues_effective(
     user: AuthenticatedUser,
     Path(thread_id): Path<i32>,
 ) -> Result<Json<ThreadIssuesEffectiveTagsResponse>, ApiError> {
-    let mut conn = db::checkout(&state).await?;
+    let conn = db::checkout(&state).await?;
     let user_id = user.id();
     let thread_row = conn
         .query_opt(
@@ -1726,7 +1603,7 @@ pub async fn thread_issues_effective(
         .map_err(db::query_error)?;
     let thread_title: String = match thread_row {
         Some(r) => r.get(0),
-        None => return Err(not_found(&format!("Thread {} does not exist", thread_id))),
+        None => return Err(not_found(&format!("Thread {thread_id} does not exist"))),
     };
 
     // issues in thread
@@ -1753,7 +1630,7 @@ pub async fn thread_issues_effective(
     }
 
     // plans containing issues for user
-    let mut placeholders: Vec<String> = (1..=issue_ids.len()).map(|i| format!("${}", i)).collect();
+    let placeholders: Vec<String> = (1..=issue_ids.len()).map(|i| format!("${i}")).collect();
     let plan_sql = format!(
         "SELECT rpi.issue_id, cp.id, cp.name FROM continuity_plans cp JOIN reading_plan_issues rpi ON rpi.plan_id=cp.id WHERE rpi.issue_id IN ({}) AND cp.user_id = ${}",
         placeholders.join(","),
@@ -1799,7 +1676,7 @@ pub async fn thread_issues_effective(
     let mut display_names: BTreeMap<(String, i32), String> = BTreeMap::new();
     display_names.insert(("Thread".to_string(), thread_id), thread_title.clone());
     for (iid, num) in &issue_numbers {
-        display_names.insert(("Issue".to_string(), *iid), format!("#{}", num));
+        display_names.insert(("Issue".to_string(), *iid), format!("#{num}"));
     }
     for (pid, pname) in &plan_names {
         display_names.insert(("ContinuityPlan".to_string(), *pid), pname.clone());
@@ -1949,3 +1826,148 @@ pub fn usage_tag_documentation() {}
 
 #[cfg(test)]
 mod tests {}
+
+#[cfg(test)]
+mod db_tests {
+    use super::*;
+    use crate::auth::AuthenticatedUser;
+    use axum::extract::{Path, State};
+
+    async fn fixture() -> (
+        Arc<AppState>,
+        tokio_postgres::Client,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let _admin = crate::test_support::required_test_admin_url();
+        let url = crate::test_support::database_url().await;
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (1, 'reader-1'); \
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, \
+                     status, queue_position) \
+                 VALUES (10, 1, 'Cable', 'Comic', 1, 'active', 1);",
+            )
+            .await
+            .expect("seed canonical schema");
+        (state, client, guard)
+    }
+
+    #[tokio::test]
+    async fn tag_mutations_persist_through_the_handlers() {
+        let (state, client, _db) = fixture().await;
+        let Json(created) = create_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Json(CreateTagRequest {
+                name: "Reading".into(),
+                color: "red".into(),
+                scope: "private".into(),
+                include_near_matches: true,
+            }),
+        )
+        .await
+        .expect("create tag");
+        let tag_id = created.tag.id;
+
+        let Json(updated) = update_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+            Json(UpdateTagRequest {
+                name: Some("Reading list".into()),
+                color: Some("blue".into()),
+            }),
+        )
+        .await
+        .expect("update tag");
+        assert_eq!(updated.name, "Reading list");
+        assert_eq!(updated.color, "blue");
+
+        let Json(assigned) = assign_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+            Json(AssignTagRequest {
+                target_type: "Thread".into(),
+                target_id: 10,
+            }),
+        )
+        .await
+        .expect("assign tag");
+        assert_eq!(assigned.target_id, 10);
+
+        let Json(bulk) = bulk_assign_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+            Json(BulkAssignRequest {
+                target_type: "Thread".into(),
+                target_ids: vec![10],
+            }),
+        )
+        .await
+        .expect("bulk assign");
+        assert_eq!(bulk.tag_id, tag_id);
+
+        let Json(bulk_removed) = bulk_unassign_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+            Json(BulkAssignRequest {
+                target_type: "Thread".into(),
+                target_ids: vec![10],
+            }),
+        )
+        .await
+        .expect("bulk unassign");
+        assert_eq!(bulk_removed.tag_id, tag_id);
+
+        assign_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+            Json(AssignTagRequest {
+                target_type: "Thread".into(),
+                target_id: 10,
+            }),
+        )
+        .await
+        .expect("re-assign tag");
+        let Json(unassigned) = unassign_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+            Json(AssignTagRequest {
+                target_type: "Thread".into(),
+                target_id: 10,
+            }),
+        )
+        .await
+        .expect("unassign tag");
+        assert_eq!(unassigned.tag_id, tag_id);
+
+        let Json(deleted) = delete_tag(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(tag_id),
+        )
+        .await
+        .expect("delete tag");
+        assert_eq!(deleted.tag_id, tag_id);
+        let row = client
+            .query_one("SELECT count(*) FROM tags WHERE id=$1", &[&tag_id])
+            .await
+            .expect("tag row");
+        assert_eq!(row.get::<_, i64>(0), 0);
+    }
+}
