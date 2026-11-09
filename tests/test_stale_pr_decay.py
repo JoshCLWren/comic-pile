@@ -699,7 +699,7 @@ def test_process_stale_prs_does_not_close_manual_only_pr(monkeypatch) -> None:
         "%Y-%m-%dT%H:%M:%SZ"
     )
     source = (SCRIPTS / "stale_pr_decay.py").read_text(encoding="utf-8")
-    assert "from factory_work_policy import is_manual_only" in source
+    assert "from factory_work_policy import eligibility, is_manual_only" in source
     hold_body = "<!-- factory-execution:manual-only -->\nHold this factory PR.\n"
     assert module.is_manual_only(hold_body)
     hold = make_pr(
