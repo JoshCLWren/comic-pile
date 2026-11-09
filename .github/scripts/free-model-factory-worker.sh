@@ -728,7 +728,12 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
     if (( recovery_status == 0 )); then
       sanitized_recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.sanitized.log"
       factory_sanitize_review_log "$recovery_log" "$sanitized_recovery_log"
-      recovered_verdict="$(factory_extract_semantic_verdict "$sanitized_recovery_log" || true)"
+      if factory_review_has_conflicting_terminal_markers "$sanitized_recovery_log"; then
+        recovered_verdict=''
+        log "${FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED}: recovery returned contradictory terminal markers"
+      else
+        recovered_verdict="$(factory_extract_semantic_verdict "$sanitized_recovery_log" || true)"
+      fi
       if [[ "$recovered_verdict" == 'repair' || "$recovered_verdict" == 'reject' ]]; then
         verdict="$recovered_verdict"
         log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered conservative verdict for PR #${NUMBER}"
