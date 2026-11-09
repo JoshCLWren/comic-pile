@@ -16,11 +16,16 @@ import pytest
 
 from scripts.generate_route_burndown import (
     BurndownGenerationError,
+    FRAGMENT_DIR,
+    RouteFragment,
     _classify_burndown,
+    _load_route_fragments,
     _load_routes,
+    _merge_route_fragments,
     _render_agents_block,
     _render_agents_text,
     _render_inventory,
+    _render_rewrite_fragment,
     load_json,
 )
 
@@ -29,6 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 INVENTORY_PATH = ROOT / "docs" / "api" / "v2-route-inventory.json"
 VERCEL_PATH = ROOT / "vercel.json"
 AGENTS_PATH = ROOT / "AGENTS.md"
+REWRITE_FRAGMENT_PATH = FRAGMENT_DIR / "vercel-rewrites.json"
 
 
 def _operation(
@@ -266,7 +272,8 @@ def test_rendered_outputs_match_checked_in_files() -> None:
     """Re-rendered inventory and agents section equal the checked-in bytes."""
     inventory = load_json(INVENTORY_PATH)
     routes = _load_routes(VERCEL_PATH)
-    payload, inventory_text = _render_inventory(inventory, routes)
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    payload, inventory_text = _render_inventory(inventory, routes, fragments)
     assert INVENTORY_PATH.read_text(encoding="utf-8") == inventory_text
     inventory_from_file = json.loads(INVENTORY_PATH.read_text(encoding="utf-8"))
     assert isinstance(inventory_from_file, dict)
@@ -281,6 +288,85 @@ def test_rendered_outputs_match_checked_in_files() -> None:
     block = _render_agents_block(operations, full_summary)
     agents_original = AGENTS_PATH.read_text(encoding="utf-8")
     assert _render_agents_text(agents_original, block) == agents_original
+
+
+def test_route_fragments_are_loaded_in_filename_order() -> None:
+    """Family fragments have stable ordering independent of filesystem order."""
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    assert [fragment.name for fragment in fragments] == ["creators", "dependencies"]
+
+
+def test_creator_fragment_covers_creator_and_creator_adjacent_metadata() -> None:
+    """The creators pilot owns all of its v1 route declarations."""
+    fragment = _load_route_fragments(FRAGMENT_DIR)[0]
+    paths = {operation["path"] for operation in fragment.operations}
+    assert "/api/v1/creators" in paths
+    assert "/api/v1/threads/{thread_id}/issues/creators" in paths
+
+
+def test_dependency_fragment_covers_native_and_python_metadata() -> None:
+    """The dependencies pilot owns both API versions and legacy routes."""
+    fragment = _load_route_fragments(FRAGMENT_DIR)[1]
+    buckets = {operation["bucket"] for operation in fragment.operations}
+    assert buckets == {"operations", "v1_operations"}
+    assert any(
+        operation["path"] == "/api/v2/dependencies/"
+        for operation in fragment.operations
+    )
+
+
+def test_fragment_merge_preserves_inventory_operation_counts() -> None:
+    """Merging source fragments is idempotent over the generated inventory."""
+    inventory = load_json(INVENTORY_PATH)
+    merged = _merge_route_fragments(inventory, _load_route_fragments(FRAGMENT_DIR))
+    full = merged["full_surface"]
+    assert isinstance(full, dict)
+    inventory_full = inventory["full_surface"]
+    assert isinstance(inventory_full, dict)
+    assert len(merged["operations"]) == len(inventory["operations"])
+    assert len(full["v1_operations"]) == len(inventory_full["v1_operations"])
+
+
+def test_fragment_ownership_removes_stale_deleted_family_routes() -> None:
+    """Removing a route from a family source cannot leave a generated ghost."""
+    inventory = load_json(INVENTORY_PATH)
+    creators = RouteFragment(
+        name="creators",
+        owned_path_patterns=(r"^/api/v1/creators(?:/.*)?$",),
+        operations=(),
+    )
+    merged = _merge_route_fragments(inventory, [creators])
+    full = merged["full_surface"]
+    assert isinstance(full, dict)
+    assert all(
+        not str(operation["path"]).startswith("/api/v1/creators")
+        for operation in full["v1_operations"]
+    )
+
+
+def test_generated_rewrite_fragment_matches_checked_in_file() -> None:
+    """The checked-in rewrite artifact is deterministic."""
+    routes = _load_routes(VERCEL_PATH)
+    expected = _render_rewrite_fragment(_load_route_fragments(FRAGMENT_DIR), routes)
+    assert REWRITE_FRAGMENT_PATH.read_text(encoding="utf-8") == expected
+
+
+def test_generated_rewrite_fragment_places_native_routes_first() -> None:
+    """Native rewrites precede every Python family rewrite."""
+    artifact = json.loads(REWRITE_FRAGMENT_PATH.read_text(encoding="utf-8"))
+    destinations = [route["dest"] for route in artifact["routes"]]
+    first_python = next(
+        (index for index, destination in enumerate(destinations) if destination == "/api/index.py"),
+        len(destinations),
+    )
+    assert all(destination != "/api/index.py" for destination in destinations[:first_python])
+    assert all(destination == "/api/index.py" for destination in destinations[first_python:])
+
+
+def test_generated_rewrite_fragment_excludes_global_catch_all() -> None:
+    """The family artifact contains only family rewrites, not global ingress."""
+    artifact = json.loads(REWRITE_FRAGMENT_PATH.read_text(encoding="utf-8"))
+    assert all(route["src"] != "/api(?:/.*)?" for route in artifact["routes"])
 
 
 def test_agents_table_uses_deployed_ingress_not_url_version() -> None:

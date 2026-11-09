@@ -3,13 +3,16 @@
 
 The burndown is derived from two checked-in sources only:
 
+* ``docs/api/route-fragments/*.json`` declares family-owned route metadata;
+  the generator merges those fragments into the generated inventory view,
 * ``docs/api/v2-route-inventory.json`` declares every live ``/api/v2``
   operation plus the full Python-handler surface (``v1`` and unversioned
   operations, the catch-all ingress, and the orphan
   ``GET /api/v2/reading-boundaries/{thread_id}``), each with its runtime,
   status, known callers, and cutover owner, and
 * ``vercel.json`` declares the deployed ingress destination for each
-  method/path.
+  method/path; ``docs/api/route-fragments/vercel-rewrites.json`` is a
+  generated family-scoped rewrite artifact with native routes first.
 
 For each operation this generator resolves the first matching Vercel route,
 classifies the burndown status (native Rust, shadowed by Rust, live
@@ -31,6 +34,8 @@ import re
 from typing import Final
 
 INVENTORY_PATH: Final = Path("docs/api/v2-route-inventory.json")
+FRAGMENT_DIR: Final = Path("docs/api/route-fragments")
+REWRITE_FRAGMENT_PATH: Final = FRAGMENT_DIR / "vercel-rewrites.json"
 VERCEL_PATH: Final = Path("vercel.json")
 AGENTS_PATH: Final = Path("AGENTS.md")
 NATIVE_DESTINATIONS: Final = frozenset({"/api/native_roll.rs", "/api/native_issue.rs"})
@@ -57,6 +62,15 @@ class VercelRoute:
     src: str | None
     dest: str | None
     methods: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RouteFragment:
+    """One family-owned source fragment and its route metadata."""
+
+    name: str
+    owned_path_patterns: tuple[str, ...]
+    operations: tuple[dict[str, object], ...]
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -149,6 +163,159 @@ def _owner(value: object, context: str) -> int | None:
     if not isinstance(value, int):
         raise BurndownGenerationError(f"{context} must be an integer or null")
     return value
+
+
+def _load_route_fragments(path: Path) -> list[RouteFragment]:
+    """Load family-owned route metadata in deterministic filename order.
+
+    Args:
+        path: Directory containing family JSON fragments.
+
+    Returns:
+        Validated route fragments.
+
+    Raises:
+        BurndownGenerationError: When a fragment is malformed or duplicates an
+            operation already declared by another fragment.
+    """
+    fragments: list[RouteFragment] = []
+    seen: set[tuple[str, str]] = set()
+    for fragment_path in sorted(path.glob("*.json")):
+        if fragment_path.name == REWRITE_FRAGMENT_PATH.name:
+            continue
+        document = load_json(fragment_path)
+        family = _string(document.get("family"), f"{fragment_path}.family")
+        raw_patterns = document.get("owned_path_patterns")
+        if not isinstance(raw_patterns, list) or not all(
+            isinstance(pattern, str) for pattern in raw_patterns
+        ):
+            raise BurndownGenerationError(
+                f"{fragment_path}.owned_path_patterns must be an array of strings"
+            )
+        defaults = _object(document.get("defaults", {}), f"{fragment_path}.defaults")
+        raw_operations = document.get("operations")
+        if not isinstance(raw_operations, list) or not raw_operations:
+            raise BurndownGenerationError(
+                f"{fragment_path} must define a non-empty operations array"
+            )
+        operations: list[dict[str, object]] = []
+        for index, raw_operation in enumerate(raw_operations):
+            operation = _object(raw_operation, f"{fragment_path}.operations[{index}]")
+            bucket = _string(
+                operation.get("bucket"),
+                f"{fragment_path}.operations[{index}].bucket",
+            )
+            if bucket not in {"operations", "v1_operations", "unversioned_operations"}:
+                raise BurndownGenerationError(f"{fragment_path} has unknown bucket {bucket!r}")
+            method = _string(operation.get("method"), f"{fragment_path}.operations[{index}].method")
+            route_path = _string(operation.get("path"), f"{fragment_path}.operations[{index}].path")
+            key = (method, route_path)
+            if key in seen:
+                raise BurndownGenerationError(
+                    f"duplicate route fragment operation {method} {route_path}"
+                )
+            seen.add(key)
+            merged = dict(defaults)
+            merged.update(operation)
+            merged.pop("bucket", None)
+            merged["method"] = method
+            merged["path"] = route_path
+            operations.append({"bucket": bucket, **merged})
+        fragments.append(
+            RouteFragment(
+                name=family,
+                owned_path_patterns=tuple(raw_patterns),
+                operations=tuple(operations),
+            )
+        )
+    return fragments
+
+
+def _merge_route_fragments(
+    inventory: dict[str, object],
+    fragments: list[RouteFragment],
+) -> dict[str, object]:
+    """Merge family fragments into the inventory's operation buckets.
+
+    Existing generated entries are removed by method/path before fragment data
+    is added, making regeneration idempotent while allowing the checked-in
+    inventory to remain a generated artifact.
+    """
+    merged = dict(inventory)
+    raw_operations = _validated_operations(inventory)
+    raw_full = _object(inventory.get("full_surface"), "full_surface")
+    buckets: dict[str, list[dict[str, object]]] = {
+        "operations": raw_operations,
+        "v1_operations": _validated_named_operations(
+            raw_full.get("v1_operations"), "full_surface.v1_operations"
+        ),
+        "unversioned_operations": _validated_named_operations(
+            raw_full.get("unversioned_operations"), "full_surface.unversioned_operations"
+        ),
+    }
+    for bucket, operations in buckets.items():
+        buckets[bucket] = [
+            operation
+            for operation in operations
+            if not any(
+                re.fullmatch(pattern, _string(operation["path"], "operation.path"))
+                for fragment in fragments
+                for pattern in fragment.owned_path_patterns
+            )
+        ]
+    for fragment in fragments:
+        for operation in fragment.operations:
+            bucket = _string(operation.get("bucket"), "fragment.bucket")
+            source = dict(operation)
+            source.pop("bucket", None)
+            buckets[bucket].append(source)
+    buckets["operations"].sort(key=lambda item: (item["path"], item["method"]))
+    for bucket in ("v1_operations", "unversioned_operations"):
+        buckets[bucket].sort(key=lambda item: (item["path"], item["method"]))
+    merged["operations"] = buckets["operations"]
+    merged["full_surface"] = {
+        **raw_full,
+        "v1_operations": buckets["v1_operations"],
+        "unversioned_operations": buckets["unversioned_operations"],
+    }
+    return merged
+
+
+def _render_rewrite_fragment(
+    fragments: list[RouteFragment],
+    routes: list[VercelRoute],
+) -> str:
+    """Render family rewrites with every native route before Python routes."""
+    paths = {
+        _string(operation.get("path"), "fragment.path")
+        for fragment in fragments
+        for operation in fragment.operations
+    }
+    selected: list[tuple[int, VercelRoute]] = []
+    for index, route in enumerate(routes):
+        if (
+            route.src is None
+            or route.src == CATCH_ALL_SRC
+            or route.dest not in (*NATIVE_DESTINATIONS, "/api/index.py")
+        ):
+            continue
+        if any(
+            re.fullmatch(route.src, re.sub(r"\{[^}]+\}", "1", route_path))
+            for route_path in paths
+        ):
+            selected.append((index, route))
+    native = [route for _, route in selected if route.dest in NATIVE_DESTINATIONS]
+    python = [route for _, route in selected if route.dest == "/api/index.py"]
+    ordered = native + python
+    payload = {
+        "generated_by": "scripts/generate_route_burndown.py",
+        "source_fragments": [fragment.name for fragment in fragments],
+        "routes": [
+            {"src": route.src, "methods": list(route.methods), "dest": route.dest}
+            for route in ordered
+        ],
+    }
+    return json.dumps(payload, indent=2) + "\n"
 
 
 def _load_routes(path: Path) -> list[VercelRoute]:
@@ -629,12 +796,14 @@ def _render_full_surface(
 def _render_inventory(
     inventory: dict[str, object],
     routes: list[VercelRoute],
+    fragments: list[RouteFragment],
 ) -> tuple[dict[str, object], str]:
     """Render the enriched inventory document and its JSON text.
 
     Args:
         inventory: Loaded inventory document.
         routes: Vercel routes for ingress resolution.
+        fragments: Family-owned route metadata to merge before enrichment.
 
     Returns:
         The enriched document and its deterministic JSON rendering.
@@ -642,12 +811,13 @@ def _render_inventory(
     Raises:
         BurndownGenerationError: When the inventory contradicts ingress.
     """
-    operations = _enrich_operations(_validated_operations(inventory), routes)
+    source_inventory = _merge_route_fragments(inventory, fragments)
+    operations = _enrich_operations(_validated_operations(source_inventory), routes)
     summary = _burndown_summary(operations)
-    schema_version = inventory.get("schema_version", 1)
-    description = inventory.get("description", "")
-    retired = inventory.get("retired_legacy_operations", [])
-    full_surface = _render_full_surface(inventory, routes, operations)
+    schema_version = source_inventory.get("schema_version", 1)
+    description = source_inventory.get("description", "")
+    retired = source_inventory.get("retired_legacy_operations", [])
+    full_surface = _render_full_surface(source_inventory, routes, operations)
     payload: dict[str, object] = {
         "schema_version": schema_version,
         "description": description,
@@ -747,7 +917,7 @@ def _render_agents_block(
         "",
         "> Generated by `scripts/generate_route_burndown.py` (issue #4739).",
         "> Do not hand-edit; run `python3 scripts/generate_route_burndown.py`",
-        "> after changing `vercel.json` or `docs/api/v2-route-inventory.json`.",
+        "> after changing `vercel.json`, route fragments, or the inventory.",
         "> API version is not implementation language.",
         "",
         f"- Live v2 operations: {total} ({native} native-rust + {python_total} python orphan).",
@@ -849,6 +1019,8 @@ def _parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--inventory", type=Path, default=INVENTORY_PATH)
+    parser.add_argument("--fragments", type=Path, default=FRAGMENT_DIR)
+    parser.add_argument("--rewrite-fragment", type=Path, default=REWRITE_FRAGMENT_PATH)
     parser.add_argument("--vercel", type=Path, default=VERCEL_PATH)
     parser.add_argument("--agents", type=Path, default=AGENTS_PATH)
     parser.add_argument(
@@ -869,9 +1041,14 @@ def main() -> int:
     args = _parse_args()
     try:
         inventory = load_json(args.inventory)
+        fragments = _load_route_fragments(args.fragments)
         routes = _load_routes(args.vercel)
-        payload, inventory_text = _render_inventory(inventory, routes)
-        enriched_operations = _enrich_operations(_validated_operations(inventory), routes)
+        payload, inventory_text = _render_inventory(inventory, routes, fragments)
+        merged_inventory = _merge_route_fragments(inventory, fragments)
+        enriched_operations = _enrich_operations(
+            _validated_operations(merged_inventory), routes
+        )
+        rewrite_text = _render_rewrite_fragment(fragments, routes)
         full_surface = payload.get("full_surface")
         full_summary: dict[str, object] | None = None
         if isinstance(full_surface, dict):
@@ -890,20 +1067,30 @@ def main() -> int:
     if args.check:
         inventory_current = args.inventory.read_text(encoding="utf-8")
         agents_current = args.agents.read_text(encoding="utf-8")
-        if inventory_current != inventory_text or agents_current != agents_text:
+        rewrite_current = args.rewrite_fragment.read_text(encoding="utf-8")
+        if (
+            inventory_current != inventory_text
+            or agents_current != agents_text
+            or rewrite_current != rewrite_text
+        ):
             print(
                 "Route burndown is stale; run "
                 "`python3 scripts/generate_route_burndown.py` and commit the result."
             )
             return 1
         print(
-            f"Verified route burndown: {args.inventory} and {args.agents}"
+            f"Verified route burndown: {args.inventory}, {args.agents}, "
+            f"and {args.rewrite_fragment}"
         )
         return 0
 
     args.inventory.write_text(inventory_text, encoding="utf-8")
     args.agents.write_text(agents_text, encoding="utf-8")
-    print(f"Wrote route burndown: {args.inventory} and {args.agents}")
+    args.rewrite_fragment.write_text(rewrite_text, encoding="utf-8")
+    print(
+        f"Wrote route burndown: {args.inventory}, {args.agents}, "
+        f"and {args.rewrite_fragment}"
+    )
     return 0
 
 
