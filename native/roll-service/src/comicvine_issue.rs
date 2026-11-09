@@ -718,7 +718,9 @@ mod tests {
         // Every call must receive CASE-normalized arrays, including when
         // provider metadata is missing or malformed.
         assert_eq!(
-            READ_SQL.matches("jsonb_array_length(CASE WHEN jsonb_typeof(").count(),
+            READ_SQL
+                .matches("jsonb_array_length(CASE WHEN jsonb_typeof(")
+                .count(),
             12,
             "all credit-length checks must handle non-array JSON safely"
         );
