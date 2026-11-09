@@ -429,7 +429,7 @@ async fn retire_edges(
     pairs: &[(i32, i32)],
     exclude_rule_id: i32,
 ) -> Result<(), ApiError> {
-    for (source, target) in pairs.iter().copied() {
+    for (source, target) in pairs {
         let still_used = tx.query_opt(
             "SELECT 1 FROM continuity_rules r
              WHERE r.user_id=$1 AND r.id<>$2 AND (
