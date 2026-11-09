@@ -200,6 +200,78 @@
       "minute": "10",
       "scheduler": "dispatcher",
       "display_name": "Kilo Auto Free II"
+    },
+    {
+      "worker": "99",
+      "source": "openrouter-free",
+      "model": "liquid/lfm-3-1.7b:free",
+      "minute": "0",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter LFM3 1.7B Free"
+    },
+    {
+      "worker": "100",
+      "source": "openrouter-free",
+      "model": "recursive/flint-v1.0:free",
+      "minute": "5",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Flint Free"
+    },
+    {
+      "worker": "101",
+      "source": "openrouter-free",
+      "model": "xingchen-agi/xing4.0-29b-a4b:free",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Xing4.0 29B Free"
+    },
+    {
+      "worker": "102",
+      "source": "openrouter-free",
+      "model": "nvidia/nemotron-3.5-super-vl:free",
+      "minute": "15",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Nemotron 3.5 Super VL Free"
+    },
+    {
+      "worker": "103",
+      "source": "nvidia",
+      "model": "minimaxai/minimax-m3.1-flash",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA MiniMax M3.1 Flash"
+    },
+    {
+      "worker": "104",
+      "source": "nvidia",
+      "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA Nemotron 3.5 Super VL"
+    },
+    {
+      "worker": "105",
+      "source": "nvidia",
+      "model": "stepfun-ai/step-5-preview",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA Step 5 Preview"
+    },
+    {
+      "worker": "106",
+      "source": "nvidia",
+      "model": "deepseek-ai/deepseek-v4.1-flash",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA DeepSeek V4.1 Flash"
+    },
+    {
+      "worker": "107",
+      "source": "nvidia",
+      "model": "google/diffusiongemma-26b-a4b-it",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA DiffusionGemma 26B"
     }
   ],
   "expected_workers": [
@@ -227,7 +299,16 @@
     91,
     96,
     97,
-    98
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107
   ],
   "retired_workers": [
     9,
@@ -282,7 +363,6 @@
     "apodex/apodex-1.1-mini:free",
     "cat-jam-free",
     "codestral-latest",
-    "deepseek-ai/deepseek-v4.1-flash",
     "deepseek-v4-flash-free",
     "deepseek-v4.1-flash-free",
     "dots-studio/dots-3-note-preview:free",
@@ -311,7 +391,6 @@
     "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3.5-lightning-30b-a3b",
-    "nvidia/nemotron-3.5-super-vl-120b-a12b",
     "nvidia/nvidia-nemotron-nano-9b-v2",
     "openrouter/free",
     "poolside/laguna-s-2.1:free",
