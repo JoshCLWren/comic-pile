@@ -592,16 +592,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 42,
-      "v1_live_python": 147,
+      "v1_shadowed_by_rust": 46,
+      "v1_live_python": 143,
       "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 12,
       "unversioned_live_python": 19,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 54,
-      "total_live_python": 166,
+      "total_shadowed_by_rust": 58,
+      "total_live_python": 162,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -3334,57 +3334,57 @@
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": null,
+        "owning_issue": 4834,
         "consumers": [
           "frontend/src/services/api-preferences.ts",
           "frontend/src/services/api-taste.ts"
         ],
         "method": "GET",
         "path": "/api/v1/users/me/preferences",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": null,
+        "owning_issue": 4834,
         "consumers": [
           "frontend/src/services/api-preferences.ts",
           "frontend/src/services/api-taste.ts"
         ],
         "method": "PATCH",
         "path": "/api/v1/users/me/preferences",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": null,
+        "owning_issue": 4834,
         "consumers": [
           "frontend/src/services/api-preferences.ts",
           "frontend/src/services/api-taste.ts"
         ],
         "method": "GET",
         "path": "/api/v1/users/me/taste-signals",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": null,
+        "owning_issue": 4834,
         "consumers": [
           "frontend/src/services/api-preferences.ts",
           "frontend/src/services/api-taste.ts"
         ],
         "method": "PUT",
         "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       }
     ],

@@ -588,6 +588,28 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/users/me/preferences$",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/taste\\-signals$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
+      "methods": [
+        "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/dependencies/[0-9]+$",
       "methods": [
         "DELETE"
@@ -1452,31 +1474,6 @@
       "src": "^/api/v1/threads:getBlockingInfo$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/preferences$",
-      "methods": [
-        "GET",
-        "PATCH",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/taste\\-signals$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
-      "methods": [
-        "PUT",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
