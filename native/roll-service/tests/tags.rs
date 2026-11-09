@@ -296,7 +296,10 @@ async fn delete_tag_cascades_assignments() {
         .get()
         .await
         .unwrap()
-        .query_one("SELECT COUNT(*)::bigint FROM tags WHERE id = $1", &[&tag_id])
+        .query_one(
+            "SELECT COUNT(*)::bigint FROM tags WHERE id = $1",
+            &[&tag_id],
+        )
         .await
         .unwrap()
         .get(0);
