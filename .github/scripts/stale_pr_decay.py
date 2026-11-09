@@ -22,9 +22,13 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, cast
 
+# Load the policy's shared-module bootstrap before importing eligibility. This
+# also preserves its canonical staged-module preference in trusted workers.
+from factory_work_policy import is_manual_only
+
+import factory_eligibility as eligibility
 from factory_jev_shadow import MODEL as JEV_MODEL, call_jev
 from factory_review_policy import performed_via_untrusted_app
-from factory_work_policy import eligibility, is_manual_only
 
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 STALE_PR_GUARD_MARKER_RE = re.compile(

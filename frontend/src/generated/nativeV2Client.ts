@@ -88,6 +88,12 @@ export interface CreateIssuesRequest {
 
 export type CreateIssuesResponse = components['schemas']['NativeIssueListResponse']
 
+export interface CreateLegacyDependencyRequest {
+  body: components['schemas']['DependencyCreateRequest']
+}
+
+export type CreateLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
@@ -126,6 +132,14 @@ export interface DeleteIssueRequest {
 
 export type DeleteIssueResponse = void
 
+export interface DeleteLegacyDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+}
+
+export type DeleteLegacyDependencyResponse = unknown
+
 export interface DeleteReadingListRequest {
   path: {
     list_id: number
@@ -157,6 +171,14 @@ export interface GetRequest {
 }
 
 export type GetResponse = components['schemas']['NativeIdentityInboxResponse']
+
+export interface GetLegacyDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+}
+
+export type GetLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
 
 export interface GetQueueEntryRequest {
   path: {
@@ -221,6 +243,8 @@ export interface IssueReadRateRequest {
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
 
 export type ListResponse = components['schemas']['NativeIdentityInboxResponse']
+
+export type ListBlockedLegacyDependenciesResponse = Array<number>
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
@@ -374,6 +398,15 @@ export interface SkipRequest {
 
 export type SkipResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
+export interface UpdateLegacyDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+  body: components['schemas']['NativeDependencyNoteUpdate']
+}
+
+export type UpdateLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+
 export interface UpdateQueueEntryRequest {
   path: {
     thread_id: number
@@ -402,17 +435,20 @@ export interface NativeV2Client {
   continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
+  createLegacyDependency(args: CreateLegacyDependencyRequest): Promise<CreateLegacyDependencyResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   csrf(): Promise<CsrfResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
+  deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   dieState(): Promise<DieStateResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
@@ -422,6 +458,7 @@ export interface NativeV2Client {
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
   list(): Promise<ListResponse>
+  listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -447,6 +484,7 @@ export interface NativeV2Client {
   search(): Promise<SearchResponse>
   seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
+  updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
 }
@@ -502,6 +540,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    createLegacyDependency(args: CreateLegacyDependencyRequest) {
+      return client.post<CreateLegacyDependencyResponse, CreateLegacyDependencyRequest['body']>(
+        "/v1/dependencies/",
+        args.body,
+      )
+    },
     createQueueOrder(args: CreateQueueOrderRequest) {
       return client.post<CreateQueueOrderResponse, CreateQueueOrderRequest['body']>(
         "/v2/queue-orders",
@@ -530,6 +574,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
       )
     },
+    deleteLegacyDependency(args: DeleteLegacyDependencyRequest) {
+      return client.delete<DeleteLegacyDependencyResponse>(
+        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+      )
+    },
     deleteReadingList(args: DeleteReadingListRequest) {
       return client.delete<DeleteReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
@@ -553,6 +602,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     get(args: GetRequest) {
       return client.get<GetResponse>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+      )
+    },
+    getLegacyDependency(args: GetLegacyDependencyRequest) {
+      return client.get<GetLegacyDependencyResponse>(
+        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     getQueueEntry(args: GetQueueEntryRequest) {
@@ -601,6 +655,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     list() {
       return client.get<ListResponse>("/v1/identity-inbox")
+    },
+    listBlockedLegacyDependencies() {
+      return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
@@ -725,6 +782,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     skip(args: SkipRequest) {
       return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
+    },
+    updateLegacyDependency(args: UpdateLegacyDependencyRequest) {
+      return client.patch<UpdateLegacyDependencyResponse, UpdateLegacyDependencyRequest['body']>(
+        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+        args.body,
+      )
     },
     updateQueueEntry(args: UpdateQueueEntryRequest) {
       return client.patch<UpdateQueueEntryResponse, UpdateQueueEntryRequest['body']>(

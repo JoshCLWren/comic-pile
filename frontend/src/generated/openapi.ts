@@ -1839,11 +1839,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Create Dependency
-         * @description Create a hard-block dependency between owned threads or owned issues.
-         */
-        post: operations["create_dependency_api_v1_dependencies__post"];
+        post: operations["create_legacy_dependency"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1857,11 +1853,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get All Blocked Thread Ids
-         * @description Return all currently blocked thread IDs for the current user.
-         */
-        get: operations["get_all_blocked_thread_ids_api_v1_dependencies_blocked_get"];
+        get: operations["list_blocked_legacy_dependencies"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1877,25 +1869,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Dependency
-         * @description Fetch a single dependency owned by the current user.
-         */
-        get: operations["get_dependency_api_v1_dependencies__dependency_id__get"];
+        get: operations["get_legacy_dependency"];
         put?: never;
         post?: never;
-        /**
-         * Delete Dependency
-         * @description Delete a dependency and refresh denormalized blocked flags.
-         */
-        delete: operations["delete_dependency_api_v1_dependencies__dependency_id__delete"];
+        delete: operations["delete_legacy_dependency"];
         options?: never;
         head?: never;
-        /**
-         * Update Dependency Note
-         * @description Update the note on a dependency owned by the current user.
-         */
-        patch: operations["update_dependency_note_api_v1_dependencies__dependency_id__patch"];
+        patch: operations["update_legacy_dependency"];
         trace?: never;
     };
     "/api/v1/identity-inbox": {
@@ -11067,6 +11047,9 @@ export interface components {
             id: number;
             type: string;
         };
+        NativeDependencyNoteUpdate: {
+            note?: string | null;
+        };
         /**
          * @description Issue-level dependency response mirroring the Python `DependencyResponse`
          *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
@@ -17408,7 +17391,7 @@ export interface operations {
             };
         };
     };
-    create_dependency_api_v1_dependencies__post: {
+    create_legacy_dependency: {
         parameters: {
             query?: never;
             header?: never;
@@ -17417,31 +17400,57 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DependencyCreate"];
+                "application/json": components["schemas"]["DependencyCreateRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Created dependency */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid dependency */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Issue not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Reading constraint cycle: nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
-    get_all_blocked_thread_ids_api_v1_dependencies_blocked_get: {
+    list_blocked_legacy_dependencies: {
         parameters: {
             query?: never;
             header?: never;
@@ -17450,7 +17459,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Blocked thread ids */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17459,104 +17468,134 @@ export interface operations {
                     "application/json": number[];
                 };
             };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
-    get_dependency_api_v1_dependencies__dependency_id__get: {
+    get_legacy_dependency: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Dependency id */
                 dependency_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Dependency */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    delete_dependency_api_v1_dependencies__dependency_id__delete: {
+    delete_legacy_dependency: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Dependency id */
                 dependency_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Deleted */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
+                    "application/json": unknown;
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    update_dependency_note_api_v1_dependencies__dependency_id__patch: {
+    update_legacy_dependency: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Dependency id */
                 dependency_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DependencyNoteUpdate"];
+                "application/json": components["schemas"]["NativeDependencyNoteUpdate"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Dependency */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Dependency not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Note must be at most 255 characters or validation failed */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
