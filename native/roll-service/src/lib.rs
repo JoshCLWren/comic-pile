@@ -37,6 +37,7 @@ pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
 mod session_bandwidth;
+pub mod taste_discoveries;
 pub mod threads;
 
 /// Test scaffolding shared by unit and integration tests.
@@ -420,6 +421,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(continuity_rules::get)
                 .put(continuity_rules::update)
                 .delete(continuity_rules::delete),
+        )
+        .route(
+            "/api/v1/taste/discoveries/{signal_id}/dismiss",
+            post(taste_discoveries::dismiss_taste_discovery),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
