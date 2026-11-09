@@ -158,7 +158,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 9
+    assert len(shadowed_v1) == 16
     for item in shadowed_v1:
         assert item.get("ingress_destination") == "/api/native_roll.rs"
     assert any(
@@ -194,12 +194,10 @@ def test_full_surface_matches_deployed_ingress() -> None:
     for item in live_v1:
         assert item.get("ingress_destination") == "/api/index.py"
         assert item.get("consumers")
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/identity-inbox"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
+    assert all(
+        item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
+        if str(item.get("path", "")).startswith("/api/v1/identity-inbox")
     )
     assert any(
         item.get("method") == "GET"

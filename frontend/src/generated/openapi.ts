@@ -2184,20 +2184,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api List Inbox
-         * @description List unresolved or ambiguous external identity mappings for the current user.
-         *
-         *     Args:
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *         offset: Pagination offset.
-         *         limit: Maximum items to return.
-         *
-         *     Returns:
-         *         Paginated list of inbox items.
-         */
-        get: operations["api_list_inbox_api_v1_identity_inbox_get"];
+        get: operations["list_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2213,20 +2200,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Search Comicvine Issues
-         * @description Search ComicVine for issues by query string.
-         *
-         *     Args:
-         *         current_user: Authenticated owner.
-         *         q: Search query string.
-         *         limit: Maximum results to return.
-         *         issue_id: Optional ComicPile issue ID for context.
-         *
-         *     Returns:
-         *         Issue search results with metadata.
-         */
-        get: operations["api_search_comicvine_issues_api_v1_identity_inbox_search_issues_get"];
+        get: operations["search_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2242,19 +2216,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Get Inbox Item
-         * @description Get a single inbox item with all its candidates.
-         *
-         *     Args:
-         *         mapping_id: The mapping ID to retrieve.
-         *         current_user: Authenticated owner.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         Single-item response with candidates.
-         */
-        get: operations["api_get_inbox_item_api_v1_identity_inbox__mapping_id__get"];
+        get: operations["get_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2272,11 +2234,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Confirm Candidate
-         * @description Confirm a candidate for an unresolved identity mapping.
-         */
-        post: operations["api_confirm_candidate_api_v1_identity_inbox__mapping_id__confirm_post"];
+        post: operations["confirm_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2292,11 +2250,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Defer Item
-         * @description Defer a mapping for later review.
-         */
-        post: operations["api_defer_item_api_v1_identity_inbox__mapping_id__defer_post"];
+        post: operations["defer_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2312,11 +2266,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Reject Candidate
-         * @description Reject a candidate for an identity mapping.
-         */
-        post: operations["api_reject_candidate_api_v1_identity_inbox__mapping_id__reject_post"];
+        post: operations["reject_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2332,11 +2282,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Api Skip Item
-         * @description Skip an inbox item for the current adoption workflow.
-         */
-        post: operations["api_skip_item_api_v1_identity_inbox__mapping_id__skip_post"];
+        post: operations["skip_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6101,6 +6047,12 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        ActionRequest: {
+            /** Format: int32 */
+            external_identity_id?: number | null;
+            rejection_reason?: string | null;
+            search_query?: string | null;
+        };
         /**
          * ActiveThreadInfo
          * @description Schema for active thread information in session response.
@@ -11749,6 +11701,78 @@ export interface components {
         /** @description Request body for an enumeration-safe password-recovery email. */
         NativeForgotPasswordRequest: {
             email: string;
+        };
+        NativeIdentityInboxActionResponse: {
+            message: string;
+            success: boolean;
+            updated_item?: null | components["schemas"]["NativeIdentityInboxItem"];
+        };
+        NativeIdentityInboxCandidate: {
+            comicvine_id?: string | null;
+            /** Format: double */
+            confidence?: number | null;
+            evidence_json: unknown;
+            evidence_source?: string | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            external_url?: string | null;
+            metadata_json: unknown;
+            provider: string;
+            rejection_reason?: string | null;
+            status: string;
+        };
+        NativeIdentityInboxItem: {
+            candidates: components["schemas"]["NativeIdentityInboxCandidate"][];
+            /** Format: double */
+            created_at?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id: number;
+            provider?: string | null;
+            source_entry_summary: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: double */
+            updated_at?: number | null;
+            why_stopped: string;
+        };
+        NativeIdentityInboxResponse: {
+            items: components["schemas"]["NativeIdentityInboxItem"][];
+            /** Format: int64 */
+            limit: number;
+            /** Format: int64 */
+            offset: number;
+            /** Format: int64 */
+            total: number;
+        };
+        NativeIdentityInboxSearchResponse: {
+            /** Format: int32 */
+            issue_id: number;
+            query: string;
+            results: components["schemas"]["NativeIdentityInboxSearchResult"][];
+            /** Format: int64 */
+            total_available?: number | null;
+        };
+        NativeIdentityInboxSearchResult: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            evidence: string[];
+            image_url?: string | null;
+            issue_name?: string | null;
+            issue_number?: string | null;
+            publisher?: string | null;
+            /** Format: double */
+            score?: number | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+            volume_name?: string | null;
         };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
@@ -18501,235 +18525,165 @@ export interface operations {
             };
         };
     };
-    api_list_inbox_api_v1_identity_inbox_get: {
+    list_documentation: {
         parameters: {
-            query?: {
-                /** @description Pagination offset */
-                offset?: number;
-                /** @description Maximum items to return */
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxResponse"];
                 };
             };
         };
     };
-    api_search_comicvine_issues_api_v1_identity_inbox_search_issues_get: {
+    search_documentation: {
         parameters: {
-            query: {
-                /** @description Issue search query */
-                q: string;
-                /** @description Maximum results */
-                limit?: number;
-                /** @description Optional ComicPile issue ID for context */
-                issue_id?: number | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxSearchResponse"];
                 };
             };
         };
     };
-    api_get_inbox_item_api_v1_identity_inbox__mapping_id__get: {
+    get_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Mapping id */
                 mapping_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxResponse"];
                 };
             };
         };
     };
-    api_confirm_candidate_api_v1_identity_inbox__mapping_id__confirm_post: {
+    confirm_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Mapping id */
                 mapping_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IdentityInboxActionRequest"];
+                "application/json": components["schemas"]["ActionRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
     };
-    api_defer_item_api_v1_identity_inbox__mapping_id__defer_post: {
+    defer_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Mapping id */
                 mapping_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
     };
-    api_reject_candidate_api_v1_identity_inbox__mapping_id__reject_post: {
+    reject_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Mapping id */
                 mapping_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IdentityInboxActionRequest"];
+                "application/json": components["schemas"]["ActionRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
     };
-    api_skip_item_api_v1_identity_inbox__mapping_id__skip_post: {
+    skip_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Mapping id */
                 mapping_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description ok */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };

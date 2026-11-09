@@ -11,6 +11,7 @@ pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_mutation;
 pub mod issue_service;
@@ -341,6 +342,31 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(dependencies::delete_dependency),
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
+        .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
+        .route(
+            "/api/v1/identity-inbox/search/issues",
+            get(identity_inbox::search_issues),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}",
+            get(identity_inbox::get_inbox_item),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            post(identity_inbox::confirm),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/defer",
+            post(identity_inbox::defer),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/reject",
+            post(identity_inbox::reject),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/skip",
+            post(identity_inbox::skip),
+        )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
