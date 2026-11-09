@@ -435,6 +435,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/sessions/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/threads/[0-9]+$",
       "methods": [
         "GET"
@@ -538,6 +545,13 @@
     },
     {
       "src": "^/api/v1/sessions/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/sessions/[^/]+/snapshots$",
       "methods": [
         "GET"
       ],
@@ -657,14 +671,6 @@
       "src": "^/api/sessions/[^/]+/restore\\-session\\-start$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/[^/]+/snapshots$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1130,14 +1136,6 @@
       "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/[^/]+/snapshots$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
