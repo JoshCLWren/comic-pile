@@ -170,14 +170,15 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
 pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 52] = [
+    ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
+    ("get", "/api/v1/continuity-rules/"),
+    ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v1/identity-inbox"),
     ("get", "/api/v1/identity-inbox/search/issues"),
     ("get", "/api/v1/identity-inbox/{mapping_id}"),
-    ("get", "/api/v1/continuity-rules/"),
-    ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
@@ -195,8 +196,8 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 52] = [
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
-    ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
     ("post", "/api/v1/continuity-rules/"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/skip"),
@@ -218,10 +219,9 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 52] = [
     ("post", "/api/v2/roll/offer"),
     ("post", "/api/v2/roll/reset"),
     ("post", "/api/v2/threads/{thread_id}/issues"),
+    ("put", "/api/v1/continuity-rules/{rule_id}"),
     ("put", "/api/v2/reading-lists/{list_id}"),
     ("put", "/api/v2/threads/{thread_id}/issue-order"),
-    ("put", "/api/v1/continuity-rules/{rule_id}"),
-    ("delete", "/api/v1/continuity-rules/{rule_id}"),
 ];
 
 /// Merge every native v2 domain document into one canonical contract.
