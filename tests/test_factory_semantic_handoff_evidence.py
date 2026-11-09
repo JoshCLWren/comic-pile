@@ -83,7 +83,7 @@ def test_trusted_ollama_review_wakes_canonical_merge_only_when_ready() -> None:
     ).read_text()
 
     assert 'review_result="$(python3 .github/scripts/factory-review-controller.py review' in reviewer
-    assert 'jq -e --arg head "$HEAD" \' .status == "ready" and .head == $head\'' in reviewer
+    assert """jq -e --arg head "$HEAD" '.status == "ready" and .head == $head'""" in reviewer
     assert 'gh_retry gh workflow run factory-ready-merge-drain.yml' in reviewer
     assert "gh pr merge" not in reviewer
     assert "  actions: write" in workflow
