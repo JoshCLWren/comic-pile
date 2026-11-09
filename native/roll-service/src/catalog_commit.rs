@@ -360,7 +360,7 @@ pub async fn commit_series_mapping_handler(
     assert_issues_owned(&*conn, user.id(), &approved_rows).await?;
     assert_no_confirmed_mapping_conflict(&*conn, &approved_rows).await?;
 
-    let response = apply_identity_writes(
+    let response = persist_commit_series_mapping_handler(
         &mut conn,
         user.id(),
         &approved_rows,
@@ -1078,7 +1078,7 @@ async fn build_queue_bootstrap_plan_db(
     ))
 }
 
-async fn apply_identity_writes(
+async fn persist_commit_series_mapping_handler(
     conn: &mut deadpool_postgres::Object,
     user_id: i32,
     approved_rows: &[Value],
@@ -1113,8 +1113,8 @@ async fn apply_identity_writes(
         let identity = tx
             .query_one(
                 "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
-                 VALUES ($1, 'issue', $2, '{}'::jsonb, EXTRACT(EPOCH FROM NOW()), EXTRACT(EPOCH FROM NOW()))
-                 ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET updated_at = EXTRACT(EPOCH FROM NOW())
+                 VALUES ($1, 'issue', $2, '{}'::jsonb, NOW(), NOW())
+                 ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET updated_at = NOW()
                  RETURNING id",
                 &[&row_provider, &row_eid],
             )
@@ -1124,10 +1124,10 @@ async fn apply_identity_writes(
         // link issue mapping
         tx.execute(
             "INSERT INTO issue_external_identity_mappings
-             (issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at)
-             VALUES ($1, $2, 'confirmed', $3, 1.0, EXTRACT(EPOCH FROM NOW()), EXTRACT(EPOCH FROM NOW()))
+             (issue_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at, evidence_json)
+             VALUES ($1, $2, 'confirmed', $3, 1.0, NOW(), NOW(), '{}'::json)
              ON CONFLICT (issue_id, external_identity_id) DO UPDATE SET
-               status='confirmed', evidence_source=$3, confidence=1.0, updated_at=EXTRACT(EPOCH FROM NOW())",
+               status='confirmed', evidence_source=$3, confidence=1.0, updated_at=NOW()",
             &[&issue_id, &identity_id, &USER_SERIES_CONFIRMATION_EVIDENCE_SOURCE],
         )
         .await
@@ -1147,8 +1147,8 @@ async fn apply_identity_writes(
     let series_identity = tx
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
-             VALUES ($1, 'series', $2, $3, EXTRACT(EPOCH FROM NOW()), EXTRACT(EPOCH FROM NOW()))
-             ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET updated_at = EXTRACT(EPOCH FROM NOW())
+             VALUES ($1, 'series', $2, $3, NOW(), NOW())
+             ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET updated_at = NOW()
              RETURNING id",
             &[&provider, &series_external_id, &series_meta_json],
         )
@@ -1161,9 +1161,9 @@ async fn apply_identity_writes(
         tx.execute(
             "INSERT INTO thread_external_series_mappings
              (thread_id, external_identity_id, status, evidence_source, confidence, created_at, updated_at)
-             VALUES ($1, $2, 'confirmed', $3, 1.0, EXTRACT(EPOCH FROM NOW()), EXTRACT(EPOCH FROM NOW()))
+             VALUES ($1, $2, 'confirmed', $3, 1.0, NOW(), NOW())
              ON CONFLICT (thread_id, external_identity_id) DO UPDATE SET
-               status='confirmed', evidence_source=$3, confidence=1.0, updated_at=EXTRACT(EPOCH FROM NOW())",
+               status='confirmed', evidence_source=$3, confidence=1.0, updated_at=NOW()",
             &[tid, &series_identity_id, &USER_SERIES_CONFIRMATION_EVIDENCE_SOURCE],
         )
         .await
@@ -1223,8 +1223,8 @@ async fn apply_identity_writes(
 
     tx.execute(
         "INSERT INTO catalog_commit_receipts
-         (user_id, idempotency_key, endpoint, request_fingerprint, response_json, created_at)
-         VALUES ($1, $2, $3, $4, $5, EXTRACT(EPOCH FROM NOW()))",
+         (user_id, idempotency_key, endpoint, request_fingerprint, response_json, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
         &[
             &user_id,
             &idempotency_key,
@@ -1254,6 +1254,81 @@ async fn apply_identity_writes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn persist_commit_writes_identity_mappings_and_receipt() {
+        let state = crate::test_support::test_state(1)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let mut connection = state.pool.get().await.expect("database connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username, created_at, is_admin)
+                 VALUES (1, 'catalog-commit-test', now(), false);
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, queue_position, status,
+                      total_issues, created_at, is_blocked, is_test, manual_creator_credits,
+                      queue_position_is_manual)
+                 VALUES (10, 1, 'Test Series', 'Comic', 1, 1, 'active', 1, now(), false, false,
+                         '[]', false);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1);",
+            )
+            .await
+            .expect("seed catalog commit schema");
+
+        let approved_rows = vec![serde_json::json!({
+            "issue_id": 100,
+            "thread_id": 10,
+            "provider": "comicvine",
+            "external_id": "issue-100",
+            "classification": "safe_exact_match",
+            "row_id": "issue:100"
+        })];
+        let response = persist_commit_series_mapping_handler(
+            &mut connection,
+            1,
+            &approved_rows,
+            "comicvine",
+            "series-10",
+            "catalog-commit-test-key",
+            "catalog-commit-test-fingerprint",
+            &approved_rows,
+            Some(&serde_json::json!({"name": "Test Series"})),
+        )
+        .await
+        .expect("persist catalog commit");
+
+        assert_eq!(response.confirmed_issue_ids, vec![100]);
+        let mapping = connection
+            .query_one(
+                "SELECT e.provider, e.external_id, m.status
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 WHERE m.issue_id = $1",
+                &[&100i32],
+            )
+            .await
+            .expect("identity mapping");
+        assert_eq!(mapping.get::<_, String>(0), "comicvine");
+        assert_eq!(mapping.get::<_, String>(1), "issue-100");
+        assert_eq!(mapping.get::<_, String>(2), "confirmed");
+
+        let receipt = connection
+            .query_one(
+                "SELECT endpoint, response_json
+                 FROM catalog_commit_receipts
+                 WHERE user_id = $1 AND idempotency_key = $2",
+                &[&1i32, &"catalog-commit-test-key"],
+            )
+            .await
+            .expect("catalog commit receipt");
+        assert_eq!(receipt.get::<_, String>(0), COMMIT_ENDPOINT);
+        let response_json: Value = receipt.get(1);
+        assert_eq!(response_json["idempotency_key"], "catalog-commit-test-key");
+    }
 
     #[test]
     fn canonical_json_matches_python_sort_keys_default_separators() {
