@@ -73,23 +73,6 @@ anyway. If that lookup fails, it dispatches as before. Two gaps remain: the race
 and the dispatch, and the other automatic triggers. If a manual run shows as cancelled with no newer
 deploy of its SHA, dispatch it again once the queue is clear.
 
-## Red-deploy freeze
-
-Deploy Production starts with a freeze gate. If the last *attempted* Deploy
-Production run on `main` is red, later deploys skip migrations instead of
-failing. Gate-blocked, cancelled, skipped, and neutral runs are ignored, so
-the gate cannot latch on itself and a cancelled run cannot lift the freeze.
-
-Factory merge drains honor the same freeze so more changes cannot land on a
-broken production deploy, except PRs labeled `deploy-fix`. A runs-API error
-fails open with a warning rather than freezing.
-
-The repository owner unfreezes a red deploy by dispatching Deploy Production
-with `override_freeze=true` and a required `reason` after the fix is on
-`main`. `github.actor` must be the repository owner. The reason is logged in
-the run summary. Factory workers must not use that override; they can label a
-fix PR `deploy-fix` instead. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
-
 ## Deployment retention and rollback candidate
 
 Hobby Functions Storage is charged per retained deployment. After successful
@@ -271,14 +254,9 @@ including the failed run and step. Updates preserve active factory leases.
 The issue enters the ordinary factory queue as a critical `deploy-fix`; fixes
 retain normal exact-head CI and independent review requirements.
 
-A merged `deploy-fix` PR on current main, merged after the latest failed attempt,
-authorizes one automatic recovery through the complete schema/deploy/smoke path.
-An unchanged failing revision is never blindly retried. If that attempt fails,
-the old repair cannot authorize another attempt: a newer merged repair or an
-explicit repository owner `override_freeze` with a reason is required.
-Blocked deploy runs report failure and are excluded from attempted-deploy history.
-All freeze callers paginate completed run summaries and stop fetching job details at
-the latest actual attempt, so repeated blocked runs cannot erase the freeze.
+A failed release is reported as a reviewed `deploy-fix` repair issue. Repairs
+use the ordinary exact-head CI, independent review, and production deployment
+gates; there is no red-deploy freeze or override path.
 Preflight publishes a run-attempt-specific `deployment-attempt-N` artifact with the
 selected checkout SHA before dependency setup. Recovery incidents use that evidence;
 historical or expired metadata is explicitly unavailable, never guessed from the
