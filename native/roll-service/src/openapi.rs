@@ -255,7 +255,10 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 72] = [
     ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/skip"),
     ("post", "/api/v1/custom-cbls"),
-    ("post", "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply"),
+    (
+        "post",
+        "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+    ),
     ("post", "/api/v2/auth/forgot-password"),
     ("post", "/api/v2/auth/login"),
     ("post", "/api/v2/auth/logout"),

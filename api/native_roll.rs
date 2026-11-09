@@ -299,7 +299,7 @@ fn app() -> Router {
         )
         .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
         .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id_action}",
             post(native_dispatch),
         )
         .route("/api/v2/analytics/metrics", get(native_dispatch))

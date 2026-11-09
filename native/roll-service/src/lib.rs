@@ -419,7 +419,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(custom_cbl::delete_overlap_decision),
         )
         .route(
-            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id_action}",
             post(custom_cbl::apply),
         )
         .route(

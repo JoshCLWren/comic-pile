@@ -95,9 +95,14 @@ def _concrete_path(path: str) -> str:
     """Use a numeric owned Issue ID when checking parameterized Axum routes."""
     # First normalize Axum curly braces {thread_id} to Vercel colon syntax :thread_id
     normalized = AXUM_CAPTURE.sub(r":\1", path)
-    # Then convert only whole path-segment captures.  A suffix such as
-    # ``{plan_id}:apply`` contains a literal colon action, not a capture.
+    # Then convert only whole path-segment captures.
     concrete = VERCEL_CAPTURE.sub("42", normalized)
+    # Axum 0.8 forbids `{plan_id}:apply` (only one capture per segment, with
+    # `:` treated as a second capture), so the wire colon action is captured
+    # as `{plan_id_action}` in the Rust routers; restore `:apply` here so the
+    # concrete URL matches the Vercel `[^/]+:apply` rewrite.
+    if normalized.endswith(":plan_id_action"):
+        concrete += ":apply"
     # Verify curly braces are gone (Axum syntax converted)
     assert "{" not in concrete and "}" not in concrete, path
     return concrete

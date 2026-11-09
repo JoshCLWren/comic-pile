@@ -386,9 +386,19 @@ pub async fn delete_overlap_decision(
 pub async fn apply(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Path((list_id, plan_id)): Path<(i32, i32)>,
+    Path((list_id, plan_id_action)): Path<(i32, String)>,
     Json(request): Json<serde_json::Value>,
 ) -> Result<Response, ApiError> {
+    // Axum 0.8 allows only one capture per segment and treats `:` as a
+    // second capture, so the wire `…/{plan_id}:apply` is registered as the
+    // single capture `{plan_id_action}` and the `:apply` suffix is validated
+    // here. The URL still matches the Vercel `[^/]+:apply` pattern.
+    let Some(plan_id_text) = plan_id_action.strip_suffix(":apply") else {
+        return Err(ApiError(StatusCode::NOT_FOUND, "Not Found".into()));
+    };
+    let plan_id: i32 = plan_id_text
+        .parse()
+        .map_err(|_| ApiError(StatusCode::NOT_FOUND, "Not Found".into()))?;
     let lane_id = request.get("lane_id").and_then(|value| value.as_str());
     let mut conn = db::checkout(&state).await?;
     let tx = conn
@@ -576,7 +586,7 @@ mod tests {
         apply(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
-            Path((201, 301)),
+            Path((201, "301:apply".to_string())),
             Json(serde_json::json!({})),
         )
         .await
