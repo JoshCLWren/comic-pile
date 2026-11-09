@@ -591,7 +591,6 @@ mod tests {
         );
     }
 
-
     async fn db_fixture() -> (
         std::sync::Arc<AppState>,
         tokio_postgres::Client,
@@ -669,6 +668,9 @@ mod tests {
             )
             .await
             .expect("persisted verdict");
-        assert_eq!(row.get::<_, Option<String>>(0).as_deref(), Some("confirmed"));
+        assert_eq!(
+            row.get::<_, Option<String>>(0).as_deref(),
+            Some("confirmed")
+        );
     }
 }
