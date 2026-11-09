@@ -18,7 +18,6 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tokio_postgres::GenericClient;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -189,7 +188,7 @@ fn verify_preview_token(
 }
 
 fn canonical_row_ids(approved_row_ids: &[String]) -> Vec<String> {
-    let mut set: std::collections::BTreeSet<String> = approved_row_ids
+    let set: std::collections::BTreeSet<String> = approved_row_ids
         .iter()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -199,10 +198,6 @@ fn canonical_row_ids(approved_row_ids: &[String]) -> Vec<String> {
 
 fn request_fingerprint(preview_token: &str, canonical_rows: &[String]) -> String {
     // Python: json.dumps({"preview_token":..., "approved_row_ids":...}, sort_keys=True, separators=(",", ":"))
-    let material = serde_json::json!({
-        "approved_row_ids": canonical_rows,
-        "preview_token": preview_token,
-    });
     // sort_keys=True and separators=(",",":") - with keys sorted, approved_row_ids comes before preview_token
     let s = format!(
         "{{\"approved_row_ids\":{},\"preview_token\":{}}}",
@@ -248,7 +243,8 @@ async fn replay_receipt(
         (status = 409, description = "preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict"),
         (status = 422, description = "invalid_approved_row"),
     ),
-    tag = "catalog"
+    tag = "catalog",
+    security(("HTTPBearer" = []))
 )]
 pub fn commit_documentation() {}
 
@@ -269,7 +265,7 @@ pub async fn commit_series_mapping_handler(
     let mut conn = db::checkout(&state).await?;
 
     // Idempotency resolved before revalidation
-    if let Some(replay) = replay_receipt(&*conn, user.id(), &normalized_key, &fingerprint).await? {
+    if let Some(replay) = replay_receipt(&conn, user.id(), &normalized_key, &fingerprint).await? {
         return Ok(Json(replay));
     }
 
@@ -312,7 +308,7 @@ pub async fn commit_series_mapping_handler(
 
     // Rebuild plan and validate digest - delegate to plan builder
     let plan = build_plan_for_commit(
-        &*conn,
+        &conn,
         user.id(),
         origin_issue_id,
         &provider,
@@ -334,7 +330,7 @@ pub async fn commit_series_mapping_handler(
     {
         // concurrent identical commit may have won
         if let Some(replay) =
-            replay_receipt(&*conn, user.id(), &normalized_key, &fingerprint).await?
+            replay_receipt(&conn, user.id(), &normalized_key, &fingerprint).await?
         {
             return Ok(Json(replay));
         }
@@ -357,8 +353,8 @@ pub async fn commit_series_mapping_handler(
         approved_rows.push(row);
     }
 
-    assert_issues_owned(&*conn, user.id(), &approved_rows).await?;
-    assert_no_confirmed_mapping_conflict(&*conn, &approved_rows).await?;
+    assert_issues_owned(&conn, user.id(), &approved_rows).await?;
+    assert_no_confirmed_mapping_conflict(&conn, &approved_rows).await?;
 
     let response = persist_commit_series_mapping_handler(
         &mut conn,
@@ -708,7 +704,7 @@ async fn build_plan_db(
 
     // Get issues with mappings for this series (local catalog path)
     let mut issues_with_mappings: Vec<Value> = Vec::new();
-    let mut series_info: Option<Value> = None;
+    let series_info: Option<Value>;
 
     if let Some(sr) = series_row {
         let meta: Value = sr
@@ -753,16 +749,6 @@ async fn build_plan_db(
             scope_mode,
         ));
     }
-
-    // Check origin confirmed for this series
-    let origin_has_confirmed = has_confirmed_series_mapping(
-        conn,
-        provider,
-        provider_series_external_id,
-        origin_issue_id,
-        origin_thread_id,
-    )
-    .await?;
 
     // If queue_thread_bootstrap, use that flow
     if scope_mode == "queue_thread_bootstrap" {
@@ -879,43 +865,6 @@ fn series_info_from_meta(external_id: &str, meta: &Value) -> Value {
     })
 }
 
-async fn has_confirmed_series_mapping(
-    conn: &tokio_postgres::Client,
-    provider: &str,
-    series_external_id: &str,
-    origin_issue_id: i32,
-    origin_thread_id: Option<i32>,
-) -> Result<bool, ApiError> {
-    // Check if origin issue has confirmed mapping to this series, or thread has confirmed series mapping
-    let row = conn
-        .query_opt(
-            "SELECT 1 FROM issue_external_identity_mappings m
-             JOIN external_identities e ON e.id = m.external_identity_id
-             WHERE m.issue_id = $1 AND m.status = 'confirmed' AND e.provider = $2
-             LIMIT 1",
-            &[&origin_issue_id, &provider],
-        )
-        .await
-        .map_err(db::query_error)?;
-    if row.is_some() {
-        return Ok(true);
-    }
-    if let Some(tid) = origin_thread_id {
-        let row = conn
-            .query_opt(
-                "SELECT 1 FROM thread_external_series_mappings m
-                 JOIN external_identities e ON e.id = m.external_identity_id
-                 WHERE m.thread_id = $1 AND m.status = 'confirmed' AND e.provider = $2 AND e.external_id = $3
-                 LIMIT 1",
-                &[&tid, &provider, &series_external_id],
-            )
-            .await
-            .map_err(db::query_error)?;
-        return Ok(row.is_some());
-    }
-    Ok(false)
-}
-
 // Classification helpers (simplified but matching key behaviors)
 fn normalize_issue_number(value: &str) -> String {
     let stripped = value.trim().trim_end_matches('.');
@@ -958,10 +907,6 @@ fn is_special_issue(issue_number: &str) -> bool {
     }
     false
 }
-fn is_ambiguous(_s: &str) -> bool {
-    false
-} // simplified; full logic in Python
-
 fn classify_rows(
     issues: &[Value],
     provider: &str,
@@ -1058,6 +1003,7 @@ fn derive_scope_key_str(rows: &[Value], origin_issue_id: i32) -> String {
     derive_scope_key(rows, origin_issue_id).unwrap_or_default()
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn build_queue_bootstrap_plan_db(
     _conn: &tokio_postgres::Client,
     _user_id: i32,
@@ -1078,6 +1024,7 @@ async fn build_queue_bootstrap_plan_db(
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn persist_commit_series_mapping_handler(
     conn: &mut deadpool_postgres::Object,
     user_id: i32,

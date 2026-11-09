@@ -4032,6 +4032,97 @@
         "title": "ComicVineStoryArc",
         "type": "object"
       },
+      "CommitRequest": {
+        "properties": {
+          "approved_row_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "preview_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "preview_token",
+          "idempotency_key"
+        ],
+        "type": "object"
+      },
+      "CommitResponse": {
+        "properties": {
+          "already_confirmed_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "confirmed_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "hydration_queued_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "needs_review_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "series_mapping": {
+            "$ref": "#/components/schemas/CommitSeriesMapping"
+          }
+        },
+        "required": [
+          "idempotency_key",
+          "confirmed_issue_ids",
+          "already_confirmed_issue_ids",
+          "needs_review_issue_ids",
+          "hydration_queued_issue_ids",
+          "series_mapping"
+        ],
+        "type": "object"
+      },
+      "CommitSeriesMapping": {
+        "properties": {
+          "evidence_source": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "external_id",
+          "status",
+          "evidence_source"
+        ],
+        "type": "object"
+      },
       "ConfirmIdentityRequest": {
         "description": "Request to confirm a specific ComicVine identity for an issue.",
         "properties": {
@@ -21733,13 +21824,12 @@
     },
     "/api/v1/catalog/series-mappings/commit": {
       "post": {
-        "description": "Commit user-approved safe series mappings transactionally and idempotently.\n\nOnly rows the referenced preview classified ``safe_exact_match`` may be approved. The\npreview token signature, user binding, and TTL are verified, current database state is\nrevalidated, and every identity write commits in one transaction. Metadata hydration is\nhanded off only after that commit.\n\nArgs:\n    request: Commit request with preview token, idempotency key, and approved row ids.\n    current_user: Authenticated user for authorization.\n    db: Database session.\n\nReturns:\n    The confirmed, already-confirmed, needs-review, and hydration-queued issue ids plus\n    the established series evidence.\n\nRaises:\n    HTTPException: 409 ``preview_stale``/``preview_expired``/``confirmed_mapping_conflict``/\n        ``idempotency_conflict`` or 422 ``invalid_approved_row``. No identity write has\n        been committed in any of those cases.",
-        "operationId": "commit_series_mapping_api_v1_catalog_series_mappings_commit_post",
+        "operationId": "commit_documentation",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SeriesMappingCommitRequest"
+                "$ref": "#/components/schemas/CommitRequest"
               }
             }
           },
@@ -21750,21 +21840,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SeriesMappingCommitResponse"
+                  "$ref": "#/components/schemas/CommitResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Commit result"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "409": {
+            "description": "preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "invalid_approved_row"
           }
         },
         "security": [
@@ -21772,9 +21861,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Commit Series Mapping",
+        "summary": "OpenAPI path documentation for the series-mapping commit endpoint.",
         "tags": [
-          "catalog",
           "catalog"
         ]
       }

@@ -155,6 +155,9 @@ use utoipa::OpenApi;
         crate::continuity_rules::ContinuityRuleRequest,
         crate::continuity_rules::ContinuityRuleResponse,
         crate::continuity_rules::ConvergenceTarget,
+        crate::catalog_commit::CommitRequest,
+        crate::catalog_commit::CommitResponse,
+        crate::catalog_commit::CommitSeriesMapping,
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
@@ -185,7 +188,7 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 56] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 57] = [
     ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
@@ -219,6 +222,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 56] = [
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
+    ("post", "/api/v1/catalog/series-mappings/commit"),
     ("post", "/api/v1/continuity-rules/"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
