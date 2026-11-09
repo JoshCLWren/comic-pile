@@ -270,13 +270,11 @@ mod tests {
             }),
         )
         .await
-        .err()
-        .expect("foreign update denied");
+        .expect_err("foreign update denied");
         assert_eq!(denied.0, StatusCode::NOT_FOUND);
         let denied = delete(State(state.clone()), other, Path(edge))
             .await
-            .err()
-            .expect("foreign delete denied");
+            .expect_err("foreign delete denied");
         assert_eq!(denied.0, StatusCode::NOT_FOUND);
         let Json(updated) = update(
             State(state.clone()),
@@ -306,8 +304,7 @@ mod tests {
             }),
         )
         .await
-        .err()
-        .expect("oversized note denied");
+        .expect_err("oversized note denied");
         assert_eq!(invalid.0, StatusCode::UNPROCESSABLE_ENTITY);
         let Json(cleared) = update(
             State(state.clone()),
