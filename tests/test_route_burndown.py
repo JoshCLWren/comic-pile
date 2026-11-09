@@ -169,7 +169,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 35
+    assert len(shadowed_v1) == 36
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/creators"
@@ -250,7 +250,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in unversioned_ops
         if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_unversioned) == 11
+    assert len(shadowed_unversioned) == 12
     assert any(
         item.get("path") == "/api/auth/login"
         and item.get("burndown_status") == "shadowed by Rust"
@@ -317,6 +317,25 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/sessions/current/"
+        and item.get("burndown_status")
+        == "live transitional Python with callers"
+        for item in v1_ops
+    )
+    assert all(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+        if item.get("path") == "/api/v1/sessions/{session_id}"
+    )
+    assert all(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in unversioned_ops
+        if item.get("path") == "/api/sessions/{session_id}"
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/sessions/correction-examples"
         and item.get("burndown_status")
         == "live transitional Python with callers"
         for item in v1_ops

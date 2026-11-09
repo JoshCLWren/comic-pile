@@ -216,6 +216,8 @@ fn app() -> Router {
         )
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/sessions/{session_id}", get(native_dispatch))
+        .route("/api/v1/sessions/{session_id}", get(native_dispatch))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
@@ -473,6 +475,41 @@ mod tests {
             assert_eq!(
                 response.headers().get("x-comicpile-api-runtime").unwrap(),
                 "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn session_detail_ingress_preserves_same_paths_and_requires_auth() {
+        for uri in ["/api/sessions/7", "/api/v1/sessions/7"] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric session ids must not fail Path extraction for {uri}: {text}"
             );
         }
     }

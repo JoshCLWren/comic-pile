@@ -586,16 +586,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 35,
-      "v1_live_python": 154,
+      "v1_shadowed_by_rust": 36,
+      "v1_live_python": 153,
       "v1_orphaned": 8,
       "unversioned_total": 33,
-      "unversioned_shadowed_by_rust": 11,
-      "unversioned_live_python": 20,
+      "unversioned_shadowed_by_rust": 12,
+      "unversioned_live_python": 19,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 46,
-      "total_live_python": 174,
+      "total_shadowed_by_rust": 48,
+      "total_live_python": 172,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -2520,8 +2520,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/sessions/{session_id}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -3594,8 +3594,8 @@
         ],
         "method": "GET",
         "path": "/api/sessions/{session_id}",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {

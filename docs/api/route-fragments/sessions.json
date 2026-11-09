@@ -31,8 +31,8 @@
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/sessions/{session_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/sessions/[^/]+$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/sessions/[0-9]+$"
     },
     {
       "bucket": "unversioned_operations",
@@ -80,8 +80,8 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/sessions/{session_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/sessions/[^/]+$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/sessions/[0-9]+$"
     },
     {
       "bucket": "v1_operations",

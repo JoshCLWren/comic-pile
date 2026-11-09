@@ -40,6 +40,7 @@ pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
 mod session_bandwidth;
+pub mod session_detail;
 pub mod taste_discoveries;
 pub mod threads;
 
@@ -284,6 +285,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-sessions",
             post(bootstrap::initialize_session),
+        )
+        .route(
+            "/api/sessions/{session_id}",
+            get(session_detail::get_session),
+        )
+        .route(
+            "/api/v1/sessions/{session_id}",
+            get(session_detail::get_session),
         )
         .route("/api/v2/roll/dice-command", post(dice_api::manual_die))
         .route("/api/v2/roll/offer", post(roll_offer::offer))
