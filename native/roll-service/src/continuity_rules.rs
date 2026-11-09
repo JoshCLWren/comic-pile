@@ -338,12 +338,12 @@ async fn would_create_cycle(
                SELECT r.target_type, r.target_id FROM continuity_rules r
                WHERE r.user_id=$1 AND r.id<>$6
                  AND ((r.source_type=$2 AND r.source_id=$3)
-                   OR COALESCE(r.convergence_targets,'[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type',$2::text,'id',$3::int)))
+                  OR COALESCE(r.convergence_targets::jsonb,'[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type',$2::text,'id',$3::int)))
                UNION
                SELECT r.target_type, r.target_id FROM continuity_rules r JOIN reachable n
                  ON r.user_id=$1 AND r.id<>$6
                 AND ((r.source_type=n.node_type AND r.source_id=n.node_id)
-                  OR COALESCE(r.convergence_targets,'[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type',n.node_type,'id',n.node_id)))
+                  OR COALESCE(r.convergence_targets::jsonb,'[]'::jsonb) @> jsonb_build_array(jsonb_build_object('type',n.node_type,'id',n.node_id)))
              ) SELECT EXISTS(SELECT 1 FROM reachable WHERE node_type=$4 AND node_id=$5)",
             &[&user_id, &target_type, &target_id, &source_type, &source_id, &excluded],
         )
@@ -434,7 +434,7 @@ async fn retire_edges(
             "SELECT 1 FROM continuity_rules r
              WHERE r.user_id=$1 AND r.id<>$2 AND (
                (r.satisfaction_type IN ('item_read','checkpoint') AND r.source_type='issue' AND r.target_type='issue' AND COALESCE(r.checkpoint_issue_id,r.source_id)=$3 AND r.target_id=$4)
-               OR (r.satisfaction_type='converged' AND r.target_type='issue' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(r.convergence_targets,'[]')) t WHERE t->>'type'='issue' AND (t->>'id')::int=$3) AND r.target_id=$4)
+               OR (r.satisfaction_type='converged' AND r.target_type='issue' AND EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(r.convergence_targets::jsonb,'[]'::jsonb)) t WHERE t->>'type'='issue' AND (t->>'id')::int=$3) AND r.target_id=$4)
              ) LIMIT 1",
             &[&user_id, &exclude_rule_id, &source, &target],
         ).await.map_err(db::query_error)?.is_some();
@@ -559,7 +559,7 @@ pub async fn create(
             .to_string(),
         )
     };
-    let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| if error.as_db_error().is_some_and(|e| e.code().code()=="23505") { conflict("continuity_rule_exists") } else { db::query_error(error) })?;
+    let row = tx.query_one("INSERT INTO continuity_rules (user_id,source_type,source_id,target_type,target_id,satisfaction_type,checkpoint_issue_id,convergence_targets,note,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8::text::json,$9,NOW(),NOW()) RETURNING id", &[&user.id(),&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note]).await.map_err(|error| if error.as_db_error().is_some_and(|e| e.code().code()=="23505") { conflict("continuity_rule_exists") } else { db::query_error(error) })?;
     let rule_id: i32 = row.get(0);
     insert_members(&tx, rule_id, &request.selected_member_issue_ids).await?;
     compile_edges(&tx, &edge_pairs(&request), rule_id).await?;
@@ -643,7 +643,7 @@ pub async fn update(
             .to_string(),
         )
     };
-    tx.execute("UPDATE continuity_rules SET source_type=$1,source_id=$2,target_type=$3,target_id=$4,satisfaction_type=$5,checkpoint_issue_id=$6,convergence_targets=$7::jsonb,note=$8,updated_at=NOW() WHERE id=$9 AND user_id=$10", &[&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note,&rule_id,&user.id()]).await.map_err(db::query_error)?;
+    tx.execute("UPDATE continuity_rules SET source_type=$1,source_id=$2,target_type=$3,target_id=$4,satisfaction_type=$5,checkpoint_issue_id=$6,convergence_targets=$7::text::json,note=$8,updated_at=NOW() WHERE id=$9 AND user_id=$10", &[&request.source_type,&request.source_id,&request.target_type,&request.target_id,&request.satisfaction_type,&request.checkpoint_issue_id,&targets,&request.note,&rule_id,&user.id()]).await.map_err(db::query_error)?;
     tx.execute(
         "DELETE FROM continuity_rule_selected_members WHERE rule_id=$1",
         &[&rule_id],
