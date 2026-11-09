@@ -122,7 +122,7 @@ errors = acceptance.validate(report, int(issue), head, body, changed)
 if errors:
     raise SystemExit("invalid provider acceptance report: " + "; ".join(errors))
 open("/tmp/opencode-factory-77.log", "w", encoding="utf-8").write(
-    log + "# comic-pile-factory-authoritative-diff-evidence\ngh pr diff\n" +
+    log + f"# comic-pile-factory-authoritative-diff-evidence\ngh pr diff {pr}\n" +
     "FACTORY_ACCEPTANCE_V1=" + json.dumps(report, separators=(",", ":")) + "\n"
 )
 print(f"validated provider acceptance for issue {issue}")
