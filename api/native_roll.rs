@@ -278,6 +278,14 @@ fn app() -> Router {
             "/api/v1/continuity-rules/{rule_id}",
             delete(native_dispatch),
         )
+        .route("/api/v1/releases/", get(native_dispatch))
+        .route("/api/v1/releases/", put(native_dispatch))
+        .route("/api/v1/releases/source", get(native_dispatch))
+        .route("/api/v1/releases/{release_id}", get(native_dispatch))
+        .route(
+            "/api/v1/releases/{release_id}/retract",
+            post(native_dispatch),
+        )
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))

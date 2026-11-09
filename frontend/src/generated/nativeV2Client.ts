@@ -304,6 +304,23 @@ export interface RejectRequest {
 
 export type RejectResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
+export interface ReleasesGetRequest {
+  path: {
+    release_id: number
+  }
+}
+
+export type ReleasesGetResponse = components['schemas']['NativePublicReleaseResponse']
+
+export interface ReleasesListRequest {
+  query?: {
+    limit?: number
+    offset?: number
+  }
+}
+
+export type ReleasesListResponse = components['schemas']['NativeReleaseListResponse']
+
 export interface RelinkRequest {
   path: {
     plan_id: number
@@ -404,6 +421,8 @@ export interface NativeV2Client {
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
+  releasesGet(args: ReleasesGetRequest): Promise<ReleasesGetResponse>
+  releasesList(args?: ReleasesListRequest): Promise<ReleasesListResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
@@ -636,6 +655,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<RejectResponse, RejectRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
         args.body,
+      )
+    },
+    releasesGet(args: ReleasesGetRequest) {
+      return client.get<ReleasesGetResponse>(
+        `/v1/releases/${encodeURIComponent(String(args.path.release_id))}`,
+      )
+    },
+    releasesList(args: ReleasesListRequest = {}) {
+      return client.get<ReleasesListResponse>(
+        "/v1/releases/",
+        { params: compactQuery(args.query) },
       )
     },
     relink(args: RelinkRequest) {

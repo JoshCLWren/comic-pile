@@ -164,7 +164,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 29
+    assert len(shadowed_v1) == 34
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/creators"
@@ -276,6 +276,11 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in v1_ops
         if str(item.get("path", "")).startswith("/api/v1/continuity-rules")
     )
+    assert all(
+        item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+        if str(item.get("path", "")).startswith("/api/v1/releases")
+    )
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/users/me/preferences"
@@ -334,7 +339,11 @@ def test_rendered_outputs_match_checked_in_files() -> None:
 def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
-    assert [fragment.name for fragment in fragments] == ["creators", "dependencies"]
+    assert [fragment.name for fragment in fragments] == [
+        "creators",
+        "dependencies",
+        "releases",
+    ]
 
 
 def test_creator_fragment_covers_creator_and_creator_adjacent_metadata() -> None:
@@ -354,6 +363,25 @@ def test_dependency_fragment_covers_native_and_python_metadata() -> None:
         operation["path"] == "/api/v2/dependencies/"
         for operation in fragment.operations
     )
+
+
+def test_release_fragment_covers_every_browser_called_release_route() -> None:
+    """The releases family owns all five browser-called operations."""
+    fragments = _load_route_fragments(FRAGMENT_DIR)
+    release_fragment = next(
+        fragment for fragment in fragments if fragment.name == "releases"
+    )
+    methods_paths = {
+        (operation["method"], operation["path"])
+        for operation in release_fragment.operations
+    }
+    assert methods_paths == {
+        ("GET", "/api/v1/releases/"),
+        ("PUT", "/api/v1/releases/"),
+        ("GET", "/api/v1/releases/source"),
+        ("GET", "/api/v1/releases/{release_id}"),
+        ("POST", "/api/v1/releases/{release_id}/retract"),
+    }
 
 
 def test_fragment_merge_preserves_inventory_operation_counts() -> None:

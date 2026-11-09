@@ -432,6 +432,87 @@
         ]
       }
     },
+    "/api/v1/releases/": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Documentation-only operation for the mounted releases list handler.",
+        "operationId": "releases_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum releases to return (1-100, default 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of matching releases to skip (default 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid pagination"
+          }
+        }
+      }
+    },
+    "/api/v1/releases/{release_id}": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Documentation-only operation for the mounted releases get handler.",
+        "operationId": "releases_get",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicReleaseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Release not found"
+          }
+        }
+      }
+    },
     "/api/v2/analytics/metrics": {
       "get": {
         "tags": [
@@ -4751,6 +4832,57 @@
           "all_out_of_pool"
         ]
       },
+      "PublicReleaseResponse": {
+        "type": "object",
+        "description": "One release ledger record returned by public-facing endpoints.",
+        "required": [
+          "id",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "released_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sort_order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "QueueEntryPatch": {
         "type": "object",
         "description": "Resource patch for one queue entry.",
@@ -5897,6 +6029,36 @@
               "string",
               "null"
             ]
+          }
+        }
+      },
+      "ReleaseListResponse": {
+        "type": "object",
+        "description": "Paginated published releases for What's New.",
+        "required": [
+          "releases",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicReleaseResponse"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

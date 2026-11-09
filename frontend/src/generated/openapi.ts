@@ -3085,11 +3085,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Releases
-         * @description List public published releases newest-first.
-         */
-        get: operations["list_releases_api_v1_releases__get"];
+        /** Documentation-only operation for the mounted releases list handler. */
+        get: operations["releases_list"];
         /**
          * Publish Release
          * @description Idempotently create or update one merged-PR-backed release.
@@ -3129,11 +3126,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Release
-         * @description Fetch one public published release.
-         */
-        get: operations["get_release_api_v1_releases__release_id__get"];
+        /** Documentation-only operation for the mounted releases get handler. */
+        get: operations["releases_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11208,6 +11202,23 @@ export interface components {
         NativePasswordResetResponse: {
             message: string;
         };
+        /** @description One release ledger record returned by public-facing endpoints. */
+        NativePublicReleaseResponse: {
+            body?: string | null;
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order: number;
+            summary: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
             publisher?: string | null;
@@ -11272,6 +11283,16 @@ export interface components {
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         NativeRefreshTokenRequest: {
             refresh_token: string;
+        };
+        /** @description Paginated published releases for What's New. */
+        NativeReleaseListResponse: {
+            /** Format: int32 */
+            limit: number;
+            /** Format: int32 */
+            offset: number;
+            releases: components["schemas"]["NativePublicReleaseResponse"][];
+            /** Format: int64 */
+            total: number;
         };
         /** @description Request body for completing a password reset with a single-use token. */
         NativeResetPasswordRequest: {
@@ -19010,10 +19031,12 @@ export interface operations {
             };
         };
     };
-    list_releases_api_v1_releases__get: {
+    releases_list: {
         parameters: {
             query?: {
+                /** @description Maximum releases to return (1-100, default 20) */
                 limit?: number;
+                /** @description Number of matching releases to skip (default 0) */
                 offset?: number;
             };
             header?: never;
@@ -19022,23 +19045,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReleaseListResponse"];
+                    "application/json": components["schemas"]["NativeReleaseListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid pagination */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -19112,7 +19132,7 @@ export interface operations {
             };
         };
     };
-    get_release_api_v1_releases__release_id__get: {
+    releases_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -19123,23 +19143,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PublicReleaseResponse"];
+                    "application/json": components["schemas"]["NativePublicReleaseResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Release not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
