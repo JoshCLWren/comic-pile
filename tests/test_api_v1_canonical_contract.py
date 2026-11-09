@@ -40,16 +40,19 @@ def _schema_candidates() -> list[Path]:
 
 
 # Families intentionally exposed ONLY under bare ``/api`` because they are
-# non-client tooling or administrative surfaces, never versioned client
-# resources. Every other bare ``/api`` path must be a compatibility alias for a
-# family that also has a canonical ``/api/v1`` route.
-LEGACY_ONLY_TOOLING = frozenset({"admin", "debug", "metrics", "ping"})
+# non-client tooling or infrastructure surfaces, never versioned client
+# resources. Admin and debug tooling was pruned (#4861); every other bare
+# ``/api`` path must be a compatibility alias for a family that also has a
+# canonical ``/api/v1`` route. Metrics is the retained eager surface.
+LEGACY_ONLY_TOOLING = frozenset({"metrics", "ping"})
 
 # Retained first-party client families that must expose a canonical
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
+# Analytics is no longer a Python ``/api/v1`` family: the Python handlers
+# were pruned (#4861) and the frontend uses the native Rust
+# ``GET /api/v2/analytics/metrics`` resource (#4348) instead.
 REQUIRED_V1_FAMILIES = frozenset(
     {
-        "analytics",
         "auth",
         "bug-reports",
         "continuity-plans",

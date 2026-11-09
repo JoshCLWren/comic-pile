@@ -258,6 +258,7 @@ dependencies = [
  "native-tls",
  "postgres-native-tls",
  "rand",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.9",

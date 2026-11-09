@@ -3,8 +3,10 @@
 The 2026-11-07 #4335 update requires a reviewed ``sql_budget`` beside each
 DB-backed Rust operation in ``docs/api/v2-route-inventory.json``. This test
 records the budget for the threads collection read as a static call-site pin:
-it counts the page statement in ``threads.rs`` and checks the inventory
-budget matches. The Option E preview path (auth helper + snapshot helper)
+it counts the page statement in the ``list_threads`` handler of
+``threads.rs`` (not the whole file, which also hosts the v1/bare
+``get_thread_detail`` operation) and checks the inventory budget matches.
+The Option E preview path (auth helper + snapshot helper)
 is presence-checked, not counted in the production-default budget; activating
 the preview requires a manual inventory update backed by a measured budget.
 All statements are set-based and independent of library size.
@@ -30,6 +32,36 @@ QUERY_CALL = re.compile(r"(?:\.|::)(query|query_opt|query_one|query_one_optional
 def _count_queries(source: str) -> int:
     """Return the number of DB query call sites in one Rust source file."""
     return len(QUERY_CALL.findall(source))
+
+
+def _list_threads_handler(source: str) -> str:
+    """Return only the ``list_threads`` handler body of ``threads.rs``.
+
+    The file also hosts ``get_thread_detail`` (the v1/bare detail cutover),
+    which issues its own single statement for a different operation. The
+    v2 collection budget pins only the collection handler, so call-site
+    counts must be scoped to that handler instead of the whole file.
+    """
+    handler = source.split("pub async fn list_threads(", 1)[1]
+    end_markers = ("pub async fn get_thread_detail(", "fn validate_auth(")
+    ends = [handler.find(marker) for marker in end_markers if handler.find(marker) != -1]
+    if ends:
+        handler = handler[: min(ends)]
+    return handler
+
+
+def _query_page(source: str) -> str:
+    """Return the ``query_page`` helper body that issues the page statement."""
+    helper = source.split("async fn query_page(", 1)[1]
+    end = helper.find("\nenum Param")
+    if end != -1:
+        helper = helper[:end]
+    return helper
+
+
+def _list_call_path(source: str) -> str:
+    """Return the v2 collection call path: handler plus its page helper."""
+    return _list_threads_handler(source) + _query_page(source)
 
 
 def _threads_entry() -> dict[str, object]:
@@ -60,9 +92,10 @@ def test_threads_sql_budget_matches_handler_call_path() -> None:
 
     # Default legacy path: one page statement issues auth, whole-queue
     # total, list names and rows together via one helper call.
-    page_statements = _count_queries(threads)
+    list_call_path = _list_call_path(threads)
+    page_statements = _count_queries(list_call_path)
     assert page_statements == 1
-    assert "query_one_optional(state, connection, &sql" in threads
+    assert "query_one_optional(state, connection, &sql" in list_call_path
     # The default path is the production default: the Option E preview
     # requires explicit env opt-in and is off unless both flags are set.
     assert "fn option_e_enabled()" in threads
@@ -88,9 +121,7 @@ def test_threads_sql_budget_matches_handler_call_path() -> None:
 def test_threads_has_no_query_inside_a_loop() -> None:
     """The threads projection must not issue per-row (N+1) statements."""
     source = THREADS.read_text(encoding="utf-8")
-    handler = source.split("pub async fn list_threads(", 1)[1].split(
-        "fn validate_auth(", 1
-    )[0]
+    handler = _list_threads_handler(source)
     # Rows are mapped onto PageRow values after the single page statement;
     # the in-memory projection must not query.
     projection = handler.find("rows")

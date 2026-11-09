@@ -40,6 +40,39 @@ export interface ConfirmRequest {
 
 export type ConfirmResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
+export interface ContinuityRulesCreateRequest {
+  body: components['schemas']['ContinuityRuleRequest']
+}
+
+export type ContinuityRulesCreateResponse = components['schemas']['NativeContinuityRuleResponse']
+
+export interface ContinuityRulesDeleteRequest {
+  path: {
+    rule_id: number
+  }
+}
+
+export type ContinuityRulesDeleteResponse = void
+
+export interface ContinuityRulesGetRequest {
+  path: {
+    rule_id: number
+  }
+}
+
+export type ContinuityRulesGetResponse = components['schemas']['NativeContinuityRuleResponse']
+
+export type ContinuityRulesListResponse = Array<components['schemas']['NativeContinuityRuleResponse']>
+
+export interface ContinuityRulesUpdateRequest {
+  path: {
+    rule_id: number
+  }
+  body: components['schemas']['ContinuityRuleRequest']
+}
+
+export type ContinuityRulesUpdateResponse = components['schemas']['NativeContinuityRuleResponse']
+
 export interface CreateDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
@@ -210,7 +243,7 @@ export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['NativeUserResponse']
 
-export type MetricsResponse = components['schemas']['NativeAnalyticsMetricsResponse']
+export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
 
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']
@@ -271,6 +304,23 @@ export interface RejectRequest {
 
 export type RejectResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
+export interface ReleasesGetRequest {
+  path: {
+    release_id: number
+  }
+}
+
+export type ReleasesGetResponse = components['schemas']['NativePublicReleaseResponse']
+
+export interface ReleasesListRequest {
+  query?: {
+    limit?: number
+    offset?: number
+  }
+}
+
+export type ReleasesListResponse = components['schemas']['NativeReleaseListResponse']
+
 export interface RelinkRequest {
   path: {
     plan_id: number
@@ -329,6 +379,11 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
+  continuityRulesCreate(args: ContinuityRulesCreateRequest): Promise<ContinuityRulesCreateResponse>
+  continuityRulesDelete(args: ContinuityRulesDeleteRequest): Promise<ContinuityRulesDeleteResponse>
+  continuityRulesGet(args: ContinuityRulesGetRequest): Promise<ContinuityRulesGetResponse>
+  continuityRulesList(): Promise<ContinuityRulesListResponse>
+  continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
@@ -366,6 +421,8 @@ export interface NativeV2Client {
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
   reject(args: RejectRequest): Promise<RejectResponse>
+  releasesGet(args: ReleasesGetRequest): Promise<ReleasesGetResponse>
+  releasesList(args?: ReleasesListRequest): Promise<ReleasesListResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
@@ -387,6 +444,31 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     confirm(args: ConfirmRequest) {
       return client.post<ConfirmResponse, ConfirmRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        args.body,
+      )
+    },
+    continuityRulesCreate(args: ContinuityRulesCreateRequest) {
+      return client.post<ContinuityRulesCreateResponse, ContinuityRulesCreateRequest['body']>(
+        "/v1/continuity-rules/",
+        args.body,
+      )
+    },
+    continuityRulesDelete(args: ContinuityRulesDeleteRequest) {
+      return client.delete<ContinuityRulesDeleteResponse>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+      )
+    },
+    continuityRulesGet(args: ContinuityRulesGetRequest) {
+      return client.get<ContinuityRulesGetResponse>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+      )
+    },
+    continuityRulesList() {
+      return client.get<ContinuityRulesListResponse>("/v1/continuity-rules/")
+    },
+    continuityRulesUpdate(args: ContinuityRulesUpdateRequest) {
+      return client.put<ContinuityRulesUpdateResponse, ContinuityRulesUpdateRequest['body']>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
         args.body,
       )
     },
@@ -573,6 +655,17 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.post<RejectResponse, RejectRequest['body']>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
         args.body,
+      )
+    },
+    releasesGet(args: ReleasesGetRequest) {
+      return client.get<ReleasesGetResponse>(
+        `/v1/releases/${encodeURIComponent(String(args.path.release_id))}`,
+      )
+    },
+    releasesList(args: ReleasesListRequest = {}) {
+      return client.get<ReleasesListResponse>(
+        "/v1/releases/",
+        { params: compactQuery(args.query) },
       )
     },
     relink(args: RelinkRequest) {

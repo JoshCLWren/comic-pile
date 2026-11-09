@@ -40,6 +40,10 @@ _RUNTIME_LEGACY_PATHS: Final = frozenset(
         "/api/v1/identity-inbox/{mapping_id}/defer",
         "/api/v1/identity-inbox/{mapping_id}/reject",
         "/api/v1/identity-inbox/{mapping_id}/skip",
+        "/api/v1/continuity-rules/",
+        "/api/v1/continuity-rules/{rule_id}",
+        "/api/v1/releases/",
+        "/api/v1/releases/{release_id}",
     }
 )
 

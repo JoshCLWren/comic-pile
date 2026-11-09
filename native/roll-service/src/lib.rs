@@ -2,9 +2,11 @@
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
+pub mod bug_reports;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
+pub mod continuity_rules;
 pub mod creators;
 pub mod db;
 pub mod dependencies;
@@ -30,12 +32,14 @@ pub mod reading_list;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_session;
+pub mod releases;
 pub mod roll_exclusions;
 pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
 mod session_bandwidth;
+pub mod taste_discoveries;
 pub mod threads;
 
 /// Test scaffolding shared by unit and integration tests.
@@ -298,6 +302,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v2/queue-orders", post(queue::create_queue_order))
         .route("/api/v2/threads", get(threads::list_threads))
         .route(
+            "/api/v1/threads/{thread_id}",
+            get(threads::get_thread_detail),
+        )
+        .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
+        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )
@@ -410,6 +419,32 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/api/v1/creators", get(creators::list_creators))
         .route("/api/v1/creators/", get(creators::list_creators))
         .route("/api/v1/creators/summaries", get(creators::get_summaries))
+        .route(
+            "/api/v1/continuity-rules/",
+            get(continuity_rules::list).post(continuity_rules::create),
+        )
+        .route(
+            "/api/v1/continuity-rules/{rule_id}",
+            get(continuity_rules::get)
+                .put(continuity_rules::update)
+                .delete(continuity_rules::delete),
+        )
+        .route(
+            "/api/v1/taste/discoveries/{signal_id}/dismiss",
+            post(taste_discoveries::dismiss_taste_discovery),
+        )
+        .route("/api/bug-reports/", post(bug_reports::create))
+        .route("/api/v1/bug-reports/", post(bug_reports::create))
+        .route(
+            "/api/v1/releases/",
+            get(releases::list).put(releases::publish),
+        )
+        .route("/api/v1/releases/source", get(releases::reconcile))
+        .route("/api/v1/releases/{release_id}", get(releases::get))
+        .route(
+            "/api/v1/releases/{release_id}/retract",
+            post(releases::retract),
+        )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

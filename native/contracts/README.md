@@ -95,6 +95,21 @@ cd native/roll-service
 cargo run --example analytics_openapi
 ```
 
+`bug-reports-v1.openapi.json` is the generated native contract for the
+same-path bug-report slice `POST /api/bug-reports/` and
+`POST /api/v1/bug-reports/` (#4852, Part of #4335). Regenerate it with:
+
+```sh
+cd native/roll-service
+cargo run --example bug_reports_openapi > ../contracts/bug-reports-v1.openapi.json
+```
+
+It is generated only from `comicpile_roll_service::bug_reports::BugReportsApi`
+and preserves the Python wire contract (201 `issue_url`, 401/422/429/502/503)
+at the exact same method/paths. Python handlers remain until production
+proof; the frontend caller (`frontend/src/services/api-bug-reports.ts`)
+keeps calling `/v1/bug-reports/` unchanged.
+
 The unified Rust-derived contract and generated TS client are owned by #4457; this
 repository does not hand-author a second analytics schema. The merged generated
 client schema temporarily retains the legacy Python v1/bare analytics operation

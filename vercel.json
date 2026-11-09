@@ -529,69 +529,85 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/cron/release\\-sync$",
+      "src": "^/api/v1/continuity\\-rules/$",
       "methods": [
         "GET",
-        "POST",
-        "OPTIONS"
+        "POST"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/admin/delete\\-test\\-data/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/admin/export/csv/$",
+      "src": "^/api/v1/continuity\\-rules/[^/]+$",
       "methods": [
         "GET",
-        "OPTIONS"
+        "PUT",
+        "DELETE"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/admin/export/json/$",
+      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/threads/[0-9]+$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/releases/$",
       "methods": [
         "GET",
-        "OPTIONS"
+        "PUT"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/admin/export/summary/$",
+      "src": "^/api/v1/releases/source$",
       "methods": [
-        "GET",
-        "OPTIONS"
+        "GET"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/admin/import/csv/$",
+      "src": "^/api/v1/releases/[0-9]+$",
       "methods": [
-        "POST",
-        "OPTIONS"
+        "GET"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/analytics/metrics$",
+      "src": "^/api/v1/releases/[0-9]+/retract$",
       "methods": [
-        "GET",
-        "OPTIONS"
+        "POST"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/bug\\-reports/$",
       "methods": [
-        "POST",
-        "OPTIONS"
+        "POST"
       ],
-      "dest": "/api/index.py"
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/bug\\-reports/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
     },
     {
       "src": "^/api/metrics$",
@@ -684,7 +700,6 @@
     {
       "src": "^/api/threads/[^/]+$",
       "methods": [
-        "GET",
         "PUT",
         "DELETE",
         "OPTIONS"
@@ -764,65 +779,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/admin/delete\\-test\\-data/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/admin/export/csv/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/admin/export/json/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/admin/export/summary/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/admin/import/csv/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/analytics/metrics$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/bootstrap\\-alias\\-metrics$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/bug\\-reports/$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1075,32 +1034,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/continuity\\-rules/$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "methods": [
-        "GET",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/creators$",
-      "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/creators/[^/]+$",
       "methods": [
         "GET",
@@ -1165,13 +1098,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/creators/summaries$",
-      "methods": [
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/creators/team\\-chemistry$",
       "methods": [
         "GET",
@@ -1180,17 +1106,9 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/crossover\\-templates/adopt$",
+      "src": "^/api/v1/cron/release\\-sync$",
       "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/crossover\\-templates/preview$",
-      "methods": [
-        "POST",
+        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1393,14 +1311,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/issues/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/issues/[^/]+:markRead$",
       "methods": [
         "POST",
@@ -1425,22 +1335,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/issues/[^/]+/comicvine$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issues/[^/]+/dependencies$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
       "methods": [
         "GET",
@@ -1452,24 +1346,6 @@
       "src": "^/api/v1/metrics$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/prerequisites/$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/prerequisites/[^/]+$",
-      "methods": [
-        "PATCH",
-        "DELETE",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1618,47 +1494,6 @@
       "src": "^/api/v1/reading\\-plan\\-sync/sync$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/recommendations/diagnostics$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/releases/$",
-      "methods": [
-        "GET",
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/releases/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/releases/[^/]+/retract$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/releases/source$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1843,14 +1678,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/taste/discoveries/[^/]+/dismiss$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads:getBlockingInfo$",
       "methods": [
         "POST",
@@ -1869,7 +1696,6 @@
     {
       "src": "^/api/v1/threads/[^/]+$",
       "methods": [
-        "GET",
         "PUT",
         "DELETE",
         "OPTIONS"

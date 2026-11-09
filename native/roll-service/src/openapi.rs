@@ -65,7 +65,19 @@ use utoipa::OpenApi;
         crate::identity_inbox::confirm_documentation,
         crate::identity_inbox::defer_documentation,
         crate::identity_inbox::reject_documentation,
-        crate::identity_inbox::skip_documentation
+        crate::identity_inbox::skip_documentation,
+        crate::continuity_rules::list_documentation,
+        crate::continuity_rules::create_documentation,
+        crate::continuity_rules::get_documentation,
+        crate::continuity_rules::update_documentation,
+        crate::continuity_rules::delete_documentation,
+        // Writer-authorized releases operations (source/publish/retract) are
+        // server-only automation, not browser-called, and require a header
+        // credential the browser SDK does not model. They stay documented by
+        // the retained Python schemas; only the public reads join this
+        // browser-facing native contract.
+        crate::releases::list_documentation,
+        crate::releases::get_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -133,7 +145,12 @@ use utoipa::OpenApi;
         crate::identity_inbox::IdentityInboxResponse,
         crate::identity_inbox::IdentityInboxSearchResponse,
         crate::identity_inbox::IdentityInboxActionResponse,
-        crate::identity_inbox::IdentityInboxSearchResult
+        crate::identity_inbox::IdentityInboxSearchResult,
+        crate::continuity_rules::ContinuityRuleRequest,
+        crate::continuity_rules::ContinuityRuleResponse,
+        crate::continuity_rules::ConvergenceTarget,
+        crate::releases::PublicReleaseResponse,
+        crate::releases::ReleaseListResponse,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -161,13 +178,18 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 47] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 54] = [
+    ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
+    ("get", "/api/v1/continuity-rules/"),
+    ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v1/identity-inbox"),
     ("get", "/api/v1/identity-inbox/search/issues"),
     ("get", "/api/v1/identity-inbox/{mapping_id}"),
+    ("get", "/api/v1/releases/"),
+    ("get", "/api/v1/releases/{release_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
@@ -185,6 +207,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 47] = [
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
+    ("post", "/api/v1/continuity-rules/"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
@@ -207,6 +230,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 47] = [
     ("post", "/api/v2/roll/offer"),
     ("post", "/api/v2/roll/reset"),
     ("post", "/api/v2/threads/{thread_id}/issues"),
+    ("put", "/api/v1/continuity-rules/{rule_id}"),
     ("put", "/api/v2/reading-lists/{list_id}"),
     ("put", "/api/v2/threads/{thread_id}/issue-order"),
 ];

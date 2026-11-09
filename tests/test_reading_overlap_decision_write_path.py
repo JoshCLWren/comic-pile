@@ -176,6 +176,34 @@ async def _thread_blockers(
     raise AssertionError(f"Thread {thread_id} is missing from the shadow report")
 
 
+async def _create_prerequisite(
+    db: AsyncSession, *, user_id: int, source_issue_id: int, target_issue_id: int
+) -> int:
+    """Create one reader prerequisite via the service (HTTP router pruned, #4861).
+
+    The ``/api/v1/prerequisites/`` router was deleted because no browser
+    caller remains, but the service and repository are retained for these
+    cycle-validation tests. Calling the service preserves the original
+    validated creation path without depending on the pruned HTTP surface.
+    """
+    from app.schemas.prerequisite import PrerequisiteCreate
+    from app.services import prerequisite_service
+
+    row = await prerequisite_service.create(
+        db,
+        user_id,
+        PrerequisiteCreate(source_issue_id=source_issue_id, target_issue_id=target_issue_id),
+    )
+    return int(row.id)
+
+
+async def _remove_prerequisite(db: AsyncSession, *, user_id: int, prerequisite_id: int) -> None:
+    """Remove one reader prerequisite via the service (HTTP router pruned, #4861)."""
+    from app.services import prerequisite_service
+
+    await prerequisite_service.delete(db, user_id, prerequisite_id)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stored_prefix", ["", "4050-"])
 async def test_reader_saves_and_reloads_one_overlap_decision(
@@ -978,14 +1006,14 @@ async def test_a_removal_that_would_create_a_cycle_is_rejected(
     decision_id = saved.json()["decisions"][0]["id"]
     token = saved.json()["updated_at"]
 
-    prerequisite = await auth_client.post(
-        "/api/v1/prerequisites/",
-        json={
-            "source_issue_id": continuing_issue.id,
-            "target_issue_id": waiting_issue.id,
-        },
+    # The prerequisites HTTP router was pruned (#4861); create the reader
+    # edge through the retained service instead.
+    prerequisite_id = await _create_prerequisite(
+        async_db,
+        user_id=user.id,
+        source_issue_id=continuing_issue.id,
+        target_issue_id=waiting_issue.id,
     )
-    assert prerequisite.status_code == 201, prerequisite.text
 
     rejected = await auth_client.delete(
         f"/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
@@ -999,10 +1027,7 @@ async def test_a_removal_that_would_create_a_cycle_is_rejected(
     assert [row["id"] for row in reloaded.json()["decisions"]] == [decision_id]
     assert reloaded.json()["updated_at"] == token
 
-    removed_prerequisite = await auth_client.delete(
-        f"/api/v1/prerequisites/{prerequisite.json()['id']}"
-    )
-    assert removed_prerequisite.status_code == 204, removed_prerequisite.text
+    await _remove_prerequisite(async_db, user_id=user.id, prerequisite_id=prerequisite_id)
 
     removed = await auth_client.delete(
         f"/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}"
@@ -1125,14 +1150,14 @@ async def test_a_reversal_that_would_create_a_cycle_is_rejected(
     decision_id = saved.json()["decisions"][0]["id"]
     token = saved.json()["updated_at"]
 
-    prerequisite = await auth_client.post(
-        "/api/v1/prerequisites/",
-        json={
-            "source_issue_id": continuing_issue.id,
-            "target_issue_id": waiting_issue.id,
-        },
+    # The prerequisites HTTP router was pruned (#4861); create the reader
+    # edge through the retained service instead.
+    prerequisite_id = await _create_prerequisite(
+        async_db,
+        user_id=user.id,
+        source_issue_id=continuing_issue.id,
+        target_issue_id=waiting_issue.id,
     )
-    assert prerequisite.status_code == 201, prerequisite.text
 
     rejected = await auth_client.put(
         url,
@@ -1153,10 +1178,7 @@ async def test_a_reversal_that_would_create_a_cycle_is_rejected(
     ] == [(decision_id, CONTINUING_VOLUME, WAITING_VOLUME)]
     assert reloaded.json()["updated_at"] == token
 
-    removed_prerequisite = await auth_client.delete(
-        f"/api/v1/prerequisites/{prerequisite.json()['id']}"
-    )
-    assert removed_prerequisite.status_code == 204, removed_prerequisite.text
+    await _remove_prerequisite(async_db, user_id=user.id, prerequisite_id=prerequisite_id)
 
     reversed_choice = await auth_client.put(
         url,

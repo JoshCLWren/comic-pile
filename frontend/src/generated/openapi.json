@@ -178,61 +178,48 @@
         "type": "object"
       },
       "AnalyticsMetricsResponse": {
-        "description": "Reading metrics and analytics for the current user.\n\n``completion_rate`` and ``average_session_hours`` keep the legacy\n``int | float`` shape because the aggregation returns either an exact\ninteger fallback (0) or a rounded float.",
+        "description": "Reading metrics and analytics for the authenticated user.",
         "properties": {
           "active_threads": {
-            "title": "Active Threads",
+            "format": "int32",
             "type": "integer"
           },
           "average_session_hours": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
-            ],
-            "title": "Average Session Hours"
+            "format": "double",
+            "type": "number"
           },
           "completed_threads": {
-            "title": "Completed Threads",
+            "format": "int32",
             "type": "integer"
           },
           "completion_rate": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              }
-            ],
-            "title": "Completion Rate"
+            "format": "double",
+            "type": "number"
           },
           "event_stats": {
             "additionalProperties": {
+              "format": "int32",
               "type": "integer"
             },
-            "title": "Event Stats",
+            "propertyNames": {
+              "type": "string"
+            },
             "type": "object"
           },
           "recent_sessions": {
             "items": {
               "$ref": "#/components/schemas/RecentSession"
             },
-            "title": "Recent Sessions",
             "type": "array"
           },
           "top_rated_threads": {
             "items": {
               "$ref": "#/components/schemas/TopRatedThread"
             },
-            "title": "Top Rated Threads",
             "type": "array"
           },
           "total_threads": {
-            "title": "Total Threads",
+            "format": "int32",
             "type": "integer"
           }
         },
@@ -246,7 +233,6 @@
           "event_stats",
           "top_rated_threads"
         ],
-        "title": "AnalyticsMetricsResponse",
         "type": "object"
       },
       "BatchBlockingExplanationRequest": {
@@ -368,34 +354,6 @@
           "blocking_reasons"
         ],
         "title": "BlockingExplanation",
-        "type": "object"
-      },
-      "Body_import_csv_api_admin_import_csv__post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_import_csv_api_admin_import_csv__post",
-        "type": "object"
-      },
-      "Body_import_csv_api_v1_admin_import_csv__post": {
-        "properties": {
-          "file": {
-            "contentMediaType": "application/octet-stream",
-            "title": "File",
-            "type": "string"
-          }
-        },
-        "required": [
-          "file"
-        ],
-        "title": "Body_import_csv_api_v1_admin_import_csv__post",
         "type": "object"
       },
       "Body_set_pending_thread_api_threads__thread_id__set_pending_post": {
@@ -4675,6 +4633,62 @@
         "title": "ContinuityRuleCreate",
         "type": "object"
       },
+      "ContinuityRuleRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "checkpoint_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/NativeConvergenceTarget"
+            },
+            "type": "array"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type"
+        ],
+        "type": "object"
+      },
       "ContinuityRuleResponse": {
         "description": "Schema for a persisted generalized continuity rule.",
         "properties": {
@@ -4784,60 +4798,6 @@
           "updated_at"
         ],
         "title": "ContinuityRuleResponse",
-        "type": "object"
-      },
-      "ControlModeGroup": {
-        "additionalProperties": false,
-        "description": "One recommendation-quality grouping by control mode and algorithm version.",
-        "properties": {
-          "acceptance_rate": {
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Acceptance Rate",
-            "type": "number"
-          },
-          "accepted_rolls": {
-            "minimum": 0.0,
-            "title": "Accepted Rolls",
-            "type": "integer"
-          },
-          "algorithm_version": {
-            "description": "Canonical algorithm version attributed to this group",
-            "title": "Algorithm Version",
-            "type": "string"
-          },
-          "control_mode": {
-            "description": "Distinguishable control/intent class: contextual_auto, explicit_correction, blocked_recovery, or legacy",
-            "title": "Control Mode",
-            "type": "string"
-          },
-          "rolls": {
-            "minimum": 0.0,
-            "title": "Rolls",
-            "type": "integer"
-          },
-          "snooze_rate": {
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Snooze Rate",
-            "type": "number"
-          },
-          "snoozed_rolls": {
-            "minimum": 0.0,
-            "title": "Snoozed Rolls",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "algorithm_version",
-          "control_mode",
-          "rolls",
-          "accepted_rolls",
-          "snoozed_rolls",
-          "acceptance_rate",
-          "snooze_rate"
-        ],
-        "title": "ControlModeGroup",
         "type": "object"
       },
       "ConvergenceGateTarget": {
@@ -4955,42 +4915,6 @@
           }
         },
         "title": "CorrectionSheetExamplesResponse",
-        "type": "object"
-      },
-      "CoverageInfo": {
-        "additionalProperties": false,
-        "description": "Honest labeling of data completeness for the requested range.",
-        "properties": {
-          "instrumented_event_count": {
-            "description": "Events carrying a selection_method (full context)",
-            "minimum": 0.0,
-            "title": "Instrumented Event Count",
-            "type": "integer"
-          },
-          "legacy_event_count": {
-            "description": "Events without selection_method (pre-instrumentation)",
-            "minimum": 0.0,
-            "title": "Legacy Event Count",
-            "type": "integer"
-          },
-          "note": {
-            "description": "Human-readable explanation of coverage limitations",
-            "title": "Note",
-            "type": "string"
-          },
-          "partial_coverage": {
-            "description": "True when legacy events are mixed into the range",
-            "title": "Partial Coverage",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "instrumented_event_count",
-          "legacy_event_count",
-          "partial_coverage",
-          "note"
-        ],
-        "title": "CoverageInfo",
         "type": "object"
       },
       "CreateIssuesRequest": {
@@ -7634,321 +7558,6 @@
         "title": "CreatorTeamSeriesRef",
         "type": "object"
       },
-      "CrossoverTemplateAdoptRequest": {
-        "description": "Adopt an external template into an editable continuity plan.",
-        "properties": {
-          "issue_node_id_prefix": {
-            "default": "tpl-",
-            "maxLength": 40,
-            "minLength": 1,
-            "title": "Issue Node Id Prefix",
-            "type": "string"
-          },
-          "lane_id": {
-            "default": "imported",
-            "maxLength": 80,
-            "minLength": 1,
-            "title": "Lane Id",
-            "type": "string"
-          },
-          "lane_name": {
-            "default": "Imported",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Lane Name",
-            "type": "string"
-          },
-          "ordering_mode": {
-            "default": "informational",
-            "enum": [
-              "informational",
-              "strict_sequential"
-            ],
-            "title": "Ordering Mode",
-            "type": "string"
-          },
-          "plan_name": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Plan Name",
-            "type": "string"
-          },
-          "source_list_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "minItems": 1,
-            "title": "Source List Ids",
-            "type": "array"
-          },
-          "target_story_arc_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Story Arc Id"
-          }
-        },
-        "required": [
-          "source_list_ids",
-          "plan_name"
-        ],
-        "title": "CrossoverTemplateAdoptRequest",
-        "type": "object"
-      },
-      "CrossoverTemplateConflictPreview": {
-        "description": "A pair whose reading-order evidence disagrees across source lists.",
-        "properties": {
-          "first_issue_id": {
-            "title": "First Issue Id",
-            "type": "integer"
-          },
-          "second_issue_id": {
-            "title": "Second Issue Id",
-            "type": "integer"
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Paths",
-            "type": "array"
-          }
-        },
-        "required": [
-          "first_issue_id",
-          "second_issue_id",
-          "source_paths"
-        ],
-        "title": "CrossoverTemplateConflictPreview",
-        "type": "object"
-      },
-      "CrossoverTemplateIntersectionPreview": {
-        "description": "Consistent cross-thread ordering observation, never a hard dependency.",
-        "properties": {
-          "explanation": {
-            "title": "Explanation",
-            "type": "string"
-          },
-          "first_issue_id": {
-            "title": "First Issue Id",
-            "type": "integer"
-          },
-          "second_issue_id": {
-            "title": "Second Issue Id",
-            "type": "integer"
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Paths",
-            "type": "array"
-          }
-        },
-        "required": [
-          "first_issue_id",
-          "second_issue_id",
-          "source_paths",
-          "explanation"
-        ],
-        "title": "CrossoverTemplateIntersectionPreview",
-        "type": "object"
-      },
-      "CrossoverTemplateItemPreview": {
-        "description": "Suggested crossover member with full provenance and advisory metadata.",
-        "properties": {
-          "confidence": {
-            "enum": [
-              "high",
-              "medium",
-              "low"
-            ],
-            "title": "Confidence",
-            "type": "string"
-          },
-          "explanation": {
-            "title": "Explanation",
-            "type": "string"
-          },
-          "issue_id": {
-            "title": "Issue Id",
-            "type": "integer"
-          },
-          "role": {
-            "enum": [
-              "core",
-              "context/prelude",
-              "epilogue",
-              "unknown"
-            ],
-            "title": "Role",
-            "type": "string"
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Paths",
-            "type": "array"
-          },
-          "suggested_position": {
-            "title": "Suggested Position",
-            "type": "integer"
-          },
-          "target_story_arc_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Story Arc Id"
-          }
-        },
-        "required": [
-          "issue_id",
-          "suggested_position",
-          "role",
-          "confidence",
-          "explanation",
-          "source_paths",
-          "target_story_arc_id"
-        ],
-        "title": "CrossoverTemplateItemPreview",
-        "type": "object"
-      },
-      "CrossoverTemplateParallelCandidatePreview": {
-        "description": "Advisory pair that may represent parallel branches.",
-        "properties": {
-          "first_issue_id": {
-            "title": "First Issue Id",
-            "type": "integer"
-          },
-          "second_issue_id": {
-            "title": "Second Issue Id",
-            "type": "integer"
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Paths",
-            "type": "array"
-          }
-        },
-        "required": [
-          "first_issue_id",
-          "second_issue_id",
-          "source_paths"
-        ],
-        "title": "CrossoverTemplateParallelCandidatePreview",
-        "type": "object"
-      },
-      "CrossoverTemplatePreviewRequest": {
-        "description": "Request to preview a derived crossover template from persisted CBL evidence.",
-        "properties": {
-          "source_list_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "minItems": 1,
-            "title": "Source List Ids",
-            "type": "array"
-          },
-          "target_story_arc_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Story Arc Id"
-          }
-        },
-        "required": [
-          "source_list_ids"
-        ],
-        "title": "CrossoverTemplatePreviewRequest",
-        "type": "object"
-      },
-      "CrossoverTemplateSerialSpinePreview": {
-        "description": "Same-thread issue order preserved as advisory series structure.",
-        "properties": {
-          "explanation": {
-            "title": "Explanation",
-            "type": "string"
-          },
-          "issue_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Issue Ids",
-            "type": "array"
-          },
-          "source_paths": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Source Paths",
-            "type": "array"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "thread_id",
-          "issue_ids",
-          "source_paths",
-          "explanation"
-        ],
-        "title": "CrossoverTemplateSerialSpinePreview",
-        "type": "object"
-      },
-      "CrossoverTemplateUnresolvedMatchPreview": {
-        "description": "A source entry that could not be matched to a ComicPile issue.",
-        "properties": {
-          "issue_number": {
-            "title": "Issue Number",
-            "type": "string"
-          },
-          "position": {
-            "title": "Position",
-            "type": "integer"
-          },
-          "reason": {
-            "title": "Reason",
-            "type": "string"
-          },
-          "series_name": {
-            "title": "Series Name",
-            "type": "string"
-          },
-          "source_path": {
-            "title": "Source Path",
-            "type": "string"
-          }
-        },
-        "required": [
-          "source_path",
-          "position",
-          "series_name",
-          "issue_number",
-          "reason"
-        ],
-        "title": "CrossoverTemplateUnresolvedMatchPreview",
-        "type": "object"
-      },
       "CsrfResponse": {
         "description": "Response body carrying a double-submit CSRF token.",
         "properties": {
@@ -9128,58 +8737,6 @@
         "title": "DependencyResponse",
         "type": "object"
       },
-      "DerivedCrossoverTemplatePreview": {
-        "description": "Non-blocking preview of a derived external crossover template.",
-        "properties": {
-          "conflicts": {
-            "items": {
-              "$ref": "#/components/schemas/CrossoverTemplateConflictPreview"
-            },
-            "title": "Conflicts",
-            "type": "array"
-          },
-          "intersections": {
-            "items": {
-              "$ref": "#/components/schemas/CrossoverTemplateIntersectionPreview"
-            },
-            "title": "Intersections",
-            "type": "array"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/CrossoverTemplateItemPreview"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "parallel_candidates": {
-            "items": {
-              "$ref": "#/components/schemas/CrossoverTemplateParallelCandidatePreview"
-            },
-            "title": "Parallel Candidates",
-            "type": "array"
-          },
-          "serial_spines": {
-            "items": {
-              "$ref": "#/components/schemas/CrossoverTemplateSerialSpinePreview"
-            },
-            "title": "Serial Spines",
-            "type": "array"
-          },
-          "unresolved": {
-            "items": {
-              "$ref": "#/components/schemas/CrossoverTemplateUnresolvedMatchPreview"
-            },
-            "title": "Unresolved",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "DerivedCrossoverTemplatePreview",
-        "type": "object"
-      },
       "DiagnosticError": {
         "description": "A captured console error entry.",
         "properties": {
@@ -9383,70 +8940,6 @@
           "effective_tags"
         ],
         "title": "EffectiveTagsResponse",
-        "type": "object"
-      },
-      "EffortBandOutcome": {
-        "additionalProperties": false,
-        "description": "Recommendation outcomes bucketed by effort band (die size).",
-        "properties": {
-          "acceptance_rate": {
-            "description": "accepted / rolls (0.0 when no rolls)",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Acceptance Rate",
-            "type": "number"
-          },
-          "accepted": {
-            "description": "Rolls whose thread was later rated in range",
-            "minimum": 0.0,
-            "title": "Accepted",
-            "type": "integer"
-          },
-          "band": {
-            "description": "Coarse effort band derived from the die size",
-            "enum": [
-              "low",
-              "medium",
-              "high"
-            ],
-            "title": "Band",
-            "type": "string"
-          },
-          "die": {
-            "description": "Die size that represents the effort band",
-            "title": "Die",
-            "type": "integer"
-          },
-          "rolls": {
-            "description": "Number of roll events in this band",
-            "minimum": 0.0,
-            "title": "Rolls",
-            "type": "integer"
-          },
-          "snooze_rate": {
-            "description": "snoozed / rolls (0.0 when no rolls)",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Snooze Rate",
-            "type": "number"
-          },
-          "snoozed": {
-            "description": "Rolls whose thread was later snoozed in range",
-            "minimum": 0.0,
-            "title": "Snoozed",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "die",
-          "band",
-          "rolls",
-          "accepted",
-          "snoozed",
-          "acceptance_rate",
-          "snooze_rate"
-        ],
-        "title": "EffortBandOutcome",
         "type": "object"
       },
       "EntryOverride": {
@@ -11645,64 +11138,6 @@
         "title": "MinimalReleaseResponse",
         "type": "object"
       },
-      "NativeAnalyticsMetricsResponse": {
-        "description": "Reading metrics and analytics for the authenticated user.",
-        "properties": {
-          "active_threads": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "average_session_hours": {
-            "format": "double",
-            "type": "number"
-          },
-          "completed_threads": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "completion_rate": {
-            "format": "double",
-            "type": "number"
-          },
-          "event_stats": {
-            "additionalProperties": {
-              "format": "int32",
-              "type": "integer"
-            },
-            "propertyNames": {
-              "type": "string"
-            },
-            "type": "object"
-          },
-          "recent_sessions": {
-            "items": {
-              "$ref": "#/components/schemas/NativeRecentSession"
-            },
-            "type": "array"
-          },
-          "top_rated_threads": {
-            "items": {
-              "$ref": "#/components/schemas/NativeTopRatedThread"
-            },
-            "type": "array"
-          },
-          "total_threads": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "total_threads",
-          "active_threads",
-          "completed_threads",
-          "completion_rate",
-          "average_session_hours",
-          "recent_sessions",
-          "event_stats",
-          "top_rated_threads"
-        ],
-        "type": "object"
-      },
       "NativeBoundaryEditorTarget": {
         "properties": {
           "issue_id": {
@@ -11842,6 +11277,98 @@
           "needs_mapping_count",
           "needs_review_count",
           "metadata_missing_count"
+        ],
+        "type": "object"
+      },
+      "NativeContinuityRuleResponse": {
+        "properties": {
+          "checkpoint_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "convergence_targets": {
+            "items": {
+              "$ref": "#/components/schemas/NativeConvergenceTarget"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "source_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type",
+          "convergence_targets",
+          "selected_member_issue_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
+      "NativeConvergenceTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id"
         ],
         "type": "object"
       },
@@ -12270,6 +11797,57 @@
         ],
         "type": "object"
       },
+      "NativePublicReleaseResponse": {
+        "description": "One release ledger record returned by public-facing endpoints.",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "released_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sort_order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "NativeQueueSeriesMetadata": {
         "description": "Confirmed provider series metadata for one queue row.",
         "properties": {
@@ -12537,34 +12115,6 @@
         ],
         "type": "object"
       },
-      "NativeRecentSession": {
-        "description": "Summary of one recent reading session.",
-        "properties": {
-          "ended_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "start_die": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "started_at": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "started_at",
-          "start_die"
-        ],
-        "type": "object"
-      },
       "NativeRefreshTokenRequest": {
         "description": "Optional request body for token refresh; the refresh cookie is also accepted.",
         "properties": {
@@ -12574,6 +12124,36 @@
         },
         "required": [
           "refresh_token"
+        ],
+        "type": "object"
+      },
+      "NativeReleaseListResponse": {
+        "description": "Paginated published releases for What's New.",
+        "properties": {
+          "limit": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "releases": {
+            "items": {
+              "$ref": "#/components/schemas/NativePublicReleaseResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "releases",
+          "total",
+          "limit",
+          "offset"
         ],
         "type": "object"
       },
@@ -12610,32 +12190,6 @@
           "access_token",
           "refresh_token",
           "token_type"
-        ],
-        "type": "object"
-      },
-      "NativeTopRatedThread": {
-        "description": "Summary of one highly rated thread.",
-        "properties": {
-          "format": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "rating": {
-            "format": "double",
-            "type": "number"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "title",
-          "rating",
-          "format"
         ],
         "type": "object"
       },
@@ -13453,148 +13007,6 @@
         ],
         "title": "PotentialDuplicateMatchType",
         "type": "string"
-      },
-      "PrerequisiteCreate": {
-        "additionalProperties": false,
-        "description": "Create one stable pair; provenance is server-controlled.",
-        "properties": {
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "source_issue_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Source Issue Id",
-            "type": "integer"
-          },
-          "target_issue_id": {
-            "exclusiveMinimum": 0.0,
-            "title": "Target Issue Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "source_issue_id",
-          "target_issue_id"
-        ],
-        "title": "PrerequisiteCreate",
-        "type": "object"
-      },
-      "PrerequisiteNoteUpdate": {
-        "additionalProperties": false,
-        "description": "Edit reader prose without changing endpoints or classification.",
-        "properties": {
-          "note": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          }
-        },
-        "title": "PrerequisiteNoteUpdate",
-        "type": "object"
-      },
-      "PrerequisiteResponse": {
-        "description": "Expose historical uncertainty without claiming approval.",
-        "properties": {
-          "classification": {
-            "anyOf": [
-              {
-                "enum": [
-                  "A",
-                  "B",
-                  "C",
-                  "D"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Classification"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "origin": {
-            "anyOf": [
-              {
-                "enum": [
-                  "reader",
-                  "converted"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Origin"
-          },
-          "provenance": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provenance"
-          },
-          "source_issue_id": {
-            "title": "Source Issue Id",
-            "type": "integer"
-          },
-          "target_issue_id": {
-            "title": "Target Issue Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "id",
-          "source_issue_id",
-          "target_issue_id",
-          "created_at",
-          "note",
-          "origin",
-          "classification",
-          "provenance"
-        ],
-        "title": "PrerequisiteResponse",
-        "type": "object"
       },
       "PublicReleaseResponse": {
         "description": "One release ledger record returned by public-facing endpoints.",
@@ -16983,191 +16395,28 @@
         "description": "Summary of one recent reading session.",
         "properties": {
           "ended_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "start_die": {
-            "title": "Start Die",
+            "format": "int32",
             "type": "integer"
           },
           "started_at": {
-            "title": "Started At",
             "type": "string"
           }
         },
         "required": [
           "id",
           "started_at",
-          "ended_at",
           "start_die"
         ],
-        "title": "RecentSession",
-        "type": "object"
-      },
-      "RecommendationDiagnosticsResponse": {
-        "additionalProperties": false,
-        "description": "Bounded, read-only recommendation-quality summary for one user.",
-        "properties": {
-          "active_algorithm_version": {
-            "description": "Algorithm version currently active for this user",
-            "title": "Active Algorithm Version",
-            "type": "string"
-          },
-          "active_control_mode": {
-            "description": "Control mode currently active for this user",
-            "title": "Active Control Mode",
-            "type": "string"
-          },
-          "avg_consecutive_snoozes_before_acceptance": {
-            "description": "Mean snooze run before acceptance (0.0 when none)",
-            "minimum": 0.0,
-            "title": "Avg Consecutive Snoozes Before Acceptance",
-            "type": "number"
-          },
-          "avg_time_to_acceptance_seconds": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Mean session-start to first acceptance (None when none)",
-            "title": "Avg Time To Acceptance Seconds"
-          },
-          "coverage": {
-            "$ref": "#/components/schemas/CoverageInfo",
-            "description": "Coverage/legacy labeling for the range"
-          },
-          "effort_band_outcomes": {
-            "items": {
-              "$ref": "#/components/schemas/EffortBandOutcome"
-            },
-            "title": "Effort Band Outcomes",
-            "type": "array"
-          },
-          "first_roll_adoption_rate": {
-            "description": "Sessions where the first roll was accepted",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "First Roll Adoption Rate",
-            "type": "number"
-          },
-          "groups_by_control_mode": {
-            "items": {
-              "$ref": "#/components/schemas/ControlModeGroup"
-            },
-            "title": "Groups By Control Mode",
-            "type": "array"
-          },
-          "max_consecutive_snoozes_before_acceptance": {
-            "description": "Longest snooze run before any acceptance in a session",
-            "minimum": 0.0,
-            "title": "Max Consecutive Snoozes Before Acceptance",
-            "type": "integer"
-          },
-          "mode_corrections": {
-            "description": "Explicit manual/override launch-mode corrections",
-            "minimum": 0.0,
-            "title": "Mode Corrections",
-            "type": "integer"
-          },
-          "range_end": {
-            "description": "Exclusive upper bound of the range",
-            "format": "date-time",
-            "title": "Range End",
-            "type": "string"
-          },
-          "range_start": {
-            "description": "Inclusive lower bound of the range",
-            "format": "date-time",
-            "title": "Range Start",
-            "type": "string"
-          },
-          "rating_average": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Mean rating across rated sessions (None when none)",
-            "title": "Rating Average"
-          },
-          "rating_distribution": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "description": "Rating histogram by integer bucket",
-            "title": "Rating Distribution",
-            "type": "object"
-          },
-          "snoozes_per_completed_read": {
-            "description": "total_snoozes / total_rates (0.0 when no reads)",
-            "minimum": 0.0,
-            "title": "Snoozes Per Completed Read",
-            "type": "number"
-          },
-          "total_rates": {
-            "minimum": 0.0,
-            "title": "Total Rates",
-            "type": "integer"
-          },
-          "total_rolls": {
-            "minimum": 0.0,
-            "title": "Total Rolls",
-            "type": "integer"
-          },
-          "total_sessions": {
-            "minimum": 0.0,
-            "title": "Total Sessions",
-            "type": "integer"
-          },
-          "total_snoozes": {
-            "minimum": 0.0,
-            "title": "Total Snoozes",
-            "type": "integer"
-          },
-          "user_id": {
-            "description": "Owner of the summarized data",
-            "title": "User Id",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "user_id",
-          "range_start",
-          "range_end",
-          "active_algorithm_version",
-          "active_control_mode",
-          "total_sessions",
-          "total_rolls",
-          "total_rates",
-          "total_snoozes",
-          "first_roll_adoption_rate",
-          "snoozes_per_completed_read",
-          "max_consecutive_snoozes_before_acceptance",
-          "avg_consecutive_snoozes_before_acceptance",
-          "avg_time_to_acceptance_seconds",
-          "mode_corrections",
-          "rating_average",
-          "coverage"
-        ],
-        "title": "RecommendationDiagnosticsResponse",
         "type": "object"
       },
       "RecommendationExplanationResponse": {
@@ -21611,19 +20860,17 @@
         "description": "Summary of one highly rated thread.",
         "properties": {
           "format": {
-            "title": "Format",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "rating": {
-            "title": "Rating",
+            "format": "double",
             "type": "number"
           },
           "title": {
-            "title": "Title",
             "type": "string"
           }
         },
@@ -21633,7 +20880,6 @@
           "rating",
           "format"
         ],
-        "title": "TopRatedThread",
         "type": "object"
       },
       "TrafficMetricsSnapshot": {
@@ -21987,191 +21233,6 @@
         "summary": "Ping",
         "tags": [
           "ping"
-        ]
-      }
-    },
-    "/api/v1/admin/delete-test-data/": {
-      "post": {
-        "description": "Delete all test data (threads, sessions, events marked as test).\n\nArgs:\n    db: SQLAlchemy session for database operations.\n    current_user: Authenticated user making the request.\n\nReturns:\n    Dictionary with counts of deleted threads, sessions, and events.",
-        "operationId": "delete_test_data_api_v1_admin_delete_test_data__post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "integer"
-                  },
-                  "title": "Response Delete Test Data Api V1 Admin Delete Test Data  Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Test Data",
-        "tags": [
-          "admin",
-          "admin"
-        ]
-      }
-    },
-    "/api/v1/admin/export/csv/": {
-      "get": {
-        "description": "Export active threads as CSV file.\n\nFormat matches Google Sheets: title, format, issues_remaining\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    StreamingResponse with CSV file attachment.",
-        "operationId": "export_csv_api_v1_admin_export_csv__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Export Csv",
-        "tags": [
-          "admin",
-          "admin"
-        ]
-      }
-    },
-    "/api/v1/admin/export/json/": {
-      "get": {
-        "description": "Export full database as JSON for backups.\n\nIncludes all data: users, threads, sessions, events (excludes test data)\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    StreamingResponse with JSON file attachment.",
-        "operationId": "export_json_api_v1_admin_export_json__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Export Json",
-        "tags": [
-          "admin",
-          "admin"
-        ]
-      }
-    },
-    "/api/v1/admin/export/summary/": {
-      "get": {
-        "description": "Export narrative session summaries as markdown file.\n\nFormats all sessions with read, skipped, and completed lists per PRD Section 11.\nExcludes sessions that only involve test threads.\n\nArgs:\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    StreamingResponse with markdown file attachment.",
-        "operationId": "export_summary_api_v1_admin_export_summary__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Export Summary",
-        "tags": [
-          "admin",
-          "admin"
-        ]
-      }
-    },
-    "/api/v1/admin/import/csv/": {
-      "post": {
-        "description": "Import threads from CSV file.\n\nCSV format: title, format, issues_remaining\n- title: Thread title (required)\n- format: Thread format (required)\n- issues_remaining: Number of issues remaining (required, integer)\n\nThreads are inserted at position 1 (front of queue).\n\nArgs:\n    file: CSV file to import.\n    db: SQLAlchemy session for database operations.\n    current_user: Authenticated user importing the threads.\n\nReturns:\n    Dictionary with \"imported\" count and \"errors\" list.\n\nRaises:\n    HTTPException: If file is not a CSV.",
-        "operationId": "import_csv_api_v1_admin_import_csv__post",
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_import_csv_api_v1_admin_import_csv__post"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "integer"
-                      },
-                      {
-                        "items": {
-                          "type": "string"
-                        },
-                        "type": "array"
-                      }
-                    ]
-                  },
-                  "title": "Response Import Csv Api V1 Admin Import Csv  Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Import Csv",
-        "tags": [
-          "admin",
-          "admin"
-        ]
-      }
-    },
-    "/api/v1/analytics/metrics": {
-      "get": {
-        "description": "Get reading metrics and analytics for the current user.\n\nArgs:\n    current_user: The authenticated user making the request.\n    db: The database session for querying data.\n\nReturns:\n    Typed analytics payload covering thread counts, completion rate,\n    average session length, recent sessions, event distribution, and\n    top-rated threads.",
-        "operationId": "get_metrics_api_v1_analytics_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AnalyticsMetricsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Metrics",
-        "tags": [
-          "analytics",
-          "analytics"
         ]
       }
     },
@@ -24497,22 +23558,20 @@
     },
     "/api/v1/continuity-rules/": {
       "get": {
-        "description": "List the authenticated user's continuity rules.",
-        "operationId": "list_continuity_rules_api_v1_continuity_rules__get",
+        "operationId": "continuity_rules_list",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/ContinuityRuleResponse"
+                    "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                   },
-                  "title": "Response List Continuity Rules Api V1 Continuity Rules  Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           }
         },
         "security": [
@@ -24520,21 +23579,17 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Continuity Rules",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       },
       "post": {
-        "description": "Create an owned continuity rule after validating references and cycles.",
-        "operationId": "create_continuity_rule_api_v1_continuity_rules__post",
+        "operationId": "continuity_rules_create",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ContinuityRuleCreate"
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
               }
             }
           },
@@ -24545,21 +23600,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -24567,42 +23612,28 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       }
     },
     "/api/v1/continuity-rules/{rule_id}": {
       "delete": {
-        "description": "Delete one owned continuity rule.",
-        "operationId": "delete_continuity_rule_api_v1_continuity_rules__rule_id__delete",
+        "operationId": "continuity_rules_delete",
         "parameters": [
           {
             "in": "path",
             "name": "rule_id",
             "required": true,
             "schema": {
-              "title": "Rule Id",
+              "format": "int32",
               "type": "integer"
             }
           }
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -24610,23 +23641,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       },
       "get": {
-        "description": "Return one owned continuity rule.",
-        "operationId": "get_continuity_rule_api_v1_continuity_rules__rule_id__get",
+        "operationId": "continuity_rules_get",
         "parameters": [
           {
             "in": "path",
             "name": "rule_id",
             "required": true,
             "schema": {
-              "title": "Rule Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24636,21 +23663,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -24658,23 +23675,19 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       },
       "put": {
-        "description": "Replace an owned continuity rule.",
-        "operationId": "update_continuity_rule_api_v1_continuity_rules__rule_id__put",
+        "operationId": "continuity_rules_update",
         "parameters": [
           {
             "in": "path",
             "name": "rule_id",
             "required": true,
             "schema": {
-              "title": "Rule Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -24683,7 +23696,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ContinuityRuleCreate"
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
               }
             }
           },
@@ -24694,21 +23707,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  "$ref": "#/components/schemas/NativeContinuityRuleResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": ""
           }
         },
         "security": [
@@ -24716,10 +23719,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Continuity Rule",
         "tags": [
-          "dependencies",
-          "dependencies",
           "continuity"
         ]
       }
@@ -25571,104 +24571,6 @@
         ]
       }
     },
-    "/api/v1/crossover-templates/adopt": {
-      "post": {
-        "description": "Adopt an external template into an editable continuity plan. Defaults to informational mode so no hard rules are created until the user explicitly selects blocking semantics.",
-        "operationId": "adopt_crossover_template_api_v1_crossover_templates_adopt_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CrossoverTemplateAdoptRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ContinuityPlanResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Adopt Crossover Template",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "crossover-templates"
-        ]
-      }
-    },
-    "/api/v1/crossover-templates/preview": {
-      "post": {
-        "description": "Preview a derived crossover template from active CBL lists. Read-only: never mutates user data or continuity rules.",
-        "operationId": "preview_crossover_template_api_v1_crossover_templates_preview_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CrossoverTemplatePreviewRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DerivedCrossoverTemplatePreview"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Preview Crossover Template",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "crossover-templates"
-        ]
-      }
-    },
     "/api/v1/custom-cbls": {
       "get": {
         "description": "List the authenticated user's editable custom CBLs.",
@@ -26273,37 +25175,6 @@
           "dependencies",
           "dependencies",
           "custom-cbls"
-        ]
-      }
-    },
-    "/api/v1/debug/log": {
-      "post": {
-        "description": "Receive client-side log messages and output to server terminal.\n\nGated by the ``enable_debug_routes`` flag via ``require_debug_routes`` —\nreturns 404 when the flag is off (default), regardless of environment.",
-        "operationId": "log_message_api_v1_debug_log_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Log Message Api V1 Debug Log Post",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Log Message",
-        "tags": [
-          "debug"
         ]
       }
     },
@@ -28013,187 +26884,6 @@
         ]
       }
     },
-    "/api/v1/prerequisites/": {
-      "get": {
-        "description": "Read stable endpoints and their unmodified provenance.",
-        "operationId": "list_prerequisites_api_v1_prerequisites__get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/PrerequisiteResponse"
-                  },
-                  "title": "Response List Prerequisites Api V1 Prerequisites  Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Prerequisites",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "prerequisites"
-        ]
-      },
-      "post": {
-        "description": "Create one explicit reader prerequisite after combined cycle validation.",
-        "operationId": "create_prerequisite_api_v1_prerequisites__post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PrerequisiteCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PrerequisiteResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Prerequisite",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "prerequisites"
-        ]
-      }
-    },
-    "/api/v1/prerequisites/{prerequisite_id}": {
-      "delete": {
-        "description": "Remove a reader requirement without changing read state or list intent.",
-        "operationId": "delete_prerequisite_api_v1_prerequisites__prerequisite_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "prerequisite_id",
-            "required": true,
-            "schema": {
-              "title": "Prerequisite Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Delete Prerequisite",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "prerequisites"
-        ]
-      },
-      "patch": {
-        "description": "Edit the note of a new reader-authored requirement.",
-        "operationId": "update_prerequisite_note_api_v1_prerequisites__prerequisite_id__patch",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "prerequisite_id",
-            "required": true,
-            "schema": {
-              "title": "Prerequisite Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PrerequisiteNoteUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PrerequisiteResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Update Prerequisite Note",
-        "tags": [
-          "dependencies",
-          "dependencies",
-          "prerequisites"
-        ]
-      }
-    },
     "/api/v1/reading-boundaries": {
       "post": {
         "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",
@@ -29203,109 +27893,27 @@
         ]
       }
     },
-    "/api/v1/recommendations/diagnostics": {
-      "get": {
-        "description": "Bounded, read-only recommendation-quality summary for the current user. This is a diagnostics endpoint and never runs during the normal Roll bootstrap path.",
-        "operationId": "get_recommendation_diagnostics_api_v1_recommendations_diagnostics_get",
-        "parameters": [
-          {
-            "description": "Inclusive lower bound (ISO 8601). Defaults to 30 days ago.",
-            "in": "query",
-            "name": "range_start",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Inclusive lower bound (ISO 8601). Defaults to 30 days ago.",
-              "title": "Range Start"
-            }
-          },
-          {
-            "description": "Exclusive upper bound (ISO 8601). Defaults to now.",
-            "in": "query",
-            "name": "range_end",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "format": "date-time",
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Exclusive upper bound (ISO 8601). Defaults to now.",
-              "title": "Range End"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecommendationDiagnosticsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Recommendation-quality diagnostics summary",
-        "tags": [
-          "recommendations",
-          "recommendations"
-        ]
-      }
-    },
     "/api/v1/releases/": {
       "get": {
-        "description": "List public published releases newest-first.",
-        "operationId": "list_releases_api_v1_releases__get",
+        "operationId": "releases_list",
         "parameters": [
           {
+            "description": "Maximum releases to return (1-100, default 20)",
             "in": "query",
             "name": "limit",
             "required": false,
             "schema": {
-              "default": 20,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Number of matching releases to skip (default 0)",
             "in": "query",
             "name": "offset",
             "required": false,
             "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -29315,27 +27923,18 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReleaseListResponse"
+                  "$ref": "#/components/schemas/NativeReleaseListResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Invalid pagination"
           }
         },
-        "summary": "List Releases",
+        "summary": "Documentation-only operation for the mounted releases list handler.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "releases"
         ]
       },
@@ -29500,15 +28099,14 @@
     },
     "/api/v1/releases/{release_id}": {
       "get": {
-        "description": "Fetch one public published release.",
-        "operationId": "get_release_api_v1_releases__release_id__get",
+        "operationId": "releases_get",
         "parameters": [
           {
             "in": "path",
             "name": "release_id",
             "required": true,
             "schema": {
-              "title": "Release Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -29518,27 +28116,18 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicReleaseResponse"
+                  "$ref": "#/components/schemas/NativePublicReleaseResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "404": {
+            "description": "Release not found"
           }
         },
-        "summary": "Get Release",
+        "summary": "Documentation-only operation for the mounted releases get handler.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "releases"
         ]
       }
@@ -32898,7 +31487,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeAnalyticsMetricsResponse"
+                  "$ref": "#/components/schemas/AnalyticsMetricsResponse"
                 }
               }
             },

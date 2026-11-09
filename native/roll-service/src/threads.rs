@@ -108,6 +108,29 @@ pub struct ThreadListResponse {
     pub active_count: i32,
 }
 
+/// The legacy single-thread response retained for the v1 and bare aliases.
+#[derive(Debug, Serialize, utoipa::ToSchema)]
+pub struct ThreadDetailResponse {
+    pub id: i32,
+    pub title: String,
+    pub format: String,
+    pub issues_remaining: i32,
+    pub queue_position: i32,
+    pub status: String,
+    pub last_rating: Option<f64>,
+    pub last_activity_at: Option<String>,
+    pub notes: Option<String>,
+    pub is_test: bool,
+    pub is_blocked: bool,
+    pub blocking_reasons: Vec<String>,
+    pub created_at: String,
+    pub total_issues: Option<i32>,
+    pub reading_progress: Option<String>,
+    pub next_unread_issue_id: Option<i32>,
+    pub next_unread_issue_number: Option<String>,
+    pub manual_creator_credits: Value,
+}
+
 /// Query parameters for `GET /api/v2/threads`.
 #[derive(Debug, Default, Deserialize)]
 pub struct ThreadListQuery {
@@ -349,6 +372,71 @@ pub async fn list_threads(
         threads,
         next_page_token,
         active_count,
+    }))
+}
+
+/// Read one owned thread using the exact legacy ThreadDetail wire contract.
+pub async fn get_thread_detail(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            "WITH auth AS (
+                 SELECT u.id AS user_id
+                 FROM users u
+                 WHERE u.username = $1
+                   AND COALESCE(trunc(extract(epoch FROM u.password_changed_at))::bigint, 0) <= $3
+                   AND NOT EXISTS (SELECT 1 FROM revoked_tokens r WHERE r.jti = $2)
+             )
+             SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                    t.status, t.last_rating,
+                    to_char(t.last_activity_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    t.notes, t.is_test, t.is_blocked,
+                    to_char(t.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+                    t.total_issues, t.reading_progress,
+                    t.next_unread_issue_id, t.manual_creator_credits::text,
+                    (SELECT i.issue_number FROM issues i WHERE i.id = t.next_unread_issue_id)
+             FROM threads t
+             JOIN auth ON auth.user_id = t.user_id
+             WHERE t.id = $4",
+            &[
+                &claims.username(),
+                &claims.jti(),
+                &claims.expected_epoch()?,
+                &thread_id,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let row = row.ok_or(ApiError(
+        StatusCode::NOT_FOUND,
+        "Thread not found".to_string(),
+    ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(row.get(2)),
+        issues_remaining: row.get(3),
+        queue_position: row.get(4),
+        status: row.get(5),
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues: row.get(12),
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: row.get(16),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
     }))
 }
 
@@ -1111,10 +1199,87 @@ impl utoipa::Modify for ThreadsSecurityAddon {
 #[allow(dead_code)]
 fn list_threads_documentation() {}
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/threads/{thread_id}",
+    tag = "threads",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    responses(
+        (status = 200, description = "Owned thread detail", body = ThreadDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+fn get_thread_detail_documentation() {}
+
+#[utoipa::path(
+    get,
+    path = "/api/threads/{thread_id}",
+    tag = "threads",
+    params(("thread_id" = i32, Path, description = "Owned Thread identifier")),
+    responses(
+        (status = 200, description = "Owned thread detail", body = ThreadDetailResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+fn get_bare_thread_detail_documentation() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn thread_detail_contract_keeps_legacy_fields_and_defaults() {
+        let detail = ThreadDetailResponse {
+            id: 7,
+            title: "Saga".to_string(),
+            format: "Comic".to_string(),
+            issues_remaining: 3,
+            queue_position: 1,
+            status: "active".to_string(),
+            last_rating: None,
+            last_activity_at: None,
+            notes: None,
+            is_test: false,
+            is_blocked: false,
+            blocking_reasons: Vec::new(),
+            created_at: "2026-01-01 00:00:00.000000".to_string(),
+            total_issues: Some(3),
+            reading_progress: None,
+            next_unread_issue_id: Some(9),
+            next_unread_issue_number: Some("1".to_string()),
+            manual_creator_credits: json!([]),
+        };
+        let value = serde_json::to_value(detail).expect("detail is serializable");
+        for field in [
+            "id",
+            "title",
+            "format",
+            "issues_remaining",
+            "queue_position",
+            "status",
+            "last_rating",
+            "last_activity_at",
+            "notes",
+            "is_test",
+            "is_blocked",
+            "blocking_reasons",
+            "created_at",
+            "total_issues",
+            "reading_progress",
+            "next_unread_issue_id",
+            "next_unread_issue_number",
+            "manual_creator_credits",
+        ] {
+            assert!(value.get(field).is_some(), "missing legacy field {field}");
+        }
+    }
 
     #[test]
     fn cursor_round_trip_binds_search_sort_and_execution() {

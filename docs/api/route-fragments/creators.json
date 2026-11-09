@@ -1,0 +1,46 @@
+{
+  "family": "creators",
+  "owned_path_patterns": [
+    "^/api/v1/creators(?:/.*)?$",
+    "^/api/v1/threads/[^/]+/issues/creators$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-creators.ts",
+      "frontend/src/services/creatorComparisonApi.ts",
+      "frontend/src/services/creatorDiscoveryApi.ts",
+      "frontend/src/services/creatorMetricDrilldownApi.ts",
+      "frontend/src/services/creatorTeamChemistryApi.ts",
+      "frontend/src/services/creatorsApi.ts"
+    ]
+  },
+  "operations": [
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/compare"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/discoveries"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/summaries"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/team-chemistry"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/{metric_type}"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/rating-distribution/{rating_value}"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/role-stats/{role}"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/metrics/series-stats/{series_key}"},
+    {"bucket": "v1_operations", "method": "GET", "path": "/api/v1/creators/{creator_key}/series/{series_key}/issues"},
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issues/creators",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/services/api-threads.ts"
+      ]
+    }
+  ]
+}
