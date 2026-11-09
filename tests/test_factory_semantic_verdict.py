@@ -162,7 +162,7 @@ POLICY = ROOT / ".github/scripts/factory_issue_acceptance.py"
 RECOVERY_HEAD = "a" * 40
 
 
-def recovery_report(head: str = RECOVERY_HEAD) -> dict:
+def recovery_report(head: str = RECOVERY_HEAD) -> dict[str, object]:
     """Model evidence fixture; the trusted controller validates issue criteria."""
     return {
         "issue": 4916,
@@ -188,7 +188,7 @@ def test_recovery_appends_one_model_report_when_original_has_none(tmp_path: Path
         + "FACTORY_GATE_READY\n"
     )
     call = (
-        f"factory_append_recovered_acceptance_report "
+        "factory_append_recovered_acceptance_report "
         f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
     )
     assert run_bash(call).returncode == 0
@@ -202,9 +202,9 @@ def test_recovery_preserves_existing_primary_report(tmp_path: Path) -> None:
     recovery = tmp_path / "recovery.log"
     original = "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
     primary.write_text(original)
-    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n")
+    recovery.write_text(\n        "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n"\n    )
     call = (
-        f"factory_append_recovered_acceptance_report "
+        "factory_append_recovered_acceptance_report "
         f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
     )
     assert run_bash(call).returncode == 0
@@ -218,7 +218,7 @@ def test_recovery_rejects_malformed_primary_and_multiple_reports(tmp_path: Path)
     primary.write_text("FACTORY_ACCEPTANCE_V1=not-json\n")
     recovery.write_text(valid)
     call = (
-        f"factory_append_recovered_acceptance_report "
+        "factory_append_recovered_acceptance_report "
         f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
     )
     assert run_bash(call).returncode != 0
@@ -238,7 +238,7 @@ def test_recovery_rejects_stale_head_and_absent_evidence(tmp_path: Path) -> None
         "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report("c" * 40)) + "\n"
     )
     call = (
-        f"factory_append_recovered_acceptance_report "
+        "factory_append_recovered_acceptance_report "
         f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
     )
     assert run_bash(call).returncode != 0
