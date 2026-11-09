@@ -813,13 +813,13 @@ pub async fn update_tag(
                     "A global tag named '{name}' already exists"
                 )));
             }
-            if tag.scope == "private" && tag.owner_user_id.is_some() {
+            if let ("private", Some(owner_id)) = (tag.scope.as_str(), tag.owner_user_id) {
                 let dup = conn
                     .query_opt(
                         &format!(
                             "{TAG_SELECT} WHERE scope = 'private' AND owner_user_id = $1 AND normalized_name = $2"
                         ),
-                        &[&tag.owner_user_id.unwrap(), &normalized],
+                        &[&owner_id, &normalized],
                     )
                     .await
                     .map_err(db::query_error)?;
