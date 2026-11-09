@@ -17,8 +17,6 @@ use std::{
 use utoipa::{IntoParams, ToSchema};
 
 const MAX_CREATOR_KEYS: usize = 50;
-const MIN_COMPARISON_CREATORS: usize = 2;
-const MAX_COMPARISON_CREATORS: usize = 4;
 const HEADLINE_ROLES: &[&str] = &[
     "writer", "artist", "penciler", "inker", "colorist", "letterer",
 ];
@@ -89,9 +87,6 @@ pub struct CreatorListQuery {
 fn bad_request(msg: impl Into<String>) -> ApiError {
     ApiError(StatusCode::BAD_REQUEST, msg.into())
 }
-fn not_found(msg: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, msg.into())
-}
 
 fn parse_creator_key(key: &str) -> Option<i64> {
     let parts: Vec<&str> = key.split(':').collect();
@@ -151,32 +146,6 @@ fn validate_creator_keys(raw: Option<&str>) -> Result<Vec<String>, ApiError> {
     Ok(keys)
 }
 
-fn validate_comparison_keys(raw: Option<&str>) -> Result<Vec<String>, ApiError> {
-    let raw = raw.map(str::trim).filter(|s| !s.is_empty()).ok_or_else(|| {
-        bad_request(format!("keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-{MAX_COMPARISON_CREATORS} canonical creator keys"))
-    })?;
-    let keys = split_keys(raw);
-    if keys.is_empty() {
-        return Err(bad_request(format!("keys must be a comma-separated list of {MIN_COMPARISON_CREATORS}-{MAX_COMPARISON_CREATORS} canonical creator keys")));
-    }
-    if keys.len() < MIN_COMPARISON_CREATORS || keys.len() > MAX_COMPARISON_CREATORS {
-        return Err(bad_request(format!("keys must contain {MIN_COMPARISON_CREATORS} to {MAX_COMPARISON_CREATORS} creator keys, got {}", keys.len())));
-    }
-    for key in &keys {
-        let parts: Vec<&str> = key.split(':').collect();
-        let valid = parts.len() == 2
-            && parts[0] == "creator"
-            && !parts[1].is_empty()
-            && parts[1].chars().all(|c| c.is_ascii_digit());
-        if !valid {
-            return Err(bad_request(format!(
-                "Invalid creator key {key:?}: expected creator:<external-person-id> (stable ComicVine person id, no display names)"
-            )));
-        }
-    }
-    Ok(keys)
-}
-
 fn headline_role(role: &str) -> bool {
     HEADLINE_ROLES.contains(&role)
 }
@@ -186,13 +155,6 @@ struct CreatorCredit {
     external_id: i64,
     roles: Vec<String>,
     display_name: String,
-}
-
-#[derive(Debug, Clone)]
-struct OwnedIssueSeries {
-    thread_id: i32,
-    thread_title: String,
-    issue_number: String,
 }
 
 fn normalize_manual_role(role: &str) -> Option<String> {
@@ -392,7 +354,6 @@ async fn resolve_user_id(state: &AppState, claims: &VerifiedAccessClaims) -> Res
 
 struct SummaryInputs {
     owned_issues: HashMap<i32, String>, // issue_id -> status
-    issue_thread: HashMap<i32, (i32, String, String)>, // issue_id -> (thread_id, thread_title, issue_number)
     issue_creator_credits: HashMap<i32, Vec<CreatorCredit>>,
     issues_with_creator_metadata: HashSet<i32>,
     effective_ratings: HashMap<i32, f64>,
@@ -541,7 +502,6 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
     }
     Ok(SummaryInputs {
         owned_issues,
-        issue_thread,
         issue_creator_credits,
         issues_with_creator_metadata,
         effective_ratings,
