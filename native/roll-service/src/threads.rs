@@ -196,6 +196,7 @@ fn encode_cursor(cursor: &QueueCursor) -> String {
     if cursor.execution != "legacy" {
         payload.insert("execution", Value::String(cursor.execution.clone()));
     }
+    #[allow(clippy::expect_used)]
     URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).expect("serializable cursor"))
 }
 
@@ -326,6 +327,7 @@ pub async fn list_threads(
     let mut rows = rows;
     let next_page_token = if rows.len() > page_size as usize {
         rows.truncate(page_size as usize);
+        #[allow(clippy::expect_used)]
         let last = rows.last().expect("non-empty page");
         Some(encode_cursor(&QueueCursor {
             sort: sort.to_string(),

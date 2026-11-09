@@ -172,10 +172,12 @@ def _baseline_allowed() -> set[str]:
 def test_router_parser_sees_every_post_call() -> None:
     """A new route syntax must fail loudly instead of silently losing coverage."""
     parsed = _route_matches()
-    post_calls = sum(
-        _lib_source().count(f"{method}(")
-        for method in ("post", "patch", "put", "delete")
-    )
+    # Count whole Rust routing constructor tokens. A substring search would
+    # mistakenly see `put(` inside unrelated code such as `.output()`.
+    post_calls = len(re.findall(
+        r"(?<![A-Za-z0-9_])(?:post|patch|put|delete)\s*\(",
+        _lib_source(),
+    ))
     assert len(parsed) == post_calls, (
         f"Parsed {len(parsed)} HTTP mutations but lib.rs contains {post_calls} "
         "post/patch/put/delete calls. Update the guard parser, not the exceptions."

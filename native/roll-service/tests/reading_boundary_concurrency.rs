@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 //! Single-snapshot concurrency regression for `POST /api/v2/reading-boundaries`
 //! (#4347 gap G5).
 //!

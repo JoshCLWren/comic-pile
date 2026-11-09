@@ -438,7 +438,13 @@ pub(crate) fn assemble_snapshot(snapshot: SnapshotRows) -> Result<OptionInputs, 
     }
     let thread_volumes = candidates
         .into_iter()
-        .filter_map(|(id, mut keys)| (keys.len() == 1).then(|| (id, keys.pop_first().unwrap())))
+        .filter_map(|(id, mut keys)| {
+            if keys.len() == 1 {
+                keys.pop_first().map(|key| (id, key))
+            } else {
+                None
+            }
+        })
         .collect();
     for row in snapshot.overlaps {
         if let (Some(c), Some(w)) = (
@@ -513,6 +519,7 @@ pub async fn load_option_diagnostics(
     let started = Instant::now();
     let mut pending = Pending(Some(db::checkout(state).await?));
     let result = tokio::time::timeout(state.request_timeout, async {
+        #[allow(clippy::unwrap_used)]
         let tx = pending
             .0
             .as_mut()

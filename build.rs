@@ -1,4 +1,7 @@
 //! Capture the actual compiler and source revision in the native executable.
+//! Build scripts run at compile time only; toolchain failures abort the build
+//! without handling requests, so panicking accessors cannot leak request data.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 use std::{env, process::Command};
 
 fn main() {
