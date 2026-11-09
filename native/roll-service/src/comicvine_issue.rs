@@ -54,24 +54,7 @@ WITH auth AS (
       -- repair is enqueued rather than suppressing it). Mirrors
       -- comicvine_repair::needs_provider_fetch exactly.
       WHEN m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL THEN
-        LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <=
-          CASE WHEN
-            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
-            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
-          THEN to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
-          ELSE to_char(now() AT TIME ZONE 'UTC' - interval '7 days', 'YYYY-MM-DD"T"HH24:MI:SS')
-          END
-      -- A deep response with empty creator_credits / person_credits is a
-      -- genuine fetch but is not permanently healthy: recheck after 7 days,
-      -- materially sooner than the 30-day window for complete rows, so a
-      -- late-arriving or repaired provider roster is picked up without a
-      -- hot loop. Malformed/absent credit arrays count as empty (safe: a
-      -- repair is enqueued rather than suppressing it). Mirrors
-      -- comicvine_repair::needs_provider_fetch exactly.
-      WHEN m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL THEN
-        LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <=
+        m.metadata->>'deep_metadata_refreshed_at' <=
           CASE WHEN
             (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
               AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
@@ -86,13 +69,12 @@ WITH auth AS (
             m.metadata->'raw_provider_payload'->>'date_last_updated', ' ', 'T'), 19) <
           to_char(m.provider_updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'))
         OR (
-          (m.metadata->'raw_provider_payload'->>'date_last_updated' IS NULL
-            OR (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
-              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 0)
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) > 0)
             OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
-              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') = 0)
-            OR (m.metadata->'raw_provider_payload'->'person_credits' IS NULL)
-           )
+              AND jsonb_array_length(m.metadata->'raw_provider_payload'->'person_credits') > 0)
+          )
            AND m.provider_updated_at <= now()-interval '7 days'
         )
         OR (
