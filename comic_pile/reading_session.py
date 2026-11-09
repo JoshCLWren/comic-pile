@@ -442,13 +442,15 @@ async def end_session(session_id: int, db: AsyncSession) -> None:
 
 
 async def get_current_die(session_id: int, db: AsyncSession) -> int:
-    """Get the die from manual selection or the latest die-changing event."""
+    """Get the die from the latest die-changing event.
+
+    Event-derived die wins (#4352, #4405): a manual choice is one explicit
+    event, not a permanent ``manual_die`` pin. The ``manual_die`` column is
+    a legacy fallback only when the session has no die-changing events.
+    """
     start_die = _start_die()
     session_result = await db.execute(select(ReadingSession).where(ReadingSession.id == session_id))
     session = session_result.scalar_one_or_none()
-
-    if session and session.manual_die:
-        return session.manual_die
 
     result = await db.execute(
         select(Event)
@@ -461,6 +463,9 @@ async def get_current_die(session_id: int, db: AsyncSession) -> int:
     last_die_event = result.scalars().first()
     if last_die_event and last_die_event.die_after is not None:
         return automatic_die_after(last_die_event.die_after, last_die_event.context)
+
+    if session and session.manual_die:
+        return session.manual_die
 
     return session.start_die if session else start_die
 
@@ -477,15 +482,14 @@ async def get_current_die_for_session(
     Args:
         session: Already-loaded authoritative session object.
         db: Async database session used for the die-event lookup.
-        automatic: Ignore the manual override to resolve its suspended ladder.
+        automatic: Ignore manual die state to resolve its suspended ladder.
 
     Returns:
-        The manual die, the latest die-changing event's die, or the session
-        start die.
+        The latest die-changing event's die, the legacy ``manual_die``
+        fallback when no die events exist, or the session start die.
+        The event-derived die wins (#4352): the ``manual_die`` column is
+        not a permanent pin once a die event exists.
     """
-    if session.manual_die and not automatic:
-        return session.manual_die
-
     # The logical die is owner-scoped event history, not just the current
     # session. Rust commands write sessionless manual_die/snooze events and do
     # not pin session.manual_die, so a session-only lookup would compute the
@@ -509,5 +513,8 @@ async def get_current_die_for_session(
     last_die_event = result.scalars().first()
     if last_die_event and last_die_event.die_after is not None:
         return automatic_die_after(last_die_event.die_after, last_die_event.context)
+
+    if session.manual_die and not automatic:
+        return session.manual_die
 
     return session.start_die

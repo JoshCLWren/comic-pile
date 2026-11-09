@@ -93,10 +93,10 @@ async def test_history_ladder_is_chronological_and_current_die_uses_latest(
 
 
 @pytest.mark.asyncio
-async def test_history_manual_die_overrides_event_derived_die(
+async def test_history_event_derived_die_wins_over_manual_column(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
-    """A manual die takes precedence over event-derived current die."""
+    """Event-derived current die wins over the legacy manual_die pin (#4352)."""
     thread = Thread(
         title="Manual Die Comic",
         format="Comic",
@@ -120,7 +120,7 @@ async def test_history_manual_die_overrides_event_derived_die(
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
-    assert item["current_die"] == 20
+    assert item["current_die"] == 8
     assert item["manual_die"] == 20
     assert item["ladder_path"] == "6 → 8"
 
