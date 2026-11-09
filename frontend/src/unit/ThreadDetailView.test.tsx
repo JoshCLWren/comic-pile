@@ -87,7 +87,7 @@ const mockedConnectedThreads = vi.mocked(dependenciesApi.getConnectedThreads)
 const mockedThreadIssuesTags = vi.mocked(tagsApi.threadIssuesEffective)
 
 beforeEach(() => {
-  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now' } } })
+  vi.mocked(readingBoundariesApi.batch).mockReset().mockResolvedValue({ threads: { 1: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] } } })
   routeParams.id = '1'
   locationState.state = undefined
   locationState.search = undefined
@@ -669,7 +669,7 @@ it('uses canonical list blockers even when explicit connected prerequisites are 
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({ threads: { 1: {
     thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{
       kind: 'hold', origin: 'reading_list', reason: 'Hold in Ultimate: waiting on One Year In #1',
-      waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1', volume_label: 'One Year In (2025)' }],
+      waiting_on: [{ issue_id: 9, thread_id: 2, thread_title: 'One Year In', issue_number: '1', label: 'One Year In #1', volume_label: 'One Year In (2025)', reading_lists: [] }],
       editor: { kind: 'reading_list', list_id: 9, label: 'Ultimate' },
     }],
   } } })
@@ -681,7 +681,7 @@ it('uses canonical list blockers even when explicit connected prerequisites are 
 
 it('falls back to the legacy availability explanation when canonical boundaries are unavailable', async () => {
   vi.mocked(readingBoundariesApi.batch).mockResolvedValue({
-    threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Option E is not active for Saga.' } },
+    threads: { 1: { thread_id: 1, state: 'unavailable', summary: 'Option E is not active for Saga.', blockers: [] } },
   })
   vi.mocked(dependenciesApi.getBatchBlockingInfo).mockResolvedValue({
     threads: {

@@ -128,43 +128,31 @@ Merges to `main` are the production source. The production workflow runs the req
 
 Factory merges made with the built-in `GITHUB_TOKEN` fire no push event, so the two factory merge drains (Factory Ready Merge Drain and the Fixed Model Factory Dispatcher's ready drain) dispatch Deploy Production themselves, once per drain run after the last merge. Factory workers do not merge. A queued manual redeploy can be superseded by a later pending run (GitHub keeps only the newest pending run), so see the note in [Overlapping runs](VERCEL_DEPLOYMENT.md#overlapping-runs). See [Bot merges dispatch the deploy](VERCEL_DEPLOYMENT.md#bot-merges-dispatch-the-deploy).
 
-### Red-deploy freeze
-
-While the most recent **attempted** Deploy Production run on `main` is red
-(`failure`, `timed_out`, or `startup_failure`), ComicPile freezes further
-factory merges and skips new Deploy Production runs before migrations.
-
-An attempted run is one that got past the freeze gate and actually tried to
-deploy. Runs that the freeze gate itself blocked are skipped when evaluating
-the latest run, so the gate cannot latch on its own failures. Cancelled,
-skipped, and neutral runs also do not count and cannot lift the freeze. Only a
-later successful attempted deploy lifts it.
-
-This exists so a broken production deploy cannot keep accumulating merges
-(#3509). There is no P1-issue freeze.
-
-**Factory merges.** The freeze blocks factory merge drains, except pull
-requests labeled `deploy-fix`. Those PRs may merge while production is red so
-the factory can land its own fix. Every other `factory:ready` PR waits.
-
-**Runs API errors fail open.** If GitHub cannot list Deploy Production runs,
-the freeze check warns and does not freeze (and does not fail the deploy
-workflow). A runs-API blip must not become a self-sustaining red deploy.
-
-**Override (repository owner only).** After the fix is on `main`, the
-repository owner re-runs **Deploy Production** with `workflow_dispatch`.
-`github.actor` must match `github.repository_owner`; other accounts, including
-`GITHUB_TOKEN` jobs, cannot override.
-
-1. Set `override_freeze` to `true`.
-2. Provide a non-empty `reason`. The reason is written to the run summary.
-3. Factory workers must not use the override. Label a factory PR `deploy-fix`
-   to merge it while frozen, then the owner dispatches the deploy.
-
-Once that overridden run completes successfully, the freeze lifts.
-
 Do not add Fly.io, Railway, or another maintained hosting target without a new product decision and an explicit migration plan. Historical references in the changelog describe past deployments and are not active operating instructions.
 
 ## Local development
 
 Use `make setup` for the local environment, `make dev` for the frontend and API development servers, and `make verify` for the complete local verification suite. Local development and GitHub Actions remain independent from production deployment configuration.
+
+
+### Automatic deployment repair
+
+`Production Deploy Recovery` runs after Deploy Production and every 15 minutes.
+A real attempted release failure opens or refreshes one GitHub repair issue,
+including the failed run and step. Updates preserve active factory leases.
+The issue enters the ordinary factory queue as a critical `deploy-fix`; fixes
+retain normal exact-head CI and independent review requirements. There is no
+red-deploy freeze or override path.
+Preflight publishes a run-attempt-specific `deployment-attempt-N` artifact with the
+selected checkout SHA before dependency setup. Recovery incidents use that evidence;
+historical or expired metadata is explicitly unavailable, never guessed from the
+workflow trigger SHA. Missing exact-attempt evidence cannot reconcile a failed CLI
+deploy against the live alias.
+Only a successful actual deployment with both production probes passing closes
+the managed repair issue; live worker leases are left for that worker to finish.
+
+The health probe reports the executable name read from the OS, OS/architecture,
+and the package, compiler version and source revision captured during the build.
+Deploy Production supplies the exact SHA to the build and checks that revision
+in the live response. The compatibility `rust` label alone is not deployment
+proof. These fields provide operational evidence, not cryptographic attestation.

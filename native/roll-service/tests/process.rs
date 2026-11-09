@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Process lifecycle evidence: health requires no DB and termination drains cleanly.
 #[cfg(unix)]
 #[test]

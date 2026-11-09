@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import shutil
+import subprocess
 from pathlib import Path
 from types import ModuleType
 
@@ -127,6 +130,83 @@ def test_all_main_health_gates_use_product_ci_workflow_runs() -> None:
         assert "gh api --paginate --slurp" in source
         assert "factory_main_health.py --sha \"$sha\"" in source
         assert "commits/${sha}/check-runs?per_page=100" not in source
+
+
+def test_main_health_gate_only_targets_its_own_issues_and_respects_leases() -> None:
+    """Run both real workflow jq selectors against mixed issue fixtures."""
+    jq = shutil.which("jq")
+    assert jq is not None, "jq is required to exercise workflow selectors; install jq"
+
+    workflow = (WORKFLOWS / "main-health-gate.yml").read_text(encoding="utf-8")
+    opener = workflow.split("      - name: Open or refresh main-breakage P0", 1)[1].split(
+        "      - name: Auto-close main-breakage when main is green", 1
+    )[0]
+    closer = workflow.split("      - name: Auto-close main-breakage when main is green", 1)[1]
+    marker = "<!-- comic-pile-main-health-gate:v1 -->"
+    assert marker in opener
+    assert "--json number,title,body,author,labels" in opener
+    assert "--json number,title,body,author,labels" in closer
+
+    def filter_query(section: str) -> str:
+        return section.split("--jq '", 1)[1].split("')\"", 1)[0]
+
+    def issue(
+        number: int, *, title: str, body: str, author: str = "github-actions[bot]",
+        labels: tuple[str, ...] = ("main-breakage", "factory:unowned"),
+    ) -> dict[str, object]:
+        return {
+            "number": number,
+            "title": title,
+            "body": body,
+            "author": {"login": author},
+            "labels": [{"name": label} for label in labels],
+        }
+
+    legacy = "This issue was opened by Main Health Gate to block the factory"
+    fixtures = [
+        issue(10, title="Main is red at deadbeef - factory blocked", body=marker,
+              author="untrusted-commenter"),
+        issue(11, title="Production deploy-fix still pending", body="P0 Rust issue"),
+        issue(12, title="Main is red at abcd1234 - factory blocked", body=legacy,
+              labels=("main-breakage", "factory:local")),
+        issue(13, title="Main is red at efgh1234 - factory blocked", body=legacy),
+        issue(14, title="Main CI gate-owned", body=marker,
+              labels=("main-breakage", "factory:41")),
+        issue(15, title="Main CI gate-owned blocked", body=marker,
+              labels=("main-breakage", "factory:blocked")),
+        issue(16, title="Main CI gate-owned unclaimed", body=marker),
+        issue(17, title="Main CI gate-owned blocked", body=marker,
+              labels=("main-breakage", "ralph-status:blocked")),
+        issue(18, title="Main CI gate-owned manual", body=marker +
+              "\n<!-- factory-execution:manual-only -->"),
+    ]
+
+    dispatcher_legacy = "Dispatcher detected red main. Fix main CI before factory merges."
+    dispatcher = (WORKFLOWS / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    fallback_creation = next(line for line in dispatcher.splitlines() if "gh issue create" in line)
+    assert marker in fallback_creation
+    fixtures.extend([
+        issue(19, title="Main is red at abc123 - factory blocked", body=dispatcher_legacy),
+        issue(20, title="Main is red at abc123 - factory blocked", body=dispatcher_legacy,
+              author="untrusted-commenter"),
+        issue(21, title="Unrelated dispatcher issue", body=dispatcher_legacy),
+    ])
+
+    def selected(section: str) -> list[int]:
+        result = subprocess.run(
+            [jq, "-r", filter_query(section)], input=json.dumps(fixtures),
+            capture_output=True, text=True, check=True,
+        )
+        return [int(value) for value in result.stdout.splitlines() if value.strip()]
+
+    # A gate-owned lease still blocks duplicate issue creation while main is red.
+    assert selected(opener) == [12]
+    # Green main may close only gate-owned and unclaimed issues.
+    # Neither a spoofed body, unrelated P0, live owner, nor manual hold is touched.
+    assert selected(closer) == [13, 16, 19]
+    fixtures[:] = fixtures[-3:]
+    assert selected(opener) == [19]
+    assert selected(closer) == [19]
 
 
 def test_held_workflow_recovery_is_unbounded_and_observable() -> None:

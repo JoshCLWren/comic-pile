@@ -104,14 +104,24 @@ def _route(routes: list[dict[str, object]], src: str) -> dict[str, object]:
 def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
     """Protect meaningful Vercel precedence, not arbitrary array offsets."""
     api_fallback = _route_index(routes, src="/api(?:/.*)?")
+    assert routes[api_fallback].get("dest") == "/api/native_roll.rs"
     native_indices = [
         index
         for index, route in enumerate(routes)
         if route.get("dest") in {"/api/native_roll.rs", "/api/native_issue.rs"}
+        and route.get("src") != "/api(?:/.*)?"
     ]
     assert native_indices, "No native ingress routes are configured"
-    assert all(index < api_fallback for index in native_indices), (
-        "Native routes must precede the Python API catch-all"
+    python_indices = [
+        index for index, route in enumerate(routes)
+        if route.get("dest") == "/api/index.py"
+    ]
+    assert python_indices, "Expected explicit Python legacy allowlist"
+    assert all(index < min(python_indices) for index in native_indices), (
+        "Native routes must precede explicit Python exceptions"
+    )
+    assert all(index < api_fallback for index in python_indices), (
+        "Python exceptions must precede Rust API catch-all"
     )
 
     # Vercel evaluates rewrites in order. Duplicate native method/path rewrites
@@ -130,7 +140,9 @@ def _assert_route_priorities(routes: list[dict[str, object]]) -> None:
             )
             seen_native.add(identity)
 
-    docs = _route_index(routes, src="/(?:openapi\\.json|docs|redoc|health)")
+    docs = _route_index(routes, src="^/(?:openapi\\.json|docs|redoc|health)$")
+    assert routes[docs].get("status") == 404
+    assert "dest" not in routes[docs]
     landing = _route_index(routes, src="/")
     assets = _route_index(routes, src="/assets/.+")
     html = _route_index(routes, src=_route_html_src_pattern())
@@ -257,11 +269,12 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
     assert all(route.get("dest") == "/api/native_roll.rs" for route in auth_routes)
     assert _route(routes, "/api(?:/.*)?") == {
         "src": "/api(?:/.*)?",
-        "dest": "/api/index.py",
+        "dest": "/api/native_roll.rs",
     }
-    assert _route(routes, "/(?:openapi\\.json|docs|redoc|health)") == {
-        "src": "/(?:openapi\\.json|docs|redoc|health)",
-        "dest": "/api/index.py",
+    assert any(route.get("dest") == "/api/index.py" for route in routes)
+    assert _route(routes, "^/(?:openapi\\.json|docs|redoc|health)$") == {
+        "src": "^/(?:openapi\\.json|docs|redoc|health)$",
+        "status": 404,
     }
     assert _route(routes, "/")["dest"] == "/index.html"
     assert _route(routes, "/assets/.+") == {
@@ -279,7 +292,11 @@ def test_vercel_routes_backend_before_spa_fallback() -> None:
 def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> None:
     """Adding a new Rust endpoint cannot shift unrelated route assertions."""
     routes = _routes(_load_vercel_config())
-    insertion = _route_index(routes, src="/api(?:/.*)?")
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
+    insertion = next(
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
+    )
     expanded = [
         *routes[:insertion],
         {
@@ -299,7 +316,11 @@ def test_unrelated_native_route_insertion_keeps_deployment_guards_stable() -> No
 def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]) -> None:
     """Reject a native rewrite whose method and source overlap an existing one."""
     routes = _routes(_load_vercel_config())
-    insertion = _route_index(routes, src="/api(?:/.*)?")
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
+    insertion = next(
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
+    )
     duplicate = {
         "src": "/api/v2/auth/register",
         "methods": list(methods),
@@ -313,7 +334,11 @@ def test_duplicate_native_method_and_path_rewrite_fails(methods: tuple[str, ...]
 def test_disjoint_methods_can_use_same_native_source() -> None:
     """Two handlers sharing a path but not its HTTP method are not duplicates."""
     routes = _routes(_load_vercel_config())
-    insertion = _route_index(routes, src="/api(?:/.*)?")
+    # Insert explicit Rust routes ahead of the generated Python exception
+    # block; Rust's catch-all is intentionally after those exceptions.
+    insertion = next(
+        i for i, route in enumerate(routes) if route.get("dest") == "/api/index.py"
+    )
     distinct_method = {
         "src": "/api/v2/auth/register",
         "methods": ["GET"],
@@ -323,13 +348,12 @@ def test_disjoint_methods_can_use_same_native_source() -> None:
     _assert_route_priorities(expanded)
 
 
-def test_python_catchall_cannot_shadow_a_native_route() -> None:
-    """Moving the Python fallback before Rust routes must fail deterministically."""
+def test_rust_default_cannot_shadow_explicit_python_routes() -> None:
+    """Moving the Rust API fallback ahead of Python exceptions fails."""
     routes = _routes(_load_vercel_config()).copy()
     fallback = routes.pop(_route_index(routes, src="/api(?:/.*)?"))
     routes.insert(0, fallback)
-
-    with pytest.raises(AssertionError, match="Native routes must precede"):
+    with pytest.raises(AssertionError, match="Python exceptions must precede"):
         _assert_route_priorities(routes)
 
 
@@ -446,7 +470,7 @@ def test_vercel_node_typescript_relative_imports_use_js_extensions() -> None:
 
 
 def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
-    """Keep account auth in Rust and legacy non-auth requests in Python."""
+    """Explicit Python legacy operations remain; missing APIs default to Rust."""
     routes = _routes(_load_vercel_config())
     probes = (
         ("GET", "/api/v1/auth/me", "/api/native_roll.rs"),
@@ -468,36 +492,45 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
         ("POST", "/api/v2/auth/logout", "/api/native_roll.rs"),
         ("POST", "/api/v2/auth/forgot-password", "/api/native_roll.rs"),
         ("POST", "/api/v2/auth/reset-password", "/api/native_roll.rs"),
-        ("POST", "/api/v1/auth/me", "/api/index.py"),
-        ("GET", "/api/v1/roll/bootstrap", "/api/index.py"),
+        ("POST", "/api/v1/auth/me", "/api/native_roll.rs"),
+        ("GET", "/api/v1/roll/bootstrap", "/api/native_roll.rs"),
         ("GET", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),
         ("POST", "/api/v2/reading-sessions", "/api/native_roll.rs"),
-        ("GET", "/api/v2/reading-sessions", "/api/index.py"),
-        ("POST", "/api/v2/roll/bootstrap", "/api/index.py"),
+        ("GET", "/api/v2/reading-sessions", "/api/native_roll.rs"),
+        ("POST", "/api/v2/roll/bootstrap", "/api/native_roll.rs"),
         ("POST", "/api/v2/roll/dice-command", "/api/native_roll.rs"),
         ("POST", "/api/v2/roll/offer", "/api/native_roll.rs"),
         ("POST", "/api/v2/roll/reset", "/api/native_roll.rs"),
         ("GET", "/api/v2/health", "/api/native_roll.rs"),
-        ("POST", "/api/v2/health", "/api/index.py"),
+        ("POST", "/api/v2/health", "/api/native_roll.rs"),
         ("GET", "/api/_native_issue/health", "/api/native_issue.rs"),
-        ("POST", "/api/_native_issue/health", "/api/index.py"),
+        ("POST", "/api/_native_issue/health", "/api/native_roll.rs"),
         ("PATCH", "/api/v2/issues/42", "/api/native_issue.rs"),
         ("PATCH", "/api/v2/issues/99", "/api/native_issue.rs"),
         ("POST", "/api/v2/issues/cards", "/api/native_issue.rs"),
-        ("GET", "/api/v2/issues/cards", "/api/index.py"),
-        ("PATCH", "/api/v2/issues/cards", "/api/index.py"),
-        ("GET", "/api/v2/issues/42", "/api/index.py"),
-        ("POST", "/api/v2/issues/42", "/api/index.py"),
-        ("PATCH", "/api/v2/issues/not-an-id", "/api/index.py"),
+        ("GET", "/api/v2/issues/cards", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/issues/cards", "/api/native_roll.rs"),
+        ("GET", "/api/v2/issues/42", "/api/native_roll.rs"),
+        ("POST", "/api/v2/issues/42", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/issues/not-an-id", "/api/native_roll.rs"),
         ("GET", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
         ("PATCH", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
         ("GET", "/api/v2/queue-entries/1018106", "/api/native_roll.rs"),
         ("PATCH", "/api/v2/queue-entries/1018106", "/api/native_roll.rs"),
-        ("POST", "/api/v2/queue-entries/240", "/api/index.py"),
-        ("GET", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
-        ("PATCH", "/api/v2/queue-entries/not-an-id", "/api/index.py"),
-        ("GET", "/api/v2/reading-boundaries", "/api/index.py"),
-        ("GET", "/health", "/api/index.py"),
+        ("POST", "/api/v2/queue-entries/240", "/api/native_roll.rs"),
+        ("GET", "/api/v2/queue-entries/not-an-id", "/api/native_roll.rs"),
+        ("PATCH", "/api/v2/queue-entries/not-an-id", "/api/native_roll.rs"),
+        ("GET", "/api/v2/reading-boundaries", "/api/native_roll.rs"),
+        ("POST", "/api/v2/reading-boundaries", "/api/native_roll.rs"),
+        ("GET", "/api/v2/reading-boundaries/17", "/api/index.py"),
+        ("GET", "/api/v1/creators/summaries", "/api/native_roll.rs"),
+        ("GET", "/api/v1/sessions/42", "/api/native_roll.rs"),
+        ("GET", "/api/sessions/42", "/api/native_roll.rs"),
+        ("GET", "/api/v1/sessions/correction-examples", "/api/index.py"),
+        ("GET", "/api/v1/sessions/current/", "/api/index.py"),
+        ("GET", "/api/v1/cron/release-sync", "/api/index.py"),
+        ("GET", "/api/v2/definitely-unknown", "/api/native_roll.rs"),
+        ("GET", "/health", None),
         ("GET", "/", "/index.html"),
     )
     for method, path, expected in probes:
@@ -508,7 +541,11 @@ def test_native_auth_route_is_isolated_from_python_and_static_routes() -> None:
             if method not in methods:
                 continue
             if re.fullmatch(str(route["src"]), path):
-                assert route.get("dest") == expected, (method, path)
+                if expected is None:
+                    assert route.get("status") == 404, (method, path)
+                    assert "dest" not in route, (method, path)
+                else:
+                    assert route.get("dest") == expected, (method, path)
                 break
         else:
             raise AssertionError(f"No route for {method} {path}")

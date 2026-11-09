@@ -56,7 +56,6 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     rateIsPending: false,
     snoozeIsPending: false,
     dismissIsPending: false,
-    manualDie: null,
     onUpdateRating: callbacks.onUpdateRating,
     onSubmitRating: callbacks.onSubmitRating,
     onSnooze: callbacks.onSnooze,

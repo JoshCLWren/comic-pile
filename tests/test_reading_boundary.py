@@ -452,10 +452,6 @@ async def test_api_returns_named_live_blocker_and_excludes_history(
         canonical_response = await auth_client.get(
             f"/api/v2/reading-boundaries/{miracle_id}"
         )
-        canonical_batch = await auth_client.post(
-            "/api/v2/reading-boundaries",
-            json={"thread_ids": [fourth.id, miracle_id]},
-        )
     finally:
         event.remove(Engine, "before_cursor_execute", capture_v2)
 
@@ -465,12 +461,6 @@ async def test_api_returns_named_live_blocker_and_excludes_history(
     assert canonical["state"] == body["state"]
     assert canonical["blockers"] == body["blockers"]
     assert canonical["next"] == body["next"]
-    assert canonical_batch.status_code == 200, canonical_batch.text
-    assert set(canonical_batch.json()["threads"]) == {str(fourth.id), str(miracle_id)}
-    assert all(
-        "historical" not in explanation
-        for explanation in canonical_batch.json()["threads"].values()
-    )
     # Only get_execution_eligibility's explicit reader-origin query is allowed.
     # The boundary label loader must never fetch converted or unclassified rows.
     assert all("DEPENDENCIES.ORIGIN =" in query.upper().split("WHERE", 1)[1]
@@ -892,9 +882,3 @@ async def test_api_counts_stacked_hold_and_strict_gates_as_one_requirement(
         blocker["reason"] == f"Also gated by Strict order in {QA_LIST_NAME}."
         for blocker in body["blockers"]
     )
-
-    canonical = await auth_client.post(
-        "/api/v2/reading-boundaries", json={"thread_ids": [geiger.id]}
-    )
-    assert canonical.status_code == 200, canonical.text
-    assert canonical.json()["threads"][str(geiger.id)]["summary"] == body["summary"]

@@ -191,7 +191,8 @@ pub async fn read(
             display_name: resolved,
         });
     }
-    if source_list_ids.len() != 1 {
+    let mut source_ids = source_list_ids.iter().copied();
+    let (Some(list_id), None) = (source_ids.next(), source_ids.next()) else {
         return Err(ApiError(
             StatusCode::CONFLICT,
             if source_list_ids.is_empty() {
@@ -201,8 +202,7 @@ pub async fn read(
             }
             .to_string(),
         ));
-    }
-    let list_id = *source_list_ids.iter().next().unwrap();
+    };
     drop(conn);
 
     // The list reader is the actual authoritative Option E read evaluator.

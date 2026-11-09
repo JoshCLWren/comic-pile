@@ -100,8 +100,6 @@ export interface RollV2BandwidthState {
 export interface RollV2BootstrapResponse {
   session_id: number
   user_id: number
-  current_die: number
-  manual_die: number | null
   pending_thread_id: number | null
   last_rolled_result: number | null
   session_mode: SessionMode

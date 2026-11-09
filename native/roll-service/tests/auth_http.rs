@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! End-to-end HTTP regressions through the real mounted native auth router.
 //!
 //! These requests enter the production Axum router (middleware included) rather

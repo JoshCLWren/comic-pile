@@ -35,7 +35,7 @@ RETIRED_RUST_ROUTES: frozenset[tuple[str, str]] = frozenset(
 )
 AXUM_ROUTE = re.compile(
     r'\.route\(\s*"(?P<path>/[^"]+)"\s*,\s*'
-    r'(?P<method>get|post|put|patch|delete)\s*\('
+    r'(?P<handlers>(?:(?:get|post|put|patch|delete)\s*\([^)]*\)\s*\.?)+)'
 )
 # Axum 0.8 spells captures ``{name}``; normalize these to stable tokens.
 # Vercel routes[].src is PCRE, not high-level rewrite syntax: a literal
@@ -51,10 +51,11 @@ def _axum_routes(source: str, *, start: str, end: str) -> set[tuple[str, str]]:
     """Read method/path registrations in the production router, not test code."""
     assert start in source, f"Missing Rust router marker: {start}"
     body = source.split(start, 1)[1].split(end, 1)[0]
-    routes = {
-        (match.group("method").upper(), _normalized_path(match.group("path")))
-        for match in AXUM_ROUTE.finditer(body)
-    }
+    routes = set()
+    for match in AXUM_ROUTE.finditer(body):
+        path = _normalized_path(match.group("path"))
+        methods = re.findall(r"(?:get|post|put|patch|delete)(?=\s*\()", match.group("handlers"))
+        routes.update((method.upper(), path) for method in methods)
     assert routes, f"No Rust HTTP routes found after {start}"
     return routes
 
@@ -153,9 +154,24 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
             assert (method, path) not in routes, (
                 f"{method} {path} is retired; remove its {function} ingress route"
             )
-        assert _destination(vercel, method, _concrete_path(path)) not in NATIVE_INGRESSES, (
-            f"{method} {path} is retired and must stay off the native ingress"
+        # Retired URLs now reach Rust's default JSON 404. The guard must
+        # prohibit an explicit native handler, not the intentional Rust fallback.
+        explicit_native = [
+            route
+            for route in vercel
+            if route.get("dest") in NATIVE_INGRESSES
+            and route.get("src") != "/api(?:/.*)?"
+            and (
+                not (methods := route.get("methods"))
+                or (isinstance(methods, list) and method in methods)
+            )
+            and isinstance(route.get("src"), str)
+            and re.fullmatch(str(route["src"]), _concrete_path(path))
+        ]
+        assert not explicit_native, (
+            f"{method} {path} is retired; remove explicit native rewrites"
         )
+        assert _destination(vercel, method, _concrete_path(path)) == "/api/native_roll.rs"
 
 
 def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
@@ -166,6 +182,12 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
         if not isinstance(function, str) or function not in ingresses:
             continue
         source = route.get("src")
+        if source == "/api(?:/.*)?":
+            # Default Rust ingress deliberately handles unregistered paths
+            # and methods, so it is not a one-to-one Axum route mapping.
+            assert function == "/api/native_roll.rs"
+            assert "methods" not in route
+            continue
         assert isinstance(source, str) and re.search(r"/:[A-Za-z_]", source) is None, (
             f"Vercel routes[].src must use regex, not :param: {source}"
         )

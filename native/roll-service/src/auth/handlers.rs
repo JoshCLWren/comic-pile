@@ -114,6 +114,7 @@ fn cookie(
     if secure {
         settings.push_str("; Secure");
     }
+    #[allow(clippy::expect_used)]
     HeaderValue::from_str(&settings).expect("generated cookie value is header-safe")
 }
 
@@ -123,6 +124,7 @@ fn cleared_refresh_cookie(secure: bool) -> HeaderValue {
     if secure {
         settings.push_str("; Secure");
     }
+    #[allow(clippy::expect_used)]
     HeaderValue::from_str(&settings).expect("static cookie value is header-safe")
 }
 

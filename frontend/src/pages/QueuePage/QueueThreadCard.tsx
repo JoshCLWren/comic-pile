@@ -13,6 +13,7 @@ import type { BlockingDependency, ThreadListItem } from '../../types'
 import QueueThreadActions from './QueueThreadActions'
 import QueueMappingHealthIndicator from './QueueMappingHealthIndicator'
 import QueueMapSeriesDialog from '../../components/QueueMapSeriesDialog'
+import QueueNextIssueCard from './QueueNextIssueCard'
 
 interface QueueThreadCardProps {
   thread: ThreadListItem
@@ -160,6 +161,7 @@ export default function QueueThreadCard({
   }
 
   const [repairOpen, setRepairOpen] = useState(false)
+  const [issueCardOpen, setIssueCardOpen] = useState(false)
 
   const handleRepairMapped = () => {
     setRepairOpen(false)
@@ -284,6 +286,17 @@ export default function QueueThreadCard({
                   : `${thread.issues_remaining} issue${thread.issues_remaining === 1 ? '' : 's'} remaining`}
               </span>
             )}
+            {isMigrated && thread.issues_remaining != null && thread.issues_remaining > 0 && (
+              <button
+                type="button"
+                aria-expanded={issueCardOpen}
+                aria-controls={`queue-issue-actions-${thread.id}`}
+                onClick={() => setIssueCardOpen((open) => !open)}
+                className="min-h-11 rounded-lg px-2 text-xs font-bold text-[var(--theme-primary-action)] hover:underline"
+              >
+                {issueCardOpen ? 'Hide issue actions' : 'Read / Rate / Map issue'}
+              </button>
+            )}
           </div>
           <ThreadTagChips
             tags={thread.tags}
@@ -339,7 +352,7 @@ export default function QueueThreadCard({
                   </>
                 }
               />
-              {isBlocked && <p className="mt-1 text-[var(--theme-text-dim)]">Read &amp; Rate unlocks once the active reading requirements are satisfied.</p>}
+              {isBlocked && <p className="mt-1 text-[var(--theme-text-dim)]">Automatic Roll waits for prerequisites, but you can still read an exact issue manually.</p>}
             </div>
           )}
         </div>
@@ -370,6 +383,15 @@ export default function QueueThreadCard({
         />
       </div>
     </div>
+    {issueCardOpen && (
+      <section
+        id={`queue-issue-actions-${thread.id}`}
+        aria-label={`Exact issue actions for ${thread.title}`}
+        className="mx-3 mb-3 rounded-xl border border-[var(--theme-border)] bg-[var(--theme-bg-panel)] p-3"
+      >
+        <QueueNextIssueCard threadId={thread.id} threadTitle={thread.title} />
+      </section>
+    )}
     <QueueMapSeriesDialog
       isOpen={repairOpen}
       threadId={thread.id}

@@ -172,8 +172,12 @@ def test_scheduled_batch_filters_pauses_before_offer_cap() -> None:
     assert scheduled.index("factory_quota_pause.py filter") < scheduled.index(".[:$cap]")
 
 
+@pytest.mark.parametrize("source,runtime", [("z-ai", "z-ai/glm-4.5-flash"),
+                                              ("kilo-auto", "kilo/kilo-auto/free")])
 @pytest.mark.parametrize("message", ["HTTP 429 Too Many Requests", "status code: 429"])
-def test_z_ai_429_is_quota_in_smoke_log_and_classifier(tmp_path: Path, message: str) -> None:
+def test_free_429_is_quota_in_smoke_log_and_classifier(
+    tmp_path: Path, message: str, source: str, runtime: str,
+) -> None:
     """Free Z.AI rate limits pause capacity rather than imply a missing model."""
     modules = {}
     for name, filename in (
@@ -187,21 +191,22 @@ def test_z_ai_429_is_quota_in_smoke_log_and_classifier(tmp_path: Path, message: 
         spec.loader.exec_module(module)
         modules[name] = module
     log = (
-        "Factory 97 locked: source=z-ai model=glm-4.5-flash runtime=z-ai/glm-4.5-flash "
+        f"Factory 97 locked: source={source} model=free runtime={runtime} "
         "minute=:50 scheduler=dispatcher configured=true\n" + message
     )
     assert modules["quota_classifier"].classify(log).outcome_class == "provider_quota"
     target = tmp_path / 'outcome'
-    assert modules["quota_smoke"].record_smoke_failure(message, 'z-ai/glm-4.5-flash', target)
+    assert modules["quota_smoke"].record_smoke_failure(message, runtime, target)
     assert target.read_text().startswith('provider_quota\t')
 
 
-def test_z_ai_session_429_records_quota(tmp_path: Path) -> None:
+@pytest.mark.parametrize("source", ["z-ai", "kilo-auto"])
+def test_free_session_429_records_quota(tmp_path: Path, source: str) -> None:
     """Execute the session classifier to prove a 429 produces durable quota evidence."""
     import subprocess
 
-    source = (SCRIPTS / 'free-model-factory-worker.sh').read_text()
-    functions = source[source.index('record_terminal_outcome() {'):source.index(
+    script = (SCRIPTS / 'free-model-factory-worker.sh').read_text()
+    functions = script[script.index('record_terminal_outcome() {'):script.index(
         '# A PR branch may predate the Kilo integration'
     )]
     worker = f'quota-test-{tmp_path.name}'
@@ -210,7 +215,7 @@ def test_z_ai_session_429_records_quota(tmp_path: Path) -> None:
     log.write_text('HTTP 429 Too Many Requests\n')
     try:
         result = subprocess.run(
-            ['bash', '-c', 'SOURCE=z-ai\nWORKER="$1"\nTERMINAL_OUTCOME_FILE="$2"\n'
+            ['bash', '-c', f'SOURCE={source}\nWORKER="$1"\nTERMINAL_OUTCOME_FILE="$2"\n'
              + functions + '\nrecord_agent_failure_outcome 1\n', '_', worker, str(outcome)],
             capture_output=True, text=True, check=False,
         )
@@ -218,3 +223,34 @@ def test_z_ai_session_429_records_quota(tmp_path: Path) -> None:
         assert outcome.read_text().startswith('provider_quota\t')
     finally:
         log.unlink(missing_ok=True)
+
+
+@pytest.mark.parametrize('observed,reset', [
+    ('2026-11-04T04:35:40Z', '2026-12-01T00:00:00Z'),
+    ('2026-12-31T23:59:59Z', '2027-01-01T00:00:00Z'),
+    ('2028-02-29T12:00:00Z', '2028-03-01T00:00:00Z'),
+])
+@pytest.mark.parametrize('provider', ['mistral', 'ollama-cloud'])
+def test_monthly_quota_uses_next_utc_month(provider: str, observed: str, reset: str) -> None:
+    """Calendar fallback handles December and leap years without a fixed day count."""
+    timestamp = int(datetime.fromisoformat(observed.replace('Z', '+00:00')).timestamp())
+    expected = int(datetime.fromisoformat(reset.replace('Z', '+00:00')).timestamp())
+    assert qp.quota_reset_epoch(provider, timestamp) == expected
+    assert qp.quota_reset_epoch('z-ai', timestamp) == timestamp + 1800
+
+
+@pytest.mark.parametrize('runtime,message', [
+    ('mistral/codestral-latest', 'Error: API budget exhausted.'),
+    ('ollama-cloud/nemotron-3-nano:30b', 'You have reached your monthly usage limit'),
+])
+def test_monthly_smoke_produces_durable_quota_outcome(
+    tmp_path: Path, runtime: str, message: str,
+) -> None:
+    """Post-reset quota errors must reach the trusted registry, not unknown_failure."""
+    spec = importlib.util.spec_from_file_location('monthly_smoke', SCRIPTS / 'factory_live_opencode.py')
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    target = tmp_path / 'outcome'
+    assert module.record_smoke_failure(message, runtime, target)
+    assert target.read_text().startswith('provider_quota\t')

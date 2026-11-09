@@ -19,8 +19,6 @@ const mockedBootstrap = bootstrapApi.get
 const bootstrapResponse: RollBootstrapResponse = {
   session_id: 1,
   user_id: 1,
-  current_die: 6,
-  manual_die: null,
   pending_thread_id: null,
   last_rolled_result: null,
   session_mode: {
@@ -272,7 +270,7 @@ describe('useRollBootstrap', () => {
     })
   })
 
-  it('refreshes scoped die-state after a reconciled bootstrap that changed the die (#4719)', async () => {
+  it('refreshes scoped die-state after a reconciled bootstrap (#4719)', async () => {
     mockedBootstrap.mockResolvedValue(bootstrapResponse)
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     renderBootstrap()
@@ -282,27 +280,27 @@ describe('useRollBootstrap', () => {
     act(() => {
       window.dispatchEvent(
         new CustomEvent(ROLL_BOOTSTRAP_RECONCILED_EVENT, {
-          detail: { ...bootstrapResponse, current_die: 8 },
+          detail: { ...bootstrapResponse, pending_thread_id: 8 },
         }),
       )
     })
 
-    // Rating moves the die; without this the scoped die the Roll page prefers
-    // stays at the pre-rating value for the 30s stale window.
+    // A rating moves the scoped die; without this the scoped die the Roll
+    // page prefers stays at the pre-rating value for the 30s stale window.
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.dieState(),
       exact: true,
     })
     expect(queryClient.getQueryData(queryKeys.roll.bootstrap())).toEqual({
       ...bootstrapResponse,
-      current_die: 8,
+      pending_thread_id: 8,
     })
   })
 
   it('keeps reconciled state when an older bootstrap request resolves later', async () => {
     const initialRequest = deferred<RollBootstrapResponse>()
     mockedBootstrap.mockReturnValueOnce(initialRequest.promise)
-    const reconciled = { ...bootstrapResponse, current_die: 8 }
+    const reconciled = { ...bootstrapResponse, pending_thread_id: 8 }
     const { result } = renderBootstrap()
 
     await waitFor(() => expect(mockedBootstrap).toHaveBeenCalledTimes(1))
@@ -331,7 +329,7 @@ describe('useRollBootstrap', () => {
   it('ignores an older bootstrap failure after successful reconciliation', async () => {
     const initialRequest = deferred<RollBootstrapResponse>()
     mockedBootstrap.mockReturnValueOnce(initialRequest.promise)
-    const reconciled = { ...bootstrapResponse, current_die: 8 }
+    const reconciled = { ...bootstrapResponse, pending_thread_id: 8 }
     const { result } = renderBootstrap()
 
     await waitFor(() => expect(mockedBootstrap).toHaveBeenCalledTimes(1))

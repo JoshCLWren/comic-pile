@@ -74,16 +74,33 @@ async def _thread_issue(
     return thread, issue
 
 
+def _isolate_synthetic_classifications(
+    monkeypatch: pytest.MonkeyPatch,
+    classifications: dict[int, str] | None = None,
+) -> None:
+    """Pin Step 14 lookups so synthetic IDs never inherit production maps."""
+    synthetic = dict(classifications or {})
+
+    def _classifications(
+        _index: object,
+    ) -> tuple[dict[int, str], dict[str, list[dict[str, object]]]]:
+        return (dict(synthetic), {})
+
+    for module in (
+        "app.services.source_backed_reader_order_migration",
+        "app.services.reader_order_migration_coordinator",
+    ):
+        monkeypatch.setattr(f"{module}._load_step14_index", lambda: {})
+        monkeypatch.setattr(f"{module}._explicit_classifications", _classifications)
+
+
 @pytest.mark.asyncio
 async def test_source_backed_migration_accepts_group_superset_and_replaces_live_order(
     async_db: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Ignore extra group members while replacing live legacy order authority."""
-    monkeypatch.setattr(
-        "app.services.source_backed_reader_order_migration._explicit_classifications",
-        lambda _index: ({}, {}),
-    )
+    _isolate_synthetic_classifications(monkeypatch)
     user = await get_or_create_user_async(async_db)
     rows = [
         await _thread_issue(
@@ -295,10 +312,7 @@ async def test_source_backed_mid_series_frontier_is_released_after_cbl_order_del
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Thread-entry compile replaces cbl-order and releases a mid-run frontier."""
-    monkeypatch.setattr(
-        "app.services.source_backed_reader_order_migration._explicit_classifications",
-        lambda _index: ({}, {}),
-    )
+    _isolate_synthetic_classifications(monkeypatch)
     user = await get_or_create_user_async(async_db)
     pred_thread, pred_issue = await _thread_issue(
         async_db,
@@ -518,13 +532,9 @@ async def test_source_backed_migration_refuses_needs_review_intersection(
     await refresh_user_blocked_status(user.id, async_db)
     await async_db.commit()
 
-    monkeypatch.setattr(
-        "app.services.source_backed_reader_order_migration._load_step14_index",
-        lambda: {},
-    )
-    monkeypatch.setattr(
-        "app.services.source_backed_reader_order_migration._explicit_classifications",
-        lambda _index: ({needs_review.id: "needs_review"}, {}),
+    _isolate_synthetic_classifications(
+        monkeypatch,
+        {needs_review.id: "needs_review"},
     )
 
     spec = SourceBackedReaderOrderSpec(
@@ -544,20 +554,15 @@ async def test_source_backed_migration_refuses_needs_review_intersection(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("source_dependency_id", [None, 101, 1929])
 async def test_source_already_migrated_requires_legacy_debt_cleared(
     async_db: AsyncSession,
-    source_dependency_id: int | None,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Canonical plan alone is not already-migrated while source-note debt remains."""
     # These are fresh fixture dependencies, not the production rows recorded in
-    # Step 14. Explicit IDs exercise collisions without inheriting that audit's
-    # classifications; the needs_review rejection has its own fixture above.
-    monkeypatch.setattr(
-        "app.services.source_backed_reader_order_migration._explicit_classifications",
-        lambda _index: ({}, {}),
-    )
+    # Step 14. IDs are sequence-minted so no fixture depends on the production
+    # classification map; the needs_review rejection has its own fixture above.
+    _isolate_synthetic_classifications(monkeypatch)
     from app.services.reader_order_migration_coordinator import (
         _source_already_migrated,
         _source_legacy_debt_cleared,
@@ -638,7 +643,6 @@ async def test_source_already_migrated_requires_legacy_debt_cleared(
         async_db.add(DependencyGroupMembership(group_id=group.id, issue_id=issue.id))
 
     source_dependency = Dependency(
-        id=source_dependency_id,
         source_issue_id=issues[0].id,
         target_issue_id=issues[1].id,
         note=f"cbl-order:source:{source_list.content_hash}:1->2",

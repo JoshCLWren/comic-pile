@@ -128,6 +128,27 @@ A substantive implementation PR changes product behavior, correctness, performan
 
 ## Lease semantics
 
+### Local factory delivery roles
+
+Local orchestration owns the authorized objective through implementation,
+targeted local verification, exact-head CI repair, actual independent review,
+gated merge, authorized deployment and real production acceptance. A PR or
+scheduled-review handoff alone is not ordinary completion. When an eligible
+local independent reviewer can run, start it rather than waiting for scheduled
+pickup; use [the executable ACP review path](LOCAL_FACTORY_REVIEW.md).
+
+Implementation and CI-repair workers are contributors and cannot independently
+approve their resulting head. Record actual reviewer identity, confirmed ACP
+session/model and exact head; never fabricate controller markers or approvals.
+Manually tag actual active local review with the canonical `factory:review` +
+`factory:local` lease, preserving other live ownership and unrelated labels via
+atomic replacement, then release when the session ends. Read only ACP checkpoints,
+model-selection metadata and final reports/verdicts, never full logs/transcripts.
+The coordinator checks all existing merge and production authorization gates;
+this workflow grants no additional authority. Remote PR/backlog intake thresholds
+do not apply to local sessions. Detailed Codex routing lives in
+`.agents/skills/crouton-factory-codex/SKILL.md`.
+
 Factory ownership is a connection-pool lock around the next action, not a permanent assignment to the model or worker that first touched the issue or PR.
 
 - Exactly one active owner label may hold an issue or PR at a time.
@@ -514,26 +535,24 @@ Define staleness relative to a rolling population of the **last 100 eligible suc
 
 The threshold uses a robust distribution-derived rule: **`2 × P90`** as the default candidate, compared with a median/MAD formulation. The final formula uses the more conservative (larger) of the two, subject to a documented lower floor of **1 hour** and a cold-start fallback of **24 hours** when fewer than 10 merged PRs exist.
 
-### Expiration behavior
+### Non-destructive recovery behavior
 
 When an autonomous Factory implementation PR crosses the stale threshold:
-1. Release/reset the linked issue to unowned executable implementation from current `main`
-2. Close/cancel that PR implementation attempt
-3. Persist a trusted controller marker/comment (`comic-pile-factory-stale-expiration-v1`) recording the observed age, baseline sample, formula, and threshold
-4. Ensure the stale branch/PR cannot immediately re-enter repair/review loops
-5. Preserve enough provenance to audit why the attempt was expired
+1. Report `stale-preserved` with the PR number, linked issue, age and measured threshold.
+2. **Keep the PR and branch open**, including their commits, existing worker lease, review findings, CI history and linked issue stage.
+3. Route recovery through the existing PR review, CI repair, conflict repair and implementation queue. The owner or next worker should fix the actual blocker on the same PR rather than throw away partial work.
+4. Close an unfinished PR only via a separate, explicit and evidenced decision that its work is completely merged, superseded, duplicate or irrecoverable. Record exactly what happened to its unique commits and how the owner objective will finish. Age, repeated provider failures, a stalled review, or a partial migration slice are not adequate reasons by themselves.
 
-The mutation order is deliberate. Resetting the issue while its canonical PR is still
-open is safe because the open PR suppresses duplicate issue intake. Writing the
-marker last keeps a partial GitHub failure retryable instead of recording a false
-completed expiration.
+The existing dispatcher consults **Jev** for aged, non-deferred PRs using `OPENROUTER_JEV_API_KEY` in bounded batches. Jev selects `preserve` or `closure_review` using trusted current-head metadata and the issue/PR context. A high-confidence `closure_review` recommendation is **advice to investigate**, never approval to close. A worker must independently establish that all unique behavior and tests are merged, superseded, redundant, or irrecoverably invalid and preserve a durable handoff before an explicit close. If Jev is missing, returns invalid output, or is uncertain, the PR remains open.
 
-Staleness is an **attempt-level circuit breaker**, just like semantic strike exhaustion. It must not close the underlying product issue unless a separate terminal condition applies.
+Scheduled `factory-work-controller.py stale` is **diagnostic only**. It must never reset the linked issue or close its canonical PR based solely on age or a Jev score. Its `expired_count` remains zero for compatibility, and `stale_preserved_count` tracks recoverable aged PRs. Dry-run and ordinary evaluation both preserve work.
+
+The older age-driven stale-expiration markers remain interpretable for historical audit and reopened PRs, but the scheduled decay check no longer produces them. Semantic review strikes are a separate policy and do not authorize treating age as a semantic defect.
 
 ### Relationship to semantic strikes
 
 - **Semantic strikes:** repeated evidence that an implementation is substantively wrong
-- **Stale decay:** evidence that an implementation has failed to converge in normal Factory time, regardless of cause
+- **Stale diagnostics:** a recovery signal that an implementation has not yet converged in normal Factory time, regardless of cause; not permission to close the PR
 - Neither mechanism increments or masquerades as the other
 
 ### Scope/eligibility
@@ -545,14 +564,15 @@ Only autonomous Factory implementation PRs should participate. Exclude Dependabo
 The `stale_pr_decay.py` module in `.github/scripts/` provides:
 - `get_staleness_baseline()` — builds the rolling population baseline
 - `is_stale_attempt()` — checks if a PR age exceeds the threshold
-- `process_stale_prs()` — evaluates and expires stale PRs
+- `process_stale_prs()` — evaluates aged PRs and reports them without closing or resetting them
 - `StalePRGuard` — configurable guard class
 - `build_stale_expiration_marker()` / `parse_stale_marker()` — durable marker support
 - `get_staleness_observability()` — logging summary
 
 The controller exposes a `stale` subcommand: `factory-work-controller.py stale [--dry-run]`.
 The fixed-model dispatcher invokes `stale` once per serialized dispatch tick,
-after the ready-PR merge drain and before new assignments are selected.
+after the ready-PR merge drain and before new assignments are selected. This is
+an observability step, never a destructive cleanup operation.
 
 ## Semantic review strike policy
 
@@ -648,3 +668,77 @@ subject. The trusted wrapper aggregates distinct model IDs across invocations,
 keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
 from served-model evidence. Missing metadata is explicitly unreported; assistant
 and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+
+### Second Kilo free lane
+
+Worker 98 runs `kilo-auto/free` at :10, thirty minutes from worker 46 at :40.
+It uses the same anonymous Kilo CLI free route and existing `PR_REBASE_TOKEN`;
+there is no second account or credential. A smoke or session HTTP 429 records
+`provider_quota` and pauses assignment for both Kilo workers for thirty minutes,
+then automatically permits a new probe. A quota-limited smoke ends immediately
+instead of continuing into an expensive coding session. Worker 46's historical
+static-pause protection does not exempt it from this shared runtime quota backoff.
+
+### Monthly provider quotas pause; they do not retire a lane
+
+Mistral and Ollama Cloud monthly-quota failures record `provider_quota` during
+smoke and sessions. Assignment pauses that source until the next UTC calendar
+month as a configured fallback when no account reset date is supplied; expiry
+permits another smoke automatically. Another quota failure renews the pause.
+This fallback is not evidence of a provider's actual account billing date.
+Monthly quota alone cannot justify roster retirement. Retirement requires
+separate non-quota evidence, such as model removal, revoked authentication or
+repeated invalid output, recorded in its PR. Catalog discovery already protects
+these runtime-only providers from catalog-absence retirement.
+
+The earlier retired identities 48 and 55 remain retired. Post-reset runs
+[41774076436](https://github.com/JoshCLWren/comic-pile/actions/runs/41774076436)
+and [41774209074](https://github.com/JoshCLWren/comic-pile/actions/runs/41774209074)
+on November 4, before #4622 merged, still reported Mistral API budget exhaustion
+and Ollama monthly usage exhaustion respectively. Their terminal registry
+records said `unknown_failure`; smoke classification now preserves that quota
+cause. Josh confirmed on November 7 that quotas remain exhausted. No new live
+probe was run and no recovery is claimed. Only a later successful existing-key
+probe can justify restoring a provider under a fresh, unused worker number.
+
+### Kilo served-model attribution
+
+For Kilo sessions, structured `step_finish.part.model.modelID` values feed the
+Actions run summary and the `factory: advance ... with ... (served: ...)` commit
+subject. The trusted wrapper aggregates distinct model IDs across invocations,
+keeps the requested `kilo-auto/free` route as provenance, and omits route aliases
+from served-model evidence. Missing metadata is explicitly unreported; assistant
+and tool prose cannot supply model attribution. The zero-cost guard remains in force.
+Delivery funnel reports use separate opened/merged/unmerged-close event windows
+of 14 and 30 days. Starter PR outcomes and advance-commit contribution shares
+are distinct. Each merged PR contributes one credit unit divided among its
+advance commits, including squash-body subjects without duplicate credit.
+Retired and unattributed history remain visible. Immutable merged attribution
+is cached on the existing status branch; unavailable history is not reported as zero.
+
+### Measured starter/finisher preference
+
+Within otherwise eligible work, lanes pinned to `z-ai` / `glm-4.5-flash`
+prefer fresh issues and lanes pinned to `kilo-auto` / `kilo-auto/free` prefer
+PR changes-requested and CI-repair work. The role comes from source/model in
+the current roster, including future duplicate slots, not worker numbers.
+Main-breakage and user-reported bugs retain protected priority. Every lane
+falls back to normal ranking when no preferred work is eligible. Manual
+issue/repair dispatch tries the corresponding eligible specialist first, then
+continues through normal workers if assignment declines (busy, paused or leased).
+Review independence, claims, quotas, and remote capacity gates remain unchanged.
+
+
+## Production deployment recovery
+
+`Production Deploy Recovery` maintains one GitHub repair issue for an unresolved
+attempted deployment failure, on completion and a 15-minute heartbeat. `deploy-fix`
+repairs use the protected priority lane alongside main-breakage. Existing remote
+factory WIP/review-backlog thresholds and all lease, CI, independent review and
+production gates still apply; this changes neither schedules nor capacity limits.
+
+A new `deploy-fix` merged onto main after the last failed attempted release permits
+one automatic recovery deployment with schema verification and both production
+smokes. A failed recovery consumes that repair; it cannot blindly retry unchanged
+code. The repository owner retains the explicit reasoned manual freeze override.
+A fully verified release closes managed repair issues when no live worker owns them.

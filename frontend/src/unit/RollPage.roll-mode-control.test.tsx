@@ -28,8 +28,6 @@ function makeBootstrap(overrides: Partial<RollBootstrapResponse> = {}): RollBoot
   return {
     session_id: 1,
     user_id: 1,
-    current_die: 6,
-    manual_die: null,
     pending_thread_id: null,
     last_rolled_result: null,
     active_thread: null,
@@ -82,7 +80,7 @@ function renderHeader(bootstrap: RollBootstrapResponse, currentDie = 6) {
 
 describe('roll-mode control group (issue #2304): visual state grammar', () => {
   it('marks exactly one roll-mode control with the solid active treatment on the mobile row', () => {
-    renderHeader(makeBootstrap({ current_die: 4, session_mode: balancedSessionMode() }), 4)
+    renderHeader(makeBootstrap({ session_mode: balancedSessionMode() }), 4)
 
     const dieControl = screen.getByRole('button', { name: /^current die d4$/i })
     expect(dieControl.className).toContain(ACTIVE_FILL)
@@ -129,7 +127,7 @@ describe('roll-mode control group (issue #2304): visual state grammar', () => {
 
 describe('roll-mode control group (issue #2304): accessible active-mode state', () => {
   it('presses only the current die segment and renders no Auto segment (#4353)', () => {
-    renderHeader(makeBootstrap({ current_die: 4 }), 4)
+    renderHeader(makeBootstrap({}), 4)
 
     expect(screen.queryByRole('button', { name: 'Auto' })).toBeNull()
     const activeDie = screen.getByRole('button', { name: 'd4' })
@@ -140,7 +138,7 @@ describe('roll-mode control group (issue #2304): accessible active-mode state', 
     render(
       <MemoryRouter>
         <RollHeader
-          bootstrap={makeBootstrap({ current_die: 8, manual_die: 8 })}
+          bootstrap={makeBootstrap({})}
           {...headerBaseProps}
           currentDie={8}
         />
@@ -158,7 +156,7 @@ describe('roll-mode control group (issue #2304): accessible active-mode state', 
   })
 
   it('names the mobile die control for the current die without a mode suffix', () => {
-    renderHeader(makeBootstrap({ current_die: 4 }), 4)
+    renderHeader(makeBootstrap({}), 4)
     expect(screen.getByRole('button', { name: 'Current die d4' })).toBeInTheDocument()
   })
 })

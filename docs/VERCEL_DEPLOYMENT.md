@@ -7,7 +7,7 @@ ComicPile uses Vercel for production only. The production branch is `main`.
 - A push or merge to `main` may create one production deployment for that exact commit SHA.
 - Pull requests and non-production branches must not create Vercel deployments.
 - Pull requests are validated locally and through GitHub Actions.
-- The React/Vite frontend is built as static output, while `/api/*` and the API documentation routes are served by FastAPI.
+- The React/Vite frontend is built as static output. Native `/api/v2` resources run in Rust, remaining transitional `/api/*` routes run in FastAPI, and bare production health/docs paths return 404 without invoking Python.
 - Neon is the production PostgreSQL provider.
 
 `vercel.json` disables Vercel Git deployments. The migration-aware
@@ -72,23 +72,6 @@ it does not dispatch, because the manual run checks out `main` when it starts an
 anyway. If that lookup fails, it dispatches as before. Two gaps remain: the race between the check
 and the dispatch, and the other automatic triggers. If a manual run shows as cancelled with no newer
 deploy of its SHA, dispatch it again once the queue is clear.
-
-## Red-deploy freeze
-
-Deploy Production starts with a freeze gate. If the last *attempted* Deploy
-Production run on `main` is red, later deploys skip migrations instead of
-failing. Gate-blocked, cancelled, skipped, and neutral runs are ignored, so
-the gate cannot latch on itself and a cancelled run cannot lift the freeze.
-
-Factory merge drains honor the same freeze so more changes cannot land on a
-broken production deploy, except PRs labeled `deploy-fix`. A runs-API error
-fails open with a warning rather than freezing.
-
-The repository owner unfreezes a red deploy by dispatching Deploy Production
-with `override_freeze=true` and a required `reason` after the fix is on
-`main`. `github.actor` must be the repository owner. The reason is logged in
-the run summary. Factory workers must not use that override; they can label a
-fix PR `deploy-fix` instead. See [Deployment](DEPLOYMENT.md#red-deploy-freeze).
 
 ## Deployment retention and rollback candidate
 
@@ -261,3 +244,29 @@ After this change is merged:
 Do not add Preview credentials, Preview databases, Preview Redis instances, or Preview-specific runtime branches. Disposable service instances used by local development or GitHub Actions are separate from Vercel Preview and remain supported.
 
 During an unsettled production rollout, pruning temporarily retains READY production deployments as well as the incoming build. Vercel can report the BUILDING deployment as `targets.production` before it serves the public alias. Pruning refreshes the protected set before every deletion. Once the production target is READY and no production build remains in progress, the normal keep-N=2 policy resumes.
+
+
+### Automatic deployment repair
+
+`Production Deploy Recovery` runs after Deploy Production and every 15 minutes.
+A real attempted release failure opens or refreshes one GitHub repair issue,
+including the failed run and step. Updates preserve active factory leases.
+The issue enters the ordinary factory queue as a critical `deploy-fix`; fixes
+retain normal exact-head CI and independent review requirements.
+
+A failed release is reported as a reviewed `deploy-fix` repair issue. Repairs
+use the ordinary exact-head CI, independent review, and production deployment
+gates; there is no red-deploy freeze or override path.
+Preflight publishes a run-attempt-specific `deployment-attempt-N` artifact with the
+selected checkout SHA before dependency setup. Recovery incidents use that evidence;
+historical or expired metadata is explicitly unavailable, never guessed from the
+workflow trigger SHA. Missing exact-attempt evidence cannot reconcile a failed CLI
+deploy against the live alias.
+Only a successful actual deployment with both production probes passing closes
+the managed repair issue; live worker leases are left for that worker to finish.
+
+The health probe reports the executable name read from the OS, OS/architecture,
+and the package, compiler version and source revision captured during the build.
+Deploy Production supplies the exact SHA to the build and checks that revision
+in the live response. The compatibility `rust` label alone is not deployment
+proof. These fields provide operational evidence, not cryptographic attestation.

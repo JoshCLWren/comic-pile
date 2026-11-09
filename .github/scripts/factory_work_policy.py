@@ -196,14 +196,6 @@ TITLE_ISSUE_RE = re.compile(
     r'(?i)\b(?:fix|fixes|fixed|fixing|resolve|resolves|resolved|resolving|'
     r'close|closes|closed|closing)\s+#(\d+)'
 )
-# Mirrors factory_post_merge_closure.CLOSING_RE so the intake side recognizes
-# the same explicit closing references GitHub itself honors on merge.
-CLOSING_ISSUE_RE = re.compile(
-    r'\b(?:closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve)\s+#(?P<issue>\d+)',
-    re.IGNORECASE,
-)
-
-
 def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
     """Return the issue a PR explicitly claims to close, if any.
 
@@ -212,8 +204,7 @@ def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
     ``#N`` mentions used by stacked/child PRs for cross-reference never claim
     closure, so they must not suppress fresh intake.
     """
-    match = CLOSING_ISSUE_RE.search(str(pr.get('body') or ''))
-    return int(match.group('issue')) if match else None
+    return eligibility.explicit_closing_issue(str(pr.get('body') or ''))
 
 
 def linked_issue_from_pr(pr: dict[str, Any]) -> int | None:
@@ -329,7 +320,7 @@ def normalize_target_state(labels: set[str], current_owner: str | None) -> tuple
 
 def provenance_lane(labels: set[str]) -> int:
     """Return the deterministic assignment lane for a label set."""
-    if 'main-breakage' in labels:
+    if 'main-breakage' in labels or 'deploy-fix' in labels:
         return 0
     if 'user-reported' in labels and 'bug' in labels:
         return 1
@@ -826,7 +817,7 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
     if candidate.kind == 'pr' and candidate.is_fork:
         try:
             from factory_roster import load_roster_rows
-            source = next((row['source'] for row in load_roster_rows() if row['worker'] == worker), '')
+            source = next((row.get('source', '') for row in load_roster_rows() if row.get('worker') == worker), '')
         except (OSError, ValueError):
             return False
         if candidate.stage == 'factory:review':
@@ -841,6 +832,23 @@ def candidate_is_independent_for_worker(candidate: Candidate, worker: str) -> bo
     return worker not in candidate.head_contributors
 
 
+def worker_delivery_role(worker: str) -> str:
+    """Read starter/finisher preference from the live free roster, never worker IDs."""
+    from factory_roster import load_roster_rows
+
+    try:
+        row = next((row for row in load_roster_rows() if row['worker'] == worker), None)
+    except (OSError, ValueError):
+        return ''
+    if row is None:
+        return ''
+    if row.get('source') == 'z-ai' and row.get('model') == 'glm-4.5-flash':
+        return 'starter'
+    if row.get('source') == 'kilo-auto' and row.get('model') == 'kilo-auto/free':
+        return 'finisher'
+    return ''
+
+
 def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> list[Candidate]:
     """Balance completion pressure with a deterministic fresh-issue intake lane."""
     eligible = [
@@ -850,6 +858,26 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
     ]
     review_backlog = sum(1 for c in candidates if c.kind == "pr" and c.stage in ("factory:review", "factory:ci", "factory:changes-requested"))
     review_first = review_capacity_worker(worker, review_backlog=review_backlog)
+    role = worker_delivery_role(worker)
+
+    def role_preference(candidate: Candidate) -> int:
+        # Protected main-breakage and user-reported lanes outrank role preferences.
+        if candidate.lane <= 1:
+            return candidate.lane
+        if (
+            review_first
+            and candidate.kind == 'pr'
+            and candidate.stage == 'factory:review'
+            and not candidate.conflicted
+        ):
+            return 1
+        if role == 'starter' and candidate.kind == 'issue':
+            return 2
+        if role == 'finisher' and candidate.kind == 'pr' and candidate.stage in {
+            'factory:changes-requested', 'factory:ci',
+        }:
+            return 2
+        return 3
 
     def work_class(candidate: Candidate) -> int:
         if candidate.lane == 0:
@@ -873,7 +901,7 @@ def order_candidates_for_worker(candidates: list[Candidate], worker: str) -> lis
 
     return sorted(
         eligible,
-        key=lambda candidate: (work_class(candidate), candidate.sort_key()),
+        key=lambda candidate: (role_preference(candidate), work_class(candidate), candidate.sort_key()),
     )
 
 

@@ -9,6 +9,820 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
+      "get": {
+        "tags": [
+          "comicvine-resolution"
+        ],
+        "summary": "OpenAPI documentation for the migrated same-path operation.",
+        "operationId": "series_import_status_documentation",
+        "parameters": [
+          {
+            "name": "comicvine_volume_id",
+            "in": "path",
+            "description": "ComicVine volume ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned import status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-rules/": {
+      "get": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_list",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ContinuityRuleResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/continuity-rules/{rule_id}": {
+      "get": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_get",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_update",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContinuityRuleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinuityRuleResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "continuity"
+        ],
+        "operationId": "continuity_rules_delete",
+        "parameters": [
+          {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/": {
+      "post": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "create_legacy_dependency",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid dependency"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Reading constraint cycle: nothing was changed"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/blocked": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "list_blocked_legacy_dependencies",
+        "responses": {
+          "200": {
+            "description": "Blocked thread ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/{dependency_id}": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "get_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "delete_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "update_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          },
+          "422": {
+            "description": "Note must be at most 255 characters or validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "list_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/search/issues": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "search_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "get_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/confirm": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "confirm_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/defer": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "defer_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/reject": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "reject_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/skip": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "skip_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/releases/": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Documentation-only operation for the mounted releases list handler.",
+        "operationId": "releases_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum releases to return (1-100, default 20)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Number of matching releases to skip (default 0)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid pagination"
+          }
+        }
+      }
+    },
+    "/api/v1/releases/{release_id}": {
+      "get": {
+        "tags": [
+          "releases"
+        ],
+        "summary": "Documentation-only operation for the mounted releases get handler.",
+        "operationId": "releases_get",
+        "parameters": [
+          {
+            "name": "release_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicReleaseResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Release not found"
+          }
+        }
+      }
+    },
+    "/api/v1/threads/{thread_id}/issue-dependencies": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for the mounted thread issue-dependencies batch read.",
+        "description": "Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
+        "operationId": "get_thread_issue_dependencies_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread issue dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueDependenciesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/analytics/metrics": {
       "get": {
         "tags": [
@@ -1365,7 +2179,7 @@
           "roll"
         ],
         "summary": "Documentation-only operation for the mounted v2 Roll bootstrap read.",
-        "description": "The published response is the actual handler DTO, so known session, die,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
+        "description": "The published response is the actual handler DTO, so known session,\npending, session-mode, bandwidth, rollable, recovery, read, snooze, skip and\ntimezone fields stay in the live contract. Stored tag records, recovery\nnodes and mode-guidance JSON remain explicitly extensible.",
         "operationId": "bootstrap_documentation",
         "parameters": [
           {
@@ -1840,6 +2654,30 @@
   },
   "components": {
     "schemas": {
+      "ActionRequest": {
+        "type": "object",
+        "properties": {
+          "external_identity_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search_query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "AnalyticsMetricsResponse": {
         "type": "object",
         "description": "Reading metrics and analytics for the authenticated user.",
@@ -1897,6 +2735,22 @@
             "format": "int32"
           }
         }
+      },
+      "BlockerKind": {
+        "type": "string",
+        "enum": [
+          "strict_order",
+          "hold",
+          "after_previous",
+          "prerequisite"
+        ]
+      },
+      "BlockerOrigin": {
+        "type": "string",
+        "enum": [
+          "reading_list",
+          "reader_prerequisite"
+        ]
       },
       "BootstrapActiveThread": {
         "type": "object",
@@ -2180,7 +3034,6 @@
         "required": [
           "session_id",
           "user_id",
-          "current_die",
           "session_mode",
           "bandwidth",
           "rollable",
@@ -2204,10 +3057,6 @@
           "bandwidth": {
             "$ref": "#/components/schemas/BootstrapBandwidth"
           },
-          "current_die": {
-            "type": "integer",
-            "format": "int32"
-          },
           "last_read": {
             "oneOf": [
               {
@@ -2224,13 +3073,6 @@
               "null"
             ],
             "format": "int64"
-          },
-          "manual_die": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int32"
           },
           "pending_thread_id": {
             "type": [
@@ -2557,7 +3399,7 @@
             "format": "int32"
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/EditorKind"
           },
           "label": {
             "type": "string"
@@ -2627,6 +3469,13 @@
           }
         }
       },
+      "BoundaryListMode": {
+        "type": "string",
+        "enum": [
+          "strict",
+          "loose"
+        ]
+      },
       "BoundaryReadingList": {
         "type": "object",
         "required": [
@@ -2640,12 +3489,21 @@
             "format": "int32"
           },
           "mode": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryListMode"
           },
           "name": {
             "type": "string"
           }
         }
+      },
+      "BoundaryState": {
+        "type": "string",
+        "enum": [
+          "blocked",
+          "available",
+          "complete",
+          "unavailable"
+        ]
       },
       "ComicPileMatch": {
         "type": "object",
@@ -2713,6 +3571,154 @@
             "format": "int32"
           }
         }
+      },
+      "ContinuityRuleRequest": {
+        "type": "object",
+        "required": [
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type"
+        ],
+        "properties": {
+          "checkpoint_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "convergence_targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            }
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ContinuityRuleResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "source_type",
+          "source_id",
+          "target_type",
+          "target_id",
+          "satisfaction_type",
+          "convergence_targets",
+          "selected_member_issue_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "checkpoint_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "convergence_targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConvergenceTarget"
+            }
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "satisfaction_type": {
+            "type": "string"
+          },
+          "selected_member_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "source_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_type": {
+            "type": "string"
+          },
+          "target_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ConvergenceTarget": {
+        "type": "object",
+        "required": [
+          "type",
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
       },
       "CreateIssuesRequest": {
         "type": "object",
@@ -2803,6 +3809,17 @@
           }
         },
         "additionalProperties": false
+      },
+      "DependencyNoteUpdate": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       },
       "DependencyResponse": {
         "type": "object",
@@ -2917,6 +3934,14 @@
           }
         }
       },
+      "EditorKind": {
+        "type": "string",
+        "enum": [
+          "reading_list",
+          "prerequisite",
+          "issue"
+        ]
+      },
       "ForgotPasswordRequest": {
         "type": "object",
         "description": "Request body for an enumeration-safe password-recovery email.",
@@ -2926,6 +3951,290 @@
         "properties": {
           "email": {
             "type": "string"
+          }
+        }
+      },
+      "IdentityInboxActionResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "updated_item": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IdentityInboxItem"
+              }
+            ]
+          }
+        }
+      },
+      "IdentityInboxCandidate": {
+        "type": "object",
+        "required": [
+          "external_identity_id",
+          "provider",
+          "metadata_json",
+          "status",
+          "evidence_json"
+        ],
+        "properties": {
+          "comicvine_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "evidence_json": {},
+          "evidence_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata_json": {},
+          "provider": {
+            "type": "string"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "IdentityInboxItem": {
+        "type": "object",
+        "required": [
+          "mapping_id",
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "source_entry_summary",
+          "why_stopped",
+          "candidates"
+        ],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxCandidate"
+            }
+          },
+          "created_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "mapping_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_entry_summary": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "why_stopped": {
+            "type": "string"
+          }
+        }
+      },
+      "IdentityInboxResponse": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxItem"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "IdentityInboxSearchResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "query",
+          "results"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxSearchResult"
+            }
+          },
+          "total_available": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "IdentityInboxSearchResult": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id",
+          "evidence"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "volume_name": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },
@@ -3044,6 +4353,64 @@
               "$ref": "#/components/schemas/IssueCard"
             },
             "description": "Owned cards in first-request order; foreign or missing IDs are omitted."
+          }
+        }
+      },
+      "IssueDependenciesResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `IssueDependenciesResponse`.",
+        "required": [
+          "issue_id",
+          "incoming",
+          "outgoing"
+        ],
+        "properties": {
+          "incoming": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDependencyEdge"
+            }
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "outgoing": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDependencyEdge"
+            }
+          }
+        }
+      },
+      "IssueDependencyEdge": {
+        "type": "object",
+        "description": "Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`).",
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "source_issue_number",
+          "source_thread_id",
+          "source_thread_title"
+        ],
+        "properties": {
+          "dependency_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_issue_number": {
+            "type": "string"
+          },
+          "source_thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source_thread_title": {
+            "type": "string"
           }
         }
       },
@@ -3844,6 +5211,57 @@
           "all_out_of_pool"
         ]
       },
+      "PublicReleaseResponse": {
+        "type": "object",
+        "description": "One release ledger record returned by public-facing endpoints.",
+        "required": [
+          "id",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "released_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sort_order": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "QueueEntryPatch": {
         "type": "object",
         "description": "Resource patch for one queue entry.",
@@ -4002,10 +5420,10 @@
             ]
           },
           "kind": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerKind"
           },
           "origin": {
-            "type": "string"
+            "$ref": "#/components/schemas/BlockerOrigin"
           },
           "reason": {
             "type": "string"
@@ -4044,7 +5462,7 @@
             ]
           },
           "state": {
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryState"
           },
           "summary": {
             "type": "string"
@@ -4993,6 +6411,36 @@
           }
         }
       },
+      "ReleaseListResponse": {
+        "type": "object",
+        "description": "Paginated published releases for What's New.",
+        "required": [
+          "releases",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicReleaseResponse"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "ResetDiceRequest": {
         "type": "object",
         "required": [
@@ -5312,6 +6760,43 @@
           }
         }
       },
+      "SeriesImportStatusResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
+        "required": [
+          "comicvine_volume_id",
+          "imported"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "imported": {
+            "type": "boolean"
+          },
+          "issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "StoryArc": {
         "type": "object",
         "description": "A provider story arc with bounded related issues and a correct total.",
@@ -5345,6 +6830,26 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "ThreadIssueDependenciesResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
+        "required": [
+          "thread_id",
+          "issues"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDependenciesResponse"
+            }
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }

@@ -40,23 +40,25 @@ def _schema_candidates() -> list[Path]:
 
 
 # Families intentionally exposed ONLY under bare ``/api`` because they are
-# non-client tooling or administrative surfaces, never versioned client
-# resources. Every other bare ``/api`` path must be a compatibility alias for a
-# family that also has a canonical ``/api/v1`` route.
-LEGACY_ONLY_TOOLING = frozenset({"admin", "debug", "metrics", "ping"})
+# non-client tooling or infrastructure surfaces, never versioned client
+# resources. Admin and debug tooling was pruned (#4861); every other bare
+# ``/api`` path must be a compatibility alias for a family that also has a
+# canonical ``/api/v1`` route. Metrics is the retained eager surface.
+LEGACY_ONLY_TOOLING = frozenset({"metrics", "ping"})
 
 # Retained first-party client families that must expose a canonical
 # ``/api/v1`` route. These are the durable product APIs, not tooling.
+# Analytics is no longer a Python ``/api/v1`` family: the Python handlers
+# were pruned (#4861) and the frontend uses the native Rust
+# ``GET /api/v2/analytics/metrics`` resource (#4348) instead.
 REQUIRED_V1_FAMILIES = frozenset(
     {
-        "analytics",
         "auth",
         "bug-reports",
         "continuity-plans",
         "continuity-rules",
         "dependencies",
         "issues",
-        "queue",
         "reading-order-groups",
         "releases",
         "roll",
@@ -154,6 +156,19 @@ def test_retained_families_expose_canonical_v1_routes() -> None:
 
     missing = REQUIRED_V1_FAMILIES - v1_families
     assert not missing, f"Retained families missing canonical /api/v1 routes: {sorted(missing)}"
+
+
+def test_retired_queue_routes_are_replaced_by_native_v2_resources() -> None:
+    """Retired v1/bare queue actions are absent and Rust owns queue ordering (#4458)."""
+    schema = _load_schema()
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in schema["paths"]
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in schema["paths"]
+        assert f"{prefix}/shuffle/" not in schema["paths"]
+    assert "PositionRequest" not in schema["components"]["schemas"]
+    # The native v2 resources remain the replacement surface.
+    assert "/api/v2/queue-entries/{thread_id}" in schema["paths"]
+    assert "/api/v2/queue-orders" in schema["paths"]
 
 
 def test_retired_rate_route_is_replaced_by_native_v2_issue_patch() -> None:

@@ -18,14 +18,8 @@ on:
     - cron: '*/5 * * * *'
   workflow_dispatch:
     inputs:
-      override_freeze:
-        description: >
-          Bypass the red-deploy freeze after a fix is on main. Repository
-          owner only (github.actor must match github.repository_owner).
-        type: boolean
-        default: false
       reason:
-        description: Required when override_freeze is true. Logged in the run summary and shown in the run name.
+        description: Optional reason for this manual deployment. Logged in the run summary and shown in the run name.
         type: string
         required: false
       source:
@@ -50,6 +44,7 @@ concurrency:
 permissions:
   actions: read
   contents: read
+  pull-requests: read
 
 env:
   VERCEL_ORG_ID: team_1na05XWOpOb6wB1CA4m3GPRT
@@ -57,106 +52,12 @@ env:
   VERCEL_TEAM_SLUG: joshclwrens-projects
 
 jobs:
-  freeze:
-    name: Red-deploy freeze gate
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      proceed: ${{ steps.check.outputs.proceed }}
-      frozen: ${{ steps.check.outputs.frozen }}
-    steps:
-      - name: Check out current main
-        uses: actions/checkout@v7
-        with:
-          ref: main
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Skip deploy when the last attempted run is red
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          OVERRIDE_FREEZE: ${{ github.event.inputs.override_freeze || 'false' }}
-          OVERRIDE_REASON: ${{ github.event.inputs.reason || '' }}
-          ACTOR: ${{ github.actor }}
-          OWNER: ${{ github.repository_owner }}
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: |
-          set -euo pipefail
-          runs_file="$RUNNER_TEMP/deploy-production-runs.json"
-          if ! gh api \
-            "repos/${GITHUB_REPOSITORY}/actions/workflows/deploy-production.yml/runs?branch=main&status=completed&per_page=100" \
-            > "$runs_file"; then
-            echo "::warning::Unable to read completed Deploy Production runs; failing open."
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-            echo "frozen=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Deploy freeze"
-              echo
-              echo "Runs API error; failing open. This run will not count as a deploy failure."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          extra=(--fetch-jobs)
-          # A canceled duplicate CLI deploy must not latch the red freeze if
-          # its exact SHA is already READY on the authenticated live alias.
-          # This is only a candidate: factory_deploy_freeze.py also verifies
-          # GitHub job steps (schema passed, CLI deploy was the sole failure).
-          verified_live_sha="$(python3 .github/scripts/verify_vercel_production.py || true)"
-          extra+=(--verified-live-sha "$verified_live_sha")
-          if [[ "$OVERRIDE_FREEZE" == "true" ]]; then
-            if [[ "$ACTOR" != "$OWNER" ]]; then
-              echo "::warning::Ignoring override_freeze from ${ACTOR}; only repository owner ${OWNER} may override."
-            else
-              extra+=(--override --reason "$OVERRIDE_REASON")
-            fi
-          fi
-          set +e
-          decision="$(python3 .github/scripts/factory_deploy_freeze.py "${extra[@]}" \
-            < "$runs_file" 2>"$RUNNER_TEMP/freeze.err")"
-          status=$?
-          set -e
-          echo "$decision"
-          cat "$RUNNER_TEMP/freeze.err" >&2
-          if [[ "$status" -eq 2 || -z "$decision" ]]; then
-            echo "::warning::Invalid Deploy Production run payload; failing open."
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-            echo "frozen=false" >> "$GITHUB_OUTPUT"
-            {
-              echo "## Deploy freeze"
-              echo
-              echo "Invalid runs payload; failing open. This run will not count as a deploy failure."
-            } >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          reason="$(python3 -c "import json,sys; print(json.load(sys.stdin)['reason'])" <<< "$decision")"
-          frozen="$(python3 -c "import json,sys; print('true' if json.load(sys.stdin)['blocked'] else 'false')" <<< "$decision")"
-          {
-            echo "## Deploy freeze"
-            echo
-            echo "$reason"
-            echo
-            echo "Actor: ${ACTOR}"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$frozen" == "true" ]]; then
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-            echo "frozen=true" >> "$GITHUB_OUTPUT"
-            echo "::error title=Deploy skipped::The last attempted Deploy Production run is red; production was not deployed." >&2
-            echo "Last attempted Deploy Production run is red; skipping this deploy." >&2
-            echo "This run is gate-blocked and will not count as a deploy failure." >&2
-            exit 0
-          fi
-          echo "proceed=true" >> "$GITHUB_OUTPUT"
-          echo "frozen=false" >> "$GITHUB_OUTPUT"
-
   preflight:
     name: Deduplicate exact main SHA
-    needs: freeze
-    if: needs.freeze.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
-      deploy_sha: ${{ steps.deployment.outputs.deploy_sha }}
+      deploy_sha: ${{ steps.revision.outputs.deploy_sha }}
       deployment_required: ${{ steps.deployment.outputs.deployment_required }}
     steps:
       - name: Check out current main
@@ -165,6 +66,25 @@ jobs:
           ref: main
           fetch-depth: 1
           persist-credentials: false
+
+      - name: Record selected deployment revision
+        id: revision
+        run: |
+          set -euo pipefail
+          deploy_sha="$(git rev-parse HEAD)"
+          echo "deploy_sha=$deploy_sha" >> "$GITHUB_OUTPUT"
+          jq -n --arg sha "$deploy_sha" --arg run_id "$GITHUB_RUN_ID" \
+            --arg run_attempt "$GITHUB_RUN_ATTEMPT" \
+            '{sha: $sha, run_id: $run_id, run_attempt: $run_attempt}' \
+            > "$RUNNER_TEMP/deployment-attempt.json"
+
+      - name: Publish selected deployment revision
+        uses: actions/upload-artifact@v7
+        with:
+          name: deployment-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/deployment-attempt.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Require Vercel token
         env:
@@ -193,7 +113,7 @@ jobs:
           # dispatch (after a GITHUB_TOKEN merge) deduplicates like push does.
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "$DISPATCH_SOURCE" != "factory-merge" ]]; then
             echo "deployment_required=true" >> "$GITHUB_OUTPUT"
-            echo "Manual recovery requested for $deploy_sha"
+            echo "Recovery requested for $deploy_sha"
             exit 0
           fi
 
@@ -256,6 +176,16 @@ jobs:
 
       - name: Install locked runtime dependencies
         run: uv sync --locked --no-dev
+
+      - name: Generate Rust-default ingress from existing FastAPI OpenAPI
+        env:
+          ROUTE_PYTHON: .venv/bin/python
+        run: |
+          set -euo pipefail
+          node scripts/generate_vercel_routes.mjs
+          .venv/bin/python scripts/generate_route_burndown.py
+          node scripts/generate_vercel_routes.mjs --check
+          .venv/bin/python scripts/generate_route_burndown.py --check
 
       - name: Get production database connection string
         id: neon
@@ -370,6 +300,7 @@ jobs:
             --prod \
             --yes \
             --logs \
+            --build-env COMICPILE_BUILD_SHA="$deploy_sha" \
             --scope "$VERCEL_TEAM_SLUG" \
             --token "$VERCEL_TOKEN" \
             --meta githubDeployment=1 \
@@ -426,12 +357,57 @@ jobs:
           jq -r '.deployments[] | "  \(.uid) \(.readyState) \(.meta.githubCommitSha // "no-sha") workflow=\((.meta.githubDeployment // "") | tostring) aliasError=\((.aliasError // null) | tostring)"' <<< "$response" >&2
           exit 1
 
-      - name: Smoke production health
+      - name: Smoke production Rust health
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error \
+          body_file="$(mktemp)"
+          header_file="$(mktemp)"
+          trap 'rm -f "$body_file" "$header_file"' EXIT
+          status="$(curl --silent --show-error --max-time 25 \
             --retry 10 --retry-delay 2 --retry-all-errors \
-            https://comic-pile.vercel.app/health >/dev/null
+            --dump-header "$header_file" \
+            --output "$body_file" \
+            --write-out '%{http_code}' \
+            https://comic-pile.vercel.app/api/v2/health)"
+          deploy_sha="$(git rev-parse HEAD)"
+          # Read build identity captured by the compiler and OS process metadata;
+          # the legacy language header alone is not runtime/revision evidence.
+          if ! jq -e --arg sha "$deploy_sha" '
+            .build.revision == $sha and
+            .build.package == "comicpile-vercel-native" and
+            (.build.compiler | startswith("rustc ")) and
+            .process.os == "linux" and
+            (.process.executable | type == "string" and length > 0)
+          ' "$body_file" >/dev/null; then
+            echo "::error::Production process/build identity does not match deployed revision" >&2
+            exit 1
+          fi
+          health="$(jq -r '.status // ""' "$body_file")"
+          runtime="$(awk 'tolower($1) == "x-comicpile-api-runtime:" {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
+          if [[ "$status" != "200" || "$health" != "ok" || "$runtime" != "rust" ]]; then
+            echo "::error::Production Rust health contract failed (HTTP $status, health=${health:-missing}, runtime=${runtime:-missing})" >&2
+            exit 1
+          fi
+          echo "Production health contract passed (HTTP 200, status ok, runtime rust)"
+
+      - name: Smoke production unknown API returns native Rust 404
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          header_file="$(mktemp)"
+          trap 'rm -f "$body_file" "$header_file"' EXIT
+          status="$(curl --silent --show-error --max-time 25 \
+            --dump-header "$header_file" \
+            --output "$body_file" \
+            --write-out '%{http_code}' \
+            https://comic-pile.vercel.app/api/v2/_unknown-rust-route-probe)"
+          runtime="$(awk 'tolower($1) == "x-comicpile-api-runtime:" {gsub(/\r/,""); print $2}' "$header_file" | tail -1)"
+          if [[ "$status" != "404" || "$runtime" != "rust" ]] || \
+             ! jq -e '.detail == "Not Found"' "$body_file" >/dev/null; then
+            echo "::error::Unknown API route did not terminate in Rust (HTTP $status, runtime=${runtime:-missing})" >&2
+            exit 1
+          fi
+          echo "Unknown API route returned Rust JSON 404"
 
       - name: Smoke production rejected login on the Rust runtime
         run: |

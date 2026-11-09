@@ -25,7 +25,7 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FA
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
-from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
+from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
@@ -1158,12 +1158,13 @@ def signal_roster_mode(*, now_epoch: int | None = None) -> dict[str, object]:
 
 
 def runtime_quota_block_reason(worker: str) -> str | None:
-    """Pause Z.AI's shared free account for 30 minutes after a trusted quota error."""
+    """Pause a shared free account until quota reset after a trusted quota error."""
     sources = worker_sources()
-    if sources.get(worker) != 'z-ai':
+    source = sources.get(worker)
+    if source not in {'z-ai', 'kilo-auto', 'mistral', 'ollama-cloud'}:
         return None
     from factory_completion_controller import (
-        RATE_LIMIT_COOLDOWN_SECONDS, latest_worker_health, registry_comments,
+        latest_worker_health, registry_comments,
     )
 
     now = int(time.time())
@@ -1171,10 +1172,10 @@ def runtime_quota_block_reason(worker: str) -> str | None:
         registry_comments(), trusted=comment_is_trusted, candidates=[], now_epoch=now,
     )
     for peer, (outcome, updated) in health.items():
-        until = updated + RATE_LIMIT_COOLDOWN_SECONDS
-        if sources.get(peer) == 'z-ai' and outcome == 'provider_quota' and updated <= now < until:
+        until = quota_reset_epoch(source, updated)
+        if sources.get(peer) == source and outcome == 'provider_quota' and updated <= now < until:
             reset = datetime.fromtimestamp(until, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-            return f'Factory {worker} paused until {reset}: provider_quota on shared Z.AI account'
+            return f'Factory {worker} paused until {reset}: provider_quota on shared {source} account'
     return None
 
 
@@ -1874,23 +1875,23 @@ def render_explain_report(report: dict[str, Any]) -> str:
 
 
 def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
-    """Evaluate open Factory PRs for staleness and expire any that cross the threshold.
+    """Report stale open PRs for recovery without discarding their work.
 
-    Returns a dict with the baseline statistics and expiration results.
-    This integrates the adaptive stale-PR decay guard into the controller.
+    Returns the baseline and non-destructive diagnostic results.
     """
     guard = StalePRGuard()
-    # The staleness baseline is defined by the rolling population of *merged*
-    # Factory PRs. Passing only open PRs made every baseline empty, forced the
-    # 24h cold-start fallback, and expired active attempts older than a day.
+    # The staleness baseline includes *merged* Factory PRs; otherwise the
+    # cold-start 24h fallback reports misleadingly stale work. No stale-age
+    # result authorizes closing an unfinished PR or resetting its issue.
     prs = list_factory_prs()
     baseline = guard.get_baseline(prs)
     results = guard.process_stale_prs(prs=prs, dry_run=dry_run)
-    expired = [r for r in results if r.get("status") == "expired"]
+    preserved = [r for r in results if r.get("status") == "stale-preserved"]
     return {
         "baseline": baseline,
         "results": results,
-        "expired_count": len(expired),
+        "expired_count": 0,
+        "stale_preserved_count": len(preserved),
         "dry_run": dry_run,
     }
 
@@ -1910,7 +1911,15 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
     manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
     capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
     workers = cast(list[dict[str, str]], capacity['executable_candidates'])
-    for worker in sorted({row['worker'] for row in workers}, key=int):
+    preferred_role = 'starter' if kind == 'issue' else (
+        'finisher' if action in {'review-findings', 'ci-repair'} else ''
+    )
+    from factory_work_policy import worker_delivery_role
+
+    for worker in sorted(
+        {row['worker'] for row in workers},
+        key=lambda worker: (worker_delivery_role(worker) != preferred_role, int(worker)),
+    ):
         candidate = assign(worker, target=(kind, number), requested_action=action)
         if candidate is None:
             continue

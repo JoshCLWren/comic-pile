@@ -92,7 +92,7 @@ def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed() -> No
     assert ".github/scripts/stale_pr_decay.py" in workflow
     assert 'jq -c --argjson n "$remaining" \'.[0:$n]\'' in workflow
     assert "OmniRoute free-entry cap is exhausted" in workflow
-    assert workflow.index("Expire stale factory PR attempts") < workflow.index(
+    assert workflow.index("Review aged PRs with Jev without discarding code") < workflow.index(
         "Resolve and dispatch fixed workers"
     )
     assert workflow.index("python3 .github/scripts/factory-work-controller.py stale") < workflow.index(
@@ -200,7 +200,7 @@ def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unread
         "Check main health (block merges onto red main)",
         "Reconcile unowned factory CI PRs",
         "Trigger merge drain on dispatcher cadence",
-        "Expire stale factory PR attempts",
+        "Review aged PRs with Jev without discarding code",
         "Resolve and dispatch fixed workers",
     ):
         section = workflow.split("- name: " + step, 1)[1].split("run: |", 1)[0]

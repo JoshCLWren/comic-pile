@@ -40,13 +40,10 @@ function renderSnooze() {
 
 const bootstrapState = (
   pendingThreadId: number | null,
-  currentDie = 12,
+  sessionId = 1,
 ): RollBootstrapResponse => ({
-  session_id: 1,
+  session_id: sessionId,
   user_id: 1,
-  // SAFETY: currentDie test param is constrained to valid die sizes (12/20/etc.); the cast narrows the number to the RollBootstrapResponse die union.
-  current_die: currentDie as RollBootstrapResponse['current_die'],
-  manual_die: null,
   pending_thread_id: pendingThreadId,
   last_rolled_result: pendingThreadId === null ? null : 1,
   session_mode: {

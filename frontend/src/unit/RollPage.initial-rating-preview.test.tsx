@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RollPage from '../pages/RollPage'
 import { useRollBootstrap } from '../hooks/useRollBootstrap'
+import { useRollDieState } from '../hooks/useRollResources'
 import { ToastProvider } from '../contexts/ToastProvider'
 import { cast } from '../utils/cast'
 
@@ -14,6 +15,11 @@ vi.mock('../contexts/useBugReportRestore', () => ({
   useBugReportRestore: () => ({ setRestoreAction: vi.fn(), clearRestoreAction: vi.fn() }),
 }))
 vi.mock('../hooks/useRollBootstrap', () => ({ useRollBootstrap: vi.fn() }))
+vi.mock('../hooks/useRollResources', () => ({
+  useRollDieState: vi.fn(),
+  useRollEligibleIssueIds: () => ({ data: undefined }),
+  useRollIssueCards: () => ({ data: undefined }),
+}))
 vi.mock('../hooks/useRoll', () => ({
   useSetDie: () => ({ mutate: vi.fn(), isPending: false }),
   useResetDice: () => ({ mutate: vi.fn().mockResolvedValue({ die: 6, replayed: false }), isPending: false }),
@@ -100,6 +106,8 @@ const pendingBootstrap = {
 // SAFETY: The mocked useRollBootstrap return value is read by the page hooks;
 // the cast reuses the same widening used across the RollPage test suite.
 const mockedUseRollBootstrap = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollBootstrap))
+// SAFETY: Same mock-shape widening for the scoped die-state hook; the test only reads its return object.
+const mockedUseRollDieState = cast<ReturnType<typeof vi.fn>>(vi.mocked(useRollDieState))
 
 function renderRollPage() {
   return render(
@@ -120,6 +128,12 @@ describe('RollPage initial rating preview (issue #2533 regression)', () => {
       isPending: false,
       isError: false,
       error: null,
+    })
+    // Selected die is scoped-only (#4352): drive d8 from die-state, not the
+    // bootstrap fixture's current_die field.
+    mockedUseRollDieState.mockReturnValue({
+      data: { die: 8, ladder: [2, 4, 6, 8, 10, 12, 20], default_die: 6, last_roll: null },
+      isError: false,
     })
   })
 

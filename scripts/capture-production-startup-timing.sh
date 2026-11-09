@@ -73,6 +73,6 @@ capture() {
 
 capture "potential cold root" "/"
 capture "potential warm root" "/"
-capture "potential warm OpenAPI" "/openapi.json"
+capture "potential warm Rust health" "/api/v2/health"
 
 printf '\nSaved timing bundle: %s\n' "$OUT"

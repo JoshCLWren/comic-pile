@@ -27,7 +27,6 @@ function makeDecisionCardProps(overrides: Partial<DecisionCardProps> = {}) {
     rateIsPending: false,
     rerollIsPending: false,
     dismissIsPending: false,
-    manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onReroll: vi.fn().mockResolvedValue(undefined),
@@ -45,7 +44,6 @@ interface DecisionCardProps {
   rateIsPending: boolean
   rerollIsPending?: boolean
   dismissIsPending: boolean
-  manualDie: number | null
   onUpdateRating: (value: string) => void
   onSubmitRating: (finishSession: boolean) => void
   onReroll?: () => Promise<void>
@@ -111,26 +109,8 @@ describe('DecisionCard', () => {
     expect(callbacks.onCancel).toHaveBeenCalled()
   })
 
-  // Issue #3144: manual mode pins the die, so the ladder move the card used to
-  // promise never happens and the readout must stop advertising one.
-  it('reports the pinned die instead of a ladder move in manual die mode', () => {
-    const callbacks = makeDecisionCardProps({
-      manualDie: 20,
-      currentDie: 20,
-      predictedDie: 12,
-    })
-
-    renderDecisionCard(callbacks)
-
-    expect(ratingReadout().textContent).toContain('Manual mode is active at d20')
-    expect(ratingReadout().textContent).not.toContain('→')
-    expect(ratingReadout().textContent).not.toContain('d12')
-    expect(screen.getByText('3.0')).toBeInTheDocument()
-  })
-
   it('keeps the ladder move when no die is pinned', () => {
     const callbacks = makeDecisionCardProps({
-      manualDie: null,
       currentDie: 6,
       predictedDie: 8,
     })
@@ -138,7 +118,6 @@ describe('DecisionCard', () => {
     renderDecisionCard(callbacks)
 
     expect(ratingReadout().textContent).toContain('d6 → d8')
-    expect(ratingReadout().textContent).not.toContain('Manual mode is active')
   })
 
   it('forwards rating changes', () => {

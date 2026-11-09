@@ -62,6 +62,25 @@ def test_stale_check_uses_merged_history_for_baseline(controller, monkeypatch) -
     assert seen == {"baseline": [merged, opened], "process": [merged, opened]}
 
 
+def test_stale_check_reports_recoverable_prs_without_expiration(controller, monkeypatch) -> None:
+    """Controller visibility reports recoverable stale work, never closures."""
+    class Guard:
+        def get_baseline(self, prs: list[dict[str, Any]]) -> dict[str, Any]:
+            return {"threshold_seconds": 90_000, "sample_size": 100}
+
+        def process_stale_prs(
+            self, prs: list[dict[str, Any]] | None = None, dry_run: bool = False
+        ) -> list[dict[str, Any]]:
+            return [{"pr": 4727, "status": "stale-preserved", "issue": 4719}]
+
+    monkeypatch.setattr(controller, "StalePRGuard", lambda: Guard())
+    monkeypatch.setattr(controller, "list_factory_prs", lambda: [])
+    report = controller.check_stale_prs()
+    assert report["stale_preserved_count"] == 1
+    assert report["expired_count"] == 0
+    assert report["results"][0]["issue"] == 4719
+
+
 def issue(
     number: int,
     *labels: str,
@@ -2086,3 +2105,30 @@ def test_unrelated_pr_activity_cannot_extend_an_inactive_issue_lease(
     assert controller.paired_owned_targets([issue_row], [unrelated]) == {}
     assert controller.reconcile_stale_leases(now_epoch=now) == [4549]
     assert len(writes) == 1
+
+
+@pytest.mark.parametrize('worker,preferred', [('54', 'issue'), ('46', 'pr')])
+def test_starter_finisher_preferences_keep_normal_fallback(
+    controller: types.ModuleType, worker: str, preferred: str,
+) -> None:
+    """Specialists prefer their measured strength but still accept other eligible work."""
+    candidates = [
+        controller.Candidate('issue', 1001, 3, 4, '2026-11-01T00:00:00Z'),
+        controller.Candidate('pr', 1002, 3, 0, '2026-11-01T00:00:00Z',
+                             stage='factory:changes-requested'),
+        controller.Candidate('pr', 1004, 3, 0, '2026-10-01T00:00:00Z',
+                             stage='factory:review'),
+    ]
+    ordered = controller.order_candidates_for_worker(candidates, worker)
+    assert ordered[0].kind == preferred
+    fallback = [candidate for candidate in candidates if candidate.kind != preferred]
+    assert controller.order_candidates_for_worker(fallback, worker) == fallback
+    urgent = controller.Candidate('issue', 1003, 0, 4, '2026-11-07T00:00:00Z')
+    assert controller.order_candidates_for_worker([*candidates, urgent], worker)[0] == urgent
+    # A protected review must not be demoted by review-capacity or role preferences.
+    protected_review = controller.Candidate(
+        'pr', 1005, 0, 0, '2026-11-07T00:00:00Z', stage='factory:review',
+    )
+    assert controller.order_candidates_for_worker(
+        [*candidates, protected_review], worker,
+    )[0] == protected_review
