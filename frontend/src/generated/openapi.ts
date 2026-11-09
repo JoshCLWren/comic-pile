@@ -17434,6 +17434,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Reading constraint cycle: nothing was changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_blocked_legacy_dependencies: {
@@ -17571,6 +17585,13 @@ export interface operations {
             };
             /** @description Dependency not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Note must be at most 255 characters or validation failed */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

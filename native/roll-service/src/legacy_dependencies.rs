@@ -187,7 +187,7 @@ pub fn blocked_documentation() {}
     operation_id = "create_legacy_dependency",
     tag = "dependencies",
     request_body = DependencyCreateRequest,
-    responses((status = 201, description = "Created dependency", body = DependencyResponse), (status = 400, description = "Invalid dependency"), (status = 401, description = "Not authenticated"), (status = 404, description = "Issue not found")),
+    responses((status = 201, description = "Created dependency", body = DependencyResponse), (status = 400, description = "Invalid dependency"), (status = 401, description = "Not authenticated"), (status = 404, description = "Issue not found"), (status = 409, description = "Reading constraint cycle: nothing was changed"), (status = 422, description = "Validation failed")),
     security(("HTTPBearer" = []))
 )]
 pub fn create_documentation() {}
@@ -210,7 +210,7 @@ pub fn get_documentation() {}
     tag = "dependencies",
     request_body = DependencyNoteUpdate,
     params(("dependency_id" = i32, Path, description = "Dependency id")),
-    responses((status = 200, description = "Dependency", body = DependencyResponse), (status = 401, description = "Not authenticated"), (status = 404, description = "Dependency not found")),
+    responses((status = 200, description = "Dependency", body = DependencyResponse), (status = 401, description = "Not authenticated"), (status = 404, description = "Dependency not found"), (status = 422, description = "Note must be at most 255 characters or validation failed")),
     security(("HTTPBearer" = []))
 )]
 pub fn update_documentation() {}

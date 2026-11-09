@@ -25354,6 +25354,12 @@
           },
           "404": {
             "description": "Issue not found"
+          },
+          "409": {
+            "description": "Reading constraint cycle: nothing was changed"
+          },
+          "422": {
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -25519,6 +25525,9 @@
           },
           "404": {
             "description": "Dependency not found"
+          },
+          "422": {
+            "description": "Note must be at most 255 characters or validation failed"
           }
         },
         "security": [
