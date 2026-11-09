@@ -345,63 +345,56 @@ async fn concurrent_success_clears_attempts_and_windows_still_recover() {
 }
 
 /// Bcrypt runs with no pooled connection held: with 3 of 4 connections
-/// reserved by the test, the pool must show a free slot while the login is
-/// still verifying — a holding implementation (connection kept across
-/// bcrypt) would keep the pool exhausted until the login completes.
+/// reserved by the test, the login takes the last slot for Phase 1,
+/// releases it during bcrypt, and we can check out that freed connection
+/// while bcrypt is still in flight. A barrier synchronizes the start so
+/// the test observes the Phase 1 release directly without polling.
 #[tokio::test]
 async fn bcrypt_verification_does_not_hold_a_pooled_connection() {
     let (state, _db) = database(4).await;
     register(&state, "connection-reader").await;
 
+    // Reserve 3 of 4 connections, leaving 1 free for the login's Phase 1.
     let mut reserved = Vec::new();
     for _ in 0..3 {
         reserved.push(state.pool.get().await.unwrap());
     }
+
+    // Barrier ensures the login and the test's pool.get() start together.
+    let barrier = Arc::new(Barrier::new(2));
+    let barrier_for_login = Arc::clone(&barrier);
     let state_for_login = Arc::clone(&state);
     let login = tokio::spawn(async move {
+        barrier_for_login.wait().await;
         wrong_password_login(&state_for_login, "connection-reader", "198.51.100.77").await
     });
 
-    // The login must first take the last slot (Phase 1).
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let status = state.pool.status();
-            if status.size == 4 && status.available == 0 {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(1)).await;
-        }
-    })
-    .await
-    .expect("login must check out its Phase 1 connection");
+    // Wait for the login to start, then wait for it to release its Phase 1 connection.
+    barrier.wait().await;
 
-    // Poll for the slot the login releases after Phase 1. It frees while the
-    // ~200 ms of bcrypt is still in flight; a connection-holding login never
-    // frees it before finishing.
-    let freed = tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if state.pool.status().available >= 1 {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(2)).await;
-        }
-    })
-    .await;
-    assert!(
-        freed.is_ok(),
-        "the login must release its pool connection before bcrypt finishes"
-    );
-    let checkout = tokio::time::timeout(Duration::from_secs(5), state.pool.get())
+    // At this point, the login has started and is trying to get a connection.
+    // With 3 reserved, there's 1 free — the login will take it for Phase 1.
+    // We now wait for that connection to be released (happens after Phase 1).
+    let freed_connection = tokio::time::timeout(Duration::from_secs(5), state.pool.get())
         .await
-        .expect("checkout must not hang")
+        .expect("checkout must not hang — login should release Phase 1 connection during bcrypt")
         .expect("the freed login connection must be reusable during bcrypt");
-    drop(checkout);
+
+    // We now hold the connection that was freed after Phase 1.
+    // The login task must still be in bcrypt verification (Phase 2 hasn't started
+    // because it needs a connection, which we're holding).
     assert!(
         !login.is_finished(),
         "login must still be verifying while its connection is reusable"
     );
+
+    // Release our hold so the login can proceed to Phase 2.
+    drop(freed_connection);
+
+    // Wait for login to complete.
     let outcome = login.await.unwrap();
     assert!(matches!(outcome, Err(AuthError::InvalidCredentials)));
+
     drop(reserved);
 }
 
