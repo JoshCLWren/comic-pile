@@ -39,3 +39,10 @@ utoipa = "5"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+
+# Forbid panicking accessors in production code (#4742). Test code and the
+# shared test scaffolding opt out explicitly; justified state invariants
+# carry per-site allows with rationale.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

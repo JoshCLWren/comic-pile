@@ -137,5 +137,17 @@ gh pr edit "$PR" --add-label "factory:review,factory:77" >/dev/null 2>&1 || true
 epoch="$(date +%s)"
 echo "<!-- comic-pile-factory-review-claim-v2:pr-${PR}:opencode-free-model-factory-77:${epoch} -->" > /tmp/claim.txt
 gh issue comment "$PR" --body-file /tmp/claim.txt >/dev/null
-python3 .github/scripts/factory-review-controller.py review --worker 77 --pr "$PR" \
-  --reviewed-head "$HEAD" --verdict approve --review-log /tmp/opencode-factory-77.log
+# The controller alone authorizes readiness. A model verdict or an existing
+# factory:approved label must never trigger a merge on its own.
+review_result="$(python3 .github/scripts/factory-review-controller.py review --worker 77 --pr "$PR" \
+  --reviewed-head "$HEAD" --verdict approve --review-log /tmp/opencode-factory-77.log)"
+printf '%s\n' "$review_result"
+
+# Wake the existing canonical merge drain immediately after exact-head readiness.
+# It rechecks authorization, required CI, dependencies, main health, and head SHA
+# before merging, and retains sole ownership of post-merge closure/deployment.
+if jq -e --arg head "$HEAD" '.status == "ready" and .head == $head' \
+  <<< "$review_result" >/dev/null; then
+  echo "PR #$PR approved at $HEAD; dispatching canonical merge drain"
+  gh_retry gh workflow run factory-ready-merge-drain.yml --repo "$GITHUB_REPOSITORY" --ref main
+fi

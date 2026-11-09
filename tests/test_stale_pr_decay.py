@@ -4,14 +4,18 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import importlib.util
+import os
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / ".github" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+ROOT_SCRIPTS = REPO_ROOT / "scripts"
+for entry in (str(ROOT_SCRIPTS), str(SCRIPTS)):
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
 
 SPEC = importlib.util.spec_from_file_location("stale_pr_decay", SCRIPTS / "stale_pr_decay.py")
 assert SPEC is not None and SPEC.loader is not None
@@ -35,6 +39,22 @@ linked_issue_from_pr = module.linked_issue_from_pr
 get_staleness_observability = module.get_staleness_observability
 
 FACTORY_LABEL = "factory"
+
+
+def test_stale_pr_decay_cli_imports_shared_eligibility() -> None:
+    """Direct CLI execution resolves the same canonical policy as pytest."""
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    result = subprocess.run(
+        [sys.executable, str(SCRIPTS / "stale_pr_decay.py"), "--help"],
+        cwd=REPO_ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 
 
 def make_pr(

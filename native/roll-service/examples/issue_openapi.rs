@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Emit the native Issue PATCH and batch-card OpenAPI contract.
 use comicpile_roll_service::issue_service::IssueApi;
 use utoipa::OpenApi;

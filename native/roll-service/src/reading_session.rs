@@ -372,6 +372,7 @@ async fn bootstrap_once(
     }
     let mut pending = Pending(Some(db::checkout(state).await?));
     let result = tokio::time::timeout(state.request_timeout, async {
+        #[allow(clippy::unwrap_used)]
         let tx = pending
             .0
             .as_mut()
@@ -495,6 +496,7 @@ async fn initialize_once(
     }
     let mut pending = Pending(Some(db::checkout(state).await?));
     let result = tokio::time::timeout(state.request_timeout, async {
+        #[allow(clippy::unwrap_used)]
         let tx = pending
             .0
             .as_mut()

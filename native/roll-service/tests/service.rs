@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Real router and configuration regressions, with no live database required.
 use axum::{
     body::{to_bytes, Body},

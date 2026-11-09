@@ -216,10 +216,13 @@ fn check_writer_from_headers(headers: &HeaderMap) -> Result<(), ApiError> {
 // ---------------------------------------------------------------------------
 
 fn compiled(pattern: &str, case_insensitive: bool) -> Regex {
-    regex::RegexBuilder::new(pattern)
+    match regex::RegexBuilder::new(pattern)
         .case_insensitive(case_insensitive)
         .build()
-        .expect("static release regex must compile")
+    {
+        Ok(regex) => regex,
+        Err(error) => panic!("static release regex must compile: {error}"),
+    }
 }
 
 fn markdown_link() -> &'static Regex {
@@ -567,7 +570,9 @@ fn find_internal_artifact(field_name: &str, value: &str) -> Option<String> {
     let lowered = text.to_lowercase();
     for (wrong, right) in SCHEMA_TYPOS {
         let needle = format!(r"\b{}\b", regex::escape(wrong));
-        let re = Regex::new(&needle).expect("typo pattern compiles");
+        let Ok(re) = Regex::new(&needle) else {
+            continue;
+        };
         if re.is_match(&lowered) {
             return Some(format!(
                 "{field_name} must be spell-checked before publication: '{wrong}' (did you mean '{right}'?)"
@@ -858,7 +863,9 @@ fn strip_repeated_title(summary: &str, title: &str) -> String {
         r"(?i)^{}(?:\s*[.:;,!?–—-]\s*|\s+)",
         regex::escape(&normalized_title)
     );
-    let re = Regex::new(&pattern).expect("repeated-title pattern compiles");
+    let Ok(re) = Regex::new(&pattern) else {
+        return summary.to_string();
+    };
     if let Some(m) = re.find(summary) {
         if m.start() == 0 && !summary[m.end()..].trim().is_empty() {
             return summary[m.end()..].to_string();
@@ -899,26 +906,20 @@ fn only_reference_artifacts(text: &str) -> bool {
 
 fn remove_artifact_parentheticals(text: &str) -> String {
     parenthetical()
-        .replace_all(text, |caps: &regex::Captures<'_>| {
-            let full = caps.get(0).expect("parenthetical match");
-            if contains_artifact(full.as_str()) {
-                String::new()
-            } else {
-                full.as_str().to_string()
-            }
+        .replace_all(text, |caps: &regex::Captures<'_>| match caps.get(0) {
+            Some(full) if contains_artifact(full.as_str()) => String::new(),
+            Some(full) => full.as_str().to_string(),
+            None => String::new(),
         })
         .to_string()
 }
 
 fn remove_artifact_clauses(text: &str) -> String {
     artifact_clause()
-        .replace_all(text, |caps: &regex::Captures<'_>| {
-            let full = caps.get(0).expect("artifact clause match");
-            if contains_artifact(full.as_str()) {
-                String::new()
-            } else {
-                full.as_str().to_string()
-            }
+        .replace_all(text, |caps: &regex::Captures<'_>| match caps.get(0) {
+            Some(full) if contains_artifact(full.as_str()) => String::new(),
+            Some(full) => full.as_str().to_string(),
+            None => String::new(),
         })
         .to_string()
 }
@@ -935,29 +936,35 @@ fn is_engineering_only(text: &str) -> bool {
 }
 
 fn clean_punctuation(text: &str) -> String {
-    let mut cleaned = Regex::new(r"\(\s*\)|\[\s*\]|\{\s*\}")
-        .expect("empty-bracket pattern compiles")
-        .replace_all(text, "")
-        .to_string();
-    cleaned = Regex::new(r"\s+([,.;:!?])")
-        .expect("punctuation spacing compiles")
-        .replace_all(&cleaned, "$1")
-        .to_string();
-    cleaned = Regex::new(r"([,;:])(?:\s*[,;:])+")
-        .expect("repeated-separator compiles")
-        .replace_all(&cleaned, "$1")
-        .to_string();
+    let mut cleaned = if let Ok(regex) = Regex::new(r"\(\s*\)|\[\s*\]|\{\s*\}") {
+        regex.replace_all(text, "").to_string()
+    } else {
+        text.to_string()
+    };
+    cleaned = if let Ok(regex) = Regex::new(r"\s+([,.;:!?])") {
+        regex.replace_all(&cleaned, "$1").to_string()
+    } else {
+        cleaned
+    };
+    cleaned = if let Ok(regex) = Regex::new(r"([,;:])(?:\s*[,;:])+") {
+        regex.replace_all(&cleaned, "$1").to_string()
+    } else {
+        cleaned
+    };
     // \.\s*\.(?![.]) -> "." unless the next character is "." (ellipsis).
     cleaned = fix_double_dots(&cleaned);
-    cleaned = Regex::new(r"\s{2,}")
-        .expect("whitespace runs compile")
-        .replace_all(&cleaned, " ")
-        .to_string();
+    cleaned = if let Ok(regex) = Regex::new(r"\s{2,}") {
+        regex.replace_all(&cleaned, " ").to_string()
+    } else {
+        cleaned
+    };
     cleaned.trim_matches([' ', '\t']).to_string()
 }
 
 fn fix_double_dots(text: &str) -> String {
-    let re = Regex::new(r"\.\s*\.").expect("double-dot pattern compiles");
+    let Ok(re) = Regex::new(r"\.\s*\.") else {
+        return text.to_string();
+    };
     let mut out = String::with_capacity(text.len());
     let mut pos = 0;
     for m in re.find_iter(text) {
@@ -993,13 +1000,9 @@ fn normalize_title(title: &str) -> String {
         .to_string();
     if let Some(first) = text.chars().next() {
         if first.is_lowercase() {
-            let mut chars = text.chars();
-            let head = chars
-                .next()
-                .expect("checked non-empty")
-                .to_uppercase()
-                .to_string();
-            text = head + chars.as_str();
+            let head = first.to_uppercase().to_string();
+            let rest: String = text.chars().skip(1).collect();
+            text = head + &rest;
         }
     }
     if !word_char().is_match(&text) {

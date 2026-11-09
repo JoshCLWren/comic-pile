@@ -85,6 +85,7 @@ pub async fn dismiss_pending(
     let session = active.session;
 
     let mut pending = PendingConn(Some(db::checkout(&state).await?));
+    #[allow(clippy::unwrap_used)]
     let result = tokio::time::timeout(
         state.request_timeout,
         mutate(user, &session, now, pending.0.as_mut().unwrap()),
@@ -112,6 +113,7 @@ impl Drop for PendingConn {
 
 /// Return the current UTC timestamp as seconds since epoch, matching
 /// Python's `datetime.now(UTC).timestamp()`.
+#[allow(clippy::unwrap_used)]
 fn now_seconds() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

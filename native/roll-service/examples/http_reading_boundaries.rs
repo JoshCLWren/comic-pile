@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Disposable-schema HTTP regression runner for the native reading-boundaries endpoint.
 use axum::{
     body::{to_bytes, Body},

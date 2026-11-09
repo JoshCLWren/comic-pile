@@ -436,6 +436,7 @@ pub async fn get_queue_entry(
 ) -> Result<Json<QueueEntryResponse>, ApiError> {
     let pending = Pending(Some(db::checkout(&state).await?));
     let rows = {
+        #[allow(clippy::expect_used)]
         let client = pending.0.as_ref().expect("checked-out PostgreSQL client");
         load_queue_rows(&***client, user.id()).await?
     };
@@ -526,6 +527,7 @@ async fn reposition(
 ) -> Result<QueueEntryResponse, Step> {
     let user_id = user.id();
     let mut pending = Pending(Some(db::checkout(state).await?));
+    #[allow(clippy::expect_used)]
     let transaction = pending
         .0
         .as_mut()
@@ -697,6 +699,7 @@ pub async fn create_queue_order(
     }
     let user_id = user.id();
     let mut pending = Pending(Some(db::checkout(&state).await?));
+    #[allow(clippy::expect_used)]
     let transaction = pending
         .0
         .as_mut()

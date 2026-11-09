@@ -72,6 +72,23 @@ def test_trusted_ollama_review_preserves_numbered_diff_inspection_proof() -> Non
     assert controller.DIFF_INSPECTION_RE.search(excerpt)
 
 
+def test_trusted_ollama_review_wakes_canonical_merge_only_when_ready() -> None:
+    """A valid Qwen review should not sit until the next factory schedule."""
+    reviewer = (SCRIPTS / "local-ollama-review.sh").read_text()
+    workflow = (
+        Path(__file__).resolve().parents[1]
+        / ".github"
+        / "workflows"
+        / "local-ollama-review.yml"
+    ).read_text()
+
+    assert 'review_result="$(python3 .github/scripts/factory-review-controller.py review' in reviewer
+    assert """jq -e --arg head "$HEAD" '.status == "ready" and .head == $head'""" in reviewer
+    assert 'gh_retry gh workflow run factory-ready-merge-drain.yml' in reviewer
+    assert "gh pr merge" not in reviewer
+    assert "  actions: write" in workflow
+
+
 def test_worker_proves_diff_inspection_without_append_of_diff_hunks() -> None:
     worker = (SCRIPTS / "free-model-factory-worker.sh").read_text()
     assert 'if ! gh pr diff "$NUMBER" >/dev/null; then' in worker

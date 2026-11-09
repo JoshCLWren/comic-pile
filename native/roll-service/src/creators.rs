@@ -196,8 +196,10 @@ fn manual_creator_id(name: &str) -> i64 {
     let hex = format!("{digest:x}");
     // hex is 64 chars
     for ch in hex.chars() {
-        let digit = ch.to_digit(16).unwrap() as u64;
-        acc = (acc * 16 + digit) % base;
+        let Some(digit) = ch.to_digit(16) else {
+            continue;
+        };
+        acc = (acc * 16 + digit as u64) % base;
     }
     MANUAL_CREATOR_ID_BASE + acc as i64
 }

@@ -75,6 +75,10 @@ fn not_found(detail: impl Into<String>) -> ApiError {
     ApiError(StatusCode::NOT_FOUND, detail.into())
 }
 
+fn internal_error(detail: impl Into<String>) -> ApiError {
+    ApiError(StatusCode::INTERNAL_SERVER_ERROR, detail.into())
+}
+
 fn validate_request(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
     if !matches!(request.source_type.as_str(), "issue" | "crossover")
         || !matches!(request.target_type.as_str(), "issue" | "crossover")
@@ -566,7 +570,7 @@ pub async fn create(
     refresh_blocked_threads(&tx, user.id()).await?;
     let response = load_rule(&tx, user.id(), rule_id)
         .await?
-        .expect("inserted rule");
+        .ok_or_else(|| internal_error("Failed to load inserted continuity rule"))?;
     tx.commit().await.map_err(db::query_error)?;
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -656,7 +660,7 @@ pub async fn update(
     refresh_blocked_threads(&tx, user.id()).await?;
     let response = load_rule(&tx, user.id(), rule_id)
         .await?
-        .expect("updated rule");
+        .ok_or_else(|| internal_error("Failed to load updated continuity rule"))?;
     tx.commit().await.map_err(db::query_error)?;
     Ok(Json(response))
 }

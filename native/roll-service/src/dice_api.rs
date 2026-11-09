@@ -43,6 +43,7 @@ impl Pending {
         Self(Some(connection))
     }
 
+    #[allow(clippy::expect_used)]
     pub(crate) fn connection(&mut self) -> &mut Object {
         self.0.as_mut().expect("checked-out PostgreSQL client")
     }

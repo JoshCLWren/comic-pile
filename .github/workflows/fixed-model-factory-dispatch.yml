@@ -151,7 +151,7 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          if gh pr checks --help 2>&1 | grep -q -- '--json'; then
+          if gh pr checks --help 2>&1 | grep -- '--json' >/dev/null; then
             gh --version
             exit 0
           fi
@@ -164,7 +164,7 @@ jobs:
             | sha256sum --check --strict
           tar -xzf "$destination" -C "$RUNNER_TEMP"
           gh_dir="$RUNNER_TEMP/gh_${version}_linux_amd64/bin"
-          "$gh_dir/gh" pr checks --help | grep -q -- '--json'
+          "$gh_dir/gh" pr checks --help | grep -- '--json' >/dev/null
           echo "$gh_dir" >> "$GITHUB_PATH"
 
       - name: Install REST-backed factory GitHub reads
@@ -275,7 +275,7 @@ jobs:
             if [[ -z "$open_issue" ]]; then
               gh api "repos/${GITHUB_REPOSITORY}/labels/main-breakage" >/dev/null 2>&1 || gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" -f name="main-breakage" -f color="B60205" -f description="Main is red - factory blocked until base is green" >/dev/null 2>&1 || true
               echo "No open main-breakage; main-health-gate will open one shortly (fallback create)"
-              gh issue create --title "Main is red at ${sha:0:12} - factory blocked" --body "Main ${sha} has ${failing} failing check(s): ${names}. Dispatcher detected red main. Fix main CI before factory merges." --label "user-reported" --label "bug" --label "priority:P0" --label "factory" --label "factory:unowned" --label "ralph-status:pending" --label "main-breakage" >/dev/null 2>&1 || true
+              gh issue create --title "Main is red at ${sha:0:12} - factory blocked" --body "Main ${sha} has ${failing} failing check(s): ${names}. Dispatcher detected red main. Fix main CI before factory merges. <!-- comic-pile-main-health-gate:v1 -->" --label "user-reported" --label "bug" --label "priority:P0" --label "factory" --label "factory:unowned" --label "ralph-status:pending" --label "main-breakage" >/dev/null 2>&1 || true
             fi
           else
             echo "Main $sha is green (total=$total failing=$failing)"

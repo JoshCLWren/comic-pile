@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 #![allow(dead_code)]
 
 //! Read-only regression-fixture DATA for the ComicPile Rust cutover.

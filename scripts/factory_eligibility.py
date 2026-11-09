@@ -66,6 +66,45 @@ from dataclasses import dataclass
 
 MANUAL_ONLY_MARKER = "<!-- factory-execution:manual-only -->"
 
+# One closing-reference parser for the merge reconciler and PR intake.
+# A negative assertion such as "does not close #4719" must never be
+# interpreted as GitHub-style issue-completion intent (#4866).
+_EXPLICIT_CLOSING_RE = re.compile(
+    r"\b(?:closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve)\s+#(?P<issue>\d+)",
+    re.IGNORECASE,
+)
+_NEGATED_CLOSING_RE = re.compile(
+    r"\b(?:(?:(?:do|does|did|will|would|should|must|can|is|are)\s+not)"
+    r"|doesn't|don't|didn't|won't|wouldn't|shouldn't|mustn't|can't|cannot|never|not)"
+    r"\s+(?:close|closes|closed|closing|fix|fixes|fixed|resolve|resolves|resolved)"
+    r"\s+#(?P<issue>\d+)\b",
+    re.IGNORECASE,
+)
+_PARTIAL_ISSUE_RE = re.compile(r"\bpart\s+of\s+#(?P<issue>\d+)\b", re.IGNORECASE)
+
+
+def nonclosing_issue_numbers(body: str | None) -> set[int]:
+    """Find issue numbers explicitly denied closure or declared as partial."""
+    text = body or ""
+    return {
+        *(int(match.group("issue")) for match in _NEGATED_CLOSING_RE.finditer(text)),
+        *(int(match.group("issue")) for match in _PARTIAL_ISSUE_RE.finditer(text)),
+    }
+
+
+def explicit_closing_issue(body: str | None) -> int | None:
+    """Honor affirmative closing references, never negations or partial work."""
+    text = body or ""
+    nonclosing = nonclosing_issue_numbers(text)
+    without_negations = _NEGATED_CLOSING_RE.sub("", text)
+    for match in _EXPLICIT_CLOSING_RE.finditer(without_negations):
+        number = int(match.group("issue"))
+        if number not in nonclosing:
+            return number
+    return None
+
+
+
 _FENCED_CODE_RE = re.compile(
     r"(?m)^[ \t]*```[^\n]*\n.*?^[ \t]*```[ \t]*$",
     re.DOTALL,

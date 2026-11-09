@@ -91,10 +91,10 @@ pub(crate) async fn durable_snoozed(
     let mut excluded = HashSet::new();
     for (thread_id, thread_rows) in grouped {
         let boundary = thread_rows.first().and_then(|row| row.last_activity);
-        let after_reset = |row: &Row| {
-            row.kind.is_some()
-                && row.timestamp.is_some()
-                && (boundary.is_none() || row.timestamp.unwrap() > boundary.unwrap())
+        let after_reset = |row: &Row| match (row.kind.is_some(), row.timestamp, boundary) {
+            (true, Some(timestamp), Some(boundary)) => timestamp > boundary,
+            (true, Some(_), None) => true,
+            _ => false,
         };
         let snoozes: Vec<f64> = thread_rows
             .iter()
