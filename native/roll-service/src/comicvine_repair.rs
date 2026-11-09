@@ -846,6 +846,25 @@ mod tests {
             "deep_metadata_refreshed_at": "2026-10-26T15:00:00+00:00",
         });
         assert!(!needs_provider_fetch(&full_old, now));
+        // R1 regression: credits in only one array count as having credits.
+        // A row with creator_credits empty but person_credits non-empty uses
+        // the 30-day window (not the 7-day recheck), matching cached_has_credits
+        // (creator || raw) and comicvine_issue.rs NOT (has credits).
+        let mut person_old_fields = empty_old["raw_provider_payload"].clone();
+        person_old_fields
+            .as_object_mut()
+            .expect("payload object")
+            .insert(
+                "person_credits".to_owned(),
+                json!([{"id": 1, "name": "Creator One"}]),
+            );
+        let person_only_old = json!({
+            "raw_provider_payload": person_old_fields,
+            "creator_credits": [],
+            "deep_metadata_refreshed_at": "2026-10-26T15:00:00+00:00",
+        });
+        assert!(cached_has_credits(&person_only_old));
+        assert!(!needs_provider_fetch(&person_only_old, now));
         // 31 days old populated row is stale under the 30-day window.
         let mut stale_fields = empty_recent["raw_provider_payload"].clone();
         stale_fields

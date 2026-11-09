@@ -707,6 +707,47 @@ mod tests {
         );
         // Malformed/absent credit arrays count as empty (safe direction).
         assert!(READ_SQL.contains("jsonb_typeof"));
+        // Both freshness branches (provider_updated_at and updated_at) must use
+        // the same NOT (has credits) predicate: a row has credits iff either
+        // creator_credits or person_credits is non-empty (R1 regression).
+        assert_eq!(
+            READ_SQL.matches("NOT (").count(),
+            2,
+            "both branches must use NOT (has credits)"
+        );
+    }
+    #[test]
+    fn seven_creators_read_through_production_path() {
+        // Issue #24 shape: seven person credits. The production read path is
+        // creators() -> response(), not cached_has_credits alone. Confirm all
+        // seven creators survive the merge, including role merging.
+        let seven = (1..=7)
+            .map(|i| json!({"id": i, "name": format!("Creator {i}"), "role": "writer"}))
+            .collect::<Vec<_>>();
+        let metadata = json!({"person_credits": seven});
+        let people = creators(&metadata);
+        assert_eq!(people.len(), 7);
+        assert_eq!(people[0].name, "Creator 1");
+        assert_eq!(people[6].name, "Creator 7");
+        assert_eq!(people[6].creator_id, Some(7));
+        // Wire projection through response() preserves all seven.
+        let mapped = Mapped {
+            external_id: "1196188".into(),
+            external_url: None,
+            metadata: json!({
+                "name": "Issue 24", "volume": {"id": 1, "name": "Absolute Superman"},
+                "person_credits": seven,
+                "cover_date": "2026-01-01", "store_date": "2026-01-01",
+                "raw_provider_payload": {"id": 1, "name": "Issue 24", "issue_number": "24",
+                    "cover_date": "2026-01-01", "store_date": "2026-01-01", "image": {},
+                    "volume": {"id": 1, "name": "Absolute Superman"},
+                    "person_credits": seven, "character_credits": [], "team_credits": [],
+                    "story_arc_credits": [], "date_last_updated": "2026-01-01T00:00:00+00:00"}
+            }),
+        };
+        let wire = serde_json::to_value(response(mapped, None, vec![], vec![])).unwrap();
+        assert_eq!(wire["creators"].as_array().unwrap().len(), 7);
+        assert_eq!(wire["metadata_status"], "complete");
     }
     #[test]
     fn render_the_existing_issue_intelligence_shape() {
