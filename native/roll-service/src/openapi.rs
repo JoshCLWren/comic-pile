@@ -85,6 +85,17 @@ use utoipa::OpenApi;
         crate::releases::list_documentation,
         crate::releases::get_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
+        crate::custom_cbl::custom_cbl_list_documentation,
+        crate::custom_cbl::custom_cbl_create_documentation,
+        crate::custom_cbl::custom_cbl_get_documentation,
+        crate::custom_cbl::custom_cbl_update_documentation,
+        crate::custom_cbl::custom_cbl_reader_documentation,
+        crate::custom_cbl::custom_cbl_search_documentation,
+        crate::custom_cbl::custom_cbl_export_documentation,
+        crate::custom_cbl::custom_cbl_get_overlap_documentation,
+        crate::custom_cbl::custom_cbl_put_overlap_documentation,
+        crate::custom_cbl::custom_cbl_delete_overlap_documentation,
+        crate::custom_cbl::custom_cbl_apply_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -163,6 +174,11 @@ use utoipa::OpenApi;
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
         crate::comicvine_resolution::SeriesImportStatusResponse,
+        crate::custom_cbl::IssueSearchResult,
+        crate::custom_cbl::OverlapDecisionItem,
+        crate::custom_cbl::OverlapVolumeCandidate,
+        crate::custom_cbl::OverlapDecisionSetResponse,
+        crate::custom_cbl::OverlapDecisionWrite,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -190,16 +206,14 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 61] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 72] = [
     ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v1/dependencies/{dependency_id}"),
+    ("delete", "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
-    (
-        "get",
-        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-    ),
+    ("get", "/api/v1/comicvine/series/{comicvine_volume_id}/import-status"),
     ("get", "/api/v1/continuity-rules/"),
     ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v1/dependencies/blocked"),
@@ -226,6 +240,12 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 61] = [
     ("get", "/api/v2/roll/eligible-issue-ids"),
     ("get", "/api/v2/threads"),
     ("patch", "/api/v1/dependencies/{dependency_id}"),
+    ("get", "/api/v1/custom-cbls"),
+    ("get", "/api/v1/custom-cbls/issue-search"),
+    ("get", "/api/v1/custom-cbls/{list_id}"),
+    ("get", "/api/v1/custom-cbls/{list_id}/export"),
+    ("get", "/api/v1/custom-cbls/{list_id}/overlap-decisions"),
+    ("get", "/api/v1/custom-cbls/{list_id}/reader"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
     ("post", "/api/v1/continuity-rules/"),
@@ -234,6 +254,8 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 61] = [
     ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/skip"),
+    ("post", "/api/v1/custom-cbls"),
+    ("post", "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply"),
     ("post", "/api/v2/auth/forgot-password"),
     ("post", "/api/v2/auth/login"),
     ("post", "/api/v2/auth/logout"),
@@ -255,6 +277,8 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 61] = [
     ("put", "/api/v1/continuity-rules/{rule_id}"),
     ("put", "/api/v2/reading-lists/{list_id}"),
     ("put", "/api/v2/threads/{thread_id}/issue-order"),
+    ("put", "/api/v1/custom-cbls/{list_id}"),
+    ("put", "/api/v1/custom-cbls/{list_id}/overlap-decisions"),
 ];
 
 /// Merge every native v2 domain document into one canonical contract.
@@ -299,6 +323,8 @@ mod tests {
             .iter()
             .map(|(method, path)| ((*method).to_string(), (*path).to_string()))
             .collect::<Vec<_>>();
+        let mut expected = expected;
+        expected.sort();
         assert_eq!(operation_set(&document()), expected);
     }
 

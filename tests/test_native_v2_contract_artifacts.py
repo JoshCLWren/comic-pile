@@ -49,6 +49,14 @@ _RUNTIME_LEGACY_PATHS: Final = frozenset(
         "/api/v1/releases/{release_id}",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
         "/api/v1/threads/{thread_id}/issue-dependencies",
+        "/api/v1/custom-cbls",
+        "/api/v1/custom-cbls/issue-search",
+        "/api/v1/custom-cbls/{list_id}",
+        "/api/v1/custom-cbls/{list_id}/export",
+        "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+        "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+        "/api/v1/custom-cbls/{list_id}/reader",
+        "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
     }
 )
 
@@ -105,6 +113,7 @@ _RUNTIME_COMMAND_PATHS: Final = frozenset(
         "/api/v1/identity-inbox/{mapping_id}/reject",
         "/api/v1/identity-inbox/{mapping_id}/skip",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+        "/api/v1/custom-cbls/issue-search",
     }
 )
 

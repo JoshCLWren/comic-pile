@@ -11,6 +11,7 @@ pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_rules;
 pub mod creators;
+pub mod custom_cbl;
 pub mod db;
 pub mod dependencies;
 pub mod dice_api;
@@ -385,6 +386,41 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-lists/{list_id}/reader",
             get(reading_list::read_reading_list),
+        )
+        // Keep the browser's established custom-CBL URLs stable while the
+        // implementation moves to the native service.  The Python router is
+        // deliberately retained behind the same paths until production proof.
+        .route(
+            "/api/v1/custom-cbls",
+            get(reading_list::list_reading_lists).post(reading_list::create_reading_list),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}",
+            get(reading_list::get_reading_list).put(reading_list::update_reading_list),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reader",
+            get(reading_list::read_reading_list),
+        )
+        .route(
+            "/api/v1/custom-cbls/issue-search",
+            get(custom_cbl::search_issues),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/export",
+            get(custom_cbl::export),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(custom_cbl::get_overlap_decisions).put(custom_cbl::put_overlap_decision),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(custom_cbl::delete_overlap_decision),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+            post(custom_cbl::apply),
         )
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",

@@ -108,6 +108,92 @@ export type CreateReadingListResponse = components['schemas']['ReadingList']
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
 
+export interface CustomCblApplyRequest {
+  path: {
+    list_id: number
+    plan_id: number
+  }
+  body: unknown
+}
+
+export type CustomCblApplyResponse = unknown
+
+export interface CustomCblCreateRequest {
+  body: components['schemas']['ReadingListWrite']
+}
+
+export type CustomCblCreateResponse = components['schemas']['ReadingList']
+
+export interface CustomCblDeleteOverlapRequest {
+  path: {
+    list_id: number
+    decision_id: number
+  }
+}
+
+export type CustomCblDeleteOverlapResponse = components['schemas']['NativeOverlapDecisionSetResponse']
+
+export interface CustomCblExportRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type CustomCblExportResponse = void
+
+export interface CustomCblGetRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type CustomCblGetResponse = components['schemas']['ReadingList']
+
+export interface CustomCblGetOverlapRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type CustomCblGetOverlapResponse = components['schemas']['NativeOverlapDecisionSetResponse']
+
+export type CustomCblListResponse = Array<components['schemas']['ReadingListSummary']>
+
+export interface CustomCblPutOverlapRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['NativeOverlapDecisionWrite']
+}
+
+export type CustomCblPutOverlapResponse = components['schemas']['NativeOverlapDecisionSetResponse']
+
+export interface CustomCblReaderRequest {
+  path: {
+    list_id: number
+  }
+}
+
+export type CustomCblReaderResponse = components['schemas']['ReadingListReader']
+
+export interface CustomCblSearchRequest {
+  query?: {
+    q?: string
+    limit?: number
+  }
+}
+
+export type CustomCblSearchResponse = Array<components['schemas']['IssueSearchResult']>
+
+export interface CustomCblUpdateRequest {
+  path: {
+    list_id: number
+  }
+  body: components['schemas']['ReadingListWrite']
+}
+
+export type CustomCblUpdateResponse = components['schemas']['ReadingList']
+
 export interface DeferRequest {
   path: {
     mapping_id: number
@@ -439,6 +525,17 @@ export interface NativeV2Client {
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   csrf(): Promise<CsrfResponse>
+  customCblApply(args: CustomCblApplyRequest): Promise<CustomCblApplyResponse>
+  customCblCreate(args: CustomCblCreateRequest): Promise<CustomCblCreateResponse>
+  customCblDeleteOverlap(args: CustomCblDeleteOverlapRequest): Promise<CustomCblDeleteOverlapResponse>
+  customCblExport(args: CustomCblExportRequest): Promise<CustomCblExportResponse>
+  customCblGet(args: CustomCblGetRequest): Promise<CustomCblGetResponse>
+  customCblGetOverlap(args: CustomCblGetOverlapRequest): Promise<CustomCblGetOverlapResponse>
+  customCblList(): Promise<CustomCblListResponse>
+  customCblPutOverlap(args: CustomCblPutOverlapRequest): Promise<CustomCblPutOverlapResponse>
+  customCblReader(args: CustomCblReaderRequest): Promise<CustomCblReaderResponse>
+  customCblSearch(args?: CustomCblSearchRequest): Promise<CustomCblSearchResponse>
+  customCblUpdate(args: CustomCblUpdateRequest): Promise<CustomCblUpdateResponse>
   defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
@@ -560,6 +657,64 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
+    },
+    customCblApply(args: CustomCblApplyRequest) {
+      return client.post<CustomCblApplyResponse, CustomCblApplyRequest['body']>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}/reading-plans/${encodeURIComponent(String(args.path.plan_id))}:apply`,
+        args.body,
+      )
+    },
+    customCblCreate(args: CustomCblCreateRequest) {
+      return client.post<CustomCblCreateResponse, CustomCblCreateRequest['body']>(
+        "/v1/custom-cbls",
+        args.body,
+      )
+    },
+    customCblDeleteOverlap(args: CustomCblDeleteOverlapRequest) {
+      return client.delete<CustomCblDeleteOverlapResponse>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions/${encodeURIComponent(String(args.path.decision_id))}`,
+      )
+    },
+    customCblExport(args: CustomCblExportRequest) {
+      return client.get<CustomCblExportResponse>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}/export`,
+      )
+    },
+    customCblGet(args: CustomCblGetRequest) {
+      return client.get<CustomCblGetResponse>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}`,
+      )
+    },
+    customCblGetOverlap(args: CustomCblGetOverlapRequest) {
+      return client.get<CustomCblGetOverlapResponse>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
+      )
+    },
+    customCblList() {
+      return client.get<CustomCblListResponse>("/v1/custom-cbls")
+    },
+    customCblPutOverlap(args: CustomCblPutOverlapRequest) {
+      return client.put<CustomCblPutOverlapResponse, CustomCblPutOverlapRequest['body']>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}/overlap-decisions`,
+        args.body,
+      )
+    },
+    customCblReader(args: CustomCblReaderRequest) {
+      return client.get<CustomCblReaderResponse>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}/reader`,
+      )
+    },
+    customCblSearch(args: CustomCblSearchRequest = {}) {
+      return client.get<CustomCblSearchResponse>(
+        "/v1/custom-cbls/issue-search",
+        { params: compactQuery(args.query) },
+      )
+    },
+    customCblUpdate(args: CustomCblUpdateRequest) {
+      return client.put<CustomCblUpdateResponse, CustomCblUpdateRequest['body']>(
+        `/v1/custom-cbls/${encodeURIComponent(String(args.path.list_id))}`,
+        args.body,
+      )
     },
     defer(args: DeferRequest) {
       return client.post<DeferResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/defer`)

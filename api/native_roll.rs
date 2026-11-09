@@ -279,6 +279,29 @@ fn app() -> Router {
             "/api/v2/reading-lists/{list_id}/reader",
             get(native_dispatch),
         )
+        .route("/api/v1/custom-cbls", get(native_dispatch))
+        .route("/api/v1/custom-cbls", post(native_dispatch))
+        .route("/api/v1/custom-cbls/issue-search", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", get(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}", put(native_dispatch))
+        .route("/api/v1/custom-cbls/{list_id}/export", get(native_dispatch))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+            put(native_dispatch),
+        )
+        .route(
+            "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+            delete(native_dispatch),
+        )
+        .route("/api/v1/custom-cbls/{list_id}/reader", get(native_dispatch))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+            post(native_dispatch),
+        )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))

@@ -173,6 +173,17 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         # shadowed until production proof.
         ("POST", "/api/bug-reports/"): "/api/native_roll.rs",
         ("POST", "/api/v1/bug-reports/"): "/api/native_roll.rs",
+        ("GET", "/api/v1/custom-cbls"): "/api/native_roll.rs",
+        ("POST", "/api/v1/custom-cbls"): "/api/native_roll.rs",
+        ("GET", "/api/v1/custom-cbls/issue-search"): "/api/native_roll.rs",
+        ("GET", "/api/v1/custom-cbls/123"): "/api/native_roll.rs",
+        ("PUT", "/api/v1/custom-cbls/123"): "/api/native_roll.rs",
+        ("GET", "/api/v1/custom-cbls/123/export"): "/api/native_roll.rs",
+        ("GET", "/api/v1/custom-cbls/123/overlap-decisions"): "/api/native_roll.rs",
+        ("PUT", "/api/v1/custom-cbls/123/overlap-decisions"): "/api/native_roll.rs",
+        ("DELETE", "/api/v1/custom-cbls/123/overlap-decisions/456"): "/api/native_roll.rs",
+        ("GET", "/api/v1/custom-cbls/123/reader"): "/api/native_roll.rs",
+        ("POST", "/api/v1/custom-cbls/123/reading-plans/456:apply"): "/api/native_roll.rs",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)
