@@ -15,6 +15,7 @@ pub mod dismiss_pending;
 pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_mutation;
+pub mod issue_read;
 pub mod issue_service;
 pub mod openapi;
 pub mod option_inputs;
@@ -371,6 +372,15 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
+        )
+        .route("/api/v1/issues/{issue_id}", get(issue_read::get_issue))
+        .route(
+            "/api/v1/issues/{issue_id}/comicvine",
+            get(comicvine_issue::issue_intelligence),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/dependencies",
+            get(issue_read::get_issue_dependencies),
         )
         .route(
             "/api/v1/roll/dismiss-pending",
