@@ -19,13 +19,20 @@
 //! failures, the buggy code stored 6 rows; the fix stores exactly 5 (the
 //! first concurrent attempt reaches the threshold, the second is rejected
 //! without a write). The same cap holds for an 8-attempt burst and for the
-//! per-IP dimension. Elapsed wall time is printed per test; the dominant
-//! cost stays the bcrypt verification itself (one per admitted attempt),
-//! and the whole burst path issues at most 8 statements — 6 application
-//! plus `BEGIN`/`COMMIT` — independent of attempt history. Full
-//! `pg_stat_statements` parity is the shared #4737 harness;
-//! `count_queries_stay_indexed_as_history_grows` proves the count queries
-//! remain index range scans beside 200 stored rows.
+//! per-IP dimension. An 8-attempt burst of simultaneous failed logins for a
+//! non-existent username is likewise capped at 5 rows through the
+//! per-username advisory lock. `bcrypt_verification_does_not_hold_a_pooled_connection`
+//! uses a deterministic Phase-1-hold-then-release checkpoint (pool exhausted,
+//! then a slot freed during bcrypt) instead of a barrier-only race, proving
+//! bcrypt runs with no pooled connection held. Elapsed wall time is printed
+//! per test; the dominant cost stays the bcrypt verification itself (one per
+//! admitted attempt), and the whole burst path issues at most 8 statements —
+//! 6 application plus `BEGIN`/`COMMIT` — independent of attempt history. The
+//! statement budget is pinned statically by `tests/test_login_sql_budget.py`;
+//! real-PostgreSQL `pg_stat_statements` measurement is deferred to the shared
+//! #4737 harness, which reports `db_statements` as `n/a` when the extension
+//! is not installed. `count_queries_stay_indexed_as_history_grows` proves the
+//! count queries remain index range scans beside 200 stored rows.
 //!
 //! Canonical Alembic schema only: `test_support` supplies the DML-only
 //! role and the fixture rows are inserted through `INSERT ... RETURNING`
@@ -257,6 +264,47 @@ async fn larger_simultaneous_burst_is_capped_at_the_threshold() {
     ));
 }
 
+/// Simultaneous failed logins for a non-existent username linearize through
+/// the per-username advisory lock: at most 5 failure rows are stored and
+/// every attempt is rejected with the non-enumerating 401. Distinct client
+/// addresses keep the per-IP dimension from confounding the measurement.
+#[tokio::test]
+async fn unknown_username_concurrent_failures_are_capped_at_threshold() {
+    let (state, _db) = database(8).await;
+    const BURST: usize = 8;
+
+    let started = Instant::now();
+    let barrier = Arc::new(Barrier::new(BURST + 1));
+    let mut tasks = Vec::new();
+    for offset in 0..BURST as u16 {
+        let barrier = Arc::clone(&barrier);
+        let state = Arc::clone(&state);
+        tasks.push(tokio::spawn(async move {
+            barrier.wait().await;
+            wrong_password_login(&state, "nonexistent-lockout-user", &unique_ip(60 + offset)).await
+        }));
+    }
+    barrier.wait().await;
+    let mut outcomes = Vec::new();
+    for task in tasks {
+        outcomes.push(task.await.unwrap());
+    }
+    let elapsed = started.elapsed();
+    println!("{BURST} concurrent unknown-user failures finished in {elapsed:?}");
+    assert_eq!(outcomes.len(), BURST);
+    for outcome in &outcomes {
+        assert!(
+            matches!(outcome, Err(AuthError::InvalidCredentials)),
+            "every unknown-user failure must be rejected, got {outcome:?}"
+        );
+    }
+    assert_eq!(
+        username_rows(&state, "nonexistent-lockout-user").await,
+        5,
+        "an 8-attempt unknown-user burst must store at most the 5-threshold rows"
+    );
+}
+
 /// The per-IP dimension caps as well: 9 stored failures for one address, then
 /// two simultaneous failures from it store exactly 10 rows, and a separate
 /// account with no failures of its own is still locked from that address.
@@ -346,9 +394,11 @@ async fn concurrent_success_clears_attempts_and_windows_still_recover() {
 
 /// Bcrypt runs with no pooled connection held: with 3 of 4 connections
 /// reserved by the test, the login takes the last slot for Phase 1,
-/// releases it during bcrypt, and we can check out that freed connection
-/// while bcrypt is still in flight. A barrier synchronizes the start so
-/// the test observes the Phase 1 release directly without polling.
+/// releases it during bcrypt, and we check out that freed connection
+/// while bcrypt is still in flight. The checkpoint confirms the login
+/// reached Phase 1 (pool exhausted: size 4, available 0) before observing
+/// the release during bcrypt (available >= 1), which distinguishes Phase 1
+/// from Phase 2 and never relies on the barrier alone.
 #[tokio::test]
 async fn bcrypt_verification_does_not_hold_a_pooled_connection() {
     let (state, _db) = database(4).await;
@@ -360,29 +410,41 @@ async fn bcrypt_verification_does_not_hold_a_pooled_connection() {
         reserved.push(state.pool.get().await.unwrap());
     }
 
-    // Barrier ensures the login and the test's pool.get() start together.
-    let barrier = Arc::new(Barrier::new(2));
-    let barrier_for_login = Arc::clone(&barrier);
     let state_for_login = Arc::clone(&state);
     let login = tokio::spawn(async move {
-        barrier_for_login.wait().await;
         wrong_password_login(&state_for_login, "connection-reader", "198.51.100.77").await
     });
 
-    // Wait for the login to start, then wait for it to release its Phase 1 connection.
-    barrier.wait().await;
+    // Deterministic checkpoint: confirm the login checked out its Phase 1
+    // connection (pool exhausted), then confirm it releases that connection
+    // during bcrypt. Observing Phase 1 hold before release distinguishes
+    // Phase 1 from Phase 2; a login blocked on pool checkout never holds the
+    // pool, so this cannot pass for a blocked login.
+    let mut saw_phase1 = false;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let status = state.pool.status();
+            if !saw_phase1 {
+                if status.size == 4 && status.available == 0 {
+                    saw_phase1 = true;
+                }
+            } else if status.available >= 1 {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .expect("login must check out Phase 1 then release it during bcrypt");
 
-    // At this point, the login has started and is trying to get a connection.
-    // With 3 reserved, there's 1 free — the login will take it for Phase 1.
-    // We now wait for that connection to be released (happens after Phase 1).
+    // Grab the connection freed during bcrypt before the login can start
+    // Phase 2 (bcrypt is ~100 ms; checkout is immediate). Holding it keeps
+    // the login blocked in Phase 2.
     let freed_connection = tokio::time::timeout(Duration::from_secs(5), state.pool.get())
         .await
         .expect("checkout must not hang — login should release Phase 1 connection during bcrypt")
         .expect("the freed login connection must be reusable during bcrypt");
 
-    // We now hold the connection that was freed after Phase 1.
-    // The login task must still be in bcrypt verification (Phase 2 hasn't started
-    // because it needs a connection, which we're holding).
     assert!(
         !login.is_finished(),
         "login must still be verifying while its connection is reusable"
