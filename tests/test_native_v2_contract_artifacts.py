@@ -29,6 +29,25 @@ NATIVE_CONTRACTS: Final = REPO_ROOT / "native" / "contracts"
 CONTRACT_GLOB: Final = "*-v2.openapi.json"
 RUNTIME_CONTRACT: Final = NATIVE_CONTRACTS / "v2-runtime.openapi.json"
 V2_PREFIX: Final = "/api/v2/"
+# These browser-called operations intentionally retain their approved v1 wire
+# paths while moving the implementation behind the same native Rust ingress.
+_RUNTIME_LEGACY_PATHS: Final = frozenset(
+    {
+        "/api/v1/identity-inbox",
+        "/api/v1/identity-inbox/search/issues",
+        "/api/v1/identity-inbox/{mapping_id}",
+        "/api/v1/identity-inbox/{mapping_id}/confirm",
+        "/api/v1/identity-inbox/{mapping_id}/defer",
+        "/api/v1/identity-inbox/{mapping_id}/reject",
+        "/api/v1/identity-inbox/{mapping_id}/skip",
+        "/api/v1/continuity-rules/",
+        "/api/v1/continuity-rules/{rule_id}",
+        "/api/v1/releases/",
+        "/api/v1/releases/{release_id}",
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+        "/api/v1/threads/{thread_id}/issue-dependencies",
+    }
+)
 
 # Path segments that describe a verb-shaped action rather than a resource. The
 # final v2 surface models these as resources (see #4335 Q1-Q44). Segments are
@@ -77,6 +96,12 @@ _RUNTIME_COMMAND_PATHS: Final = frozenset(
         "/api/v2/auth/reset-password",
         "/api/v2/roll/offer",
         "/api/v2/roll/reset",
+        "/api/v1/identity-inbox/search/issues",
+        "/api/v1/identity-inbox/{mapping_id}/confirm",
+        "/api/v1/identity-inbox/{mapping_id}/defer",
+        "/api/v1/identity-inbox/{mapping_id}/reject",
+        "/api/v1/identity-inbox/{mapping_id}/skip",
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
     }
 )
 
@@ -165,7 +190,9 @@ def _assert_baseline_contract(path: Path, document: dict[str, object]) -> dict[s
     paths = _object_mapping(document.get("paths"), label=f"{path.name} paths")
     assert paths, f"{path.name}: contract must declare at least one operation"
     for raw_path in paths:
-        assert raw_path.startswith(V2_PREFIX), (
+        assert raw_path.startswith(V2_PREFIX) or (
+            path == RUNTIME_CONTRACT and raw_path in _RUNTIME_LEGACY_PATHS
+        ), (
             f"{path.name}: {raw_path} is not under {V2_PREFIX}"
         )
     return paths

@@ -558,6 +558,32 @@ pub async fn issue_intelligence(
 )]
 pub struct ComicVineIssueApi;
 
+/// Native same-path alias for the browser-called v1 read (#4845).
+///
+/// Serves `GET /api/v1/issues/{issue_id}/comicvine` with the identical
+/// handler and `IssueIntelligence` wire as the v2 resource; deployed
+/// ingress in `vercel.json` shadows the Python v1 handler. The Python v1
+/// reader was deliberately read-only (never enqueued a repair); the
+/// native cutover adopts the Rust v2 producer, which idempotently queues
+/// a refresh only when stored deep metadata is stale, and reports the
+/// stored repair state in `metadata_status` exactly as the v2 contract
+/// documents.
+#[utoipa::path(
+    get,
+    path="/api/v1/issues/{issue_id}/comicvine",
+    params(("issue_id"=i32,Path,description="Owner-scoped ComicPile issue id")),
+    tag="issues",
+    responses(
+        (status=200, description="Stored ComicVine intelligence, or null without a mapping",
+            body=Option<IssueIntelligence>),
+        (status=401, description="Invalid or revoked access token"),
+        (status=404, description="Issue is not owned by the reader")
+    ),
+    security(("HTTPBearer"=[]))
+)]
+#[allow(dead_code)]
+pub fn issue_intelligence_v1_documentation() {}
+
 struct IssueSecurityAddon;
 impl utoipa::Modify for IssueSecurityAddon {
     fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {

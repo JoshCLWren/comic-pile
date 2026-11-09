@@ -25,8 +25,9 @@ LIB_SOURCE = SERVICE_SOURCE / "lib.rs"
 BASELINE = REPOSITORY_ROOT / "tests" / "native_roll_write_test_baseline.json"
 
 WRITE_ROUTE_RE = re.compile(
-    r'\.route\(\s*"[^"]+"\s*,\s*(?:post|patch|put|delete)\(\s*'
-    r'(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)\s*,?\s*\)',
+    r'(?:\.route\(\s*"[^"]+"\s*,\s*|\.)'
+    r'(?:post|patch|put|delete)\(\s*'
+    r'(?P<path>(?:[a-z_0-9]+::)*[a-z_0-9]+)\s*\)',
     re.DOTALL,
 )
 # A write-path test is database-backed when it reaches the disposable database.

@@ -1,0 +1,154 @@
+{
+  "family": "dependencies",
+  "owned_path_patterns": [
+    "^/api/v2/dependencies(?:/.*)?$",
+    "^/api/v1/.*dependencies(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/dependencies/",
+      "dest": "/api/native_roll.rs",
+      "src": "/api/v2/dependencies/",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/dependencies/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-orders.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/dependencies/",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/dependencies/$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/dependencies/blocked",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/dependencies/blocked$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/dependencies/{dependency_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/dependencies/[^/]+$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/dependencies/{dependency_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/dependencies/[^/]+$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PATCH",
+      "path": "/api/v1/dependencies/{dependency_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/dependencies/[^/]+$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issues/{issue_id}/dependencies",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issues/[0-9]+/dependencies$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/dependencies",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/threads/[^/]+/dependencies$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/services/api-threads.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/threads/{thread_id}/issue-dependencies",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-dependency-groups.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-migration.ts",
+        "frontend/src/services/api-reading-orders.ts",
+        "frontend/src/services/api-threads.ts"
+      ]
+    }
+  ]
+}

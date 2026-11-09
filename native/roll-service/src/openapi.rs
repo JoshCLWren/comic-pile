@@ -50,6 +50,7 @@ use utoipa::OpenApi;
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
+        crate::issue_read::get_thread_issue_dependencies_documentation,
         crate::reading_list::list_reading_lists_documentation,
         crate::reading_list::get_reading_list_documentation,
         crate::reading_list::create_reading_list_documentation,
@@ -58,7 +59,27 @@ use utoipa::OpenApi;
         crate::reading_list::read_reading_list_documentation,
         crate::reading_plan_recovery::preview_documentation,
         crate::reading_plan_recovery::relink_documentation,
-        crate::reading_plan_reader::read_documentation
+        crate::reading_plan_reader::read_documentation,
+        crate::identity_inbox::list_documentation,
+        crate::identity_inbox::search_documentation,
+        crate::identity_inbox::get_documentation,
+        crate::identity_inbox::confirm_documentation,
+        crate::identity_inbox::defer_documentation,
+        crate::identity_inbox::reject_documentation,
+        crate::identity_inbox::skip_documentation,
+        crate::continuity_rules::list_documentation,
+        crate::continuity_rules::create_documentation,
+        crate::continuity_rules::get_documentation,
+        crate::continuity_rules::update_documentation,
+        crate::continuity_rules::delete_documentation,
+        // Writer-authorized releases operations (source/publish/retract) are
+        // server-only automation, not browser-called, and require a header
+        // credential the browser SDK does not model. They stay documented by
+        // the retained Python schemas; only the public reads join this
+        // browser-facing native contract.
+        crate::releases::list_documentation,
+        crate::releases::get_documentation,
+        crate::comicvine_resolution::series_import_status_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -119,7 +140,23 @@ use utoipa::OpenApi;
         crate::reading_plan_reader::PlanReaderSource,
         crate::reading_plan_reader::PlanReleaseSourceStatus,
         crate::reading_plan_reader::PlanReleaseCandidate,
-        crate::reading_plan_reader::PlanReaderResponse
+        crate::reading_plan_reader::PlanReaderResponse,
+        crate::identity_inbox::ActionRequest,
+        crate::identity_inbox::IdentityInboxCandidate,
+        crate::identity_inbox::IdentityInboxItem,
+        crate::identity_inbox::IdentityInboxResponse,
+        crate::identity_inbox::IdentityInboxSearchResponse,
+        crate::identity_inbox::IdentityInboxActionResponse,
+        crate::issue_read::IssueDependencyEdge,
+        crate::issue_read::IssueDependenciesResponse,
+        crate::issue_read::ThreadIssueDependenciesResponse,
+        crate::identity_inbox::IdentityInboxSearchResult,
+        crate::continuity_rules::ContinuityRuleRequest,
+        crate::continuity_rules::ContinuityRuleResponse,
+        crate::continuity_rules::ConvergenceTarget,
+        crate::releases::PublicReleaseResponse,
+        crate::releases::ReleaseListResponse,
+        crate::comicvine_resolution::SeriesImportStatusResponse,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -147,10 +184,23 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 40] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 56] = [
+    ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
+    (
+        "get",
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    ),
+    ("get", "/api/v1/continuity-rules/"),
+    ("get", "/api/v1/continuity-rules/{rule_id}"),
+    ("get", "/api/v1/identity-inbox"),
+    ("get", "/api/v1/identity-inbox/search/issues"),
+    ("get", "/api/v1/identity-inbox/{mapping_id}"),
+    ("get", "/api/v1/releases/"),
+    ("get", "/api/v1/releases/{release_id}"),
+    ("get", "/api/v1/threads/{thread_id}/issue-dependencies"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
@@ -168,6 +218,11 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 40] = [
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
+    ("post", "/api/v1/continuity-rules/"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/skip"),
     ("post", "/api/v2/auth/forgot-password"),
     ("post", "/api/v2/auth/login"),
     ("post", "/api/v2/auth/logout"),
@@ -186,6 +241,7 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 40] = [
     ("post", "/api/v2/roll/offer"),
     ("post", "/api/v2/roll/reset"),
     ("post", "/api/v2/threads/{thread_id}/issues"),
+    ("put", "/api/v1/continuity-rules/{rule_id}"),
     ("put", "/api/v2/reading-lists/{list_id}"),
     ("put", "/api/v2/threads/{thread_id}/issue-order"),
 ];

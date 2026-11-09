@@ -195,12 +195,33 @@ async fn native_not_found() -> Response {
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
+        .route("/api/v1/identity-inbox", get(native_dispatch))
+        .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
+        .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/defer",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/reject",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/skip",
+            post(native_dispatch),
+        )
         .route(
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
         )
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/sessions/{session_id}", get(native_dispatch))
+        .route("/api/v1/sessions/{session_id}", get(native_dispatch))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
@@ -211,6 +232,8 @@ fn app() -> Router {
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", get(native_dispatch))
+        .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
@@ -247,6 +270,36 @@ fn app() -> Router {
         )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route(
+            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/dependencies",
+            get(native_dispatch),
+        )
+        .route("/api/v1/continuity-rules/", get(native_dispatch))
+        .route("/api/v1/continuity-rules/", post(native_dispatch))
+        .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
+        .route("/api/v1/continuity-rules/{rule_id}", put(native_dispatch))
+        .route(
+            "/api/v1/continuity-rules/{rule_id}",
+            delete(native_dispatch),
+        )
+        .route("/api/v1/releases/", get(native_dispatch))
+        .route("/api/v1/releases/", put(native_dispatch))
+        .route("/api/v1/releases/source", get(native_dispatch))
+        .route("/api/v1/releases/{release_id}", get(native_dispatch))
+        .route(
+            "/api/v1/releases/{release_id}/retract",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issue-dependencies",
+            get(native_dispatch),
+        )
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))
@@ -273,6 +326,15 @@ fn app() -> Router {
         .route("/api/auth/csrf", get(native_dispatch))
         .route("/api/auth/forgot-password", post(native_dispatch))
         .route("/api/auth/reset-password", post(native_dispatch))
+        .route("/api/v1/creators", get(native_dispatch))
+        .route("/api/v1/creators/", get(native_dispatch))
+        .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route(
+            "/api/v1/taste/discoveries/{signal_id}/dismiss",
+            post(native_dispatch),
+        )
+        .route("/api/bug-reports/", post(native_dispatch))
+        .route("/api/v1/bug-reports/", post(native_dispatch))
         .fallback(native_not_found)
 }
 
@@ -298,6 +360,167 @@ mod tests {
     use vercel_runtime::{AppState as VercelState, LogContext};
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
+
+    #[tokio::test]
+    async fn v1_issue_read_ingress_preserves_same_path_and_requires_auth() {
+        for uri in [
+            "/api/v1/issues/7",
+            "/api/v1/issues/7/comicvine",
+            "/api/v1/issues/7/dependencies",
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric issue ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v1_taste_dismiss_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/taste/discoveries/7/dismiss")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                || response.status() == StatusCode::FORBIDDEN,
+            "taste dismiss must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains("Wrong number of path arguments"),
+            "numeric signal ids must not fail Path extraction: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/comicvine/series/42/import-status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "ComicVine import status must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
+
+    #[tokio::test]
+    async fn bug_report_ingress_preserves_same_paths_and_requires_auth() {
+        for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("POST")
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"title":"Bug","description":"Details"}"#))
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn session_detail_ingress_preserves_same_paths_and_requires_auth() {
+        for uri in ["/api/sessions/7", "/api/v1/sessions/7"] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric session ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
 
     #[tokio::test]
     async fn unknown_api_route_returns_rust_json_404_without_database() {

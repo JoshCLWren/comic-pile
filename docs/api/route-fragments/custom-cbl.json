@@ -1,0 +1,154 @@
+{
+  "family": "custom-cbl",
+  "owned_path_patterns": [
+    "^/api/v1/custom\\-cbls(?:/.*)?$",
+    "^/api/v2/reading\\-lists(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-custom-cbl.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/reading-lists",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684
+    },
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/reading-lists",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684
+    },
+    {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684
+    },
+    {
+      "bucket": "operations",
+      "method": "PUT",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/reader",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/reading-lists/[0-9]+/reader$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/custom-cbls",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/custom-cbls",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/custom-cbls/issue-search",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/issue\\-search$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/custom-cbls/{list_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/custom-cbls/{list_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/custom-cbls/{list_id}/export",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+/export$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "DELETE",
+      "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions/[^/]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/custom-cbls/{list_id}/reader",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+/reader$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$"
+    }
+  ]
+}

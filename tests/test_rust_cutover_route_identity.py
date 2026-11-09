@@ -133,7 +133,7 @@ def test_threads_collection_client_uses_the_native_v2_resource() -> None:
 
 
 def test_analytics_client_uses_the_bounded_native_v2_resource() -> None:
-    """The real client uses native v2 while the Python v1 fallback is retained."""
+    """The real client uses native v2; the Python v1 handlers are pruned (#4861)."""
     source = _service("api-tasks.ts")
     assert "createNativeV2Client" in source
     assert "nativeV2.metrics()" in source
@@ -156,13 +156,18 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         ("POST", "/api/v2/reading-boundaries"): "/api/native_roll.rs",
         ("GET", "/api/v2/threads"): "/api/native_roll.rs",
         ("GET", "/api/v2/analytics/metrics"): "/api/native_roll.rs",
-        # The retired Python v1 collection read now reaches the catch-all and
-        # returns 404; creation stays on the same path (#4342).
+        # The retired Python v1 collection read now reaches the Rust catch-all
+        # and returns 404; creation stays on the same path (#4342).
         ("GET", "/api/v1/threads/"): "/api/native_roll.rs",
-        # The Python analytics handler is retained until authenticated native
-        # v2 production proof exists; the new frontend caller already uses v2.
-        ("GET", "/api/v1/analytics/metrics"): "/api/index.py",
-        ("GET", "/api/analytics/metrics"): "/api/index.py",
+        # The Python analytics handlers were pruned (#4861); both aliases now
+        # reach the Rust catch-all and return 404. The frontend caller already
+        # uses the native v2 resource.
+        ("GET", "/api/v1/analytics/metrics"): "/api/native_roll.rs",
+        ("GET", "/api/analytics/metrics"): "/api/native_roll.rs",
+        # Bug-report twins are same-path Rust cutovers (#4852); Python stays
+        # shadowed until production proof.
+        ("POST", "/api/bug-reports/"): "/api/native_roll.rs",
+        ("POST", "/api/v1/bug-reports/"): "/api/native_roll.rs",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)

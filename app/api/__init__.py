@@ -13,14 +13,12 @@ relying on package-attribute access, which this package no longer provides.
 #: Listed for discoverability only: the names are not bound as attributes of
 #: this package, so ``from app.api import *`` does not resolve them.
 ROUTER_SUBMODULES = (
-    "analytics",
     "cbl_catalog",
     "cbl_comicvine_lookup",
     "cbl_sources",
     "collection_exclusions",
     "continuity_plan",
     "continuity_rule",
-    "continuity_template",
     "custom_cbl",
     "dependency",
     "dependency_group",
@@ -29,7 +27,6 @@ ROUTER_SUBMODULES = (
     "issue_dependency_batch",
     "reading_order_projection",
     "reading_plan_sync",
-    "recommendation_diagnostics",
     "releases",
     "roll_recovery_switch",
     "taste_signal",

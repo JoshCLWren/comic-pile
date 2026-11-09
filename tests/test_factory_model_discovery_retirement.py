@@ -1548,8 +1548,9 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert 76 in lock["retired_workers"]
     assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in remaining}
-    assert "77" not in by_worker
-    assert 77 in lock["retired_workers"]
+    assert by_worker["77"]["source"] == "nvidia"
+    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
+    assert 77 in lock["expected_workers"]
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
     assert "79" not in by_worker
@@ -1563,7 +1564,11 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "81" not in by_worker
     assert 81 not in lock["expected_workers"]
     assert 81 in lock["retired_workers"]
-    assert "deepseek-ai/deepseek-v4.1-flash" in lock["retired_models"]
+    # Owner-authorized (Josh) un-retirement 2026-11-08: this NVIDIA model
+    # is live again at 0/0 and now pinned as worker 106. Worker 81 itself
+    # stays retired; only the permanently-retired model seal is lifted.
+    assert "deepseek-ai/deepseek-v4.1-flash" not in lock["retired_models"]
+    assert by_worker["106"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
     # Workers 68/69 retired before OpenRouter Laguna :free access ends 2026-10-31.
     # NVIDIA worker 11 (poolside/laguna-xs-2.1) and kilo-auto 46 stay pinned.
     assert "68" not in by_worker
@@ -1840,13 +1845,14 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["46"]["scheduler"] == "dispatcher"
-    _assert_committed_pin(
-        by_worker,
-        lock,
-        "95",
-        source="nvidia",
-        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
-    )
+    # Worker 95 stays retired, but its model is live again at 0/0 and is
+    # now pinned as worker 104 (owner-authorized 2026-11-08). The
+    # permanently-retired seal is lifted for the model, not the worker.
+    assert "95" not in by_worker
+    assert 95 not in lock["expected_workers"]
+    assert 95 in lock["retired_workers"]
+    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
+    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 

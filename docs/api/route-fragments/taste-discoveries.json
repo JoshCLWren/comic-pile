@@ -1,0 +1,30 @@
+{
+  "family": "taste-discoveries",
+  "owned_path_patterns": [
+    "^/api/v1/taste/discoveries(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-taste.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/taste/discoveries",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/taste/discoveries$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$"
+    }
+  ]
+}

@@ -108,7 +108,7 @@ test('fixed-model worker tokens map from the roster, not a numeric ceiling', () 
   assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-75'), 'factory:75');
   assert.equal(ownerFor('opencode-free-model-factory-95'), 'factory:unowned');
-  assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:unowned');
+  assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:77');
   assert.equal(ownerFor('opencode-free-model-factory-56'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-78'), 'factory:unowned');
   assert.equal(ownerFor('opencode-omniroute-factory-95'), 'factory:unowned');
@@ -127,7 +127,7 @@ test('head-contributor markers resolve roster workers above the old ceiling', ()
   const { workerFrom } = reconcile._test;
   const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-77:epoch-2 -->';
   assert.equal(workerFrom(body), '77');
-  assert.equal(ownerFor(workerFrom(body)), 'factory:unowned');
+  assert.equal(ownerFor(workerFrom(body)), 'factory:77');
   assert.equal(ownerFor('worker-93'), 'factory:unowned');
   assert.equal(ownerFor('72'), 'factory:unowned');
 });

@@ -24,10 +24,10 @@ test('expected workers come from the lock and include post-71 roster pins', () =
   assert.equal(retiredWorkers.has(71), true);
   assert.equal(expectedWorkers.has(76), false);
   assert.equal(retiredWorkers.has(76), true);
-  assert.equal(expectedWorkers.has(77), false);
-  assert.equal(retiredWorkers.has(77), true);
+  assert.equal(expectedWorkers.has(77), true);
+  assert.equal(retiredWorkers.has(77), false);
   assert.equal(isExpectedWorkerId(76), false);
-  assert.equal(isExpectedWorkerId(77), false);
+  assert.equal(isExpectedWorkerId(77), true);
   assert.equal(isExpectedWorkerId(73), false);
   assert.equal(isExpectedWorkerId(72), false);
   assert.equal(isExpectedWorkerId(71), false);
@@ -39,7 +39,7 @@ test('OWNER label definitions track roster size without a hard-coded max', () =>
   const { FIXED_MODEL_OWNER_LABELS, WORKER_OWNER_LABELS, EXPECTED_WORKER_IDS } = visibility._test;
   assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:98'), true)
   assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:76'), false);
-  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:77'), false);
+  assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:77'), true);
   assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:93'), false);
   assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:73'), false);
   assert.equal(FIXED_MODEL_OWNER_LABELS.includes('factory:72'), false);

@@ -234,7 +234,11 @@ def test_inventory_covers_every_live_v2_operation() -> None:
         "frontend/src/generated/openapi.json and update the inventory together"
     )
 
-    native = _openapi_operations(_load_json(NATIVE_CONTRACT_PATH))
+    native = {
+        operation
+        for operation in _openapi_operations(_load_json(NATIVE_CONTRACT_PATH))
+        if operation[1].startswith("/api/v2/")
+    }
     assert _runtime_set(operations, NATIVE_RUNTIME) == native
 
 

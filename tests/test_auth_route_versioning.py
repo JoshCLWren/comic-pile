@@ -20,9 +20,15 @@ AUTH_SUFFIXES = frozenset(
 
 STARTUP_SENTINEL_ROUTES = {
     "/api/v1/auth/me": frozenset({"GET"}),
-    "/api/v1/crossover-templates/preview": frozenset({"POST"}),
-    "/api/v1/crossover-templates/adopt": frozenset({"POST"}),
 }
+
+#: Routes deleted with the crossover-template prune (#4861). Startup must
+#: not resurrect them; if this constant drifts away from ``methods_by_path``
+#: the absence test below fails.
+PRUNED_SENTINEL_ROUTES = (
+    "/api/v1/crossover-templates/preview",
+    "/api/v1/crossover-templates/adopt",
+)
 
 
 def _collect_route_methods(
@@ -71,12 +77,15 @@ def _route_methods_by_path() -> dict[str, frozenset[str]]:
 
 
 def test_application_startup_loads_cross_feature_routers() -> None:
-    """Require startup to load auth and crossover-template routers."""
+    """Require startup to load auth routers and keep pruned routers out."""
     methods_by_path = _route_methods_by_path()
 
     for path, methods in STARTUP_SENTINEL_ROUTES.items():
         assert path in methods_by_path
         assert methods_by_path[path] == methods
+
+    for path in PRUNED_SENTINEL_ROUTES:
+        assert path not in methods_by_path, f"{path} must stay pruned (#4861)"
 
 
 def test_auth_v1_routes_are_canonical_compatibility_twins() -> None:
