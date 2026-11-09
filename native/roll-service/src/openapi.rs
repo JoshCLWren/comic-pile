@@ -78,6 +78,7 @@ use utoipa::OpenApi;
         // browser-facing native contract.
         crate::releases::list_documentation,
         crate::releases::get_documentation,
+        crate::comicvine_resolution::series_import_status_documentation,
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -151,6 +152,7 @@ use utoipa::OpenApi;
         crate::continuity_rules::ConvergenceTarget,
         crate::releases::PublicReleaseResponse,
         crate::releases::ReleaseListResponse,
+        crate::comicvine_resolution::SeriesImportStatusResponse,
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -178,11 +180,15 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 54] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 55] = [
     ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
+    (
+        "get",
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    ),
     ("get", "/api/v1/continuity-rules/"),
     ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v1/identity-inbox"),

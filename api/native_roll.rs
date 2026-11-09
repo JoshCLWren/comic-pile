@@ -267,6 +267,10 @@ fn app() -> Router {
         .route("/api/v1/issues/{issue_id}", get(native_dispatch))
         .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
         .route(
+            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+            get(native_dispatch),
+        )
+        .route(
             "/api/v1/issues/{issue_id}/dependencies",
             get(native_dispatch),
         )
@@ -417,6 +421,31 @@ mod tests {
         assert!(
             !text.contains("Wrong number of path arguments"),
             "numeric signal ids must not fail Path extraction: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/comicvine/series/42/import-status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "ComicVine import status must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
         );
     }
 

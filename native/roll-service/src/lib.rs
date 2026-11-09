@@ -5,6 +5,7 @@ pub mod bootstrap;
 pub mod bug_reports;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
+pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_rules;
 pub mod creators;
@@ -386,6 +387,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
+        )
+        .route(
+            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+            get(comicvine_resolution::series_import_status),
         )
         .route(
             "/api/v1/issues/{issue_id}/dependencies",

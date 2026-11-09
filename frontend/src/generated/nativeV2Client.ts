@@ -350,6 +350,14 @@ export type ResetPasswordResponse = components['schemas']['NativePasswordResetRe
 
 export type SearchResponse = components['schemas']['NativeIdentityInboxSearchResponse']
 
+export interface SeriesImportStatusRequest {
+  path: {
+    comicvine_volume_id: number
+  }
+}
+
+export type SeriesImportStatusResponse = components['schemas']['NativeSeriesImportStatusResponse']
+
 export interface SkipRequest {
   path: {
     mapping_id: number
@@ -428,6 +436,7 @@ export interface NativeV2Client {
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
   search(): Promise<SearchResponse>
+  seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
   skip(args: SkipRequest): Promise<SkipResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
@@ -694,6 +703,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     search() {
       return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
+    },
+    seriesImportStatus(args: SeriesImportStatusRequest) {
+      return client.get<SeriesImportStatusResponse>(
+        `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
+      )
     },
     skip(args: SkipRequest) {
       return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)

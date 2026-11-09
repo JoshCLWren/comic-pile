@@ -9,6 +9,50 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
+      "get": {
+        "tags": [
+          "comicvine-resolution"
+        ],
+        "summary": "OpenAPI documentation for the migrated same-path operation.",
+        "operationId": "series_import_status_documentation",
+        "parameters": [
+          {
+            "name": "comicvine_volume_id",
+            "in": "path",
+            "description": "ComicVine volume ID",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owned import status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesImportStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or revoked access token"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/continuity-rules/": {
       "get": {
         "tags": [
@@ -6373,6 +6417,43 @@
             "type": "string"
           },
           "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
+      "SeriesImportStatusResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `SeriesImportStatusResponse`.",
+        "required": [
+          "comicvine_volume_id",
+          "imported"
+        ],
+        "properties": {
+          "comicvine_volume_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "imported": {
+            "type": "boolean"
+          },
+          "issue_count": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "series_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread_id": {
             "type": [
               "integer",
               "null"

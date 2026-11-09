@@ -55,6 +55,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/continuity\\-rules/$",
       "methods": [
         "GET",
@@ -434,14 +441,6 @@
     },
     {
       "src": "^/api/v1/comicvine/search/series$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
       "methods": [
         "GET",
         "OPTIONS"
