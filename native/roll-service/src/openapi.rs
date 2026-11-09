@@ -58,7 +58,14 @@ use utoipa::OpenApi;
         crate::reading_list::read_reading_list_documentation,
         crate::reading_plan_recovery::preview_documentation,
         crate::reading_plan_recovery::relink_documentation,
-        crate::reading_plan_reader::read_documentation
+        crate::reading_plan_reader::read_documentation,
+        crate::identity_inbox::list_documentation,
+        crate::identity_inbox::search_documentation,
+        crate::identity_inbox::get_documentation,
+        crate::identity_inbox::confirm_documentation,
+        crate::identity_inbox::defer_documentation,
+        crate::identity_inbox::reject_documentation,
+        crate::identity_inbox::skip_documentation
     ),
     components(schemas(
         crate::auth::dto::RegisterRequest,
@@ -119,7 +126,14 @@ use utoipa::OpenApi;
         crate::reading_plan_reader::PlanReaderSource,
         crate::reading_plan_reader::PlanReleaseSourceStatus,
         crate::reading_plan_reader::PlanReleaseCandidate,
-        crate::reading_plan_reader::PlanReaderResponse
+        crate::reading_plan_reader::PlanReaderResponse,
+        crate::identity_inbox::ActionRequest,
+        crate::identity_inbox::IdentityInboxCandidate,
+        crate::identity_inbox::IdentityInboxItem,
+        crate::identity_inbox::IdentityInboxResponse,
+        crate::identity_inbox::IdentityInboxSearchResponse,
+        crate::identity_inbox::IdentityInboxActionResponse,
+        crate::identity_inbox::IdentityInboxSearchResult
     )),
     modifiers(&NativeSecurityAddon)
 )]
@@ -147,10 +161,13 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 40] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 47] = [
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
+    ("get", "/api/v1/identity-inbox"),
+    ("get", "/api/v1/identity-inbox/search/issues"),
+    ("get", "/api/v1/identity-inbox/{mapping_id}"),
     ("get", "/api/v2/analytics/metrics"),
     ("get", "/api/v2/auth/csrf"),
     ("get", "/api/v2/auth/me"),
@@ -168,6 +185,10 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 40] = [
     ("get", "/api/v2/threads"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),
+    ("post", "/api/v1/identity-inbox/{mapping_id}/skip"),
     ("post", "/api/v2/auth/forgot-password"),
     ("post", "/api/v2/auth/login"),
     ("post", "/api/v2/auth/logout"),

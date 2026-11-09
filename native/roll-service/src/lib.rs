@@ -5,14 +5,17 @@ pub mod bootstrap;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
+pub mod creators;
 pub mod db;
 pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
 pub mod dice_state;
 pub mod dismiss_pending;
+pub mod identity_inbox;
 pub mod issue_handler;
 pub mod issue_mutation;
+pub mod issue_read;
 pub mod issue_service;
 pub mod openapi;
 pub mod option_inputs;
@@ -341,9 +344,43 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(dependencies::delete_dependency),
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
+        .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
+        .route(
+            "/api/v1/identity-inbox/search/issues",
+            get(identity_inbox::search_issues),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}",
+            get(identity_inbox::get_inbox_item),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            post(identity_inbox::confirm),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/defer",
+            post(identity_inbox::defer),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/reject",
+            post(identity_inbox::reject),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/skip",
+            post(identity_inbox::skip),
+        )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
             get(comicvine_issue::issue_intelligence),
+        )
+        .route("/api/v1/issues/{issue_id}", get(issue_read::get_issue))
+        .route(
+            "/api/v1/issues/{issue_id}/comicvine",
+            get(comicvine_issue::issue_intelligence),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/dependencies",
+            get(issue_read::get_issue_dependencies),
         )
         .route(
             "/api/v1/roll/dismiss-pending",
@@ -370,6 +407,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
+        .route("/api/v1/creators", get(creators::list_creators))
+        .route("/api/v1/creators/", get(creators::list_creators))
+        .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

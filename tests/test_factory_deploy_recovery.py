@@ -1,9 +1,7 @@
 """Regressions for bounded recovery and factory incident routing."""
 
 import importlib.util
-import io
 import json
-import sys
 import subprocess
 from pathlib import Path
 from types import ModuleType
@@ -15,7 +13,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 
 @pytest.fixture
 def recovery(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    """Load the trusted workflow helper and its sibling freeze evaluator."""
+    """Load the trusted deployment recovery helper."""
     monkeypatch.syspath_prepend(str(SCRIPTS))
     spec = importlib.util.spec_from_file_location(
         "factory_deploy_recovery", SCRIPTS / "factory_deploy_recovery.py"
@@ -153,7 +151,7 @@ def test_failure_refresh_preserves_live_lease(
 
 
 def test_success_needs_both_real_smokes(recovery: ModuleType) -> None:
-    """Neither a green freeze gate nor a partial smoke result proves recovery."""
+    """A successful recovery requires both real production smoke probes."""
     run = failed_run()
     run["conclusion"] = "success"
     run["jobs"] = [{"name": recovery.DEPLOY_JOB_NAME, "conclusion": "skipped"}]
@@ -205,7 +203,6 @@ def test_recovery_workflow_uses_trusted_main_and_heartbeat() -> None:
     assert "ref: main" in workflow
     assert "secrets." not in workflow
     deploy = (SCRIPTS.parent / "workflows" / "deploy-production.yml").read_text()
-    assert "--recover-reviewed-fix" in deploy
     assert "--build-env COMICPILE_BUILD_SHA=" in deploy
     assert ".build.revision == $sha" in deploy
 
@@ -236,31 +233,6 @@ def test_recovered_incident_keeps_active_worker_lease(
         ],
     )
     assert len(calls) == 2
-
-
-@pytest.mark.parametrize("proof_available", [True, False])
-def test_freeze_cli_requires_successful_repair_proof(
-    recovery: ModuleType,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    proof_available: bool,
-) -> None:
-    """The real freeze CLI retries a proven fix and stays frozen on API errors."""
-    factory_deploy_freeze = importlib.import_module("factory_deploy_freeze")
-
-    def proof(run: object, repository: str) -> int:
-        if not proof_available:
-            raise subprocess.CalledProcessError(1, ["gh", "pr", "list"])
-        return 42
-
-    monkeypatch.setattr(recovery, "merged_repair", proof)
-    monkeypatch.setitem(sys.modules, "factory_deploy_recovery", recovery)
-    monkeypatch.setenv("GITHUB_REPOSITORY", "example/repo")
-    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"workflow_runs": [failed_run()]})))
-    result = factory_deploy_freeze.main(["--recover-reviewed-fix"])
-    decision = json.loads(capsys.readouterr().out)
-    assert result == (0 if proof_available else 1)
-    assert decision["blocked"] is not proof_available
 
 
 @pytest.mark.parametrize("invalid", [None, "sha", "run_id", "run_attempt"])

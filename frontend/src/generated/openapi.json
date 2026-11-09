@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "ActionRequest": {
+        "properties": {
+          "external_identity_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search_query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "ActiveThreadInfo": {
         "description": "Schema for active thread information in session response.",
         "properties": {
@@ -11917,6 +11941,290 @@
         },
         "required": [
           "email"
+        ],
+        "type": "object"
+      },
+      "NativeIdentityInboxActionResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "updated_item": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeIdentityInboxItem"
+              }
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "type": "object"
+      },
+      "NativeIdentityInboxCandidate": {
+        "properties": {
+          "comicvine_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "evidence_json": {},
+          "evidence_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata_json": {},
+          "provider": {
+            "type": "string"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "external_identity_id",
+          "provider",
+          "metadata_json",
+          "status",
+          "evidence_json"
+        ],
+        "type": "object"
+      },
+      "NativeIdentityInboxItem": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIdentityInboxCandidate"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "mapping_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_entry_summary": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "why_stopped": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mapping_id",
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "source_entry_summary",
+          "why_stopped",
+          "candidates"
+        ],
+        "type": "object"
+      },
+      "NativeIdentityInboxResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIdentityInboxItem"
+            },
+            "type": "array"
+          },
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "offset": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "total": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "NativeIdentityInboxSearchResponse": {
+        "properties": {
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIdentityInboxSearchResult"
+            },
+            "type": "array"
+          },
+          "total_available": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "issue_id",
+          "query",
+          "results"
+        ],
+        "type": "object"
+      },
+      "NativeIdentityInboxSearchResult": {
+        "properties": {
+          "comicvine_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "comicvine_volume_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "volume_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "comicvine_issue_id",
+          "evidence"
         ],
         "type": "object"
       },
@@ -26261,57 +26569,17 @@
     },
     "/api/v1/identity-inbox": {
       "get": {
-        "description": "List unresolved or ambiguous external identity mappings for the current user.\n\nArgs:\n    current_user: Authenticated owner.\n    db: Async database session.\n    offset: Pagination offset.\n    limit: Maximum items to return.\n\nReturns:\n    Paginated list of inbox items.",
-        "operationId": "api_list_inbox_api_v1_identity_inbox_get",
-        "parameters": [
-          {
-            "description": "Pagination offset",
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "description": "Pagination offset",
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Maximum items to return",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 50,
-              "description": "Maximum items to return",
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          }
-        ],
+        "operationId": "list_documentation",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26319,84 +26587,24 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api List Inbox",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
     },
     "/api/v1/identity-inbox/search/issues": {
       "get": {
-        "description": "Search ComicVine for issues by query string.\n\nArgs:\n    current_user: Authenticated owner.\n    q: Search query string.\n    limit: Maximum results to return.\n    issue_id: Optional ComicPile issue ID for context.\n\nReturns:\n    Issue search results with metadata.",
-        "operationId": "api_search_comicvine_issues_api_v1_identity_inbox_search_issues_get",
-        "parameters": [
-          {
-            "description": "Issue search query",
-            "in": "query",
-            "name": "q",
-            "required": true,
-            "schema": {
-              "description": "Issue search query",
-              "maxLength": 200,
-              "minLength": 1,
-              "title": "Q",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Maximum results",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 10,
-              "description": "Maximum results",
-              "maximum": 50,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Optional ComicPile issue ID for context",
-            "in": "query",
-            "name": "issue_id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Optional ComicPile issue ID for context",
-              "title": "Issue Id"
-            }
-          }
-        ],
+        "operationId": "search_documentation",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxSearchResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26404,24 +26612,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Search Comicvine Issues",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
     },
     "/api/v1/identity-inbox/{mapping_id}": {
       "get": {
-        "description": "Get a single inbox item with all its candidates.\n\nArgs:\n    mapping_id: The mapping ID to retrieve.\n    current_user: Authenticated owner.\n    db: Async database session.\n\nReturns:\n    Single-item response with candidates.",
-        "operationId": "api_get_inbox_item_api_v1_identity_inbox__mapping_id__get",
+        "operationId": "get_documentation",
         "parameters": [
           {
+            "description": "Mapping id",
             "in": "path",
             "name": "mapping_id",
             "required": true,
             "schema": {
-              "title": "Mapping Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -26431,21 +26637,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26453,24 +26649,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Get Inbox Item",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
     },
     "/api/v1/identity-inbox/{mapping_id}/confirm": {
       "post": {
-        "description": "Confirm a candidate for an unresolved identity mapping.",
-        "operationId": "api_confirm_candidate_api_v1_identity_inbox__mapping_id__confirm_post",
+        "operationId": "confirm_documentation",
         "parameters": [
           {
+            "description": "Mapping id",
             "in": "path",
             "name": "mapping_id",
             "required": true,
             "schema": {
-              "title": "Mapping Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -26479,7 +26673,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IdentityInboxActionRequest"
+                "$ref": "#/components/schemas/ActionRequest"
               }
             }
           },
@@ -26490,21 +26684,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxActionResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26512,24 +26696,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Confirm Candidate",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
     },
     "/api/v1/identity-inbox/{mapping_id}/defer": {
       "post": {
-        "description": "Defer a mapping for later review.",
-        "operationId": "api_defer_item_api_v1_identity_inbox__mapping_id__defer_post",
+        "operationId": "defer_documentation",
         "parameters": [
           {
+            "description": "Mapping id",
             "in": "path",
             "name": "mapping_id",
             "required": true,
             "schema": {
-              "title": "Mapping Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -26539,21 +26721,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxActionResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26561,24 +26733,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Defer Item",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
     },
     "/api/v1/identity-inbox/{mapping_id}/reject": {
       "post": {
-        "description": "Reject a candidate for an identity mapping.",
-        "operationId": "api_reject_candidate_api_v1_identity_inbox__mapping_id__reject_post",
+        "operationId": "reject_documentation",
         "parameters": [
           {
+            "description": "Mapping id",
             "in": "path",
             "name": "mapping_id",
             "required": true,
             "schema": {
-              "title": "Mapping Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -26587,7 +26757,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/IdentityInboxActionRequest"
+                "$ref": "#/components/schemas/ActionRequest"
               }
             }
           },
@@ -26598,21 +26768,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxActionResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26620,24 +26780,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Reject Candidate",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
     },
     "/api/v1/identity-inbox/{mapping_id}/skip": {
       "post": {
-        "description": "Skip an inbox item for the current adoption workflow.",
-        "operationId": "api_skip_item_api_v1_identity_inbox__mapping_id__skip_post",
+        "operationId": "skip_documentation",
         "parameters": [
           {
+            "description": "Mapping id",
             "in": "path",
             "name": "mapping_id",
             "required": true,
             "schema": {
-              "title": "Mapping Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -26647,21 +26805,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                  "$ref": "#/components/schemas/NativeIdentityInboxActionResponse"
                 }
               }
             },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "ok"
           }
         },
         "security": [
@@ -26669,9 +26817,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Api Skip Item",
         "tags": [
-          "identity-inbox",
           "identity-inbox"
         ]
       }
@@ -30826,34 +30972,6 @@
         ]
       }
     },
-    "/api/v1/threads/active": {
-      "get": {
-        "description": "Render active threads as radio buttons for the override modal.",
-        "operationId": "list_active_threads_api_v1_threads_active_get",
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Active Threads",
-        "tags": [
-          "threads",
-          "threads"
-        ]
-      }
-    },
     "/api/v1/threads/check-duplicates": {
       "post": {
         "description": "Report the reader's series that may already be this volume (#3612).\n\nAdvisory only. A confirmed ComicVine volume is reported as a strong match;\ntitle resemblance is reported as an uncertain suggestion so same-titled\nvolumes remain creatable and renameable. Nothing is written, merged, or\ndeleted by checking.\n\nArgs:\n    request: FastAPI request object for rate limiting.\n    check_data: Proposed title, format, optional ComicVine volume, and the\n        thread to exclude when checking a rename.\n    current_user: The authenticated reader.\n    db: SQLAlchemy session for database operations.\n\nReturns:\n    Possible existing volumes, strongest match first.",
@@ -30896,34 +31014,6 @@
           }
         ],
         "summary": "Check Potential Duplicates",
-        "tags": [
-          "threads",
-          "threads"
-        ]
-      }
-    },
-    "/api/v1/threads/completed": {
-      "get": {
-        "description": "Render completed threads as options for the reactivation modal.",
-        "operationId": "list_completed_threads_html_api_v1_threads_completed_get",
-        "responses": {
-          "200": {
-            "content": {
-              "text/html": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "List Completed Threads Html",
         "tags": [
           "threads",
           "threads"

@@ -9,7 +9,6 @@ lives in ``app/services/thread_service.py``; query construction lives in
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -245,26 +244,6 @@ async def check_potential_duplicates(
         exclude_thread_id=check_data.exclude_thread_id,
     )
     return CheckPotentialDuplicatesResponse(matches=matches)
-
-
-@router.get("/completed", response_class=HTMLResponse)
-async def list_completed_threads_html(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> str:
-    """Render completed threads as options for the reactivation modal."""
-    return await thread_service.completed_threads_html(db, current_user.id)
-
-
-@router.get("/active", response_class=HTMLResponse)
-async def list_active_threads(
-    request: Request,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> str:
-    """Render active threads as radio buttons for the override modal."""
-    return await thread_service.active_threads_html(db, current_user.id)
 
 
 @router.post("/", response_model=ThreadResponse, status_code=status.HTTP_201_CREATED)

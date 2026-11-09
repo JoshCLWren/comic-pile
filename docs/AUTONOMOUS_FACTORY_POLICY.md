@@ -535,26 +535,24 @@ Define staleness relative to a rolling population of the **last 100 eligible suc
 
 The threshold uses a robust distribution-derived rule: **`2 × P90`** as the default candidate, compared with a median/MAD formulation. The final formula uses the more conservative (larger) of the two, subject to a documented lower floor of **1 hour** and a cold-start fallback of **24 hours** when fewer than 10 merged PRs exist.
 
-### Expiration behavior
+### Non-destructive recovery behavior
 
 When an autonomous Factory implementation PR crosses the stale threshold:
-1. Release/reset the linked issue to unowned executable implementation from current `main`
-2. Close/cancel that PR implementation attempt
-3. Persist a trusted controller marker/comment (`comic-pile-factory-stale-expiration-v1`) recording the observed age, baseline sample, formula, and threshold
-4. Ensure the stale branch/PR cannot immediately re-enter repair/review loops
-5. Preserve enough provenance to audit why the attempt was expired
+1. Report `stale-preserved` with the PR number, linked issue, age and measured threshold.
+2. **Keep the PR and branch open**, including their commits, existing worker lease, review findings, CI history and linked issue stage.
+3. Route recovery through the existing PR review, CI repair, conflict repair and implementation queue. The owner or next worker should fix the actual blocker on the same PR rather than throw away partial work.
+4. Close an unfinished PR only via a separate, explicit and evidenced decision that its work is completely merged, superseded, duplicate or irrecoverable. Record exactly what happened to its unique commits and how the owner objective will finish. Age, repeated provider failures, a stalled review, or a partial migration slice are not adequate reasons by themselves.
 
-The mutation order is deliberate. Resetting the issue while its canonical PR is still
-open is safe because the open PR suppresses duplicate issue intake. Writing the
-marker last keeps a partial GitHub failure retryable instead of recording a false
-completed expiration.
+The existing dispatcher consults **Jev** for aged, non-deferred PRs using `OPENROUTER_JEV_API_KEY` in bounded batches. Jev selects `preserve` or `closure_review` using trusted current-head metadata and the issue/PR context. A high-confidence `closure_review` recommendation is **advice to investigate**, never approval to close. A worker must independently establish that all unique behavior and tests are merged, superseded, redundant, or irrecoverably invalid and preserve a durable handoff before an explicit close. If Jev is missing, returns invalid output, or is uncertain, the PR remains open.
 
-Staleness is an **attempt-level circuit breaker**, just like semantic strike exhaustion. It must not close the underlying product issue unless a separate terminal condition applies.
+Scheduled `factory-work-controller.py stale` is **diagnostic only**. It must never reset the linked issue or close its canonical PR based solely on age or a Jev score. Its `expired_count` remains zero for compatibility, and `stale_preserved_count` tracks recoverable aged PRs. Dry-run and ordinary evaluation both preserve work.
+
+The older age-driven stale-expiration markers remain interpretable for historical audit and reopened PRs, but the scheduled decay check no longer produces them. Semantic review strikes are a separate policy and do not authorize treating age as a semantic defect.
 
 ### Relationship to semantic strikes
 
 - **Semantic strikes:** repeated evidence that an implementation is substantively wrong
-- **Stale decay:** evidence that an implementation has failed to converge in normal Factory time, regardless of cause
+- **Stale diagnostics:** a recovery signal that an implementation has not yet converged in normal Factory time, regardless of cause; not permission to close the PR
 - Neither mechanism increments or masquerades as the other
 
 ### Scope/eligibility
@@ -566,14 +564,15 @@ Only autonomous Factory implementation PRs should participate. Exclude Dependabo
 The `stale_pr_decay.py` module in `.github/scripts/` provides:
 - `get_staleness_baseline()` — builds the rolling population baseline
 - `is_stale_attempt()` — checks if a PR age exceeds the threshold
-- `process_stale_prs()` — evaluates and expires stale PRs
+- `process_stale_prs()` — evaluates aged PRs and reports them without closing or resetting them
 - `StalePRGuard` — configurable guard class
 - `build_stale_expiration_marker()` / `parse_stale_marker()` — durable marker support
 - `get_staleness_observability()` — logging summary
 
 The controller exposes a `stale` subcommand: `factory-work-controller.py stale [--dry-run]`.
 The fixed-model dispatcher invokes `stale` once per serialized dispatch tick,
-after the ready-PR merge drain and before new assignments are selected.
+after the ready-PR merge drain and before new assignments are selected. This is
+an observability step, never a destructive cleanup operation.
 
 ## Semantic review strike policy
 

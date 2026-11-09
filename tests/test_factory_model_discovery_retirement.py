@@ -1548,8 +1548,9 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert 76 in lock["retired_workers"]
     assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in remaining}
-    assert "77" not in by_worker
-    assert 77 in lock["retired_workers"]
+    assert by_worker["77"]["source"] == "nvidia"
+    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
+    assert 77 in lock["expected_workers"]
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
     assert "79" not in by_worker

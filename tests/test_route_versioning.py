@@ -140,6 +140,18 @@ def test_retired_queue_routes_are_absent() -> None:
         assert f"{prefix}/shuffle/" not in schema["paths"]
 
 
+def test_retired_thread_html_routes_are_absent() -> None:
+    """Rust-first cutover excludes unused HTML handlers but retains the JSON listing."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+    for prefix in ("/api/threads", "/api/v1/threads"):
+        assert f"{prefix}/active" not in methods_by_path
+        assert f"{prefix}/completed" not in methods_by_path
+        assert f"{prefix}/active" not in app.openapi()["paths"]
+        assert f"{prefix}/completed" not in app.openapi()["paths"]
+    assert "/api/v1/threads/completed/threads" in methods_by_path
+
+
 def test_v1_admin_aliases_match_legacy_route_methods() -> None:
     """Canonical /api/v1/admin aliases reuse the same admin handler contracts."""
     app = create_app(serve_frontend=False)
@@ -238,8 +250,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/sessions/{session_id}/restore-session-start",
             "/api/sessions/{session_id}/snapshots",
             "/api/threads/",
-            "/api/threads/active",
-            "/api/threads/completed",
             "/api/threads/reactivate",
             "/api/threads/stale",
             "/api/threads/{thread_id}",

@@ -553,7 +553,6 @@
     "tests/test_factory_completion_controller.py",
     "tests/test_factory_dependency_intake.py",
     "tests/test_factory_deploy_dispatch_after_merge.py",
-    "tests/test_factory_deploy_freeze.py",
     "tests/test_factory_dispatch_workflow.py",
     "tests/test_factory_dispatcher_authorization.py",
     "tests/test_factory_eligibility.py",
@@ -10511,8 +10510,6 @@
       ]
     },
     {
-      "path": "tests/test_factory_deploy_freeze.py",
-      "module": "tests.test_factory_deploy_freeze",
       "package": "tests",
       "explicit_surface": true,
       "error_count": 0,

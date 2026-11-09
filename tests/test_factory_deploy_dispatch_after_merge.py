@@ -175,7 +175,6 @@ esac
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
         "GITHUB_REPOSITORY": "JoshCLWren/comic-pile",
         "RUNNER_TEMP": str(tmp_path),
-        "DEPLOY_FROZEN": "false",
         "GH_TOKEN": "test",
     }
     script = _step_script(workflow_rel, "Drain exact-head ready factory PRs")

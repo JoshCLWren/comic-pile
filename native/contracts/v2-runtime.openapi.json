@@ -9,6 +9,261 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/api/v1/identity-inbox": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "list_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/search/issues": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "search_documentation",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxSearchResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}": {
+      "get": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "get_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/confirm": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "confirm_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/defer": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "defer_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/reject": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "reject_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/identity-inbox/{mapping_id}/skip": {
+      "post": {
+        "tags": [
+          "identity-inbox"
+        ],
+        "operationId": "skip_documentation",
+        "parameters": [
+          {
+            "name": "mapping_id",
+            "in": "path",
+            "description": "Mapping id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityInboxActionResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/analytics/metrics": {
       "get": {
         "tags": [
@@ -1840,6 +2095,30 @@
   },
   "components": {
     "schemas": {
+      "ActionRequest": {
+        "type": "object",
+        "properties": {
+          "external_identity_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "search_query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "AnalyticsMetricsResponse": {
         "type": "object",
         "description": "Reading metrics and analytics for the authenticated user.",
@@ -2954,6 +3233,290 @@
         "properties": {
           "email": {
             "type": "string"
+          }
+        }
+      },
+      "IdentityInboxActionResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "updated_item": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/IdentityInboxItem"
+              }
+            ]
+          }
+        }
+      },
+      "IdentityInboxCandidate": {
+        "type": "object",
+        "required": [
+          "external_identity_id",
+          "provider",
+          "metadata_json",
+          "status",
+          "evidence_json"
+        ],
+        "properties": {
+          "comicvine_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "evidence_json": {},
+          "evidence_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "external_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata_json": {},
+          "provider": {
+            "type": "string"
+          },
+          "rejection_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "IdentityInboxItem": {
+        "type": "object",
+        "required": [
+          "mapping_id",
+          "issue_id",
+          "thread_id",
+          "thread_title",
+          "issue_number",
+          "status",
+          "source_entry_summary",
+          "why_stopped",
+          "candidates"
+        ],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxCandidate"
+            }
+          },
+          "created_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "mapping_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "provider": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_entry_summary": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "why_stopped": {
+            "type": "string"
+          }
+        }
+      },
+      "IdentityInboxResponse": {
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "offset",
+          "limit"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxItem"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "IdentityInboxSearchResponse": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "query",
+          "results"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "query": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IdentityInboxSearchResult"
+            }
+          },
+          "total_available": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          }
+        }
+      },
+      "IdentityInboxSearchResult": {
+        "type": "object",
+        "required": [
+          "comicvine_issue_id",
+          "evidence"
+        ],
+        "properties": {
+          "comicvine_issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comicvine_volume_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "image_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publisher": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "site_detail_url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "start_year": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "volume_name": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

@@ -477,40 +477,22 @@ def test_get_staleness_baseline_sample_size_cap():
     assert baseline["sample_size"] <= 10
 
 
-def test_record_stale_expiration_releases_issue_before_closing_and_marks_last(
-    monkeypatch,
-) -> None:
-    """A stale PR cannot close before its linked issue is safely reusable."""
-    events: list[tuple[str, object]] = []
-    monkeypatch.setattr(
-        module,
-        "reset_issue_to_unowned",
-        lambda number: events.append(("reset", number)),
-    )
-    monkeypatch.setattr(
-        module,
-        "close_pr_implementation",
-        lambda number: events.append(("close", number)),
-    )
-    monkeypatch.setattr(
-        module,
-        "run_gh",
-        lambda args, **kwargs: events.append(("comment", tuple(args))),
-    )
+def test_record_stale_expiration_refuses_legacy_age_based_close(monkeypatch) -> None:
+    """Even an explicit legacy helper call cannot destroy work due to age."""
+    def forbidden(*_args, **_kwargs) -> None:
+        raise AssertionError("no GitHub write is allowed by stale-age cleanup")
 
-    marker = module.record_stale_expiration(
-        42,
-        100,
-        90_000,
-        {"sample_size": 50, "formula": "2x_p90", "threshold_seconds": 23_200},
-    )
-
-    assert events[0] == ("reset", 100)
-    assert events[1] == ("close", 42)
-    assert events[2][0] == "comment"
-    comment_args = events[2][1]
-    assert isinstance(comment_args, tuple)
-    assert marker in comment_args
+    for action in ("reset_issue_to_unowned", "close_pr_implementation", "run_gh"):
+        monkeypatch.setattr(module, action, forbidden)
+    try:
+        module.record_stale_expiration(
+            42, 100, 90_000,
+            {"sample_size": 50, "formula": "2x_p90", "threshold_seconds": 23_200},
+        )
+    except RuntimeError as exc:
+        assert "age-based PR expiration is disabled" in str(exc)
+    else:
+        raise AssertionError("the legacy expiration helper must fail closed")
 
 
 def test_reset_issue_to_unowned_makes_open_issue_executable(monkeypatch) -> None:
@@ -630,8 +612,8 @@ def test_stale_pr_cutover_deferral_preserves_open_pr(monkeypatch) -> None:
     assert closed == []
 
 
-def test_stale_pr_cutover_issue_is_not_exempt(monkeypatch) -> None:
-    """Genuinely active Rust attempts retain adaptive stale expiry."""
+def test_stale_pr_cutover_issue_is_reported_without_closing(monkeypatch) -> None:
+    """Even active Rust attempts keep their exact-head code when old."""
     now = 1_800_000_000
     created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
@@ -656,8 +638,9 @@ def test_stale_pr_cutover_issue_is_not_exempt(monkeypatch) -> None:
         lambda pr_number, *_args: closed.append(pr_number) or "marker",
     )
     result = module.process_stale_prs(prs=[pr], now_epoch=now)
-    assert result[0]["status"] == "expired"
-    assert closed == [4703]
+    assert result[0]["status"] == "stale-preserved"
+    assert result[0]["issue"] == 4589
+    assert closed == []
 
 
 def test_stale_pr_cutover_state_lookup_failure_cannot_close_pr(monkeypatch) -> None:
@@ -735,5 +718,165 @@ def test_process_stale_prs_does_not_close_manual_only_pr(monkeypatch) -> None:
     assert by_pr[7]["status"] == "manual-only"
     assert 7 not in closed
     assert 7 not in comment_fetches
-    assert 8 in closed
-    assert by_pr[8]["status"] == "expired"
+    assert closed == []
+    assert by_pr[8]["status"] == "stale-preserved"
+    assert by_pr[8]["dry_run"] is False
+
+
+def test_age_only_preserves_review_claim_commit_and_issue_even_in_normal_mode(monkeypatch) -> None:
+    """Age-based cleanup must not erase a repairable Rust PR or its worker lease."""
+    now = 1_800_000_000
+    created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    labels = ["factory", "factory:changes-requested", "factory:80", "rust"]
+    pr = make_pr(
+        4727,
+        created=created,
+        state="OPEN",
+        branch="factory/54-4719-opencode-free",
+        labels=labels,
+        body="Part of #4719. Retain this scoped migration PR.",
+    )
+    baseline = {"sample_size": 50, "threshold_seconds": 90_000}
+    monkeypatch.setattr(module, "get_staleness_baseline", lambda *_a, **_kw: baseline)
+    monkeypatch.setattr(module, "get_pr_comments", lambda _n: [])
+    monkeypatch.setattr(module, "stale_pr_is_cutover_deferred", lambda _pr: False)
+
+    def forbid_destructive_call(*_args, **_kwargs) -> None:
+        raise AssertionError("age-only stale evaluation must never write or close")
+
+    for destructive in (
+        "record_stale_expiration",
+        "reset_issue_to_unowned",
+        "close_pr_implementation",
+        "replace_factory_labels",
+        "run_gh",
+    ):
+        monkeypatch.setattr(module, destructive, forbid_destructive_call)
+
+    for dry_run in (False, True):
+        result = module.process_stale_prs(prs=[pr], now_epoch=now, dry_run=dry_run)
+        assert result == [{
+            "pr": 4727,
+            "status": "stale-preserved",
+            "age_seconds": 700_000,
+            "issue": 4719,
+            "baseline": baseline,
+            "dry_run": dry_run,
+            "jev": {"status": "unavailable", "reason": "missing dedicated Jev key"},
+        }]
+        assert [label["name"] for label in pr["labels"]] == labels
+
+
+def test_stale_report_preserves_branch_without_linked_issue(monkeypatch) -> None:
+    """A local factory PR without a closing keyword keeps its actual patch."""
+    now = 1_800_000_000
+    created = datetime.fromtimestamp(now - 700_000, tz=UTC).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    pr = make_pr(
+        4778, created=created, state="OPEN",
+        branch="local/issue-card-roll-featured-parity-20261107",
+        body="Part of #4445",
+    )
+    monkeypatch.setattr(
+        module, "get_staleness_baseline",
+        lambda *_a, **_kw: {"sample_size": 20, "threshold_seconds": 90_000},
+    )
+    monkeypatch.setattr(module, "get_pr_comments", lambda _n: [])
+    monkeypatch.setattr(module, "stale_pr_is_cutover_deferred", lambda _pr: False)
+    monkeypatch.setattr(
+        module,
+        "record_stale_expiration",
+        lambda *_a: (_ for _ in ()).throw(AssertionError("closed valuable code")),
+    )
+    result = module.process_stale_prs(prs=[pr], now_epoch=now)
+    assert result[0]["status"] == "stale-preserved"
+    assert result[0]["issue"] is None
+
+
+def test_stale_jev_preserves_incomplete_work_even_when_model_suggests_closure() -> None:
+    """Jev is consulted but cannot directly expire valuable commits."""
+    prs = [
+        make_pr(
+            4727, state="OPEN", body="Part of #4719. The migration is unfinished.",
+            labels=["factory", "factory:changes-requested", "rust"],
+        ),
+        make_pr(4758, state="OPEN", body="Only partial SQL proof exists."),
+    ]
+    calls: list[dict[str, Any]] = []
+
+    def jev(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
+        assert api_key == "test-jev-key"
+        calls.append(payload)
+        return {
+            "model": module.JEV_MODEL,
+            "answers": {
+                "closure_4727": {
+                    "type": "choice", "choice": "preserve",
+                    "confidence": 0.99,
+                    "probabilities": {"preserve": 0.99, "closure_review": 0.01},
+                },
+                "closure_4758": {
+                    "type": "choice", "choice": "closure_review",
+                    "confidence": 0.95,
+                    "probabilities": {"preserve": 0.04, "closure_review": 0.96},
+                },
+            },
+        }
+
+    decisions = module.consult_jev_on_aged_prs(prs, "test-jev-key", client=jev)
+    assert len(calls) == 1
+    assert calls[0]["model"] == module.JEV_MODEL
+    assert decisions[4727]["status"] == "preserve"
+    # High confidence authorizes a separate investigation, not automatic close.
+    assert decisions[4758]["status"] == "closure-review"
+
+
+def test_stale_jev_unavailable_abstains_without_destructive_fallback() -> None:
+    """Provider interruptions and malformed answers always retain the old PR."""
+    prs = [make_pr(4727, state="OPEN")]
+    no_key = module.consult_jev_on_aged_prs(prs, "")
+    assert no_key[4727]["status"] == "unavailable"
+    assert no_key[4727]["reason"] == "missing dedicated Jev key"
+
+    def unavailable(_payload: dict[str, Any], _key: str) -> dict[str, Any]:
+        raise OSError("provider unreachable")
+
+    result = module.consult_jev_on_aged_prs(prs, "test-jev-key", client=unavailable)
+    assert result[4727]["status"] == "unavailable"
+
+    invalid = module.consult_jev_on_aged_prs(
+        prs, "test-jev-key",
+        client=lambda _payload, _key: {
+            "model": module.JEV_MODEL,
+            "answers": {
+                "closure_4727": {
+                    "type": "choice", "choice": "closure_review",
+                    "confidence": 0.8,
+                    "probabilities": {"preserve": -1, "closure_review": 2},
+                },
+            },
+        },
+    )
+    assert invalid[4727]["status"] == "unavailable"
+
+
+def test_stale_jev_weak_closure_decision_is_preservation() -> None:
+    """Low-confidence choice does not promote a PR into closure investigation."""
+    prs = [make_pr(4727, state="OPEN")]
+    result = module.consult_jev_on_aged_prs(
+        prs, "test-jev-key",
+        client=lambda _payload, _key: {
+            "model": module.JEV_MODEL,
+            "answers": {
+                "closure_4727": {
+                    "type": "choice", "choice": "closure_review",
+                    "confidence": 0.55,
+                    "probabilities": {"preserve": 0.4, "closure_review": 0.6},
+                },
+            },
+        },
+    )
+    assert result[4727]["status"] == "preserve"

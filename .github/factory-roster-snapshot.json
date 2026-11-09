@@ -138,6 +138,14 @@
       "display_name": "OpenCode Nemotron 3.5 Super Vl Free"
     },
     {
+      "worker": "77",
+      "source": "nvidia",
+      "model": "qwen2.5-coder-7b",
+      "minute": "45",
+      "scheduler": "dispatcher",
+      "display_name": "Local Reviewer 77 Qwen Coder"
+    },
+    {
       "worker": "80",
       "source": "nvidia",
       "model": "z-ai/glm-5.3-flash",
@@ -284,6 +292,7 @@
     64,
     65,
     75,
+    77,
     80,
     82,
     86,
@@ -335,7 +344,6 @@
     73,
     74,
     76,
-    77,
     78,
     79,
     81,
