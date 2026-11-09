@@ -169,7 +169,13 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 37
+    assert len(shadowed_v1) == 38
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/threads/completed/threads"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/creators"

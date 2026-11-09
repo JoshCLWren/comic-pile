@@ -178,6 +178,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/completed/threads$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/dependencies/[0-9]+$",
       "methods": [
         "DELETE"
@@ -1020,14 +1027,6 @@
       "src": "^/api/v1/threads/check\\-duplicates$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/completed/threads$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
