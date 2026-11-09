@@ -2827,8 +2827,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/threads/completed/threads",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
