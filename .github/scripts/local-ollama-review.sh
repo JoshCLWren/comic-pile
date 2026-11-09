@@ -24,7 +24,7 @@ HEAD="$(gh_retry gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)
 ISSUE="$(gh pr view "$PR" --json body --jq .body | grep -oE 'Closes #[0-9]+|Fixes #[0-9]+|Resolves #[0-9]+' | grep -oE '[0-9]+' | head -1 || true)"
 [ -n "$ISSUE" ] || ISSUE="4825"
 gh_retry gh pr diff "$PR" > /tmp/p.patch
-truncate -s 8000 /tmp/p.patch || true
+truncate -s 16000 /tmp/p.patch || true
 
 # Build the prompt from the authoritative issue rubric and exact changed paths.
 # The model must return the complete structured report; this script never
@@ -43,7 +43,14 @@ acceptance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(acceptance)
 repo = os.environ["GITHUB_REPOSITORY"]
 body = json.loads(subprocess.check_output(["gh", "api", f"repos/{repo}/issues/{issue}"], text=True))["body"]
+pr_data = json.loads(subprocess.check_output(["gh", "api", f"repos/{repo}/pulls/{pr}"], text=True))
 changed = [path for path in subprocess.check_output(["gh", "pr", "diff", pr, "--name-only"], text=True).splitlines() if path]
+checks = subprocess.run(
+    ["gh", "pr", "checks", pr],
+    text=True,
+    capture_output=True,
+    check=False,
+).stdout
 prompt = (
     "You are the independent semantic reviewer for a factory PR. Inspect the exact PR head and "
     "decide whether every issue criterion is actually satisfied by this diff. Do not infer or "
@@ -57,8 +64,13 @@ prompt = (
     "paths. Use the exact issue number, full head, and digest below.\n\nIssue rubric:\n" +
     acceptance.rubric(body) + "\n\nChanged paths:\n" + "\n".join(changed) +
     "\n\nExact head: " + head + "\nIssue: " + issue +
-    "\nIssue digest: " + acceptance.digest(body) + "\n\nPatch:\n" +
-    open("/tmp/p.patch", encoding="utf-8").read()[:6000]
+    "\nIssue digest: " + acceptance.digest(body) +
+    "\n\nPR title:\n" + pr_data.get("title", "") +
+    "\n\nPR body (authoritative validation claims; verify them against the diff):\n" +
+    pr_data.get("body", "")[:8000] +
+    "\n\nCurrent CI checks for the exact PR head:\n" + checks[:6000] +
+    "\n\nPatch:\n" +
+    open("/tmp/p.patch", encoding="utf-8").read()[:14000]
 )
 json.dump({"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 1400}, open("/tmp/req.json", "w"))
 PY
