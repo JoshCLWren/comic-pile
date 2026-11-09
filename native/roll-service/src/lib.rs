@@ -311,7 +311,10 @@ async fn bound_request(
     };
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
-        .unwrap_or_else(|_| ApiError::RequestTimeout.into_response());
+        .unwrap_or_else(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            ApiError::RequestTimeout.into_response()
+        });
     // No URI, query, headers, credentials, SQL or upstream error strings in request logs.
     tracing::info!(method = %method, status = response.status().as_u16(), elapsed_ms = started.elapsed().as_millis() as u64, "request completed");
     response

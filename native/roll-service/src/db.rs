@@ -39,7 +39,10 @@ pub async fn checkout(state: &AppState) -> Result<Object, ApiError> {
     }
     tokio::time::timeout(state.request_timeout, recover(state))
         .await
-        .unwrap_or_else(|_| Err(ApiError::database_unavailable()))
+        .unwrap_or_else(|e| {
+            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            Err(ApiError::database_unavailable())
+        })
 }
 
 /// Replace pooled sockets that cannot carry a statement, bounded to
