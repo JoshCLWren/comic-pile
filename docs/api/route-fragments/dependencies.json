@@ -124,8 +124,8 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/dependencies",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/dependencies$",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[0-9]+/dependencies$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-dependency-groups.ts",

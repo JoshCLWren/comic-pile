@@ -12268,6 +12268,28 @@
         ],
         "type": "object"
       },
+      "NativeThreadDependenciesResponse": {
+        "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
+        "properties": {
+          "blocked_by": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyResponse"
+            },
+            "type": "array"
+          },
+          "blocking": {
+            "items": {
+              "$ref": "#/components/schemas/NativeDependencyResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "blocking",
+          "blocked_by"
+        ],
+        "type": "object"
+      },
       "NativeThreadIssueDependenciesResponse": {
         "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
         "properties": {
@@ -30287,15 +30309,16 @@
     },
     "/api/v1/threads/{thread_id}/dependencies": {
       "get": {
-        "description": "List dependencies where a thread blocks others and where it is blocked.",
-        "operationId": "list_thread_dependencies_api_v1_threads__thread_id__dependencies_get",
+        "description": "List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.",
+        "operationId": "get_thread_dependencies_documentation",
         "parameters": [
           {
+            "description": "Owned thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30305,21 +30328,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadDependenciesResponse"
+                  "$ref": "#/components/schemas/NativeThreadDependenciesResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Thread dependencies"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -30327,9 +30349,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Thread Dependencies",
+        "summary": "Documentation-only operation for the mounted thread-dependencies read.",
         "tags": [
-          "dependencies",
           "dependencies"
         ]
       }

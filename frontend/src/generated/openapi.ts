@@ -4271,10 +4271,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Thread Dependencies
-         * @description List dependencies where a thread blocks others and where it is blocked.
+         * Documentation-only operation for the mounted thread-dependencies read.
+         * @description List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.
          */
-        get: operations["list_thread_dependencies_api_v1_threads__thread_id__dependencies_get"];
+        get: operations["get_thread_dependencies_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11306,6 +11306,16 @@ export interface components {
             series_name?: string | null;
             /** Format: int32 */
             thread_id?: number | null;
+        };
+        /**
+         * @description Wire parity with Python `ThreadDependenciesResponse`
+         *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
+         *     thread's issues block others, `blocked_by` holds edges where this thread's
+         *     issues are blocked. Each entry is the enriched `DependencyResponse`.
+         */
+        NativeThreadDependenciesResponse: {
+            blocked_by: components["schemas"]["NativeDependencyResponse"][];
+            blocking: components["schemas"]["NativeDependencyResponse"][];
         };
         /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
         NativeThreadIssueDependenciesResponse: {
@@ -20413,34 +20423,47 @@ export interface operations {
             };
         };
     };
-    list_thread_dependencies_api_v1_threads__thread_id__dependencies_get: {
+    get_thread_dependencies_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Thread dependencies */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadDependenciesResponse"];
+                    "application/json": components["schemas"]["NativeThreadDependenciesResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

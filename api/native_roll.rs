@@ -280,6 +280,10 @@ fn app() -> Router {
             "/api/v1/issues/{issue_id}/dependencies",
             get(native_dispatch),
         )
+        .route(
+            "/api/v1/threads/{thread_id}/dependencies",
+            get(native_dispatch),
+        )
         .route("/api/v1/continuity-rules/", get(native_dispatch))
         .route("/api/v1/continuity-rules/", post(native_dispatch))
         .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
