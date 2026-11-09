@@ -1,5 +1,6 @@
 //! Vercel's native Rust ingress for the Roll endpoint cutover.
 //! The health probe never reads database configuration.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 use axum::{
     extract::Request,
     http::{Extensions, HeaderValue, StatusCode},
