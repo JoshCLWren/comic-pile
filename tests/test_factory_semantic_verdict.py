@@ -117,6 +117,8 @@ def test_worker_recovery_is_fresh_bounded_and_fail_closed() -> None:
     assert "pull request #${pr} at exact head ${head}" in helper
     assert '"$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission"' in worker
     assert "factory_append_recovered_acceptance_report" in worker
+    assert 'factory_sanitize_review_log "$recovery_log" "$sanitized_recovery_log"' in worker
+    assert '"$sanitized_review_log" "$sanitized_recovery_log"' in worker
     assert "FACTORY_GATE_BLOCKED" in helper
     assert "recovery_timeout=90" in worker
     assert "current_head" in worker
