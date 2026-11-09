@@ -12,15 +12,47 @@ from pathlib import Path
 from collections.abc import Mapping, Sequence
 from datetime import datetime
 
-from factory_deploy_freeze import (
-    DEPLOY_JOB_NAME,
-    RED_CONCLUSIONS,
-    fetch_run_jobs,
-    latest_attempted_deploy_run,
-)
+DEPLOY_JOB_NAME = "Migrate Neon and deploy exact main SHA"
+RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
+
+
+def fetch_run_jobs(run_id: int, *, repository: str) -> list[Mapping[str, object]] | None:
+    """Fetch jobs for a completed deployment run."""
+    try:
+        payload = gh_json(["run", "view", str(run_id), "--repo", repository, "--json", "jobs"])
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    return mappings(payload.get("jobs")) if isinstance(payload, Mapping) else None
+
+
+def latest_attempted_deploy_run(
+    payload: object,
+    *,
+    jobs_loader: object = None,
+) -> Mapping[str, object] | None:
+    """Return the newest completed deployment run that reached the deploy job."""
+    pages = payload if isinstance(payload, list) else [payload]
+    runs: list[Mapping[str, object]] = []
+    for page in pages:
+        if not isinstance(page, Mapping):
+            continue
+        for run in page.get("workflow_runs", []):
+            if isinstance(run, Mapping) and run.get("head_branch", "main") == "main":
+                if str(run.get("conclusion") or "").lower() not in {"cancelled", "skipped", "neutral"}:
+                    runs.append(run)
+    runs.sort(key=lambda run: (str(run.get("updated_at") or ""), int(run.get("id", 0))), reverse=True)
+    for run in runs:
+        jobs = run.get("jobs")
+        if jobs is None and callable(jobs_loader):
+            jobs = jobs_loader(int(run["id"]))
+        if jobs is None:
+            return run
+        if any(job.get("name") == DEPLOY_JOB_NAME for job in mappings(jobs)):
+            return run
+    return None
 
 MARKER = "<!-- comic-pile-deploy-recovery:v1 -->"
-TITLE = "Production deployment failed: repair frozen release"
+TITLE = "Production deployment failed: repair release"
 SMOKES = frozenset(
     {"Smoke production Rust health", "Smoke production rejected login on the Rust runtime"}
 )
