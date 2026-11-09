@@ -320,7 +320,10 @@ pub async fn bootstrap_at(
         retry_deadlock(|| bootstrap_once(state, user, timezone, policy, now)),
     )
     .await
-    .unwrap_or(Err(ApiError::DatabaseUnavailable))
+    .unwrap_or_else(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        Err(ApiError::DatabaseUnavailable)
+    })
 }
 
 /// Total attempts for a deadlock-detected bootstrap or initialization.
@@ -476,7 +479,10 @@ pub async fn initialize_at(
         retry_deadlock(|| initialize_once(state, user, timezone, policy, now)),
     )
     .await
-    .unwrap_or(Err(ApiError::DatabaseUnavailable))
+    .unwrap_or_else(|e| {
+        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        Err(ApiError::DatabaseUnavailable)
+    })
 }
 async fn initialize_once(
     state: &AppState,
