@@ -10,8 +10,10 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = REPO_ROOT / ".github" / "scripts"
-if str(SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS))
+ROOT_SCRIPTS = REPO_ROOT / "scripts"
+for entry in (str(ROOT_SCRIPTS), str(SCRIPTS)):
+    if entry not in sys.path:
+        sys.path.insert(0, entry)
 
 SPEC = importlib.util.spec_from_file_location("stale_pr_decay", SCRIPTS / "stale_pr_decay.py")
 assert SPEC is not None and SPEC.loader is not None

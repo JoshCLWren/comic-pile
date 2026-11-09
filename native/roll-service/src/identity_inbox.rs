@@ -444,10 +444,9 @@ pub async fn search_issues(
     if let Some(p) = payload {
         if let Some(rows) = p.get("results").and_then(|v| v.as_array()) {
             for row in rows {
-                if !row.is_object() {
+                let Some(obj) = row.as_object() else {
                     continue;
-                }
-                let obj = row.as_object().unwrap();
+                };
                 let comicvine_issue_id = match obj.get("id").and_then(|v| v.as_i64()) {
                     Some(v) => v as i32,
                     None => continue,
