@@ -156,6 +156,11 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         ("POST", "/api/v2/reading-boundaries"): "/api/native_roll.rs",
         ("GET", "/api/v2/threads"): "/api/native_roll.rs",
         ("GET", "/api/v2/analytics/metrics"): "/api/native_roll.rs",
+        ("POST", "/api/v1/dependencies/"): "/api/native_roll.rs",
+        ("GET", "/api/v1/dependencies/blocked"): "/api/native_roll.rs",
+        ("DELETE", "/api/v1/dependencies/42"): "/api/native_roll.rs",
+        ("GET", "/api/v1/dependencies/42"): "/api/native_roll.rs",
+        ("PATCH", "/api/v1/dependencies/42"): "/api/native_roll.rs",
         # The retired Python v1 collection read now reaches the Rust catch-all
         # and returns 404; creation stays on the same path (#4342).
         ("GET", "/api/v1/threads/"): "/api/native_roll.rs",

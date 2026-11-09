@@ -237,6 +237,17 @@ fn app() -> Router {
             "/api/v2/dependencies/{dependency_id}",
             delete(native_dispatch),
         )
+        .route("/api/v1/dependencies/blocked", get(native_dispatch))
+        .route("/api/v1/dependencies/", post(native_dispatch))
+        .route("/api/v1/dependencies/{dependency_id}", get(native_dispatch))
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            delete(native_dispatch),
+        )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
         .route(
             "/api/v2/threads/{thread_id}/issue-order",

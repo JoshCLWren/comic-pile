@@ -586,16 +586,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 37,
-      "v1_live_python": 152,
+      "v1_shadowed_by_rust": 42,
+      "v1_live_python": 147,
       "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 12,
       "unversioned_live_python": 19,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 49,
-      "total_live_python": 171,
+      "total_shadowed_by_rust": 54,
+      "total_live_python": 166,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -1640,8 +1640,8 @@
         "consumers": [
           "frontend/src/services/api-dependencies.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1653,8 +1653,8 @@
         "consumers": [
           "frontend/src/services/api-dependencies.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1666,8 +1666,8 @@
         "consumers": [
           "frontend/src/services/api-dependencies.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1679,8 +1679,8 @@
         "consumers": [
           "frontend/src/services/api-dependencies.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -1692,8 +1692,8 @@
         "consumers": [
           "frontend/src/services/api-dependencies.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
