@@ -181,6 +181,17 @@ def test_main_health_gate_only_targets_its_own_issues_and_respects_leases() -> N
               "\n<!-- factory-execution:manual-only -->"),
     ]
 
+    dispatcher_legacy = "Dispatcher detected red main. Fix main CI before factory merges."
+    dispatcher = (WORKFLOWS / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
+    fallback_creation = next(line for line in dispatcher.splitlines() if "gh issue create" in line)
+    assert marker in fallback_creation
+    fixtures.extend([
+        issue(19, title="Main is red at abc123 - factory blocked", body=dispatcher_legacy),
+        issue(20, title="Main is red at abc123 - factory blocked", body=dispatcher_legacy,
+              author="untrusted-commenter"),
+        issue(21, title="Unrelated dispatcher issue", body=dispatcher_legacy),
+    ])
+
     def selected(section: str) -> list[int]:
         result = subprocess.run(
             [jq, "-r", filter_query(section)], input=json.dumps(fixtures),
@@ -192,7 +203,10 @@ def test_main_health_gate_only_targets_its_own_issues_and_respects_leases() -> N
     assert selected(opener) == [12]
     # Green main may close only gate-owned and unclaimed issues.
     # Neither a spoofed body, unrelated P0, live owner, nor manual hold is touched.
-    assert selected(closer) == [13, 16]
+    assert selected(closer) == [13, 16, 19]
+    fixtures[:] = fixtures[-3:]
+    assert selected(opener) == [19]
+    assert selected(closer) == [19]
 
 
 def test_held_workflow_recovery_is_unbounded_and_observable() -> None:

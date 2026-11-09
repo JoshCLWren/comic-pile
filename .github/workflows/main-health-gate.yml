@@ -112,7 +112,10 @@ jobs:
                   ((.body // "") | contains("<!-- comic-pile-main-health-gate:v1 -->"))
                   or (
                     ((.title // "") | startswith("Main is red at "))
-                    and ((.body // "") | contains("This issue was opened by Main Health Gate"))
+                    and (
+                      ((.body // "") | contains("This issue was opened by Main Health Gate"))
+                      or ((.body // "") | contains("Dispatcher detected red main. Fix main CI before factory merges."))
+                    )
                   )
                 )
               )] | .[0].number // empty
@@ -153,7 +156,10 @@ jobs:
                   ((.body // "") | contains("<!-- comic-pile-main-health-gate:v1 -->"))
                   or (
                     ((.title // "") | startswith("Main is red at "))
-                    and ((.body // "") | contains("This issue was opened by Main Health Gate"))
+                    and (
+                      ((.body // "") | contains("This issue was opened by Main Health Gate"))
+                      or ((.body // "") | contains("Dispatcher detected red main. Fix main CI before factory merges."))
+                    )
                   )
                 )
                 and (
