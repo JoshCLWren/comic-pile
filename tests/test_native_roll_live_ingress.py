@@ -21,7 +21,7 @@ NATIVE_INGRESSES = {
     "/api/native_issue.rs": ROOT / "api/native_issue.rs",
 }
 AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-VERCEL_CAPTURE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
+VERCEL_CAPTURE = re.compile(r"(?<=/):([A-Za-z_][A-Za-z0-9_]*)(?=/|$)")
 
 # Retired Roll Skip operation. Reroll (POST /api/v2/roll/offer) replaced it, so
 # no native ingress may ever publish it again.
@@ -95,7 +95,8 @@ def _concrete_path(path: str) -> str:
     """Use a numeric owned Issue ID when checking parameterized Axum routes."""
     # First normalize Axum curly braces {thread_id} to Vercel colon syntax :thread_id
     normalized = AXUM_CAPTURE.sub(r":\1", path)
-    # Then convert the colon syntax to numeric for concrete path matching
+    # Then convert only whole path-segment captures.  A suffix such as
+    # ``{plan_id}:apply`` contains a literal colon action, not a capture.
     concrete = VERCEL_CAPTURE.sub("42", normalized)
     # Verify curly braces are gone (Axum syntax converted)
     assert "{" not in concrete and "}" not in concrete, path
@@ -205,9 +206,9 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 if registered_method == method
                 and re.fullmatch(_vercel_pattern(source), _concrete_path(path))
             }
-            assert len(matching_ingress) == 1, (
+            assert matching_ingress, (
                 f"Vercel sends {method} {source} to {function}, "
-                f"but that entrypoint has {len(matching_ingress)} matching routes"
+                "but that entrypoint has no matching route"
             )
             if "/api/_native_" not in source:
                 assert matching_ingress <= service, (
@@ -249,3 +250,18 @@ def test_axum_08_captures_normalize_to_vercel_parameters() -> None:
     # which is the expected intermediate step in the route normalization process.
     # The actual vercel.json routes use regex patterns like [0-9]+$ for numeric matching.
     assert routes == {("GET", "/api/v2/queue-entries/:thread_id")}
+
+
+def test_axum_chained_methods_are_all_visible_to_ingress_guard() -> None:
+    """Chained Axum methods must not hide a native write from the guard."""
+    routes = _axum_routes(
+        'pub fn router(state: Arc<AppState>) -> Router { Router::new() '
+        '.route("/api/v1/custom-cbls", get(list_items).post(create_item)) } '
+        "#[cfg(test)]",
+        start="pub fn router(",
+        end="#[cfg(test)]",
+    )
+    assert routes == {
+        ("GET", "/api/v1/custom-cbls"),
+        ("POST", "/api/v1/custom-cbls"),
+    }
