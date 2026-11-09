@@ -713,6 +713,34 @@ pub fn delete_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{db, test_support};
+    use std::sync::Arc;
+
+    async fn database_fixture() -> (
+        Arc<AppState>,
+        AuthenticatedUser,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (1001, 'continuity-rules-test');
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, queue_position, status)
+                 VALUES (2001, 1001, 'Continuity test', 'Comic', 2, 1, 'active');
+                 INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+                 VALUES
+                   (3001, 2001, '1', 'unread', NOW(), 1),
+                   (3002, 2001, '2', 'unread', NOW(), 2);",
+            )
+            .await
+            .expect("seed continuity rules fixture");
+        drop(connection);
+        (state, AuthenticatedUser::for_test(1001), guard)
+    }
 
     fn request(satisfaction_type: &str) -> ContinuityRuleRequest {
         ContinuityRuleRequest {
@@ -726,6 +754,94 @@ mod tests {
             selected_member_issue_ids: Vec::new(),
             note: None,
         }
+    }
+
+    #[tokio::test]
+    async fn create_writes_continuity_rule_and_dependency_to_disposable_postgres() {
+        let (state, user, _guard) = database_fixture().await;
+        let (status, Json(response)) = create(
+            State(state),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect("create continuity rule");
+
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(response.user_id, user.id());
+        assert_eq!(response.source_id, 3001);
+        assert_eq!(response.target_id, 3002);
+    }
+
+    #[tokio::test]
+    async fn update_writes_continuity_rule_to_disposable_postgres() {
+        let (state, user, _guard) = database_fixture().await;
+        let (_, Json(created)) = create(
+            State(state.clone()),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect("create continuity rule");
+
+        let Json(updated) = update(
+            State(state),
+            user,
+            Path(created.id),
+            Json(ContinuityRuleRequest {
+                source_id: 3002,
+                target_id: 3001,
+                note: Some("updated".to_string()),
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect("update continuity rule");
+
+        assert_eq!(updated.id, created.id);
+        assert_eq!(updated.source_id, 3002);
+        assert_eq!(updated.target_id, 3001);
+        assert_eq!(updated.note.as_deref(), Some("updated"));
+    }
+
+    #[tokio::test]
+    async fn delete_removes_continuity_rule_and_dependency_from_disposable_postgres() {
+        let (state, user, _guard) = database_fixture().await;
+        let (_, Json(created)) = create(
+            State(state.clone()),
+            user,
+            Json(ContinuityRuleRequest {
+                source_id: 3001,
+                target_id: 3002,
+                ..request("item_read")
+            }),
+        )
+        .await
+        .expect("create continuity rule");
+
+        let response = delete(State(state.clone()), user, Path(created.id))
+            .await
+            .expect("delete continuity rule");
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+        let connection = db::checkout(&state).await.expect("verify connection");
+        let remaining: i64 = connection
+            .query_one(
+                "SELECT count(*) FROM continuity_rules WHERE id = $1",
+                &[&created.id],
+            )
+            .await
+            .expect("verify rule deletion")
+            .get(0);
+        assert_eq!(remaining, 0);
     }
 
     #[test]

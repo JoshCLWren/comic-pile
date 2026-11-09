@@ -35,7 +35,7 @@ RETIRED_RUST_ROUTES: frozenset[tuple[str, str]] = frozenset(
 )
 AXUM_ROUTE = re.compile(
     r'\.route\(\s*"(?P<path>/[^"]+)"\s*,\s*'
-    r'(?P<method>get|post|put|patch|delete)\s*\('
+    r'(?P<handlers>(?:(?:get|post|put|patch|delete)\s*\([^)]*\)\s*\.?)+)'
 )
 # Axum 0.8 spells captures ``{name}``; normalize these to stable tokens.
 # Vercel routes[].src is PCRE, not high-level rewrite syntax: a literal
@@ -51,10 +51,11 @@ def _axum_routes(source: str, *, start: str, end: str) -> set[tuple[str, str]]:
     """Read method/path registrations in the production router, not test code."""
     assert start in source, f"Missing Rust router marker: {start}"
     body = source.split(start, 1)[1].split(end, 1)[0]
-    routes = {
-        (match.group("method").upper(), _normalized_path(match.group("path")))
-        for match in AXUM_ROUTE.finditer(body)
-    }
+    routes = set()
+    for match in AXUM_ROUTE.finditer(body):
+        path = _normalized_path(match.group("path"))
+        methods = re.findall(r"(?:get|post|put|patch|delete)(?=\s*\()", match.group("handlers"))
+        routes.update((method.upper(), path) for method in methods)
     assert routes, f"No Rust HTTP routes found after {start}"
     return routes
 
