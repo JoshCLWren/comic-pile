@@ -212,21 +212,14 @@ def test_pruned_debug_routes_are_absent() -> None:
         assert path not in schema["paths"], f"{path} must stay out of OpenAPI"
 
 
-def test_delivery_target_route_addresses_slash_containing_branches() -> None:
-    """Delivery target lookup supports slash-containing repos and branches.
-
-    Regression guard: the delivery target/branch lookup must split the target
-    repository into ``owner``/``repo`` path segments and use the
-    ``{branch_name:path}`` converter, because every allowlisted target
-    repository (e.g. ``JoshCLWren/Latticery``) and factory branch name (e.g.
-    ``factory/2875-first-extraction-slice``) contains slashes. A route that
-    models either as a single path segment can never match a real delivery.
-    """
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
-    target_path = "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}"
-    assert target_path in methods_by_path
-    assert "GET" in methods_by_path[target_path]
+def test_retired_zero_browser_delivery_routes_are_absent() -> None:
+    """Delivery HTTP API was pruned: the browser never calls it (#4865)."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for path in (
+        "/api/v1/delivery",
+        "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}",
+    ):
+        assert path not in methods_by_path
 
 
 def test_no_new_bare_api_client_routes() -> None:

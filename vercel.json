@@ -578,14 +578,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/analytics/metrics$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST",
@@ -799,14 +791,6 @@
       "src": "^/api/v1/admin/import/csv/$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/analytics/metrics$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
