@@ -92,10 +92,10 @@ impl AppState {
             MakeTlsConnector::new(tls),
             ManagerConfig {
                 // `db::checkout` validates the socket with a bounded read-only
-                // probe before any handler statement (#4732). Keeping Fast
-                // avoids probing twice on every checkout; the centralized probe
-                // also classifies and bounds recovery instead of swallowing it.
-                recycling_method: RecyclingMethod::Fast,
+                // probe before any handler statement (#4732). Verified ensures every
+                // checkout validates the connection, providing consistent recovery
+                // across all endpoints instead of Fast's minimal probe.
+                recycling_method: RecyclingMethod::Verified,
             },
         );
         let pool = Pool::builder(manager)
