@@ -31,7 +31,7 @@ function issueLabel(issue: ReadingPlanReaderIssue): string {
   return issue.label?.trim() ? issue.label : `${issue.thread_title} #${issue.issue_number}`
 }
 
-function availabilityLabel(issue: ReadingPlanReaderIssue): string {
+export function availabilityLabel(issue: ReadingPlanReaderIssue): string {
   if (issue.availability === 'excluded') return 'Excluded from collection'
   if (issue.availability === 'inactive') return 'Series is inactive'
   if (issue.availability === 'read') return 'Read'

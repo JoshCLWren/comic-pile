@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
+import ReadingPlanDetailPage, { availabilityLabel } from '../pages/ReadingPlanDetailPage'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
 import { tagsApi } from '../services/api-tags'
 import { threadsApi } from '../services/api-threads'
@@ -494,5 +494,38 @@ describe('ReadingPlanDetailPage', () => {
     renderPage('not-a-number')
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid reading plan ID.')
     expect(mockGetReader).not.toHaveBeenCalled()
+  })
+
+  it('tolerates an empty plan total while rendering a read row', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      progress: { total_issues: 0, read_issues: 0 },
+      available_now: [],
+      blocked_next: [],
+      lanes: [
+        {
+          id: 'main',
+          name: 'Main',
+          order: 0,
+          issues: [
+            { ...availableIssue, occurrence_id: 'read-1', issue_id: 201, availability: 'read' as const, status: 'read' },
+          ],
+        },
+      ],
+    })
+    renderPage()
+    expect(await screen.findByTestId('reading-plan-reader')).toBeInTheDocument()
+  })
+})
+
+describe('availabilityLabel', () => {
+  it('covers every availability outcome', () => {
+    const base = { ...availableIssue }
+    expect(availabilityLabel({ ...base, availability: 'excluded' })).toBe('Excluded from collection')
+    expect(availabilityLabel({ ...base, availability: 'inactive' })).toBe('Series is inactive')
+    expect(availabilityLabel({ ...base, availability: 'read' })).toBe('Read')
+    expect(availabilityLabel({ ...base, availability: 'blocked' })).toBe('Blocked by')
+    expect(availabilityLabel({ ...base, availability: 'available' })).toBe('Available now')
+    expect(availabilityLabel({ ...base, availability: 'later' })).toBe('Upcoming')
   })
 })
