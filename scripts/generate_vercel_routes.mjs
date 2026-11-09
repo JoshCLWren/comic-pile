@@ -13,6 +13,9 @@ const NATIVE = new Set([RUST, '/api/native_issue.rs']);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const PARAM = /\{([^{}]+)\}/g;
+const INVENTORY_EXCLUDED_OPERATIONS = new Set([
+  'GET /api/v1/cron/release-sync',
+]);
 
 // Introspect the existing FastAPI application offline. This does not create
 // another Python service, script, or long-lived process.
@@ -21,9 +24,15 @@ const METADATA_QUERY = [
   'from app.main import create_app',
   'from fastapi.routing import APIRoute',
   'app = create_app(serve_frontend=False, defer_router_imports=False)',
+  'routes = []',
+  'for r in app.routes:',
+  '    if isinstance(r, APIRoute):',
+  '        routes.append((r.path, r.methods, r.include_in_schema))',
+  '    elif hasattr(r, "effective_route_contexts"):',
+  '        routes.extend((context.path, context.methods, context.include_in_schema) for context in r.effective_route_contexts() if context.path == "/api/v1/cron/release-sync")',
   'print(json.dumps({"paths": app.openapi()["paths"], "registered": [',
-  '{"path": r.path, "methods": sorted(r.methods), "visible": r.include_in_schema}',
-  'for r in app.routes if isinstance(r, APIRoute)]}))',
+  '{"path": p, "methods": sorted(methods), "visible": visible}',
+  'for p, methods, visible in routes if p.startswith("/api/")]}))',
 ].join('\n');
 
 export function pythonOperations(data) {
@@ -112,6 +121,17 @@ export function updateInventory(inventory, operations) {
     catch_all: {src: FALLBACK, dest: RUST},
     v1_operations: v1, unversioned_operations: unversioned}};
 }
+export function normalizeOperationIds(operations) {
+  return operations.map(operation => [operation.method, operation.path])
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]));
+}
+export function sameOperationIds(operations, expected) {
+  return JSON.stringify(normalizeOperationIds(operations))
+    === JSON.stringify(normalizeOperationIds(expected));
+}
+function inventoryOperations(operations) {
+  return operations.filter(([method, path]) => !INVENTORY_EXCLUDED_OPERATIONS.has(`${method} ${path}`));
+}
 function inspect() {
   const env = {...process.env, ENVIRONMENT: 'production',
     SECRET_KEY: process.env.SECRET_KEY || 'synthetic-route-inspection-only',
@@ -126,14 +146,12 @@ function run() {
   const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
   const operations = pythonOperations(inspect());
   const nextVercel = JSON.stringify(generateVercel(original, operations), null, 2) + '\n';
-  const nextInventory = updateInventory(inventory, operations);
+  const nextInventory = updateInventory(inventory, inventoryOperations(operations));
   if (check) {
     const full = inventory.full_surface;
-    const sameIds = (ops, expected) => JSON.stringify(ops.map(x => [x.method, x.path]))
-      === JSON.stringify(expected.map(x => [x.method, x.path]));
     if (readFileSync('vercel.json', 'utf8') !== nextVercel
-        || !sameIds(full.v1_operations, nextInventory.full_surface.v1_operations)
-        || !sameIds(full.unversioned_operations, nextInventory.full_surface.unversioned_operations)
+        || !sameOperationIds(full.v1_operations, nextInventory.full_surface.v1_operations)
+        || !sameOperationIds(full.unversioned_operations, nextInventory.full_surface.unversioned_operations)
         || full.catch_all.dest !== RUST) {
       throw new Error('Stale Vercel Python allowlist. Run node scripts/generate_vercel_routes.mjs');
     }
