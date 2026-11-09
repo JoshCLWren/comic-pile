@@ -537,38 +537,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/health$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/health/dependencies$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/health/live$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/health/warmup$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/metrics$",
       "methods": [
         "GET",
@@ -1021,14 +989,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/creators/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/creators/[^/]+$",
       "methods": [
         "GET",
@@ -1094,14 +1054,6 @@
     },
     {
       "src": "^/api/v1/creators/team\\-chemistry$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/cron/comicvine\\-metadata\\-repair$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1211,38 +1163,6 @@
     },
     {
       "src": "^/api/v1/dependencies/blocked$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/health$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/health/dependencies$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/health/live$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/health/warmup$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1371,14 +1291,6 @@
     },
     {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/keepalive$",
       "methods": [
         "GET",
         "OPTIONS"

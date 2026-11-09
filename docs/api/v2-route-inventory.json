@@ -585,18 +585,18 @@
       "catch_all_dest": "/api/native_roll.rs",
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
-      "v1_total": 203,
+      "v1_total": 197,
       "v1_shadowed_by_rust": 21,
       "v1_live_python": 168,
-      "v1_orphaned": 14,
-      "unversioned_total": 37,
+      "v1_orphaned": 8,
+      "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 9,
       "unversioned_live_python": 22,
-      "unversioned_orphaned": 6,
-      "total_python_surface": 240,
+      "unversioned_orphaned": 2,
+      "total_python_surface": 230,
       "total_shadowed_by_rust": 30,
       "total_live_python": 190,
-      "total_orphaned": 20
+      "total_orphaned": 10
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
@@ -1477,28 +1477,6 @@
       },
       {
         "method": "GET",
-        "path": "/api/v1/cron/comicvine-metadata-repair",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/cron/release-sync",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
         "path": "/api/v1/custom-cbls",
         "runtime": "python-fastapi",
         "status": "transitional",
@@ -1716,39 +1694,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/health",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/health/live",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/health/warmup",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {
@@ -2111,17 +2056,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/v1/keepalive",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {
@@ -3562,50 +3496,6 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/health",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/health/dependencies",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/health/live",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
-        "verified_against": "vercel.json"
-      },
-      {
-        "method": "GET",
-        "path": "/api/health/warmup",
-        "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
-        "consumers": [],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {

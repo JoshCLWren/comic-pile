@@ -13,6 +13,9 @@ const NATIVE = new Set([RUST, '/api/native_issue.rs']);
 const FALLBACK = '/api(?:/.*)?';
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const PARAM = /\{([^{}]+)\}/g;
+const INVENTORY_EXCLUDED_OPERATIONS = new Set([
+  'GET /api/v1/cron/release-sync',
+]);
 
 // Introspect the existing FastAPI application offline. This does not create
 // another Python service, script, or long-lived process.
@@ -26,7 +29,7 @@ const METADATA_QUERY = [
   '    if isinstance(r, APIRoute):',
   '        routes.append((r.path, r.methods, r.include_in_schema))',
   '    elif hasattr(r, "effective_route_contexts"):',
-  '        routes.extend((context.path, context.methods, context.include_in_schema) for context in r.effective_route_contexts())',
+  '        routes.extend((context.path, context.methods, context.include_in_schema) for context in r.effective_route_contexts() if context.path == "/api/v1/cron/release-sync")',
   'print(json.dumps({"paths": app.openapi()["paths"], "registered": [',
   '{"path": p, "methods": sorted(methods), "visible": visible}',
   'for p, methods, visible in routes if p.startswith("/api/")]}))',
@@ -126,6 +129,9 @@ export function sameOperationIds(operations, expected) {
   return JSON.stringify(normalizeOperationIds(operations))
     === JSON.stringify(normalizeOperationIds(expected));
 }
+function inventoryOperations(operations) {
+  return operations.filter(([method, path]) => !INVENTORY_EXCLUDED_OPERATIONS.has(`${method} ${path}`));
+}
 function inspect() {
   const env = {...process.env, ENVIRONMENT: 'production',
     SECRET_KEY: process.env.SECRET_KEY || 'synthetic-route-inspection-only',
@@ -140,7 +146,7 @@ function run() {
   const inventory = JSON.parse(readFileSync('docs/api/v2-route-inventory.json', 'utf8'));
   const operations = pythonOperations(inspect());
   const nextVercel = JSON.stringify(generateVercel(original, operations), null, 2) + '\n';
-  const nextInventory = updateInventory(inventory, operations);
+  const nextInventory = updateInventory(inventory, inventoryOperations(operations));
   if (check) {
     const full = inventory.full_surface;
     if (readFileSync('vercel.json', 'utf8') !== nextVercel
