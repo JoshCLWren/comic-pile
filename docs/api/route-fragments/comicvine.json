@@ -93,7 +93,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$"
     },
     {

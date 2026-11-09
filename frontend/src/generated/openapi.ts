@@ -799,25 +799,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Api Series Import Status
-         * @description Report whether this user already imported one ComicVine volume.
-         *
-         *     A client whose ``series:import`` response was lost asks this endpoint
-         *     before reporting failure, so a slow import that actually committed is
-         *     recovered instead of being reported as an error or retried into a
-         *     duplicate series. The answer is scoped to the calling user's threads.
-         *
-         *     Args:
-         *         comicvine_volume_id: ComicVine volume ID the client submitted.
-         *         current_user: Authenticated caller.
-         *         db: Async database session.
-         *
-         *     Returns:
-         *         SeriesImportStatusResponse with the owned thread when the volume is
-         *         already imported for this user.
-         */
-        get: operations["api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get"];
+        /** OpenAPI documentation for the migrated same-path operation. */
+        get: operations["series_import_status_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11299,6 +11282,17 @@ export interface components {
             new_password: string;
             token: string;
         };
+        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
+        NativeSeriesImportStatusResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            imported: boolean;
+            /** Format: int32 */
+            issue_count?: number | null;
+            series_name?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+        };
         /** @description Response body for token endpoints, matching the Python wire contract. */
         NativeTokenResponse: {
             access_token: string;
@@ -15940,34 +15934,40 @@ export interface operations {
             };
         };
     };
-    api_series_import_status_api_v1_comicvine_series__comicvine_volume_id__import_status_get: {
+    series_import_status_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description ComicVine volume ID */
                 comicvine_volume_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Owned import status */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
+                    "application/json": components["schemas"]["NativeSeriesImportStatusResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Invalid or revoked access token */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
