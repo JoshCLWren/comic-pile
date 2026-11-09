@@ -18,16 +18,16 @@ workflow path and branch. Owner submission attests that the supplied original
 reports and session metadata are genuine; this is not a new model review.
 
 The payload contains `pr`, `issue`, full `head`, every local author/repairer in
-`contributors`, the original independent reviewer's structured `acceptance`
+`contributors`, `acceptance_reviewer` naming the actual lane that produced the
+acceptance, the original independent reviewer's structured `acceptance`
 object, and exactly two `lanes`. Every lane has a truthful `local-*` `identity`,
 `head`, `kind` (`alpha-acp` or `codex`), actual `model`, `verdict: "approve"`, and
-original `report`. The Alpha lane additionally has its actual `session`,
-`state: "complete"`, and `model_confirmed: true` from the launcher metadata; its
+original `report`, and `state: "complete"`. The Alpha lane additionally has its actual `session`, and `model_confirmed: true` from the launcher metadata; its
 original report must end in `FACTORY_GATE_READY`. Never relabel a coordinator's
 acceptance report as Alpha output. Do not submit secrets, raw transcripts, logs,
 or production data. Incomplete or stale reports require fresh actual evidence.
 
-The importer rejects numbered-owner conflicts and contributor self-review,
+Release completed local review leases before submission. The importer rejects all active-owner conflicts and contributor self-review,
 validates the original acceptance object against the fresh issue revision and
 head, and records truthful local reviewer identities using existing semantic,
 model and acceptance attestation formats. It then releases the PR to canonical

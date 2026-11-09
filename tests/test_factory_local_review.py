@@ -27,7 +27,7 @@ def evidence() -> dict[str, object]:
          "report": "Independent exact-head review found no actionable findings. " * 2 +
                    "FACTORY_GATE_READY"},
         {"identity": "local-codex-session", "head": "a" * 40, "verdict": "approve",
-         "kind": "codex", "model": "gpt-6", "report": "Independent review found no actionable findings. " * 3},
+         "kind": "codex", "state": "complete", "model": "gpt-6", "report": "Independent review found no actionable findings. " * 3},
     ]}
 
 
@@ -46,7 +46,8 @@ def test_actual_distinct_local_lanes_are_accepted() -> None:
 @pytest.mark.parametrize(("field", "value"), [
     ("head", "b" * 40), ("verdict", "repair"), ("model", "substitute-model"),
     ("state", "timeout"), ("model_confirmed", False), ("session", ""),
-    ("report", "FACTORY_GATE_READY"), ("kind", "invented"), ("identity", "77"),
+    ("report", "FACTORY_GATE_READY"),
+    ("report", "Contradictory findings " * 5 + "FACTORY_GATE_BLOCKED\nFACTORY_GATE_READY"), ("kind", "invented"), ("identity", "77"),
 ])
 def test_invalid_alpha_evidence_is_rejected(field: str, value: object) -> None:
     """Stale, incomplete, substituted and falsely numbered reports fail closed."""
@@ -96,3 +97,66 @@ def test_untrusted_run_cannot_attest(
     monkeypatch.setattr(module.controller, "gh_json", lambda *args, **kwargs: run)
     with pytest.raises(RuntimeError, match="owner-dispatched"):
         module.main()
+
+
+@pytest.mark.parametrize("mutation", ["owner", "issue", "head", "none"])
+def test_live_evidence_is_rechecked_before_attestation(
+    monkeypatch: pytest.MonkeyPatch, mutation: str,
+) -> None:
+    """Actual ingestion refuses moved contracts, heads and newly acquired owners."""
+    import json
+    from types import SimpleNamespace
+
+    module = importer()
+    head = "a" * 40
+    payload = evidence()
+    payload.update(pr=123, issue=456, head=head, contributors=["local-author-session"],
+                   acceptance_reviewer="local-codex-session", acceptance={})
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+    monkeypatch.setenv("LOCAL_REVIEW_EVIDENCE", json.dumps(payload))
+    monkeypatch.setattr(module.controller, "gh_json", lambda *args, **kwargs: {
+        "event": "workflow_dispatch", "head_branch": "main",
+        "actor": {"login": "JoshCLWren"}, "path": ".github/workflows/factory-local-review.yml"})
+    calls = 0
+
+    def pr_snapshot(*args: object) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        return {"headRefOid": "b" * 40 if mutation == "head" and calls > 1 else head,
+                "state": "OPEN", "isDraft": False, "headRefName": "local-repair",
+                "labels": [{"name": "factory:local" if mutation == "owner" and calls > 1
+                            else "factory:unowned"}]}
+
+    issue_reads = 0
+
+    def issue_snapshot(*args: object) -> dict[str, str]:
+        nonlocal issue_reads
+        issue_reads += 1
+        return {"body": "changed" if mutation == "issue" and issue_reads > 1 else "original"}
+
+    monkeypatch.setattr(module.controller, "pr_json", pr_snapshot)
+    monkeypatch.setattr(module.controller, "target_json", issue_snapshot)
+    monkeypatch.setattr(module.controller, "reconcile_provenance", lambda **kwargs: {"status": "attested"})
+    monkeypatch.setattr(module.controller, "review_comment_bodies", lambda *args: [])
+    monkeypatch.setattr(module.controller, "model_comment_bodies", lambda *args: [])
+    monkeypatch.setattr(module.controller, "linked_issue_mode_for_pr", lambda *args: (456, False))
+    monkeypatch.setattr(module.controller.issue_acceptance, "validate", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module.controller, "implementation_delivery_gate", lambda *args: {"decision": "pass"})
+    monkeypatch.setattr(module.policy, "current_head_author_identity", lambda *args, **kwargs: ("gpt-6", "local-author-session"))
+    writes: list[object] = []
+
+    def gh_call(args: list[str]) -> SimpleNamespace:
+        if args[:2] == ["issue", "comment"]:
+            writes.append(args)
+        return SimpleNamespace(stdout="changed.py\n")
+
+    monkeypatch.setattr(module.controller, "run_gh", gh_call)
+    monkeypatch.setattr(module.controller, "replace_factory_labels", lambda *args: writes.append(args))
+    if mutation == "none":
+        module.main()
+        assert writes and writes[-1] == (123, "factory:unowned", "factory:ci")
+    else:
+        with pytest.raises(RuntimeError):
+            module.main()
+        assert not writes

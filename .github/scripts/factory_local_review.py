@@ -46,6 +46,11 @@ def validate_lanes(payload: Mapping[str, object], head: str, contributors: set[s
         model = lane.get("model")
         if not isinstance(report, str) or len(report.strip()) < 80 or not isinstance(model, str):
             raise ValueError("actual report and model required")
+        if lane.get("state") != "complete":
+            raise ValueError("actual completed review required")
+        gate_tokens = set(re.findall(r"FACTORY_GATE_[A-Z_]+", report))
+        if gate_tokens - {"FACTORY_GATE_READY"}:
+            raise ValueError("contradictory or nonpassing review evidence")
         kind = lane.get("kind")
         if kind == "alpha-acp":
             if model != "openrouter/stealth/crouton-alpha":
@@ -83,8 +88,8 @@ def main() -> None:
     if pr.get("headRefOid") != head or pr.get("state") != "OPEN" or pr.get("isDraft"):
         raise RuntimeError("PR moved, closed or draft")
     labels = {label["name"] for label in pr.get("labels", [])}
-    if any(re.fullmatch(r"factory:[0-9]+", label) for label in labels):
-        raise RuntimeError("another numbered factory owns the PR")
+    if controller.active_factory_owner(labels) is not None:
+        raise RuntimeError("active factory owns the PR; release completed review lease first")
     provenance = controller.reconcile_provenance(pr_number=pr_number, expected_head=head)
     if provenance.get("status") not in {"attested", "already-attested"}:
         raise RuntimeError("exact-head authorship unavailable")
@@ -95,6 +100,8 @@ def main() -> None:
         raise ValueError("complete local contributor identities required")
     contributors.update(declared)
     lanes = validate_lanes(payload, head, contributors)
+    if payload.get("acceptance_reviewer") not in {lane["identity"] for lane in lanes}:
+        raise ValueError("original acceptance reviewer must identify its actual lane")
     issue, non_closing = controller.linked_issue_mode_for_pr(pr_number, str(pr.get("headRefName") or ""))
     if issue != payload.get("issue"):
         raise ValueError("linked issue mismatch")
@@ -109,8 +116,17 @@ def main() -> None:
     author = policy.current_head_author_identity(controller.model_comment_bodies(pr_number), pr=pr_number, head=head)
     if author is None:
         raise RuntimeError("controller author model unavailable")
-    if controller.pr_json(pr_number).get("headRefOid") != head:
-        raise RuntimeError("PR moved while validating evidence")
+    def recheck() -> None:
+        """Fail closed if the immutable evidence or live ownership changed."""
+        latest = controller.pr_json(pr_number)
+        if latest.get("headRefOid") != head or latest.get("state") != "OPEN":
+            raise RuntimeError("PR moved while validating evidence")
+        if controller.active_factory_owner(controller.labels_of(latest)) is not None:
+            raise RuntimeError("factory acquired ownership during validation")
+        if controller.target_json(issue).get("body") != body:
+            raise RuntimeError("issue acceptance contract changed during validation")
+
+    recheck()
     for lane in lanes:
         marker = policy.review_marker(pr=pr_number, head=head, reviewer=lane["identity"], producer=None, verdict="approve")
         controller.run_gh(["issue", "comment", str(pr_number), "--repo", controller.REPO, "--body", marker + "\nActual local review: " + lane["identity"] + "\n" + controller.redact_review_text(lane["report"])[:7000]])
@@ -118,6 +134,7 @@ def main() -> None:
             marker = policy.agent_model_review_marker(pr=pr_number, head=head, author_model=author[0], reviewer_model=lane["model"], author_agent=author[1], reviewer_agent=lane["identity"])
             controller.run_gh(["issue", "comment", str(pr_number), "--repo", controller.REPO, "--body", marker])
     controller.run_gh(["issue", "comment", str(pr_number), "--repo", controller.REPO, "--body", controller.issue_acceptance.marker(issue, head, body)])
+    recheck()
     controller.replace_factory_labels(pr_number, "factory:unowned", "factory:ci")
     print(json.dumps({"pr": pr_number, "head": head, "status": "attested"}))
 
