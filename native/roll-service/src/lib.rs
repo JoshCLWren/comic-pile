@@ -5,6 +5,7 @@ pub mod bootstrap;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod config;
+pub mod creators;
 pub mod db;
 pub mod dependencies;
 pub mod dice_api;
@@ -396,6 +397,9 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(issue_mutation::reorder_issues),
         )
+        .route("/api/v1/creators", get(creators::list_creators))
+        .route("/api/v1/creators/", get(creators::list_creators))
+        .route("/api/v1/creators/summaries", get(creators::get_summaries))
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {
             ApiError(

@@ -158,7 +158,19 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 16
+    assert len(shadowed_v1) == 22
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/creators"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/creators/summaries"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
     for item in shadowed_v1:
         assert item.get("ingress_destination") == "/api/native_roll.rs"
     assert any(
@@ -178,7 +190,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in unversioned_ops
         if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_unversioned) == 9
+    assert len(shadowed_unversioned) == 13
     assert any(
         item.get("path") == "/api/auth/login"
         and item.get("burndown_status") == "shadowed by Rust"
@@ -202,13 +214,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/users/me/preferences"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/creators/summaries"
         and item.get("burndown_status")
         == "live transitional Python with callers"
         for item in v1_ops

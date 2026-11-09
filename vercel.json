@@ -452,6 +452,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/creators$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/creators/summaries$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/identity\\-inbox/search/issues$",
       "methods": [
         "GET"
@@ -1061,7 +1075,6 @@
     {
       "src": "^/api/v1/creators$",
       "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1133,7 +1146,6 @@
     {
       "src": "^/api/v1/creators/summaries$",
       "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

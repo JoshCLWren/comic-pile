@@ -294,6 +294,10 @@ fn app() -> Router {
         .route("/api/auth/csrf", get(native_dispatch))
         .route("/api/auth/forgot-password", post(native_dispatch))
         .route("/api/auth/reset-password", post(native_dispatch))
+
+        .route("/api/v1/creators", get(native_dispatch))
+        .route("/api/v1/creators/", get(native_dispatch))
+        .route("/api/v1/creators/summaries", get(native_dispatch))
         .fallback(native_not_found)
 }
 
