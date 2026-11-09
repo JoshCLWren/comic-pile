@@ -64,9 +64,9 @@ def test_trusted_ollama_review_preserves_numbered_diff_inspection_proof() -> Non
 
     controller = load_controller()
     excerpt = controller.semantic_review_excerpt(
-        "### Factory semantic review\\n"
+        "### Factory semantic review\n"
         + controller.AUTHORITATIVE_DIFF_EVIDENCE
-        + "\\ngh pr diff 4828\\nFACTORY_ACCEPTANCE_V1={}\\n"
+        + "\ngh pr diff 4828\nFACTORY_ACCEPTANCE_V1={}\n"
     )
     assert "gh pr diff 4828" in excerpt
     assert controller.DIFF_INSPECTION_RE.search(excerpt)
