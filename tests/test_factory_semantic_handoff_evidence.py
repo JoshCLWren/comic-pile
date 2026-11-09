@@ -56,6 +56,22 @@ def test_source_diff_and_verdict_tokens_are_not_repair_findings(review_log: str)
     assert not controller.has_actionable_review_findings(review_log)
 
 
+def test_trusted_ollama_review_preserves_numbered_diff_inspection_proof() -> None:
+    """Provider-backed review must preserve the exact PR-scoped diff command."""
+    reviewer = (SCRIPTS / "local-ollama-review.sh").read_text()
+    assert 'gh_retry gh pr diff "$PR" > /tmp/p.patch' in reviewer
+    assert 'f"# comic-pile-factory-authoritative-diff-evidence\\ngh pr diff {pr}\\n"' in reviewer
+
+    controller = load_controller()
+    excerpt = controller.semantic_review_excerpt(
+        "### Factory semantic review\\n"
+        + controller.AUTHORITATIVE_DIFF_EVIDENCE
+        + "\\ngh pr diff 4828\\nFACTORY_ACCEPTANCE_V1={}\\n"
+    )
+    assert "gh pr diff 4828" in excerpt
+    assert controller.DIFF_INSPECTION_RE.search(excerpt)
+
+
 def test_worker_proves_diff_inspection_without_append_of_diff_hunks() -> None:
     worker = (SCRIPTS / "free-model-factory-worker.sh").read_text()
     assert 'if ! gh pr diff "$NUMBER" >/dev/null; then' in worker
