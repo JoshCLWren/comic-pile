@@ -11755,6 +11755,64 @@
         ],
         "type": "object"
       },
+      "NativeIssueDependenciesResponse": {
+        "description": "Wire parity with Python `IssueDependenciesResponse`.",
+        "properties": {
+          "incoming": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueDependencyEdge"
+            },
+            "type": "array"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "outgoing": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueDependencyEdge"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "issue_id",
+          "incoming",
+          "outgoing"
+        ],
+        "type": "object"
+      },
+      "NativeIssueDependencyEdge": {
+        "description": "Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`).",
+        "properties": {
+          "dependency_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_issue_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_issue_number": {
+            "type": "string"
+          },
+          "source_thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_thread_title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dependency_id",
+          "source_issue_id",
+          "source_issue_number",
+          "source_thread_id",
+          "source_thread_title"
+        ],
+        "type": "object"
+      },
       "NativeIssueListResponse": {
         "properties": {
           "issues": {
@@ -12207,6 +12265,26 @@
         "required": [
           "comicvine_volume_id",
           "imported"
+        ],
+        "type": "object"
+      },
+      "NativeThreadIssueDependenciesResponse": {
+        "description": "Wire parity with Python `ThreadIssueDependenciesResponse`.",
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/NativeIssueDependenciesResponse"
+            },
+            "type": "array"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "thread_id",
+          "issues"
         ],
         "type": "object"
       },
@@ -30356,15 +30434,16 @@
     },
     "/api/v1/threads/{thread_id}/issue-dependencies": {
       "get": {
-        "description": "Return dependency edges for every issue in one thread using bulk queries.\n\nThis endpoint replaces the frontend's previous one-request-per-issue pattern.\nEmpty dependency payloads are included so clients can distinguish a complete\nresponse from missing data without issuing fallback requests.",
-        "operationId": "list_thread_issue_dependencies_api_v1_threads__thread_id__issue_dependencies_get",
+        "description": "Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.",
+        "operationId": "get_thread_issue_dependencies_documentation",
         "parameters": [
           {
+            "description": "Owned thread identifier",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "title": "Thread Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -30374,21 +30453,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueDependenciesResponse"
+                  "$ref": "#/components/schemas/NativeThreadIssueDependenciesResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Thread issue dependencies"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -30396,10 +30474,8 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List Thread Issue Dependencies",
+        "summary": "Documentation-only operation for the mounted thread issue-dependencies batch read.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "dependencies"
         ]
       }

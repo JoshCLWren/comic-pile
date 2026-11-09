@@ -406,6 +406,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(issue_read::get_issue_dependencies),
         )
         .route(
+            "/api/v1/threads/{thread_id}/issue-dependencies",
+            get(issue_read::get_thread_issue_dependencies),
+        )
+        .route(
             "/api/v1/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
         )

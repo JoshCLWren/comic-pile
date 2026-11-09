@@ -4337,14 +4337,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Thread Issue Dependencies
-         * @description Return dependency edges for every issue in one thread using bulk queries.
-         *
-         *     This endpoint replaces the frontend's previous one-request-per-issue pattern.
-         *     Empty dependency payloads are included so clients can distinguish a complete
-         *     response from missing data without issuing fallback requests.
+         * Documentation-only operation for the mounted thread issue-dependencies batch read.
+         * @description Return dependency edges for every issue in one owner-scoped thread. Wire parity with Python: issues are ordered by position and id, incoming/outgoing edges are ordered by dependency id, and foreign endpoints are omitted.
          */
-        get: operations["list_thread_issue_dependencies_api_v1_threads__thread_id__issue_dependencies_get"];
+        get: operations["get_thread_issue_dependencies_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -11173,6 +11169,24 @@ export interface components {
             start_year?: number | null;
             volume_name?: string | null;
         };
+        /** @description Wire parity with Python `IssueDependenciesResponse`. */
+        NativeIssueDependenciesResponse: {
+            incoming: components["schemas"]["NativeIssueDependencyEdge"][];
+            /** Format: int32 */
+            issue_id: number;
+            outgoing: components["schemas"]["NativeIssueDependencyEdge"][];
+        };
+        /** @description Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`). */
+        NativeIssueDependencyEdge: {
+            /** Format: int32 */
+            dependency_id: number;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number: string;
+            /** Format: int32 */
+            source_thread_id: number;
+            source_thread_title: string;
+        };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
             next_page_token?: string | null;
@@ -11292,6 +11306,12 @@ export interface components {
             series_name?: string | null;
             /** Format: int32 */
             thread_id?: number | null;
+        };
+        /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
+        NativeThreadIssueDependenciesResponse: {
+            issues: components["schemas"]["NativeIssueDependenciesResponse"][];
+            /** Format: int32 */
+            thread_id: number;
         };
         /** @description Response body for token endpoints, matching the Python wire contract. */
         NativeTokenResponse: {
@@ -20486,34 +20506,47 @@ export interface operations {
             };
         };
     };
-    list_thread_issue_dependencies_api_v1_threads__thread_id__issue_dependencies_get: {
+    get_thread_issue_dependencies_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Thread issue dependencies */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
+                    "application/json": components["schemas"]["NativeThreadIssueDependenciesResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
