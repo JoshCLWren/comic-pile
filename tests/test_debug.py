@@ -1,160 +1,47 @@
-"""Tests for debug endpoints."""
+"""Pruned debug log routes stay absent (#4861).
 
-import os
+The non-production debug router (``POST /api/debug/log`` plus its ``/api/v1``
+alias) was deleted with its deferred mount. These guards assert both
+aliases answer 404 regardless of environment flags and stay out of the
+generated OpenAPI contract, while the retained eager health/ping/metrics
+routes keep working.
+"""
 
 import pytest
 from httpx import AsyncClient
 
-from app.config import clear_settings_cache
-from app.main import app
-
-
-class _MockAdminUser:
-    """Mock user with admin privileges for test purposes."""
-
-    def __init__(self) -> None:
-        self.id = 1
-        self.username = "admin"
-        self.is_admin = True
-
-
-class _MockRegularUser:
-    """Mock regular user without admin privileges for test purposes."""
-
-    def __init__(self) -> None:
-        self.id = 2
-        self.username = "regular"
-        self.is_admin = False
+from app.main import create_app
 
 
 @pytest.mark.asyncio
-async def test_debug_log_admin_success(client: AsyncClient) -> None:
-    """Test that admin users can access debug log endpoint when enabled."""
-    from app.auth import get_current_user
-
-    def _override() -> _MockAdminUser:
-        return _MockAdminUser()
-
-    app.dependency_overrides[get_current_user] = _override
-
-    original_env = os.environ.get("ENVIRONMENT", "")
-    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
-    clear_settings_cache()
-    os.environ["ENVIRONMENT"] = "development"
-    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
-
-    try:
-        response = await client.post(
-            "/api/debug/log", json={"level": "INFO", "message": "test message"}
-        )
-        assert response.status_code == 200
-        assert response.json() == {"status": "logged"}
-    finally:
-        if original_env:
-            os.environ["ENVIRONMENT"] = original_env
-        else:
-            os.environ.pop("ENVIRONMENT", None)
-        if original_debug:
-            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
-        else:
-            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
-        clear_settings_cache()
-        app.dependency_overrides.pop(get_current_user, None)
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/debug/log",
+        "/api/v1/debug/log",
+    ],
+)
+async def test_pruned_debug_log_returns_404(
+    client: AsyncClient, path: str
+) -> None:
+    """The deleted debug log handlers answer 404 for anonymous callers."""
+    response = await client.post(path, json={"level": "INFO", "message": "probe"})
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_debug_log_non_admin_forbidden(client: AsyncClient) -> None:
-    """Test that non-admin users get 403 when accessing debug log endpoint."""
-    from app.auth import get_current_user
-
-    def _override() -> _MockRegularUser:
-        return _MockRegularUser()
-
-    app.dependency_overrides[get_current_user] = _override
-
-    original_env = os.environ.get("ENVIRONMENT", "")
-    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
-    clear_settings_cache()
-    os.environ["ENVIRONMENT"] = "development"
-    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
-
-    try:
-        response = await client.post(
-            "/api/debug/log",
-            json={"level": "INFO", "message": "test message"},
-        )
-        assert response.status_code == 403
-        assert response.json()["detail"] == "Insufficient permissions"
-    finally:
-        if original_env:
-            os.environ["ENVIRONMENT"] = original_env
-        else:
-            os.environ.pop("ENVIRONMENT", None)
-        if original_debug:
-            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
-        else:
-            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
-        clear_settings_cache()
-        app.dependency_overrides.pop(get_current_user, None)
+async def test_pruned_debug_log_returns_404_for_authenticated_user(
+    auth_client: AsyncClient,
+) -> None:
+    """The deleted debug log handlers answer 404 for authenticated callers too."""
+    response = await auth_client.post(
+        "/api/debug/log", json={"level": "INFO", "message": "probe"}
+    )
+    assert response.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_debug_log_anonymous_unauthorized(client: AsyncClient) -> None:
-    """Test that anonymous users get 401 when accessing debug log endpoint."""
-    original_env = os.environ.get("ENVIRONMENT", "")
-    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
-    clear_settings_cache()
-    os.environ["ENVIRONMENT"] = "development"
-    os.environ["ENABLE_DEBUG_ROUTES"] = "true"
-
-    try:
-        response = await client.post(
-            "/api/debug/log", json={"level": "INFO", "message": "test message"}
-        )
-        assert response.status_code == 401
-        assert response.json()["detail"] == "Not authenticated"
-    finally:
-        if original_env:
-            os.environ["ENVIRONMENT"] = original_env
-        else:
-            os.environ.pop("ENVIRONMENT", None)
-        if original_debug:
-            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
-        else:
-            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
-        clear_settings_cache()
-
-
-@pytest.mark.asyncio
-async def test_debug_log_disabled_when_flag_off(client: AsyncClient) -> None:
-    """Test that debug routes return 404 when enable_debug_routes is False."""
-    from app.auth import get_current_user
-
-    def _override() -> _MockAdminUser:
-        return _MockAdminUser()
-
-    app.dependency_overrides[get_current_user] = _override
-
-    original_env = os.environ.get("ENVIRONMENT", "")
-    original_debug = os.environ.get("ENABLE_DEBUG_ROUTES", "")
-    clear_settings_cache()
-    os.environ["ENVIRONMENT"] = "development"
-    os.environ["ENABLE_DEBUG_ROUTES"] = "false"
-
-    try:
-        response = await client.post(
-            "/api/debug/log", json={"level": "INFO", "message": "test message"}
-        )
-        assert response.status_code == 404
-        assert response.json()["detail"] == "Not Found"
-    finally:
-        if original_env:
-            os.environ["ENVIRONMENT"] = original_env
-        else:
-            os.environ.pop("ENVIRONMENT", None)
-        if original_debug:
-            os.environ["ENABLE_DEBUG_ROUTES"] = original_debug
-        else:
-            os.environ.pop("ENABLE_DEBUG_ROUTES", None)
-        clear_settings_cache()
-        app.dependency_overrides.pop(get_current_user, None)
+def test_pruned_debug_absent_from_openapi() -> None:
+    """The pruned debug paths stay out of the generated OpenAPI contract."""
+    schema = create_app(serve_frontend=False).openapi()
+    for path in ("/api/debug/log", "/api/v1/debug/log"):
+        assert path not in schema["paths"], f"{path} must stay pruned"
