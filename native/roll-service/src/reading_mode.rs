@@ -528,19 +528,15 @@ mod tests {
     #[tokio::test]
     async fn suggest_then_dismiss_toggles_only_the_suggestion_flag() {
         let (state, client, _db) = db_state().await;
-        let Json(suggested) = suggest_reading_mode(
-            State(state.clone()),
-            AuthenticatedUser::for_test(1),
-        )
-        .await
-        .expect("suggest must succeed");
+        let Json(suggested) =
+            suggest_reading_mode(State(state.clone()), AuthenticatedUser::for_test(1))
+                .await
+                .expect("suggest must succeed");
         assert!(suggested.suggested);
-        let Json(dismissed) = dismiss_reading_mode_suggestion(
-            State(state.clone()),
-            AuthenticatedUser::for_test(1),
-        )
-        .await
-        .expect("dismiss must succeed");
+        let Json(dismissed) =
+            dismiss_reading_mode_suggestion(State(state.clone()), AuthenticatedUser::for_test(1))
+                .await
+                .expect("dismiss must succeed");
         assert!(!dismissed.suggested);
         let row = client
             .query_one(
