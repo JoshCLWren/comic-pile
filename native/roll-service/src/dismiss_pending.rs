@@ -16,13 +16,6 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio_postgres::IsolationLevel;
 
-fn unavailable() -> ApiError {
-    ApiError(
-        StatusCode::SERVICE_UNAVAILABLE,
-        "Database temporarily unavailable".to_string(),
-    )
-}
-
 /// Mutating transaction for the dismiss-pending flow.
 #[allow(clippy::too_many_arguments)]
 async fn mutate(
@@ -92,7 +85,13 @@ pub async fn dismiss_pending(
     )
     .await;
     match result {
-        Err(_) => Err(unavailable()),
+        Err(e) => {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            Err(ApiError::database_unavailable())
+        }
         Ok(Ok(())) => {
             drop(pending.0.take());
             Ok(StatusCode::NO_CONTENT)
@@ -189,8 +188,9 @@ mod tests {
 
     #[test]
     fn unavailable_returns_503() {
-        let error = unavailable();
-        assert_eq!(error.0, StatusCode::SERVICE_UNAVAILABLE);
-        assert_eq!(error.1, "Database temporarily unavailable");
+        let error = ApiError::database_unavailable();
+        assert_eq!(error.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(error.detail(), "Database temporarily unavailable");
+        assert!(error.is_database_unavailable());
     }
 }

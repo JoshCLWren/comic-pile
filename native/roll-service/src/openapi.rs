@@ -207,12 +207,20 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// per-domain documents contribute their paths, component schemas and security
 /// scheme. Merge order is deterministic and the surfaces are disjoint.
 pub fn canonical_openapi() -> utoipa::openapi::OpenApi {
-    NativeSurfaceApi::openapi()
+    let mut openapi = NativeSurfaceApi::openapi()
         .merge_from(crate::queue::QueueApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi())
         .merge_from(crate::issue_service::IssueApi::openapi())
         .merge_from(crate::analytics::AnalyticsApi::openapi())
-        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi())
+        .merge_from(crate::comicvine_issue::ComicVineIssueApi::openapi());
+    // The aggregate artifact is the deployed v2 runtime contract. The
+    // completed-threads v1 operation has its own same-path contract and must
+    // not expand the v2 inventory.
+    openapi
+        .paths
+        .paths
+        .remove("/api/v1/threads/completed/threads");
+    openapi
 }
 
 #[cfg(test)]

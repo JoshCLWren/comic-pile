@@ -109,15 +109,15 @@ pub struct IdentityInboxSearchResponse {
 }
 
 fn bad_request(detail: &str) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail.to_string())
+    ApiError::with_status(StatusCode::BAD_REQUEST, detail.to_string())
 }
 
 fn not_found(detail: &str) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, detail.to_string())
+    ApiError::with_status(StatusCode::NOT_FOUND, detail.to_string())
 }
 
 fn unprocessable(detail: &str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
+    ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
 }
 
 fn source_entry_summary(thread_title: &str, issue_number: &str, metadata: &Value) -> String {

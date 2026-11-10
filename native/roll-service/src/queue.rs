@@ -281,14 +281,11 @@ impl Drop for Pending {
 }
 
 fn bad_request(detail: String) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail)
+    ApiError::BadRequest(detail)
 }
 
 fn not_found(thread_id: i32) -> ApiError {
-    ApiError(
-        StatusCode::NOT_FOUND,
-        format!("Thread {thread_id} not found"),
-    )
+    ApiError::NotFound(format!("Thread {thread_id} not found"))
 }
 
 pub(crate) fn option_e_enabled() -> bool {
@@ -504,7 +501,7 @@ pub async fn update_queue_entry(
         Err(Step {
             error,
             retryable: true,
-        }) if error.0 == StatusCode::SERVICE_UNAVAILABLE => {
+        }) if error.is_database_unavailable() => {
             tracing::warn!(
                 operation = "queue.reposition.retry",
                 "retrying reposition after a transient database connection failure"
@@ -1840,7 +1837,10 @@ mod tests {
             Path(1),
         )
         .await;
-        assert_eq!(foreign.expect_err("foreign entry").0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            foreign.expect_err("foreign entry").status(),
+            StatusCode::NOT_FOUND
+        );
         let foreign_move = update_queue_entry(
             State(state.clone()),
             AuthenticatedUser::for_test(9),
@@ -1849,7 +1849,7 @@ mod tests {
         )
         .await;
         assert_eq!(
-            foreign_move.expect_err("foreign move").0,
+            foreign_move.expect_err("foreign move").status(),
             StatusCode::NOT_FOUND
         );
         let invalid = update_queue_entry(
@@ -1860,7 +1860,7 @@ mod tests {
         )
         .await;
         assert_eq!(
-            invalid.expect_err("invalid position").0,
+            invalid.expect_err("invalid position").status(),
             StatusCode::BAD_REQUEST
         );
 
@@ -1976,7 +1976,10 @@ mod tests {
             }),
         )
         .await;
-        assert_eq!(invalid.expect_err("empty key").0, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            invalid.expect_err("empty key").status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     /// #4535: a reposition must not need a second pooled connection.

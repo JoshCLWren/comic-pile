@@ -154,7 +154,7 @@ async fn shared_python_rust_auth_and_ownership_matrix() {
                 .await
                 .err()
                 .unwrap()
-                .0,
+                .status(),
             StatusCode::NOT_FOUND
         );
         assert_eq!(
@@ -162,7 +162,7 @@ async fn shared_python_rust_auth_and_ownership_matrix() {
                 .await
                 .err()
                 .unwrap()
-                .0,
+                .status(),
             StatusCode::NOT_FOUND
         );
     }

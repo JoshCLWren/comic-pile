@@ -16,7 +16,7 @@ async fn main() {
             }
         }
         Err(error) => {
-            eprintln!("snapshot failed: {} {}", error.0, error.1);
+            eprintln!("snapshot failed: {} {}", error.status(), error.detail());
             std::process::exit(1);
         }
     }

@@ -34,7 +34,7 @@ use crate::{
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -58,7 +58,7 @@ pub struct ReadingModeSetRequest {
 }
 
 fn unprocessable(detail: String) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
+    ApiError::Unprocessable(detail)
 }
 
 fn is_valid_reading_mode(bandwidth: &str, intent: &str) -> bool {
@@ -299,6 +299,7 @@ fn suggest_reading_mode_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use std::collections::BTreeMap;
 
     fn test_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -415,8 +416,11 @@ mod tests {
     fn invalid_source_message_matches_python() {
         let source = "forced-onboarding";
         let error = unprocessable(format!("Invalid reading-mode source: '{source}'"));
-        assert_eq!(error.0, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(error.1, "Invalid reading-mode source: 'forced-onboarding'");
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            error.detail(),
+            "Invalid reading-mode source: 'forced-onboarding'"
+        );
     }
 
     #[test]
@@ -426,7 +430,7 @@ mod tests {
             "mystical", "momentum"
         ));
         assert_eq!(
-            error.1,
+            error.detail(),
             "Invalid reading-mode values: 'mystical'/'momentum'"
         );
     }

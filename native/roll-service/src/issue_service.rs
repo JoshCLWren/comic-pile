@@ -8,7 +8,6 @@ use crate::{
     dice_mutation::{self, DiceCommand},
     dice_state, option_inputs, queue, roll_exclusions, ApiError,
 };
-use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -115,7 +114,7 @@ pub struct IssueReadRateResponse {
 }
 
 fn invalid(message: &'static str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, message.into())
+    ApiError::Unprocessable(message.into())
 }
 
 /// Resolve the requested action source to its canonical value.
@@ -509,18 +508,20 @@ async fn effective_roll_exclusions(
         // These columns are SQLAlchemy JSON, not PostgreSQL integer arrays.
         // Decode their stored JSON text, including null as an empty list.
         let snoozed: Vec<i32> =
-            serde_json::from_str(&session.get::<_, String>(0)).map_err(|_| {
-                ApiError(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Invalid snoozed threads".into(),
-                )
+            serde_json::from_str(&session.get::<_, String>(0)).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ApiError::Internal("Invalid snoozed threads".into())
             })?;
         let skipped: Vec<i32> =
-            serde_json::from_str(&session.get::<_, String>(1)).map_err(|_| {
-                ApiError(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Invalid skipped threads".into(),
-                )
+            serde_json::from_str(&session.get::<_, String>(1)).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ApiError::Internal("Invalid skipped threads".into())
             })?;
         for thread_id in snoozed.into_iter().chain(skipped) {
             if seen.insert(thread_id) {
@@ -762,7 +763,7 @@ pub(crate) async fn persist(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Issue not found".into()))?;
+        .ok_or_else(|| ApiError::NotFound("Issue not found".into()))?;
     let thread_id: i32 = owner.get(0);
     let placement_is_manual: bool = owner.get(1);
     let thread_pre_state = json!({
@@ -790,32 +791,28 @@ pub(crate) async fn persist(
         .map_err(db::query_error)?;
     if let Some(row) = existing {
         let saved: String = row.get(0);
-        let context: Value = serde_json::from_str(&saved).map_err(|_| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid stored issue receipt".into(),
-            )
+        let context: Value = serde_json::from_str(&saved).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid stored issue receipt".into())
         })?;
         if context.get("issue_command_payload") != Some(&payload) {
-            return Err(ApiError(
-                StatusCode::CONFLICT,
+            return Err(ApiError::Conflict(
                 "Idempotency key reused for different action".into(),
             ));
         }
         let receipt = context
             .get("issue_command_receipt")
             .cloned()
-            .ok_or_else(|| {
-                ApiError(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Missing stored issue receipt".into(),
-                )
-            })?;
-        let mut result: IssueReadRateResponse = serde_json::from_value(receipt).map_err(|_| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid stored issue receipt".into(),
-            )
+            .ok_or_else(|| ApiError::Internal("Missing stored issue receipt".into()))?;
+        let mut result: IssueReadRateResponse = serde_json::from_value(receipt).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid stored issue receipt".into())
         })?;
         result.replayed = true;
         return Ok(result);
@@ -1033,11 +1030,12 @@ pub(crate) async fn persist(
         die_after,
     };
     let mut saved = context;
-    saved["issue_command_receipt"] = serde_json::to_value(&result).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Cannot store issue receipt".into(),
-        )
+    saved["issue_command_receipt"] = serde_json::to_value(&result).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Cannot store issue receipt".into())
     })?;
     tx.execute(
         "UPDATE events SET context=$2::text::json WHERE id=$1 AND user_id=$3",
@@ -1149,6 +1147,7 @@ fn issue_cards_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use utoipa::OpenApi;
 
     fn request(status: Option<&str>, rating: Option<f64>) -> IssueReadRateRequest {
@@ -1428,7 +1427,7 @@ mod tests {
         let tx = first.transaction().await.unwrap();
         let collision = persist(&tx, user, 110, &command).await.unwrap_err();
         tx.rollback().await.unwrap();
-        assert_eq!(collision.0, StatusCode::CONFLICT);
+        assert_eq!(collision.status(), StatusCode::CONFLICT);
 
         let correction = IssueReadRateRequest {
             status: None,
@@ -1592,7 +1591,7 @@ mod tests {
             .await
             .unwrap_err();
         tx.rollback().await.unwrap();
-        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
         let tx = first.transaction().await.unwrap();
         let unmapped = persist(
             &tx,

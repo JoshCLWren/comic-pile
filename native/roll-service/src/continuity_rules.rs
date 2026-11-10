@@ -64,19 +64,19 @@ pub struct ContinuityRuleResponse {
 }
 
 fn bad_request(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail.into())
+    ApiError::with_status(StatusCode::BAD_REQUEST, detail.into())
 }
 
 fn conflict(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::CONFLICT, detail.into())
+    ApiError::with_status(StatusCode::CONFLICT, detail.into())
 }
 
 fn not_found(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, detail.into())
+    ApiError::with_status(StatusCode::NOT_FOUND, detail.into())
 }
 
 fn internal_error(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::INTERNAL_SERVER_ERROR, detail.into())
+    ApiError::with_status(StatusCode::INTERNAL_SERVER_ERROR, detail.into())
 }
 
 fn validate_request(request: &ContinuityRuleRequest) -> Result<(), ApiError> {
