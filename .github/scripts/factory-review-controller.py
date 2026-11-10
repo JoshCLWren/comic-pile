@@ -306,7 +306,9 @@ def explicit_part_of_issue(body: str) -> int | None:
     return int(match.group("issue")) if match else None
 
 
-def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | None, bool]:
+def linked_issue_mode_for_pr(
+    pr_number: int, branch: str | None, *, body: str | None = None
+) -> tuple[int | None, bool]:
     """Resolve a PR's issue and whether the link is review-only.
 
     A canonical factory branch retains issue ownership, but a matching
@@ -324,7 +326,8 @@ def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | 
         ``(issue, non_closing)``; ``non_closing`` is true only for a ``Part of``
         link.
     """
-    body = str(pr_json(pr_number).get("body") or "")
+    if body is None:
+        body = str(pr_json(pr_number).get("body") or "")
     linked = linked_issue_from_branch(branch)
     match = re.search(
         r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
@@ -1887,7 +1890,9 @@ def handle_review(
     # only for the exact issue revision + PR head it verified.
     accepted_contract_marker: str | None = None
     if verdict == "approve":
-        issue_number, non_closing = linked_issue_mode_for_pr(pr_number, branch)
+        issue_number, non_closing = linked_issue_mode_for_pr(
+            pr_number, branch, body=str(pr.get("body") or "")
+        )
         if issue_number is None:
             return return_to_review(
                 pr_number=pr_number, branch=branch, worker=worker,
