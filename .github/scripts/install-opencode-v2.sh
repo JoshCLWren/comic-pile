@@ -24,6 +24,23 @@ cat > "$HOME/.config/opencode/opencode.json" <<'JSON'
           "body": {"safety_identifier": "comic-pile-factory"}
         }
       }
+    },
+    "openrouter": {
+      "models": {
+        "free": {
+          "modelID": "openrouter/free",
+          "name": "OpenRouter Free Models Router (factory semantic review)",
+          "capabilities": {
+            "tools": true,
+            "input": ["text"],
+            "output": ["text"]
+          },
+          "limit": {
+            "context": 64000,
+            "output": 8192
+          }
+        }
+      }
     }
   },
   "permissions": [
