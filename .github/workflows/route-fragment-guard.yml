@@ -40,8 +40,17 @@ jobs:
             "${{ github.event.pull_request.base.sha }}" \
             "${{ github.event.pull_request.head.sha }}"
 
-      - name: Fail PRs that include bot-owned generated files
+      - name: Reject hand-edited generated files in ordinary PRs
+        if: ${{ !(startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository) }}
         run: >-
           python3 scripts/check_route_fragment_guard.py
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"
+
+      - name: Enforce generated-only scope on regeneration PRs
+        if: ${{ startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: >-
+          python3 scripts/check_route_fragment_guard.py
+          --allow-generated
           --base "${{ github.event.pull_request.base.sha }}"
           --head "${{ github.event.pull_request.head.sha }}"
