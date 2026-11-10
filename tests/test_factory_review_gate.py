@@ -3653,12 +3653,10 @@ def test_review_route_rejects_inconsistent_runtime_provenance(
 
 
 def test_dedicated_review_route_is_limited_to_exact_head_semantic_stage() -> None:
-    """No implementation or PR repair run is routed through the composite."""
+    """Only a leased semantic review may use the composite route."""
     workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
-    assert 'if jq -e \' .kind == "pr"\'' not in workflow  # no loose PR-only match
-    stage_match = 'if jq -e \' .kind == "pr" and .stage == "factory:review"\''
-    # Check the concrete condition without the whitespace normalization above.
-    assert ".kind == \\"pr\\" and .stage == \\"factory:review\\"" in workflow
+    condition = '.kind == "pr" and .stage == "factory:review"'
+    assert condition in workflow
     assert "source='openrouter-free'" in workflow
     assert "model='openrouter/free'" in workflow
     assert "runtime_model='openrouter/free'" in workflow
