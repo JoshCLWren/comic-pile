@@ -58,6 +58,21 @@ def _die_event(
     )
 
 
+def _manual_die_event(
+    session: ReadingSession,
+    *,
+    timestamp: int,
+    die_after: int,
+) -> Event:
+    """Build a session-scoped manual_die event for die selection."""
+    return Event(
+        type="manual_die",
+        session_id=session.id,
+        die_after=die_after,
+        timestamp=datetime(2026, 8, 2, 12, 0, timestamp, tzinfo=UTC),
+    )
+
+
 @pytest.mark.asyncio
 async def test_history_ladder_is_chronological_and_current_die_uses_latest(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
@@ -93,10 +108,10 @@ async def test_history_ladder_is_chronological_and_current_die_uses_latest(
 
 
 @pytest.mark.asyncio
-async def test_history_manual_die_overrides_event_derived_die(
+async def test_history_event_derived_die_wins_over_manual_column(
     auth_client: AsyncClient, async_db: AsyncSession, default_user: User
 ) -> None:
-    """A manual die takes precedence over event-derived current die."""
+    """Event-derived current die wins over the legacy manual_die pin (#4352)."""
     thread = Thread(
         title="Manual Die Comic",
         format="Comic",
@@ -120,7 +135,7 @@ async def test_history_manual_die_overrides_event_derived_die(
     assert response.status_code == 200
     item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
 
-    assert item["current_die"] == 20
+    assert item["current_die"] == 8
     assert item["manual_die"] == 20
     assert item["ladder_path"] == "6 → 8"
 
@@ -140,6 +155,36 @@ async def test_history_no_die_events_falls_back_to_start_die(
 
     assert item["ladder_path"] == "10"
     assert item["current_die"] == 10
+
+
+@pytest.mark.asyncio
+async def test_history_manual_die_event_includes_in_die_path(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user: User
+) -> None:
+    """A manual_die event is included in the die path and wins over column.
+
+    Event-derived die wins (#4352): the legacy manual_die column is a
+    fallback only when no die events exist.
+    """
+    session = ReadingSession(
+        start_die=6,
+        manual_die=20,
+        user_id=default_user.id,
+        started_at=datetime.now(UTC),
+    )
+    async_db.add(session)
+    await async_db.flush()
+    async_db.add(_manual_die_event(session, timestamp=1, die_after=12))
+    await _commit_all(async_db)
+
+    response = await auth_client.get("/api/v1/sessions/")
+    assert response.status_code == 200
+    item = next(s for s in response.json()["sessions"] if s["id"] == session.id)
+
+    # Event-derived die wins: manual_die event (12) overrides column (20)
+    assert item["current_die"] == 12
+    assert item["manual_die"] == 20  # Column is still shown
+    assert item["ladder_path"] == "6 → 12"
 
 
 @pytest.mark.asyncio
