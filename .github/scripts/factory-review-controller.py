@@ -893,12 +893,12 @@ def has_actionable_review_findings(excerpt: str) -> bool:
         # actionable diagnosis, even when its text contains English words.
         if line.startswith(("> ", "→ ", "$ ", "↳ ")):
             continue
-        if re.match(r"^[0-9a-f]{7,40}\\s", line):
+        if re.match(r"^[0-9a-f]{7,40}\s", line):
             continue
         if re.match(r"^(?:commit |Author:|Date:|On branch |nothing to commit|working tree clean)", line, re.I):
             continue
-        if re.match(r"^\\S+\\s+\\|\\s+\\d+\\s", line) or re.match(
-            r"^\\d+ files? changed(?:,|$)", line
+        if re.match(r"^\S+\s+\|\s+\d+\s", line) or re.match(
+            r"^\d+ files? changed(?:,|$)", line
         ):
             continue
         # Unified diff additions/deletions and standalone source expressions
