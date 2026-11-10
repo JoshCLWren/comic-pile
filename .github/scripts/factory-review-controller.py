@@ -324,10 +324,16 @@ def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | 
         ``(issue, non_closing)``; ``non_closing`` is true only for a ``Part of``
         link.
     """
-    linked = linked_issue_from_branch(branch)
-    if linked is not None:
-        return linked, False
     body = str(pr_json(pr_number).get("body") or "")
+    linked = linked_issue_from_branch(branch)
+    match = re.search(
+        r"(?i)\\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\\s+#(\\d+)",
+        body,
+    )
+    if linked is not None:
+        # The canonical branch selects the issue, not the PR's closure scope.
+        # Honor a matching explicit Part of only when no closing claim exists.
+        return linked, match is None and explicit_part_of_issue(body) == linked
     match = re.search(
         r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
         body,
