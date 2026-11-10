@@ -9,7 +9,9 @@ from comic_pile.dice_ladder import automatic_die_after
 #: Event types that move the reading die. A dismissal is not one of them: it
 #: clears the pending roll without changing the die, so it never carries a
 #: ``die_after`` and never belongs on the die ladder.
-_DIE_EVENT_TYPES = frozenset({"rate", "snooze", "undo"})
+# Event-derived die wins (#4352): manual_die and reset_dice are included so
+# Rust sessionless manual selections appear in the History die path.
+_DIE_EVENT_TYPES = frozenset({"rate", "snooze", "undo", "reset_dice", "manual_die"})
 
 
 @dataclass(frozen=True, slots=True)
