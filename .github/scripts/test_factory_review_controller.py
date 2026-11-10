@@ -51,7 +51,10 @@ def test_canonical_factory_branch_honors_matching_part_of_without_changing_owner
     current["body"] = "Part of #4740."
     assert controller.linked_issue_mode_for_pr(4934, "local/review") == (4740, True)
     # handle_review already fetched this PR; avoid another remote read.
-    monkeypatch.setattr(controller, "pr_json", lambda _pr: (_ for _ in ()).throw(AssertionError("extra PR fetch")))
+    def unexpected_fetch(_pr: int) -> dict[str, object]:
+        raise AssertionError("linked issue mode should reuse the PR snapshot")
+
+    monkeypatch.setattr(controller, "pr_json", unexpected_fetch)
     assert controller.linked_issue_mode_for_pr(
         4934, branch, body="Part of #4740."
     ) == (4740, True)
