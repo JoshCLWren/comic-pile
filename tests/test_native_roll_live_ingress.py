@@ -267,7 +267,8 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
 def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
     """Both native entrypoints must register the method and path sent by Vercel."""
     service, ingresses = _production_routes()
-    for route in _vercel_routes():
+    routes = _vercel_routes()
+    for route_index, route in enumerate(routes):
         function = route.get("dest")
         if not isinstance(function, str) or function not in ingresses:
             continue
@@ -294,6 +295,18 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 for registered_method, path in ingresses[function]
                 if registered_method == method
                 and re.fullmatch(_vercel_pattern(source), _concrete_path(path))
+                # A prior static rewrite owns its concrete path before this
+                # broader parameter rewrite is considered by Vercel.
+                and not any(
+                    isinstance(previous_source := previous.get("src"), str)
+                    and re.fullmatch(_vercel_pattern(previous_source), _concrete_path(path))
+                    and (
+                        (previous_methods := previous.get("methods")) is None
+                        or isinstance(previous_methods, list)
+                        and method in previous_methods
+                    )
+                    for previous in routes[:route_index]
+                )
             }
             assert len(matching_ingress) == 1, (
                 f"Vercel sends {method} {source} to {function}, "

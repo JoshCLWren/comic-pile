@@ -297,10 +297,7 @@ pub async fn export(
             "attachment; filename=\"custom-cbl-{list_id}.cbl\""
         ))
         .map_err(|_| {
-            ApiError::with_status(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error",
-            )
+            ApiError::with_status(StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
         })?,
     );
     Ok(response)
