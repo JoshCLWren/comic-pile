@@ -30,20 +30,31 @@ RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
 
-def free_models(raw_catalog: str) -> list[str]:
-    """Cost metadata wins over names: never silently select a paid model."""
-    catalog = parse_opencode_models_text(raw_catalog, "opencode")
+def free_models(raw_catalog: str, *, provider: str = "opencode-free") -> list[str]:
+    """Enumerate only zero-price candidates from the selected OpenCode provider."""
+    if provider not in {"opencode-free", "openrouter-free"}:
+        raise ValueError("unsupported free model provider")
+    catalog = parse_opencode_models_text(raw_catalog, provider.removesuffix("-free"))
     retired = set(load_roster_lock()["retired_models"])
     return sorted(
         entry.model_id
         for entry in catalog.entries
         if entry.model_id not in retired
         and not entry.cost_is_paid
-        and (entry.cost_is_zero or opencode_model_is_free(entry.model_id))
+        and (
+            entry.cost_is_zero
+            or (
+                provider == "opencode-free"
+                and opencode_model_is_free(entry.model_id)
+            )
+            or (provider == "openrouter-free" and entry.model_id.endswith(":free"))
+        )
     )
 
 
-def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
+def unavailable_models(
+    payload: object, *, now_epoch: int, provider: str = "opencode-free"
+) -> set[str]:
     """Return model-specific exclusions from trusted, timestamped registry records."""
     comments = []
     for comment in flatten_comments(payload):
@@ -76,13 +87,13 @@ def unavailable_models(payload: object, *, now_epoch: int) -> set[str]:
         comments.append(comment)
     excluded = set()
     for evidence in latest_attempt_evidence(comments).values():
-        if evidence.provider != "opencode-free" or evidence.updated > now_epoch:
+        if evidence.provider != provider or evidence.updated > now_epoch:
             continue
         if evidence.outcome == "model_retired_410" or (
             evidence.outcome in {"model_unavailable", "provider_quota"}
             and now_epoch < evidence.updated + COOLDOWN_SECONDS
         ):
-            excluded.add(evidence.model.removeprefix("opencode/"))
+            excluded.add(evidence.model.removeprefix(provider.removesuffix("-free") + "/"))
     return excluded
 
 
@@ -132,12 +143,13 @@ def select_model(
     *,
     now_epoch: int | None = None,
     attempted: set[str] | None = None,
+    provider: str = "opencode-free",
 ) -> dict[str, str | int]:
     """Rotate all free models without assigning duplicate permanent pins.
 
     Consults trusted registry attempt comments and applies model cooldowns.
     """
-    models = free_models(raw_catalog)
+    models = free_models(raw_catalog, provider=provider)
     if not models:
         raise ValueError("OpenCode catalog has no provably free models")
 
@@ -148,21 +160,22 @@ def select_model(
         excluded = unavailable_models(
             payload,
             now_epoch=int(time.time()) if now_epoch is None else now_epoch,
+            provider=provider,
         )
     available_models = [model for model in models if model not in excluded and model not in (attempted or set())]
     if not available_models:
         raise ValueError(f"All {len(models)} candidates are unavailable or in cooldown")
 
     rows = load_roster_rows(roster_path)
-    workers = sorted(int(row["worker"]) for row in rows if row["source"] == "opencode-free")
+    workers = sorted(int(row["worker"]) for row in rows if row["source"] == provider)
     if worker not in workers:
-        raise ValueError(f"worker {worker} has no OpenCode free slot")
+        raise ValueError(f"worker {worker} has no {provider} slot")
 
     model = available_models[(workers.index(worker) + rotation) % len(available_models)]
     return {
         "model": model,
-        "runtime_model": f"opencode/{model}",
-        "provider": "opencode-free",
+        "runtime_model": f"{provider.removesuffix('-free')}/{model}",
+        "provider": provider,
         "candidate_count": len(models),
     }
 
@@ -177,6 +190,7 @@ def main() -> None:
     parser.add_argument("--worker", type=int)
     parser.add_argument("--rotation", type=int, default=0)
     parser.add_argument("--attempted", action="append", default=[])
+    parser.add_argument("--provider", choices=("opencode-free", "openrouter-free"), default="opencode-free")
     parser.add_argument("--roster", type=Path, default=Path(".github/free-model-factories.tsv"))
     args = parser.parse_args()
     if args.smoke_log is not None:
@@ -197,6 +211,7 @@ def main() -> None:
         args.roster,
         args.comments,
         attempted=set(args.attempted),
+        provider=args.provider,
     )
     print(json.dumps(selected, sort_keys=True))
 

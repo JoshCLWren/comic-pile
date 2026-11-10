@@ -18,6 +18,11 @@ const HOST: &str = "comicvine.gamespot.com";
 const MAX_BODY: usize = 2_000_000;
 const BATCH_LIMIT: usize = 8;
 const PROVIDER_TIMEOUT: Duration = Duration::from_secs(5);
+// Shared with comicvine_issue.rs READ_SQL: complete rows stay fresh 30 days;
+// a deep response with empty credits is rechecked after 7 days. The two
+// implementations must use the same precise policy (see needs_provider_fetch).
+const COMPLETE_FRESH_DAYS: i64 = 30;
+const EMPTY_CREDIT_RECHECK_DAYS: i64 = 7;
 
 // A provider connection must not outlive its awaited Vercel request. In
 // particular, early return on malformed/oversized provider responses must
@@ -108,6 +113,7 @@ pub struct DrainReport {
 enum ProviderFailure {
     RateLimited(u32),
     Unavailable,
+    Timeout,
     InvalidPayload,
 }
 
@@ -306,7 +312,7 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
     };
     tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
-        .map_err(|_| ProviderFailure::Unavailable)?
+        .map_err(|_| ProviderFailure::Timeout)?
 }
 
 async fn claim(state: &AppState) -> Result<Option<Job>, ApiError> {
@@ -402,6 +408,12 @@ fn failure_transition(error: &ProviderFailure, attempt: i32) -> (&'static str, i
             if attempt <= 1 { 60 } else { 300 },
             "provider_unavailable",
         ),
+        ProviderFailure::Timeout if attempt >= 3 => ("failed", 21600, "provider_timeout"),
+        ProviderFailure::Timeout => (
+            "deferred",
+            if attempt <= 1 { 60 } else { 300 },
+            "provider_timeout",
+        ),
     }
 }
 
@@ -409,6 +421,54 @@ fn has_complete_provider_payload(metadata: &Value) -> bool {
     metadata["raw_provider_payload"]
         .as_object()
         .is_some_and(|raw| FIELDS.split(',').all(|key| raw.contains_key(key)))
+}
+
+fn cached_has_credits(metadata: &Value) -> bool {
+    let creator = metadata["creator_credits"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty());
+    let raw = metadata["raw_provider_payload"]["person_credits"]
+        .as_array()
+        .is_some_and(|v| !v.is_empty());
+    creator || raw
+}
+
+fn provider_newer_than_deep_fetch(metadata: &Value) -> bool {
+    let deep = metadata["deep_metadata_refreshed_at"]
+        .as_str()
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
+    let Some(deep) = deep else {
+        return false;
+    };
+    provider_timestamp(&metadata["raw_provider_payload"]["date_last_updated"])
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(&v).ok())
+        .is_some_and(|provider| provider > deep)
+}
+
+/// Whether the worker must call the provider instead of settling from cache.
+/// Must mirror comicvine_issue.rs freshness exactly: a provider revision
+/// newer than the deep fetch is always stale; complete rows use 30 days;
+/// empty-credit rows use 7 days. Malformed/absent timestamps are stale.
+fn needs_provider_fetch(metadata: &Value, now: chrono::DateTime<chrono::Utc>) -> bool {
+    if !has_complete_provider_payload(metadata) {
+        return true;
+    }
+    if provider_newer_than_deep_fetch(metadata) {
+        return true;
+    }
+    let Some(fetched_at) = metadata["deep_metadata_refreshed_at"]
+        .as_str()
+        .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+    else {
+        return true;
+    };
+    let age = now.signed_duration_since(fetched_at);
+    let window = if cached_has_credits(metadata) {
+        chrono::Duration::days(COMPLETE_FRESH_DAYS)
+    } else {
+        chrono::Duration::days(EMPTY_CREDIT_RECHECK_DAYS)
+    };
+    age >= window
 }
 
 async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'static str, ApiError> {
@@ -420,23 +480,13 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
         settle(state, job, "failed", 21600, Some("invalid_external_id")).await?;
         return Ok("failed");
     };
-    if let Some(metadata) = job
+    let cached: Option<Value> = job
         .metadata
         .as_deref()
-        .and_then(|v| serde_json::from_str::<Value>(v).ok())
-    {
-        let fetched_at = metadata["deep_metadata_refreshed_at"]
-            .as_str()
-            .and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok());
-        let deep = has_complete_provider_payload(&metadata);
-        if deep
-            && fetched_at.is_some_and(|date| {
-                chrono::Utc::now().signed_duration_since(date) < chrono::Duration::days(30)
-            })
-        {
-            let has = metadata["creator_credits"]
-                .as_array()
-                .is_some_and(|v| !v.is_empty());
+        .and_then(|v| serde_json::from_str::<Value>(v).ok());
+    if let Some(metadata) = &cached {
+        if !needs_provider_fetch(metadata, chrono::Utc::now()) {
+            let has = cached_has_credits(metadata);
             settle(
                 state,
                 job,
@@ -463,9 +513,40 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
         .await
         .and_then(|value| normalized_metadata(&value, id))
     {
-        Ok((patch, has, url, updated)) => {
-            if persist(state, job, &patch, has, &url, &updated).await? {
-                Ok(if has { "completed" } else { "no_credits" })
+        Ok((mut patch, has, url, updated)) => {
+            // A lower-fidelity / sparser fresh roster must never erase
+            // previously persisted creators: keep cached credits when the
+            // new fetch is empty but the cache already has them.
+            if !has {
+                if let Some(existing) = &cached {
+                    if existing["creator_credits"]
+                        .as_array()
+                        .is_some_and(|v| !v.is_empty())
+                    {
+                        if let Some(obj) = patch.as_object_mut() {
+                            obj.insert(
+                                "creator_credits".to_owned(),
+                                existing["creator_credits"].clone(),
+                            );
+                        }
+                    } else if existing["raw_provider_payload"]["person_credits"]
+                        .as_array()
+                        .is_some_and(|v| !v.is_empty())
+                    {
+                        // Normalize cached raw credits into creator_credits when
+                        // the cached normalized array is empty
+                        if let Some(obj) = patch.as_object_mut() {
+                            obj.insert(
+                                "creator_credits".to_owned(),
+                                compact_refs(&existing["raw_provider_payload"]["person_credits"]),
+                            );
+                        }
+                    }
+                }
+            }
+            let effective = cached_has_credits(&patch) || has;
+            if persist(state, job, &patch, effective, &url, &updated).await? {
+                Ok(if effective { "completed" } else { "no_credits" })
             } else {
                 // Another worker reclaimed the expired lease; its result is authoritative.
                 Ok("deferred")
@@ -731,6 +812,170 @@ mod tests {
             .expect("provider payload")
             .remove("image");
         assert!(!has_complete_provider_payload(&metadata));
+    }
+
+    #[test]
+    fn empty_credits_use_bounded_recheck_not_30_day_lock() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-11-08T15:00:00+00:00")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        // Issue 1121330-shaped: deep payload complete, person_credits and
+        // creator_credits empty, fetched ~1 day ago.
+        let mut fields = Map::new();
+        for field in FIELDS.split(',') {
+            fields.insert(field.to_string(), Value::Null);
+        }
+        // Provider revision predates the deep fetch so only age decides.
+        fields.insert(
+            "date_last_updated".to_owned(),
+            json!("2026-11-05T08:37:31Z"),
+        );
+        fields.insert("person_credits".to_owned(), json!([]));
+        let empty_recent = json!({
+            "raw_provider_payload": fields,
+            "creator_credits": [],
+            "deep_metadata_refreshed_at": "2026-11-07T21:09:17.019489+00:00",
+        });
+        // 1 day old: still within the 7-day empty recheck, no hot loop.
+        assert!(!needs_provider_fetch(&empty_recent, now));
+        // 8 days old: past the 7-day recheck, must fetch again. Provider
+        // revision predates the deep fetch so only age decides.
+        let mut old_fields = empty_recent["raw_provider_payload"].clone();
+        old_fields.as_object_mut().expect("payload object").insert(
+            "date_last_updated".to_owned(),
+            json!("2026-10-20T08:37:31Z"),
+        );
+        let empty_old = json!({
+            "raw_provider_payload": old_fields,
+            "creator_credits": [],
+            "deep_metadata_refreshed_at": "2026-10-26T15:00:00+00:00",
+        });
+        assert!(needs_provider_fetch(&empty_old, now));
+        // Same age but populated (issue #24 shape): 8 days is still fresh.
+        let full_old = json!({
+            "raw_provider_payload": empty_old["raw_provider_payload"],
+            "creator_credits": [{"id": 1, "name": "Creator One"}],
+            "deep_metadata_refreshed_at": "2026-10-26T15:00:00+00:00",
+        });
+        assert!(!needs_provider_fetch(&full_old, now));
+        // R1 regression: credits in only one array count as having credits.
+        // A row with creator_credits empty but person_credits non-empty uses
+        // the 30-day window (not the 7-day recheck), matching cached_has_credits
+        // (creator || raw) and comicvine_issue.rs NOT (has credits).
+        let mut person_old_fields = empty_old["raw_provider_payload"].clone();
+        person_old_fields
+            .as_object_mut()
+            .expect("payload object")
+            .insert(
+                "person_credits".to_owned(),
+                json!([{"id": 1, "name": "Creator One"}]),
+            );
+        let person_only_old = json!({
+            "raw_provider_payload": person_old_fields,
+            "creator_credits": [],
+            "deep_metadata_refreshed_at": "2026-10-26T15:00:00+00:00",
+        });
+        assert!(cached_has_credits(&person_only_old));
+        assert!(!needs_provider_fetch(&person_only_old, now));
+        // 31 days old populated row is stale under the 30-day window.
+        let mut stale_fields = empty_recent["raw_provider_payload"].clone();
+        stale_fields
+            .as_object_mut()
+            .expect("payload object")
+            .insert(
+                "date_last_updated".to_owned(),
+                json!("2026-09-01T08:37:31Z"),
+            );
+        let full_stale = json!({
+            "raw_provider_payload": stale_fields,
+            "creator_credits": [{"id": 1, "name": "Creator One"}],
+            "deep_metadata_refreshed_at": "2026-10-01T15:00:00+00:00",
+        });
+        assert!(needs_provider_fetch(&full_stale, now));
+        // Provider revision newer than the deep fetch forces a refetch even
+        // when the deep timestamp is recent.
+        let mut newer_fields = empty_recent["raw_provider_payload"].clone();
+        newer_fields
+            .as_object_mut()
+            .expect("payload object")
+            .insert(
+                "date_last_updated".to_owned(),
+                json!("2026-11-08T10:00:00Z"),
+            );
+        let provider_newer = json!({
+            "raw_provider_payload": newer_fields,
+            "creator_credits": [],
+            "deep_metadata_refreshed_at": "2026-11-07T21:09:17.019489+00:00",
+        });
+        assert!(needs_provider_fetch(&provider_newer, now));
+        // Missing/incomplete payload or timestamps are stale, never fresh.
+        assert!(needs_provider_fetch(&json!({}), now));
+        let no_timestamp = json!({
+            "raw_provider_payload": empty_recent["raw_provider_payload"],
+            "creator_credits": [{"id": 1, "name": "Creator One"}],
+        });
+        assert!(needs_provider_fetch(&no_timestamp, now));
+    }
+
+    #[test]
+    fn cached_has_credits_detects_seven_creators_from_issue_24() {
+        // Regression test for #4819/#24: verify that cached_has_credits correctly
+        // identifies issues with multiple creators, which is used by
+        // needs_provider_fetch() and process() for the 7-day recheck window.
+        let metadata_with_seven = json!({
+            "creator_credits": [
+                {"id": 1, "name": "Creator One", "role": "writer"},
+                {"id": 2, "name": "Creator Two", "role": "penciler"},
+                {"id": 3, "name": "Creator Three", "role": "inker"},
+                {"id": 4, "name": "Creator Four", "role": "colorist"},
+                {"id": 5, "name": "Creator Five", "role": "letterer"},
+                {"id": 6, "name": "Creator Six", "role": "cover"},
+                {"id": 7, "name": "Creator Seven", "role": "editor"}
+            ],
+            "raw_provider_payload": {
+                "person_credits": [
+                    {"id": 1, "name": "Creator One", "role": "writer"},
+                    {"id": 2, "name": "Creator Two", "role": "penciler"},
+                    {"id": 3, "name": "Creator Three", "role": "inker"},
+                    {"id": 4, "name": "Creator Four", "role": "colorist"},
+                    {"id": 5, "name": "Creator Five", "role": "letterer"},
+                    {"id": 6, "name": "Creator Six", "role": "cover"},
+                    {"id": 7, "name": "Creator Seven", "role": "editor"}
+                ]
+            }
+        });
+        assert!(cached_has_credits(&metadata_with_seven));
+
+        // Empty credits should return false.
+        let empty_metadata = json!({
+            "creator_credits": [],
+            "raw_provider_payload": {"person_credits": []}
+        });
+        assert!(!cached_has_credits(&empty_metadata));
+
+        // One creator should return true.
+        let one_creator = json!({
+            "creator_credits": [{"id": 1, "name": "One", "role": "writer"}],
+            "raw_provider_payload": {"person_credits": []}
+        });
+        assert!(cached_has_credits(&one_creator));
+    }
+
+    #[test]
+    fn timeout_is_distinct_from_provider_unavailable() {
+        assert_eq!(
+            failure_transition(&ProviderFailure::Timeout, 1),
+            ("deferred", 60, "provider_timeout")
+        );
+        assert_eq!(
+            failure_transition(&ProviderFailure::Timeout, 3),
+            ("failed", 21600, "provider_timeout")
+        );
+        // Rate limiting stays distinct and never reported as empty credits.
+        assert_eq!(
+            failure_transition(&ProviderFailure::RateLimited(120), 1),
+            ("deferred", 120, "rate_limit")
+        );
     }
 
     #[test]

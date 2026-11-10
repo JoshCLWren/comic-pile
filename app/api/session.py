@@ -272,7 +272,8 @@ async def list_sessions(
                 (Event.type == "roll") & (Event.selected_thread_id.is_not(None)),
                 Event.type == "rate",
                 Event.type == "rolled_but_skipped",
-                (Event.type.in_(("snooze", "unsnooze", "undo", "restore"))) & (Event.die_after.is_not(None)),
+                (Event.type.in_(("snooze", "unsnooze", "undo", "restore", "manual_die", "reset_dice")))
+                & (Event.die_after.is_not(None)),
             )
         )
         .order_by(Event.session_id, Event.timestamp, Event.id)
@@ -335,10 +336,14 @@ async def list_sessions(
     current_die: dict[int, int] = {}
     for sid in session_ids:
         session = sessions_by_id[sid]
-        if session.manual_die:
+        # Event-derived die wins (#4352): the manual_die column is a legacy
+        # fallback only when the session has no die-changing events.
+        if sid in projection.latest_die_by_session:
+            current_die[sid] = projection.latest_die_by_session[sid]
+        elif session.manual_die:
             current_die[sid] = session.manual_die
-            continue
-        current_die[sid] = projection.latest_die_by_session.get(sid, session.start_die)
+        else:
+            current_die[sid] = session.start_die
 
     roll_thread_ids = {
         event.selected_thread_id
