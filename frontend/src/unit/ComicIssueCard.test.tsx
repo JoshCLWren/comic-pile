@@ -56,6 +56,21 @@ function mount(status: 'read' | 'unread' = 'read') {
 beforeEach(() => { patch.mockReset(); patch.mockResolvedValue(receipt) })
 
 describe('shared direct issue card', () => {
+  it('shows a pending save state until the write settles', async () => {
+    let resolvePatch!: (value: IssueReadRateResponse) => void
+    patch.mockImplementationOnce(
+      () => new Promise<IssueReadRateResponse>((resolve) => { resolvePatch = resolve }),
+    )
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Edit rating' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save rating' }))
+    expect(await screen.findByRole('button', { name: 'Saving…' })).toBeDisabled()
+    resolvePatch(receipt)
+    await waitFor(() =>
+      expect(screen.queryByTestId('comic-issue-rating-editor')).not.toBeInTheDocument(),
+    )
+  })
+
   it('edits a persisted rating without sending a read status or another read', async () => {
     const onMutated = mount()
     expect(screen.getByText(/Rated 4/)).toBeVisible()
@@ -108,6 +123,26 @@ describe('shared direct issue card', () => {
     expect(patch.mock.calls[1]?.[1].rating).toBe(5)
   })
 
+  it('keeps unread correction locked while its direct write is pending', async () => {
+    let finish: (value: IssueReadRateResponse) => void = () => {}
+    patch.mockImplementationOnce(() => new Promise<IssueReadRateResponse>((resolve) => { finish = resolve }))
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByRole('button', { name: 'Saving…' })).toBeDisabled()
+    expect(patch).toHaveBeenCalledExactlyOnceWith(75, expect.objectContaining({ status: 'unread' }))
+    finish(receipt)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark unread' })).toBeEnabled())
+    expect(patch).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows explicit fallback recovery copy when a failed correction has no error detail', async () => {
+    patch.mockRejectedValueOnce(new Error(''))
+    mount()
+    await userEvent.click(screen.getByRole('button', { name: 'Mark unread' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not save. Your rating was not recorded')
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled()
+  })
+
   it('keeps external unowned entries free of personal read and correction controls', () => {
     render(<ComicIssueCard issueId={75} threadTitle="Cable" issueNumber="75" status="unread" isOwned={false} showMapping={false} variant="compact" advisory="Add this exact issue to your library." />, { wrapper })
     expect(screen.getByText('Add this exact issue to your library.')).toBeVisible()
@@ -117,6 +152,75 @@ describe('shared direct issue card', () => {
 })
 
 describe('issue-specific cover and shared rating input', () => {
+  it('uses the shared cover for Roll geometry without changing the CDN URL or zoom access', () => {
+    const image = 'https://comicvine.gamespot.com/a/uploads/original/cover.jpg'
+    const onLoad = vi.fn()
+    const { rerender } = render(
+      <ComicIssueCover
+        coverImageUrl={image}
+        threadTitle="Hellboy"
+        issueNumber="1"
+        variant="featured"
+        testId="roll-shared-cover"
+        placeholderTestId="cover-placeholder"
+        frameClassName="h-full w-full"
+        frameStyle={{ aspectRatio: 'auto' }}
+        imageClassName="h-full w-full object-contain"
+        onImageLoad={onLoad}
+      >
+        <button type="button">View cover larger</button>
+      </ComicIssueCover>,
+    )
+    expect(screen.getByTestId('roll-shared-cover')).toHaveStyle({ aspectRatio: 'auto' })
+    expect(screen.getByRole('img', { name: 'Cover for Hellboy #1' })).toHaveAttribute('src', image)
+    expect(screen.getByRole('button', { name: 'View cover larger' })).toBeVisible()
+    fireEvent.load(screen.getByRole('img'))
+    expect(onLoad).toHaveBeenCalledOnce()
+    fireEvent.error(screen.getByRole('img'))
+    expect(screen.getByTestId('cover-placeholder')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'View cover larger' })).not.toBeInTheDocument()
+    rerender(<ComicIssueCover coverImageUrl={null} threadTitle="Hellboy" issueNumber="2" />)
+    expect(screen.getByTestId('comic-issue-cover-placeholder')).toHaveAttribute('aria-label', 'No cover for Hellboy #2')
+  })
+
+  it('treats the Roll featured cover as decorative while preserving accessible zoom controls', () => {
+    const image = 'https://comicvine.gamespot.com/a/uploads/original/hellboy.jpg'
+    const { container } = render(
+      <ComicIssueCover
+        coverImageUrl={image}
+        threadTitle="Hellboy"
+        issueNumber="3"
+        variant="featured"
+        altText=""
+        testId="roll-decorative-cover"
+      >
+        <button type="button" aria-label="View cover larger">Zoom</button>
+      </ComicIssueCover>,
+    )
+    expect(screen.getByTestId('roll-decorative-cover')).toBeVisible()
+    expect(container.querySelector('img')).toHaveAttribute('alt', '')
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'View cover larger' })).toBeEnabled()
+  })
+
+  it('lets the shared featured identity be a Roll heading without inventing read status', () => {
+    render(
+      <ComicIssueIdentity
+        threadTitle="Hellboy"
+        issueNumber="12"
+        status="unread"
+        rating={null}
+        variant="featured"
+        heading
+        headingTestId="comic-header-title"
+        showStatus={false}
+      />,
+    )
+    expect(screen.getByTestId('comic-header-title').tagName).toBe('H2')
+    expect(screen.getByRole('heading', { name: 'Hellboy #12' })).toBeVisible()
+    expect(screen.queryByText('Unread')).not.toBeInTheDocument()
+  })
+
   it('keeps the provider URL unchanged, replaces broken art, and recovers on mapping change', () => {
     const first = 'https://comicvine.gamespot.com/a/cover.jpg?size=original'
     const second = 'https://comicvine.gamespot.com/b/annual.jpg'

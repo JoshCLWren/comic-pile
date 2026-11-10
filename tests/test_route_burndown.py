@@ -65,7 +65,7 @@ def _operation(
 
 
 def test_burndown_summary_matches_deployed_ingress() -> None:
-    """Inventory burndown reports 40 Native Rust + one Python operation."""
+    """Inventory burndown reports the current native and Python v2 surface."""
     inventory = load_json(INVENTORY_PATH)
     burndown = inventory.get("burndown")
     assert isinstance(burndown, dict)
@@ -169,7 +169,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 38
+    assert len(shadowed_v1) == 43
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/threads/completed/threads"
@@ -355,6 +355,33 @@ def test_full_surface_matches_deployed_ingress() -> None:
     for item in v1_ops:
         if item.get("burndown_status") == "shadowed by Rust":
             assert item.get("runtime") == "python-fastapi"
+
+
+def test_dependencies_slice_routes_native_while_python_remains_declared() -> None:
+    """All browser dependency paths use native ingress without deleting Python."""
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    operations = full_surface["v1_operations"]
+    assert isinstance(operations, list)
+    expected = {
+        ("POST", "/api/v1/dependencies/"),
+        ("GET", "/api/v1/dependencies/blocked"),
+        ("DELETE", "/api/v1/dependencies/{dependency_id}"),
+        ("GET", "/api/v1/dependencies/{dependency_id}"),
+        ("PATCH", "/api/v1/dependencies/{dependency_id}"),
+    }
+    actual = {
+        (item["method"], item["path"])
+        for item in operations
+        if isinstance(item, dict) and item["path"].startswith("/api/v1/dependencies")
+    }
+    assert actual == expected
+    for item in operations:
+        if isinstance(item, dict) and (item["method"], item["path"]) in expected:
+            assert item["runtime"] == "python-fastapi"
+            assert item["ingress_destination"] == "/api/native_roll.rs"
+            assert item["burndown_status"] == "shadowed by Rust"
 
 
 def test_rendered_outputs_match_checked_in_files() -> None:

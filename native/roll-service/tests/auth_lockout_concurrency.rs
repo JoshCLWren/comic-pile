@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Concurrency regression for atomic login lockout serialization (#4746).
 //!
 //! The previous implementation checked the per-account and per-client

@@ -62,7 +62,7 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/dependencies/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/dependencies/$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
@@ -72,7 +72,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/dependencies/blocked",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/dependencies/blocked$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
@@ -82,8 +82,8 @@
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/dependencies/{dependency_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/dependencies/[^/]+$",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/dependencies/[0-9]+$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
       ]
@@ -92,8 +92,8 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/dependencies/{dependency_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/dependencies/[^/]+$",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/dependencies/[0-9]+$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
       ]
@@ -102,8 +102,8 @@
       "bucket": "v1_operations",
       "method": "PATCH",
       "path": "/api/v1/dependencies/{dependency_id}",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/dependencies/[^/]+$",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/dependencies/[0-9]+$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
       ]
