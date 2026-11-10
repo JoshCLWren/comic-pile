@@ -1305,9 +1305,13 @@ fn parse_limit(value: Option<&str>) -> Result<i32, ApiError> {
     match value {
         None => Ok(20),
         Some(raw) => {
-            let parsed: i32 = raw
-                .parse()
-                .map_err(|_| unprocessable("limit must be an integer"))?;
+            let parsed: i32 = raw.parse().map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                unprocessable("limit must be an integer")
+            })?;
             if !(1..=100).contains(&parsed) {
                 return Err(unprocessable("limit must be between 1 and 100"));
             }
@@ -1320,9 +1324,13 @@ fn parse_offset(value: Option<&str>) -> Result<i32, ApiError> {
     match value {
         None => Ok(0),
         Some(raw) => {
-            let parsed: i32 = raw
-                .parse()
-                .map_err(|_| unprocessable("offset must be an integer"))?;
+            let parsed: i32 = raw.parse().map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                unprocessable("offset must be an integer")
+            })?;
             if parsed < 0 {
                 return Err(unprocessable("offset must be at least 0"));
             }
@@ -1335,9 +1343,13 @@ fn parse_source_pr(value: Option<&str>) -> Result<Option<i32>, ApiError> {
     match value {
         None => Ok(None),
         Some(raw) => {
-            let parsed: i32 = raw
-                .parse()
-                .map_err(|_| unprocessable("source_pr_number must be an integer"))?;
+            let parsed: i32 = raw.parse().map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                unprocessable("source_pr_number must be an integer")
+            })?;
             if parsed < 1 {
                 return Err(unprocessable("source_pr_number must be at least 1"));
             }

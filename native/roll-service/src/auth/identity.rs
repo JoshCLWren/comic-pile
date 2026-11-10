@@ -143,7 +143,10 @@ fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
     validation.validate_aud = false;
     let payload = decode::<Value>(token, &DecodingKey::from_secret(secret), &validation)
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             invalid()
         })?
         .claims;

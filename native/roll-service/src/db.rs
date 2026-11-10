@@ -40,7 +40,10 @@ pub async fn checkout(state: &AppState) -> Result<Object, ApiError> {
     tokio::time::timeout(state.request_timeout, recover(state))
         .await
         .unwrap_or_else(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             Err(ApiError::database_unavailable())
         })
 }
@@ -71,11 +74,17 @@ async fn acquire(state: &AppState) -> Result<Object, ApiError> {
     tokio::time::timeout(state.request_timeout, state.pool.get())
         .await
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::database_unavailable()
         })?
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::database_unavailable()
         })
 }
@@ -107,7 +116,10 @@ async fn probe(state: &AppState, connection: Object) -> Result<Object, ApiError>
     .await;
     match result {
         Err(e) => {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             Err(ApiError::database_unavailable())
         }
         #[allow(clippy::expect_used)]
@@ -139,7 +151,10 @@ pub(crate) async fn query_one_optional(
     let result = tokio::time::timeout(state.request_timeout, deref.query_opt(sql, params)).await;
     match result {
         Err(e) => {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             Err(ApiError::database_unavailable())
         }
         Ok(result) => {

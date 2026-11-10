@@ -473,7 +473,10 @@ pub async fn create_reading_list(
                 &(position as i32),
                 &checkpoints.contains(issue_id),
                 &serde_json::to_string(&targets).map_err(|e| {
-                    tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                    tracing::debug!(
+                        error_kind = crate::error_kind(&e),
+                        "preserved underlying error before mapping"
+                    );
                     ApiError::Internal("Invalid checkpoint".to_string())
                 })?,
                 &gate,
@@ -770,7 +773,10 @@ pub async fn update_reading_list(
             ));
         }
         let targets_json = serde_json::to_string(&targets).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid checkpoint".into())
         })?;
         tx.execute(
@@ -801,7 +807,10 @@ pub async fn update_reading_list(
         .as_ref()
         .map_or(Ok(Vec::new()), |value| {
             serde_json::from_value(value.clone()).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ApiError::Unprocessable("Invalid predecessor confirmation".into())
             })
         })?;
@@ -832,7 +841,10 @@ pub async fn update_reading_list(
         entries,
     );
     let mut json = serde_json::to_value(&list).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Reading List serialization failed".into())
     })?;
     json["predecessor_changes"] = serde_json::to_value(&changes).unwrap_or_default();

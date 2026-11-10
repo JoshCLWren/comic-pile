@@ -241,22 +241,34 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         let tcp = tokio::net::TcpStream::connect((HOST, 443))
             .await
             .map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ProviderFailure::Unavailable
             })?;
         let tls = native_tls::TlsConnector::new().map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ProviderFailure::Unavailable
         })?;
         let tls = tokio_native_tls::TlsConnector::from(tls)
             .connect(HOST, tcp)
             .await
             .map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ProviderFailure::Unavailable
             })?;
         let (mut sender, connection) = http1::handshake(TokioIo::new(tls)).await.map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ProviderFailure::Unavailable
         })?;
         let _connection_guard = ConnectionGuard(tokio::spawn(async move {
@@ -272,11 +284,17 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
             .header("user-agent", "ComicPile/1.0 (metadata repair)")
             .body(Empty::<Bytes>::new())
             .map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ProviderFailure::Unavailable
             })?;
         let mut response = sender.send_request(request).await.map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ProviderFailure::Unavailable
         })?;
         if response.status() == StatusCode::TOO_MANY_REQUESTS
@@ -306,7 +324,10 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         let mut data = Vec::new();
         while let Some(frame) = response.body_mut().frame().await {
             let frame = frame.map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ProviderFailure::Unavailable
             })?;
             if let Ok(bytes) = frame.into_data() {
@@ -317,7 +338,10 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
             }
         }
         let payload: Value = serde_json::from_slice(&data).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ProviderFailure::InvalidPayload
         })?;
         if payload["status_code"].as_i64() != Some(1) {
@@ -331,7 +355,10 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
     tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ProviderFailure::Timeout
         })?
 }

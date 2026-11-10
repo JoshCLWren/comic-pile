@@ -496,7 +496,10 @@ async fn current_active_thread(
         .map(|row| {
             let value: String = row.try_get(0).map_err(db::query_error)?;
             serde_json::from_str(&value).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ApiError::Internal("Invalid native Roll response".to_string())
             })
         })
@@ -666,7 +669,10 @@ async fn canonical_series_stats(
         let id: String = row.try_get(0).map_err(db::query_error)?;
         let encoded: String = row.try_get(1).map_err(db::query_error)?;
         let metadata: Value = serde_json::from_str(&encoded).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid native Roll response".to_string())
         })?;
         let count = metadata.get("count_of_issues").and_then(|value| {
@@ -806,7 +812,10 @@ fn pending_roll_recovery(
         return Ok(None);
     };
     let edges = validated.unsatisfied_edges().map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Invalid native Roll response".to_string())
     })?;
     let direct: Vec<_> = edges
@@ -921,7 +930,10 @@ async fn visible_thread_tags(
         let thread_id: i32 = row.try_get(0).map_err(db::query_error)?;
         let raw: String = row.try_get(1).map_err(db::query_error)?;
         let tag: BootstrapTag = serde_json::from_str(&raw).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid native Roll response".to_string())
         })?;
         by_id.entry(thread_id).or_default().push(tag);
@@ -971,7 +983,10 @@ pub async fn bootstrap_v2(
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let session = &active.session;
     let candidates = validated.eligible_frontiers().map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Invalid reading constraints".to_string())
     })?;
     let conn = db::checkout(&state).await?;

@@ -509,12 +509,18 @@ async fn effective_roll_exclusions(
         // Decode their stored JSON text, including null as an empty list.
         let snoozed: Vec<i32> =
             serde_json::from_str(&session.get::<_, String>(0)).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ApiError::Internal("Invalid snoozed threads".into())
             })?;
         let skipped: Vec<i32> =
             serde_json::from_str(&session.get::<_, String>(1)).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ApiError::Internal("Invalid skipped threads".into())
             })?;
         for thread_id in snoozed.into_iter().chain(skipped) {
@@ -786,7 +792,10 @@ pub(crate) async fn persist(
     if let Some(row) = existing {
         let saved: String = row.get(0);
         let context: Value = serde_json::from_str(&saved).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid stored issue receipt".into())
         })?;
         if context.get("issue_command_payload") != Some(&payload) {
@@ -799,7 +808,10 @@ pub(crate) async fn persist(
             .cloned()
             .ok_or_else(|| ApiError::Internal("Missing stored issue receipt".into()))?;
         let mut result: IssueReadRateResponse = serde_json::from_value(receipt).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid stored issue receipt".into())
         })?;
         result.replayed = true;
@@ -1019,7 +1031,10 @@ pub(crate) async fn persist(
     };
     let mut saved = context;
     saved["issue_command_receipt"] = serde_json::to_value(&result).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Cannot store issue receipt".into())
     })?;
     tx.execute(

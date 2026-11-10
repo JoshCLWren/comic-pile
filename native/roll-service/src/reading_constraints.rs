@@ -921,7 +921,10 @@ impl ValidatedReadingInputs {
         names: &BTreeMap<i32, String>,
     ) -> Result<Self, ValidationError> {
         inputs.require_resolved().map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             invalid("Unresolved reading reference")
         })?;
         let snapshot = Snapshot::from_inputs(&inputs, names);
@@ -945,7 +948,10 @@ impl ValidatedReadingInputs {
         names: &BTreeMap<i32, String>,
     ) -> Result<Self, ValidationError> {
         inputs.require_resolved().map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             invalid("Unresolved reading reference")
         })?;
         let snapshot = Snapshot::from_inputs(&inputs, names);

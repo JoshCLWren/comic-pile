@@ -91,7 +91,10 @@ impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
     pub fn new(config: Config) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ConfigError("TLS initialization failed")
         })?;
         let manager = Manager::from_config(
@@ -115,7 +118,10 @@ impl AppState {
             })
             .build()
             .map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ConfigError("pool configuration failed")
             })?;
         Ok(Self {
@@ -150,10 +156,16 @@ pub async fn serve(
         .into_future();
     tokio::pin!(server);
     let result = tokio::select! {
-        result = &mut server => result.map_err(|e| { tracing::debug!(error = ?e, "preserved underlying error before mapping"); "HTTP server failed" }),
+        result = &mut server => result.map_err(|e| { tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            ); "HTTP server failed" }),
         _ = shutdown_receive.changed() => {
             match tokio::time::timeout(drain_timeout, &mut server).await {
-                Ok(result) => result.map_err(|e| { tracing::debug!(error = ?e, "preserved underlying error before mapping"); "HTTP server failed" }),
+                Ok(result) => result.map_err(|e| { tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            ); "HTTP server failed" }),
                 Err(_) => Err("shutdown drain deadline exceeded"),
             }
         }
@@ -282,6 +294,15 @@ impl ApiError {
     }
 }
 
+/// Secret-free classification of an error being replaced by a mapped error.
+///
+/// Logging the `Debug` of a replaced error can carry credential-bearing input
+/// (validated password and token values, provider URIs with `api_key`, database
+/// URLs, SQL). Log only the error's type name, never its message or payload.
+pub fn error_kind<T: ?Sized>(_: &T) -> &'static str {
+    std::any::type_name::<T>()
+}
+
 impl std::fmt::Display for ApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.detail())
@@ -343,7 +364,10 @@ async fn bound_request(
     let response = tokio::time::timeout(timeout, next.run(request))
         .await
         .unwrap_or_else(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::RequestTimeout.into_response()
         });
     // No URI, query, headers, credentials, SQL or upstream error strings in request logs.

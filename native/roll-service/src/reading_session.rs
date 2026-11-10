@@ -98,7 +98,10 @@ fn decode_session_json(json: &str) -> Result<ReadingSession, ApiError> {
         Ok(session) => Ok(session),
         Err(_) => {
             let mut value: Value = serde_json::from_str(json).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 corrupt()
             })?;
             let repaired = repair_session_value(&mut value);
@@ -106,7 +109,10 @@ fn decode_session_json(json: &str) -> Result<ReadingSession, ApiError> {
                 return Err(corrupt());
             }
             let session: ReadingSession = serde_json::from_value(value).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 corrupt()
             })?;
             tracing::warn!(
@@ -306,7 +312,10 @@ pub async fn bootstrap(
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             corrupt()
         })?
         .as_secs_f64();
@@ -328,7 +337,10 @@ pub async fn bootstrap_at(
     )
     .await
     .unwrap_or_else(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         Err(ApiError::DatabaseUnavailable)
     })
 }
@@ -376,7 +388,10 @@ async fn bootstrap_once(
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
     SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         corrupt()
     })?;
     if !now.is_finite() {
@@ -444,7 +459,10 @@ async fn bootstrap_once(
     .await;
     match result {
         Err(e) => {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             Err(ApiError::DatabaseUnavailable)
         }
         Ok(result) => {
@@ -466,7 +484,10 @@ pub async fn initialize(
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             corrupt()
         })?
         .as_secs_f64();
@@ -488,7 +509,10 @@ pub async fn initialize_at(
     )
     .await
     .unwrap_or_else(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         Err(ApiError::DatabaseUnavailable)
     })
 }
@@ -500,7 +524,10 @@ async fn initialize_once(
     now: f64,
 ) -> Result<SessionBootstrap, ApiError> {
     SessionPolicy::new(policy.gap_hours, policy.start_die).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         corrupt()
     })?;
     if !now.is_finite() {
@@ -654,7 +681,10 @@ async fn initialize_once(
     .await;
     match result {
         Err(e) => {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             Err(ApiError::DatabaseUnavailable)
         }
         Ok(result) => {
@@ -735,7 +765,10 @@ async fn checkpoint(
     let mut by_thread = std::collections::HashMap::<i64, Vec<Value>>::new();
     for row in issues {
         let mut i: Value = serde_json::from_str(row.get(0)).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             corrupt()
         })?;
         python_timestamp(&mut i["read_at"]);
@@ -749,7 +782,10 @@ async fn checkpoint(
     let mut threads = serde_json::Map::new();
     for row in rows {
         let mut t: Value = serde_json::from_str(row.get(0)).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             corrupt()
         })?;
         for key in ["last_activity_at", "created_at"] {
@@ -798,7 +834,10 @@ async fn checkpoint(
         threads.insert(t["id"].to_string(), Value::Object(capture));
     }
     let mut session_state = serde_json::to_value(session).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         corrupt()
     })?;
     let keys = [

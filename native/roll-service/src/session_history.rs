@@ -58,8 +58,13 @@ pub async fn list_session_snapshots(
     )
     .await?
     .ok_or(ApiError::NotFound("Session not found".to_string()))?;
-    let snapshots: Value = serde_json::from_str(row.get(0))
-        .map_err(|_| ApiError::Internal("Internal Server Error".to_string()))?;
+    let snapshots: Value = serde_json::from_str(row.get(0)).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Internal Server Error".to_string())
+    })?;
     Ok(Json(
         json!({"session_id": session_id, "snapshots": snapshots}),
     ))

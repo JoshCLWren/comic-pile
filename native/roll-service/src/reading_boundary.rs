@@ -762,7 +762,11 @@ async fn get_reading_boundary_explanations(
     })
     .await;
     let (labels, validated) = match result {
-        Err(_) => {
+        Err(error) => {
+            tracing::debug!(
+                error_kind = crate::error_kind(&error),
+                "preserved underlying error before mapping"
+            );
             return Err(ApiError::DatabaseUnavailable);
         }
         Ok(Err(error)) => return Err(error),

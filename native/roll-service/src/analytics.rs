@@ -300,7 +300,10 @@ pub async fn metrics(
         .ok_or_else(internal_error)?;
     let payload_text: String = row.try_get(0).map_err(db::query_error)?;
     let payload: MetricsPayload = serde_json::from_str(&payload_text).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         internal_error()
     })?;
 

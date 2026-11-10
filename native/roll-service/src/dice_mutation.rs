@@ -62,7 +62,10 @@ pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError>
     match command {
         DiceCommand::ManualSelect { die } => {
             dice_state::apply_action(6, DiceAction::ManualSelect(*die)).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 invalid("Invalid manual die")
             })?;
         }
@@ -78,7 +81,10 @@ pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError>
                 return Err(invalid("Invalid issue"));
             }
             dice_state::apply_action(6, DiceAction::RollRating(*rating)).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 invalid("Invalid rating")
             })?;
         }
@@ -187,11 +193,17 @@ pub async fn persist_in_transaction(
     if let Some(row) = previous {
         let context: String = row.get(3);
         let original: Value = serde_json::from_str(&context).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid event receipt".to_string())
         })?;
         let expected = serde_json::to_value(command).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid dice command".to_string())
         })?;
         if original.get("dice_command") != Some(&expected) {
@@ -239,7 +251,10 @@ pub async fn persist_in_transaction(
 
     let before = dice_state::current_die(tx, user).await?;
     let after = dice_state::apply_action(before, command.action()).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         invalid("Invalid dice command")
     })?;
     let context = json!({

@@ -1,5 +1,5 @@
 //! Native process entry point: bind once, drain on SIGINT/SIGTERM, close the pool.
-use comicpile_roll_service::{config::Config, router, serve, AppState};
+use comicpile_roll_service::{config::Config, error_kind, router, serve, AppState};
 use std::{process::ExitCode, sync::Arc};
 
 #[tokio::main]
@@ -23,12 +23,18 @@ async fn run() -> Result<(), &'static str> {
         .with_env_filter(config.log_filter.clone())
         .try_init()
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             "log initialization failed"
         })?;
     let state = Arc::new(AppState::new(config).map_err(|error| error.0)?);
     let listener = tokio::net::TcpListener::bind(bind).await.map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         "listener bind failed"
     })?;
     tracing::info!(address = %bind, "native Roll listener started");

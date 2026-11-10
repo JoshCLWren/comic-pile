@@ -314,7 +314,10 @@ pub async fn offer(
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
     let candidates = validated.eligible_frontiers().map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Invalid reading constraints".to_string())
     })?;
     if candidates.is_empty() {

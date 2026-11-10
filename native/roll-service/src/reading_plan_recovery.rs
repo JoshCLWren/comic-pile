@@ -159,7 +159,10 @@ pub async fn preview(
     for row in lists {
         let steps_text: String = row.get(4);
         let steps: Vec<RecoveryStep> = serde_json::from_str(&steps_text).map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ApiError::Internal("Invalid Reading List snapshot".to_string())
         })?;
         let (added_steps, removed_steps, order_changed) = candidate_diff(&retained_steps, &steps);

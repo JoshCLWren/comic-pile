@@ -286,7 +286,10 @@ async fn load_eligible_payload(
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             invalid_projection()
         })?
         .as_secs_f64();
@@ -324,7 +327,10 @@ fn parse_snoozed(raw: Option<&str>) -> Result<HashSet<i32>, ApiError> {
             continue;
         }
         let thread_id: i32 = part.parse().map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             invalid_snoozes()
         })?;
         if thread_id <= 0 {
@@ -356,14 +362,20 @@ fn select_eligible(
 ) -> Result<RollEligibleIssueIdsResponse, ApiError> {
     let validated = option_inputs::validated_contained(inputs)?;
     let candidates = validated.eligible_frontiers().map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Invalid reading constraints".to_string())
     })?;
     let current_die = dice_state::projected_die(die_after);
     let (die, mut excluded) = match pending_thread_id {
         Some(thread_id) => (
             dice_state::apply_action(current_die, DiceAction::Reroll).map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 invalid_projection()
             })?,
             HashSet::from([thread_id]),

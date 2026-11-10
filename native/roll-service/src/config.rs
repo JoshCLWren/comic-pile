@@ -115,7 +115,10 @@ impl Config {
             .unwrap_or_else(|| "127.0.0.1:8010".into())
             .parse::<SocketAddr>()
             .map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ConfigError("invalid RUST_ROLL_BIND")
             })?;
         if environment == Environment::Development && !bind.ip().is_loopback() {
@@ -125,7 +128,10 @@ impl Config {
             &get("RUST_ROLL_DATABASE_URL").ok_or(ConfigError("RUST_ROLL_DATABASE_URL required"))?,
         )
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
             ConfigError("invalid RUST_ROLL_DATABASE_URL")
         })?;
         if environment == Environment::Production && database.get_ssl_mode() != SslMode::Require {
@@ -136,7 +142,10 @@ impl Config {
             .ok_or(ConfigError("RUST_ROLL_JWT_SECRET required"))?;
         let log_filter = EnvFilter::try_new(get("RUST_ROLL_LOG").unwrap_or_else(|| "info".into()))
             .map_err(|e| {
-                tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
                 ConfigError("invalid RUST_ROLL_LOG")
             })?;
         fn number(
@@ -149,7 +158,10 @@ impl Config {
                 .map(|value| value.parse::<u64>())
                 .transpose()
                 .map_err(|e| {
-                    tracing::debug!(error = ?e, "preserved underlying error before mapping");
+                    tracing::debug!(
+                        error_kind = crate::error_kind(&e),
+                        "preserved underlying error before mapping"
+                    );
                     ConfigError("invalid numeric pool or timeout setting")
                 })?
                 .unwrap_or(default);

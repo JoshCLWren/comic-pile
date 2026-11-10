@@ -210,11 +210,17 @@ fn decode_cursor(
     let invalid = || bad_request("Invalid Queue page token");
     let padded = token.trim_end_matches('=');
     let raw = URL_SAFE_NO_PAD.decode(padded).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         invalid()
     })?;
     let payload: Value = serde_json::from_slice(&raw).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         invalid()
     })?;
     let Some(object) = payload.as_object() else {
@@ -1067,7 +1073,10 @@ async fn query_page(
         .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
     let payload: PagePayload = serde_json::from_str(&payload).map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
         ApiError::Internal("Internal Server Error".to_string())
     })?;
     Ok((

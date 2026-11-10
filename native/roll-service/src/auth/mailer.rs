@@ -176,10 +176,16 @@ pub async fn deliver(delivery: ResetDelivery) {
 
 fn build_message(sender: &str, recipient: &str, body: String) -> Result<Message, ()> {
     let from: Mailbox = sender.parse().map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
     })?;
     let to: Mailbox = recipient.parse().map_err(|e| {
-        tracing::debug!(error = ?e, "preserved underlying error before mapping");
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
     })?;
     Message::builder()
         .from(from)
@@ -187,7 +193,10 @@ fn build_message(sender: &str, recipient: &str, body: String) -> Result<Message,
         .subject(RESET_SUBJECT)
         .body(body)
         .map_err(|e| {
-            tracing::debug!(error = ?e, "preserved underlying error before mapping");
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
         })
 }
 

@@ -292,34 +292,166 @@ pub async fn get_session(
         .map_err(db::query_error)?
         .ok_or_else(not_found)?;
 
-    let started_at: String = session_row.try_get(1).map_err(|_| internal())?;
-    let ended_at: Option<String> = session_row.try_get(2).map_err(|_| internal())?;
-    let start_die: i32 = session_row.try_get(3).map_err(|_| internal())?;
-    let manual_die: Option<i32> = session_row.try_get(4).map_err(|_| internal())?;
-    let owner_id: i32 = session_row.try_get(5).map_err(|_| internal())?;
-    let pending_thread_id: Option<i32> = session_row.try_get(6).map_err(|_| internal())?;
-    let timezone: Option<String> = session_row.try_get(7).map_err(|_| internal())?;
-    let reading_bandwidth: Option<String> = session_row.try_get(8).map_err(|_| internal())?;
-    let reading_intent: Option<String> = session_row.try_get(9).map_err(|_| internal())?;
-    let reading_mode_source: Option<String> = session_row.try_get(10).map_err(|_| internal())?;
-    let reading_mode_suggested: Option<bool> = session_row.try_get(11).map_err(|_| internal())?;
-    let predicted_bandwidth: Option<String> = session_row.try_get(12).map_err(|_| internal())?;
-    let active_bandwidth: Option<String> = session_row.try_get(13).map_err(|_| internal())?;
-    let bandwidth_confidence: Option<f64> = session_row.try_get(14).map_err(|_| internal())?;
-    let bandwidth_source: Option<String> = session_row.try_get(15).map_err(|_| internal())?;
-    let bandwidth_version: Option<String> = session_row.try_get(16).map_err(|_| internal())?;
-    let predicted_intent: Option<String> = session_row.try_get(17).map_err(|_| internal())?;
-    let active_intent: Option<String> = session_row.try_get(18).map_err(|_| internal())?;
-    let intent_confidence: Option<f64> = session_row.try_get(19).map_err(|_| internal())?;
-    let intent_source: Option<String> = session_row.try_get(20).map_err(|_| internal())?;
-    let intent_version: Option<String> = session_row.try_get(21).map_err(|_| internal())?;
+    let started_at: String = session_row.try_get(1).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let ended_at: Option<String> = session_row.try_get(2).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let start_die: i32 = session_row.try_get(3).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let manual_die: Option<i32> = session_row.try_get(4).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let owner_id: i32 = session_row.try_get(5).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let pending_thread_id: Option<i32> = session_row.try_get(6).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let timezone: Option<String> = session_row.try_get(7).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let reading_bandwidth: Option<String> = session_row.try_get(8).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let reading_intent: Option<String> = session_row.try_get(9).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let reading_mode_source: Option<String> = session_row.try_get(10).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let reading_mode_suggested: Option<bool> = session_row.try_get(11).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let predicted_bandwidth: Option<String> = session_row.try_get(12).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let active_bandwidth: Option<String> = session_row.try_get(13).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let bandwidth_confidence: Option<f64> = session_row.try_get(14).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let bandwidth_source: Option<String> = session_row.try_get(15).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let bandwidth_version: Option<String> = session_row.try_get(16).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let predicted_intent: Option<String> = session_row.try_get(17).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let active_intent: Option<String> = session_row.try_get(18).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let intent_confidence: Option<f64> = session_row.try_get(19).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let intent_source: Option<String> = session_row.try_get(20).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
+    let intent_version: Option<String> = session_row.try_get(21).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        internal()
+    })?;
 
     let snapshot_count: i32 = connection
         .query_one(SNAPSHOT_COUNT_SQL, &[&session_id])
         .await
         .map_err(db::query_error)?
         .try_get(0)
-        .map_err(|_| internal())?;
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            internal()
+        })?;
 
     let ladder_rows = connection
         .query(LADDER_SQL, &[&session_id])
@@ -327,7 +459,15 @@ pub async fn get_session(
         .map_err(db::query_error)?;
     let ladder_values: Vec<i32> = ladder_rows
         .iter()
-        .map(|row| row.try_get::<_, i32>(0).map_err(|_| internal()))
+        .map(|row| {
+            row.try_get::<_, i32>(0).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                internal()
+            })
+        })
         .collect::<Result<_, ApiError>>()?;
     let ladder = ladder_path(start_die, &ladder_values);
 
@@ -337,8 +477,20 @@ pub async fn get_session(
         .map_err(db::query_error)?;
     let latest_die = match die_row {
         Some(row) => {
-            let die_after: i32 = row.try_get(0).map_err(|_| internal())?;
-            let context_text: Option<String> = row.try_get(1).map_err(|_| internal())?;
+            let die_after: i32 = row.try_get(0).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                internal()
+            })?;
+            let context_text: Option<String> = row.try_get(1).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                internal()
+            })?;
             let context: Value = context_text
                 .as_deref()
                 .and_then(|text| serde_json::from_str(text).ok())
@@ -364,9 +516,27 @@ pub async fn get_session(
         .map_err(db::query_error)?;
     let (action_type, selected_thread_id, roll_result) = match action_row {
         Some(row) => (
-            row.try_get::<_, String>(0).map_err(|_| internal())?,
-            row.try_get::<_, Option<i32>>(1).map_err(|_| internal())?,
-            row.try_get::<_, Option<i32>>(2).map_err(|_| internal())?,
+            row.try_get::<_, String>(0).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                internal()
+            })?,
+            row.try_get::<_, Option<i32>>(1).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                internal()
+            })?,
+            row.try_get::<_, Option<i32>>(2).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                internal()
+            })?,
         ),
         None => (String::new(), None, None),
     };
@@ -400,21 +570,67 @@ pub async fn get_session(
                 None => None,
                 Some(thread_row) => {
                     // Rolled threads must still belong to the session owner.
-                    let thread_owner: i32 = thread_row.try_get(7).map_err(|_| internal())?;
+                    let thread_owner: i32 = thread_row.try_get(7).map_err(|e| {
+                        tracing::debug!(
+                            error_kind = crate::error_kind(&e),
+                            "preserved underlying error before mapping"
+                        );
+                        internal()
+                    })?;
                     if pending_thread_id.is_none() && thread_owner != owner_id {
                         None
                     } else {
-                        let thread_id_value: i32 = thread_row.try_get(0).map_err(|_| internal())?;
-                        let title: String = thread_row.try_get(1).map_err(|_| internal())?;
-                        let format: String = thread_row.try_get(2).map_err(|_| internal())?;
-                        let stored_remaining: i32 =
-                            thread_row.try_get(3).map_err(|_| internal())?;
-                        let total_issues: Option<i32> =
-                            thread_row.try_get(4).map_err(|_| internal())?;
+                        let thread_id_value: i32 = thread_row.try_get(0).map_err(|e| {
+                            tracing::debug!(
+                                error_kind = crate::error_kind(&e),
+                                "preserved underlying error before mapping"
+                            );
+                            internal()
+                        })?;
+                        let title: String = thread_row.try_get(1).map_err(|e| {
+                            tracing::debug!(
+                                error_kind = crate::error_kind(&e),
+                                "preserved underlying error before mapping"
+                            );
+                            internal()
+                        })?;
+                        let format: String = thread_row.try_get(2).map_err(|e| {
+                            tracing::debug!(
+                                error_kind = crate::error_kind(&e),
+                                "preserved underlying error before mapping"
+                            );
+                            internal()
+                        })?;
+                        let stored_remaining: i32 = thread_row.try_get(3).map_err(|e| {
+                            tracing::debug!(
+                                error_kind = crate::error_kind(&e),
+                                "preserved underlying error before mapping"
+                            );
+                            internal()
+                        })?;
+                        let total_issues: Option<i32> = thread_row.try_get(4).map_err(|e| {
+                            tracing::debug!(
+                                error_kind = crate::error_kind(&e),
+                                "preserved underlying error before mapping"
+                            );
+                            internal()
+                        })?;
                         let reading_progress: Option<String> =
-                            thread_row.try_get(5).map_err(|_| internal())?;
+                            thread_row.try_get(5).map_err(|e| {
+                                tracing::debug!(
+                                    error_kind = crate::error_kind(&e),
+                                    "preserved underlying error before mapping"
+                                );
+                                internal()
+                            })?;
                         let next_unread_issue_id: Option<i32> =
-                            thread_row.try_get(6).map_err(|_| internal())?;
+                            thread_row.try_get(6).map_err(|e| {
+                                tracing::debug!(
+                                    error_kind = crate::error_kind(&e),
+                                    "preserved underlying error before mapping"
+                                );
+                                internal()
+                            })?;
 
                         let issues_remaining = if total_issues.is_some() {
                             connection
@@ -422,7 +638,13 @@ pub async fn get_session(
                                 .await
                                 .map_err(db::query_error)?
                                 .try_get(0)
-                                .map_err(|_| internal())?
+                                .map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?
                         } else {
                             stored_remaining
                         };
@@ -435,14 +657,20 @@ pub async fn get_session(
                                     .map_err(db::query_error)?;
                                 match issue_row {
                                     Some(issue_row) => (
-                                        Some(
-                                            issue_row
-                                                .try_get::<_, i32>(0)
-                                                .map_err(|_| internal())?,
-                                        ),
-                                        issue_row
-                                            .try_get::<_, Option<String>>(1)
-                                            .map_err(|_| internal())?,
+                                        Some(issue_row.try_get::<_, i32>(0).map_err(|e| {
+                                            tracing::debug!(
+                                                error_kind = crate::error_kind(&e),
+                                                "preserved underlying error before mapping"
+                                            );
+                                            internal()
+                                        })?),
+                                        issue_row.try_get::<_, Option<String>>(1).map_err(|e| {
+                                            tracing::debug!(
+                                                error_kind = crate::error_kind(&e),
+                                                "preserved underlying error before mapping"
+                                            );
+                                            internal()
+                                        })?,
                                     ),
                                     None => (None, None),
                                 }
@@ -457,14 +685,62 @@ pub async fn get_session(
                         let mut tags = Vec::with_capacity(tag_rows.len());
                         for tag_row in &tag_rows {
                             tags.push(SessionTag {
-                                id: tag_row.try_get(0).map_err(|_| internal())?,
-                                name: tag_row.try_get(1).map_err(|_| internal())?,
-                                normalized_name: tag_row.try_get(2).map_err(|_| internal())?,
-                                scope: tag_row.try_get(3).map_err(|_| internal())?,
-                                owner_user_id: tag_row.try_get(4).map_err(|_| internal())?,
-                                color: tag_row.try_get(5).map_err(|_| internal())?,
-                                created_at: tag_row.try_get(6).map_err(|_| internal())?,
-                                updated_at: tag_row.try_get(7).map_err(|_| internal())?,
+                                id: tag_row.try_get(0).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                name: tag_row.try_get(1).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                normalized_name: tag_row.try_get(2).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                scope: tag_row.try_get(3).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                owner_user_id: tag_row.try_get(4).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                color: tag_row.try_get(5).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                created_at: tag_row.try_get(6).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
+                                updated_at: tag_row.try_get(7).map_err(|e| {
+                                    tracing::debug!(
+                                        error_kind = crate::error_kind(&e),
+                                        "preserved underlying error before mapping"
+                                    );
+                                    internal()
+                                })?,
                             });
                         }
 
@@ -473,7 +749,13 @@ pub async fn get_session(
                             .await
                             .map_err(db::query_error)?;
                         let queue_position: i32 = match queue_row {
-                            Some(row) => row.try_get(0).map_err(|_| internal())?,
+                            Some(row) => row.try_get(0).map_err(|e| {
+                                tracing::debug!(
+                                    error_kind = crate::error_kind(&e),
+                                    "preserved underlying error before mapping"
+                                );
+                                internal()
+                            })?,
                             None => 0,
                         };
 
