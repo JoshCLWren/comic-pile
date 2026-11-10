@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import IssueCorrectionDialog from '../../../components/IssueCorrectionDialog'
+import { ComicIssueIdentity } from '../../../components/ComicIssueCard'
 import ComicIssueMappingAction from '../../../components/ComicIssueMappingAction'
 import ComicVineSearchDialog from '../../../components/ComicVineSearchDialog'
 import QueueMapSeriesDialog from '../../../components/QueueMapSeriesDialog'
@@ -165,10 +166,16 @@ export function ComicPillar({
                   {rollResultLine}
                 </p>
               ) : null}
-              <h2 data-testid="comic-header-title" className="text-xl font-black text-stone-100 leading-tight break-words">
-                {threadTitle}
-                {issueNumber != null ? <span className="ml-1 text-[var(--theme-comic-accent)]"> #{issueNumber}</span> : null}
-              </h2>
+              <ComicIssueIdentity
+                threadTitle={threadTitle}
+                issueNumber={issueNumber == null ? '?' : String(issueNumber)}
+                status="unread"
+                rating={null}
+                variant="featured"
+                heading
+                headingTestId="comic-header-title"
+                showStatus={false}
+              />
               {storyTitle ? (
                 <p data-testid="comic-story-title" className="text-sm font-semibold leading-snug text-stone-300 break-words">
                   {storyTitle}

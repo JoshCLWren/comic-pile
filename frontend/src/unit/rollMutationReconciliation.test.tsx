@@ -28,13 +28,11 @@ const wrapper = ({ children }: { children: React.ReactNode }) => (
 )
 
 const bootstrapState = (
-  currentDie: RollBootstrapResponse['current_die'],
+  sessionId: number,
   pendingThreadId: number | null,
 ): RollBootstrapResponse => ({
-  session_id: 1,
+  session_id: sessionId,
   user_id: 1,
-  current_die: currentDie,
-  manual_die: null,
   pending_thread_id: pendingThreadId,
   last_rolled_result: pendingThreadId === null ? null : 1,
   session_mode: {
@@ -136,7 +134,7 @@ describe('Roll mutation reconciliation', () => {
     // React Query applies the reconciled cache value to the observer asynchronously
     // and structurally shares it, so compare by content.
     await waitFor(() => expect(result.current.data).toStrictEqual(reconciled))
-    expect(result.current.data?.current_die).toBe(8)
+    expect(result.current.data?.session_id).toBe(8)
     expect(result.current.data?.pending_thread_id).toBeNull()
     expect(result.current.isPending).toBe(false)
     expect(result.current.isError).toBe(false)

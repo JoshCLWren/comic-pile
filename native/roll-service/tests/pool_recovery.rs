@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Pooled-socket recovery regressions (#4732).
 //!
 //! A pooled PostgreSQL socket can be half-open after an idle freeze or platform

@@ -335,13 +335,10 @@ fn strict_covers(
             None => wait_for.clone(),
             Some(set) => set.intersection(wait_for).copied().collect(),
         });
-        if intersection
-            .as_ref()
-            .unwrap()
-            .difference(target_waiting)
-            .next()
-            .is_none()
-        {
+        let Some(current) = intersection.as_ref() else {
+            continue;
+        };
+        if current.difference(target_waiting).next().is_none() {
             break;
         }
     }
@@ -473,8 +470,14 @@ pub fn validate(snapshot: &Snapshot) -> Result<Vec<i32>, ValidationError> {
     let mut indegree: HashMap<i32, usize> =
         snapshot.issues.iter().map(|i| (i.issue_id, 0)).collect();
     for edge in edges {
-        *indegree.get_mut(&edge.target_issue_id).unwrap() += 1;
-        adjacency.get_mut(&edge.source_issue_id).unwrap().push(edge);
+        let Some(degree) = indegree.get_mut(&edge.target_issue_id) else {
+            return Err(invalid("Constraint edge targets an unknown issue"));
+        };
+        *degree += 1;
+        let Some(outgoing) = adjacency.get_mut(&edge.source_issue_id) else {
+            return Err(invalid("Constraint edge sources an unknown issue"));
+        };
+        outgoing.push(edge);
     }
     let mut ready: BinaryHeap<_> = indegree
         .iter()
@@ -485,7 +488,9 @@ pub fn validate(snapshot: &Snapshot) -> Result<Vec<i32>, ValidationError> {
     while let Some(Reverse(id)) = ready.pop() {
         ordered.push(id);
         for edge in &adjacency[&id] {
-            let degree = indegree.get_mut(&edge.target_issue_id).unwrap();
+            let Some(degree) = indegree.get_mut(&edge.target_issue_id) else {
+                return Err(invalid("Constraint edge targets an unknown issue"));
+            };
             *degree -= 1;
             if *degree == 0 {
                 ready.push(Reverse(edge.target_issue_id));

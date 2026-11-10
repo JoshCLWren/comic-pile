@@ -373,7 +373,7 @@ it('uses the scoped die in the die-selection modal when bootstrap differs (#4719
   }
 })
 
-it('falls back to the reconciled bootstrap die after a scoped refetch error (#4719)', async () => {
+it('uses the d6 default after a scoped refetch error, ignoring the bootstrap die (#4352)', async () => {
   const user = userEvent.setup()
   mockedUseRollBootstrap.mockReturnValue({
     data: { ...bootstrap, current_die: 8 },
@@ -389,11 +389,11 @@ it('falls back to the reconciled bootstrap die after a scoped refetch error (#47
   })
 
   renderRollPage()
-  await user.click(screen.getByRole('button', { name: /^current die d8$/i }))
+  await user.click(screen.getByRole('button', { name: /^current die d6$/i }))
   const dieModal = screen.getByRole('dialog', { name: 'Select Die' })
-  expect(within(dieModal).getByText(/die is currently d8/i)).toBeInTheDocument()
+  expect(within(dieModal).getByText(/die is currently d6/i)).toBeInTheDocument()
   for (const die of screen.getAllByTestId('lazy-dice')) {
-    expect(die).toHaveAttribute('data-sides', '8')
+    expect(die).toHaveAttribute('data-sides', '6')
   }
 })
 

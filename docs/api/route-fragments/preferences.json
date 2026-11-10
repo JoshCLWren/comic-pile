@@ -1,0 +1,45 @@
+{
+  "family": "preferences",
+  "owned_path_patterns": [
+    "^/api/v1/users/me/(?:preferences|taste\\-signals)(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-preferences.ts",
+      "frontend/src/services/api-taste.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/users/me/preferences",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/users/me/preferences$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PATCH",
+      "path": "/api/v1/users/me/preferences",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/users/me/preferences$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/users/me/taste-signals",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/users/me/taste\\-signals$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$"
+    }
+  ]
+}

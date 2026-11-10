@@ -97,6 +97,7 @@ pub async fn load_core_inputs(
     let started = Instant::now();
     let mut pending = Pending(Some(db::checkout(state).await?));
     let result = tokio::time::timeout(state.request_timeout, async {
+        #[allow(clippy::unwrap_used)]
         let tx = pending
             .0
             .as_mut()

@@ -7,67 +7,40 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_queue_move_creates_event(
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("put", "/api/v1/queue/threads/1/position/"),
+        ("put", "/api/v1/queue/threads/1/back/"),
+        ("put", "/api/queue/threads/1/position/"),
+        ("put", "/api/queue/threads/1/back/"),
+    ],
+)
+async def test_retired_queue_move_routes_create_no_reorder_event(
     auth_client: AsyncClient,
-    sample_data: dict,
     async_db: AsyncSession,
+    method: str,
+    path: str,
 ) -> None:
-    """Test that moving a thread in queue creates a reorder event.
+    """Retired queue moves answer 404 and record no reorder event.
 
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-        sample_data: Sample data dictionary containing threads, sessions, events, user.
-        async_db: Async database session for direct database queries.
+    Reorder audit ownership moved to the Rust queue-entry resource: the
+    native ``update_queue_entry_moves_front_middle_and_back_with_reorder_events``
+    test proves front/middle/back writes record reorder events with the
+    reader and thread ids. The retired Python actions must not write an
+    event on their 404 path.
     """
     from app.models import Event
 
-    thread_id = sample_data["threads"][0].id
+    result = await async_db.execute(select(Event).where(Event.type == "reorder"))
+    initial_count = len(result.scalars().all())
 
-    response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": 3}
-    )
-    assert response.status_code == 200
+    kwargs = {"json": {"new_position": 3}} if path.endswith("/position/") else {}
+    response = await getattr(auth_client, method)(path, **kwargs)
+    assert response.status_code == 404
 
-    result = await async_db.execute(
-        select(Event).where(Event.type == "reorder").order_by(Event.timestamp.desc())
-    )
-    events = result.scalars().all()
-
-    assert len(events) >= 1
-    reorder_event = next((e for e in events if e.thread_id == thread_id), None)
-    assert reorder_event is not None
-    assert reorder_event.type == "reorder"
-
-
-@pytest.mark.asyncio
-async def test_move_to_back_creates_event(
-    auth_client: AsyncClient,
-    sample_data: dict,
-    async_db: AsyncSession,
-) -> None:
-    """Test that moving thread to back creates a reorder event.
-
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-        sample_data: Sample data dictionary containing threads, sessions, events, user.
-        async_db: Async database session for direct database queries.
-    """
-    from app.models import Event
-
-    thread_id = sample_data["threads"][2].id
-
-    response = await auth_client.put(f"/api/v1/queue/threads/{thread_id}/back/")
-    assert response.status_code == 200
-
-    result = await async_db.execute(
-        select(Event).where(Event.type == "reorder").order_by(Event.timestamp.desc())
-    )
-    events = result.scalars().all()
-
-    assert len(events) >= 1
-    reorder_event = next((e for e in events if e.thread_id == thread_id), None)
-    assert reorder_event is not None
-    assert reorder_event.type == "reorder"
+    result = await async_db.execute(select(Event).where(Event.type == "reorder"))
+    assert len(result.scalars().all()) == initial_count
 
 
 @pytest.mark.asyncio
@@ -112,30 +85,23 @@ async def test_delete_thread_creates_event(
 
 
 @pytest.mark.asyncio
-async def test_no_duplicate_event_on_no_movement(
+async def test_retired_shuffle_route_create_no_event(
     auth_client: AsyncClient,
-    sample_data: dict,
     async_db: AsyncSession,
 ) -> None:
-    """Test that moving to same position does not create event.
+    """Retired shuffle actions answer 404 and record no shuffle event.
 
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-        sample_data: Sample data dictionary containing threads, sessions, events, user.
-        async_db: Async database session for direct database queries.
+    Shuffle audit ownership moved to ``POST /api/v2/queue-orders``, which
+    records a durable, idempotent queue-order revision in Rust. The retired
+    Python shuffle must not write an event on its 404 path.
     """
     from app.models import Event
 
-    thread_id = sample_data["threads"][0].id
-    result = await async_db.execute(select(Event).where(Event.thread_id == thread_id))
-    initial_event_count = len(result.scalars().all())
+    result = await async_db.execute(select(Event).where(Event.type == "shuffle"))
+    initial_count = len(result.scalars().all())
 
-    response = await auth_client.put(
-        f"/api/v1/queue/threads/{thread_id}/position/", json={"new_position": 1}
-    )
-    assert response.status_code == 200
+    response = await auth_client.post("/api/v1/queue/shuffle/")
+    assert response.status_code == 404
 
-    result = await async_db.execute(select(Event).where(Event.thread_id == thread_id))
-    final_event_count = len(result.scalars().all())
-
-    assert initial_event_count == final_event_count
+    result = await async_db.execute(select(Event).where(Event.type == "shuffle"))
+    assert len(result.scalars().all()) == initial_count

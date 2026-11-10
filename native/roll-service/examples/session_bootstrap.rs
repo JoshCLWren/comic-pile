@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Disposable parity runner, never mounted on a public router.
 use comicpile_roll_service::{
     auth,

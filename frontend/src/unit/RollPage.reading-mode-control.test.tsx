@@ -43,8 +43,6 @@ function bootstrapWithMode(mode: SessionModeState | null | undefined): RollBoots
   return {
     session_id: 1,
     user_id: 1,
-    current_die: 6,
-    manual_die: null,
     pending_thread_id: null,
     last_rolled_result: null,
     active_thread: null,

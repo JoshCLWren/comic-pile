@@ -78,7 +78,6 @@ function makeRatingViewData(overrides: Partial<RatingViewData> = {}): RatingView
     rateIsPending: false,
     rerollIsPending: false,
     dismissIsPending: false,
-    manualDie: null,
     onUpdateRating: vi.fn(),
     onSubmitRating: vi.fn(),
     onReroll: vi.fn().mockResolvedValue(undefined),

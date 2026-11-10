@@ -45,8 +45,6 @@ function bootstrapResponse(sessionId: number, userId: number): RollBootstrapResp
   return {
     session_id: sessionId,
     user_id: userId,
-    current_die: 6,
-    manual_die: null,
     pending_thread_id: null,
     last_rolled_result: null,
     session_mode: {

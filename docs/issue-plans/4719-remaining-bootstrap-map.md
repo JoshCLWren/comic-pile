@@ -56,8 +56,8 @@ Wire type: `RollV2BootstrapResponse` in `frontend/src/types/rollV2.ts`
 | --- | --- | --- | --- |
 | `session_id` | `RollPage/index.tsx` undo session (`useSnapshots`), `handleUndoRating` (`undo.mutate`), `useRollBootstrap.ts` greeting (`trackSessionGreeting`) | None. No scoped GET carries session identity | #4343 current-session `GET` + #4405 sessionless decision |
 | `user_id` | `useRollBootstrap.ts` greeting persistence | None in Roll scoped resources; identity belongs to auth/current-user surface, not a Roll GET | Move greeting to auth cache; delete with bootstrap |
-| `current_die` | `useRollBootstrapSync.ts` page die state fallback | `GET /v2/roll/die-state` `{ die }` (`DieStateResponse`) | #4729 prefers scoped die for page state; delete fallback once #4729 lands |
-| `manual_die` | `useRollBootstrapSync.ts`, `useRatingView.ts` (`RatingViewData.manualDie`) | None needed. `DieStateResponse` exposes a single event-derived `die`; header convention (#4353) has no Auto/Manual segment | Remove `manualDie` derivation after #4729; no server field needed |
+| `current_die` | **Deleted from bootstrap wire** (#4352 contract-after). Formerly `useRollBootstrapSync.ts` page die state fallback; now `resolveRollSelectedDie` is scoped-only (`DieStateResponse.die` ?? d6). | `GET /v2/roll/die-state` `{ die }` (`DieStateResponse`) | Done (#4352 contract-after). The internal Rust `current_die` still bounds `offer_frontiers` but is no longer serialized. |
+| `manual_die` | **Deleted from bootstrap wire** (#4352 contract-after). Formerly `useRollBootstrapSync.ts`, `useRatingView.ts` (`RatingViewData.manualDie`, now always `null`). | None needed. `DieStateResponse` exposes a single event-derived `die`; header convention (#4353) has no Auto/Manual segment | Done (#4352 contract-after). Bootstrap no longer serializes a manual pin. |
 | `pending_thread_id` | `useRollPendingSession.ts` (rating-view hydration), `useRollActions.ts` (roll/pending flows), `RollPage/index.tsx` (`RollModals pendingThreadId`), `rollMutationReconciliation.ts` (committed check) | None | #4343 + #4405 |
 | `last_rolled_result` | `useRollBootstrapSync.ts` (`setDiceState('rolled')`), `useRollPendingSession.ts`, `useRollActions.ts` | `DieStateResponse.last_roll` exists but is **global** across sessions; bootstrap reports the current session's pending roll. Substituting it lights a stale rolled state on a fresh idle die (see #4729). Not a replacement | Session-scoped pending projection or #4343 |
 | `session_mode` | `RollHeader.tsx` → `ReadingModeControl` (`active_bandwidth/intent`, `bandwidth_source/confidence/version`) | None. `RollV2BootstrapResponse.bandwidth` is a separate wire field the frontend does not read | Session/sessionless `GET` or mode `GET` |
@@ -86,8 +86,9 @@ they land; they currently share the `roll.bootstrap()` cache key.
 ## What #4719 already shipped (not deleted yet)
 
 - Header die ladder reads `DieStateResponse.die` (`RollHeader`). Page die
-  state still derives from `manual_die ?? current_die` on `main`; #4729
-  switches it to `scopedDie ?? manualDie ?? currentDie`.
+  state is scoped-only `scopedDie ?? d6` (#4352 contract-after); the former
+  `scopedDie ?? manualDie ?? currentDie` bootstrap fallback was removed with
+  the bootstrap `current_die`/`manual_die` wire fields.
 - `ThreadPool` renders `displayPool` by filtering bootstrap `pool` through
   scoped `thread_ids`, and overlays `thread_title` / `issue_number` from
   issue cards. Bootstrap remains the row source.
@@ -114,9 +115,14 @@ following suites in the same PR; do not widen baselines:
 ## Non-goals
 
 This map does not remove the server route, the `vercel.json` entries, the
-Python parity tooling, or any bootstrap field. It does not add a scoped
-replacement for session/pending/recovery, does not change any Roll surface's
-loading, empty, or error behavior, and does not claim production Rust
-execution proof. Visual grammar: no frontend visual surface is touched, so
-no `FRONTEND_VISUAL_GRAMMAR.md` role, spacing, typography, or overlay
+Python parity tooling, or any remaining bootstrap field. The bootstrap
+`current_die`/`manual_die` wire fields were removed field-by-field by the
+#4352 contract-after slice (die now scoped-only); retirement of the
+`GET /api/v2/roll/bootstrap` endpoint itself remains #4299, blocked on
+#4343/#4405, and `last_rolled_result` is retained for pending hydration
+(session-scoped). It does not add a scoped replacement for
+session/pending/recovery, does not change any Roll surface's loading,
+empty, or error behavior, and does not claim production Rust execution
+proof. Visual grammar: no frontend visual surface is touched, so no
+`FRONTEND_VISUAL_GRAMMAR.md` role, spacing, typography, or overlay
 primitive changes.

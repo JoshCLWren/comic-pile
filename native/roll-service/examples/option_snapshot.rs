@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Local parity runner. Never mounted on the service's public router.
 use comicpile_roll_service::{auth, config::Config, option_inputs, AppState};
 #[tokio::main]

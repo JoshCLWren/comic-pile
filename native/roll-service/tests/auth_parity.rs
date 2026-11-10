@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Shared synthetic claims and SQL isolation checks; requires a disposable PostgreSQL service.
 use axum::{
     body::{to_bytes, Body},

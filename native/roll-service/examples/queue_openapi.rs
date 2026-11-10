@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Emit the native v2 queue OpenAPI document for contract review and drift checks.
 use comicpile_roll_service::queue::QueueApi;
 use utoipa::OpenApi;

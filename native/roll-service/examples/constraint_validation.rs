@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Offline parity runner: sanitized scalar JSON on stdin, no database or auth.
 use comicpile_roll_service::reading_constraints::{validate, Snapshot};
 use serde_json::json;

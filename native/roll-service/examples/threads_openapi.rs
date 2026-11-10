@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Emit the native v2 reader threads OpenAPI contract.
 use comicpile_roll_service::threads::ThreadsApi;
 use utoipa::OpenApi;

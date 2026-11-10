@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
 publish = false
+build = "build.rs"
 
 [dependencies]
 http-body = "1"
@@ -30,3 +31,11 @@ path = "api/native_issue.rs"
 codegen-units = 1
 lto = "fat"
 opt-level = 3
+
+# Forbid panicking accessors in Vercel ingress production dispatch (#4742).
+# Test harnesses inside the ingress binaries opt out with cfg(test) allows;
+# the compile-time-only build script allows panicking accessors because a
+# toolchain failure aborts the build without handling requests.
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

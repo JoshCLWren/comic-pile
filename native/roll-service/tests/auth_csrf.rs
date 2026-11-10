@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Regression coverage for double-submit CSRF on the protected native routes.
 //!
 //! These are committed replacements for a throwaway probe: a missing cookie, a

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Production-shaped regressions for the reading-dependency cycle outage (#4684).
 //!
 //! Canonical Alembic schema only: `test_support` loads the real `pg_dump`

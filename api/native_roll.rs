@@ -1,5 +1,6 @@
 //! Vercel's native Rust ingress for the Roll endpoint cutover.
 //! The health probe never reads database configuration.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 use axum::{
     extract::Request,
     http::{Extensions, HeaderValue, StatusCode},
@@ -19,12 +20,29 @@ use std::{
 use tower::Service;
 use vercel_runtime::{axum::StreamingUtils, AppState as VercelState, Error, ResponseBody};
 
-async fn native_health() -> Json<serde_json::Value> {
-    Json(serde_json::json!({
+async fn native_health() -> Response {
+    let mut response = Json(serde_json::json!({
         "status": "ok",
         "runtime": "rust",
-        "service": "roll"
+        "service": "roll",
+        "build": {
+            "revision": env!("COMICPILE_SOURCE_REVISION"),
+            "compiler": env!("COMICPILE_COMPILER"),
+            "package": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION")
+        },
+        "process": {
+            "executable": std::env::current_exe().ok()
+                .and_then(|path| path.file_name().map(|name| name.to_string_lossy().into_owned())),
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH
+        }
     }))
+    .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
 }
 
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
@@ -37,6 +55,9 @@ tokio::task_local! {
 /// JSON subscriber for Vercel logs. `try_init` keeps isolate reuse and tests
 /// from failing when startup runs more than once.
 fn init_tracing() {
+    // Production panic hooks otherwise print sensitive payloads before catch_unwind.
+    #[cfg(not(test))]
+    comicpile_roll_service::install_sanitized_panic_hook();
     let directive = std::env::var("RUST_ROLL_LOG").unwrap_or_else(|_| "info".into());
     let filter = tracing_subscriber::EnvFilter::try_new(directive)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -158,15 +179,49 @@ where
     }
 }
 
+/// Unknown API paths must terminate in Rust without initializing Python or Neon.
+async fn native_not_found() -> Response {
+    let mut response = (
+        StatusCode::NOT_FOUND,
+        Json(serde_json::json!({"detail": "Not Found"})),
+    )
+        .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
+}
+
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
+        .route("/api/v1/identity-inbox", get(native_dispatch))
+        .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
+        .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/confirm",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/defer",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/reject",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/identity-inbox/{mapping_id}/skip",
+            post(native_dispatch),
+        )
         .route(
             "/api/v2/maintenance/comicvine-metadata-repairs",
             get(native_dispatch),
         )
         .route("/api/v2/roll/bootstrap", get(native_dispatch))
         .route("/api/v2/reading-sessions", post(native_dispatch))
+        .route("/api/sessions/{session_id}", get(native_dispatch))
+        .route("/api/v1/sessions/{session_id}", get(native_dispatch))
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
@@ -177,11 +232,24 @@ fn app() -> Router {
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
+        .route("/api/v1/threads/{thread_id}", get(native_dispatch))
+        .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))
         .route(
             "/api/v2/dependencies/{dependency_id}",
+            delete(native_dispatch),
+        )
+        .route("/api/v1/dependencies/blocked", get(native_dispatch))
+        .route("/api/v1/dependencies/", post(native_dispatch))
+        .route("/api/v1/dependencies/{dependency_id}", get(native_dispatch))
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
             delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))
@@ -213,6 +281,36 @@ fn app() -> Router {
         )
         .route("/api/v2/analytics/metrics", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}", get(native_dispatch))
+        .route("/api/v1/issues/{issue_id}/comicvine", get(native_dispatch))
+        .route(
+            "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issues/{issue_id}/dependencies",
+            get(native_dispatch),
+        )
+        .route("/api/v1/continuity-rules/", get(native_dispatch))
+        .route("/api/v1/continuity-rules/", post(native_dispatch))
+        .route("/api/v1/continuity-rules/{rule_id}", get(native_dispatch))
+        .route("/api/v1/continuity-rules/{rule_id}", put(native_dispatch))
+        .route(
+            "/api/v1/continuity-rules/{rule_id}",
+            delete(native_dispatch),
+        )
+        .route("/api/v1/releases/", get(native_dispatch))
+        .route("/api/v1/releases/", put(native_dispatch))
+        .route("/api/v1/releases/source", get(native_dispatch))
+        .route("/api/v1/releases/{release_id}", get(native_dispatch))
+        .route(
+            "/api/v1/releases/{release_id}/retract",
+            post(native_dispatch),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issue-dependencies",
+            get(native_dispatch),
+        )
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))
@@ -239,6 +337,16 @@ fn app() -> Router {
         .route("/api/auth/csrf", get(native_dispatch))
         .route("/api/auth/forgot-password", post(native_dispatch))
         .route("/api/auth/reset-password", post(native_dispatch))
+        .route("/api/v1/creators", get(native_dispatch))
+        .route("/api/v1/creators/", get(native_dispatch))
+        .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route(
+            "/api/v1/taste/discoveries/{signal_id}/dismiss",
+            post(native_dispatch),
+        )
+        .route("/api/bug-reports/", post(native_dispatch))
+        .route("/api/v1/bug-reports/", post(native_dispatch))
+        .fallback(native_not_found)
 }
 
 #[tokio::main]
@@ -263,6 +371,193 @@ mod tests {
     use vercel_runtime::{AppState as VercelState, LogContext};
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
+
+    #[tokio::test]
+    async fn v1_issue_read_ingress_preserves_same_path_and_requires_auth() {
+        for uri in [
+            "/api/v1/issues/7",
+            "/api/v1/issues/7/comicvine",
+            "/api/v1/issues/7/dependencies",
+        ] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric issue ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn v1_taste_dismiss_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/v1/taste/discoveries/7/dismiss")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE
+                || response.status() == StatusCode::FORBIDDEN,
+            "taste dismiss must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 8192)
+            .await
+            .expect("body bytes");
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(
+            !text.contains("Wrong number of path arguments"),
+            "numeric signal ids must not fail Path extraction: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn comicvine_import_status_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/comicvine/series/42/import-status")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "ComicVine import status must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+    }
+
+    #[tokio::test]
+    async fn bug_report_ingress_preserves_same_paths_and_requires_auth() {
+        for uri in ["/api/bug-reports/", "/api/v1/bug-reports/"] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("POST")
+                        .uri(uri)
+                        .header("content-type", "application/json")
+                        .body(Body::from(r#"{"title":"Bug","description":"Details"}"#))
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn session_detail_ingress_preserves_same_paths_and_requires_auth() {
+        for uri in ["/api/sessions/7", "/api/v1/sessions/7"] {
+            let mut router = app();
+            let response = router
+                .call(
+                    Request::builder()
+                        .method("GET")
+                        .uri(uri)
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .expect("router response");
+            assert!(
+                response.status() == StatusCode::UNAUTHORIZED
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+                "{uri} must require auth and reach Rust, got {}",
+                response.status()
+            );
+            assert_eq!(
+                response.headers().get("x-comicpile-api-runtime").unwrap(),
+                "rust"
+            );
+            let bytes = to_bytes(response.into_body(), 8192)
+                .await
+                .expect("body bytes");
+            let text = String::from_utf8_lossy(&bytes);
+            assert!(
+                !text.contains("Wrong number of path arguments"),
+                "numeric session ids must not fail Path extraction for {uri}: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unknown_api_route_returns_rust_json_404_without_database() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .uri("/api/v2/definitely-not-registered")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let bytes = to_bytes(response.into_body(), 1024)
+            .await
+            .expect("body bytes");
+        assert_eq!(
+            serde_json::from_slice::<Value>(&bytes).expect("JSON"),
+            serde_json::json!({"detail": "Not Found"})
+        );
+    }
 
     async fn disposable_schema_url() -> String {
         let base = std::env::var("RUST_ROLL_TEST_DATABASE_URL")
@@ -540,16 +835,36 @@ mod tests {
         let response = router.call(request).await.expect("health response");
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
+            response.headers().get("x-comicpile-api-runtime"),
+            Some(&axum::http::HeaderValue::from_static("rust"))
+        );
+        assert_eq!(
             response.headers().get(header::CONTENT_TYPE),
             Some(&axum::http::HeaderValue::from_static("application/json"))
         );
         let body = to_bytes(response.into_body(), 1024)
             .await
             .expect("health JSON");
+        let health: serde_json::Value = serde_json::from_slice(&body).expect("valid JSON");
+        assert_eq!(health["status"], "ok");
+        assert_eq!(health["runtime"], "rust");
+        assert_eq!(health["service"], "roll");
         assert_eq!(
-            serde_json::from_slice::<serde_json::Value>(&body).expect("valid JSON"),
-            serde_json::json!({"status": "ok", "runtime": "rust", "service": "roll"})
+            health["build"]["revision"],
+            env!("COMICPILE_SOURCE_REVISION")
         );
+        assert!(health["build"]["compiler"]
+            .as_str()
+            .unwrap()
+            .starts_with("rustc "));
+        assert_eq!(health["build"]["package"], env!("CARGO_PKG_NAME"));
+        let executable = std::env::current_exe().expect("current executable");
+        assert_eq!(
+            health["process"]["executable"],
+            executable.file_name().unwrap().to_string_lossy().as_ref()
+        );
+        assert_eq!(health["process"]["os"], std::env::consts::OS);
+        assert_eq!(health["process"]["arch"], std::env::consts::ARCH);
     }
 
     #[tokio::test]

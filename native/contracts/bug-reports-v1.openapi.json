@@ -1,0 +1,312 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "comicpile-roll-service",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/bug-reports/": {
+      "post": {
+        "tags": [
+          "bug-reports"
+        ],
+        "summary": "Documentation-only operation for the mounted unversioned create.",
+        "operationId": "create_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "GitHub issue created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugReportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid or blank title/description, or invalid diagnostics"
+          },
+          "429": {
+            "description": "Non-admin GitHub issue rate limit reached"
+          },
+          "502": {
+            "description": "GitHub issue creation failed"
+          },
+          "503": {
+            "description": "GitHub integration not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/bug-reports/": {
+      "post": {
+        "tags": [
+          "bug-reports"
+        ],
+        "summary": "Documentation-only operation for the mounted versioned create.",
+        "operationId": "create_v1_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BugReportCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "GitHub issue created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BugReportResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Invalid or blank title/description, or invalid diagnostics"
+          },
+          "429": {
+            "description": "Non-admin GitHub issue rate limit reached"
+          },
+          "502": {
+            "description": "GitHub issue creation failed"
+          },
+          "503": {
+            "description": "GitHub integration not configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BugReportCreate": {
+        "type": "object",
+        "description": "Request schema for creating a bug report or feature request.",
+        "required": [
+          "title",
+          "description"
+        ],
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "diagnostics": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BugReportDiagnostics"
+              }
+            ]
+          },
+          "report_type": {
+            "$ref": "#/components/schemas/ReportType"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "BugReportDiagnostics": {
+        "type": "object",
+        "description": "Structured browser diagnostics (`userAgent` alias on the wire).",
+        "required": [
+          "timestamp",
+          "url",
+          "userAgent",
+          "screen",
+          "viewport",
+          "scroll",
+          "performance",
+          "errors"
+        ],
+        "properties": {
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticError"
+            }
+          },
+          "performance": {
+            "$ref": "#/components/schemas/DiagnosticPerformance"
+          },
+          "screen": {
+            "$ref": "#/components/schemas/DiagnosticScreen"
+          },
+          "scroll": {
+            "$ref": "#/components/schemas/DiagnosticScroll"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "userAgent": {
+            "type": "string"
+          },
+          "viewport": {
+            "$ref": "#/components/schemas/DiagnosticViewport"
+          }
+        }
+      },
+      "BugReportResponse": {
+        "type": "object",
+        "description": "Response after successfully creating a GitHub issue.",
+        "required": [
+          "issue_url"
+        ],
+        "properties": {
+          "issue_url": {
+            "type": "string"
+          }
+        }
+      },
+      "DiagnosticError": {
+        "type": "object",
+        "description": "A captured console error entry.",
+        "required": [
+          "message",
+          "timestamp"
+        ],
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "DiagnosticPerformance": {
+        "type": "object",
+        "description": "Performance timing diagnostic information (both fields optional).",
+        "properties": {
+          "domContentLoaded": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "loadComplete": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          }
+        }
+      },
+      "DiagnosticScreen": {
+        "type": "object",
+        "description": "Screen diagnostic information (`pixelRatio` alias on the wire).",
+        "required": [
+          "width",
+          "height",
+          "pixelRatio"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pixelRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DiagnosticScroll": {
+        "type": "object",
+        "description": "Scroll position diagnostic information.",
+        "required": [
+          "x",
+          "y"
+        ],
+        "properties": {
+          "x": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "y": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "DiagnosticViewport": {
+        "type": "object",
+        "description": "Viewport diagnostic information.",
+        "required": [
+          "width",
+          "height"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReportType": {
+        "type": "string",
+        "description": "Report kind, mirroring Python `ReportType = Literal[\"bug\", \"feature\"]`.",
+        "enum": [
+          "bug",
+          "feature"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

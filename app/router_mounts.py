@@ -111,22 +111,6 @@ def _register_roll(app: FastAPI) -> None:
     app.include_router(roll.router, prefix="/api/v1/roll", tags=["roll"])
 
 
-def _register_admin(app: FastAPI) -> None:
-    """Register internal admin routers."""
-    from app.api import admin
-
-    app.include_router(admin.router, prefix="/api", tags=["admin"])
-    app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
-
-
-def _register_analytics(app: FastAPI) -> None:
-    """Register analytics routers."""
-    from app.api import analytics
-
-    app.include_router(analytics.router, prefix="/api", tags=["analytics"])
-    app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
-
-
 def _register_health(app: FastAPI) -> None:
     """Register bounded health probes."""
     from app.api import health
@@ -197,14 +181,6 @@ def _register_tags(app: FastAPI) -> None:
     app.include_router(tags.router)
 
 
-def _register_queue(app: FastAPI) -> None:
-    """Register queue routers."""
-    from app.api import queue
-
-    app.include_router(queue.router, prefix="/api/queue", tags=["queue"])
-    app.include_router(queue.router, prefix="/api/v1/queue", tags=["queue"])
-
-
 def _register_reading_orders(app: FastAPI) -> None:
     """Register reading-order routers (absolute ``/api/v1`` paths)."""
     from app.api import reading_orders
@@ -234,13 +210,6 @@ def _register_cron(app: FastAPI) -> None:
     # Machine-triggered Vercel Cron endpoint. It is secret-gated, omitted from
     # the generated client schema, and delegates all work to the sync service.
     app.include_router(cron.router, prefix="/api/v1", tags=["cron"])
-
-
-def _register_recommendations(app: FastAPI) -> None:
-    """Register recommendation diagnostics routers."""
-    from app.api import recommendation_diagnostics
-
-    app.include_router(recommendation_diagnostics.router, prefix="/api", tags=["recommendations"])
 
 
 def _register_sessions(app: FastAPI) -> None:
@@ -310,13 +279,6 @@ def _register_dependencies(app: FastAPI) -> None:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
 
-def _register_delivery(app: FastAPI) -> None:
-    """Register delivery routers."""
-    from app.api import delivery
-
-    app.include_router(delivery.router, prefix="/api/v1", tags=["delivery"])
-
-
 def _register_demo(app: FastAPI) -> None:
     """Register the unauthenticated guest demo router."""
     from app.api import demo
@@ -327,7 +289,7 @@ def _register_demo(app: FastAPI) -> None:
 
 
 def _register_catalog(app: FastAPI) -> None:
-    """Register catalog and external-attach routers (absolute ``/api/v1`` paths)."""
+    """Register catalog series-mapping routers (absolute ``/api/v1`` paths)."""
     from app.api import catalog
 
     app.include_router(catalog.router, tags=["catalog"])
@@ -354,24 +316,6 @@ def _register_cbl_adoption(app: FastAPI) -> None:
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
 
 
-def _register_performance_metrics(app: FastAPI) -> None:
-    """Register performance-metric collection routers."""
-    from app.api import performance_metric
-
-    app.include_router(
-        performance_metric.router,
-        prefix="/api/v1/performance-metrics",
-        tags=["performance-metrics"],
-    )
-
-
-
-def _register_debug(app: FastAPI) -> None:
-    """Register the non-production debug router."""
-    from app.api import debug
-
-    app.include_router(debug.router, prefix="/api", tags=["debug"])
-    app.include_router(debug.router, prefix="/api/v1", tags=["debug"])
 
 
 def _register_test_helpers(app: FastAPI) -> None:
@@ -386,8 +330,6 @@ def _register_test_helpers(app: FastAPI) -> None:
 #: fails if a route's segment is missing here.
 _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("roll", frozenset({"roll"}), _register_roll),
-    RouterMount("admin", frozenset({"admin"}), _register_admin),
-    RouterMount("analytics", frozenset({"analytics"}), _register_analytics),
     RouterMount("health", frozenset({"health"}), _register_health),
     RouterMount("bug-reports", frozenset({"bug-reports"}), _register_bug_reports),
     RouterMount("auth", frozenset({"auth"}), _register_auth),
@@ -401,7 +343,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("creators", frozenset({"creators"}), _register_creators),
     RouterMount("taste", frozenset({"taste"}), _register_taste),
     RouterMount("tags", frozenset({"tags"}), _register_tags),
-    RouterMount("queue", frozenset({"queue"}), _register_queue),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
@@ -410,7 +351,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("reading-boundaries", frozenset({"reading-boundaries"}), _register_reading_boundary),
     RouterMount("reading-plan-sync", frozenset({"reading-plan-sync"}), _register_reading_plan_sync),
     RouterMount("cron", frozenset({"cron"}), _register_cron),
-    RouterMount("recommendations", frozenset({"recommendations"}), _register_recommendations),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
     RouterMount("reading-mode", frozenset({"reading-mode"}), _register_reading_mode),
     RouterMount("undo", frozenset({"undo"}), _register_undo),
@@ -429,12 +369,10 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
                 "collection-exclusions",
                 "continuity-plans",
                 "continuity-rules",
-                "crossover-templates",
                 "custom-cbls",
                 "dependencies",
                 "issue-identity",
                 "issues",
-                "prerequisites",
                 "reading-order-groups",
                 "releases",
                 # roll_recovery_switch composes under /roll in mount_subrouters().
@@ -444,31 +382,27 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         ),
         _register_dependencies,
     ),
-    RouterMount("delivery", frozenset({"delivery"}), _register_delivery),
     RouterMount("demo", frozenset({"demo"}), _register_demo),
-    RouterMount("catalog", frozenset({"catalog", "threads"}), _register_catalog),
+    RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
     RouterMount("identity-inbox", frozenset({"identity-inbox"}), _register_identity_inbox),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
     RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
-    RouterMount("performance-metrics", frozenset({"performance-metrics"}), _register_performance_metrics),
 )
 
 
 def build_router_mounts(environment: str) -> tuple[RouterMount, ...]:
     """Return the deferred mounts for the current environment.
 
-    Debug routes exist only outside production and test helpers only when the
-    test environment is active, matching the eager registration contract.
+    Test helpers exist only when the test environment is active, matching the
+    eager registration contract.
 
     Args:
         environment: Current application environment string.
 
     Returns:
-        Ordered mounts, production-safe debug/test filtering applied.
+        Ordered mounts, test-helper filtering applied.
     """
     mounts = list(_CORE_MOUNTS)
-    if environment != "production":
-        mounts.append(RouterMount("debug", frozenset({"debug"}), _register_debug))
     if os.getenv("TEST_ENVIRONMENT") == "true":
         mounts.append(RouterMount("test-helpers", frozenset({"test"}), _register_test_helpers))
     return tuple(mounts)

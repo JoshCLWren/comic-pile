@@ -91,7 +91,7 @@ pub fn evaluate(
 
         let next_issue_id = next_unread.get(&thread.id).copied();
 
-        if next_issue_id.is_none() {
+        let Some(next_issue_id) = next_issue_id else {
             result.insert(
                 thread.id,
                 ThreadEligibility {
@@ -102,9 +102,7 @@ pub fn evaluate(
                 },
             );
             continue;
-        }
-
-        let next_issue_id = next_issue_id.unwrap();
+        };
 
         // Check if this issue is blocked by unsatisfied edges
         let empty_vec: Vec<ConstraintEdge> = vec![];

@@ -1,0 +1,51 @@
+{
+  "family": "releases",
+  "owned_path_patterns": [
+    "^/api/v1/releases(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-releases.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/releases/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/releases/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "PUT",
+      "path": "/api/v1/releases/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/releases/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/releases/source",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/releases/source$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/releases/{release_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/releases/[0-9]+$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/releases/{release_id}/retract",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/releases/[0-9]+/retract$"
+    }
+  ]
+}

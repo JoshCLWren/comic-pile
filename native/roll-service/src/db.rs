@@ -95,6 +95,7 @@ async fn probe(state: &AppState, connection: Object) -> Result<Object, ApiError>
         }
     }
     let mut pending = Pending(Some(connection));
+    #[allow(clippy::expect_used)]
     let result = tokio::time::timeout(
         state.request_timeout.min(MAX_PROBE_TIMEOUT),
         pending
@@ -109,6 +110,7 @@ async fn probe(state: &AppState, connection: Object) -> Result<Object, ApiError>
             tracing::debug!(error = ?e, "preserved underlying error before mapping");
             Err(ApiError::database_unavailable())
         }
+        #[allow(clippy::expect_used)]
         Ok(Ok(_)) => Ok(pending.0.take().expect("checked-out PostgreSQL client")),
         Ok(Err(error)) => Err(query_error_for("database.checkout_probe", error)),
     }
@@ -132,11 +134,9 @@ pub(crate) async fn query_one_optional(
         }
     }
     let mut pending = Pending(Some(connection));
-    let result = tokio::time::timeout(
-        state.request_timeout,
-        pending.0.as_ref().unwrap().query_opt(sql, params),
-    )
-    .await;
+    #[allow(clippy::unwrap_used)]
+    let deref = pending.0.as_ref().unwrap();
+    let result = tokio::time::timeout(state.request_timeout, deref.query_opt(sql, params)).await;
     match result {
         Err(e) => {
             tracing::debug!(error = ?e, "preserved underlying error before mapping");

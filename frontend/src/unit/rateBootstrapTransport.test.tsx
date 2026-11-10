@@ -64,8 +64,6 @@ function bootstrapState(overrides: Partial<RollBootstrapResponse> = {}): RollBoo
   return {
     session_id: 1,
     user_id: 1,
-    current_die: 8,
-    manual_die: null,
     pending_thread_id: 1,
     last_rolled_result: 4,
     session_mode: {

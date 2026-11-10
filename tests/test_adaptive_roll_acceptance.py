@@ -983,11 +983,28 @@ class TestAC9DiagnosticsByModeAndAlgorithmVersion:
     async def test_diagnostics_groups_by_algorithm_version(
         self, auth_client: AsyncClient, async_db: AsyncSession,
     ) -> None:
-        """The diagnostics endpoint returns groups with algorithm versions."""
-        response = await auth_client.get("/api/v1/recommendations/diagnostics")
-        assert response.status_code == 200
+        """Diagnostics service returns groups with algorithm versions (#4861).
 
-        data = response.json()
+        The HTTP diagnostics handler was pruned; the service-level
+        diagnostics remain. The pruned HTTP path answers 404 while the
+        service still produces the grouped payload.
+        """
+        pruned = await auth_client.get("/api/v1/recommendations/diagnostics")
+        assert pruned.status_code == 404
+
+        from tests.conftest import get_or_create_user_async
+
+        user = await get_or_create_user_async(async_db)
+        await async_db.commit()
+        range_start, range_end = resolve_diagnostics_range(None, None)
+        diagnostics = await compute_recommendation_diagnostics(
+            async_db,
+            user_id=user.id,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+        data = diagnostics.model_dump()
         assert "groups_by_control_mode" in data
         assert "active_algorithm_version" in data
         assert "active_control_mode" in data
@@ -997,11 +1014,23 @@ class TestAC9DiagnosticsByModeAndAlgorithmVersion:
     async def test_diagnostics_effort_band_outcomes(
         self, auth_client: AsyncClient, async_db: AsyncSession,
     ) -> None:
-        """Diagnostics include effort-band outcome breakdowns."""
-        response = await auth_client.get("/api/v1/recommendations/diagnostics")
-        assert response.status_code == 200
+        """Diagnostics service includes effort-band outcome breakdowns (#4861)."""
+        pruned = await auth_client.get("/api/v1/recommendations/diagnostics")
+        assert pruned.status_code == 404
 
-        data = response.json()
+        from tests.conftest import get_or_create_user_async
+
+        user = await get_or_create_user_async(async_db)
+        await async_db.commit()
+        range_start, range_end = resolve_diagnostics_range(None, None)
+        diagnostics = await compute_recommendation_diagnostics(
+            async_db,
+            user_id=user.id,
+            range_start=range_start,
+            range_end=range_end,
+        )
+
+        data = diagnostics.model_dump()
         assert "effort_band_outcomes" in data
         assert isinstance(data["effort_band_outcomes"], list)
 

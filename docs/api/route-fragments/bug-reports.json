@@ -1,0 +1,31 @@
+{
+  "family": "bug-reports",
+  "owned_path_patterns": [
+    "^/api/v1/bug\\-reports(?:/.*)?$",
+    "^/api/bug\\-reports(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-bug-reports.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/bug-reports/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/bug\\-reports/$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/bug-reports/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/bug\\-reports/$"
+    }
+  ]
+}

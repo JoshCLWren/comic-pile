@@ -31,6 +31,48 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface ConfirmRequest {
+  path: {
+    mapping_id: number
+  }
+  body: components['schemas']['ActionRequest']
+}
+
+export type ConfirmResponse = components['schemas']['NativeIdentityInboxActionResponse']
+
+export interface ContinuityRulesCreateRequest {
+  body: components['schemas']['ContinuityRuleRequest']
+}
+
+export type ContinuityRulesCreateResponse = components['schemas']['NativeContinuityRuleResponse']
+
+export interface ContinuityRulesDeleteRequest {
+  path: {
+    rule_id: number
+  }
+}
+
+export type ContinuityRulesDeleteResponse = void
+
+export interface ContinuityRulesGetRequest {
+  path: {
+    rule_id: number
+  }
+}
+
+export type ContinuityRulesGetResponse = components['schemas']['NativeContinuityRuleResponse']
+
+export type ContinuityRulesListResponse = Array<components['schemas']['NativeContinuityRuleResponse']>
+
+export interface ContinuityRulesUpdateRequest {
+  path: {
+    rule_id: number
+  }
+  body: components['schemas']['ContinuityRuleRequest']
+}
+
+export type ContinuityRulesUpdateResponse = components['schemas']['NativeContinuityRuleResponse']
+
 export interface CreateDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
@@ -46,6 +88,12 @@ export interface CreateIssuesRequest {
 
 export type CreateIssuesResponse = components['schemas']['NativeIssueListResponse']
 
+export interface CreateLegacyDependencyRequest {
+  body: components['schemas']['DependencyCreateRequest']
+}
+
+export type CreateLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
 }
@@ -59,6 +107,14 @@ export interface CreateReadingListRequest {
 export type CreateReadingListResponse = components['schemas']['ReadingList']
 
 export type CsrfResponse = components['schemas']['CsrfResponse']
+
+export interface DeferRequest {
+  path: {
+    mapping_id: number
+  }
+}
+
+export type DeferResponse = components['schemas']['NativeIdentityInboxActionResponse']
 
 export interface DeleteDependencyRequest {
   path: {
@@ -75,6 +131,14 @@ export interface DeleteIssueRequest {
 }
 
 export type DeleteIssueResponse = void
+
+export interface DeleteLegacyDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+}
+
+export type DeleteLegacyDependencyResponse = unknown
 
 export interface DeleteReadingListRequest {
   path: {
@@ -100,6 +164,22 @@ export interface ForgotPasswordRequest {
 
 export type ForgotPasswordResponse = components['schemas']['NativePasswordResetResponse']
 
+export interface GetRequest {
+  path: {
+    mapping_id: number
+  }
+}
+
+export type GetResponse = components['schemas']['NativeIdentityInboxResponse']
+
+export interface GetLegacyDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+}
+
+export type GetLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+
 export interface GetQueueEntryRequest {
   path: {
     thread_id: number
@@ -115,6 +195,14 @@ export interface GetReadingListRequest {
 }
 
 export type GetReadingListResponse = components['schemas']['ReadingList']
+
+export interface GetThreadIssueDependenciesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type GetThreadIssueDependenciesResponse = components['schemas']['NativeThreadIssueDependenciesResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -154,6 +242,10 @@ export interface IssueReadRateRequest {
 
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
 
+export type ListResponse = components['schemas']['NativeIdentityInboxResponse']
+
+export type ListBlockedLegacyDependenciesResponse = Array<number>
+
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
 export interface ListThreadsRequest {
@@ -183,7 +275,7 @@ export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
 export type MeResponse = components['schemas']['NativeUserResponse']
 
-export type MetricsResponse = components['schemas']['NativeAnalyticsMetricsResponse']
+export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
 
 export interface OfferRequest {
   body: components['schemas']['RollOfferRequest']
@@ -219,7 +311,7 @@ export interface ReadingBoundaryBatchRequest {
   body: components['schemas']['NativeReadingBoundaryBatchRequest']
 }
 
-export type ReadingBoundaryBatchResponse = components['schemas']['NativeReadingBoundaryBatchResponseV2']
+export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundaryBatchResponseV2']
 
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
@@ -234,6 +326,32 @@ export interface RegisterRequest {
 }
 
 export type RegisterResponse = components['schemas']['NativeTokenResponse']
+
+export interface RejectRequest {
+  path: {
+    mapping_id: number
+  }
+  body: components['schemas']['ActionRequest']
+}
+
+export type RejectResponse = components['schemas']['NativeIdentityInboxActionResponse']
+
+export interface ReleasesGetRequest {
+  path: {
+    release_id: number
+  }
+}
+
+export type ReleasesGetResponse = components['schemas']['NativePublicReleaseResponse']
+
+export interface ReleasesListRequest {
+  query?: {
+    limit?: number
+    offset?: number
+  }
+}
+
+export type ReleasesListResponse = components['schemas']['NativeReleaseListResponse']
 
 export interface RelinkRequest {
   path: {
@@ -262,6 +380,33 @@ export interface ResetPasswordRequest {
 
 export type ResetPasswordResponse = components['schemas']['NativePasswordResetResponse']
 
+export type SearchResponse = components['schemas']['NativeIdentityInboxSearchResponse']
+
+export interface SeriesImportStatusRequest {
+  path: {
+    comicvine_volume_id: number
+  }
+}
+
+export type SeriesImportStatusResponse = components['schemas']['NativeSeriesImportStatusResponse']
+
+export interface SkipRequest {
+  path: {
+    mapping_id: number
+  }
+}
+
+export type SkipResponse = components['schemas']['NativeIdentityInboxActionResponse']
+
+export interface UpdateLegacyDependencyRequest {
+  path: {
+    dependency_id: number
+  }
+  body: components['schemas']['NativeDependencyNoteUpdate']
+}
+
+export type UpdateLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+
 export interface UpdateQueueEntryRequest {
   path: {
     thread_id: number
@@ -282,24 +427,38 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  confirm(args: ConfirmRequest): Promise<ConfirmResponse>
+  continuityRulesCreate(args: ContinuityRulesCreateRequest): Promise<ContinuityRulesCreateResponse>
+  continuityRulesDelete(args: ContinuityRulesDeleteRequest): Promise<ContinuityRulesDeleteResponse>
+  continuityRulesGet(args: ContinuityRulesGetRequest): Promise<ContinuityRulesGetResponse>
+  continuityRulesList(): Promise<ContinuityRulesListResponse>
+  continuityRulesUpdate(args: ContinuityRulesUpdateRequest): Promise<ContinuityRulesUpdateResponse>
   createDependency(args: CreateDependencyRequest): Promise<CreateDependencyResponse>
   createIssues(args: CreateIssuesRequest): Promise<CreateIssuesResponse>
+  createLegacyDependency(args: CreateLegacyDependencyRequest): Promise<CreateLegacyDependencyResponse>
   createQueueOrder(args: CreateQueueOrderRequest): Promise<CreateQueueOrderResponse>
   createReadingList(args: CreateReadingListRequest): Promise<CreateReadingListResponse>
   csrf(): Promise<CsrfResponse>
+  defer(args: DeferRequest): Promise<DeferResponse>
   deleteDependency(args: DeleteDependencyRequest): Promise<DeleteDependencyResponse>
   deleteIssue(args: DeleteIssueRequest): Promise<DeleteIssueResponse>
+  deleteLegacyDependency(args: DeleteLegacyDependencyRequest): Promise<DeleteLegacyDependencyResponse>
   deleteReadingList(args: DeleteReadingListRequest): Promise<DeleteReadingListResponse>
   dieState(): Promise<DieStateResponse>
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
+  get(args: GetRequest): Promise<GetResponse>
+  getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
+  getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
   issueOrder(args: IssueOrderRequest): Promise<IssueOrderResponse>
   issueReadRate(args: IssueReadRateRequest): Promise<IssueReadRateResponse>
+  list(): Promise<ListResponse>
+  listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
@@ -315,10 +474,17 @@ export interface NativeV2Client {
   readingGraph(): Promise<ReadingGraphResponse>
   refresh(args?: RefreshRequest): Promise<RefreshResponse>
   register(args: RegisterRequest): Promise<RegisterResponse>
+  reject(args: RejectRequest): Promise<RejectResponse>
+  releasesGet(args: ReleasesGetRequest): Promise<ReleasesGetResponse>
+  releasesList(args?: ReleasesListRequest): Promise<ReleasesListResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
   resetPassword(args: ResetPasswordRequest): Promise<ResetPasswordResponse>
+  search(): Promise<SearchResponse>
+  seriesImportStatus(args: SeriesImportStatusRequest): Promise<SeriesImportStatusResponse>
+  skip(args: SkipRequest): Promise<SkipResponse>
+  updateLegacyDependency(args: UpdateLegacyDependencyRequest): Promise<UpdateLegacyDependencyResponse>
   updateQueueEntry(args: UpdateQueueEntryRequest): Promise<UpdateQueueEntryResponse>
   updateReadingList(args: UpdateReadingListRequest): Promise<UpdateReadingListResponse>
 }
@@ -331,6 +497,37 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         { params: compactQuery(args.query) },
       )
     },
+    confirm(args: ConfirmRequest) {
+      return client.post<ConfirmResponse, ConfirmRequest['body']>(
+        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/confirm`,
+        args.body,
+      )
+    },
+    continuityRulesCreate(args: ContinuityRulesCreateRequest) {
+      return client.post<ContinuityRulesCreateResponse, ContinuityRulesCreateRequest['body']>(
+        "/v1/continuity-rules/",
+        args.body,
+      )
+    },
+    continuityRulesDelete(args: ContinuityRulesDeleteRequest) {
+      return client.delete<ContinuityRulesDeleteResponse>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+      )
+    },
+    continuityRulesGet(args: ContinuityRulesGetRequest) {
+      return client.get<ContinuityRulesGetResponse>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+      )
+    },
+    continuityRulesList() {
+      return client.get<ContinuityRulesListResponse>("/v1/continuity-rules/")
+    },
+    continuityRulesUpdate(args: ContinuityRulesUpdateRequest) {
+      return client.put<ContinuityRulesUpdateResponse, ContinuityRulesUpdateRequest['body']>(
+        `/v1/continuity-rules/${encodeURIComponent(String(args.path.rule_id))}`,
+        args.body,
+      )
+    },
     createDependency(args: CreateDependencyRequest) {
       return client.post<CreateDependencyResponse, CreateDependencyRequest['body']>(
         "/v2/dependencies/",
@@ -340,6 +537,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     createIssues(args: CreateIssuesRequest) {
       return client.post<CreateIssuesResponse, CreateIssuesRequest['body']>(
         `/v2/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        args.body,
+      )
+    },
+    createLegacyDependency(args: CreateLegacyDependencyRequest) {
+      return client.post<CreateLegacyDependencyResponse, CreateLegacyDependencyRequest['body']>(
+        "/v1/dependencies/",
         args.body,
       )
     },
@@ -358,6 +561,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     csrf() {
       return client.get<CsrfResponse>("/v2/auth/csrf")
     },
+    defer(args: DeferRequest) {
+      return client.post<DeferResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/defer`)
+    },
     deleteDependency(args: DeleteDependencyRequest) {
       return client.delete<DeleteDependencyResponse>(
         `/v2/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
@@ -366,6 +572,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     deleteIssue(args: DeleteIssueRequest) {
       return client.delete<DeleteIssueResponse>(
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
+      )
+    },
+    deleteLegacyDependency(args: DeleteLegacyDependencyRequest) {
+      return client.delete<DeleteLegacyDependencyResponse>(
+        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
     deleteReadingList(args: DeleteReadingListRequest) {
@@ -388,6 +599,16 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    get(args: GetRequest) {
+      return client.get<GetResponse>(
+        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+      )
+    },
+    getLegacyDependency(args: GetLegacyDependencyRequest) {
+      return client.get<GetLegacyDependencyResponse>(
+        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
+      )
+    },
     getQueueEntry(args: GetQueueEntryRequest) {
       return client.get<GetQueueEntryResponse>(
         `/v2/queue-entries/${encodeURIComponent(String(args.path.thread_id))}`,
@@ -396,6 +617,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     getReadingList(args: GetReadingListRequest) {
       return client.get<GetReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
+      )
+    },
+    getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest) {
+      return client.get<GetThreadIssueDependenciesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
       )
     },
     initializeSession(args: InitializeSessionRequest) {
@@ -426,6 +652,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/issues/${encodeURIComponent(String(args.path.issue_id))}`,
         args.body,
       )
+    },
+    list() {
+      return client.get<ListResponse>("/v1/identity-inbox")
+    },
+    listBlockedLegacyDependencies() {
+      return client.get<ListBlockedLegacyDependenciesResponse>("/v1/dependencies/blocked")
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
@@ -499,6 +731,23 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         args.body,
       )
     },
+    reject(args: RejectRequest) {
+      return client.post<RejectResponse, RejectRequest['body']>(
+        `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/reject`,
+        args.body,
+      )
+    },
+    releasesGet(args: ReleasesGetRequest) {
+      return client.get<ReleasesGetResponse>(
+        `/v1/releases/${encodeURIComponent(String(args.path.release_id))}`,
+      )
+    },
+    releasesList(args: ReleasesListRequest = {}) {
+      return client.get<ReleasesListResponse>(
+        "/v1/releases/",
+        { params: compactQuery(args.query) },
+      )
+    },
     relink(args: RelinkRequest) {
       return client.post<RelinkResponse, RelinkRequest['body']>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/recovery`,
@@ -520,6 +769,23 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     resetPassword(args: ResetPasswordRequest) {
       return client.post<ResetPasswordResponse, ResetPasswordRequest['body']>(
         "/v2/auth/reset-password",
+        args.body,
+      )
+    },
+    search() {
+      return client.get<SearchResponse>("/v1/identity-inbox/search/issues")
+    },
+    seriesImportStatus(args: SeriesImportStatusRequest) {
+      return client.get<SeriesImportStatusResponse>(
+        `/v1/comicvine/series/${encodeURIComponent(String(args.path.comicvine_volume_id))}/import-status`,
+      )
+    },
+    skip(args: SkipRequest) {
+      return client.post<SkipResponse>(`/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}/skip`)
+    },
+    updateLegacyDependency(args: UpdateLegacyDependencyRequest) {
+      return client.patch<UpdateLegacyDependencyResponse, UpdateLegacyDependencyRequest['body']>(
+        `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
         args.body,
       )
     },

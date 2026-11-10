@@ -28,7 +28,6 @@ from app.main import create_app
 # convention. See the comment in app/main.py.
 _BARE_API_EXCEPTIONS = frozenset(
     {
-        "/api/debug/log",
         "/api/metrics",
         "/api/test/sessions/expire",
         "/api/test/reading-orders",
@@ -108,36 +107,76 @@ def test_v1_undo_aliases_match_legacy_route_methods() -> None:
         assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
 
 
-def test_v1_queue_aliases_match_legacy_route_methods() -> None:
-    """Canonical /api/v1/queue aliases reuse the same queue handler contracts."""
+def test_retired_queue_routes_are_absent() -> None:
+    """Native v2 queue-entry resources replace position/back/shuffle on every alias.
+
+    Regression guard for the retired queue action surface (#4458): no Python
+    handler may be re-registered for the legacy position/back/shuffle paths
+    under either prefix, and the FastAPI OpenAPI document must not publish
+    those operations again. ``PATCH /api/v2/queue-entries/{thread_id}`` with a
+    target ``position`` and ``POST /api/v2/queue-orders`` (in
+    ``native/contracts/v2-runtime.openapi.json``) are the replacement.
+    """
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in methods_by_path, (
+            f"{prefix}/threads/{{thread_id}}/position/ must stay retired; "
+            "PATCH /api/v2/queue-entries/{thread_id} is the replacement"
+        )
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in methods_by_path, (
+            f"{prefix}/threads/{{thread_id}}/back/ must stay retired; "
+            "PATCH /api/v2/queue-entries/{thread_id} with position is the replacement"
+        )
+        assert f"{prefix}/shuffle/" not in methods_by_path, (
+            f"{prefix}/shuffle/ must stay retired; "
+            "POST /api/v2/queue-orders is the replacement"
+        )
+
+    schema = create_app(serve_frontend=False).openapi()
+    for prefix in ("/api/queue", "/api/v1/queue"):
+        assert f"{prefix}/threads/{{thread_id}}/position/" not in schema["paths"]
+        assert f"{prefix}/threads/{{thread_id}}/back/" not in schema["paths"]
+        assert f"{prefix}/shuffle/" not in schema["paths"]
+
+
+def test_retired_thread_html_routes_are_absent() -> None:
+    """Rust-first cutover excludes unused HTML handlers but retains the JSON listing."""
     app = create_app(serve_frontend=False)
     methods_by_path = _collect_routes(app)
+    for prefix in ("/api/threads", "/api/v1/threads"):
+        assert f"{prefix}/active" not in methods_by_path
+        assert f"{prefix}/completed" not in methods_by_path
+        assert f"{prefix}/active" not in app.openapi()["paths"]
+        assert f"{prefix}/completed" not in app.openapi()["paths"]
+    assert "/api/v1/threads/completed/threads" in methods_by_path
 
-    alias_pairs = (
-        ("/api/queue/shuffle/", "/api/v1/queue/shuffle/"),
-        ("/api/queue/threads/{thread_id}/back/", "/api/v1/queue/threads/{thread_id}/back/"),
-        ("/api/queue/threads/{thread_id}/position/", "/api/v1/queue/threads/{thread_id}/position/"),
+
+def test_pruned_admin_routes_are_absent() -> None:
+    """Pruned admin import/export/delete handlers stay removed (#4861).
+
+    The zero-browser admin surface was deleted with its router mounts.
+    Re-adding any admin handler must fail here so the prune cannot regress
+    silently. Health/ping/metrics are untouched and covered elsewhere.
+    """
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    pruned_paths = (
+        "/api/admin/import/csv/",
+        "/api/v1/admin/import/csv/",
+        "/api/admin/export/csv/",
+        "/api/v1/admin/export/csv/",
+        "/api/admin/export/json/",
+        "/api/v1/admin/export/json/",
+        "/api/admin/export/summary/",
+        "/api/v1/admin/export/summary/",
+        "/api/admin/delete-test-data/",
+        "/api/v1/admin/delete-test-data/",
     )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+    for path in pruned_paths:
+        assert path not in methods_by_path, f"{path} must stay pruned"
 
-
-def test_v1_admin_aliases_match_legacy_route_methods() -> None:
-    """Canonical /api/v1/admin aliases reuse the same admin handler contracts."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
-
-    alias_pairs = (
-        ("/api/admin/import/csv/", "/api/v1/admin/import/csv/"),
-        ("/api/admin/export/csv/", "/api/v1/admin/export/csv/"),
-        ("/api/admin/export/json/", "/api/v1/admin/export/json/"),
-        ("/api/admin/export/summary/", "/api/v1/admin/export/summary/"),
-        ("/api/admin/delete-test-data/", "/api/v1/admin/delete-test-data/"),
-    )
-    for legacy_path, canonical_path in alias_pairs:
-        assert canonical_path in methods_by_path
-        assert methods_by_path[canonical_path] == methods_by_path[legacy_path]
+    schema = create_app(serve_frontend=False).openapi()
+    for path in pruned_paths:
+        assert path not in schema["paths"], f"{path} must stay out of OpenAPI"
 
 
 def test_v1_bug_reports_alias_matches_legacy_route_methods() -> None:
@@ -158,30 +197,29 @@ def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
     assert methods_by_path["/api/v1/metrics"] == methods_by_path["/api/metrics"]
 
 
-def test_v1_debug_alias_matches_legacy_route_methods_outside_production() -> None:
-    """Canonical /api/v1/debug alias reuses the same handler contract (non-prod)."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
+def test_pruned_debug_routes_are_absent() -> None:
+    """Pruned debug log handlers stay removed (#4861).
 
-    assert "/api/v1/debug/log" in methods_by_path
-    assert methods_by_path["/api/v1/debug/log"] == methods_by_path["/api/debug/log"]
-
-
-def test_delivery_target_route_addresses_slash_containing_branches() -> None:
-    """Delivery target lookup supports slash-containing repos and branches.
-
-    Regression guard: the delivery target/branch lookup must split the target
-    repository into ``owner``/``repo`` path segments and use the
-    ``{branch_name:path}`` converter, because every allowlisted target
-    repository (e.g. ``JoshCLWren/Latticery``) and factory branch name (e.g.
-    ``factory/2875-first-extraction-slice``) contains slashes. A route that
-    models either as a single path segment can never match a real delivery.
+    The non-production debug router was deleted; re-adding it must fail here.
+    Eager health/ping/metrics routes are kept and covered by other tests.
     """
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
-    target_path = "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}"
-    assert target_path in methods_by_path
-    assert "GET" in methods_by_path[target_path]
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for path in ("/api/debug/log", "/api/v1/debug/log"):
+        assert path not in methods_by_path, f"{path} must stay pruned"
+
+    schema = create_app(serve_frontend=False).openapi()
+    for path in ("/api/debug/log", "/api/v1/debug/log"):
+        assert path not in schema["paths"], f"{path} must stay out of OpenAPI"
+
+
+def test_retired_zero_browser_delivery_routes_are_absent() -> None:
+    """Delivery HTTP API was pruned: the browser never calls it (#4865)."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for path in (
+        "/api/v1/delivery",
+        "/api/v1/delivery/target/{owner}/{repo}/branch/{branch_name:path}",
+    ):
+        assert path not in methods_by_path
 
 
 def test_no_new_bare_api_client_routes() -> None:
@@ -194,14 +232,6 @@ def test_no_new_bare_api_client_routes() -> None:
     # existing clients.
     grandfathered_bare_api = frozenset(
         {
-            "/api/admin/delete-test-data/",
-            "/api/admin/export/csv/",
-            "/api/admin/export/json/",
-            "/api/admin/export/summary/",
-            "/api/admin/import/csv/",
-            "/api/analytics/metrics",
-            "/api/analytics/summary",
-            "/api/analytics/reading-history",
             "/api/auth/csrf",
             "/api/auth/login",
             "/api/auth/logout",
@@ -217,9 +247,6 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/health/warmup",
             "/api/instance/warm",
             "/api/ping",
-            "/api/queue/shuffle/",
-            "/api/queue/threads/{thread_id}/back/",
-            "/api/queue/threads/{thread_id}/position/",
             "/api/roll/bootstrap",
             "/api/roll/dismiss-pending",
             "/api/roll/override",
@@ -313,15 +340,19 @@ def test_retired_roll_skip_routes_are_absent() -> None:
     assert "/api/v1/roll/skip/{thread_id}/unskip" not in schema["paths"]
 
 
-def test_analytics_legacy_routes_remain_until_production_proof() -> None:
-    """Keep the Python v1/bare metrics handlers until the Rust cutover is proven.
+def test_pruned_python_analytics_routes_are_absent() -> None:
+    """Pruned Python analytics handlers stay removed; native v2 is kept (#4861).
 
-    #4348 requires deletion only after the native v2 resource is deployed and
-    authenticated production proof exists. The transition guard keeps the real
-    legacy handler visible rather than silently removing a supported API.
+    The Python ``/api/analytics/metrics`` and ``/api/v1/analytics/metrics``
+    handlers were deleted because no browser caller remains — the frontend
+    uses the native Rust ``GET /api/v2/analytics/metrics`` resource (#4348).
+    Eager ``/api/metrics`` and ``/api/v1/metrics`` are a different,
+    retained surface covered by :func:`test_v1_metrics_alias_matches_legacy_route_methods`.
     """
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+    for path in ("/api/analytics/metrics", "/api/v1/analytics/metrics"):
+        assert path not in methods_by_path, f"{path} must stay pruned"
 
-    assert "GET" in methods_by_path["/api/v1/analytics/metrics"]
-    assert "GET" in methods_by_path["/api/analytics/metrics"]
+    schema = create_app(serve_frontend=False).openapi()
+    for path in ("/api/analytics/metrics", "/api/v1/analytics/metrics"):
+        assert path not in schema["paths"], f"{path} must stay out of OpenAPI"

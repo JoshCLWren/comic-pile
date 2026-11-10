@@ -1,0 +1,172 @@
+{
+  "family": "issues",
+  "owned_path_patterns": [
+    "^/api/v1/issues(?::.*|/.*)?$",
+    "^/api/v2/issues(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-comicvine.ts",
+      "frontend/src/services/api-dependencies.ts",
+      "frontend/src/services/api-issues.ts",
+      "frontend/src/services/api-reader-context.ts",
+      "frontend/src/services/issueCardsApi.ts",
+      "frontend/src/services/nativeRollMutationApi.ts",
+      "frontend/src/services/rollResourcesApi.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "POST",
+      "path": "/api/v2/issues/cards",
+      "dest": "/api/native_issue.rs",
+      "src": "^/api/v2/issues/cards$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4443,
+      "consumers": [
+        "frontend/src/services/rollResourcesApi.ts",
+        "frontend/src/services/issueCardsApi.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "DELETE",
+      "path": "/api/v2/issues/{issue_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4684,
+      "consumers": [
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/services/issueCardsApi.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "PATCH",
+      "path": "/api/v2/issues/{issue_id}",
+      "dest": "/api/native_issue.rs",
+      "src": "^/api/v2/issues/[0-9]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4443,
+      "consumers": [
+        "frontend/src/services/nativeRollMutationApi.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/issueCardsApi.ts"
+      ]
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/comicvine",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/issues/[0-9]+/comicvine$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4623,
+      "consumers": [
+        "frontend/src/services/api-comicvine.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issues/{issue_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issues/[0-9]+$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issues/{issue_id}/comicvine",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/issues/[0-9]+/comicvine$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/issues/{issue_id}/reader-context",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issues/[^/]+/reader\\-context$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issues/{issue_id}:markRead",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issues/[^/]+:markRead$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issues/{issue_id}:markUnread",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issues/[^/]+:markUnread$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issues/{issue_id}:move",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issues/[^/]+:move$",
+      "consumers": [
+        "frontend/src/services/api-dependencies.ts",
+        "frontend/src/services/api-issues.ts",
+        "frontend/src/services/api-reader-context.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issues:bulkMarkRead",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issues:bulkMarkRead$",
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/issues:bulkMarkUnread",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/issues:bulkMarkUnread$",
+      "consumers": [
+        "frontend/src/services/api-issues.ts"
+      ]
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Disposable-schema HTTP regression runner for the scoped native v2 Roll
 //! resources: the die state and the ordered eligible issue identifiers.
 use axum::{
