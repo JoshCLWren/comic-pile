@@ -261,9 +261,9 @@ def linked_issue_mode(branch: str, body: str) -> tuple[int | None, bool]:
         body: PR description.
 
     Returns:
-        ``(issue, non_closing)``. ``non_closing`` is true only when the issue
-        came from the canonical ``Part of #N.`` line, never from a branch or a
-        closing keyword.
+        ``(issue, non_closing)``. A canonical branch fixes the issue
+        identity, while a matching explicit ``Part of #N.`` line can make
+        the PR non-closing. A closing keyword always takes precedence.
     """
     match = BRANCH_RE.match(branch)
     if match:
