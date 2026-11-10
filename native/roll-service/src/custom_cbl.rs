@@ -200,7 +200,7 @@ pub fn custom_cbl_delete_overlap_documentation() {}
 pub fn custom_cbl_apply_documentation() {}
 
 fn bad_request(message: impl Into<String>) -> ApiError {
-    ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, message.into())
+    ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, message)
 }
 
 fn volume_id(value: &str) -> Option<&str> {
@@ -262,7 +262,7 @@ pub async fn export(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
+        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
     let name: String = list.get(0);
     let rows = conn
         .query(
@@ -299,7 +299,7 @@ pub async fn export(
         .map_err(|_| {
             ApiError::with_status(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error".into(),
+                "Internal Server Error",
             )
         })?,
     );
@@ -327,7 +327,7 @@ async fn decision_set(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
+        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
     let updated_at: String = list.get(0);
     let rows = conn
         .query(
@@ -408,7 +408,7 @@ pub async fn put_overlap_decision(
         .await
         .map_err(db::query_error)?;
     lock_reader(&tx, user.id()).await?;
-    let current = tx.query_opt("SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&list_id, &user.id()]).await.map_err(db::query_error)?.ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
+    let current = tx.query_opt("SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&list_id, &user.id()]).await.map_err(db::query_error)?.ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
     let current_at: String = current.get(0);
     if request
         .expected_updated_at
@@ -417,7 +417,7 @@ pub async fn put_overlap_decision(
     {
         return Err(ApiError::with_status(
             StatusCode::CONFLICT,
-            "The Reading List's overlap decisions changed since they were read".into(),
+            "The Reading List's overlap decisions changed since they were read",
         ));
     }
     let ids = tx.query("SELECT id,external_id FROM external_identities WHERE provider='comicvine' AND entity_type='series' AND external_id=ANY($1::text[])", &[&vec![continuing, waiting]]).await.map_err(db::query_error)?;
@@ -465,13 +465,13 @@ pub async fn delete_overlap_decision(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
+        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
     let current_at: String = current.get(0);
     if let Some(expected) = query.get("expected_updated_at") {
         if expected != &current_at {
             return Err(ApiError::with_status(
                 StatusCode::CONFLICT,
-                "The Reading List's overlap decisions changed since they were read".into(),
+                "The Reading List's overlap decisions changed since they were read",
             ));
         }
     }
@@ -485,7 +485,7 @@ pub async fn delete_overlap_decision(
     if deleted == 0 {
         return Err(ApiError::with_status(
             StatusCode::NOT_FOUND,
-            "Overlap decision not found".into(),
+            "Overlap decision not found",
         ));
     }
     tx.execute(
@@ -511,11 +511,11 @@ pub async fn apply(
     // single capture `{plan_id_action}` and the `:apply` suffix is validated
     // here. The URL still matches the Vercel `[^/]+:apply` pattern.
     let Some(plan_id_text) = plan_id_action.strip_suffix(":apply") else {
-        return Err(ApiError::with_status(StatusCode::NOT_FOUND, "Not Found".into()));
+        return Err(ApiError::with_status(StatusCode::NOT_FOUND, "Not Found"));
     };
     let plan_id: i32 = plan_id_text
         .parse()
-        .map_err(|_| ApiError::with_status(StatusCode::NOT_FOUND, "Not Found".into()))?;
+        .map_err(|_| ApiError::with_status(StatusCode::NOT_FOUND, "Not Found"))?;
     let lane_id = request.get("lane_id").and_then(|value| value.as_str());
     let expected_updated_at = request
         .get("expected_updated_at")
@@ -533,7 +533,7 @@ pub async fn apply(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found".into()))?;
+        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
     let list_name: String = list.get(0);
     let plan = tx
         .query_opt(
@@ -542,7 +542,7 @@ pub async fn apply(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Continuity plan not found".into()))?;
+        .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Continuity plan not found"))?;
     let plan_pk: i32 = plan.get(0);
     let plan_user_id: i32 = plan.get(1);
     let plan_name: String = plan.get(2);
@@ -602,7 +602,7 @@ pub async fn apply(
         if expected != plan_updated_at {
             return Err(ApiError::with_status(
                 StatusCode::CONFLICT,
-                "plan_version_conflict".into(),
+                "plan_version_conflict",
             ));
         }
     }
