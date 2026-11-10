@@ -238,7 +238,7 @@ mod tests {
         let operations = operation_set(&document);
         assert!(!operations.is_empty(), "native OpenAPI must not be empty");
         for (method, path) in operations {
-            let operation = &document["paths"][&path][&method];
+            let operation = &document["paths"][path.as_str()][method.as_str()];
             assert!(
                 operation["operationId"].as_str().is_some(),
                 "missing generated operationId for {method} {path}"
