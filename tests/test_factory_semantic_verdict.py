@@ -295,9 +295,9 @@ def test_composite_recovery_handoff_requires_complete_trusted_issue_rubric(
 ) -> None:
     """Reproduce #4926: bare JSON/A1-only READY is not independent acceptance."""
     mission = (
-        f"ISSUE ACCEPTANCE: #4916, head {RECOVERY_HEAD}, issue digest {'b' * 64}.\\n"
-        "ACCEPTANCE_CRITERIA_COUNT=3\\n"
-    ).replace("\\\\n", "\\n")
+        f"ISSUE ACCEPTANCE: #4916, head {RECOVERY_HEAD}, issue digest {'b' * 64}.\n"
+        "ACCEPTANCE_CRITERIA_COUNT=3\n"
+    )
     # Three *independently described* entries; no wrapper may generate these.
     complete = recovery_report()
     complete["items"] = [
@@ -306,7 +306,7 @@ def test_composite_recovery_handoff_requires_complete_trusted_issue_rubric(
     ]
     primary = tmp_path / "primary.log"
     recovery = tmp_path / "recovery.log"
-    primary.write_text("FACTORY_GATE_READY\\n".replace("\\\\n", "\\n"))
+    primary.write_text("FACTORY_GATE_READY\n")
     call = (
         "factory_append_recovered_acceptance_report "
         f"{shlex.quote(str(primary))} {shlex.quote(str(recovery))} "
@@ -318,18 +318,18 @@ def test_composite_recovery_handoff_requires_complete_trusted_issue_rubric(
     )
 
     # The actual OpenRouter recovery emitted this bare, one-criterion JSON.
-    recovery.write_text(json.dumps(recovery_report()) + "\\nFACTORY_GATE_READY\\n")
+    recovery.write_text(json.dumps(recovery_report()) + "\nFACTORY_GATE_READY\n")
     assert run_bash(call).returncode != 0
     assert run_bash(check).returncode != 0
-    assert primary.read_text() == "FACTORY_GATE_READY\\n"
+    assert primary.read_text() == "FACTORY_GATE_READY\n"
 
     # Even prefixed evidence is incomplete if it does not cover A1..A3.
-    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\\n")
+    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n")
     assert run_bash(call).returncode != 0
-    assert primary.read_text() == "FACTORY_GATE_READY\\n"
+    assert primary.read_text() == "FACTORY_GATE_READY\n"
 
     # Exactly one model-authored, prefixed, correctly shaped report flows once.
-    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(complete) + "\\nFACTORY_GATE_READY\\n")
+    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(complete) + "\nFACTORY_GATE_READY\n")
     assert run_bash(call).returncode == 0
     assert run_bash(call).returncode == 0
     assert run_bash(check).returncode == 0
