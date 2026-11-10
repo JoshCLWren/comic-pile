@@ -25,6 +25,7 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod openapi;
 pub mod option_inputs;
+pub mod preferences;
 pub mod queue;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
@@ -641,6 +642,22 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/roll/dismiss-pending",
             post(dismiss_pending::dismiss_pending),
+        )
+        .route(
+            "/api/v1/users/me/preferences",
+            get(preferences::get_user_preferences),
+        )
+        .route(
+            "/api/v1/users/me/preferences",
+            patch(preferences::patch_user_preferences),
+        )
+        .route(
+            "/api/v1/users/me/taste-signals",
+            get(preferences::list_taste_signals),
+        )
+        .route(
+            "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+            put(preferences::set_taste_signal_verdict),
         )
         .route(
             "/api/v2/issues/{issue_id}",

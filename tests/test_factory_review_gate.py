@@ -3601,3 +3601,86 @@ def test_controller_repair_transition_clears_stale_approved_label(
     assert writes
     assert "factory:approved" not in writes[0]["labels"]
     assert "bug" in writes[0]["labels"]
+
+
+def test_review_route_provenance_records_executed_openrouter_composite(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A reviewing worker's coding pin is not its executed review model."""
+    module = load_review_controller()
+    monkeypatch.setattr(
+        module, "roster_model_for_worker", lambda _worker: "thinkingmachines/inkling:free"
+    )
+    for key in ("FACTORY_SOURCE", "FACTORY_MODEL", "FACTORY_RUNTIME_MODEL"):
+        monkeypatch.delenv(key, raising=False)
+    assert module.model_for_trusted_review_session("52") == "thinkingmachines/inkling:free"
+
+    monkeypatch.setenv("FACTORY_SOURCE", "openrouter-free")
+    monkeypatch.setenv("FACTORY_MODEL", "openrouter/free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/free")
+    assert module.model_for_trusted_review_session("52") == "openrouter/free"
+
+    author = agent_model_author_marker(
+        pr=4922, head=REVIEWED_HEAD, model="thinkingmachines/inkling:free", agent="96"
+    )
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [author])
+    sent: list[list[str]] = []
+    monkeypatch.setattr(module, "run_gh", lambda args, **_kw: sent.append(args))
+    marker = module.persist_cross_model_review_marker(
+        pr_number=4922, head=REVIEWED_HEAD, reviewer="52"
+    )
+    assert marker is not None
+    assert "reviewer-openrouter-free:" in marker
+    assert "author-thinkingmachines-inkling-free:" in marker
+    assert sent and sent[-1][-1] == marker
+
+
+def test_review_route_rejects_inconsistent_runtime_provenance(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A composite reviewer marker cannot be written for a mismatched lane."""
+    module = load_review_controller()
+    monkeypatch.setenv("FACTORY_SOURCE", "opencode-free")
+    monkeypatch.setenv("FACTORY_MODEL", "openrouter/free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/free")
+    with pytest.raises(RuntimeError, match="inconsistent dedicated"):
+        module.model_for_trusted_review_session("52")
+
+    monkeypatch.setenv("FACTORY_SOURCE", "openrouter-free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/other:free")
+    with pytest.raises(RuntimeError, match="inconsistent dedicated"):
+        module.model_for_trusted_review_session("52")
+
+
+def test_dedicated_review_route_is_limited_to_exact_head_semantic_stage() -> None:
+    """Only a leased semantic review may use the composite route."""
+    workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
+    condition = '.kind == "pr" and .stage == "factory:review"'
+    assert condition in workflow
+    assert "source='openrouter-free'" in workflow
+    assert "model='openrouter/free'" in workflow
+    assert "runtime_model='openrouter/free'" in workflow
+    assert "reason='exact-head-semantic-review-only'" in workflow
+    assert "python3 .github/scripts/factory-work-controller.py release" in workflow
+    assert "mandatory real OpenCode smoke" in workflow
+    worker = (SCRIPTS / "free-model-factory-worker.sh").read_text()
+    assert 'if [[ "$RUNTIME_MODEL" == \'openrouter/free\' ]]' in worker
+    assert '"$MODE" != pr || "$ASSIGNED_PR_STAGE" != \'factory:review\'' in worker
+    assert "composite semantic review route lost its review-stage assignment" in worker
+    assert "name: Register composite OpenRouter model for semantic review only" in workflow
+    assert "if: steps.lane.outputs.reason == 'exact-head-semantic-review-only'" in workflow
+    assert 'modelID: "openrouter/free"' in workflow
+
+
+def test_composite_review_model_is_not_truncated_before_provenance_check() -> None:
+    """The trusted runner must retain openrouter/free, not the bare free suffix."""
+    workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
+    marker = "Composite free review route: validating by real OpenCode smoke"
+    assert workflow.count(marker) == 1
+    composite_preflight = workflow.split(marker, 1)[1].split("\n          fi", 1)[0]
+    assert 'echo "model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in composite_preflight
+    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in composite_preflight
+    assert 'echo "model=${RUNTIME_MODEL#*/}"' not in composite_preflight
+    assert "FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model" in workflow
+    assert "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model" in workflow
+
