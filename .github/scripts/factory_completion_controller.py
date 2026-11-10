@@ -18,7 +18,7 @@ from typing import Any
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = 120
 # Keep in sync with factory_work_policy.FACTORY_REVIEW_BACKLOG_LIMIT (incident #2309).
-REVIEW_BACKLOG_LIMIT = 8
+REVIEW_BACKLOG_LIMIT = 3
 HIGH_REVIEW_BACKLOG = 20
 NORMAL_DRAIN_BATCH = 8
 HIGH_DRAIN_BATCH = 12
