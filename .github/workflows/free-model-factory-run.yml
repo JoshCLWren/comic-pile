@@ -1009,10 +1009,6 @@ jobs:
                   Detail: ${detail}
                   Updated: ${now}
                   Run: ${GITHUB_RUN_ID}" >/dev/null
-                if [[ "$kind" == provider_quota ]]; then
-                  echo "Provider-wide free quota reached; no per-model retry within this account" >&2
-                  exit 1
-                fi
                 attempted+=("$model")
                 exclusions=()
                 for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
