@@ -687,8 +687,11 @@ fi
 
 verdict="$(factory_extract_semantic_verdict "$review_log" || true)"
 acceptance_policy="$(dirname "$TRUSTED_REVIEW_CONTROLLER")/factory_issue_acceptance.py"
+# Obtain the trusted linked-issue rubric before checking primary evidence.
+# A parseable report with only A1 is not a complete acceptance report.
+acceptance_mission="$(factory_issue_acceptance_mission "$NUMBER" "$EXPECTED_HEAD")"
 if [[ "$verdict" == 'approve' ]] \
-  && ! factory_has_acceptance_report "$sanitized_review_log" "$acceptance_policy"; then
+  && ! factory_has_acceptance_report "$sanitized_review_log" "$acceptance_policy" "$acceptance_mission"; then
   log "review returned READY without a parseable acceptance report; requesting bounded evidence recovery"
   # A bare READY cannot be submitted to the controller if recovery times out.
   verdict=''
@@ -711,7 +714,6 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
 
   if (( recovery_timeout >= 20 )); then
     log "semantic review needs a verdict or acceptance report; attempting one bounded same-session evidence recovery"
-    acceptance_mission="$(factory_issue_acceptance_mission "$NUMBER" "$EXPECTED_HEAD")"
     set +e
     factory_recover_semantic_verdict "$RUNTIME_MODEL" "$GITHUB_WORKSPACE" "$recovery_timeout" "$recovery_log" \
       "$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission"
@@ -744,7 +746,7 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
         log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered conservative verdict for PR #${NUMBER}"
       elif [[ "$recovered_verdict" == 'approve' ]] && ! factory_primary_review_denies_ready_recovery "$review_log"; then
         if factory_append_recovered_acceptance_report \
-          "$sanitized_review_log" "$sanitized_recovery_log" "$acceptance_policy" "$EXPECTED_HEAD"; then
+          "$sanitized_review_log" "$sanitized_recovery_log" "$acceptance_policy" "$EXPECTED_HEAD" "$acceptance_mission"; then
           verdict='approve'
           log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered approval with acceptance evidence for PR #${NUMBER}"
         else
