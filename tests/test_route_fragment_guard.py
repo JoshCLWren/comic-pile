@@ -189,3 +189,59 @@ def test_agents_comparison_uses_the_merge_base(monkeypatch: pytest.MonkeyPatch) 
     assert guard.agents_block_changed_for_refs("base-tip", "head") is False
     assert ("show", "merge-base-sha:AGENTS.md") in calls
     assert ("show", "base-tip:AGENTS.md") not in calls
+
+
+def test_regeneration_scope_rejects_source_and_code_edits() -> None:
+    """Bot-only PRs cannot smuggle an unrelated file past the guard."""
+    violations = guard.regenerated_pr_violations(
+        ["vercel.json", "docs/api/route-fragments/threads.json", "app/main.py"],
+        "base",
+        "head",
+    )
+    assert violations == ["app/main.py", "docs/api/route-fragments/threads.json"]
+
+
+def test_regeneration_scope_requires_changed_artifacts() -> None:
+    assert guard.regenerated_pr_violations([], "base", "head")
+
+
+def test_regeneration_agents_may_only_change_generated_block() -> None:
+    before = (
+        "# AGENTS\\n<!-- route-burndown:begin -->\\nold\\n"
+        "<!-- route-burndown:end -->\\nmanual rules\\n"
+    )
+    after = before.replace("old", "new")
+    assert guard.regenerated_agents_only(before, after)
+    assert not guard.regenerated_agents_only(before, after + "new manual rule\\n")
+    assert not guard.regenerated_agents_only(before, "# AGENTS\\nno markers\\n")
+
+
+def test_regeneration_workflow_creates_ci_gated_pr() -> None:
+    """No route regeneration may directly push to protected main or skip CI."""
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/regenerate-routes.yml").read_text(encoding="utf-8")
+    )
+    on = workflow.get("on", workflow.get(True))
+    assert ".github/workflows/regenerate-routes.yml" in on["push"]["paths"]
+    assert on["schedule"]
+    steps = workflow["jobs"]["regenerate"]["steps"]
+    publish = next(step for step in steps if "regeneration PR" in step.get("name", ""))
+    script = publish["run"]
+    assert "PR_REBASE_TOKEN" in publish["env"]["GH_TOKEN"]
+    assert "automation/route-regeneration/current" in script
+    assert "gh pr create" in script
+    assert "gh pr merge" in script and "--auto" in script
+    assert "--force-with-lease" in script
+    assert "[skip ci]" not in script
+    assert "git push\n" not in script
+
+
+def test_ci_summary_gates_regeneration_proof() -> None:
+    """The required CI Summary must depend on regeneration reproducibility."""
+    ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+    steps = ci["jobs"]["rust-ingress"]["steps"]
+    proof = next(step for step in steps if step.get("name", "").startswith("Prove regeneration PR"))
+    assert "--allow-generated" in proof["run"]
+    assert "generate_vercel_routes.mjs --check" in proof["run"]
+    assert "generate_route_burndown.py --check" in proof["run"]
+    assert "rust-ingress" in ci["jobs"]["check-all-jobs"]["needs"]
