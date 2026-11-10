@@ -592,16 +592,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 53,
-      "v1_live_python": 136,
+      "v1_shadowed_by_rust": 42,
+      "v1_live_python": 147,
       "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 12,
       "unversioned_live_python": 19,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 65,
-      "total_live_python": 155,
+      "total_shadowed_by_rust": 54,
+      "total_live_python": 166,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -1490,8 +1490,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/custom-cbls",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1503,8 +1503,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/custom-cbls",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1516,8 +1516,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/custom-cbls/issue-search",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1529,8 +1529,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/custom-cbls/{list_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1542,8 +1542,8 @@
         ],
         "method": "PUT",
         "path": "/api/v1/custom-cbls/{list_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1555,8 +1555,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/custom-cbls/{list_id}/export",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1568,8 +1568,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1581,8 +1581,8 @@
         ],
         "method": "PUT",
         "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1594,8 +1594,8 @@
         ],
         "method": "DELETE",
         "path": "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1607,8 +1607,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/custom-cbls/{list_id}/reader",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1620,8 +1620,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
