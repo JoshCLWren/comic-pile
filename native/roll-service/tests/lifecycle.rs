@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Exercise the production server lifecycle with controlled in-flight handlers.
 use axum::{routing::get, Router};
 use comicpile_roll_service::{config::Config, serve, AppState};

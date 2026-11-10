@@ -8,6 +8,10 @@
 //! Every test loads the canonical Alembic fixture, a `pg_dump --schema-only` of a database
 //! that Alembic migrated to head. Regenerate it with `make roll-test-schema`;
 //! CI regenerates and diffs it, so a stale fixture fails instead of drifting.
+//!
+//! Test scaffolding only: unwraps may panic loudly in tests, never in handlers,
+//! so the production `unwrap_used`/`expect_used` denies do not apply here.
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use crate::{db, AppState};
 

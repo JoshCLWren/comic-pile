@@ -1,5 +1,6 @@
 //! Vercel's native Rust ingress for the Roll endpoint cutover.
 //! The health probe never reads database configuration.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 use axum::{
     extract::Request,
     http::{Extensions, HeaderValue, StatusCode},
@@ -54,6 +55,9 @@ tokio::task_local! {
 /// JSON subscriber for Vercel logs. `try_init` keeps isolate reuse and tests
 /// from failing when startup runs more than once.
 fn init_tracing() {
+    // Production panic hooks otherwise print sensitive payloads before catch_unwind.
+    #[cfg(not(test))]
+    comicpile_roll_service::install_sanitized_panic_hook();
     let directive = std::env::var("RUST_ROLL_LOG").unwrap_or_else(|_| "info".into());
     let filter = tracing_subscriber::EnvFilter::try_new(directive)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -239,6 +243,17 @@ fn app() -> Router {
         .route("/api/v2/dependencies/", post(native_dispatch))
         .route(
             "/api/v2/dependencies/{dependency_id}",
+            delete(native_dispatch),
+        )
+        .route("/api/v1/dependencies/blocked", get(native_dispatch))
+        .route("/api/v1/dependencies/", post(native_dispatch))
+        .route("/api/v1/dependencies/{dependency_id}", get(native_dispatch))
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            patch(native_dispatch),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
             delete(native_dispatch),
         )
         .route("/api/v2/threads/{thread_id}/issues", post(native_dispatch))

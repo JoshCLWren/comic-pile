@@ -1064,6 +1064,21 @@ def test_non_factory_branch_closing_reference_is_recognized():
     assert policy.issue_explicitly_closed_by_pr(pr) == 2127
 
 
+def test_negated_closing_language_does_not_claim_issue_completion() -> None:
+    """#4753 wording may not suppress intake as though it closed #4719."""
+    pr = human_pr_fixture(
+        number=4753,
+        branch="local/partial-4719",
+        body="Part of #4719. This PR does not close #4719.",
+    )
+    assert policy.issue_explicitly_closed_by_pr(pr) is None
+    assert policy.linked_issue_from_pr(pr) is None
+    affirmative = human_pr_fixture(
+        number=4799, body="Closes #4740. Part of #4335."
+    )
+    assert policy.issue_explicitly_closed_by_pr(affirmative) == 4740
+
+
 def test_factory_canonical_pr_is_still_recognized():
     """Factory branches retain canonical identity without body keywords."""
     pr = pr_fixture(

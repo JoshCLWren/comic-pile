@@ -372,24 +372,21 @@ fn summary(
     if state.is_none() {
         return format!("{title} is not currently active.");
     }
-    if next_issue.is_none() {
+    let Some(next_issue) = next_issue else {
         return format!("{title} has no unread issues.");
-    }
+    };
     if requirements > 0 {
         return format!(
             "{} is waiting on {} live requirement{}.",
-            next_issue.as_ref().unwrap().label,
+            next_issue.label,
             requirements,
             if requirements != 1 { "s" } else { "" }
         );
     }
     if !blockers.is_empty() {
-        return format!(
-            "{} is blocked by an active reading rule.",
-            next_issue.as_ref().unwrap().label
-        );
+        return format!("{} is blocked by an active reading rule.", next_issue.label);
     }
-    format!("{} is available next.", next_issue.as_ref().unwrap().label)
+    format!("{} is available next.", next_issue.label)
 }
 
 #[derive(Debug, Serialize)]
@@ -454,7 +451,9 @@ async fn load_boundary_labels(
 
     let mut issue_labels: HashMap<i32, BoundaryIssueLabels> = HashMap::new();
     for row in &issue_rows {
-        let thread = thread_labels.get(&row.get(1)).unwrap();
+        let Some(thread) = thread_labels.get(&row.get(1)) else {
+            continue;
+        };
         issue_labels.insert(
             row.get(0),
             BoundaryIssueLabels {
@@ -662,7 +661,9 @@ async fn _volume_labels_by_thread(
     let mut labels = HashMap::new();
     for (thread_id, names) in grouped {
         if names.len() == 1 {
-            labels.insert(thread_id, names.into_iter().next().unwrap());
+            if let Some(name) = names.into_iter().next() {
+                labels.insert(thread_id, name);
+            }
         }
     }
     Ok(labels)

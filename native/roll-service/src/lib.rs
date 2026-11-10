@@ -1,4 +1,6 @@
 //! Native Roll service with authenticated GET bootstrap and owner-scoped PostgreSQL access.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
+
 pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
@@ -21,6 +23,7 @@ pub mod issue_handler;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
+pub mod legacy_dependencies;
 pub mod openapi;
 pub mod option_inputs;
 pub mod queue;
@@ -221,6 +224,49 @@ async fn bound_request(
     response
 }
 
+/// Replace Rust's default panic hook in production with a payload-free signal.
+///
+/// `catch_unwind` invokes the hook *before* returning an error. Without this,
+/// a handler panic can return sanitized JSON yet still leak its message, source
+/// location, or user content through Vercel's stderr logs. This is process-wide
+/// by design and is installed once at the native Rust executable entrypoints.
+pub fn install_sanitized_panic_hook() {
+    static INSTALL: std::sync::Once = std::sync::Once::new();
+    INSTALL.call_once(|| {
+        std::panic::set_hook(Box::new(|_| {
+            eprintln!("native Rust panic: payload and location redacted");
+        }));
+    });
+}
+
+/// Map a handler panic to the standard 500 JSON body without leaking details.
+///
+/// The panic payload and location are deliberately never logged: payloads can
+/// carry user data or secrets. Only a fixed message is emitted so the failure
+/// stays attributable without exposing request content (#4742).
+async fn catch_panic(request: Request, next: Next) -> Response {
+    let future = next.run(request);
+    let mut future = Box::pin(future);
+    std::future::poll_fn(|context| {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            future.as_mut().poll(context)
+        })) {
+            Ok(poll) => poll,
+            Err(_) => {
+                tracing::error!("request handler panicked");
+                std::task::Poll::Ready(
+                    ApiError(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Internal Server Error".to_string(),
+                    )
+                    .into_response(),
+                )
+            }
+        }
+    })
+    .await
+}
+
 /// Mount health and bootstrap routes; no partial-success fallback.
 pub fn router(state: Arc<AppState>) -> Router {
     use auth::middleware::csrf_middleware;
@@ -369,6 +415,23 @@ pub fn router(state: Arc<AppState>) -> Router {
             "/api/v2/dependencies/{dependency_id}",
             delete(dependencies::delete_dependency),
         )
+        .route(
+            "/api/v1/dependencies/blocked",
+            get(legacy_dependencies::blocked),
+        )
+        .route("/api/v1/dependencies/", post(legacy_dependencies::create))
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            get(legacy_dependencies::get),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            patch(legacy_dependencies::update),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            delete(legacy_dependencies::delete),
+        )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
@@ -479,6 +542,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         })
         .layer(middleware::from_fn_with_state(state.clone(), bound_request))
         .layer(axum::middleware::from_fn(csrf_middleware))
+        .layer(axum::middleware::from_fn(catch_panic))
         .with_state(state)
 }
 
@@ -515,6 +579,121 @@ mod tests {
         assert_eq!(
             to_bytes(response.into_body(), 4096).await.unwrap(),
             r#"{"detail":"Request timed out"}"#
+        );
+    }
+
+    #[tokio::test]
+    async fn panic_maps_to_standard_500_json_without_leaking_payload() {
+        async fn panicking() -> Response {
+            panic!("secret canary in panic payload");
+        }
+        let app = Router::new()
+            .route("/panic", get(panicking))
+            .route(
+                "/ok",
+                get(|| async { Json(serde_json::json!({"ok": true})) }),
+            )
+            .layer(middleware::from_fn(catch_panic));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/panic")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        let body = to_bytes(response.into_body(), 4096).await.unwrap();
+        assert_eq!(body, r#"{"detail":"Internal Server Error"}"#);
+        assert!(
+            !String::from_utf8_lossy(&body).contains("canary"),
+            "panic payload must never reach the response body"
+        );
+        let response = app
+            .oneshot(Request::builder().uri("/ok").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn production_router_keeps_normal_statuses_unchanged() {
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/health")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/no-such-route")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            to_bytes(response.into_body(), 4096).await.unwrap(),
+            r#"{"detail":"Not Found"}"#
+        );
+    }
+
+    #[test]
+    fn panic_hook_child_never_logs_sensitive_payload() {
+        if std::env::var_os("COMICPILE_PANIC_HOOK_CHILD").is_none() {
+            return;
+        }
+        install_sanitized_panic_hook();
+        panic!("secret-canary-panic-message");
+    }
+
+    #[test]
+    fn panic_hook_redacts_payload_in_real_subprocess() {
+        // Never replace the hook of this shared test process: the child is
+        // isolated so parallel Rust tests retain their normal failure output.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::panic_hook_child_never_logs_sensitive_payload",
+                "--nocapture",
+            ])
+            .env("COMICPILE_PANIC_HOOK_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "child must panic and fail");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stderr.contains("native Rust panic: payload and location redacted"));
+        assert!(
+            !stderr.contains("secret-canary-panic-message")
+                && !stdout.contains("secret-canary-panic-message"),
+            "panic payload must not escape to stdout/stderr"
+        );
+    }
+
+    #[test]
+    fn lints_forbid_unwrap_in_production_code() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+        let manifest = std::fs::read_to_string(&path).expect("read service manifest");
+        assert!(
+            manifest.contains("unwrap_used") && manifest.contains("expect_used"),
+            "manifest must deny unwrap/expect so a new production panic fails CI (see #4742)"
         );
     }
 }

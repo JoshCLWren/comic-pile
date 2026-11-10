@@ -48,6 +48,11 @@ use utoipa::OpenApi;
         crate::reading_graph::repair_documentation,
         crate::dependencies::create_dependency_documentation,
         crate::dependencies::delete_dependency_documentation,
+        crate::legacy_dependencies::blocked_documentation,
+        crate::legacy_dependencies::create_documentation,
+        crate::legacy_dependencies::get_documentation,
+        crate::legacy_dependencies::update_documentation,
+        crate::legacy_dependencies::delete_documentation,
         crate::issue_mutation::create_issues_documentation,
         crate::issue_mutation::delete_issue_documentation,
         crate::issue_mutation::issue_order_documentation,
@@ -115,6 +120,7 @@ use utoipa::OpenApi;
         crate::reading_graph::ReadingGraphRepairResponse,
         crate::dependencies::DependencyCreateRequest,
         crate::dependencies::DependencyResponse,
+        crate::legacy_dependencies::DependencyNoteUpdate,
         crate::issue_mutation::CreateIssuesRequest,
         crate::issue_mutation::IssueMutationItem,
         crate::issue_mutation::IssueListResponse,
@@ -188,8 +194,9 @@ impl utoipa::Modify for NativeSecurityAddon {
 /// This is a literal snapshot of the router in `lib.rs` and the ingress in
 /// `vercel.json`; `tests/test_api_v2_contract_inventory.py` fails when either
 /// source drifts from the generated contract.
-pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 57] = [
+pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 62] = [
     ("delete", "/api/v1/continuity-rules/{rule_id}"),
+    ("delete", "/api/v1/dependencies/{dependency_id}"),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
@@ -199,6 +206,8 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 57] = [
     ),
     ("get", "/api/v1/continuity-rules/"),
     ("get", "/api/v1/continuity-rules/{rule_id}"),
+    ("get", "/api/v1/dependencies/blocked"),
+    ("get", "/api/v1/dependencies/{dependency_id}"),
     ("get", "/api/v1/identity-inbox"),
     ("get", "/api/v1/identity-inbox/search/issues"),
     ("get", "/api/v1/identity-inbox/{mapping_id}"),
@@ -220,10 +229,12 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 57] = [
     ("get", "/api/v2/roll/die-state"),
     ("get", "/api/v2/roll/eligible-issue-ids"),
     ("get", "/api/v2/threads"),
+    ("patch", "/api/v1/dependencies/{dependency_id}"),
     ("patch", "/api/v2/issues/{issue_id}"),
     ("patch", "/api/v2/queue-entries/{thread_id}"),
     ("post", "/api/v1/catalog/series-mappings/commit"),
     ("post", "/api/v1/continuity-rules/"),
+    ("post", "/api/v1/dependencies/"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/confirm"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/defer"),
     ("post", "/api/v1/identity-inbox/{mapping_id}/reject"),

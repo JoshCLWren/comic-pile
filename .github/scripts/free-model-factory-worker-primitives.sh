@@ -758,6 +758,61 @@ factory_advance_display() {
   fi
 }
 
+find_overlapping_factory_pr() {
+  local issue="$1" branch="$2" changed prs pr linked files matched
+  changed="$(git diff --cached --name-only --no-renames -z | jq -Rsc 'split("\u0000") | map(select(length > 0))')" || return 2
+  prs="$(gh pr list --state open --label factory --limit 1000 --json number,headRefName)" || return 2
+  # A saturated list is incomplete evidence; never assume no overlap.
+  [[ "$(jq 'length' <<< "$prs")" -lt 1000 ]] || return 2
+  while IFS= read -r pr; do
+    [[ -n "$pr" ]] || continue
+    linked="$(linked_issue_from_pr "$pr")" || return 2
+    [[ "$linked" == "$issue" ]] || continue
+    files="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/pulls/${pr}/files?per_page=100")" || return 2
+    matched="$(jq -r --argjson changed "$changed" '
+      [.[][] | .filename, .previous_filename // empty]
+      | any(. as $path | $changed | index($path) != null)
+    ' <<< "$files")" || return 2
+    if [[ "$matched" == true ]]; then
+      jq -c --argjson pr "$pr" '.[] | select(.number == $pr)' <<< "$prs"
+      return 0
+    fi
+  done < <(jq -r --arg branch "$branch" 'sort_by(.number)[] | select(.headRefName != $branch) | .number' <<< "$prs")
+  printf '{}\n'
+}
+
+redirect_issue_to_overlapping_pr() {
+  local issue="$1" overlap pr branch patch timeout_seconds
+  [[ -n "$(git status --porcelain)" ]] || return 0
+  git add -A || return 2
+  overlap="$(find_overlapping_factory_pr "$issue" "$BRANCH")" || return 2
+  pr="$(jq -r '.number // empty' <<< "$overlap")"
+  [[ -n "$pr" ]] || return 0
+  branch="$(jq -er '.headRefName' <<< "$overlap")" || return 2
+  # Reuse only an unowned or already-self-owned PR. Never steal a live lease.
+  if ! current_owner_is_self "$pr" && ! claim_unowned_pr "$pr"; then
+    log "same-issue file overlap belongs to active PR #${pr}; refusing another PR" >&2
+    return 2
+  fi
+  patch="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-overlap.XXXXXX.patch")" || return 2
+  git diff --no-ext-diff --no-textconv --no-color --cached --binary > "$patch" || return 2
+  log "prepared overlap patch retained at ${patch} until successful application" >&2
+  # checkout_target rejects fork repositories and verifies the exact remote head.
+  checkout_target pr "$pr" "$branch" >&2 || return 2
+  MODE=pr NUMBER="$pr" BRANCH="$branch"
+  replace_labels "$pr" "$OWNER" factory:building || return 2
+  log "advancing overlapping PR #${pr} for issue #${issue} instead of opening a duplicate" >&2
+  if ! git apply --3way --index "$patch" >&2; then
+    timeout_seconds=$(( $(remaining) - 480 ))
+    (( timeout_seconds >= 300 )) || return 2
+    # Reconcile the prepared change with existing work on the actual PR branch;
+    # normal PR fast checks still run before any push.
+    run_agent pr "$pr" "$timeout_seconds" >&2 || return 2
+    [[ -z "$(git ls-files -u)" ]] || return 2
+  fi
+  rm -f "$patch"
+}
+
 persist_issue_pr() {
   # The push credential (possibly a minted installation token) lives in locals
   # below. Suspend xtrace for the whole persistence step so `set -x` cannot
@@ -786,6 +841,14 @@ _persist_issue_pr_untraced() {
     return 1
   fi
   git add -A >&2
+  # Revalidate immediately before creating a new branch/PR. A late overlap or
+  # unreadable GitHub state must not turn into another conflicting PR.
+  local overlap
+  overlap="$(find_overlapping_factory_pr "$number" "$branch")" || return 1
+  if [[ -n "$(jq -r '.number // empty' <<< "$overlap")" ]]; then
+    log 'same-issue overlap appeared during validation; refusing duplicate PR' >&2
+    return 1
+  fi
   git commit -m "factory: advance #${number} with $(factory_advance_display)" >&2
   # The agent may be running on a local worktree branch whose name differs from
   # the target branch. Push the exact commit we just created, then verify that

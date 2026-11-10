@@ -196,14 +196,6 @@ TITLE_ISSUE_RE = re.compile(
     r'(?i)\b(?:fix|fixes|fixed|fixing|resolve|resolves|resolved|resolving|'
     r'close|closes|closed|closing)\s+#(\d+)'
 )
-# Mirrors factory_post_merge_closure.CLOSING_RE so the intake side recognizes
-# the same explicit closing references GitHub itself honors on merge.
-CLOSING_ISSUE_RE = re.compile(
-    r'\b(?:closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve)\s+#(?P<issue>\d+)',
-    re.IGNORECASE,
-)
-
-
 def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
     """Return the issue a PR explicitly claims to close, if any.
 
@@ -212,8 +204,7 @@ def issue_explicitly_closed_by_pr(pr: dict[str, Any]) -> int | None:
     ``#N`` mentions used by stacked/child PRs for cross-reference never claim
     closure, so they must not suppress fresh intake.
     """
-    match = CLOSING_ISSUE_RE.search(str(pr.get('body') or ''))
-    return int(match.group('issue')) if match else None
+    return eligibility.explicit_closing_issue(str(pr.get('body') or ''))
 
 
 def linked_issue_from_pr(pr: dict[str, Any]) -> int | None:

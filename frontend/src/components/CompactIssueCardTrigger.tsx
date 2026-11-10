@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ComicIssueCard, ComicIssueCover } from './ComicIssueCard'
+import { ComicIssueCard, ComicIssueCover, type ComicIssueCardVariant } from './ComicIssueCard'
 import { useIssueCards } from '../hooks/useIssueCards'
 import { getApiErrorDetail } from '../utils/apiError'
 import type { IssueCard, IssueReadRateResponse } from '../services/issueCardsApi'
@@ -14,11 +14,15 @@ interface Props {
   onMutated?: (response: IssueReadRateResponse) => void
   /** Parent already displays the exact issue name in an adjacent named link. */
   hideTitle?: boolean
+  /** Context-specific label for the same covered issue action, e.g. a Plan's next issue. */
+  actionLabel?: string
+  /** The expanded card can be featured in a Plan header, compact in dense lists. */
+  expandedVariant?: ComicIssueCardVariant
 }
 
 /** On-demand detail loader: a dense collapsed list does not mount a query per row. */
 function ExpandedIssueCard({
-  issueId, card, threadTitle, issueNumber, status, rating, onMutated, onCardLoaded,
+  issueId, card, threadTitle, issueNumber, status, rating, onMutated, onCardLoaded, expandedVariant = 'compact',
 }: Omit<Props, 'hideTitle'> & { onCardLoaded: (card: IssueCard) => void }) {
   const fetched = useIssueCards([issueId], { enabled: card == null })
   const fetchedExact = fetched.data?.find((item) => item.issue_id === issueId) ?? null
@@ -48,7 +52,7 @@ function ExpandedIssueCard({
         issueNumber={number}
         status={isRead ? 'read' : 'unread'}
         rating={rating}
-        variant="compact"
+        variant={expandedVariant}
         onMutated={onMutated}
       />
     </div>
@@ -63,7 +67,7 @@ function ExpandedIssueCard({
  */
 export default function CompactIssueCardTrigger({
   issueId, threadTitle, issueNumber, status = 'unread',
-  rating = null, card, onMutated, hideTitle = false,
+  rating = null, card, onMutated, hideTitle = false, actionLabel, expandedVariant = 'compact',
 }: Props) {
   const [open, setOpen] = useState(false)
   const [loadedCard, setLoadedCard] = useState<IssueCard | null>(null)
@@ -79,7 +83,7 @@ export default function CompactIssueCardTrigger({
     <div className="min-w-0" data-testid={`issue-card-trigger-${issueId}`}>
       <button
         type="button"
-        aria-label={`Reading and mapping actions for ${title} #${number}`}
+        aria-label={actionLabel ?? `Reading and mapping actions for ${title} #${number}`}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 max-w-full items-center gap-2 rounded-lg p-1 text-left text-[var(--theme-text-primary)] hover:bg-[var(--theme-bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--theme-focus-ring)]"
@@ -95,7 +99,7 @@ export default function CompactIssueCardTrigger({
           <span className="block text-[11px] text-[var(--theme-text-muted)]">
             {isRead ? 'Read' : 'Unread'}
             {(resolved?.rating ?? rating) != null ? ` · Rated ${resolved?.rating ?? rating}` : ''}
-            {' · '}{open ? 'Close actions' : 'Read / Rate / Map'}
+            {' · '}{open ? 'Close actions' : actionLabel ?? 'Read / Rate / Map'}
           </span>
         </span>
       </button>
@@ -108,6 +112,7 @@ export default function CompactIssueCardTrigger({
           status={isRead ? 'read' : 'unread'}
           rating={rating}
           onMutated={onMutated}
+          expandedVariant={expandedVariant}
           onCardLoaded={setLoadedCard}
         />
       )}

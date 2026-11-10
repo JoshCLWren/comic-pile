@@ -11463,6 +11463,17 @@
         ],
         "type": "object"
       },
+      "NativeDependencyNoteUpdate": {
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "NativeDependencyResponse": {
         "description": "Issue-level dependency response mirroring the Python `DependencyResponse`\nfields the Dependency Builder consumes (`warning`, labels, thread ids).",
         "properties": {
@@ -25401,13 +25412,12 @@
     },
     "/api/v1/dependencies/": {
       "post": {
-        "description": "Create a hard-block dependency between owned threads or owned issues.",
-        "operationId": "create_dependency_api_v1_dependencies__post",
+        "operationId": "create_legacy_dependency",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyCreate"
+                "$ref": "#/components/schemas/DependencyCreateRequest"
               }
             }
           },
@@ -25418,21 +25428,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
+                  "$ref": "#/components/schemas/NativeDependencyResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Created dependency"
+          },
+          "400": {
+            "description": "Invalid dependency"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Reading constraint cycle: nothing was changed"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Validation failed"
           }
         },
         "security": [
@@ -25440,31 +25455,31 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Create Dependency",
         "tags": [
-          "dependencies",
           "dependencies"
         ]
       }
     },
     "/api/v1/dependencies/blocked": {
       "get": {
-        "description": "Return all currently blocked thread IDs for the current user.",
-        "operationId": "get_all_blocked_thread_ids_api_v1_dependencies_blocked_get",
+        "operationId": "list_blocked_legacy_dependencies",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
                   "items": {
+                    "format": "int32",
                     "type": "integer"
                   },
-                  "title": "Response Get All Blocked Thread Ids Api V1 Dependencies Blocked Get",
                   "type": "array"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Blocked thread ids"
+          },
+          "401": {
+            "description": "Not authenticated"
           }
         },
         "security": [
@@ -25472,24 +25487,22 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get All Blocked Thread Ids",
         "tags": [
-          "dependencies",
           "dependencies"
         ]
       }
     },
     "/api/v1/dependencies/{dependency_id}": {
       "delete": {
-        "description": "Delete a dependency and refresh denormalized blocked flags.",
-        "operationId": "delete_dependency_api_v1_dependencies__dependency_id__delete",
+        "operationId": "delete_legacy_dependency",
         "parameters": [
           {
+            "description": "Dependency id",
             "in": "path",
             "name": "dependency_id",
             "required": true,
             "schema": {
-              "title": "Dependency Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -25498,26 +25511,16 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "title": "Response Delete Dependency Api V1 Dependencies  Dependency Id  Delete",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
-            "description": "Successful Response"
+            "description": "Deleted"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
           }
         },
         "security": [
@@ -25525,22 +25528,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Delete Dependency",
         "tags": [
-          "dependencies",
           "dependencies"
         ]
       },
       "get": {
-        "description": "Fetch a single dependency owned by the current user.",
-        "operationId": "get_dependency_api_v1_dependencies__dependency_id__get",
+        "operationId": "get_legacy_dependency",
         "parameters": [
           {
+            "description": "Dependency id",
             "in": "path",
             "name": "dependency_id",
             "required": true,
             "schema": {
-              "title": "Dependency Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -25550,21 +25551,17 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
+                  "$ref": "#/components/schemas/NativeDependencyResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Dependency"
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
           }
         },
         "security": [
@@ -25572,22 +25569,20 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Dependency",
         "tags": [
-          "dependencies",
           "dependencies"
         ]
       },
       "patch": {
-        "description": "Update the note on a dependency owned by the current user.",
-        "operationId": "update_dependency_note_api_v1_dependencies__dependency_id__patch",
+        "operationId": "update_legacy_dependency",
         "parameters": [
           {
+            "description": "Dependency id",
             "in": "path",
             "name": "dependency_id",
             "required": true,
             "schema": {
-              "title": "Dependency Id",
+              "format": "int32",
               "type": "integer"
             }
           }
@@ -25596,7 +25591,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DependencyNoteUpdate"
+                "$ref": "#/components/schemas/NativeDependencyNoteUpdate"
               }
             }
           },
@@ -25607,21 +25602,20 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DependencyResponse"
+                  "$ref": "#/components/schemas/NativeDependencyResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Dependency"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Note must be at most 255 characters or validation failed"
           }
         },
         "security": [
@@ -25629,9 +25623,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Update Dependency Note",
         "tags": [
-          "dependencies",
           "dependencies"
         ]
       }

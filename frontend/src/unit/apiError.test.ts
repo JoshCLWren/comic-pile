@@ -198,6 +198,28 @@ describe('isIndeterminateApiOutcome', () => {
     expect(isIndeterminateApiOutcome(undefined)).toBe(false)
   })
 
+  it('treats plain transport-message objects as ambiguous but not malformed messages', () => {
+    // Direct issue corrections may receive a non-Axios network failure.
+    expect(isIndeterminateApiOutcome({ message: 'Network Error' })).toBe(true)
+    expect(isIndeterminateApiOutcome({ message: 'Failed to fetch' })).toBe(true)
+    expect(isIndeterminateApiOutcome({ message: 500 })).toBe(false)
+    expect(isIndeterminateApiOutcome({ message: null })).toBe(false)
+  })
+
+  it('treats a null Axios response as an unknown transport outcome', () => {
+    const error = { isAxiosError: true, response: null, message: 'timeout' }
+    expect(getApiErrorStatus(error)).toBe(null)
+    expect(isIndeterminateApiOutcome(error)).toBe(true)
+    expect(getApiErrorDetail(error)).toBe('timeout')
+  })
+
+  it('handles malformed optional error responses without fabricating server detail', () => {
+    expect(getApiErrorStatus({ response: null })).toBe(null)
+    expect(getApiErrorStatus({ response: {} })).toBe(null)
+    expect(getApiErrorDetail({ response: null })).toBe('Unknown error')
+    expect(getApiErrorDetail({ response: { data: {} } })).toBe('Unknown error')
+  })
+
   it('reads status from an Error instance carrying a response', () => {
     const error = Object.assign(new Error('Request failed'), {
       response: { status: 503, data: {} },
