@@ -357,7 +357,7 @@ pub async fn commit_series_mapping_handler(
     assert_issues_owned(&conn, user.id(), &approved_rows).await?;
     assert_no_confirmed_mapping_conflict(&conn, &approved_rows).await?;
 
-    let response = persist_commit_series_mapping_handler(
+    let response = persist_commit_or_replay(
         &mut conn,
         user.id(),
         &approved_rows,
@@ -1025,6 +1025,44 @@ async fn build_queue_bootstrap_plan_db(
     ))
 }
 
+/// A concurrent identical request may have inserted the receipt after our
+/// initial lookup and preview revalidation. The losing transaction must fully
+/// roll back before reading the winning receipt on this connection.
+#[allow(clippy::too_many_arguments)]
+async fn persist_commit_or_replay(
+    conn: &mut deadpool_postgres::Object,
+    user_id: i32,
+    approved_rows: &[Value],
+    provider: &str,
+    series_external_id: &str,
+    idempotency_key: &str,
+    request_fingerprint: &str,
+    all_rows: &[Value],
+    series_metadata: Option<&Value>,
+) -> Result<CommitResponse, ApiError> {
+    match persist_commit_series_mapping_handler(
+        conn,
+        user_id,
+        approved_rows,
+        provider,
+        series_external_id,
+        idempotency_key,
+        request_fingerprint,
+        all_rows,
+        series_metadata,
+    )
+    .await
+    {
+        Ok(response) => Ok(response),
+        Err(ApiError::Conflict(code)) if code == ERROR_IDEMPOTENCY_CONFLICT => {
+            replay_receipt(conn, user_id, idempotency_key, request_fingerprint)
+                .await?
+                .ok_or_else(|| conflict(ERROR_IDEMPOTENCY_CONFLICT))
+        }
+        Err(err) => Err(err),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn persist_commit_series_mapping_handler(
     conn: &mut deadpool_postgres::Object,
@@ -1165,31 +1203,29 @@ async fn persist_commit_series_mapping_handler(
     let response_json = serde_json::to_value(&response)
         .map_err(|_| ApiError::Internal("serialization failed".to_string()))?;
 
-    tx.execute(
-        "INSERT INTO catalog_commit_receipts
-         (user_id, idempotency_key, endpoint, request_fingerprint, response_json, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
-        &[
-            &user_id,
-            &idempotency_key,
-            &COMMIT_ENDPOINT,
-            &request_fingerprint,
-            &response_json,
-        ],
-    )
-    .await
-    .map_err(|e| {
-        // check for unique violation -> replay
-        let msg = e.to_string();
-        if msg.contains("unique")
-            || msg.contains("duplicate")
-            || e.code() == Some(&tokio_postgres::error::SqlState::UNIQUE_VIOLATION)
-        {
-            // will be handled by caller? but we're in tx
-            return conflict(ERROR_IDEMPOTENCY_CONFLICT);
+    if let Err(err) = tx
+        .execute(
+            "INSERT INTO catalog_commit_receipts
+             (user_id, idempotency_key, endpoint, request_fingerprint, response_json, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())",
+            &[
+                &user_id,
+                &idempotency_key,
+                &COMMIT_ENDPOINT,
+                &request_fingerprint,
+                &response_json,
+            ],
+        )
+        .await
+    {
+        if err.code() == Some(&tokio_postgres::error::SqlState::UNIQUE_VIOLATION) {
+            // PostgreSQL has aborted this transaction. Explicitly roll it
+            // back before the caller can safely query the winning receipt.
+            tx.rollback().await.map_err(db::query_error)?;
+            return Err(conflict(ERROR_IDEMPOTENCY_CONFLICT));
         }
-        db::query_error(e)
-    })?;
+        return Err(db::query_error(err));
+    }
 
     tx.commit().await.map_err(db::query_error)?;
     Ok(response)
@@ -1272,6 +1308,59 @@ mod tests {
         assert_eq!(receipt.get::<_, String>(0), COMMIT_ENDPOINT);
         let response_json: Value = receipt.get(1);
         assert_eq!(response_json["idempotency_key"], "catalog-commit-test-key");
+
+        // A second writer with an identical key reaches the receipt unique
+        // constraint after provisional identity writes. Roll back and replay
+        // the committed response instead of surfacing a spurious 409.
+        let replayed = persist_commit_or_replay(
+            &mut connection,
+            1,
+            &approved_rows,
+            "comicvine",
+            "series-10",
+            "catalog-commit-test-key",
+            "catalog-commit-test-fingerprint",
+            &approved_rows,
+            Some(&serde_json::json!({"name": "Test Series"})),
+        )
+        .await
+        .expect("identical receipt must replay after rollback");
+        assert_eq!(
+            serde_json::to_value(&response).expect("original response JSON"),
+            serde_json::to_value(&replayed).expect("replayed response JSON"),
+        );
+
+        // Reusing the key with a different request must remain a 409, and
+        // must not change the winning receipt.
+        let mismatch = persist_commit_or_replay(
+            &mut connection,
+            1,
+            &approved_rows,
+            "comicvine",
+            "series-10",
+            "catalog-commit-test-key",
+            "different-request-fingerprint",
+            &approved_rows,
+            None,
+        )
+        .await;
+        assert!(matches!(
+            mismatch,
+            Err(ApiError::Conflict(code)) if code == ERROR_IDEMPOTENCY_CONFLICT
+        ));
+        let stored_after = replay_receipt(
+            &connection,
+            1,
+            "catalog-commit-test-key",
+            "catalog-commit-test-fingerprint",
+        )
+        .await
+        .expect("receipt lookup")
+        .expect("winning receipt remains");
+        assert_eq!(
+            serde_json::to_value(&response).expect("original response JSON"),
+            serde_json::to_value(&stored_after).expect("stored response JSON"),
+        );
     }
 
     #[test]
