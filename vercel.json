@@ -487,6 +487,29 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/dependencies/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/dependencies/[0-9]+$",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/dependencies/blocked$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issues/[0-9]+$",
       "methods": [
         "GET"
@@ -559,13 +582,6 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/threads/completed/threads$",
       "methods": [
         "GET"
       ],
@@ -1019,32 +1035,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/dependencies/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/dependencies/[^/]+$",
-      "methods": [
-        "GET",
-        "PATCH",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/dependencies/blocked$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
       "methods": [
         "GET",
@@ -1414,6 +1404,14 @@
       "src": "^/api/v1/threads/check\\-duplicates$",
       "methods": [
         "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/threads/completed/threads$",
+      "methods": [
+        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
