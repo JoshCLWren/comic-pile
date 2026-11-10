@@ -92,7 +92,7 @@ def test_retired_models_are_not_reselected_from_a_live_catalog(tmp_path: Path) -
 def test_empty_catalog_and_non_opencode_worker_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no provably free"):
         selector.select_model(catalog(("paid", 1, 1)), 41, 0, roster(tmp_path))
-    with pytest.raises(ValueError, match="no OpenCode free slot"):
+    with pytest.raises(ValueError, match="no opencode-free slot"):
         selector.select_model(catalog(("big-pickle", 0, 0)), 50, 0, roster(tmp_path))
 
 
