@@ -709,6 +709,12 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
   recovery_attempted=1
   recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.log"
   recovery_timeout=90
+  # The composite router may spend more time selecting an upstream model and
+  # a full issue rubric is longer than the former one-item example. Keep a
+  # single bounded recovery, but give this review-only route sufficient budget.
+  if [[ "$RUNTIME_MODEL" == 'openrouter/free' ]]; then
+    recovery_timeout=180
+  fi
   available="$(remaining)"
   (( recovery_timeout > available - 45 )) && recovery_timeout=$((available - 45))
 
