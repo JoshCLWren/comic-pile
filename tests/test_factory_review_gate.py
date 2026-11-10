@@ -3601,3 +3601,67 @@ def test_controller_repair_transition_clears_stale_approved_label(
     assert writes
     assert "factory:approved" not in writes[0]["labels"]
     assert "bug" in writes[0]["labels"]
+
+
+def test_review_route_provenance_records_executed_openrouter_composite(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A reviewing worker's coding pin is not its executed review model."""
+    module = load_review_controller()
+    monkeypatch.setattr(
+        module, "roster_model_for_worker", lambda _worker: "thinkingmachines/inkling:free"
+    )
+    for key in ("FACTORY_SOURCE", "FACTORY_MODEL", "FACTORY_RUNTIME_MODEL"):
+        monkeypatch.delenv(key, raising=False)
+    assert module.model_for_trusted_review_session("52") == "thinkingmachines/inkling:free"
+
+    monkeypatch.setenv("FACTORY_SOURCE", "openrouter-free")
+    monkeypatch.setenv("FACTORY_MODEL", "openrouter/free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/free")
+    assert module.model_for_trusted_review_session("52") == "openrouter/free"
+
+    author = agent_model_author_marker(
+        pr=4922, head=REVIEWED_HEAD, model="thinkingmachines/inkling:free", agent="96"
+    )
+    monkeypatch.setattr(module, "model_comment_bodies", lambda _pr: [author])
+    sent: list[list[str]] = []
+    monkeypatch.setattr(module, "run_gh", lambda args, **_kw: sent.append(args))
+    marker = module.persist_cross_model_review_marker(
+        pr_number=4922, head=REVIEWED_HEAD, reviewer="52"
+    )
+    assert marker is not None
+    assert "reviewer-openrouter-free:" in marker
+    assert "author-thinkingmachines-inkling-free:" in marker
+    assert sent and sent[-1][-1] == marker
+
+
+def test_review_route_rejects_inconsistent_runtime_provenance(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """A composite reviewer marker cannot be written for a mismatched lane."""
+    module = load_review_controller()
+    monkeypatch.setenv("FACTORY_SOURCE", "opencode-free")
+    monkeypatch.setenv("FACTORY_MODEL", "openrouter/free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/free")
+    with pytest.raises(RuntimeError, match="inconsistent dedicated"):
+        module.model_for_trusted_review_session("52")
+
+    monkeypatch.setenv("FACTORY_SOURCE", "openrouter-free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/other:free")
+    with pytest.raises(RuntimeError, match="inconsistent dedicated"):
+        module.model_for_trusted_review_session("52")
+
+
+def test_dedicated_review_route_is_limited_to_exact_head_semantic_stage() -> None:
+    """No implementation or PR repair run is routed through the composite."""
+    workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
+    assert 'if jq -e \' .kind == "pr"\'' not in workflow  # no loose PR-only match
+    stage_match = 'if jq -e \' .kind == "pr" and .stage == "factory:review"\''
+    # Check the concrete condition without the whitespace normalization above.
+    assert ".kind == \\"pr\\" and .stage == \\"factory:review\\"" in workflow
+    assert "source='openrouter-free'" in workflow
+    assert "model='openrouter/free'" in workflow
+    assert "runtime_model='openrouter/free'" in workflow
+    assert "reason='exact-head-semantic-review-only'" in workflow
+    assert "python3 .github/scripts/factory-work-controller.py release" in workflow
+    assert "mandatory real OpenCode smoke" in workflow
