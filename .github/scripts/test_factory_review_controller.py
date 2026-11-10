@@ -36,6 +36,22 @@ def configure_model_provenance(
     monkeypatch.setattr(controller, "model_comment_bodies", lambda _pr: markers)
 
 
+def test_canonical_factory_branch_honors_matching_part_of_without_changing_ownership(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    controller = load_controller()
+    current = {"body": "Part of #4740."}
+    monkeypatch.setattr(controller, "pr_json", lambda _pr: current)
+    branch = "factory/75-4740-opencode-free"
+    assert controller.linked_issue_mode_for_pr(4934, branch) == (4740, True)
+    current["body"] = "Part of #9999."
+    assert controller.linked_issue_mode_for_pr(4934, branch) == (4740, False)
+    current["body"] = "Closes #4740.\nPart of #4740."
+    assert controller.linked_issue_mode_for_pr(4934, branch) == (4740, False)
+    current["body"] = "Part of #4740."
+    assert controller.linked_issue_mode_for_pr(4934, "local/review") == (4740, True)
+
+
 def test_required_checks_no_checks_configured_retries():
     controller = load_controller()
     result = controller.interpret_required_checks(
