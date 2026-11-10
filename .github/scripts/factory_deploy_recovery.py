@@ -45,6 +45,8 @@ def latest_attempted_deploy_run(
         jobs = run.get("jobs")
         if jobs is None and callable(jobs_loader):
             jobs = jobs_loader(int(run["id"]))
+            if jobs is not None:
+                run["jobs"] = jobs
         if jobs is None:
             return run
         if any(job.get("name") == DEPLOY_JOB_NAME for job in mappings(jobs)):
