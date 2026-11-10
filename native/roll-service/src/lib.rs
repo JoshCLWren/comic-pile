@@ -26,6 +26,7 @@ pub mod issue_service;
 pub mod legacy_dependencies;
 pub mod openapi;
 pub mod option_inputs;
+pub mod preferences;
 pub mod queue;
 pub mod reading_blocker_projection;
 pub mod reading_boundary;
@@ -34,6 +35,7 @@ pub mod reading_eligibility;
 pub mod reading_graph;
 pub mod reading_inputs;
 pub mod reading_list;
+pub mod reading_mode;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_session;
@@ -46,6 +48,7 @@ pub mod roll_resources;
 mod session_bandwidth;
 pub mod session_detail;
 pub mod session_history;
+pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
 
@@ -497,6 +500,22 @@ pub fn router(state: Arc<AppState>) -> Router {
             post(dismiss_pending::dismiss_pending),
         )
         .route(
+            "/api/v1/users/me/preferences",
+            get(preferences::get_user_preferences),
+        )
+        .route(
+            "/api/v1/users/me/preferences",
+            patch(preferences::patch_user_preferences),
+        )
+        .route(
+            "/api/v1/users/me/taste-signals",
+            get(preferences::list_taste_signals),
+        )
+        .route(
+            "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+            put(preferences::set_taste_signal_verdict),
+        )
+        .route(
             "/api/v2/issues/{issue_id}",
             patch(issue_handler::read_rate_issue),
         )
@@ -541,6 +560,51 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/releases/{release_id}/retract",
             post(releases::retract),
+        )
+        .route("/api/v1/tags/", get(tags::list_tags))
+        .route("/api/v1/tags/", post(tags::create_tag))
+        .route(
+            "/api/v1/tags/effective/issue/{issue_id}/",
+            get(tags::effective_for_issue),
+        )
+        .route(
+            "/api/v1/tags/effective/plan/{plan_id}/",
+            get(tags::effective_for_plan),
+        )
+        .route(
+            "/api/v1/tags/effective/thread/{thread_id}/",
+            get(tags::effective_for_thread),
+        )
+        .route(
+            "/api/v1/tags/effective/thread/{thread_id}/issues/",
+            get(tags::thread_issues_effective),
+        )
+        .route("/api/v1/tags/{tag_id}/", get(tags::get_tag))
+        .route("/api/v1/tags/{tag_id}/", put(tags::update_tag))
+        .route("/api/v1/tags/{tag_id}/", delete(tags::delete_tag))
+        .route("/api/v1/tags/{tag_id}/assign/", post(tags::assign_tag))
+        .route(
+            "/api/v1/tags/{tag_id}/bulk-assign/",
+            post(tags::bulk_assign_tag),
+        )
+        .route(
+            "/api/v1/tags/{tag_id}/bulk-unassign/",
+            post(tags::bulk_unassign_tag),
+        )
+        .route(
+            "/api/v1/tags/{tag_id}/unassign/",
+            delete(tags::unassign_tag),
+        )
+        .route("/api/v1/tags/{tag_id}/usage/", get(tags::get_tag_usage))
+        .route("/api/v1/reading-mode", get(reading_mode::get_reading_mode))
+        .route("/api/v1/reading-mode", post(reading_mode::set_reading_mode))
+        .route(
+            "/api/v1/reading-mode/dismiss-suggestion",
+            post(reading_mode::dismiss_reading_mode_suggestion),
+        )
+        .route(
+            "/api/v1/reading-mode/suggest",
+            post(reading_mode::suggest_reading_mode),
         )
         .fallback(|| async { ApiError(StatusCode::NOT_FOUND, "Not Found".to_string()) })
         .method_not_allowed_fallback(|| async {

@@ -133,6 +133,27 @@ repository does not hand-author a second analytics schema. The merged generated
 client schema temporarily retains the legacy Python v1/bare analytics operation
 until #4348's authenticated production proof permits the post-proof cleanup.
 
+`preferences-v1.openapi.json` is the generated native contract for the
+same-path preferences and Taste Bank signal cutover in #4834:
+`GET`/`PATCH /api/v1/users/me/preferences`,
+`GET /api/v1/users/me/taste-signals` and
+`PUT /api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict`.
+It is generated only from Rust declarations
+(`comicpile_roll_service::preferences::PreferencesApi`) and is not part of
+the `/api/v2` aggregate (`v2-runtime.openapi.json`), because these browser
+callers keep their `/api/v1` URLs. Regenerate it with:
+
+```sh
+cd native/roll-service
+cargo run --example preferences_openapi > ../contracts/preferences-v1.openapi.json
+```
+
+Its checked-in drift test is
+`preferences::tests::checked_in_openapi_contract_is_current`. The Python
+handlers stay mounted until authenticated production proof permits their
+removal; the schemas here match the Python `UserPreferences*` and
+`TasteSignal*`/`TasteVerdictRequest` contracts field for field.
+
 To compare an independently generated Rust OpenAPI operation:
 
 ```sh

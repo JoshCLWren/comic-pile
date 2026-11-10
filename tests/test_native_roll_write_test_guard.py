@@ -50,6 +50,37 @@ DELEGATED_WRITE_TESTS = {
 
 # Mounted POST handlers that are pure read projections. Each entry must stay
 # free of write SQL and carry a DB-backed HTTP parity test (asserted below).
+# Real disposable-Postgres HTTP integration tests, not exemptions. Each entry
+# must prove the exact mounted method/path, a named Tokio test, database reset,
+# an Axum router request, and a success assertion.
+INTEGRATION_WRITE_TESTS = {
+    ("tags", "create_tag"): (
+        "create_tag_writes_database_row", "POST", "/api/v1/tags/",
+    ),
+    ("tags", "update_tag"): (
+        "update_tag_persists_name_and_color", "PUT", "/api/v1/tags/{tag_id}/",
+    ),
+    ("tags", "delete_tag"): (
+        "delete_tag_cascades_assignments", "DELETE", "/api/v1/tags/{tag_id}/",
+    ),
+    ("tags", "assign_tag"): (
+        "assign_tag_inserts_assignment", "POST", "/api/v1/tags/{tag_id}/assign/",
+    ),
+    ("tags", "unassign_tag"): (
+        "unassign_tag_removes_assignment", "DELETE",
+        "/api/v1/tags/{tag_id}/unassign/",
+    ),
+    ("tags", "bulk_assign_tag"): (
+        "bulk_assign_tag_writes_unique_assignments", "POST",
+        "/api/v1/tags/{tag_id}/bulk-assign/",
+    ),
+    ("tags", "bulk_unassign_tag"): (
+        "bulk_unassign_tag_removes_assignments", "POST",
+        "/api/v1/tags/{tag_id}/bulk-unassign/",
+    ),
+}
+
+
 READ_ONLY_POST_HANDLERS = {
     ("reading_boundary", "reading_boundary_batch_v2"): "test_http_reading_boundaries.py",
     ("issue_handler", "issue_cards"): "test_http_issue_cards.py",
@@ -107,6 +138,49 @@ def _test_module(module: str) -> str:
     return source[source.index(marker):]
 
 
+def _integration_tests_write_path(module: str, handler: str) -> bool:
+    """Require exact-route, database-backed HTTP integration test evidence.
+
+    The test must send the matching method/path through the production router.
+    This fails closed if its route, named test, or database proof disappears.
+    """
+    evidence = INTEGRATION_WRITE_TESTS.get((module, handler))
+    if evidence is None:
+        return False
+    test_name, method, route_path = evidence
+    path = REPOSITORY_ROOT / "native" / "roll-service" / "tests" / f"{module}.rs"
+    if not path.is_file():
+        return False
+    source = path.read_text(encoding="utf-8")
+    route_pattern = (
+        rf'\.route\(\s*"{re.escape(route_path)}"\s*,\s*'
+        rf'{method.lower()}\(\s*{re.escape(module)}::{re.escape(handler)}\s*\)'
+    )
+    if re.search(route_pattern, _lib_source(), flags=re.DOTALL) is None:
+        return False
+    if not all(
+        marker in source
+        for marker in (
+            "test_support::database_url",
+            "test_support::reset_for_test",
+            "router(state.clone()).oneshot(request)",
+        )
+    ):
+        return False
+    for section in re.split(r"(?m)^#\[tokio::test\]\s*$", source)[1:]:
+        if re.match(rf"\s*async fn {re.escape(test_name)}\(\)", section):
+            return all(
+                required in section
+                for required in (
+                    "mutation(",
+                    f'"{method}"',
+                    f'"{route_path}"',
+                    "StatusCode::OK",
+                )
+            )
+    return False
+
+
 def _tests_write_path(module: str, handler: str) -> bool:
     """Return whether the test module reaches this handler's write path.
 
@@ -131,6 +205,8 @@ def _tests_write_path(module: str, handler: str) -> bool:
         tests = _test_module(writer_module)
         handler = writer
     else:
+        if _integration_tests_write_path(module, handler):
+            return True
         tests = _test_module(module)
     if not tests or "#[tokio::test]" not in tests:
         return False

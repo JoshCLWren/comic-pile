@@ -1,0 +1,330 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "comicpile-roll-service",
+    "description": "",
+    "license": {
+      "name": ""
+    },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/users/me/preferences": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Documentation-only operation for reading user preferences.",
+        "operationId": "get_user_preferences_documentation",
+        "responses": {
+          "200": {
+            "description": "The authenticated user's preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Documentation-only operation for updating user preferences.",
+        "operationId": "patch_user_preferences_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferencesPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The user's preferences after the update",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Unknown theme id"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/taste-signals": {
+      "get": {
+        "tags": [
+          "taste-signals"
+        ],
+        "summary": "Documentation-only operation for listing Taste Bank signals.",
+        "operationId": "list_taste_signals_documentation",
+        "responses": {
+          "200": {
+            "description": "Every Taste Bank signal owned by the authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteSignalListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict": {
+      "put": {
+        "tags": [
+          "taste-signals"
+        ],
+        "summary": "Documentation-only operation for recording a Taste Bank verdict.",
+        "operationId": "set_taste_signal_verdict_documentation",
+        "parameters": [
+          {
+            "name": "signal_type",
+            "in": "path",
+            "description": "Category of the targeted signal",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "external_key",
+            "in": "path",
+            "description": "Stable normalized key of the targeted feature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TasteVerdictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The canonical updated signal after the verdict is persisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TasteSignalResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "422": {
+            "description": "Unknown signal type, verdict, or oversized external key"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TasteSignalListResponse": {
+        "type": "object",
+        "description": "All Taste Bank signals owned by the authenticated user.",
+        "required": [
+          "signals"
+        ],
+        "properties": {
+          "signals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TasteSignalResponse"
+            }
+          }
+        }
+      },
+      "TasteSignalResponse": {
+        "type": "object",
+        "description": "Canonical representation of one persisted Taste Bank signal.",
+        "required": [
+          "user_id",
+          "signal_type",
+          "external_key",
+          "display_name",
+          "evidence_count",
+          "distinct_thread_count"
+        ],
+        "properties": {
+          "affinity_estimate": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "confidence": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "distinct_thread_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "evidence_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "external_key": {
+            "type": "string"
+          },
+          "first_observed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_observed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_prompted_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signal_type": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "user_verdict": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "verdict_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "TasteVerdictRequest": {
+        "type": "object",
+        "description": "Explicit user verdict on one Taste Bank signal.",
+        "required": [
+          "verdict"
+        ],
+        "properties": {
+          "verdict": {
+            "type": "string"
+          }
+        }
+      },
+      "UserPreferencesPatchRequest": {
+        "type": "object",
+        "description": "Partial update of the authenticated user's preferences.\n\n`theme` is optional: when omitted or explicit JSON null the current\npreference is left unchanged and a missing row is seeded with the\ndefault, exactly like the Python `UserPreferencesPatchRequest`.",
+        "properties": {
+          "theme": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "UserPreferencesResponse": {
+        "type": "object",
+        "description": "Current preference values for the authenticated user.",
+        "required": [
+          "theme",
+          "user_id"
+        ],
+        "properties": {
+          "theme": {
+            "type": "string"
+          },
+          "user_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

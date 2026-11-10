@@ -173,6 +173,16 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
         # shadowed until production proof.
         ("POST", "/api/bug-reports/"): "/api/native_roll.rs",
         ("POST", "/api/v1/bug-reports/"): "/api/native_roll.rs",
+        # Preferences and Taste Bank signals keep their browser-called
+        # /api/v1 URLs and are now served same-path by native Rust (#4834).
+        # The Python handlers stay mounted until production proof.
+        ("GET", "/api/v1/users/me/preferences"): "/api/native_roll.rs",
+        ("PATCH", "/api/v1/users/me/preferences"): "/api/native_roll.rs",
+        ("GET", "/api/v1/users/me/taste-signals"): "/api/native_roll.rs",
+        (
+            "PUT",
+            "/api/v1/users/me/taste-signals/creator/creator%3Awriter%3Adk/verdict",
+        ): "/api/native_roll.rs",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)
