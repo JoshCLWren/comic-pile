@@ -826,7 +826,10 @@ jobs:
           # mandatory real OpenCode smoke below is its execution proof.
           if [[ "$RUNTIME_MODEL" == 'openrouter/free' ]]; then
             echo 'Composite free review route: validating by real OpenCode smoke'
-            echo "model=${RUNTIME_MODEL#*/}" >> "$GITHUB_OUTPUT"
+            # Preserve the complete composite identifier as the trusted review
+            # model. Returning only "free" here breaks the controller's
+            # (source, model, runtime) provenance invariant after smoke.
+            echo "model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
             echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
             exit 0
           fi
