@@ -50,6 +50,11 @@ def test_canonical_factory_branch_honors_matching_part_of_without_changing_owner
     assert controller.linked_issue_mode_for_pr(4934, branch) == (4740, False)
     current["body"] = "Part of #4740."
     assert controller.linked_issue_mode_for_pr(4934, "local/review") == (4740, True)
+    # handle_review already fetched this PR; avoid another remote read.
+    monkeypatch.setattr(controller, "pr_json", lambda _pr: (_ for _ in ()).throw(AssertionError("extra PR fetch")))
+    assert controller.linked_issue_mode_for_pr(
+        4934, branch, body="Part of #4740."
+    ) == (4740, True)
 
 
 def test_required_checks_no_checks_configured_retries():
