@@ -64,6 +64,49 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO schema_audit;
   `pull_request_target`, so untrusted branch code never runs with the secret
   in scope. It fails closed when the secret is absent.
 
+### Verified role-provisioning contract (throwaway Postgres 16)
+
+The provisioning SQL above was applied verbatim to a throwaway
+`postgres:16-alpine` container loaded with the canonical fixture, and the
+audit entry point (`scripts/production_schema_audit.py`, not just the
+comparison helpers) was run against it with the dedicated role:
+
+- unchanged fixture-loaded database → exit `0`, minimal diagnostic
+  (`added: 0; removed: 0; changed: 0`), empty diff artifact;
+- `ALTER TABLE … ADD COLUMN` + `CREATE INDEX` → exit `1`, targeted output
+  (`added: INDEX ix_audit_probe…`, `changed: TABLE threads`), bounded diff
+  artifact, **no** role password in stdout, stderr, or the artifact;
+- `postgres` / `neondb_owner` credentials → exit `2`
+  (`refusing to run with an admin/owner database user`);
+- missing `PRODUCTION_SCHEMA_AUDIT_DATABASE_URL` → exit `2` (fail closed);
+- the `schema_audit` role cannot execute DDL or `INSERT`
+  (`cannot execute … in a read-only transaction`).
+
+This round trip is locked in as a regression test:
+`tests/test_production_schema_audit.py::test_documented_least_privilege_role_round_trip`
+(skipped only when docker or pg_dump is unavailable). The Neon production
+role must still be created by the project owner as described above; the
+throwaway evidence proves the grants and session settings are sufficient
+and that nothing else is needed.
+
+## Closing #4735: remaining owner action
+
+The scheduled audit is live code on `main` but cannot prove production until
+the owner completes this one-time sequence:
+
+1. Run the provisioning SQL above against production Neon as the project
+   owner (adapt the database name; the grants must cover the current
+   `public`-schema objects and all future ones via
+   `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES TO schema_audit` if
+   the owner wants the audit to survive future migrations without re-granting).
+2. Store the role's **direct** URL as the repository secret
+   `PRODUCTION_SCHEMA_AUDIT_DATABASE_URL`.
+3. Confirm the next weekly run (Monday 06:00 UTC) or an owner-authorized
+   `workflow_dispatch` run completes with exit `0`. That run is the
+   acceptance evidence for "CI scheduled run succeeds against unchanged
+   production schema". No factory or agent may provision the role, create
+   the secret, or connect to production to obtain it.
+
 ## Known prod-only extensions
 
 **No extension is ignored by default.** The allowlist

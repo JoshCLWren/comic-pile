@@ -293,3 +293,123 @@ def test_throwaway_postgres_round_trip_matches_and_detects_mutation() -> None:
     finally:
         subprocess.run(["docker", "rm", "-f", container],
                        capture_output=True, check=False, timeout=60)
+
+
+@pytest.mark.skipif(
+    shutil.which("docker") is None or shutil.which("pg_dump") is None,
+    reason="requires docker and pg_dump for the throwaway round-trip",
+)
+def test_documented_least_privilege_role_round_trip(tmp_path: Path) -> None:
+    """The documented role setup makes the audit entry point pass then fail.
+
+    Provisions ``schema_audit`` exactly as ``docs/PRODUCTION_SCHEMA_AUDIT.md``
+    instructs (read-only role, bounded timeouts, SELECT-only grants), then runs
+    ``scripts/production_schema_audit.py`` itself — not just the comparison
+    helpers — against the fixture-loaded throwaway database: exit 0 on match,
+    exit 1 with a bounded redacted diff on drift, exit 2 on the admin user,
+    and no password in any output. This pins the documented production role
+    contract and the least-privilege refusal to executable evidence.
+    """
+    import os
+    import sys
+    import time
+
+    container = "comic-pile-4735-audit-role"
+    port = "5452"
+    password = "audit-role-test-pw-4735"
+    base = ["docker", "run", "-d", "--rm", "--name", container,
+            "-e", "POSTGRES_PASSWORD=postgres", "-e", "POSTGRES_DB=postgres",
+            "-p", f"127.0.0.1:{port}:5432", "postgres:16-alpine"]
+    subprocess.run(["docker", "rm", "-f", container],
+                   capture_output=True, check=False)
+    role_sql = f"""
+CREATE ROLE schema_audit LOGIN PASSWORD '{password}' CONNECTION LIMIT 2;
+ALTER ROLE schema_audit SET default_transaction_read_only = on;
+ALTER ROLE schema_audit SET statement_timeout = '60s';
+ALTER ROLE schema_audit SET lock_timeout = '30s';
+GRANT CONNECT ON DATABASE postgres TO schema_audit;
+GRANT USAGE ON SCHEMA public TO schema_audit;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO schema_audit;
+GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO schema_audit;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO schema_audit;
+"""
+    psql_admin = ["docker", "exec", "-i", "-e", "PGPASSWORD=postgres", container,
+                  "psql", "-h", "127.0.0.1",
+                  "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"]
+
+    def run_audit(url_env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+        env = dict(os.environ)
+        env.pop("PRODUCTION_SCHEMA_AUDIT_DATABASE_URL", None)
+        env.update(url_env)
+        return subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts/production_schema_audit.py"),
+             "--diff-output", str(tmp_path / "audit-diff.txt")],
+            env=env, capture_output=True, text=True, timeout=180, check=False,
+        )
+
+    try:
+        started = subprocess.run(base, capture_output=True, text=True,
+                                 timeout=120, check=False)
+        assert started.returncode == 0, started.stderr
+        for _ in range(60):
+            ready = subprocess.run(
+                ["docker", "exec", container, "pg_isready", "-h", "127.0.0.1",
+                 "-U", "postgres"],
+                capture_output=True, check=False, timeout=10,
+            )
+            if ready.returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            pytest.fail("throwaway postgres did not become ready")
+
+        fixture = FIXTURE_PATH.read_bytes()
+        loaded = subprocess.run(
+            [*psql_admin, "-q"],
+            input=fixture, capture_output=True, check=False, timeout=120,
+        )
+        assert loaded.returncode == 0, loaded.stderr.decode("utf-8", "replace")
+        provisioned = subprocess.run(
+            psql_admin,
+            input=role_sql.encode(), capture_output=True, check=False, timeout=60,
+        )
+        assert provisioned.returncode == 0, provisioned.stderr.decode(
+            "utf-8", "replace")
+
+        audit_dsn = (
+            f"postgresql://schema_audit:{password}@127.0.0.1:{port}/postgres"
+        )
+        match = run_audit({"PRODUCTION_SCHEMA_AUDIT_DATABASE_URL": audit_dsn})
+        assert match.returncode == 0, match.stdout + match.stderr
+        assert "matches the canonical fixture" in match.stdout
+
+        subprocess.run(
+            [*psql_admin, "-c",
+             "ALTER TABLE public.threads ADD COLUMN audit_probe integer;"],
+            check=True, capture_output=True, timeout=60,
+        )
+        subprocess.run(
+            [*psql_admin, "-c",
+             "CREATE INDEX ix_audit_probe ON public.threads (audit_probe);"],
+            check=True, capture_output=True, timeout=60,
+        )
+        drift = run_audit({"PRODUCTION_SCHEMA_AUDIT_DATABASE_URL": audit_dsn})
+        assert drift.returncode == 1, drift.stdout + drift.stderr
+        assert "changed: TABLE threads" in drift.stdout
+        assert "added: INDEX ix_audit_probe" in drift.stdout
+        diff_artifact = (tmp_path / "audit-diff.txt").read_text(encoding="utf-8")
+        assert "ix_audit_probe" in diff_artifact
+        assert password not in drift.stdout + drift.stderr + diff_artifact
+
+        admin = run_audit(
+            {"PRODUCTION_SCHEMA_AUDIT_DATABASE_URL":
+             f"postgresql://postgres:postgres@127.0.0.1:{port}/postgres"}
+        )
+        assert admin.returncode == 2
+        assert "refusing to run with an admin/owner database user" in admin.stderr
+
+        missing = run_audit({})
+        assert missing.returncode == 2
+    finally:
+        subprocess.run(["docker", "rm", "-f", container],
+                       capture_output=True, check=False, timeout=60)
