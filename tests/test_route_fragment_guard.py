@@ -207,7 +207,7 @@ def test_regeneration_scope_requires_changed_artifacts() -> None:
 
 def test_regeneration_agents_may_only_change_generated_block() -> None:
     before = (
-        "# AGENTS\\n<!-- route-burndown:begin -->\\nold\\n"
+        "# AGENTS\n<!-- route-burndown:begin -->\nold\n"
         "<!-- route-burndown:end -->\\nmanual rules\\n"
     )
     after = before.replace("old", "new")
