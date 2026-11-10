@@ -219,6 +219,28 @@ jobs:
             reason='missing-OpenCode-credential'
           fi
 
+          # Trusted, leased stage decides the execution route, never PR text.
+          # Review only: do not consume or preflight the worker's authoring
+          # model. Repair and implementation still use their roster model.
+          assignment="$(python3 .github/scripts/factory-work-controller.py inspect --worker "$worker")"
+          if jq -e '.kind == "pr" and .stage == "factory:review"' <<< "$assignment" >/dev/null; then
+            if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
+              echo "::error::OPENROUTER_API_KEY is required for dedicated factory semantic review"
+              python3 .github/scripts/factory-work-controller.py release \
+                --worker "$worker" --reason review-router-credential-unavailable || true
+              exit 1
+            fi
+            source='openrouter-free'
+            model='openrouter/free'
+            runtime_model='openrouter/free'
+            deepseek_mode='normal'
+            branch_suffix='openrouter-review'
+            display='OpenRouter Free · independent semantic review'
+            configured=true
+            reason='exact-head-semantic-review-only'
+            echo "Factory $worker: routing leased semantic review via $runtime_model"
+          fi
+
           {
             echo "deepseek_mode=$deepseek_mode"
             echo "worker=$worker"
@@ -379,6 +401,20 @@ jobs:
               exit 0
               ;;
             openrouter-free)
+              # The exact-head semantic review router is fixed even if
+              # OmniRoute is later enabled. Never feed it to free-model
+              # candidate rotation or substitute a coding model.
+              if [[ "$LANE_RUNTIME_MODEL" == 'openrouter/free' ]]; then
+                {
+                  echo "source=openrouter-free"
+                  echo "model=openrouter/free"
+                  echo "runtime_model=openrouter/free"
+                  echo "display=$LANE_DISPLAY"
+                  echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                  echo "reason=dedicated-composite-semantic-review"
+                } >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
               # Keep OpenRouter's known-free route while OmniRoute is disabled.
               if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
                 {
@@ -756,6 +792,13 @@ jobs:
           RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
         run: |
           set -Eeuo pipefail
+          # openrouter/free is a composite route. Its current backing model
+          # need not appear as an exact static OpenCode catalog entry; the
+          # mandatory real OpenCode smoke below is its execution proof.
+          if [[ "$RUNTIME_MODEL" == 'openrouter/free' ]]; then
+            echo 'Composite free review route: validating by real OpenCode smoke'
+            exit 0
+          fi
           # Fresh runners can initially expose only OpenCode's older bundled catalog.
           if ! bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL"; then
             printf 'control_plane_failure\tOpenCode catalog not ready for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
