@@ -294,6 +294,31 @@ jobs:
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         run: bash .github/scripts/install-opencode-v2.sh
 
+      - name: Register composite OpenRouter model for semantic review only
+        if: steps.lane.outputs.reason == 'exact-head-semantic-review-only'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          config="$HOME/.config/opencode/opencode.json"
+          temp="$(mktemp)"
+          jq '.providers.openrouter.models.free = {
+            modelID: "openrouter/free",
+            name: "OpenRouter Free Models Router (independent semantic review)",
+            capabilities: {
+              tools: true,
+              input: ["text"],
+              output: ["text"]
+            },
+            limit: {
+              context: 64000,
+              output: 8192
+            }
+          }' "$config" > "$temp"
+          install -m 600 "$temp" "$config"
+          rm -f "$temp"
+          # Fail closed if the isolated review route was not registered.
+          jq -e '.providers.openrouter.models.free.modelID == "openrouter/free"' "$config" >/dev/null
+
       - name: Configure authenticated DeepSeek OpenCode credential
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode == 'authenticated'
         shell: bash
