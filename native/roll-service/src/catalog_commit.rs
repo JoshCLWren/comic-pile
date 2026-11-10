@@ -95,9 +95,8 @@ fn hex_digest(bytes: &[u8]) -> String {
 }
 
 fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
-        ApiError::Internal("signature unavailable".to_string())
-    })?;
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|_| ApiError::Internal("signature unavailable".to_string()))?;
     mac.update(message.as_bytes());
     Ok(hex_digest(&mac.finalize().into_bytes()))
 }
@@ -1163,9 +1162,8 @@ async fn persist_commit_series_mapping_handler(
             evidence_source: USER_SERIES_CONFIRMATION_EVIDENCE_SOURCE.to_string(),
         },
     };
-    let response_json = serde_json::to_value(&response).map_err(|_| {
-        ApiError::Internal("serialization failed".to_string())
-    })?;
+    let response_json = serde_json::to_value(&response)
+        .map_err(|_| ApiError::Internal("serialization failed".to_string()))?;
 
     tx.execute(
         "INSERT INTO catalog_commit_receipts
