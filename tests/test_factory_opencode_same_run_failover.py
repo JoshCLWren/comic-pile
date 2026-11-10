@@ -19,7 +19,7 @@ SELECTOR = ROOT / ".github/scripts/factory_live_opencode.py"
 def test_same_run_smoke_excludes_attempted_models_and_never_falls_back_to_paid() -> None:
     """Every retry uses the existing catalog policy and excludes prior failures."""
     workflow = WORKFLOW.read_text()
-    assert 'if [[ "${SOURCE:-}" == opencode-free && "${DEEPSEEK_MODE:-}" == normal ]]' in workflow
+    assert '[[ "${SOURCE:-}" == opencode-free || "${SOURCE:-}" == openrouter-free ]]' in workflow
     assert 'attempted+=("$model")' in workflow
     assert 'exclusions+=(--attempted "$prior")' in workflow
     assert '--catalog "$catalog" --comments "$comments" --worker "$WORKER"' in workflow
@@ -34,8 +34,8 @@ def test_selected_smoked_model_is_used_for_actual_factory_session() -> None:
     assert 'id: smoke' in workflow
     assert 'echo "model=$model" >> "$GITHUB_OUTPUT"' in workflow
     assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in workflow
-    assert 'FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}' in workflow
-    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
+    assert 'FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}' in workflow
+    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
     terminal = workflow.split('      - name: Report terminal heartbeat', 1)[1]
     assert 'MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}' in terminal
 
@@ -54,6 +54,7 @@ def _run_dynamic_smoke(
     scenario: str,
     catalog_models: tuple[tuple[str, int], ...],
     initial_model: str = "model-a-free",
+    source: str = "opencode-free",
 ) -> tuple[subprocess.CompletedProcess[str], list[str], str, str]:
     """Exercise the real workflow's smoke script with deterministic fake executables."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -84,6 +85,9 @@ def _run_dynamic_smoke(
         "if scenario == 'all-quota' or (scenario == 'quota-then-success' and model.endswith('model-a-free')):\n"
         "    print('Free usage limit reached')\n"
         "    sys.exit(1)\n"
+        "if scenario == 'model-unavailable-then-success' and model.endswith('vendor/a:free'):\n"
+        "    print('Error: Model unavailable: ' + model)\n"
+        "    sys.exit(1)\n"
         "if scenario == 'nonquota-failure':\n"
         "    print('Unexpected provider authentication failure')\n"
         "    sys.exit(17)\n"
@@ -94,7 +98,7 @@ def _run_dynamic_smoke(
     )
     opencode.chmod(0o755)
 
-    (tmp_path / "factory-opencode-free-catalog").write_text(
+    (tmp_path / f"factory-{source}-catalog").write_text(
         json.dumps(
             {
                 "models": [
@@ -108,6 +112,9 @@ def _run_dynamic_smoke(
     (tmp_path / "factory-opencode-attempt-comments.json").write_text(
         "[]", encoding="utf-8"
     )
+    (tmp_path / "factory-model-preflight-comments.json").write_text(
+        "[]", encoding="utf-8"
+    )
     output = tmp_path / "github-output"
     attempts = tmp_path / "smoke-attempts"
     gh_log = tmp_path / "smoke-gh-calls"
@@ -118,9 +125,9 @@ def _run_dynamic_smoke(
             **os.environ,
             "PATH": f"{bin_dir}:{os.environ['PATH']}",
             "RUNNER_TEMP": str(tmp_path),
-            "RUNTIME_MODEL": f"opencode/{initial_model}",
-            "SOURCE": "opencode-free",
-            "WORKER": "41",
+            "RUNTIME_MODEL": f"{source.removesuffix('-free')}/{initial_model}",
+            "SOURCE": source,
+            "WORKER": "52" if source == "openrouter-free" else "41",
             "DEEPSEEK_MODE": "normal",
             "GITHUB_RUN_ID": "12345",
             "GITHUB_RUN_NUMBER": "0",
@@ -198,3 +205,26 @@ def test_crouton_requires_actual_shell_tool_proof(
     assert ("runtime_model=opencode/crouton-alpha-free" in output) == (
         expected_status == 0
     )
+
+
+def test_openrouter_free_retries_missing_model_within_provider(tmp_path: Path) -> None:
+    """The old pinned OpenRouter lane must try another proven-free executable model."""
+    result, attempts, output, evidence = _run_dynamic_smoke(
+        tmp_path,
+        scenario="model-unavailable-then-success",
+        catalog_models=(
+            ("vendor/a:free", 0),
+            ("vendor/b:free", 0),
+            ("vendor/paid", 2),
+        ),
+        initial_model="vendor/a:free",
+        source="openrouter-free",
+    )
+    assert result.returncode == 0, (result.stdout, result.stderr)
+    assert attempts == ["openrouter/vendor/a:free", "openrouter/vendor/b:free"]
+    assert "openrouter/vendor/paid" not in attempts
+    assert "model=vendor/b:free" in output
+    assert "runtime_model=openrouter/vendor/b:free" in output
+    assert "Source: openrouter-free" in evidence
+    assert "Model: vendor/a:free" in evidence
+    assert "Attempt outcome: model_unavailable" in evidence
