@@ -20,12 +20,13 @@
 //!   reasons. It needs the bounded Option E input snapshot in addition to the
 //!   page statement, so the default path is the only one-statement path.
 
+use axum::http::StatusCode;
+
 use crate::{
     auth::VerifiedAccessClaims, db, option_inputs, reading_eligibility, ApiError, AppState,
 };
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
     Json,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
@@ -151,11 +152,11 @@ struct QueueCursor {
 }
 
 fn bad_request(detail: &str) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail.to_string())
+    ApiError::BadRequest(detail.to_string())
 }
 
 fn unprocessable(detail: &str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
+    ApiError::Unprocessable(detail.to_string())
 }
 
 fn normalize_search(search: Option<&str>) -> String {
@@ -208,8 +209,20 @@ fn decode_cursor(
 ) -> Result<QueueCursor, ApiError> {
     let invalid = || bad_request("Invalid Queue page token");
     let padded = token.trim_end_matches('=');
-    let raw = URL_SAFE_NO_PAD.decode(padded).map_err(|_| invalid())?;
-    let payload: Value = serde_json::from_slice(&raw).map_err(|_| invalid())?;
+    let raw = URL_SAFE_NO_PAD.decode(padded).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        invalid()
+    })?;
+    let payload: Value = serde_json::from_slice(&raw).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        invalid()
+    })?;
     let Some(object) = payload.as_object() else {
         return Err(invalid());
     };
@@ -315,6 +328,7 @@ pub async fn list_threads(
         sort,
         page_size,
         cursor.as_ref(),
+        "active",
     )
     .await?;
     if option_e_state.is_none() {
@@ -413,7 +427,7 @@ pub async fn get_thread_detail(
         )
         .await
         .map_err(db::query_error)?;
-    let row = row.ok_or(ApiError(
+    let row = row.ok_or(ApiError::with_status(
         StatusCode::NOT_FOUND,
         "Thread not found".to_string(),
     ))?;
@@ -442,19 +456,90 @@ pub async fn get_thread_detail(
     }))
 }
 
+/// Read one page of the authenticated reader's completed threads.
+pub async fn list_completed_threads(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Query(query): Query<ThreadListQuery>,
+) -> Result<Json<ThreadListResponse>, ApiError> {
+    let requested_sort = query.sort.as_deref().unwrap_or("created");
+    if !matches!(requested_sort, "position" | "title" | "created") {
+        return Err(bad_request("sort must be one of: position, title, created"));
+    }
+    let sort = if requested_sort == "position" {
+        "created"
+    } else {
+        requested_sort
+    };
+    let page_size = query.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
+        return Err(unprocessable("page_size must be between 1 and 200"));
+    }
+    let raw_search = query.search.as_deref();
+    if raw_search.is_some_and(str::is_empty) {
+        return Err(unprocessable("search must be at least 1 character"));
+    }
+    let search = normalize_search(raw_search);
+    let cursor = query
+        .page_token
+        .as_deref()
+        .filter(|token| !token.is_empty())
+        .map(|token| decode_cursor(token, sort, &search, "legacy"))
+        .transpose()?;
+    let (auth, _active_count, _list_names, rows) = query_page(
+        &state,
+        &claims,
+        None,
+        false,
+        None,
+        &search,
+        sort,
+        page_size,
+        cursor.as_ref(),
+        "completed",
+    )
+    .await?;
+    validate_auth(&claims, &auth)?;
+    let mut rows = rows;
+    let next_page_token = if rows.len() > page_size as usize {
+        rows.truncate(page_size as usize);
+        rows.last().map(|last| {
+            encode_cursor(&QueueCursor {
+                sort: sort.to_string(),
+                search,
+                values: vec![
+                    last.created_at
+                        .strip_suffix('Z')
+                        .map(|value| format!("{value}+00:00"))
+                        .unwrap_or_else(|| last.created_at.clone()),
+                    last.id.to_string(),
+                ],
+                execution: "legacy".to_string(),
+            })
+        })
+    } else {
+        None
+    };
+    let threads = rows
+        .into_iter()
+        .map(|row| row.into_item(None, None))
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    Ok(Json(ThreadListResponse {
+        threads,
+        next_page_token,
+        active_count: 0,
+    }))
+}
+
 fn validate_auth(claims: &VerifiedAccessClaims, auth: &Option<AuthRow>) -> Result<(), ApiError> {
     let auth = auth
         .as_ref()
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "User not found".to_string()))?;
+        .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
     if auth.revoked {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
-            "Token has been revoked".to_string(),
-        ));
+        return Err(ApiError::Unauthorized("Token has been revoked".to_string()));
     }
     if claims.expected_epoch()? < auth.password_epoch {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
+        return Err(ApiError::Unauthorized(
             "Password changed; please sign in again.".to_string(),
         ));
     }
@@ -1016,6 +1101,7 @@ async fn query_page(
     sort: &str,
     page_size: i64,
     cursor: Option<&QueueCursor>,
+    status: &str,
 ) -> Result<(Option<AuthRow>, i32, Vec<ListName>, Vec<PageRow>), ApiError> {
     // Reference both mode parameters unconditionally so the statement keeps a
     // stable bind count whether the Option E preview is active or not.
@@ -1027,6 +1113,15 @@ async fn query_page(
     };
     let (cursor_sql, cursor_bindings) = cursor_clause(sort, cursor);
     let sql = THREADS_SQL_PREFIX
+        .replace("t.status = 'active'", &format!("t.status = '{status}'"))
+        .replace(
+            &format!("WHERE t.status = '{status}' AND t.queue_position >= 1"),
+            if status == "completed" {
+                "WHERE FALSE"
+            } else {
+                "WHERE t.status = 'active' AND t.queue_position >= 1"
+            },
+        )
         .replace("{order}", &order)
         .replace("{cursor}", &cursor_sql)
         .replace("{blocked}", blocked)
@@ -1061,18 +1156,14 @@ async fn query_page(
     PAGE_STATEMENTS_ISSUED.fetch_add(1, Ordering::Relaxed);
     let row = db::query_one_optional(state, connection, &sql, &bindings)
         .await?
-        .ok_or_else(|| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error".to_string(),
-            )
-        })?;
+        .ok_or_else(|| ApiError::Internal("Internal Server Error".to_string()))?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
-    let payload: PagePayload = serde_json::from_str(&payload).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_string(),
-        )
+    let payload: PagePayload = serde_json::from_str(&payload).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Internal Server Error".to_string())
     })?;
     Ok((
         payload.auth,
@@ -1151,7 +1242,7 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
 /// OpenAPI document for the v2 reader threads collection.
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(list_threads_documentation),
+    paths(list_threads_documentation, list_completed_threads_documentation),
     components(schemas(
         ThreadListItem,
         ThreadListResponse,
@@ -1231,6 +1322,27 @@ fn get_thread_detail_documentation() {}
 #[allow(dead_code)]
 fn get_bare_thread_detail_documentation() {}
 
+#[utoipa::path(
+    get,
+    path = "/api/v1/threads/completed/threads",
+    tag = "threads",
+    params(
+        ("search" = Option<String>, Query, description = "Case-insensitive title search"),
+        ("sort" = Option<String>, Query, description = "position, title, or created"),
+        ("page_size" = Option<i64>, Query, description = "1-200 rows per page (default 50)"),
+        ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
+    ),
+    responses(
+        (status = 200, description = "Owner-scoped completed threads page", body = ThreadListResponse),
+        (status = 400, description = "Invalid sort or page token"),
+        (status = 401, description = "Not authenticated"),
+        (status = 422, description = "Invalid bounds")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+fn list_completed_threads_documentation() {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1299,13 +1411,13 @@ mod tests {
         assert_eq!(
             decode_cursor(&token, "title", "saga", "legacy")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Queue page token does not match current search or sort"
         );
         assert_eq!(
             decode_cursor(&token, "position", "saga", "option_e")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Queue ordering changed; reload the Queue"
         );
     }
@@ -1317,13 +1429,13 @@ mod tests {
         assert_eq!(
             decode_cursor(&token, "position", "", "legacy")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Invalid Queue page token values"
         );
         assert_eq!(
             decode_cursor("not-base64", "position", "", "legacy")
                 .unwrap_err()
-                .1,
+                .detail(),
             "Invalid Queue page token"
         );
     }
@@ -1361,6 +1473,33 @@ mod tests {
         assert_eq!(operation["operationId"], "list_threads_documentation");
         let response = &operation["responses"]["200"]["content"]["application/json"]["schema"];
         assert_eq!(response["$ref"], "#/components/schemas/ThreadListResponse");
+    }
+
+    #[test]
+    fn threads_openapi_documents_the_completed_collection_read() {
+        use utoipa::OpenApi;
+        let document = serde_json::to_value(ThreadsApi::openapi()).expect("threads OpenAPI");
+        let operation = &document["paths"]["/api/v1/threads/completed/threads"]["get"];
+        assert_eq!(
+            operation["operationId"],
+            "list_completed_threads_documentation"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ThreadListResponse"
+        );
+    }
+
+    #[test]
+    fn completed_position_sort_uses_created_cursor_order() {
+        let requested_sort = "position";
+        let effective_sort = if requested_sort == "position" {
+            "created"
+        } else {
+            requested_sort
+        };
+        assert_eq!(effective_sort, "created");
+        assert_eq!(cursor_clause(effective_sort, None).0, "");
     }
 
     #[test]

@@ -572,7 +572,7 @@ async fn a_hung_probe_is_bounded_and_discards_the_physical_connection() {
     proxy.hang_next_statement();
     let started = Instant::now();
     let error = db::checkout(&proxied).await.expect_err("probe must fail");
-    assert_eq!(error.0, StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(error.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert!(
         started.elapsed() < Duration::from_secs(3),
         "the probe deadline must bound a half-open socket: {:?}",

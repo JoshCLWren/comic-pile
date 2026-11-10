@@ -37,7 +37,6 @@ use crate::{
 };
 use axum::{
     extract::{Query, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -158,17 +157,11 @@ struct EligiblePayload {
 }
 
 fn invalid_projection() -> ApiError {
-    ApiError(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Invalid native Roll projection".to_string(),
-    )
+    ApiError::Internal("Invalid native Roll projection".to_string())
 }
 
 fn invalid_snoozes() -> ApiError {
-    ApiError(
-        StatusCode::UNPROCESSABLE_ENTITY,
-        "Invalid temporary snooze identifiers".to_string(),
-    )
+    ApiError::Unprocessable("Invalid temporary snooze identifiers".to_string())
 }
 
 /// The last recorded roll, with the same owner source and ordering as the die.
@@ -292,7 +285,13 @@ async fn load_eligible_payload(
     let jti = claims.jti().to_string();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|_| invalid_projection())?
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid_projection()
+        })?
         .as_secs_f64();
     let gap_hours = SessionPolicy::default().gap_hours;
     let bindings: [&(dyn tokio_postgres::types::ToSql + Sync); 5] =
@@ -327,14 +326,19 @@ fn parse_snoozed(raw: Option<&str>) -> Result<HashSet<i32>, ApiError> {
         if part.is_empty() {
             continue;
         }
-        let thread_id: i32 = part.parse().map_err(|_| invalid_snoozes())?;
+        let thread_id: i32 = part.parse().map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid_snoozes()
+        })?;
         if thread_id <= 0 {
             return Err(invalid_snoozes());
         }
         count += 1;
         if count > MAX_TEMPORARY_SNOOZES {
-            return Err(ApiError(
-                StatusCode::UNPROCESSABLE_ENTITY,
+            return Err(ApiError::Unprocessable(
                 "Too many temporary snoozes".to_string(),
             ));
         }
@@ -357,17 +361,23 @@ fn select_eligible(
     snoozed: &HashSet<i32>,
 ) -> Result<RollEligibleIssueIdsResponse, ApiError> {
     let validated = option_inputs::validated_contained(inputs)?;
-    let candidates = validated.eligible_frontiers().map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading constraints".to_string(),
-        )
+    let candidates = validated.eligible_frontiers().map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Invalid reading constraints".to_string())
     })?;
     let current_die = dice_state::projected_die(die_after);
     let (die, mut excluded) = match pending_thread_id {
         Some(thread_id) => (
-            dice_state::apply_action(current_die, DiceAction::Reroll)
-                .map_err(|_| invalid_projection())?,
+            dice_state::apply_action(current_die, DiceAction::Reroll).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                invalid_projection()
+            })?,
             HashSet::from([thread_id]),
         ),
         None => (current_die, HashSet::new()),
@@ -649,7 +659,7 @@ mod tests {
             .collect::<Vec<_>>()
             .join(",");
         assert_eq!(
-            parse_snoozed(Some(&too_many)).unwrap_err().0,
+            parse_snoozed(Some(&too_many)).unwrap_err().status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
     }

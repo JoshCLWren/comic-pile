@@ -14,7 +14,7 @@ use crate::{
     roll_pool::{offer_frontiers, MAX_TEMPORARY_SNOOZES},
     ApiError, AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -64,10 +64,7 @@ pub struct RollOfferResponse {
 }
 
 fn invalid_key() -> ApiError {
-    ApiError(
-        StatusCode::UNPROCESSABLE_ENTITY,
-        "Invalid idempotency key".to_string(),
-    )
+    ApiError::Unprocessable("Invalid idempotency key".to_string())
 }
 
 fn validate_key(key: &str) -> Result<(), ApiError> {
@@ -83,21 +80,11 @@ fn validate_key(key: &str) -> Result<(), ApiError> {
 }
 
 fn empty_pool(has_candidates: bool) -> ApiError {
-    ApiError(
-        StatusCode::BAD_REQUEST,
-        if has_candidates {
+    ApiError::BadRequest(if has_candidates {
             "No other eligible comics remain. Reset Dice to clear temporary snoozes, or wait until tomorrow."
         } else {
             "No eligible comics to roll. Add comics or resolve reading constraints."
-        }.to_string(),
-    )
-}
-
-fn unavailable() -> ApiError {
-    ApiError(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "Roll offer unavailable".to_string(),
-    )
+        }.to_string())
 }
 
 /// Cookie IDs are exclusion hints only. Intersecting with the live Option E
@@ -138,7 +125,7 @@ async fn offer_metadata(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(unavailable)?;
+        .ok_or_else(|| ApiError::Internal("Roll offer unavailable".to_string()))?;
     Ok(OfferMetadata {
         thread_id: row.try_get(0).map_err(db::query_error)?,
         title: row.try_get(1).map_err(db::query_error)?,
@@ -288,8 +275,7 @@ pub(crate) async fn persist_offer(
         .await
         .map_err(db::query_error)?;
     if updated != 1 {
-        return Err(ApiError(
-            StatusCode::CONFLICT,
+        return Err(ApiError::Conflict(
             "Reading session changed; try again".to_string(),
         ));
     }
@@ -299,8 +285,7 @@ pub(crate) async fn persist_offer(
 /// Reject a stale Queue action before recording any snooze/die/offer event.
 fn require_expected_pending(expected: Option<i32>, actual: Option<i32>) -> Result<(), ApiError> {
     if expected.is_some() && expected != actual {
-        return Err(ApiError(
-            StatusCode::CONFLICT,
+        return Err(ApiError::Conflict(
             "Pending roll changed; refresh Queue before snoozing".to_string(),
         ));
     }
@@ -314,8 +299,7 @@ pub async fn offer(
 ) -> Result<Json<RollOfferResponse>, ApiError> {
     validate_key(&request.idempotency_key)?;
     if request.snoozed_thread_ids.len() > MAX_TEMPORARY_SNOOZES {
-        return Err(ApiError(
-            StatusCode::UNPROCESSABLE_ENTITY,
+        return Err(ApiError::Unprocessable(
             "Too many temporary snoozes".to_string(),
         ));
     }
@@ -329,21 +313,19 @@ pub async fn offer(
     // Compute the read-only Option E snapshot before taking the write
     // connection so this request never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
-    let candidates = validated.eligible_frontiers().map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid reading constraints".to_string(),
-        )
+    let candidates = validated.eligible_frontiers().map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Invalid reading constraints".to_string())
     })?;
     if candidates.is_empty() {
         if let Some(problem) = validated.graph_problem() {
-            return Err(ApiError(
-                StatusCode::CONFLICT,
-                format!(
+            return Err(ApiError::Conflict(format!(
                     "No healthy series remain while a reading constraint cycle exists. {} Open Reading Graph to repair.",
                     problem.summary()
-                ),
-            ));
+                )));
         }
     }
 
@@ -388,8 +370,7 @@ pub async fn offer(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or(ApiError(
-            StatusCode::CONFLICT,
+        .ok_or(ApiError::Conflict(
             "Reading session changed; try again".to_string(),
         ))?;
     let previous_offer: Option<i32> = locked.try_get(0).map_err(db::query_error)?;
@@ -508,11 +489,15 @@ mod tests {
         assert!(require_expected_pending(None, Some(7)).is_ok());
         assert!(require_expected_pending(Some(7), Some(7)).is_ok());
         assert_eq!(
-            require_expected_pending(Some(7), Some(8)).unwrap_err().0,
+            require_expected_pending(Some(7), Some(8))
+                .unwrap_err()
+                .status(),
             StatusCode::CONFLICT
         );
         assert_eq!(
-            require_expected_pending(Some(7), None).unwrap_err().0,
+            require_expected_pending(Some(7), None)
+                .unwrap_err()
+                .status(),
             StatusCode::CONFLICT
         );
     }
@@ -541,10 +526,10 @@ mod tests {
     #[test]
     fn exhaustion_is_distinct_from_having_no_eligible_comics() {
         assert!(empty_pool(true)
-            .1
+            .detail()
             .starts_with("No other eligible comics remain."));
         assert!(empty_pool(false)
-            .1
+            .detail()
             .starts_with("No eligible comics to roll."));
     }
 

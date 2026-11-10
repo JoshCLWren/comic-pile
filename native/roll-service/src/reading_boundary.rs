@@ -7,7 +7,6 @@ use crate::{
 };
 use axum::{
     extract::{Json as AxumJson, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -28,8 +27,7 @@ pub const MAX_BATCH_THREAD_IDS: usize = 200;
 /// Reject an empty or oversized batch exactly where Pydantic would.
 pub fn validate_thread_ids(thread_ids: &[i32]) -> Result<(), ApiError> {
     if thread_ids.is_empty() || thread_ids.len() > MAX_BATCH_THREAD_IDS {
-        return Err(ApiError(
-            StatusCode::UNPROCESSABLE_ENTITY,
+        return Err(ApiError::Unprocessable(
             "thread_ids must contain between 1 and 200 entries".to_string(),
         ));
     }
@@ -674,10 +672,10 @@ pub async fn project_boundary_explanation(
     labels: &BoundaryShadowLabels,
     thread_id: i32,
 ) -> Result<ReadingBoundaryExplanationV2, ApiError> {
-    let thread = labels.threads.get(&thread_id).ok_or(ApiError(
-        StatusCode::NOT_FOUND,
-        format!("Thread {thread_id} not found"),
-    ))?;
+    let thread = labels
+        .threads
+        .get(&thread_id)
+        .ok_or(ApiError::NotFound(format!("Thread {thread_id} not found")))?;
     let state = snapshot.threads.get(&thread_id);
     let next_issue = state
         .and_then(|s| s.next_issue_id)
@@ -756,10 +754,7 @@ async fn get_reading_boundary_explanations(
             .find(|id| !labels.threads.contains_key(id));
         if let Some(thread_id) = missing {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError(
-                StatusCode::NOT_FOUND,
-                format!("Thread {thread_id} not found"),
-            ));
+            return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
         }
         let validated = option_inputs::load_validated_contained_in_transaction(&tx, user).await?;
         tx.rollback().await.map_err(db::query_error)?;
@@ -767,11 +762,12 @@ async fn get_reading_boundary_explanations(
     })
     .await;
     let (labels, validated) = match result {
-        Err(_) => {
-            return Err(ApiError(
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Database temporarily unavailable".to_string(),
-            ));
+        Err(error) => {
+            tracing::debug!(
+                error_kind = crate::error_kind(&error),
+                "preserved underlying error before mapping"
+            );
+            return Err(ApiError::DatabaseUnavailable);
         }
         Ok(Err(error)) => return Err(error),
         Ok(Ok(values)) => {
@@ -900,6 +896,7 @@ pub fn reading_boundary_batch_documentation() {}
 mod tests {
     use super::*;
     use crate::reading_constraints::ThreadEligibility;
+    use axum::http::StatusCode;
 
     #[test]
     fn batch_bounds_match_the_canonical_python_request() {
@@ -907,12 +904,15 @@ mod tests {
         assert!(validate_thread_ids(&[1; MAX_BATCH_THREAD_IDS]).is_ok());
 
         let empty = validate_thread_ids(&[]).expect_err("empty batch is rejected");
-        assert_eq!(empty.0, StatusCode::UNPROCESSABLE_ENTITY);
-        assert_eq!(empty.1, "thread_ids must contain between 1 and 200 entries");
+        assert_eq!(empty.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(
+            empty.detail(),
+            "thread_ids must contain between 1 and 200 entries"
+        );
 
         let oversized = vec![1; MAX_BATCH_THREAD_IDS + 1];
         let rejected = validate_thread_ids(&oversized).expect_err("oversized batch is rejected");
-        assert_eq!(rejected.0, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(rejected.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[test]

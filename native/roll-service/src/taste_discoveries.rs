@@ -42,7 +42,7 @@ pub struct TasteDismissResponse {
 const DISMISS_SQL: &str = "UPDATE taste_signals SET prompt_suppressed_until = NOW() + interval '14 days', updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING id";
 
 fn not_found(signal_id: i32) -> ApiError {
-    ApiError(
+    ApiError::with_status(
         StatusCode::NOT_FOUND,
         format!("Taste discovery {signal_id} not found"),
     )
@@ -152,14 +152,14 @@ mod tests {
         let missing = dismiss_taste_discovery(State(state.clone()), user, Path(9999))
             .await
             .expect_err("missing signal must 404");
-        assert_eq!(missing.0, StatusCode::NOT_FOUND);
-        assert_eq!(missing.1, "Taste discovery 9999 not found");
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        assert_eq!(missing.detail(), "Taste discovery 9999 not found");
 
         let foreign = dismiss_taste_discovery(State(state.clone()), user, Path(8002))
             .await
             .expect_err("foreign signal must 404");
-        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
-        assert_eq!(foreign.1, "Taste discovery 8002 not found");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+        assert_eq!(foreign.detail(), "Taste discovery 8002 not found");
 
         let connection = db::checkout(&state).await.expect("verify connection");
         let suppressed: bool = connection
@@ -194,8 +194,8 @@ mod tests {
     #[test]
     fn not_found_matches_python_detail_text() {
         let error = not_found(42);
-        assert_eq!(error.0, StatusCode::NOT_FOUND);
-        assert_eq!(error.1, "Taste discovery 42 not found");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+        assert_eq!(error.detail(), "Taste discovery 42 not found");
     }
 
     #[tokio::test]

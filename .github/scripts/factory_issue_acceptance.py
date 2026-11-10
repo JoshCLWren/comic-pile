@@ -289,19 +289,10 @@ def linked_issue(branch: str, body: str) -> int | None:
 
 
 def mission(issue: int, head: str, body: str, non_closing: bool = False) -> str:
-    """Provide all requirements and current revision to the reviewer.
-
-    Args:
-        issue: Linked issue number.
-        head: Reviewed PR commit SHA.
-        body: Exact authoritative issue body.
-        non_closing: True when the PR links the issue with ``Part of #N`` and
-            does not claim to close it.
-
-    Returns:
-        Review instructions and required structured report schema.
-    """
+    """Give the reviewer an exact, complete acceptance schema for this issue."""
     revision = digest(body)
+    criteria = requirements(body)
+    count = len(criteria)
     if non_closing:
         scope = (
             " This is a review-only `Part of` handoff: it does not close the issue."
@@ -311,19 +302,74 @@ def mission(issue: int, head: str, body: str, non_closing: bool = False) -> str:
         )
     else:
         scope = " Do not approve when any requirement is missing or unverified."
+    # Build every ID rather than demonstrating A1 alone: in the production
+    # incident the model copied the old one-item example despite a longer rubric.
+    # Placeholders are deliberately invalid, not synthetic acceptance evidence.
+    items = ",".join(
+        f'{{"id":"A{index}","status":"unverified","file":"","evidence":"","test":""}}'
+        for index in range(1, count + 1)
+    )
+    template = (
+        f'{PREFIX}{{"issue":{issue},"head":"{head}",'
+        f'"issue_digest":"{revision}","items":[{items}]}}'
+    )
     return (
         f"\nISSUE ACCEPTANCE: #{issue}, head {head}, issue digest {revision}.\n"
-        "Review every numbered requirement below against the real diff and tests."
-        + scope
-        + " Before FACTORY_GATE_READY output exactly one single-line JSON record"
-        " with every criterion represented:\n"
-        f'{PREFIX}{{"issue":{issue},"head":"{head}",'
-        f'"issue_digest":"{revision}","items":['
-        '{"id":"A1","status":"pass","file":"changed/path.py",'
-        '"evidence":"Concrete inspected implementation behavior",'
-        '"test":"Executable command and observed result"}]}\n'
-        "Use A1 through the last criterion. Missing/unverified means REPAIR.\n"
-        + rubric(body)
+        "Independently review EVERY numbered requirement against the exact diff"
+        " and observed tests." + scope + "\n"
+        f"ACCEPTANCE_CRITERIA_COUNT={count}\n"
+        "OUTPUT CONTRACT: Immediately before FACTORY_GATE_READY, write exactly"
+        " one SINGLE line beginning with the literal FACTORY_ACCEPTANCE_V1= at"
+        " column zero, followed without a space by one JSON object. Do not use"
+        " a bare JSON object, Markdown fence, summary, or shortened A1 example."
+        f" It must contain exactly A1 through A{count} in order, with no omissions.\n"
+        "The following is a SHAPE ONLY, not approval: replace EVERY unverified"
+        " placeholder with your independently corroborated status, a real changed"
+        " file, implementation evidence and the actual test/check observed."
+        " Never copy placeholder data or invent test results. If even one"
+        " criterion is missing, unsafe or unsupported, finish with"
+        " FACTORY_GATE_BLOCKED rather than READY.\n"
+        f"{template}\n"
+        + "\n".join(f"A{index}: {item}" for index, item in enumerate(criteria, 1))
+    )
+
+
+def report_matches_mission(report: Mapping[str, Any] | None, mission_text: str) -> bool:
+    """Shape-check a model report against the trusted exact-head issue mission.
+
+    This is a preliminary fail-closed check, never an acceptance attestation.
+    The review controller still re-fetches the current issue and independently
+    verifies evidence, changed paths, checks, and reviewer provenance.
+    """
+    if report is None:
+        return False
+    identity = re.findall(
+        r"(?m)^ISSUE ACCEPTANCE: #([1-9][0-9]*), head ([a-f0-9]{40}), issue digest ([a-f0-9]{64})\.$",
+        mission_text,
+    )
+    counts = re.findall(
+        r"(?m)^ACCEPTANCE_CRITERIA_COUNT=([1-9][0-9]*)$", mission_text
+    )
+    if len(identity) != 1 or len(counts) != 1:
+        return False
+    issue, head, revision = identity[0]
+    count = int(counts[0])
+    if count > 1000 or count < 1:
+        return False
+    if (report.get("issue"), report.get("head"), report.get("issue_digest")) != (
+        int(issue), head, revision
+    ):
+        return False
+    items = report.get("items")
+    return (
+        isinstance(items, list)
+        and len(items) == count
+        and all(
+            isinstance(item, dict)
+            and item.get("id") == f"A{index}"
+            and item.get("status") in {"pass", "remaining"}
+            for index, item in enumerate(items, 1)
+        )
     )
 
 if __name__ == "__main__":

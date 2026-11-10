@@ -14,7 +14,6 @@ use crate::{
     dice_state::{self, DiceAction},
     ApiError,
 };
-use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tokio_postgres::{Client, IsolationLevel, Transaction};
@@ -49,7 +48,7 @@ pub struct DiceMutation {
 }
 
 fn invalid(detail: &str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
+    ApiError::Unprocessable(detail.to_string())
 }
 
 pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError> {
@@ -62,8 +61,13 @@ pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError>
     }
     match command {
         DiceCommand::ManualSelect { die } => {
-            dice_state::apply_action(6, DiceAction::ManualSelect(*die))
-                .map_err(|_| invalid("Invalid manual die"))?;
+            dice_state::apply_action(6, DiceAction::ManualSelect(*die)).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                invalid("Invalid manual die")
+            })?;
         }
         DiceCommand::Reroll { thread_id } if *thread_id <= 0 => {
             return Err(invalid("Invalid thread"));
@@ -76,8 +80,13 @@ pub(crate) fn validate(key: &str, command: &DiceCommand) -> Result<(), ApiError>
             if *thread_id <= 0 || *issue_id <= 0 {
                 return Err(invalid("Invalid issue"));
             }
-            dice_state::apply_action(6, DiceAction::RollRating(*rating))
-                .map_err(|_| invalid("Invalid rating"))?;
+            dice_state::apply_action(6, DiceAction::RollRating(*rating)).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                invalid("Invalid rating")
+            })?;
         }
         _ => {}
     }
@@ -164,8 +173,7 @@ pub async fn persist_in_transaction(
         .map_err(db::query_error)?
         .is_none()
     {
-        return Err(ApiError(
-            StatusCode::UNAUTHORIZED,
+        return Err(ApiError::Unauthorized(
             "Could not validate credentials".to_string(),
         ));
     }
@@ -184,21 +192,22 @@ pub async fn persist_in_transaction(
         .map_err(db::query_error)?;
     if let Some(row) = previous {
         let context: String = row.get(3);
-        let original: Value = serde_json::from_str(&context).map_err(|_| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid event receipt".to_string(),
-            )
+        let original: Value = serde_json::from_str(&context).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid event receipt".to_string())
         })?;
-        let expected = serde_json::to_value(command).map_err(|_| {
-            ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Invalid dice command".to_string(),
-            )
+        let expected = serde_json::to_value(command).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ApiError::Internal("Invalid dice command".to_string())
         })?;
         if original.get("dice_command") != Some(&expected) {
-            return Err(ApiError(
-                StatusCode::CONFLICT,
+            return Err(ApiError::Conflict(
                 "Idempotency key already used for a different dice command".to_string(),
             ));
         }
@@ -220,10 +229,7 @@ pub async fn persist_in_transaction(
             .map_err(db::query_error)?
             .is_none()
         {
-            return Err(ApiError(
-                StatusCode::NOT_FOUND,
-                "Thread not found".to_string(),
-            ));
+            return Err(ApiError::NotFound("Thread not found".to_string()));
         }
     }
     if let Some(issue_id) = command.issue_id() {
@@ -239,16 +245,18 @@ pub async fn persist_in_transaction(
             .map_err(db::query_error)?
             .is_none()
         {
-            return Err(ApiError(
-                StatusCode::NOT_FOUND,
-                "Issue not found".to_string(),
-            ));
+            return Err(ApiError::NotFound("Issue not found".to_string()));
         }
     }
 
     let before = dice_state::current_die(tx, user).await?;
-    let after = dice_state::apply_action(before, command.action())
-        .map_err(|_| invalid("Invalid dice command"))?;
+    let after = dice_state::apply_action(before, command.action()).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        invalid("Invalid dice command")
+    })?;
     let context = json!({
         "dice_command_key": idempotency_key,
         "dice_command": command,
@@ -309,6 +317,7 @@ pub async fn execute_standalone(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use tokio_postgres::NoTls;
 
     #[test]
@@ -511,7 +520,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(err.0, StatusCode::NOT_FOUND);
+        assert_eq!(err.status(), StatusCode::NOT_FOUND);
         tx.rollback().await.unwrap();
     }
 
@@ -533,7 +542,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
         tx.rollback().await.unwrap();
 
         let tx = client.transaction().await.unwrap();
@@ -549,7 +558,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(foreign_issue.0, StatusCode::NOT_FOUND);
+        assert_eq!(foreign_issue.status(), StatusCode::NOT_FOUND);
         tx.rollback().await.unwrap();
 
         let result = execute_standalone(
@@ -569,7 +578,7 @@ mod tests {
         )
         .await
         .unwrap_err();
-        assert_eq!(conflict.0, StatusCode::CONFLICT);
+        assert_eq!(conflict.status(), StatusCode::CONFLICT);
         let replay = execute_standalone(
             &mut client,
             user,

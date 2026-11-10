@@ -243,3 +243,47 @@ def test_changed_path_citations_allow_numeric_line_ranges_only():
     for invalid in (FILE + " tests", FILE + ":21-45 notes", "other.py:21-45", []):
         report["items"][0]["file"] = invalid
         assert "cite a file changed" in " ".join(errors(report))
+
+
+def test_mission_sends_complete_non_approving_schema_for_every_criterion():
+    mission = acceptance.mission(4010, HEAD, ISSUE)
+    assert "ACCEPTANCE_CRITERIA_COUNT=3" in mission
+    assert "literal FACTORY_ACCEPTANCE_V1=" in mission
+    assert "A1 through A3" in mission
+    assert mission.count('"status":"unverified"') == 3
+    assert all(f'"id":"A{i}"' in mission for i in range(1, 4))
+    assert "FACTORY_GATE_BLOCKED" in mission
+    assert acceptance.report_matches_mission(complete_report(), mission)
+
+
+def test_mission_shape_rejects_real_composite_failure_and_stale_evidence():
+    import copy
+    import json
+
+    mission = acceptance.mission(4010, HEAD, ISSUE)
+    full = complete_report()
+    # The live OpenRouter review returned bare JSON with only A1 and READY.
+    assert acceptance.report_from_text(json.dumps(full) + "\nFACTORY_GATE_READY") is None
+    partial = copy.deepcopy(full)
+    partial["items"] = partial["items"][:1]
+    assert not acceptance.report_matches_mission(partial, mission)
+    assert not acceptance.report_matches_mission(
+        acceptance.report_from_text(acceptance.PREFIX + json.dumps(partial)), mission
+    )
+    for field, value in (
+        ("issue", 4011),
+        ("head", NEXT),
+        ("issue_digest", "c" * 64),
+    ):
+        stale = copy.deepcopy(full)
+        stale[field] = value
+        assert not acceptance.report_matches_mission(stale, mission)
+    unverified = copy.deepcopy(full)
+    unverified["items"][1]["status"] = "unverified"
+    assert not acceptance.report_matches_mission(unverified, mission)
+    reordered = copy.deepcopy(full)
+    reordered["items"][0], reordered["items"][1] = (
+        reordered["items"][1], reordered["items"][0]
+    )
+    assert not acceptance.report_matches_mission(reordered, mission)
+    assert not acceptance.report_matches_mission(full, "")

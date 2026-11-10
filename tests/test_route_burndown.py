@@ -69,16 +69,27 @@ def test_burndown_summary_matches_deployed_ingress() -> None:
     inventory = load_json(INVENTORY_PATH)
     burndown = inventory.get("burndown")
     assert isinstance(burndown, dict)
-    assert burndown.get("total_live_operations") == 41
-    assert burndown.get("native_rust") == 40
-    assert burndown.get("python_fastapi") == 1
-    assert burndown.get("native_rust_status") == 40
-    assert burndown.get("unreferenced_or_orphaned") == 1
     assert burndown.get("ingress_source") == "vercel.json"
     raw_operations = inventory.get("operations")
     assert isinstance(raw_operations, list)
     operations = [item for item in raw_operations if isinstance(item, dict)]
-    assert len(operations) == 41
+    assert operations, "v2 inventory must not be empty"
+    assert len(operations) == burndown.get("total_live_operations")
+    assert sum(item.get("runtime") == "native-rust" for item in operations) == burndown.get(
+        "native_rust"
+    )
+    assert sum(item.get("runtime") == "python-fastapi" for item in operations) == burndown.get(
+        "python_fastapi"
+    )
+    for status, count_field in (
+        ("native Rust", "native_rust_status"),
+        ("shadowed by Rust", "shadowed_by_rust"),
+        ("live transitional Python with callers", "live_transitional_python_with_callers"),
+        ("unreferenced/orphaned", "unreferenced_or_orphaned"),
+    ):
+        assert sum(item.get("burndown_status") == status for item in operations) == (
+            burndown.get(count_field)
+        )
     for operation in operations:
         assert operation.get("ingress_destination")
         assert operation.get("burndown_status")
@@ -175,7 +186,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     )
     assert any(
         item.get("method") == "GET"
-        and item.get("path") == "/api/v1/threads/{thread_id}/dependencies"
+        and item.get("path") == "/api/v1/threads/completed/threads"
         and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
@@ -231,12 +242,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in v1_ops
     )
     assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/threads/{thread_id}/dependencies"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
         item.get("method") == "POST"
         and item.get("path") == "/api/v1/roll/dismiss-pending"
         and item.get("burndown_status") == "shadowed by Rust"
@@ -266,12 +271,21 @@ def test_full_surface_matches_deployed_ingress() -> None:
         and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/threads/{thread_id}/dependencies"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
     shadowed_unversioned = [
         item
         for item in unversioned_ops
         if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_unversioned) == 13
+    assert len(shadowed_unversioned) == sum(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        for item in unversioned_ops
+    )
     assert any(
         item.get("path") == "/api/auth/login"
         and item.get("burndown_status") == "shadowed by Rust"

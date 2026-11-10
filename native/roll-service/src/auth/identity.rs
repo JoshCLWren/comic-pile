@@ -1,9 +1,6 @@
 //! Python access-token semantics and opaque, verified owner identity.
 use crate::{ApiError, AppState};
-use axum::{
-    extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
-};
+use axum::{extract::FromRequestParts, http::request::Parts};
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
 use serde_json::Value;
@@ -26,7 +23,7 @@ impl AuthenticatedUser {
 }
 
 fn unauthorized(detail: &'static str) -> ApiError {
-    ApiError(StatusCode::UNAUTHORIZED, detail.to_string())
+    ApiError::Unauthorized(detail.to_string())
 }
 
 fn bearer(parts: &Parts) -> Result<&str, ApiError> {
@@ -72,10 +69,8 @@ impl VerifiedAccessClaims {
         if self.0.password_epoch.is_null() {
             return Ok(0);
         }
-        integer(&self.0.password_epoch).ok_or(ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_string(),
-        ))
+        integer(&self.0.password_epoch)
+            .ok_or(ApiError::Internal("Internal Server Error".to_string()))
     }
 
     /// Build verified claims for a disposable-database test.
@@ -147,7 +142,13 @@ fn claims(token: &str, secret: &[u8]) -> Result<AccessClaims, ApiError> {
     validation.validate_nbf = false;
     validation.validate_aud = false;
     let payload = decode::<Value>(token, &DecodingKey::from_secret(secret), &validation)
-        .map_err(|_| invalid())?
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid()
+        })?
         .claims;
     let now = jsonwebtoken::get_current_timestamp() as i64;
     for field in ["iat", "nbf", "exp"] {
@@ -261,6 +262,7 @@ impl FromRequestParts<Arc<AppState>> for AuthenticatedUser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use jsonwebtoken::{encode, EncodingKey, Header};
     use serde_json::json;
 
@@ -271,7 +273,7 @@ mod tests {
         let hs256 = encode(&Header::new(Algorithm::HS256), &payload, &key).unwrap();
         assert!(claims(&hs256, b"synthetic-test-key").is_ok());
         let wrong_key = claims(&hs256, b"other-key").err().unwrap();
-        assert_eq!(wrong_key.0, StatusCode::UNAUTHORIZED);
+        assert_eq!(wrong_key.status(), StatusCode::UNAUTHORIZED);
         let hs384 = encode(&Header::new(Algorithm::HS384), &payload, &key).unwrap();
         assert!(claims(&hs384, b"synthetic-test-key").is_err());
         assert!(claims("eyJhbGciOiJub25lIn0.e30.", b"synthetic-test-key").is_err());
@@ -297,7 +299,7 @@ mod tests {
                 })
             )
             .unwrap_err()
-            .1,
+            .detail(),
             "Token has been revoked"
         );
         assert_eq!(
@@ -309,7 +311,7 @@ mod tests {
                 })
             )
             .unwrap_err()
-            .1,
+            .detail(),
             "Password changed; please sign in again."
         );
     }
