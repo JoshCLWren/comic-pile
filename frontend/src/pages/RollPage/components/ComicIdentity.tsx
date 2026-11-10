@@ -4,7 +4,7 @@ import { canonicalCreatorKey, useCreatorSummaries } from '../../../hooks/useCrea
 import type { ComicVineRelatedIssue } from '../../../services/api-comicvine'
 import { extractComicIdentity, getMemberState, getStateLabel, getStateColorClass, normalizeArcName, computeArcNeighborAnchors } from '../../../utils/comicIdentity'
 import AddToComicPileDialog from '../../../components/AddToComicPileDialog'
-import ImageWithLoading from '../../../components/ImageWithLoading'
+import { ComicIssueCover } from '../../../components/ComicIssueCard'
 import CompactIssueCardTrigger from '../../../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../../../hooks/useIssueCards'
 import Modal from '../../../components/Modal'
@@ -61,7 +61,6 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
   const { metadata, isLoading, refetch } = useComicVineIssueIntelligence(issueId)
   const storyArcCards = useIssueCards(metadata?.story_arcs.flatMap((arc) => arc.related_issues.flatMap((related) => related.comicpile_matches.map((match) => match.issue_id))) ?? [], { enabled: !isLoading })
   const cardsByIssue = indexIssueCards(storyArcCards.data)
-  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null)
   const [coverRatio, setCoverRatio] = useState<number | null>(null)
   const [showAllCreators, setShowAllCreators] = useState(false)
   const [showAllStoryArcs, setShowAllStoryArcs] = useState(false)
@@ -232,54 +231,47 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
         className="relative mx-auto overflow-hidden rounded-xl bg-white/5"
         style={{ ...coverStyle, ...coverFrameBorder }}
       >
-        {metadata.image_url && metadata.image_url !== failedImageUrl ? (
-          <>
-            <ImageWithLoading
-              src={metadata.image_url}
-              alt=""
-              loading="eager"
-              className="h-full w-full object-contain"
-              placeholderClassName="animate-pulse bg-white/10"
-              onLoad={(img) => {
-                const { naturalWidth, naturalHeight } = img
-                if (naturalWidth > 0 && naturalHeight > 0) {
-                  setCoverRatio(naturalWidth / naturalHeight)
-                }
-              }}
-              onError={() => setFailedImageUrl(metadata.image_url)}
-            />
-            <div className="absolute bottom-2 left-2 right-2 flex justify-end gap-1.5">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
+        <ComicIssueCover
+          coverImageUrl={metadata.image_url}
+          threadTitle={metadata.series_name ?? 'Comic'}
+          issueNumber={metadata.issue_number ?? '?'}
+          variant="featured"
+          frameClassName="h-full w-full"
+          frameStyle={{ aspectRatio: 'auto' }}
+          imageClassName="h-full w-full object-contain"
+          altText=""
+          placeholderTestId="cover-placeholder"
+          onImageLoad={(img) => {
+            const { naturalWidth, naturalHeight } = img
+            if (naturalWidth > 0 && naturalHeight > 0) {
+              setCoverRatio(naturalWidth / naturalHeight)
+            }
+          }}
+        >
+          <div className="absolute bottom-2 left-2 right-2 flex justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
+              aria-label="View cover larger"
+              title="View larger"
+            >
+              <EyeIcon className="w-4 h-4" />
+            </button>
+            {metadata.comicvine_url && (
+              <a
+                href={metadata.comicvine_url}
+                target="_blank"
+                rel="noreferrer"
                 className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
-                aria-label="View cover larger"
-                title="View larger"
+                aria-label="Open on ComicVine"
+                title="Open in ComicVine"
               >
-                <EyeIcon className="w-4 h-4" />
-              </button>
-              {metadata.comicvine_url && (
-                <a
-                  href={metadata.comicvine_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-black/60 text-stone-300 hover:text-stone-100 hover:bg-black/80 transition-colors focus:ring-2 focus:ring-amber-500"
-                  aria-label="Open on ComicVine"
-                  title="Open in ComicVine"
-                >
-                  <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-                </a>
-              )}
-            </div>
-          </>
-        ) : (
-          <div data-testid="cover-placeholder" className="w-full h-full flex items-center justify-center text-stone-600 flex-col gap-2" aria-hidden="true">
-            <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-            </svg>
-            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500">COMIC COVER</span>
+                <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+              </a>
+            )}
           </div>
-        )}
+        </ComicIssueCover>
       </div>
 
       <div className="space-y-3">
@@ -453,7 +445,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 case 'deep_fetched_no_credits':
                   return (
                     <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
-                      Credits not available
+                      ComicVine currently has no creator credits
                     </p>
                   );
                 default:

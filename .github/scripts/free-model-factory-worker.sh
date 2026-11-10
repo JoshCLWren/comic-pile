@@ -515,6 +515,11 @@ while :; do
   (( agent_timeout >= 300 )) || break
 done
 
+if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
+  record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
+  exit 2
+fi
+
 if [[ "$MODE" == 'pr' ]]; then
   pr_lifecycle="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" 2>/dev/null || true)"
   if [[ -n "$pr_lifecycle" ]]; then
@@ -681,6 +686,13 @@ if factory_review_has_conflicting_terminal_markers "$review_log"; then
 fi
 
 verdict="$(factory_extract_semantic_verdict "$review_log" || true)"
+acceptance_policy="$(dirname "$TRUSTED_REVIEW_CONTROLLER")/factory_issue_acceptance.py"
+if [[ "$verdict" == 'approve' ]] \
+  && ! factory_has_acceptance_report "$sanitized_review_log" "$acceptance_policy"; then
+  log "review returned READY without a parseable acceptance report; requesting bounded evidence recovery"
+  # A bare READY cannot be submitted to the controller if recovery times out.
+  verdict=''
+fi
 recovery_attempted=0
 recovery_status=0
 
@@ -698,9 +710,11 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
   (( recovery_timeout > available - 45 )) && recovery_timeout=$((available - 45))
 
   if (( recovery_timeout >= 20 )); then
-    log "semantic review completed without a terminal marker; attempting one bounded same-session verdict recovery"
+    log "semantic review needs a verdict or acceptance report; attempting one bounded same-session evidence recovery"
+    acceptance_mission="$(factory_issue_acceptance_mission "$NUMBER" "$EXPECTED_HEAD")"
     set +e
-    factory_recover_semantic_verdict "$RUNTIME_MODEL" "$GITHUB_WORKSPACE" "$recovery_timeout" "$recovery_log"
+    factory_recover_semantic_verdict "$RUNTIME_MODEL" "$GITHUB_WORKSPACE" "$recovery_timeout" "$recovery_log" \
+      "$NUMBER" "$EXPECTED_HEAD" "$acceptance_mission"
     recovery_status=$?
     set -e
 
@@ -717,13 +731,25 @@ if [[ -z "$verdict" ]] && [[ "$SOURCE" != 'kilo-auto' ]] \
     fi
 
     if (( recovery_status == 0 )); then
-      recovered_verdict="$(factory_extract_semantic_verdict "$recovery_log" || true)"
+      sanitized_recovery_log="/tmp/opencode-factory-${WORKER}-verdict-recovery.sanitized.log"
+      factory_sanitize_review_log "$recovery_log" "$sanitized_recovery_log"
+      if factory_review_has_conflicting_terminal_markers "$sanitized_recovery_log"; then
+        recovered_verdict=''
+        log "${FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED}: recovery returned contradictory terminal markers"
+      else
+        recovered_verdict="$(factory_extract_semantic_verdict "$sanitized_recovery_log" || true)"
+      fi
       if [[ "$recovered_verdict" == 'repair' || "$recovered_verdict" == 'reject' ]]; then
         verdict="$recovered_verdict"
         log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered conservative verdict for PR #${NUMBER}"
       elif [[ "$recovered_verdict" == 'approve' ]] && ! factory_primary_review_denies_ready_recovery "$review_log"; then
-        verdict='approve'
-        log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered approval verdict for PR #${NUMBER}"
+        if factory_append_recovered_acceptance_report \
+          "$sanitized_review_log" "$sanitized_recovery_log" "$acceptance_policy" "$EXPECTED_HEAD"; then
+          verdict='approve'
+          log "${FACTORY_SEMANTIC_STATUS_RECOVERED}: recovered approval with acceptance evidence for PR #${NUMBER}"
+        else
+          log "${FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED}: recovery approval lacks a unique current-head acceptance report"
+        fi
       else
         log "${FACTORY_SEMANTIC_STATUS_RECOVERY_FAILED}: recovery remained ambiguous or contradicted the primary review"
       fi

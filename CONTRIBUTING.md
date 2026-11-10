@@ -95,6 +95,20 @@ where Playwright can otherwise mask a missing greenlet dependency.
 - Test endpoints with httpx.AsyncClient before building UI
 - Use FastAPI's automatic OpenAPI docs at `/docs`
 
+### Route fragments and generated routing files
+
+Contributors edit only `docs/api/route-fragments/*.json` source fragments
+(excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit
+`vercel.json`, `docs/api/v2-route-inventory.json`, the `AGENTS.md`
+`<!-- route-burndown -->` section, or `docs/api/route-fragments/vercel-rewrites.json` in a PR.
+Those files are bot-owned and are regenerated post-merge by
+`.github/workflows/regenerate-routes.yml` (runs
+`python3 scripts/generate_route_burndown.py` then
+`node scripts/generate_vercel_routes.mjs`). The `route-fragment-guard`
+workflow fails PRs that include generated files. `vercel.json` stays on
+`main` for Vercel deploy (do not gitignore it); the previous `main` copy
+remains valid until the bot lands.
+
 ### Frontend Development
 
 - Install deps:    `pnpm install`

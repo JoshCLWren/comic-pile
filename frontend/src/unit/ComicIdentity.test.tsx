@@ -42,6 +42,49 @@ describe('ComicIdentity', () => {
     importIssue.mockReset()
   })
 
+  it('reports truncated story arcs and links the arc on ComicVine', async () => {
+    getIntelligence.mockResolvedValue({
+      comicvine_issue_id: '110',
+      comicvine_url: null,
+      series_name: 'Alpha',
+      series_id: 8,
+      issue_number: '1',
+      name: 'Opening',
+      description: null,
+      image_url: 'https://images.example/110.jpg',
+      cover_date: null,
+      store_date: null,
+      creators: [],
+      story_arcs: [{
+        comicvine_arc_id: 43,
+        total_related_count: 5,
+        name: 'Long Arc',
+        comicvine_url: 'https://comicvine.example/arc/43',
+        related_issues: [
+          {
+            comicvine_issue_id: '111', series_name: 'Alpha', issue_number: '2',
+            name: 'Second Part', cover_date: null, comicvine_url: null,
+            comicpile_matches: [],
+          },
+          {
+            comicvine_issue_id: '112', series_name: 'Alpha', issue_number: '3',
+            name: 'Third Part', cover_date: null, comicvine_url: null,
+            comicpile_matches: [],
+          },
+        ],
+      }],
+    })
+
+    renderWithToast(<ComicIdentity issueId={10} />)
+    await waitForLoaded()
+
+    expect(screen.getByText('(2 of 5 shown)')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'View story arc on ComicVine' })).toHaveAttribute(
+      'href',
+      'https://comicvine.example/arc/43',
+    )
+  })
+
   it('renders large cover image and expanded metadata for full intelligence', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '100',
@@ -1116,7 +1159,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     expect(screen.getByTestId('creator-status-failed')).toHaveTextContent('Refresh failed')
   })
 
-  it('shows "Credits not available" when metadata_status is deep_fetched_no_credits', async () => {
+  it('shows "ComicVine currently has no creator credits" when metadata_status is deep_fetched_no_credits', async () => {
     getIntelligence.mockResolvedValue({
       comicvine_issue_id: '700',
       comicvine_url: null,
@@ -1138,7 +1181,7 @@ describe('ComicIdentity creator status (issue #4149)', () => {
     await waitForLoaded()
 
     expect(screen.getByTestId('creator-status-no-credits')).toBeInTheDocument()
-    expect(screen.getByTestId('creator-status-no-credits')).toHaveTextContent('Credits not available')
+    expect(screen.getByTestId('creator-status-no-credits')).toHaveTextContent('ComicVine currently has no creator credits')
   })
 
   it('does not show status when creators array is not empty', async () => {

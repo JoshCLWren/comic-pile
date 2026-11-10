@@ -92,7 +92,7 @@ def test_retired_models_are_not_reselected_from_a_live_catalog(tmp_path: Path) -
 def test_empty_catalog_and_non_opencode_worker_fail_closed(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="no provably free"):
         selector.select_model(catalog(("paid", 1, 1)), 41, 0, roster(tmp_path))
-    with pytest.raises(ValueError, match="no OpenCode free slot"):
+    with pytest.raises(ValueError, match="no opencode-free slot"):
         selector.select_model(catalog(("big-pickle", 0, 0)), 50, 0, roster(tmp_path))
 
 
@@ -277,3 +277,63 @@ def test_non_recovery_outcomes_do_not_clear_active_cooldown(outcome: str) -> Non
             )
             == set()
         )
+
+
+def test_openrouter_free_selector_rotates_only_proven_zero_cost_models(tmp_path: Path) -> None:
+    """A broken OpenRouter lane may try another verified free model, never paid."""
+    roster_path = roster(tmp_path)
+    with roster_path.open("a", encoding="utf-8") as out:
+        out.write("52\topenrouter-free\tvendor/missing:free\t10\tdispatcher\tOpenRouter\n")
+    raw = json.dumps({
+        "models": [
+            {"id": "openrouter/vendor/missing:free"},
+            {"id": "openrouter/vendor/available:free"},
+            {"id": "openrouter/vendor/expensive", "cost": {"input": 0.01, "output": 0.01}},
+            {"id": "opencode/big-pickle"},
+        ]
+    })
+    assert selector.free_models(raw, provider="openrouter-free") == [
+        "vendor/available:free",
+        "vendor/missing:free",
+    ]
+    selected = selector.select_model(
+        raw, 52, 0, roster_path, attempted={"vendor/missing:free"},
+        provider="openrouter-free",
+    )
+    assert selected["model"] == "vendor/available:free"
+    assert selected["runtime_model"] == "openrouter/vendor/available:free"
+    with pytest.raises(ValueError, match="All 2 candidates"):
+        selector.select_model(
+            raw, 52, 0, roster_path,
+            attempted={"vendor/missing:free", "vendor/available:free"},
+            provider="openrouter-free",
+        )
+
+
+def test_model_unavailability_cooldown_is_provider_scoped(tmp_path: Path) -> None:
+    """An OpenRouter failure cannot suppress the same model name on OpenCode."""
+    from datetime import UTC, datetime
+
+    now = int(datetime(2026, 11, 9, 23, 0, tzinfo=UTC).timestamp())
+    entry = attempt("vendor/a:free", "2026-11-09T23:00:00Z")
+    entry["body"] = str(entry["body"]).replace(
+        "Source: opencode-free", "Source: openrouter-free"
+    )
+    assert selector.unavailable_models(
+        [entry], provider="openrouter-free", now_epoch=now
+    ) == {"vendor/a:free"}
+    assert selector.unavailable_models(
+        [entry], provider="opencode-free", now_epoch=now
+    ) == set()
+
+
+def test_openrouter_free_disallows_unverified_discount_names() -> None:
+    """Only provider-defined :free or metadata-proven zero-cost routes are used."""
+    raw = json.dumps({
+        "models": [
+            {"id": "openrouter/vendor/unknown-free"},
+            {"id": "openrouter/vendor/price-zero", "cost": {"input": 0, "output": 0}},
+            {"id": "openrouter/vendor/paid:free", "cost": {"input": 1, "output": 0}},
+        ]
+    })
+    assert selector.free_models(raw, provider="openrouter-free") == ["vendor/price-zero"]

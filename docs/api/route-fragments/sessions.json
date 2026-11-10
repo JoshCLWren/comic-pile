@@ -52,7 +52,7 @@
       "bucket": "unversioned_operations",
       "method": "GET",
       "path": "/api/sessions/{session_id}/snapshots",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/sessions/[^/]+/snapshots$"
     },
     {
@@ -101,7 +101,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/sessions/{session_id}/snapshots",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/sessions/[^/]+/snapshots$"
     }
   ]
