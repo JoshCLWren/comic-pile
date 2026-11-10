@@ -59,6 +59,55 @@ def test_static_review_has_no_repository_credentials_or_tools(tmp_path: Path) ->
     assert "plugins" not in config
 
 
+
+def test_static_fork_review_uses_dedicated_route_and_only_its_key(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """An NVIDIA coding worker must review via OpenRouter without GitHub credentials."""
+    original = tmp_path / "original/.config/opencode"
+    original.mkdir(parents=True)
+    (original / "opencode.json").write_text(json.dumps({
+        "providers": {"openrouter": {"models": {"free": {"modelID": "openrouter/free"}}}}
+    }))
+    monkeypatch.setenv("HOME", str(tmp_path / "original"))
+    monkeypatch.setenv("FACTORY_SOURCE", "openrouter-free")
+    monkeypatch.setenv("FACTORY_MODEL", "openrouter/free")
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "openrouter/free")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "review-only")
+    monkeypatch.setenv("NVIDIA_API_KEY", "coding-key")
+    monkeypatch.setenv("GH_TOKEN", "writer")
+    monkeypatch.setattr(control, "_source", lambda _worker: "nvidia")
+    monkeypatch.setattr(
+        control, "_context", lambda _pr, _head, path: path.write_text("Reviewed diff")
+    )
+    monkeypatch.chdir(tmp_path)
+    seen: list[dict[str, str]] = []
+
+    def fake_run(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        env = kwargs.get("env")
+        assert isinstance(env, dict)
+        seen.append(env)
+        model_index = args.index("-m")
+        assert args[model_index + 1] == "openrouter/free"
+        config = json.loads(
+            (Path(env["HOME"]) / ".config/opencode/opencode.json").read_text()
+        )
+        assert list(config["providers"]) == ["openrouter"]
+        assert all(item["effect"] == "deny" for item in config["permissions"])
+        return subprocess.CompletedProcess(args, 1)
+
+    monkeypatch.setattr(control.subprocess, "run", fake_run)
+    assert control._review(4923, "a" * 40, "52", "openrouter/free", 30, tmp_path / "review.log") == 1
+    assert len(seen) == 1
+    assert seen[0]["OPENROUTER_API_KEY"] == "review-only"
+    assert "NVIDIA_API_KEY" not in seen[0]
+    assert "GH_TOKEN" not in seen[0]
+
+    monkeypatch.setenv("FACTORY_SOURCE", "nvidia")
+    with pytest.raises(ValueError, match="inconsistent dedicated"):
+        control._review(4923, "a" * 40, "52", "openrouter/free", 30, tmp_path / "invalid.log")
+
+
 def test_execution_rejects_writer_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """Fail before fetching source or metadata if a privileged token reaches execution."""
     # Simulate the real secretless main workflow so only the credential fence can fire.
