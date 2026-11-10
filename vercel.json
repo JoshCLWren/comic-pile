@@ -531,28 +531,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/reading\\-mode$",
-      "methods": [
-        "GET",
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading\\-mode/suggest$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v1/releases/$",
       "methods": [
         "GET",
@@ -1098,6 +1076,31 @@
     },
     {
       "src": "^/api/v1/issues:bulkMarkUnread$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode$",
+      "methods": [
+        "GET",
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode/suggest$",
       "methods": [
         "POST",
         "OPTIONS"

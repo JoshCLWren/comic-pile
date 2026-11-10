@@ -592,16 +592,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 46,
-      "v1_live_python": 143,
+      "v1_shadowed_by_rust": 42,
+      "v1_live_python": 147,
       "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 12,
       "unversioned_live_python": 19,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 58,
-      "total_live_python": 162,
+      "total_shadowed_by_rust": 54,
+      "total_live_python": 166,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -2106,8 +2106,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/reading-mode",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2119,8 +2119,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/reading-mode",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2132,8 +2132,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/reading-mode/dismiss-suggestion",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2145,8 +2145,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/reading-mode/suggest",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
