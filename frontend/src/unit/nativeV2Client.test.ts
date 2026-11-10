@@ -49,6 +49,18 @@ const clientCases: ClientCase[] = [
     expectedArgs: ['/v2/auth/csrf'],
   },
   {
+    name: 'searches custom CBL issues without query values',
+    invoke: (client) => client.customCblSearch(),
+    method: 'get',
+    expectedArgs: ['/v1/custom-cbls/issue-search', { params: undefined }],
+  },
+  {
+    name: 'searches custom CBL issues with a bounded query',
+    invoke: (client) => client.customCblSearch({ query: { q: 'bat', limit: 10 } }),
+    method: 'get',
+    expectedArgs: ['/v1/custom-cbls/issue-search', { params: { q: 'bat', limit: 10 } }],
+  },
+  {
     name: 'requests a password-recovery email',
     invoke: (client) => client.forgotPassword({ body: { email: 'reader@example.com' } }),
     method: 'post',
