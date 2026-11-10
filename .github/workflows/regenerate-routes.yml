@@ -22,6 +22,8 @@ on:
       - 'docs/api/route-fragments/*.json'
       - '.github/workflows/regenerate-routes.yml'
   workflow_dispatch:
+  pull_request_target:
+    types: [closed]
   schedule:
     # Fallback for merges made with GITHUB_TOKEN, which do not trigger push CI.
     - cron: '11,41 * * * *'
@@ -38,8 +40,13 @@ jobs:
     name: Regenerate routing artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip bot's own landing commit so post-merge regen never loops.
-    if: github.actor != 'github-actions[bot]'
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    # The separate merged-PR handler below deploys after auto-merge.
+    # Skip bot landing commits to prevent post-merge regeneration loops.
+    if: github.event_name != 'pull_request_target' && github.actor != 'github-actions[bot]'
     steps:
       - name: Check out current main
         uses: actions/checkout@v7
@@ -140,5 +147,39 @@ jobs:
           <!-- route-regeneration:bot-owned -->')"
             echo "Opened regeneration PR $pr."
           fi
+          # If the PR was already mergeable and the merge lands synchronously,
+          # dispatch production on exit. Normally CI is still running and a
+          # separate pull_request_target/closed job handles the eventual merge.
+          # shellcheck source=/dev/null
+          source .github/scripts/factory-dispatch-production-deploy.sh
+          dispatch_deploy_after_merges() {
+            if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)" == 'MERGED' ]]; then
+              factory_dispatch_production_deploy "Route regeneration PR #$pr merged"
+            fi
+          }
+          trap dispatch_deploy_after_merges EXIT
           # No bypass and no CI-skipping commit marker: GitHub enforces CI Summary.
           gh pr merge --repo "$GITHUB_REPOSITORY" --auto --merge "$pr"
+
+  deploy-after-regeneration:
+    name: Dispatch production after generated artifacts merge
+    if: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'automation/route-regeneration/current' && contains(github.event.pull_request.body, '<!-- route-regeneration:bot-owned -->') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Dispatch deploy for merged route artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # The event is already merged. Never run code from the PR head.
+          # shellcheck source=/dev/null
+          source .github/scripts/factory-dispatch-production-deploy.sh
+          factory_dispatch_production_deploy "Route regeneration PR #${PR_NUMBER} merged"
