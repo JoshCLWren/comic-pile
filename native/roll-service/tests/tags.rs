@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 //! Database-backed regressions for every tag mutation through the mounted router.
 
 use axum::{
