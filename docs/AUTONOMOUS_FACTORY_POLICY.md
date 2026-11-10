@@ -742,3 +742,9 @@ one automatic recovery deployment with schema verification and both production
 smokes. A failed recovery consumes that repair; it cannot blindly retry unchanged
 code. The repository owner retains the explicit reasoned manual freeze override.
 A fully verified release closes managed repair issues when no live worker owns them.
+
+Before issue persistence, compare staged paths (including rename sources) with
+all pages of open same-issue factory PR files. Reuse an available overlapping
+PR and its exact branch/head; preserve live ownership and fork checkout fences.
+Revalidate before a new PR is created. Unreadable state or a live owner blocks
+duplicate creation; disjoint files remain eligible for separate PRs.

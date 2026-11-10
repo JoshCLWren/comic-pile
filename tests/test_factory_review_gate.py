@@ -1594,8 +1594,16 @@ def test_worker_stages_the_controller_once_from_the_pre_checkout_tree() -> None:
         # as an early return or as the condition of a wrapping if block.
         assert body.index(guard) < body.index(copy), script
 
-        first_call = source.index("\nstage_trusted_review_controller\n")
-        checkout = re.search(r"^\s*checkout_target \S", source, re.MULTILINE)
+        # A helper definition may contain its own checkout_target call that only
+        # executes when that helper is invoked after staging. Ignore helper
+        # bodies so this ordering check measures the worker's startup path.
+        startup = source
+        if "\nredirect_issue_to_overlapping_pr() {" in startup:
+            startup = startup.replace(
+                shell_function_body(source, "redirect_issue_to_overlapping_pr"), ""
+            )
+        first_call = startup.index("\nstage_trusted_review_controller\n")
+        checkout = re.search(r"^\s*checkout_target \S", startup, re.MULTILINE)
         assert checkout is not None, script
         assert first_call < checkout.start(), script
 

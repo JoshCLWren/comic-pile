@@ -264,18 +264,18 @@ pub(crate) fn ladder_path(start_die: i32, die_after: &[i32]) -> String {
 }
 
 /// Python `get_current_die` resolution for one already-loaded session.
+///
+/// Event-derived die wins (#4352): the manual_die column is a legacy
+/// fallback only when the session has no die-changing events.
 pub(crate) fn current_die(
     manual_die: Option<i32>,
     latest: Option<(i32, &Value)>,
     start_die: i32,
 ) -> i32 {
-    if let Some(manual) = manual_die.filter(|value| *value != 0) {
-        return manual;
+    if let Some((die_after, context)) = latest {
+        return automatic_die_after(die_after, context);
     }
-    match latest {
-        Some((die_after, context)) => automatic_die_after(die_after, context),
-        None => start_die,
-    }
+    manual_die.filter(|value| *value != 0).unwrap_or(start_die)
 }
 
 /// `GET /api/sessions/{session_id}` and `GET /api/v1/sessions/{session_id}`.
@@ -659,9 +659,12 @@ mod tests {
     }
 
     #[test]
-    fn current_die_prefers_manual_then_automatic() {
-        assert_eq!(current_die(Some(10), Some((4, &json!({}))), 6), 10);
+    fn current_die_is_event_derived_with_manual_fallback() {
+        // #4352: the newest die event wins over the legacy manual pin.
+        assert_eq!(current_die(Some(10), Some((4, &json!({}))), 6), 4);
         assert_eq!(current_die(Some(0), Some((4, &json!({}))), 6), 4);
+        // With no die events, the legacy manual column is the fallback.
+        assert_eq!(current_die(Some(10), None, 6), 10);
         assert_eq!(
             current_die(None, Some((4, &json!({"automatic_die_after": 20}))), 6),
             20
@@ -671,6 +674,7 @@ mod tests {
             4
         );
         assert_eq!(current_die(None, None, 8), 8);
+        assert_eq!(current_die(Some(0), None, 8), 8);
     }
 
     #[test]
