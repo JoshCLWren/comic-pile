@@ -476,26 +476,14 @@ def test_rendered_outputs_match_checked_in_files() -> None:
 
 
 def test_route_fragments_are_loaded_in_filename_order() -> None:
-    """Family fragments have stable ordering independent of filesystem order."""
+    """Every source fragment is loaded exactly once in filename order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
-    assert [fragment.name for fragment in fragments] == [
-        "bug-reports",
-        "catalog",
-        "comicvine",
-        "completed-threads",
-        "continuity-rules",
-        "creators",
-        "custom-cbl",
-        "dependencies",
-        "issues",
-        "preferences",
-        "reading-mode",
-        "releases",
-        "sessions",
-        "tags",
-        "taste-discoveries",
-        "threads",
-    ]
+    expected = sorted(
+        path.stem
+        for path in FRAGMENT_DIR.glob("*.json")
+        if path.name != "vercel-rewrites.json"
+    )
+    assert [fragment.name for fragment in fragments] == expected
 
 
 def _fragment_named(name: str) -> RouteFragment:
