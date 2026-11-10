@@ -121,6 +121,31 @@ def _production_routes() -> tuple[
     return service, ingresses
 
 
+def _registered_route_matches(
+    method: str, documented_path: str, registered: set[tuple[str, str]]
+) -> bool:
+    """Match actual routes, including literal suffixes after OpenAPI captures.
+
+    Example: a documented `/{plan_id}:apply` is served by Axum's
+    `/{plan_id_action}` segment. Do not hardcode which route family owns it.
+    """
+    normalized = _normalized_path(documented_path)
+    if (method, normalized) in registered:
+        return True
+    concrete = AXUM_CAPTURE.sub("42", documented_path)
+    for registered_method, template in registered:
+        if method != registered_method:
+            continue
+        route_pattern = re.sub(
+            r":[A-Za-z_][A-Za-z0-9_]*",
+            "[^/]+",
+            re.escape(template),
+        )
+        if re.fullmatch(route_pattern, concrete):
+            return True
+    return False
+
+
 def test_native_openapi_matches_registered_rust_operations() -> None:
     """Derive route coverage from live Rust routers, not a handwritten endpoint list.
 
@@ -141,11 +166,21 @@ def test_native_openapi_matches_registered_rust_operations() -> None:
     }
     service, ingresses = _production_routes()
     exposed = set().union(*ingresses.values())
-    assert documented <= service, (
-        f"OpenAPI operations without a Rust handler: {sorted(documented - service)}"
+    missing_service = {
+        (method, path)
+        for method, path in documented
+        if not _registered_route_matches(method, path, service)
+    }
+    missing_ingress = {
+        (method, path)
+        for method, path in documented
+        if not _registered_route_matches(method, path, exposed)
+    }
+    assert not missing_service, (
+        f"OpenAPI operations without a Rust handler: {sorted(missing_service)}"
     )
-    assert documented <= exposed, (
-        f"OpenAPI operations without a native ingress: {sorted(documented - exposed)}"
+    assert not missing_ingress, (
+        f"OpenAPI operations without a native ingress: {sorted(missing_ingress)}"
     )
 
     # Health and the internal maintenance drain are implemented directly,
@@ -164,10 +199,16 @@ def test_native_openapi_matches_registered_rust_operations() -> None:
         for method, path in documented
         if path.startswith("/api/v2/")
     }
-    assert public_v2 == documented_v2, (
-        f"Missing v2 OpenAPI: {sorted(public_v2 - documented_v2)}; "
-        f"undelivered v2 OpenAPI: {sorted(documented_v2 - public_v2)}"
-    )
+    undocumented = {
+        (method, path)
+        for method, path in public_v2
+        if not any(
+            documented_method == method
+            and _registered_route_matches(method, documented_path, {(method, path)})
+            for documented_method, documented_path in documented_v2
+        )
+    }
+    assert not undocumented, f"Native v2 handlers missing OpenAPI: {sorted(undocumented)}"
 
 
 def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
