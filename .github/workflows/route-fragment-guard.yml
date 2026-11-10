@@ -1,0 +1,47 @@
+name: Route Fragment Guard
+
+# Fragment-only guard for pull requests.
+#
+# Route PRs must touch only docs/api/route-fragments/*.json source
+# fragments (excluding the generated vercel-rewrites.json artifact).
+# This workflow fails any PR that includes bot-owned generated files:
+# vercel.json, docs/api/v2-route-inventory.json,
+# docs/api/route-fragments/vercel-rewrites.json, or edits inside the
+# AGENTS.md route-burndown markers. AGENTS.md guidance outside the
+# markers remains editable. The artifacts are regenerated post-merge by
+# regenerate-routes.yml, so contributors must never hand-edit or
+# commit them in a PR.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: route-fragment-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  guard:
+    name: Fragment-only guard (no generated files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Fetch PR base and head revisions
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin \
+            "${{ github.event.pull_request.base.sha }}" \
+            "${{ github.event.pull_request.head.sha }}"
+
+      - name: Fail PRs that include bot-owned generated files
+        run: >-
+          python3 scripts/check_route_fragment_guard.py
+          --base "${{ github.event.pull_request.base.sha }}"
+          --head "${{ github.event.pull_request.head.sha }}"
