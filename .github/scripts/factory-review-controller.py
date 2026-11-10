@@ -309,12 +309,12 @@ def explicit_part_of_issue(body: str) -> int | None:
 def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | None, bool]:
     """Resolve a PR's issue and whether the link is review-only.
 
-    Precedence keeps every existing ownership signal authoritative: the
-    canonical factory branch identity first, then GitHub's explicit
-    closes/fixes/resolves reference, then the canonical non-closing
-    ``Part of #N.`` line. A casual #number mention is not an issue-ownership
-    claim, and ``Part of`` authorizes review only; merge-time closure still
-    follows explicit closing references alone.
+    A canonical factory branch retains issue ownership, but a matching
+    ``Part of #N.`` line makes its PR non-closing unless the body explicitly
+    claims closure. Without a factory branch, explicit closing references
+    take precedence over a canonical non-closing ``Part of`` line. Mismatched
+    references cannot redirect issue identity or relax acceptance; merge-time
+    closure still follows explicit closing references alone.
 
     Args:
         pr_number: Pull request number.
