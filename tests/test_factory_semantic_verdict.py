@@ -346,3 +346,6 @@ def test_worker_checks_full_mission_before_recovered_ready() -> None:
     assert '"$EXPECTED_HEAD" "$acceptance_mission"; then' in worker
     assert "policy.report_matches_mission(recovered, sys.argv[5])" in helper
     assert "A bare JSON object" in helper
+    assert "recovery_timeout=90" in worker
+    assert "recovery_timeout=180" in worker
+    assert 'if [[ "$RUNTIME_MODEL" == \'openrouter/free\' ]]; then' in worker
