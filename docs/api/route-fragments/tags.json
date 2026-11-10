@@ -16,98 +16,98 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/tags/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/effective/issue/{issue_id}/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/effective/issue/[^/]+/$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/effective/plan/{plan_id}/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/effective/plan/[^/]+/$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/effective/thread/{thread_id}/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/effective/thread/[^/]+/$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/effective/thread/{thread_id}/issues/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/effective/thread/[^/]+/issues/$"
     },
     {
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/tags/{tag_id}/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/{tag_id}/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/$"
     },
     {
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/tags/{tag_id}/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/tags/{tag_id}/assign/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/assign/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/tags/{tag_id}/bulk-assign/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/bulk\\-assign/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/tags/{tag_id}/bulk-unassign/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/bulk\\-unassign/$"
     },
     {
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/tags/{tag_id}/unassign/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/unassign/$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/tags/{tag_id}/usage/",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/tags/[^/]+/usage/$"
     }
   ]
