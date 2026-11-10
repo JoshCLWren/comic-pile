@@ -20,6 +20,8 @@
 //!   reasons. It needs the bounded Option E input snapshot in addition to the
 //!   page statement, so the default path is the only one-statement path.
 
+use axum::http::StatusCode;
+
 use crate::{
     auth::VerifiedAccessClaims, db, option_inputs, reading_eligibility, ApiError, AppState,
 };
@@ -418,7 +420,7 @@ pub async fn get_thread_detail(
         )
         .await
         .map_err(db::query_error)?;
-    let row = row.ok_or(ApiError(
+    let row = row.ok_or(ApiError::with_status(
         StatusCode::NOT_FOUND,
         "Thread not found".to_string(),
     ))?;

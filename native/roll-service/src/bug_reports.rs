@@ -159,11 +159,11 @@ pub struct BugReportResponse {
 }
 
 fn unprocessable(detail: String) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
+    ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, detail)
 }
 
 fn not_configured() -> ApiError {
-    ApiError(
+    ApiError::with_status(
         StatusCode::SERVICE_UNAVAILABLE,
         "GitHub integration not configured".to_string(),
     )
@@ -466,7 +466,9 @@ async fn load_user(state: &AppState, user_id: i32) -> Result<(String, bool), Api
         .query_opt(USER_SQL, &[&user_id])
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "User not found".to_string()))?;
+        .ok_or_else(|| {
+            ApiError::with_status(StatusCode::UNAUTHORIZED, "User not found".to_string())
+        })?;
     Ok((row.get(0), row.get(1)))
 }
 
@@ -541,7 +543,7 @@ async fn submit_with_issuer(
     if is_admin {
         let issue_url = issuer(settings, title, body, labels)
             .await
-            .map_err(|detail| ApiError(StatusCode::BAD_GATEWAY, detail))?;
+            .map_err(|detail| ApiError::with_status(StatusCode::BAD_GATEWAY, detail))?;
         return Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response());
     }
 
@@ -569,7 +571,7 @@ async fn submit_with_issuer(
         Ok(url) => url,
         Err(detail) => {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError(StatusCode::BAD_GATEWAY, detail));
+            return Err(ApiError::with_status(StatusCode::BAD_GATEWAY, detail));
         }
     };
     let submitted_at_seconds = Utc::now().timestamp_micros() as f64 / 1_000_000.0;
@@ -752,8 +754,8 @@ mod tests {
             },
         ] {
             let error = validate_create(&request).expect_err("blank must fail");
-            assert_eq!(error.0, StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(error.1, "Title and description must not be blank");
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(error.detail(), "Title and description must not be blank");
         }
     }
 
@@ -766,7 +768,7 @@ mod tests {
             diagnostics: None,
         };
         assert_eq!(
-            validate_create(&too_long_title).unwrap_err().0,
+            validate_create(&too_long_title).unwrap_err().status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
         let too_long_description = BugReportCreate {
@@ -776,7 +778,7 @@ mod tests {
             diagnostics: None,
         };
         assert_eq!(
-            validate_create(&too_long_description).unwrap_err().0,
+            validate_create(&too_long_description).unwrap_err().status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
         let valid = BugReportCreate {
@@ -971,7 +973,7 @@ mod tests {
         )
         .await
         .expect_err("synthetic issuer must fail so the claim rolls back");
-        assert_eq!(error.0, StatusCode::BAD_GATEWAY);
+        assert_eq!(error.status(), StatusCode::BAD_GATEWAY);
 
         let connection = db::checkout(&state).await.expect("verify connection");
         let consumed: i64 = connection

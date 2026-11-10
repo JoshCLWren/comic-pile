@@ -177,11 +177,11 @@ const TAGS_SQL: &str = "SELECT tag.id, tag.name, tag.normalized_name, tag.scope,
 const QUEUE_POSITION_SQL: &str = "SELECT seq::int FROM (SELECT id, row_number() OVER (ORDER BY is_blocked ASC, queue_position ASC, id ASC) AS seq FROM threads WHERE user_id = $1 AND status = 'active' AND queue_position >= 1) ranked WHERE id = $2";
 
 fn not_found() -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, "Session not found".to_string())
+    ApiError::with_status(StatusCode::NOT_FOUND, "Session not found".to_string())
 }
 
 fn internal() -> ApiError {
-    ApiError(
+    ApiError::with_status(
         StatusCode::INTERNAL_SERVER_ERROR,
         "Internal Server Error".to_string(),
     )
@@ -676,8 +676,8 @@ mod tests {
     #[test]
     fn not_found_matches_python_detail_text() {
         let error = not_found();
-        assert_eq!(error.0, StatusCode::NOT_FOUND);
-        assert_eq!(error.1, "Session not found");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+        assert_eq!(error.detail(), "Session not found");
     }
 
     #[test]
@@ -802,14 +802,14 @@ mod tests {
         let missing = get_session(Path(9999), user, State(state.clone()))
             .await
             .expect_err("missing must 404");
-        assert_eq!(missing.0, StatusCode::NOT_FOUND);
-        assert_eq!(missing.1, "Session not found");
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        assert_eq!(missing.detail(), "Session not found");
 
         let foreign = get_session(Path(9302), user, State(state.clone()))
             .await
             .expect_err("foreign must 404");
-        assert_eq!(foreign.0, StatusCode::NOT_FOUND);
-        assert_eq!(foreign.1, "Session not found");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+        assert_eq!(foreign.detail(), "Session not found");
     }
 
     #[tokio::test]

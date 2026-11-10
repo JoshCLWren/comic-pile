@@ -101,7 +101,7 @@ const THREAD_INCOMING_SQL: &str = "SELECT d.id, d.target_issue_id, si.id, si.iss
 const THREAD_OUTGOING_SQL: &str = "SELECT d.id, d.source_issue_id, ti.id, ti.issue_number, ti.thread_id, tt.title FROM dependencies d JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE d.source_issue_id = ANY($1::int[]) AND tt.user_id = $2 ORDER BY d.id";
 
 fn not_found(issue_id: i32) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, format!("Issue {issue_id} not found"))
+    ApiError::with_status(StatusCode::NOT_FOUND, format!("Issue {issue_id} not found"))
 }
 
 /// `GET /api/v1/issues/{issue_id}` — one owner-scoped issue row.
@@ -188,7 +188,7 @@ pub async fn get_thread_issue_dependencies(
         .await
         .map_err(db::query_error)?;
     if owned.is_none() {
-        return Err(ApiError(
+        return Err(ApiError::with_status(
             StatusCode::NOT_FOUND,
             format!("Thread {thread_id} not found"),
         ));
@@ -423,8 +423,8 @@ mod tests {
     #[test]
     fn not_found_matches_python_detail_text() {
         let error = not_found(42);
-        assert_eq!(error.0, StatusCode::NOT_FOUND);
-        assert_eq!(error.1, "Issue 42 not found");
+        assert_eq!(error.status(), StatusCode::NOT_FOUND);
+        assert_eq!(error.detail(), "Issue 42 not found");
     }
 
     #[tokio::test]

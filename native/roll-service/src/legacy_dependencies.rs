@@ -23,7 +23,7 @@ pub struct DependencyNoteUpdate {
 }
 
 fn not_found(dependency_id: i32) -> ApiError {
-    ApiError(
+    ApiError::with_status(
         StatusCode::NOT_FOUND,
         format!("Dependency {dependency_id} not found"),
     )
@@ -135,7 +135,7 @@ pub async fn update(
         .as_ref()
         .is_some_and(|note| note.chars().count() > 255)
     {
-        return Err(ApiError(
+        return Err(ApiError::with_status(
             StatusCode::UNPROCESSABLE_ENTITY,
             "String should have at most 255 characters".to_string(),
         ));
@@ -271,11 +271,11 @@ mod tests {
         )
         .await
         .expect_err("foreign update denied");
-        assert_eq!(denied.0, StatusCode::NOT_FOUND);
+        assert_eq!(denied.status(), StatusCode::NOT_FOUND);
         let denied = delete(State(state.clone()), other, Path(edge))
             .await
             .expect_err("foreign delete denied");
-        assert_eq!(denied.0, StatusCode::NOT_FOUND);
+        assert_eq!(denied.status(), StatusCode::NOT_FOUND);
         let Json(updated) = update(
             State(state.clone()),
             owner,
@@ -305,7 +305,7 @@ mod tests {
         )
         .await
         .expect_err("oversized note denied");
-        assert_eq!(invalid.0, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(invalid.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let Json(cleared) = update(
             State(state.clone()),
             owner,

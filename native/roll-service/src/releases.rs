@@ -145,23 +145,23 @@ pub struct ReleaseSourceResponse {
 // ---------------------------------------------------------------------------
 
 fn unprocessable(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.into())
+    ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, detail.into())
 }
 
 fn not_found(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, detail.into())
+    ApiError::with_status(StatusCode::NOT_FOUND, detail.into())
 }
 
 fn conflict(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::CONFLICT, detail.into())
+    ApiError::with_status(StatusCode::CONFLICT, detail.into())
 }
 
 fn unavailable(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::SERVICE_UNAVAILABLE, detail.into())
+    ApiError::with_status(StatusCode::SERVICE_UNAVAILABLE, detail.into())
 }
 
 fn unauthorized(detail: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::UNAUTHORIZED, detail.into())
+    ApiError::with_status(StatusCode::UNAUTHORIZED, detail.into())
 }
 
 // ---------------------------------------------------------------------------
@@ -1675,10 +1675,7 @@ async fn upsert_once(
         Ok(row) => row,
         Err(error) if is_unique_violation(&error) => {
             let _ = tx.rollback().await;
-            return Err(ApiError(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "unique-violation-retry".to_string(),
-            ));
+            return Err(ApiError::UniqueViolation);
         }
         Err(error) => {
             let _ = tx.rollback().await;
@@ -1700,7 +1697,7 @@ pub async fn publish(
     check_writer_from_headers(&headers)?;
     match upsert_once(&state, &payload, false).await {
         Ok(release) => Ok(Json(full_response(&release))),
-        Err(error) if error.1 == "unique-violation-retry" => {
+        Err(error) if error.is_unique_violation() => {
             // Concurrent duplicate retry: re-resolve identity and apply.
             let matches = find_full_by_source(
                 &state,
@@ -1710,7 +1707,7 @@ pub async fn publish(
             )
             .await?;
             let Some(existing) = matches.first() else {
-                return Err(ApiError(
+                return Err(ApiError::with_status(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal Server Error".to_string(),
                 ));
@@ -1906,17 +1903,21 @@ mod tests {
     #[test]
     fn writer_token_requires_configuration_then_credential() {
         assert_eq!(
-            check_writer_token(Some("writer-secret"), "").unwrap_err().0,
+            check_writer_token(Some("writer-secret"), "")
+                .unwrap_err()
+                .status(),
             StatusCode::SERVICE_UNAVAILABLE
         );
         assert_eq!(
-            check_writer_token(None, "writer-secret").unwrap_err().0,
+            check_writer_token(None, "writer-secret")
+                .unwrap_err()
+                .status(),
             StatusCode::UNAUTHORIZED
         );
         assert_eq!(
             check_writer_token(Some("wrong"), "writer-secret")
                 .unwrap_err()
-                .0,
+                .status(),
             StatusCode::UNAUTHORIZED
         );
         assert!(check_writer_token(Some("writer-secret"), "writer-secret").is_ok());
@@ -2048,13 +2049,13 @@ mod tests {
 
         payload.title = "T".to_string();
         let error = validate_upsert_request(&payload).unwrap_err();
-        assert_eq!(error.0, StatusCode::UNPROCESSABLE_ENTITY);
-        assert!(error.1.contains("title must contain meaningful"));
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(error.detail().contains("title must contain meaningful"));
 
         payload = valid_payload(1213, &"7".repeat(40));
         payload.title = "incomplete #1551 fix for roll recovery".to_string();
         assert_eq!(
-            validate_upsert_request(&payload).unwrap_err().0,
+            validate_upsert_request(&payload).unwrap_err().status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
 
@@ -2062,7 +2063,7 @@ mod tests {
         payload.provenance_json = json!({"source": "github"});
         assert!(validate_upsert_request(&payload)
             .unwrap_err()
-            .1
+            .detail()
             .contains("provenance_json.classification"));
     }
 
@@ -2131,12 +2132,12 @@ mod tests {
             .expect("retract succeeds");
         assert_eq!(retracted.status, "retracted");
         let fetched_after = get(State(state.clone()), Path(first.id)).await;
-        assert_eq!(fetched_after.unwrap_err().0, StatusCode::NOT_FOUND);
+        assert_eq!(fetched_after.unwrap_err().status(), StatusCode::NOT_FOUND);
 
         let missing = retract(State(state.clone()), writer_headers(), Path(999999))
             .await
             .unwrap_err();
-        assert_eq!(missing.0, StatusCode::NOT_FOUND);
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 
         set_writer_token(None);
     }
@@ -2150,7 +2151,7 @@ mod tests {
         let rejected = publish(State(state.clone()), empty_headers(), Json(payload.clone()))
             .await
             .unwrap_err();
-        assert_eq!(rejected.0, StatusCode::UNAUTHORIZED);
+        assert_eq!(rejected.status(), StatusCode::UNAUTHORIZED);
 
         let Json(_) = publish(
             State(state.clone()),
@@ -2164,7 +2165,7 @@ mod tests {
         let conflict_error = publish(State(state.clone()), writer_headers(), Json(conflicting))
             .await
             .unwrap_err();
-        assert_eq!(conflict_error.0, StatusCode::CONFLICT);
+        assert_eq!(conflict_error.status(), StatusCode::CONFLICT);
 
         set_writer_token(None);
     }
@@ -2182,7 +2183,7 @@ mod tests {
             .await
             .expect("hidden row publishes");
         let fetched = get(State(state.clone()), Path(created.id)).await;
-        assert_eq!(fetched.unwrap_err().0, StatusCode::NOT_FOUND);
+        assert_eq!(fetched.unwrap_err().status(), StatusCode::NOT_FOUND);
 
         let Json(retracted) = retract(State(state.clone()), writer_headers(), Path(created.id))
             .await

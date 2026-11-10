@@ -85,7 +85,7 @@ pub struct CreatorListQuery {
 }
 
 fn bad_request(msg: impl Into<String>) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, msg.into())
+    ApiError::with_status(StatusCode::BAD_REQUEST, msg.into())
 }
 
 fn parse_creator_key(key: &str) -> Option<i64> {
@@ -334,19 +334,20 @@ async fn resolve_user_id(state: &AppState, claims: &VerifiedAccessClaims) -> Res
          SELECT user_id, password_epoch, revoked FROM auth",
         &[&username, &jti],
     ).await?;
-    let row =
-        row.ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "User not found".to_string()))?;
+    let row = row.ok_or_else(|| {
+        ApiError::with_status(StatusCode::UNAUTHORIZED, "User not found".to_string())
+    })?;
     let user_id: i32 = row.get(0);
     let epoch: i64 = row.get(1);
     let revoked: bool = row.get(2);
     if revoked {
-        return Err(ApiError(
+        return Err(ApiError::with_status(
             StatusCode::UNAUTHORIZED,
             "Token has been revoked".to_string(),
         ));
     }
     if expected_epoch < epoch {
-        return Err(ApiError(
+        return Err(ApiError::with_status(
             StatusCode::UNAUTHORIZED,
             "Password changed; please sign in again.".to_string(),
         ));
