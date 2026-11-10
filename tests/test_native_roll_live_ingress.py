@@ -308,10 +308,20 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                     for previous in routes[:route_index]
                 )
             }
-            assert len(matching_ingress) == 1, (
+            # A parameter rewrite can legitimately also match a literal
+            # sibling (for example /custom-cbls/{list_id} and /issue-search).
+            # Axum chooses the static sibling, but both must land in the same
+            # native entrypoint on the first matching Vercel rewrite.
+            assert matching_ingress, (
                 f"Vercel sends {method} {source} to {function}, "
-                f"but that entrypoint has {len(matching_ingress)} matching routes"
+                "but that entrypoint has no matching registered Rust route"
             )
+            for registered_method, path in matching_ingress:
+                actual = _destination(routes, registered_method, _concrete_path(path))
+                assert actual == function, (
+                    f"Vercel sends {registered_method} {path} to {actual!r}, "
+                    f"not the expected {function!r}"
+                )
             if "/api/_native_" not in source:
                 assert matching_ingress <= service, (
                     f"Vercel sends {method} {source} to {function}, "
