@@ -132,6 +132,26 @@ def find_generated_violations(
     return violations
 
 
+def agents_block_changed_for_refs(base: str, head: str) -> bool:
+    """Return whether the head changed the AGENTS burndown block from base.
+
+    The comparison uses the merge base, not the current base-branch tip:
+    a PR that edits AGENTS.md outside the markers must not be failed merely
+    because main regenerated the block after the branch was created.
+
+    Args:
+        base: Base revision (for example the pull-request base SHA).
+        head: Head revision.
+
+    Returns:
+        True when the generated burndown block differs from the merge base.
+    """
+    merge_base = _git_text("merge-base", base, head).strip()
+    base_text = _git_text("show", f"{merge_base}:{AGENTS_PATH}")
+    head_text = _git_text("show", f"{head}:{AGENTS_PATH}")
+    return agents_block_changed(base_text, head_text)
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -186,12 +206,10 @@ def main() -> int:
     agents_changed = False
     if AGENTS_PATH in changed_files:
         try:
-            base_text = _git_text("show", f"{args.base}:{AGENTS_PATH}")
-            head_text = _git_text("show", f"{args.head}:{AGENTS_PATH}")
+            agents_changed = agents_block_changed_for_refs(args.base, args.head)
         except subprocess.CalledProcessError as exc:
             print(f"route fragment guard failed to read AGENTS.md: {exc}")
             return 2
-        agents_changed = agents_block_changed(base_text, head_text)
     violations = find_generated_violations(changed_files, agents_changed)
     if violations:
         print(

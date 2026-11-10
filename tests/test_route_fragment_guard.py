@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts import check_route_fragment_guard as guard
 from scripts.check_route_fragment_guard import (
     agents_block_changed,
     extract_agents_block,
@@ -167,3 +168,24 @@ def test_guard_workflow_runs_on_pull_request() -> None:
 def test_generated_paths_list_matches_guard_contract(path: str) -> None:
     """Guard contract covers every bot-owned artifact."""
     assert is_generated_path(path)
+
+
+def test_agents_comparison_uses_the_merge_base(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stale base tip must not fail an outside-marker AGENTS.md edit."""
+    block = "<!-- route-burndown:begin -->\nold counts\n<!-- route-burndown:end -->"
+    calls: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str) -> str:
+        calls.append(args)
+        if args == ("merge-base", "base-tip", "head"):
+            return "merge-base-sha\n"
+        if args == ("show", "merge-base-sha:AGENTS.md"):
+            return f"intro\n{block}\nfooter old\n"
+        if args == ("show", "head:AGENTS.md"):
+            return f"intro\n{block}\nfooter new\n"
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr(guard, "_git_text", fake_git)
+    assert guard.agents_block_changed_for_refs("base-tip", "head") is False
+    assert ("show", "merge-base-sha:AGENTS.md") in calls
+    assert ("show", "base-tip:AGENTS.md") not in calls
