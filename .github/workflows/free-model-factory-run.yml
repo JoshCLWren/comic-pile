@@ -1042,9 +1042,20 @@ jobs:
                 RUNTIME_MODEL="$(jq -er '.runtime_model' <<< "$selected")"
                 continue
               fi
-              grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log" || {
-                echo 'Smoke did not return required marker' >&2; exit 1;
-              }
+              if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
+                echo "Smoke was successful but $RUNTIME_MODEL did not honor the response contract; trying a different model" >&2
+                attempted+=("$model")
+                exclusions=()
+                for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
+                if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
+                  --provider "$SOURCE" --catalog "$catalog" --comments "$comments" --worker "$WORKER" \
+                  --rotation "${GITHUB_RUN_NUMBER:-0}" "${exclusions[@]}")"; then
+                  echo "No remaining free model obeyed the smoke contract" >&2
+                  exit 1
+                fi
+                RUNTIME_MODEL="$(jq -er '.runtime_model' <<< "$selected")"
+                continue
+              fi
               if [[ "$SOURCE" == opencode-free && "$model" == crouton-alpha-free ]] && \
                 [[ "$(cat "$marker_file" 2>/dev/null || true)" != FIXED_MODEL_OPENCODE_OK ]]; then
                 echo 'Crouton did not invoke shell tool' >&2; exit 1
