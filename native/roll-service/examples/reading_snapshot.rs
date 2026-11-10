@@ -11,7 +11,7 @@ async fn main() {
     match reading_inputs::load_core_inputs(&state, user).await {
         Ok(inputs) => println!("{}", serde_json::to_string(&inputs).unwrap()),
         Err(error) => {
-            eprintln!("snapshot failed: {} {}", error.0, error.1);
+            eprintln!("snapshot failed: {} {}", error.status(), error.detail());
             std::process::exit(1);
         }
     }

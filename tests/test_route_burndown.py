@@ -175,6 +175,12 @@ def test_full_surface_matches_deployed_ingress() -> None:
     )
     assert any(
         item.get("method") == "GET"
+        and item.get("path") == "/api/v1/threads/completed/threads"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
         and item.get("path") == "/api/v1/creators"
         and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops

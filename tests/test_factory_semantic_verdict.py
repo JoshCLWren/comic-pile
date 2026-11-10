@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -250,3 +251,105 @@ def test_recovery_rejects_stale_head_and_absent_evidence(tmp_path: Path) -> None
     recovery.write_text("FACTORY_GATE_READY\n")
     assert run_bash(call).returncode != 0
     assert run_bash(f"factory_has_acceptance_report {primary} {POLICY}").returncode != 0
+
+
+def test_recover_verdict_rejects_invalid_pr_and_head(tmp_path: Path) -> None:
+    """The recovery model is bound to an exact PR number and 40-char lowercase head."""
+    recovery_log = str(tmp_path / "recovery.log")
+    head40 = "a" * 40
+    # PR must be a positive integer (not zero, not negative, not non-numeric)
+    for bad_pr in ("0", "-1", "abc"):
+        result = run_bash(
+            f"factory_recover_semantic_verdict model workspace 30 {recovery_log} '{bad_pr}' {head40} 'mission'"
+        )
+        assert result.returncode == 2, f"PR={bad_pr!r} should be rejected, got {result.returncode}"
+    # Head must be exactly 40 lowercase hex characters (not short, not uppercase, not non-hex)
+    for bad_head in ("short", "A" * 40, "g" * 40, "a" * 39, "a" * 41):
+        result = run_bash(
+            f"factory_recover_semantic_verdict model workspace 30 {recovery_log} 1 {bad_head} 'mission'"
+        )
+        assert result.returncode == 2, f"head={bad_head!r} should be rejected, got {result.returncode}"
+
+
+def test_recovery_reads_primary_ready_with_no_report(tmp_path: Path) -> None:
+    """A primary READY result with no parseable report is handled correctly during worker handoff."""
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    # Primary has READY marker but no FACTORY_ACCEPTANCE_V1 report
+    primary.write_text("FACTORY_GATE_READY\n")
+    recovery.write_text(
+        "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
+        + "FACTORY_GATE_READY\n"
+    )
+    call = (
+        "factory_append_recovered_acceptance_report "
+        f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
+    )
+    assert run_bash(call).returncode == 0
+    assert primary.read_text().count("FACTORY_ACCEPTANCE_V1=") == 1
+    assert run_bash(f"factory_has_acceptance_report {primary} {POLICY}").returncode == 0
+
+
+def test_composite_recovery_handoff_requires_complete_trusted_issue_rubric(
+    tmp_path: Path,
+) -> None:
+    """Reproduce #4926: bare JSON/A1-only READY is not independent acceptance."""
+    mission = (
+        f"ISSUE ACCEPTANCE: #4916, head {RECOVERY_HEAD}, issue digest {'b' * 64}.\n"
+        "ACCEPTANCE_CRITERIA_COUNT=3\n"
+    )
+    # Three *independently described* entries; no wrapper may generate these.
+    complete = recovery_report()
+    items = complete["items"]
+    assert isinstance(items, list)
+    original_item = items[0]
+    assert isinstance(original_item, dict)
+    complete["items"] = [
+        {**original_item, "id": f"A{i}"}
+        for i in range(1, 4)
+    ]
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    primary.write_text("FACTORY_GATE_READY\n")
+    call = (
+        "factory_append_recovered_acceptance_report "
+        f"{shlex.quote(str(primary))} {shlex.quote(str(recovery))} "
+        f"{shlex.quote(str(POLICY))} {RECOVERY_HEAD} {shlex.quote(mission)}"
+    )
+    check = (
+        "factory_has_acceptance_report "
+        f"{shlex.quote(str(primary))} {shlex.quote(str(POLICY))} {shlex.quote(mission)}"
+    )
+
+    # The actual OpenRouter recovery emitted this bare, one-criterion JSON.
+    recovery.write_text(json.dumps(recovery_report()) + "\nFACTORY_GATE_READY\n")
+    assert run_bash(call).returncode != 0
+    assert run_bash(check).returncode != 0
+    assert primary.read_text() == "FACTORY_GATE_READY\n"
+
+    # Even prefixed evidence is incomplete if it does not cover A1..A3.
+    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n")
+    assert run_bash(call).returncode != 0
+    assert primary.read_text() == "FACTORY_GATE_READY\n"
+
+    # Exactly one model-authored, prefixed, correctly shaped report flows once.
+    recovery.write_text("FACTORY_ACCEPTANCE_V1=" + json.dumps(complete) + "\nFACTORY_GATE_READY\n")
+    assert run_bash(call).returncode == 0
+    assert run_bash(call).returncode == 0
+    assert run_bash(check).returncode == 0
+    assert primary.read_text().count("FACTORY_ACCEPTANCE_V1=") == 1
+
+
+def test_worker_checks_full_mission_before_recovered_ready() -> None:
+    worker = WORKER.read_text()
+    helper = HELPER.read_text()
+    mission = 'acceptance_mission="$(factory_issue_acceptance_mission "$NUMBER" "$EXPECTED_HEAD")"'
+    assert worker.count(mission) == 1
+    assert worker.index(mission) < worker.index('if [[ "$verdict" == \'approve\' ]]')
+    assert 'factory_has_acceptance_report "$sanitized_review_log" "$acceptance_policy" "$acceptance_mission"' in worker
+    assert '"$EXPECTED_HEAD" "$acceptance_mission"; then' in worker
+    assert "policy.report_matches_mission(recovered, sys.argv[5])" in helper
+    assert "A bare JSON object" in helper
+    assert "recovery_timeout=90" in worker
+    assert "recovery_timeout=180" in worker
+    assert 'if [[ "$RUNTIME_MODEL" == \'openrouter/free\' ]]; then' in worker

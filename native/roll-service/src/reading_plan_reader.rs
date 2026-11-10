@@ -7,7 +7,6 @@
 use crate::{auth::AuthenticatedUser, db, reading_list, ApiError, AppState};
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::Serialize;
@@ -156,7 +155,7 @@ pub async fn read(
         )
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Reading Plan not found".to_string()))?;
+        .ok_or_else(|| ApiError::NotFound("Reading Plan not found".to_string()))?;
     let plan_name: String = plan.get(0);
 
     let source_rows = conn
@@ -193,8 +192,7 @@ pub async fn read(
     }
     let mut source_ids = source_list_ids.iter().copied();
     let (Some(list_id), None) = (source_ids.next(), source_ids.next()) else {
-        return Err(ApiError(
-            StatusCode::CONFLICT,
+        return Err(ApiError::Conflict(
             if source_list_ids.is_empty() {
                 "Reading Plan has no linked authoritative Reading List. Open recovery to relink."
             } else {

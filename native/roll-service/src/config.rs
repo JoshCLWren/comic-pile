@@ -34,8 +34,7 @@ pub struct Config {
     pub bind: SocketAddr,
     pub database: PostgresConfig,
     pub jwt_secret: JwtSecret,
-    /// HMAC secret for series-mapping preview tokens. Matches Python:
-    /// PREVIEW_TOKEN_SECRET_KEY first, then SECRET_KEY/auth secret.
+    /// HMAC secret for series-mapping preview tokens.
     pub preview_token_secret: String,
     pub log_filter: EnvFilter,
     pub pool_size: usize,
@@ -117,14 +116,26 @@ impl Config {
         let bind = get("RUST_ROLL_BIND")
             .unwrap_or_else(|| "127.0.0.1:8010".into())
             .parse::<SocketAddr>()
-            .map_err(|_| ConfigError("invalid RUST_ROLL_BIND"))?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ConfigError("invalid RUST_ROLL_BIND")
+            })?;
         if environment == Environment::Development && !bind.ip().is_loopback() {
             return Err(ConfigError("development binding must be loopback"));
         }
         let database = PostgresConfig::from_str(
             &get("RUST_ROLL_DATABASE_URL").ok_or(ConfigError("RUST_ROLL_DATABASE_URL required"))?,
         )
-        .map_err(|_| ConfigError("invalid RUST_ROLL_DATABASE_URL"))?;
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ConfigError("invalid RUST_ROLL_DATABASE_URL")
+        })?;
         if environment == Environment::Production && database.get_ssl_mode() != SslMode::Require {
             return Err(ConfigError("production database requires sslmode=require"));
         }
@@ -132,11 +143,17 @@ impl Config {
             .filter(|value| !value.trim().is_empty())
             .ok_or(ConfigError("RUST_ROLL_JWT_SECRET required"))?;
         let preview_token_secret = get("PREVIEW_TOKEN_SECRET_KEY")
-            .map(|v| v.trim().to_string())
-            .filter(|v| !v.is_empty())
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
             .unwrap_or_else(|| jwt_secret.clone());
         let log_filter = EnvFilter::try_new(get("RUST_ROLL_LOG").unwrap_or_else(|| "info".into()))
-            .map_err(|_| ConfigError("invalid RUST_ROLL_LOG"))?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ConfigError("invalid RUST_ROLL_LOG")
+            })?;
         fn number(
             get: &impl Fn(&str) -> Option<String>,
             name: &'static str,
@@ -146,7 +163,13 @@ impl Config {
             let value = get(name)
                 .map(|value| value.parse::<u64>())
                 .transpose()
-                .map_err(|_| ConfigError("invalid numeric pool or timeout setting"))?
+                .map_err(|e| {
+                    tracing::debug!(
+                        error_kind = crate::error_kind(&e),
+                        "preserved underlying error before mapping"
+                    );
+                    ConfigError("invalid numeric pool or timeout setting")
+                })?
                 .unwrap_or(default);
             if value == 0 || value > max {
                 return Err(ConfigError("pool or timeout setting outside allowed range"));

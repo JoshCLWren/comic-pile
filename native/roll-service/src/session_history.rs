@@ -7,7 +7,6 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde_json::{json, Value};
@@ -58,12 +57,13 @@ pub async fn list_session_snapshots(
         &[&session_id, &user.id()],
     )
     .await?
-    .ok_or(ApiError(StatusCode::NOT_FOUND, "Session not found".to_string()))?;
-    let snapshots: Value = serde_json::from_str(row.get(0)).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".to_string(),
-        )
+    .ok_or(ApiError::NotFound("Session not found".to_string()))?;
+    let snapshots: Value = serde_json::from_str(row.get(0)).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Internal Server Error".to_string())
     })?;
     Ok(Json(
         json!({"session_id": session_id, "snapshots": snapshots}),

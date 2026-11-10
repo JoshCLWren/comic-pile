@@ -77,7 +77,7 @@ pub enum AuthError {
 
 impl From<crate::ApiError> for AuthError {
     fn from(error: crate::ApiError) -> Self {
-        if error.0 == StatusCode::SERVICE_UNAVAILABLE {
+        if error.is_database_unavailable() {
             AuthError::Unavailable
         } else {
             AuthError::InternalError

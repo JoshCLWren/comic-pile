@@ -15,7 +15,7 @@ use crate::{
     auth::AuthenticatedUser, db, option_inputs, option_inputs::OptionInputs,
     reading_constraints::ValidationError, ApiError, AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
@@ -121,9 +121,7 @@ impl ReadingGraphRepairRequest {
             "delete_list" => self
                 .list_id
                 .map(|list_id| ReadingGraphRepairAction::DeleteList { list_id })
-                .ok_or_else(|| {
-                    crate::ApiError(StatusCode::BAD_REQUEST, "list_id is required".to_string())
-                }),
+                .ok_or_else(|| crate::ApiError::BadRequest("list_id is required".to_string())),
             "delete_prerequisite" => self
                 .prerequisite_id
                 .map(
@@ -132,22 +130,17 @@ impl ReadingGraphRepairRequest {
                     },
                 )
                 .ok_or_else(|| {
-                    crate::ApiError(
-                        StatusCode::BAD_REQUEST,
-                        "prerequisite_id is required".to_string(),
-                    )
+                    crate::ApiError::BadRequest("prerequisite_id is required".to_string())
                 }),
             "delete_list_entry" => match (self.list_id, self.issue_id) {
                 (Some(list_id), Some(issue_id)) => {
                     Ok(ReadingGraphRepairAction::DeleteListEntry { list_id, issue_id })
                 }
-                _ => Err(crate::ApiError(
-                    StatusCode::BAD_REQUEST,
+                _ => Err(crate::ApiError::BadRequest(
                     "list_id and issue_id are required".to_string(),
                 )),
             },
-            _ => Err(crate::ApiError(
-                StatusCode::BAD_REQUEST,
+            _ => Err(crate::ApiError::BadRequest(
                 "action must be delete_list, delete_prerequisite or delete_list_entry".to_string(),
             )),
         }
@@ -208,14 +201,11 @@ pub(crate) fn cycle_conflict(
                 })
                 .collect::<Vec<_>>()
                 .join(" -> ");
-            ApiError(
-                StatusCode::CONFLICT,
-                format!("Reading constraint cycle: {path}. Nothing was changed."),
-            )
+            ApiError::Conflict(format!(
+                "Reading constraint cycle: {path}. Nothing was changed."
+            ))
         }
-        ValidationError::InvalidSnapshot { message } => {
-            ApiError(StatusCode::UNPROCESSABLE_ENTITY, message)
-        }
+        ValidationError::InvalidSnapshot { message } => ApiError::Unprocessable(message),
     }
 }
 
@@ -631,8 +621,7 @@ pub async fn repair(
     };
     if !inputs.unresolved.is_empty() {
         if request.confirm {
-            return Err(crate::ApiError(
-                StatusCode::CONFLICT,
+            return Err(crate::ApiError::Conflict(
                 "Resolve the missing reading reference before applying a repair".to_string(),
             ));
         }
@@ -653,27 +642,24 @@ pub async fn repair(
     };
     let action = request.action()?;
     if !repair_target_exists(&inputs, &action) {
-        return Err(crate::ApiError(
-            StatusCode::NOT_FOUND,
+        return Err(crate::ApiError::NotFound(
             "Constraint not found".to_string(),
         ));
     }
     if !repair_is_offered(&allowed, &action) {
-        return Err(crate::ApiError(
-            StatusCode::UNPROCESSABLE_ENTITY,
+        return Err(crate::ApiError::Unprocessable(
             "Repair is not applicable to the current reading graph".to_string(),
         ));
     }
     let mut projected = inputs;
     let removed = remove_from_inputs(&mut projected, &action)
-        .map_err(|detail| crate::ApiError(StatusCode::NOT_FOUND, detail.to_string()))?;
+        .map_err(|detail| crate::ApiError::NotFound(detail.to_string()))?;
 
     if let Some(tx) = transaction {
         let deleted = delete_owned(&tx, user.id(), &action).await?;
         if deleted == 0 {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(crate::ApiError(
-                StatusCode::NOT_FOUND,
+            return Err(crate::ApiError::NotFound(
                 "Constraint not found".to_string(),
             ));
         }

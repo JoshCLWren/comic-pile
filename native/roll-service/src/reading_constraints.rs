@@ -920,9 +920,13 @@ impl ValidatedReadingInputs {
         inputs: OptionInputs,
         names: &BTreeMap<i32, String>,
     ) -> Result<Self, ValidationError> {
-        inputs
-            .require_resolved()
-            .map_err(|_| invalid("Unresolved reading reference"))?;
+        inputs.require_resolved().map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid("Unresolved reading reference")
+        })?;
         let snapshot = Snapshot::from_inputs(&inputs, names);
         let topological_order = validate(&snapshot)?;
         let edges = constraint_edges(&snapshot)?;
@@ -943,9 +947,13 @@ impl ValidatedReadingInputs {
         inputs: OptionInputs,
         names: &BTreeMap<i32, String>,
     ) -> Result<Self, ValidationError> {
-        inputs
-            .require_resolved()
-            .map_err(|_| invalid("Unresolved reading reference"))?;
+        inputs.require_resolved().map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            invalid("Unresolved reading reference")
+        })?;
         let snapshot = Snapshot::from_inputs(&inputs, names);
         let edges = constraint_edges(&snapshot)?;
         // Acyclic data must be byte-for-byte identical to the strict result.
@@ -1722,7 +1730,10 @@ mod tests {
             let error = crate::option_inputs::validated(fixture)
                 .err()
                 .expect("the incident fixture must be cyclic");
-            assert_eq!(error.0, axum::http::StatusCode::INTERNAL_SERVER_ERROR);
+            assert_eq!(
+                error.status(),
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            );
         }
     }
 

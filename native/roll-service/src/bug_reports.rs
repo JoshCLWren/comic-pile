@@ -159,11 +159,11 @@ pub struct BugReportResponse {
 }
 
 fn unprocessable(detail: String) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail)
+    ApiError::with_status(StatusCode::UNPROCESSABLE_ENTITY, detail)
 }
 
 fn not_configured() -> ApiError {
-    ApiError(
+    ApiError::with_status(
         StatusCode::SERVICE_UNAVAILABLE,
         "GitHub integration not configured".to_string(),
     )
@@ -347,16 +347,37 @@ async fn create_github_issue(
     let connect = async move {
         let tcp = tokio::net::TcpStream::connect((GITHUB_HOST, 443))
             .await
-            .map_err(|_| "Failed to create GitHub issue: network error".to_string())?;
-        let tls = native_tls::TlsConnector::new()
-            .map_err(|_| "Failed to create GitHub issue: TLS not available".to_string())?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                "Failed to create GitHub issue: network error".to_string()
+            })?;
+        let tls = native_tls::TlsConnector::new().map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            "Failed to create GitHub issue: TLS not available".to_string()
+        })?;
         let tls = tokio_native_tls::TlsConnector::from(tls)
             .connect(GITHUB_HOST, tcp)
             .await
-            .map_err(|_| "Failed to create GitHub issue: TLS handshake failed".to_string())?;
-        let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
-            .await
-            .map_err(|_| "Failed to create GitHub issue: connection failed".to_string())?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                "Failed to create GitHub issue: TLS handshake failed".to_string()
+            })?;
+        let (mut sender, connection) = http1::handshake(TokioIo::new(tls)).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            "Failed to create GitHub issue: connection failed".to_string()
+        })?;
         let _connection_guard = ConnectionGuard(tokio::spawn(async move {
             let _ = connection.await;
         }));
@@ -372,15 +393,30 @@ async fn create_github_issue(
             .header("content-type", "application/json")
             .header("content-length", payload_bytes.len().to_string())
             .body(Full::new(HyperBytes::from(payload_bytes)))
-            .map_err(|_| "Failed to create GitHub issue: request invalid".to_string())?;
-        let mut response = sender
-            .send_request(request)
-            .await
-            .map_err(|_| "Failed to create GitHub issue: network error".to_string())?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                "Failed to create GitHub issue: request invalid".to_string()
+            })?;
+        let mut response = sender.send_request(request).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            "Failed to create GitHub issue: network error".to_string()
+        })?;
         let status = response.status();
         let mut data = Vec::new();
         while let Some(frame) = response.body_mut().frame().await {
-            let frame = frame.map_err(|_| "Failed to create GitHub issue".to_string())?;
+            let frame = frame.map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                "Failed to create GitHub issue".to_string()
+            })?;
             if let Ok(bytes) = frame.into_data() {
                 if data.len() + bytes.len() > MAX_GITHUB_BODY {
                     break;
@@ -389,8 +425,14 @@ async fn create_github_issue(
             }
         }
         if status.is_success() {
-            let value: serde_json::Value = serde_json::from_slice(&data).map_err(|_| {
-                "Failed to create GitHub issue: invalid provider payload".to_string()
+            let value: serde_json::Value = serde_json::from_slice(&data).map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                {
+                    "Failed to create GitHub issue: invalid provider payload".to_string()
+                }
             })?;
             let url = value
                 .get("html_url")
@@ -411,7 +453,13 @@ async fn create_github_issue(
     };
     tokio::time::timeout(GITHUB_TIMEOUT, connect)
         .await
-        .map_err(|_| "Failed to create GitHub issue: timeout".to_string())?
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            "Failed to create GitHub issue: timeout".to_string()
+        })?
 }
 
 type GithubFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
@@ -466,7 +514,9 @@ async fn load_user(state: &AppState, user_id: i32) -> Result<(String, bool), Api
         .query_opt(USER_SQL, &[&user_id])
         .await
         .map_err(db::query_error)?
-        .ok_or_else(|| ApiError(StatusCode::UNAUTHORIZED, "User not found".to_string()))?;
+        .ok_or_else(|| {
+            ApiError::with_status(StatusCode::UNAUTHORIZED, "User not found".to_string())
+        })?;
     Ok((row.get(0), row.get(1)))
 }
 
@@ -541,7 +591,7 @@ async fn submit_with_issuer(
     if is_admin {
         let issue_url = issuer(settings, title, body, labels)
             .await
-            .map_err(|detail| ApiError(StatusCode::BAD_GATEWAY, detail))?;
+            .map_err(|detail| ApiError::with_status(StatusCode::BAD_GATEWAY, detail))?;
         return Ok((StatusCode::CREATED, Json(BugReportResponse { issue_url })).into_response());
     }
 
@@ -569,7 +619,7 @@ async fn submit_with_issuer(
         Ok(url) => url,
         Err(detail) => {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError(StatusCode::BAD_GATEWAY, detail));
+            return Err(ApiError::with_status(StatusCode::BAD_GATEWAY, detail));
         }
     };
     let submitted_at_seconds = Utc::now().timestamp_micros() as f64 / 1_000_000.0;
@@ -588,8 +638,14 @@ pub async fn create(
     user: AuthenticatedUser,
     body: Bytes,
 ) -> Result<Response, ApiError> {
-    let request: BugReportCreate = serde_json::from_slice(&body).map_err(|_| {
-        unprocessable("Invalid request body: expected a bug-report JSON object".to_string())
+    let request: BugReportCreate = serde_json::from_slice(&body).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        {
+            unprocessable("Invalid request body: expected a bug-report JSON object".to_string())
+        }
     })?;
     let (username, is_admin) = load_user(&state, user.id()).await?;
     let settings = github_settings();
@@ -752,8 +808,8 @@ mod tests {
             },
         ] {
             let error = validate_create(&request).expect_err("blank must fail");
-            assert_eq!(error.0, StatusCode::UNPROCESSABLE_ENTITY);
-            assert_eq!(error.1, "Title and description must not be blank");
+            assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(error.detail(), "Title and description must not be blank");
         }
     }
 
@@ -766,7 +822,7 @@ mod tests {
             diagnostics: None,
         };
         assert_eq!(
-            validate_create(&too_long_title).unwrap_err().0,
+            validate_create(&too_long_title).unwrap_err().status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
         let too_long_description = BugReportCreate {
@@ -776,7 +832,7 @@ mod tests {
             diagnostics: None,
         };
         assert_eq!(
-            validate_create(&too_long_description).unwrap_err().0,
+            validate_create(&too_long_description).unwrap_err().status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
         let valid = BugReportCreate {
@@ -971,7 +1027,7 @@ mod tests {
         )
         .await
         .expect_err("synthetic issuer must fail so the claim rolls back");
-        assert_eq!(error.0, StatusCode::BAD_GATEWAY);
+        assert_eq!(error.status(), StatusCode::BAD_GATEWAY);
 
         let connection = db::checkout(&state).await.expect("verify connection");
         let consumed: i64 = connection

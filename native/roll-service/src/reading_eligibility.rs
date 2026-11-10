@@ -37,16 +37,11 @@ pub fn evaluate(
     // Build adjacency for topological processing
     let mut incoming: HashMap<i32, Vec<ConstraintEdge>> = HashMap::new();
     let edges = validated.unsatisfied_edges().map_err(|e| match e {
-        ValidationError::InvalidSnapshot { message } => {
-            crate::ApiError(axum::http::StatusCode::INTERNAL_SERVER_ERROR, message)
-        }
+        ValidationError::InvalidSnapshot { message } => crate::ApiError::Internal(message),
         ValidationError::Cycle {
             message: _,
             edges: _,
-        } => crate::ApiError(
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            "Reading constraint cycle".to_string(),
-        ),
+        } => crate::ApiError::Internal("Reading constraint cycle".to_string()),
     })?;
 
     for edge in edges {

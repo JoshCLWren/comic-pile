@@ -243,6 +243,7 @@ fn app() -> Router {
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
         .route("/api/threads/{thread_id}", get(native_dispatch))
+        .route("/api/v1/threads/completed/threads", get(native_dispatch))
         .route("/api/v2/reading-graph", get(native_dispatch))
         .route("/api/v2/reading-graph/repairs", post(native_dispatch))
         .route("/api/v2/dependencies/", post(native_dispatch))

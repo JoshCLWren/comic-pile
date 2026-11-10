@@ -49,7 +49,8 @@ _RUNTIME_LEGACY_PATHS: Final = frozenset(
         "/api/v1/releases/{release_id}",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
         "/api/v1/threads/{thread_id}/issue-dependencies",
-        "/api/v1/catalog/series-mappings/commit",
+        "/api/v1/threads/completed/threads",        "/api/v1/catalog/series-mappings/commit",
+
     }
 )
 
@@ -195,7 +196,11 @@ def _assert_baseline_contract(path: Path, document: dict[str, object]) -> dict[s
     assert paths, f"{path.name}: contract must declare at least one operation"
     for raw_path in paths:
         assert raw_path.startswith(V2_PREFIX) or (
-            path == RUNTIME_CONTRACT and raw_path in _RUNTIME_LEGACY_PATHS
+            (path == RUNTIME_CONTRACT and raw_path in _RUNTIME_LEGACY_PATHS)
+            or (
+                path.name == "threads-v2.openapi.json"
+                and raw_path == "/api/v1/threads/completed/threads"
+            )
         ), (
             f"{path.name}: {raw_path} is not under {V2_PREFIX}"
         )
