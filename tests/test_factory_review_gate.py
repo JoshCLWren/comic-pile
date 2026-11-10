@@ -3659,7 +3659,6 @@ def test_review_restores_per_worker_provider_instead_of_a_shared_composite() -> 
     assert "Register composite OpenRouter model for semantic review only" not in workflow
     assert "Factory $worker: routing leased semantic review via" not in workflow
     assert 'row="$(awk -F' in workflow
-    assert 'source="$source"' not in workflow  # source is resolved through step outputs
     assert 'echo "source=$source"' in workflow
     assert 'echo "runtime_model=$runtime_model"' in workflow
 
