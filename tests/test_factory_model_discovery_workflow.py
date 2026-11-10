@@ -54,8 +54,9 @@ def test_discovery_and_runner_use_unpinned_opencode_v2() -> None:
         / "scripts"
         / "install-opencode-v2.sh"
     ).read_text(encoding="utf-8")
-    assert "@opencode/cli@latest" in installer
-    assert "OpenCode 2 required" in installer
+    assert "npm view @opencode/cli versions --json" in installer
+    assert '"@opencode/cli@$candidate"' in installer
+    assert "No working published OpenCode v2 CLI" in installer
     for workflow in (discovery, runner):
         assert "bash .github/scripts/install-opencode-v2.sh" in workflow
         assert "OPENCODE_VERSION:" not in workflow
