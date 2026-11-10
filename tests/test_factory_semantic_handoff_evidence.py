@@ -56,6 +56,46 @@ def test_source_diff_and_verdict_tokens_are_not_repair_findings(review_log: str)
     assert not controller.has_actionable_review_findings(review_log)
 
 
+
+def test_factory_60_tool_transcript_is_not_actionable_repair_evidence() -> None:
+    """PR #4923 was incorrectly returned to repair by command-only output."""
+    controller = load_controller()
+    transcript = (
+        "> build · cohere/north-mini-code:free\\n"
+        "→ Read AGENTS.md\\n"
+        "→ Read docs/ISSUE_EXECUTION_PROTOCOL.md\\n"
+        "$ git log --oneline -10\\n"
+        "80b649f31 test(factory): sandboxed fork review uses composite key\\n"
+        "$ git show 80b649f31 --stat\\n"
+        "commit 80b649f31a7c2e0461b65024b26f2ef3d6d389b9\\n"
+        "Author: JoshCLWren\\n"
+        "Date: Mon Nov 9 19:47:59 2026 -0600\\n"
+        "tests/test_factory_fork_control.py | 49 ++++++++++++++++++\\n"
+        "1 file changed, 49 insertions(+)\\n"
+        "$ git status\\n"
+        "On branch fix/4922-openrouter-composite-semantic-reviews\\n"
+        "nothing to commit, working tree clean\\n"
+        "$ git diff HEAD~1 HEAD\\n"
+        "FACTORY_GATE_NOT_READY\\n"
+        "# comic-pile-factory-authoritative-diff-evidence\\n"
+        "gh pr diff 4923\\n"
+    )
+    assert not controller.has_actionable_review_findings(transcript)
+
+
+def test_substantive_review_finding_survives_tool_transcript_filter() -> None:
+    controller = load_controller()
+    transcript = (
+        "> build · model/free\\n"
+        "$ git diff --stat\\n"
+        "Finding: The review worker can write to a contributor fork because "
+        "the OpenRouter sandbox inherited GH_TOKEN; remove that credential "
+        "and add a regression test for fork isolation.\\n"
+        "FACTORY_GATE_NOT_READY\\n"
+    )
+    assert controller.has_actionable_review_findings(transcript)
+
+
 def test_trusted_ollama_review_preserves_numbered_diff_inspection_proof() -> None:
     """Provider-backed review must preserve the exact PR-scoped diff command."""
     reviewer = (SCRIPTS / "local-ollama-review.sh").read_text()
