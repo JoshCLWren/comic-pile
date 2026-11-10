@@ -85,7 +85,9 @@ fn now_f64() -> f64 {
 /// Python's default separators are (', ', ': ').
 fn _verify_signature(secret: &str, payload: &Value, signature: &str) -> bool {
     let canonical = canonical_json(payload);
-    let expected = hmac_sha256_hex(secret, &canonical);
+    let Ok(expected) = hmac_sha256_hex(secret, &canonical) else {
+        return false;
+    };
     constant_time_eq(expected.as_bytes(), signature.as_bytes())
 }
 
@@ -93,11 +95,15 @@ fn hex_digest(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn hmac_sha256_hex(secret: &str, message: &str) -> String {
-    let mut mac =
-        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
+fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
+        ApiError(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "signature unavailable".to_string(),
+        )
+    })?;
     mac.update(message.as_bytes());
-    hex_digest(&mac.finalize().into_bytes())
+    Ok(hex_digest(&mac.finalize().into_bytes()))
 }
 
 fn sha256_hex(message: &str) -> String {
@@ -166,7 +172,7 @@ fn verify_preview_token(
         return Err(unauthorized("invalid_preview_token"));
     }
     let payload_json = canonical_json(&payload);
-    let expected_sig = hmac_sha256_hex(secret, &payload_json);
+    let expected_sig = hmac_sha256_hex(secret, &payload_json)?;
     if !constant_time_eq(expected_sig.as_bytes(), signature.as_bytes()) {
         return Err(unauthorized("invalid_preview_token"));
     }

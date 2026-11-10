@@ -81,7 +81,7 @@ async fn database(pool_size: usize) -> (Arc<AppState>, tokio::sync::MutexGuard<'
 /// One distinct TEST-NET client address per attempt, so the per-IP lockout
 /// never confounds the per-username measurements.
 fn unique_ip(attempt: u16) -> String {
-    format!("198.51.100.{}", attempt)
+    format!("198.51.100.{attempt}")
 }
 
 async fn register(state: &Arc<AppState>, username: &str) {
