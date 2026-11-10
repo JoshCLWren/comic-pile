@@ -18,6 +18,7 @@ WORKFLOW = ROOT / ".github/workflows/free-model-factory-run.yml"
     [
         ("vendor/selected:free\nvendor/other:free\n", 0),
         ("vendor/other:free\n", 3),
+        ("", 1),
         (None, 1),
     ],
 )
