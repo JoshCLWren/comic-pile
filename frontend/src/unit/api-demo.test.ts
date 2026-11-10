@@ -30,7 +30,7 @@ describe('demoApi', () => {
     client.get.mockResolvedValue(payload)
 
     await expect(demoApi.roll()).resolves.toEqual(payload)
-    expect(client.get).toHaveBeenCalledWith('/v1/demo/roll')
+    expect(client.get).toHaveBeenCalledWith('/v2/demo-roll')
   })
 
   it('exposes no write method so demo interactions cannot persist', () => {

@@ -8036,6 +8036,102 @@
         "title": "CustomCBLWrite",
         "type": "object"
       },
+      "DemoRoll": {
+        "description": "The product-owned deterministic guest Roll fixture.",
+        "properties": {
+          "die_size": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "next_issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "queue_position": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "snoozed_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "type": "object"
+      },
       "DependencyCreate": {
         "description": "Schema for creating dependencies.",
         "properties": {
@@ -32045,6 +32141,27 @@
         ],
         "tags": [
           "continuity-plans"
+        ]
+      }
+    },
+    "/api/v2/demo-roll": {
+      "get": {
+        "operationId": "read_demo_roll_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoRoll"
+                }
+              }
+            },
+            "description": "Deterministic sample Roll"
+          }
+        },
+        "summary": "Generated contract for the public guest sample.",
+        "tags": [
+          "demo"
         ]
       }
     },

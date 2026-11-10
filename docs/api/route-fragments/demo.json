@@ -1,0 +1,30 @@
+{
+  "family": "demo",
+  "owned_path_patterns": [
+    "^/api/v2/demo-roll$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 4855,
+    "db_free": true,
+    "sql_budget": {
+      "application_statements": 0,
+      "transaction_control_statements": 0,
+      "total_statements": 0,
+      "basis": "Static guest fixture; native ingress bypasses application state and PostgreSQL"
+    },
+    "consumers": [
+      "frontend/src/services/api-demo.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/demo-roll",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/demo-roll$"
+    }
+  ]
+}
