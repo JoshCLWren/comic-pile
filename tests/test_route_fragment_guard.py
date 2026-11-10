@@ -202,10 +202,12 @@ def test_regeneration_scope_rejects_source_and_code_edits() -> None:
 
 
 def test_regeneration_scope_requires_changed_artifacts() -> None:
+    """Empty bot PRs do not satisfy the generated artifact contract."""
     assert guard.regenerated_pr_violations([], "base", "head")
 
 
 def test_regeneration_agents_may_only_change_generated_block() -> None:
+    """The automation may not alter handwritten AGENTS.md guidance."""
     before = (
         "# AGENTS\n<!-- route-burndown:begin -->\nold\n"
         "<!-- route-burndown:end -->\\nmanual rules\\n"
