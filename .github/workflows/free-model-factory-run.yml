@@ -813,6 +813,7 @@ jobs:
                 exit 1
               }
               attempted+=("$model")
+              printf '%s\n' "$model" >> "$RUNNER_TEMP/factory-model-preflight-attempted"
               exclusions=()
               for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
               if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
@@ -960,6 +961,9 @@ jobs:
               exit 1
             }
             attempted=()
+            if [[ -f "$RUNNER_TEMP/factory-model-preflight-attempted" ]]; then
+              mapfile -t attempted < "$RUNNER_TEMP/factory-model-preflight-attempted"
+            fi
             max_candidates=5
             for (( smoke_attempt=1; smoke_attempt<=max_candidates; smoke_attempt++ )); do
               model="${RUNTIME_MODEL#*/}"
@@ -1051,6 +1055,8 @@ jobs:
               echo "Dynamic free-model smoke succeeded: $RUNTIME_MODEL"
               exit 0
             done
+            echo "All $max_candidates smoke candidates exhausted without a usable free model" >&2
+            exit 1
           fi
           before="$(git status --porcelain)"
           [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
