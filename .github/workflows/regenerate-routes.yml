@@ -89,6 +89,7 @@ jobs:
       - name: Open or refresh CI-gated regeneration PR
         env:
           GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+          DEPLOY_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git add vercel.json docs/api/v2-route-inventory.json \
@@ -154,12 +155,16 @@ jobs:
           source .github/scripts/factory-dispatch-production-deploy.sh
           dispatch_deploy_after_merges() {
             if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)" == 'MERGED' ]]; then
-              factory_dispatch_production_deploy "Route regeneration PR #$pr merged"
+              GH_TOKEN="$DEPLOY_TOKEN" factory_dispatch_production_deploy "Route regeneration PR #$pr merged"
             fi
           }
           trap dispatch_deploy_after_merges EXIT
           # No bypass and no CI-skipping commit marker: GitHub enforces CI Summary.
-          gh pr merge --repo "$GITHUB_REPOSITORY" --auto --merge "$pr"
+          if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json autoMergeRequest --jq '.autoMergeRequest != null')" == 'true' ]]; then
+            echo "PR #$pr already has auto-merge enabled."
+          else
+            gh pr merge --repo "$GITHUB_REPOSITORY" --auto --merge "$pr"
+          fi
 
   deploy-after-regeneration:
     name: Dispatch production after generated artifacts merge
