@@ -750,20 +750,91 @@ jobs:
           echo "Verified zero-price Vercel AI Gateway model: ${MODEL}"
 
       - name: Wait for exact model in OpenCode catalog
+        id: model_preflight
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
         shell: bash
         env:
           RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
+          WORKER: ${{ steps.lane.outputs.worker }}
+          DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
         run: |
           set -Eeuo pipefail
-          # Fresh runners can initially expose only OpenCode's older bundled catalog.
+          # Dynamic free-model lanes try each model at most once, within their
+          # own provider. Pinned experiments and other sources never fall back.
+          if [[ "$DEEPSEEK_MODE" == normal ]] && \
+            [[ "$SOURCE" == opencode-free || "$SOURCE" == openrouter-free ]]; then
+            catalog="$RUNNER_TEMP/factory-${SOURCE}-catalog"
+            if [[ "$SOURCE" == opencode-free ]]; then
+              catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
+            else
+              bash scripts/opencode-model-catalog.sh openrouter verbose refresh > "$catalog" || {
+                printf 'control_plane_failure\tOpenRouter executable catalog read failed\n' > "$RUNNER_TEMP/factory-discovery-outcome"
+                exit 1
+              }
+            fi
+            [[ -s "$catalog" ]] || {
+              printf 'control_plane_failure\tProvider model catalog empty\n' > "$RUNNER_TEMP/factory-discovery-outcome"
+              exit 1
+            }
+            comments="$RUNNER_TEMP/factory-model-preflight-comments.json"
+            gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" > "$comments" || {
+              printf 'control_plane_failure\tTrusted model history unavailable\n' > "$RUNNER_TEMP/factory-discovery-outcome"
+              exit 1
+            }
+            attempted=()
+            max_candidates=5
+            for (( attempt=1; attempt<=max_candidates; attempt++ )); do
+              wait_status=0
+              bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL" || wait_status=$?
+              if (( wait_status == 0 )); then
+                echo "model=${RUNTIME_MODEL#*/}" >> "$GITHUB_OUTPUT"
+                echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
+                echo "Executable free-model preflight passed: $RUNTIME_MODEL (attempt $attempt)"
+                exit 0
+              fi
+              if (( wait_status != 3 )); then
+                printf 'control_plane_failure\tOpenCode catalog unreadable for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+                exit 1
+              fi
+              model="${RUNTIME_MODEL#*/}"
+              echo "Missing model $RUNTIME_MODEL ($attempt/$max_candidates); trying another vetted free model" >&2
+              now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+                -f body="<!-- factory-model-unavailable:v1 run=${GITHUB_RUN_ID} -->
+          Worker: opencode-free-model-factory-${WORKER}
+          Model: ${model}
+          Source: ${SOURCE}
+          Attempt outcome: model_unavailable
+          Detail: Exact selected model absent from successfully read runtime catalog
+          Updated: ${now}
+          Run: ${GITHUB_RUN_ID}" >/dev/null || {
+                printf 'control_plane_failure\tCannot persist trusted model-health evidence\n' > "$RUNNER_TEMP/factory-discovery-outcome"
+                exit 1
+              }
+              attempted+=("$model")
+              exclusions=()
+              for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
+              if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
+                --provider "$SOURCE" --catalog "$catalog" --comments "$comments" \
+                --worker "$WORKER" --rotation "${GITHUB_RUN_NUMBER:-0}" \
+                "${exclusions[@]}" 2>&1)"; then
+                printf 'model_unavailable\tNo alternative zero-cost %s candidate after %s attempts\n' "$SOURCE" "${#attempted[@]}" > "$RUNNER_TEMP/factory-discovery-outcome"
+                echo "No additional vetted model: $selected" >&2
+                exit 1
+              fi
+              RUNTIME_MODEL="$(jq -er '.runtime_model' <<< "$selected")"
+            done
+            printf 'model_unavailable\tAll %s bounded candidate attempts failed\n' "$max_candidates" > "$RUNNER_TEMP/factory-discovery-outcome"
+            exit 1
+          fi
           model_wait_status=0
           bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL" || model_wait_status=$?
           if (( model_wait_status == 3 )); then
             printf 'model_unavailable\tOpenCode catalog did not expose exact model: %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
             exit 1
           elif (( model_wait_status != 0 )); then
-            printf 'control_plane_failure\tOpenCode catalog could not be read reliably for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+            printf 'control_plane_failure\tOpenCode catalog unreadable for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
             exit 1
           fi
 
