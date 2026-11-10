@@ -496,6 +496,18 @@ describe('ReadingPlanDetailPage', () => {
     expect(mockGetReader).not.toHaveBeenCalled()
   })
 
+  it('prefers an explicit issue label when present', async () => {
+    const labeled = { ...availableIssue, label: 'Opening chapter' }
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      available_now: [labeled],
+      blocked_next: [],
+      lanes: [{ id: 'main', name: 'Main', order: 0, issues: [labeled] }],
+    })
+    renderPage()
+    expect(await screen.findByText('Opening chapter')).toBeInTheDocument()
+  })
+
   it('tolerates an empty plan total while rendering a read row', async () => {
     mockGetReader.mockResolvedValue({
       ...readerView,
