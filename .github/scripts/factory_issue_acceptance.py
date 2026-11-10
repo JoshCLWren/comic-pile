@@ -344,7 +344,7 @@ def report_matches_mission(report: Mapping[str, Any] | None, mission_text: str) 
     if report is None:
         return False
     identity = re.findall(
-        r"(?m)^ISSUE ACCEPTANCE: #([1-9][0-9]*), head ([a-f0-9]{40}), issue digest ([a-f0-9]{64})\\.$",
+        r"(?m)^ISSUE ACCEPTANCE: #([1-9][0-9]*), head ([a-f0-9]{40}), issue digest ([a-f0-9]{64})\.$",
         mission_text,
     )
     counts = re.findall(
