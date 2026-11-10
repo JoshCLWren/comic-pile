@@ -5,8 +5,8 @@ DB-backed Rust operation in ``docs/api/v2-route-inventory.json``, counted
 from live call sites. Per-route tests pin each budget against its handler;
 this guard keeps the inventory side honest:
 
-* every budgeted entry is a native-rust operation registered in
-  ``DEPLOYED_V2_OPERATIONS`` (``openapi.rs``) with consistent arithmetic;
+* every budgeted entry is an operation present in the generated native
+  OpenAPI contract with consistent arithmetic;
 * the budgeted set is recorded exactly, so adding a budget requires a
   deliberate test update alongside its per-route pin;
 * native operations without a budget are recorded exactly as gaps, so a
@@ -18,12 +18,11 @@ this guard keeps the inventory side honest:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "docs" / "api" / "v2-route-inventory.json"
-OPENAPI = ROOT / "native" / "roll-service" / "src" / "openapi.rs"
+OPENAPI = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 
 _BUDGETED_OPERATIONS = frozenset(
     {
@@ -78,8 +77,6 @@ _KNOWN_BUDGET_GAPS = frozenset(
     }
 )
 
-_OPERATION = re.compile(r'\("(?P<method>[a-z]+)",\s*"(?P<path>/api/v2/[^"]*)"\)')
-
 
 def _inventory_operations() -> list[dict[str, object]]:
     """Load and validate the inventory operations."""
@@ -94,14 +91,16 @@ def _inventory_operations() -> list[dict[str, object]]:
 
 
 def _deployed_operations() -> set[tuple[str, str]]:
-    """Return every ``(method, path)`` registered in ``openapi.rs``."""
-    source = OPENAPI.read_text(encoding="utf-8")
-    registered = {
-        (match.group("method"), match.group("path"))
-        for match in _OPERATION.finditer(source)
+    """Read native operations from generated OpenAPI, without count snapshots."""
+    document = json.loads(OPENAPI.read_text(encoding="utf-8"))
+    paths = document.get("paths")
+    assert isinstance(paths, dict) and paths, "native OpenAPI must declare paths"
+    return {
+        (method.lower(), path)
+        for path, operations in paths.items()
+        if path.startswith("/api/v2/")
+        for method in operations
     }
-    assert len(registered) == 40, "expected 40 deployed native operations"
-    return registered
 
 
 def _key(operation: dict[str, object]) -> tuple[str, str]:
@@ -129,7 +128,7 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
 
 
 def test_every_budget_is_a_deployed_native_operation() -> None:
-    """Budgeted entries are native-rust and registered in openapi.rs."""
+    """Budgeted entries are native-rust and present in the generated contract."""
     operations = _inventory_operations()
     deployed = _deployed_operations()
     budgeted = [op for op in operations if "sql_budget" in op]
@@ -137,7 +136,7 @@ def test_every_budget_is_a_deployed_native_operation() -> None:
     for operation in budgeted:
         assert operation.get("runtime") == "native-rust"
         assert _key(operation) in deployed, (
-            f"budgeted {_key(operation)} is not in DEPLOYED_V2_OPERATIONS"
+            f"budgeted {_key(operation)} is absent from native OpenAPI"
         )
         _budget(operation)
 

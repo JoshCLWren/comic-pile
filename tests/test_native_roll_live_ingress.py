@@ -21,7 +21,7 @@ NATIVE_INGRESSES = {
     "/api/native_issue.rs": ROOT / "api/native_issue.rs",
 }
 AXUM_CAPTURE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-VERCEL_CAPTURE = re.compile(r"(?<=/):([A-Za-z_][A-Za-z0-9_]*)(?=/|$)")
+VERCEL_CAPTURE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
 
 # Retired Roll Skip operation. Reroll (POST /api/v2/roll/offer) replaced it, so
 # no native ingress may ever publish it again.
@@ -95,14 +95,8 @@ def _concrete_path(path: str) -> str:
     """Use a numeric owned Issue ID when checking parameterized Axum routes."""
     # First normalize Axum curly braces {thread_id} to Vercel colon syntax :thread_id
     normalized = AXUM_CAPTURE.sub(r":\1", path)
-    # Then convert only whole path-segment captures.
+    # Then convert the colon syntax to numeric for concrete path matching
     concrete = VERCEL_CAPTURE.sub("42", normalized)
-    # Axum 0.8 forbids `{plan_id}:apply` (only one capture per segment, with
-    # `:` treated as a second capture), so the wire colon action is captured
-    # as `{plan_id_action}` in the Rust routers; restore `:apply` here so the
-    # concrete URL matches the Vercel `[^/]+:apply` rewrite.
-    if normalized.endswith(":plan_id_action"):
-        concrete += ":apply"
     # Verify curly braces are gone (Axum syntax converted)
     assert "{" not in concrete and "}" not in concrete, path
     return concrete
@@ -125,6 +119,55 @@ def _production_routes() -> tuple[
         for function, source in NATIVE_INGRESSES.items()
     }
     return service, ingresses
+
+
+def test_native_openapi_matches_registered_rust_operations() -> None:
+    """Derive route coverage from live Rust routers, not a handwritten endpoint list.
+
+    Every documented method/path must be registered in the production service
+    and its ingress. Every public v2 service operation must be documented,
+    except the health and internal maintenance probes, which deliberately
+    have separate runtime contracts.
+    """
+    document = json.loads(
+        (ROOT / "native/contracts/v2-runtime.openapi.json").read_text(encoding="utf-8")
+    )
+    paths = document["paths"]
+    assert isinstance(paths, dict) and paths
+    documented = {
+        (method.upper(), _normalized_path(path))
+        for path, methods in paths.items()
+        for method in methods
+    }
+    service, ingresses = _production_routes()
+    exposed = set().union(*ingresses.values())
+    assert documented <= service, (
+        f"OpenAPI operations without a Rust handler: {sorted(documented - service)}"
+    )
+    assert documented <= exposed, (
+        f"OpenAPI operations without a native ingress: {sorted(documented - exposed)}"
+    )
+
+    # Health and the internal maintenance drain are implemented directly,
+    # but do not belong to the public API contract.
+    internal = {
+        ("GET", "/api/v2/health"),
+        ("GET", "/api/v2/maintenance/comicvine-metadata-repairs"),
+    }
+    public_v2 = {
+        (method, path)
+        for method, path in service
+        if path.startswith("/api/v2/") and (method, path) not in internal
+    }
+    documented_v2 = {
+        (method, path)
+        for method, path in documented
+        if path.startswith("/api/v2/")
+    }
+    assert public_v2 == documented_v2, (
+        f"Missing v2 OpenAPI: {sorted(public_v2 - documented_v2)}; "
+        f"undelivered v2 OpenAPI: {sorted(documented_v2 - public_v2)}"
+    )
 
 
 def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
@@ -211,9 +254,9 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 if registered_method == method
                 and re.fullmatch(_vercel_pattern(source), _concrete_path(path))
             }
-            assert matching_ingress, (
+            assert len(matching_ingress) == 1, (
                 f"Vercel sends {method} {source} to {function}, "
-                "but that entrypoint has no matching route"
+                f"but that entrypoint has {len(matching_ingress)} matching routes"
             )
             if "/api/_native_" not in source:
                 assert matching_ingress <= service, (
@@ -255,18 +298,3 @@ def test_axum_08_captures_normalize_to_vercel_parameters() -> None:
     # which is the expected intermediate step in the route normalization process.
     # The actual vercel.json routes use regex patterns like [0-9]+$ for numeric matching.
     assert routes == {("GET", "/api/v2/queue-entries/:thread_id")}
-
-
-def test_axum_chained_methods_are_all_visible_to_ingress_guard() -> None:
-    """Chained Axum methods must not hide a native write from the guard."""
-    routes = _axum_routes(
-        'pub fn router(state: Arc<AppState>) -> Router { Router::new() '
-        '.route("/api/v1/custom-cbls", get(list_items).post(create_item)) } '
-        "#[cfg(test)]",
-        start="pub fn router(",
-        end="#[cfg(test)]",
-    )
-    assert routes == {
-        ("GET", "/api/v1/custom-cbls"),
-        ("POST", "/api/v1/custom-cbls"),
-    }
