@@ -4,7 +4,6 @@
 use crate::{auth::VerifiedAccessClaims, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -583,7 +582,7 @@ fn response(
 }
 
 fn unauthorized(detail: &'static str) -> ApiError {
-    ApiError(StatusCode::UNAUTHORIZED, detail.into())
+    ApiError::Unauthorized(detail.into())
 }
 
 /// The only live issue-intelligence read and queue producer. No provider I/O.
@@ -603,18 +602,14 @@ pub async fn issue_intelligence(
         &[&username, &jti, &epoch, &issue_id],
     )
     .await?
-    .ok_or_else(|| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal Server Error".into(),
-        )
-    })?;
+    .ok_or_else(|| ApiError::Internal("Internal Server Error".into()))?;
     let payload: String = row.try_get(0).map_err(db::query_error)?;
-    let snapshot: Snapshot = serde_json::from_str(&payload).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Invalid stored metadata".into(),
-        )
+    let snapshot: Snapshot = serde_json::from_str(&payload).map_err(|e| {
+        tracing::debug!(
+            error_kind = crate::error_kind(&e),
+            "preserved underlying error before mapping"
+        );
+        ApiError::Internal("Invalid stored metadata".into())
     })?;
     let auth = snapshot
         .auth
@@ -626,7 +621,7 @@ pub async fn issue_intelligence(
         return Err(unauthorized("Password changed; please sign in again."));
     }
     if !snapshot.owned {
-        return Err(ApiError(StatusCode::NOT_FOUND, "Issue not found".into()));
+        return Err(ApiError::NotFound("Issue not found".into()));
     }
     Ok(Json(snapshot.mapped.map(|metadata| {
         response(metadata, snapshot.repair, snapshot.arcs, snapshot.related)

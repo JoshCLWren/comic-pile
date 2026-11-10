@@ -1,6 +1,5 @@
 //! Owner-scoped scalar inputs. Stored queue fields are diagnostics only.
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
-use axum::http::StatusCode;
 use deadpool_postgres::Object;
 use serde::Serialize;
 use std::{collections::HashMap, time::Instant};
@@ -114,16 +113,18 @@ pub async fn load_core_inputs(
     })
     .await;
     match result {
-        Err(_) => Err(ApiError(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "Database temporarily unavailable".to_string(),
-        )),
+        Err(e) => {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            Err(ApiError::DatabaseUnavailable)
+        }
         Ok(Err(error)) => Err(db::query_error(error)),
         Ok(Ok(inputs)) => {
             drop(pending.0.take());
             if !valid_references(&inputs) {
-                return Err(ApiError(
-                    StatusCode::INTERNAL_SERVER_ERROR,
+                return Err(ApiError::Internal(
                     "Unresolved reading reference".to_string(),
                 ));
             }
@@ -142,6 +143,7 @@ pub async fn load_core_inputs(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
 
     #[test]
     fn references_require_the_exact_owned_thread_and_allow_empty_threads() {
@@ -207,7 +209,7 @@ mod tests {
             } else {
                 state.request_timeout = Duration::from_millis(20);
                 let error = load_core_inputs(&state, user).await.err().unwrap();
-                assert_eq!(error.0, StatusCode::SERVICE_UNAVAILABLE);
+                assert_eq!(error.status(), StatusCode::SERVICE_UNAVAILABLE);
             }
             assert_eq!(state.pool.status().size, 0);
             state.request_timeout = Duration::from_secs(2);

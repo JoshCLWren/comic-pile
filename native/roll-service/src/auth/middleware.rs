@@ -2,7 +2,6 @@
 use crate::ApiError;
 use axum::{
     extract::Request,
-    http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
 };
@@ -77,11 +76,7 @@ pub async fn csrf_middleware(request: Request, next: Next) -> Response {
             .zip(header)
             .is_some_and(|(cookie, header)| constant_time_eq(cookie, header));
         if !valid {
-            return ApiError(
-                StatusCode::FORBIDDEN,
-                "CSRF token missing or invalid".into(),
-            )
-            .into_response();
+            return ApiError::Forbidden("CSRF token missing or invalid".into()).into_response();
         }
     }
     next.run(request).await

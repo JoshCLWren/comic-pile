@@ -153,7 +153,7 @@ async fn lock_thread(tx: &Transaction<'_>, thread_id: i32, user_id: i32) -> Resu
         )
         .await
         .map_err(db::query_error)?;
-    row.ok_or_else(|| ApiError(StatusCode::NOT_FOUND, "Thread not found".to_string()))?;
+    row.ok_or_else(|| ApiError::NotFound("Thread not found".to_string()))?;
     Ok(())
 }
 
@@ -179,10 +179,7 @@ fn parse_issue_numbers(raw: &str) -> Result<Vec<String>, ApiError> {
             let (start, end) = (start.trim(), end.trim());
             if let (Some(start), Some(end)) = (ordinary(start), ordinary(end)) {
                 if end < start || end - start >= MAX_ISSUES_PER_REQUEST {
-                    return Err(ApiError(
-                        StatusCode::BAD_REQUEST,
-                        format!("Invalid issue range: {part}"),
-                    ));
+                    return Err(ApiError::BadRequest(format!("Invalid issue range: {part}")));
                 }
                 for value in start..=end {
                     let label = value.to_string();
@@ -198,16 +195,12 @@ fn parse_issue_numbers(raw: &str) -> Result<Vec<String>, ApiError> {
         }
     }
     if numbers.is_empty() {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
+        return Err(ApiError::BadRequest(
             "Issue range cannot be empty".to_string(),
         ));
     }
     if numbers.len() as i64 > MAX_ISSUES_PER_REQUEST {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
-            "Issue range is too large".to_string(),
-        ));
+        return Err(ApiError::BadRequest("Issue range is too large".to_string()));
     }
     Ok(numbers)
 }
@@ -320,8 +313,7 @@ pub async fn create_issues(
         .filter(|number| !existing_numbers.contains(number))
         .collect();
     if new_numbers.is_empty() {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
+        return Err(ApiError::BadRequest(
             "All issues in range already exist".to_string(),
         ));
     }
@@ -348,7 +340,7 @@ pub async fn create_issues(
             .iter()
             .find(|(id, _, _)| *id == anchor)
             .map(|(_, _, position)| *position)
-            .ok_or_else(|| ApiError(StatusCode::NOT_FOUND, format!("Issue {anchor} not found")))?;
+            .ok_or_else(|| ApiError::NotFound(format!("Issue {anchor} not found")))?;
         let count = new_numbers.len() as i32;
         tx.execute(
             "UPDATE issues SET position=position+$1
@@ -521,10 +513,7 @@ pub async fn delete_issue(
         .map_err(db::query_error)?;
     let Some(row) = row else {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(
-            StatusCode::NOT_FOUND,
-            format!("Issue {issue_id} not found"),
-        ));
+        return Err(ApiError::NotFound(format!("Issue {issue_id} not found")));
     };
     let thread_id: i32 = row.get(0);
     let issue_number: String = row.get(1);
@@ -534,13 +523,10 @@ pub async fn delete_issue(
     let references = reference_names(&tx, issue_id, user.id()).await?;
     if !references.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError(
-            StatusCode::CONFLICT,
-            format!(
+        return Err(ApiError::Conflict(format!(
                 "Issue {issue_number} is referenced by {}. Remove those references first; nothing was changed.",
                 references.join(", ")
-            ),
-        ));
+            )));
     }
 
     tx.execute("DELETE FROM issues WHERE id=$1", &[&issue_id])
@@ -593,8 +579,7 @@ pub async fn reorder_issues(
     let requested: BTreeSet<i32> = request.issue_ids.iter().copied().collect();
     let available: BTreeSet<i32> = existing.iter().copied().collect();
     if requested.len() != request.issue_ids.len() || requested != available {
-        return Err(ApiError(
-            StatusCode::BAD_REQUEST,
+        return Err(ApiError::BadRequest(
             "issue_ids must contain every issue in the thread exactly once".to_string(),
         ));
     }

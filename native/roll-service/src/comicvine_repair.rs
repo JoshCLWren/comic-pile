@@ -240,15 +240,37 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
     let connect = async {
         let tcp = tokio::net::TcpStream::connect((HOST, 443))
             .await
-            .map_err(|_| ProviderFailure::Unavailable)?;
-        let tls = native_tls::TlsConnector::new().map_err(|_| ProviderFailure::Unavailable)?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+        let tls = native_tls::TlsConnector::new().map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Unavailable
+        })?;
         let tls = tokio_native_tls::TlsConnector::from(tls)
             .connect(HOST, tcp)
             .await
-            .map_err(|_| ProviderFailure::Unavailable)?;
-        let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
-            .await
-            .map_err(|_| ProviderFailure::Unavailable)?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+        let (mut sender, connection) = http1::handshake(TokioIo::new(tls)).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Unavailable
+        })?;
         let _connection_guard = ConnectionGuard(tokio::spawn(async move {
             let _ = connection.await;
         }));
@@ -261,11 +283,20 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
             .header("accept", "application/json")
             .header("user-agent", "ComicPile/1.0 (metadata repair)")
             .body(Empty::<Bytes>::new())
-            .map_err(|_| ProviderFailure::Unavailable)?;
-        let mut response = sender
-            .send_request(request)
-            .await
-            .map_err(|_| ProviderFailure::Unavailable)?;
+            .map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
+        let mut response = sender.send_request(request).await.map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Unavailable
+        })?;
         if response.status() == StatusCode::TOO_MANY_REQUESTS
             || response.status() == StatusCode::FORBIDDEN
         {
@@ -292,7 +323,13 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         }
         let mut data = Vec::new();
         while let Some(frame) = response.body_mut().frame().await {
-            let frame = frame.map_err(|_| ProviderFailure::Unavailable)?;
+            let frame = frame.map_err(|e| {
+                tracing::debug!(
+                    error_kind = crate::error_kind(&e),
+                    "preserved underlying error before mapping"
+                );
+                ProviderFailure::Unavailable
+            })?;
             if let Ok(bytes) = frame.into_data() {
                 if data.len() + bytes.len() > MAX_BODY {
                     return Err(ProviderFailure::InvalidPayload);
@@ -300,8 +337,13 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
                 data.extend_from_slice(&bytes);
             }
         }
-        let payload: Value =
-            serde_json::from_slice(&data).map_err(|_| ProviderFailure::InvalidPayload)?;
+        let payload: Value = serde_json::from_slice(&data).map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::InvalidPayload
+        })?;
         if payload["status_code"].as_i64() != Some(1) {
             return Err(ProviderFailure::Unavailable);
         }
@@ -312,7 +354,13 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
     };
     tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
-        .map_err(|_| ProviderFailure::Timeout)?
+        .map_err(|e| {
+            tracing::debug!(
+                error_kind = crate::error_kind(&e),
+                "preserved underlying error before mapping"
+            );
+            ProviderFailure::Timeout
+        })?
 }
 
 async fn claim(state: &AppState) -> Result<Option<Job>, ApiError> {
@@ -567,7 +615,7 @@ pub async fn drain(
 ) -> Result<Json<DrainReport>, ApiError> {
     let secret = std::env::var("CRON_SECRET").ok();
     if !allowed(&headers, secret.as_deref()) {
-        return Err(ApiError(StatusCode::UNAUTHORIZED, "Unauthorized".into()));
+        return Err(ApiError::Unauthorized("Unauthorized".into()));
     }
     let key = std::env::var("COMICVINE_API_KEY").ok();
     let key = key.as_deref().filter(|v| !v.is_empty());

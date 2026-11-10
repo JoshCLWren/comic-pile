@@ -11,7 +11,7 @@ use crate::{
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_postgres::IsolationLevel;
@@ -59,8 +59,7 @@ pub(crate) async fn persist_reset(
             .await
             .map_err(db::query_error)?;
         if updated != 1 {
-            return Err(ApiError(
-                StatusCode::CONFLICT,
+            return Err(ApiError::Conflict(
                 "Reading session changed; try again".to_string(),
             ));
         }
