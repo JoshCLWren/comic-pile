@@ -321,6 +321,7 @@ def linked_issue_mode_for_pr(
     Args:
         pr_number: Pull request number.
         branch: Pull request head branch.
+        body: Optional already-fetched PR description to avoid redundant API reads.
 
     Returns:
         ``(issue, non_closing)``; ``non_closing`` is true only for a ``Part of``
