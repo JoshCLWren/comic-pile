@@ -117,8 +117,9 @@ def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Pat
         )
         return True
     if runtime_model.startswith(("opencode/", "openrouter/")) and FREE_QUOTA_RE.search(log_content):
+        provider = "OpenRouter" if runtime_model.startswith("openrouter/") else "OpenCode"
         outcome_file.write_text(
-            f"provider_quota\tFree account quota exhausted for {runtime_model}\n",
+            f"provider_quota\t{provider} free quota exhausted for {runtime_model}\n",
             encoding="utf-8",
         )
         return True
