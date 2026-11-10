@@ -530,20 +530,23 @@ fn combine_assignments(
             });
             order.push(tag.id);
         }
-        let entry = by_id.get_mut(&tag.id).unwrap();
-        if source_type == self_type && source_id == self_id {
-            entry.direct = true;
+        if let Some(entry) = by_id.get_mut(&tag.id) {
+            if source_type == self_type && source_id == self_id {
+                entry.direct = true;
+            }
+            entry.sources.push(InheritanceSource {
+                target_type: source_type,
+                target_id: source_id,
+                display_name,
+            });
         }
-        entry.sources.push(InheritanceSource {
-            target_type: source_type,
-            target_id: source_id,
-            display_name,
-        });
     }
     // Note: by_id moved? We inserted tag before; need tag value. We cloned tag into EffectiveTag. Good.
     let mut effective = Vec::new();
     for id in &order {
-        effective.push(by_id.remove(id).unwrap());
+        if let Some(tag) = by_id.remove(id) {
+            effective.push(tag);
+        }
     }
     // put back? not needed
     let direct_tags: Vec<Tag> = effective
@@ -1932,7 +1935,7 @@ mod db_tests {
         .expect("bulk unassign");
         assert_eq!(bulk_removed.tag_id, tag_id);
 
-        assign_tag(
+        let _reassigned = assign_tag(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
             Path(tag_id),
