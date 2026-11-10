@@ -325,6 +325,13 @@ fn app() -> Router {
             "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
             put(native_dispatch),
         )
+        .route("/api/v1/reading-mode", get(native_dispatch))
+        .route("/api/v1/reading-mode", post(native_dispatch))
+        .route(
+            "/api/v1/reading-mode/dismiss-suggestion",
+            post(native_dispatch),
+        )
+        .route("/api/v1/reading-mode/suggest", post(native_dispatch))
         .route("/api/v2/auth/register", post(native_dispatch))
         .route("/api/v2/auth/login", post(native_dispatch))
         .route("/api/v2/auth/refresh", post(native_dispatch))
