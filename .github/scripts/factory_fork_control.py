@@ -342,6 +342,17 @@ def _static_environment(home: Path, source: str, original: dict[str, str], runti
 
 def _review(pr: int, head: str, worker: str, runtime: str, timeout: int, log: Path) -> int:
     source = _source(worker)
+    if runtime == "openrouter/free":
+        # The static reviewer executes only in a tool-free sandbox. In the
+        # dedicated review lane its credential must follow the trusted runtime,
+        # not the worker's unrelated coding provider in the roster.
+        if (
+            os.environ.get("FACTORY_SOURCE"),
+            os.environ.get("FACTORY_MODEL"),
+            os.environ.get("FACTORY_RUNTIME_MODEL"),
+        ) != ("openrouter-free", "openrouter/free", "openrouter/free"):
+            raise ValueError("inconsistent dedicated fork-review runtime provenance")
+        source = "openrouter-free"
     with tempfile.TemporaryDirectory(prefix="factory-static-review-") as directory:
         root = Path(directory)
         context = root / "context.txt"
