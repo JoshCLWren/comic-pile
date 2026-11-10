@@ -300,7 +300,9 @@ def test_non_reserved_worker_preserves_product_capacity():
 def test_review_share_scales_continuously_with_backlog():
     """Completion pressure uses a ratio, not absolute magic tiers."""
     assert policy.review_share_for_backlog(0) == 0.25
-    assert policy.review_share_for_backlog(10) == 0.25 + (0.65 * 10 / 20.0)
+    assert policy.review_share_for_backlog(1) == 0.25 + (0.65 / 3.0)
+    assert policy.review_share_for_backlog(3) == 0.90
+    assert policy.review_share_for_backlog(10) == 0.90
     assert policy.review_share_for_backlog(20) == 0.90
     assert policy.review_share_for_backlog(80) == 0.90
     idle = sum(1 for worker in range(6, 76) if policy.review_capacity_worker(str(worker), review_backlog=0))
