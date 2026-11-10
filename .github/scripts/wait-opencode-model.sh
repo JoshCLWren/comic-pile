@@ -11,7 +11,10 @@ while ((SECONDS < deadline)); do
   request_timeout=$((remaining < 10 ? remaining : 10))
   if catalog="$(timeout --signal=TERM --kill-after=1s "${request_timeout}s" \
     "$binary" models --standalone)"; then
-    catalog_readable=1
+    # A zero-byte successful response is not an authoritative model inventory.
+    if [[ -n "${catalog//[[:space:]]/}" ]]; then
+      catalog_readable=1
+    fi
     if grep -Fxq -- "$model" <<<"$catalog"; then
       printf 'OpenCode catalog ready for %s\n' "$model"
       exit 0
