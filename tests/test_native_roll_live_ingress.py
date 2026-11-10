@@ -121,6 +121,55 @@ def _production_routes() -> tuple[
     return service, ingresses
 
 
+def test_native_openapi_matches_registered_rust_operations() -> None:
+    """Derive route coverage from live Rust routers, not a handwritten endpoint list.
+
+    Every documented method/path must be registered in the production service
+    and its ingress. Every public v2 service operation must be documented,
+    except the health and internal maintenance probes, which deliberately
+    have separate runtime contracts.
+    """
+    document = json.loads(
+        (ROOT / "native/contracts/v2-runtime.openapi.json").read_text(encoding="utf-8")
+    )
+    paths = document["paths"]
+    assert isinstance(paths, dict) and paths
+    documented = {
+        (method.upper(), _normalized_path(path))
+        for path, methods in paths.items()
+        for method in methods
+    }
+    service, ingresses = _production_routes()
+    exposed = set().union(*ingresses.values())
+    assert documented <= service, (
+        f"OpenAPI operations without a Rust handler: {sorted(documented - service)}"
+    )
+    assert documented <= exposed, (
+        f"OpenAPI operations without a native ingress: {sorted(documented - exposed)}"
+    )
+
+    # Health and the internal maintenance drain are implemented directly,
+    # but do not belong to the public API contract.
+    internal = {
+        ("GET", "/api/v2/health"),
+        ("GET", "/api/v2/maintenance/comicvine-metadata-repairs"),
+    }
+    public_v2 = {
+        (method, path)
+        for method, path in service
+        if path.startswith("/api/v2/") and (method, path) not in internal
+    }
+    documented_v2 = {
+        (method, path)
+        for method, path in documented
+        if path.startswith("/api/v2/")
+    }
+    assert public_v2 == documented_v2, (
+        f"Missing v2 OpenAPI: {sorted(public_v2 - documented_v2)}; "
+        f"undelivered v2 OpenAPI: {sorted(documented_v2 - public_v2)}"
+    )
+
+
 def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
     """Every service route requires an exposed method and an exact native target."""
     service, ingresses = _production_routes()
