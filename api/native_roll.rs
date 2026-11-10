@@ -347,6 +347,13 @@ fn app() -> Router {
         .route("/api/v1/tags/{tag_id}/usage/", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
+        .route("/api/v1/users/me/preferences", get(native_dispatch))
+        .route("/api/v1/users/me/preferences", patch(native_dispatch))
+        .route("/api/v1/users/me/taste-signals", get(native_dispatch))
+        .route(
+            "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+            put(native_dispatch),
+        )
         .route("/api/v1/reading-mode", get(native_dispatch))
         .route("/api/v1/reading-mode", post(native_dispatch))
         .route(
