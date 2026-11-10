@@ -641,8 +641,7 @@ mod tests {
         let missing = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(999))
             .await
             .expect_err("missing thread is 404");
-        assert_eq!(missing.0, StatusCode::NOT_FOUND);
-        assert_eq!(missing.1, "Thread 999 not found");
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        assert_eq!(missing.detail(), "Thread 999 not found");
     }
-
 }
