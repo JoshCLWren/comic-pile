@@ -250,3 +250,21 @@ def test_recovery_rejects_stale_head_and_absent_evidence(tmp_path: Path) -> None
     recovery.write_text("FACTORY_GATE_READY\n")
     assert run_bash(call).returncode != 0
     assert run_bash(f"factory_has_acceptance_report {primary} {POLICY}").returncode != 0
+
+
+def test_recover_verdict_rejects_invalid_pr_and_head(tmp_path: Path) -> None:
+    """The recovery model is bound to an exact PR number and 40-char lowercase head."""
+    recovery_log = str(tmp_path / "recovery.log")
+    head40 = "a" * 40
+    # PR must be a positive integer (not zero, not negative, not non-numeric)
+    for bad_pr in ("0", "-1", "abc"):
+        result = run_bash(
+            f"factory_recover_semantic_verdict model workspace 30 {recovery_log} '{bad_pr}' {head40} 'mission'"
+        )
+        assert result.returncode == 2, f"PR={bad_pr!r} should be rejected, got {result.returncode}"
+    # Head must be exactly 40 lowercase hex characters (not short, not uppercase, not non-hex)
+    for bad_head in ("short", "A" * 40, "g" * 40, "a" * 39, "a" * 41):
+        result = run_bash(
+            f"factory_recover_semantic_verdict model workspace 30 {recovery_log} 1 {bad_head} 'mission'"
+        )
+        assert result.returncode == 2, f"head={bad_head!r} should be rejected, got {result.returncode}"
