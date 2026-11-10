@@ -435,6 +435,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/sessions/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/threads/[0-9]+$",
       "methods": [
         "GET"
@@ -531,6 +538,28 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/reading\\-mode$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode/suggest$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/releases/$",
       "methods": [
         "GET",
@@ -567,6 +596,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/sessions/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
       "methods": [
         "POST"
@@ -584,6 +620,28 @@
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/preferences$",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/taste\\-signals$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
+      "methods": [
+        "PUT"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -680,14 +738,6 @@
       "src": "^/api/sessions/[^/]+/restore\\-session\\-start$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/[^/]+/snapshots$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1083,31 +1133,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/reading\\-mode$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-mode/suggest$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/sessions/$",
       "methods": [
         "GET",
@@ -1127,14 +1152,6 @@
       "src": "^/api/v1/sessions/[^/]+/restore\\-session\\-start$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/sessions/[^/]+/snapshots$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1452,31 +1469,6 @@
       "src": "^/api/v1/threads:getBlockingInfo$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/preferences$",
-      "methods": [
-        "GET",
-        "PATCH",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/taste\\-signals$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
-      "methods": [
-        "PUT",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
