@@ -169,7 +169,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 57
+    assert len(shadowed_v1) == 47
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/creators"
@@ -314,8 +314,25 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/reading-mode"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/reading-mode"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/reading-mode/dismiss-suggestion"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/reading-mode/suggest"
+        and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
     assert any(
