@@ -63,6 +63,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
@@ -72,6 +74,18 @@ jobs:
           enable-cache: true
       - name: Install locked Python runtime dependencies for read-only route discovery
         run: uv sync --locked --no-dev
+      - name: Prove regeneration PR contains only current deterministic artifacts
+        if: ${{ github.event_name == 'pull_request' && startsWith(github.head_ref, 'automation/route-regeneration/') && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          ROUTE_PYTHON: .venv/bin/python
+        run: |
+          set -euo pipefail
+          python3 scripts/check_route_fragment_guard.py --allow-generated \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}"
+          node scripts/generate_vercel_routes.mjs --check
+          .venv/bin/python scripts/generate_route_burndown.py --check
+
       - name: Generate and validate real FastAPI ingress
         env:
           ROUTE_PYTHON: .venv/bin/python
