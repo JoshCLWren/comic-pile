@@ -316,6 +316,35 @@ fn app() -> Router {
             "/api/v1/threads/{thread_id}/issue-dependencies",
             get(native_dispatch),
         )
+        .route("/api/v1/tags/", get(native_dispatch))
+        .route("/api/v1/tags/", post(native_dispatch))
+        .route(
+            "/api/v1/tags/effective/issue/{issue_id}/",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/tags/effective/plan/{plan_id}/",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/tags/effective/thread/{thread_id}/",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/tags/effective/thread/{thread_id}/issues/",
+            get(native_dispatch),
+        )
+        .route("/api/v1/tags/{tag_id}/", get(native_dispatch))
+        .route("/api/v1/tags/{tag_id}/", put(native_dispatch))
+        .route("/api/v1/tags/{tag_id}/", delete(native_dispatch))
+        .route("/api/v1/tags/{tag_id}/assign/", post(native_dispatch))
+        .route("/api/v1/tags/{tag_id}/bulk-assign/", post(native_dispatch))
+        .route(
+            "/api/v1/tags/{tag_id}/bulk-unassign/",
+            post(native_dispatch),
+        )
+        .route("/api/v1/tags/{tag_id}/unassign/", delete(native_dispatch))
+        .route("/api/v1/tags/{tag_id}/usage/", get(native_dispatch))
         .route("/api/v1/roll/dismiss-pending", post(native_dispatch))
         .route("/api/roll/dismiss-pending", post(native_dispatch))
         .route("/api/v1/users/me/preferences", get(native_dispatch))
