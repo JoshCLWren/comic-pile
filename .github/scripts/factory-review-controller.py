@@ -739,6 +739,25 @@ def reconcile_provenance(
     }
 
 
+def model_for_trusted_review_session(reviewer: str) -> str | None:
+    """Bind reviewer provenance to the executed route, not the coding roster.
+
+    The runtime/source/model triplet comes from the trusted factory Entry job,
+    not from the PR body or agent's prose. Ordinary sessions and local/manual
+    controller invocations retain the existing roster-based behavior.
+    """
+    runtime = os.environ.get("FACTORY_RUNTIME_MODEL", "")
+    source = os.environ.get("FACTORY_SOURCE", "")
+    selected = os.environ.get("FACTORY_MODEL", "")
+    if runtime == "openrouter/free" or selected == "openrouter/free":
+        if (source, selected, runtime) != (
+            "openrouter-free", "openrouter/free", "openrouter/free"
+        ):
+            raise RuntimeError("inconsistent dedicated semantic review runtime provenance")
+        return "openrouter/free"
+    return roster_model_for_worker(reviewer)
+
+
 def persist_cross_model_review_marker(
     *,
     pr_number: int,
@@ -765,7 +784,7 @@ def persist_cross_model_review_marker(
         pr=pr_number,
         head=head,
     )
-    reviewer_model = roster_model_for_worker(reviewer)
+    reviewer_model = model_for_trusted_review_session(reviewer)
     if recorded is None or reviewer_model is None:
         return None
     author_model, author_agent = recorded
