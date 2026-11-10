@@ -121,6 +121,96 @@ def _production_routes() -> tuple[
     return service, ingresses
 
 
+def _registered_route_matches(
+    method: str, documented_path: str, registered: set[tuple[str, str]]
+) -> bool:
+    """Match actual routes, including literal suffixes after OpenAPI captures.
+
+    Example: a documented `/{plan_id}:apply` is served by Axum's
+    `/{plan_id_action}` segment. Do not hardcode which route family owns it.
+    """
+    normalized = _normalized_path(documented_path)
+    if (method, normalized) in registered:
+        return True
+    concrete = AXUM_CAPTURE.sub("42", documented_path)
+    for registered_method, template in registered:
+        if method != registered_method:
+            continue
+        route_pattern = re.sub(
+            r":[A-Za-z_][A-Za-z0-9_]*",
+            "[^/]+",
+            re.escape(template),
+        )
+        if re.fullmatch(route_pattern, concrete):
+            return True
+    return False
+
+
+def test_native_openapi_matches_registered_rust_operations() -> None:
+    """Derive route coverage from live Rust routers, not a handwritten endpoint list.
+
+    Every documented method/path must be registered in the production service
+    and its ingress. Every public v2 service operation must be documented,
+    except the health and internal maintenance probes, which deliberately
+    have separate runtime contracts.
+    """
+    document = json.loads(
+        (ROOT / "native/contracts/v2-runtime.openapi.json").read_text(encoding="utf-8")
+    )
+    paths = document["paths"]
+    assert isinstance(paths, dict) and paths
+    documented = {
+        (method.upper(), path)
+        for path, methods in paths.items()
+        for method in methods
+    }
+    service, ingresses = _production_routes()
+    exposed = set().union(*ingresses.values())
+    missing_service = {
+        (method, path)
+        for method, path in documented
+        if not _registered_route_matches(method, path, service)
+    }
+    missing_ingress = {
+        (method, path)
+        for method, path in documented
+        if not _registered_route_matches(method, path, exposed)
+    }
+    assert not missing_service, (
+        f"OpenAPI operations without a Rust handler: {sorted(missing_service)}"
+    )
+    assert not missing_ingress, (
+        f"OpenAPI operations without a native ingress: {sorted(missing_ingress)}"
+    )
+
+    # Health and the internal maintenance drain are implemented directly,
+    # but do not belong to the public API contract.
+    internal = {
+        ("GET", "/api/v2/health"),
+        ("GET", "/api/v2/maintenance/comicvine-metadata-repairs"),
+    }
+    public_v2 = {
+        (method, path)
+        for method, path in service
+        if path.startswith("/api/v2/") and (method, path) not in internal
+    }
+    documented_v2 = {
+        (method, path)
+        for method, path in documented
+        if path.startswith("/api/v2/")
+    }
+    undocumented = {
+        (method, path)
+        for method, path in public_v2
+        if not any(
+            documented_method == method
+            and _registered_route_matches(method, documented_path, {(method, path)})
+            for documented_method, documented_path in documented_v2
+        )
+    }
+    assert not undocumented, f"Native v2 handlers missing OpenAPI: {sorted(undocumented)}"
+
+
 def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
     """Every service route requires an exposed method and an exact native target."""
     service, ingresses = _production_routes()
