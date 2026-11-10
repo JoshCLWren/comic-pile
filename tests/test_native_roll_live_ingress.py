@@ -160,7 +160,7 @@ def test_native_openapi_matches_registered_rust_operations() -> None:
     paths = document["paths"]
     assert isinstance(paths, dict) and paths
     documented = {
-        (method.upper(), _normalized_path(path))
+        (method.upper(), path)
         for path, methods in paths.items()
         for method in methods
     }
