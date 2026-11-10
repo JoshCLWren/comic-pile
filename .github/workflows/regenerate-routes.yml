@@ -6,10 +6,10 @@ name: Regenerate Routes (Post-Merge)
 # (excluding the generated vercel-rewrites.json artifact). vercel.json,
 # docs/api/v2-route-inventory.json, docs/api/route-fragments/
 # vercel-rewrites.json, and the AGENTS.md route-burndown section are
-# bot-owned and are regenerated here on push to main. This workflow does
-# not gate merges or block deploy: the previous main vercel.json remains
-# valid until the bot lands (deploy-production also runs on schedule),
-# and bot commits carry [skip ci] so they do not re-trigger CI.
+# bot-owned and are regenerated here after source fragments land.
+# Regeneration is published as a PR because main's required CI Summary rule
+# rejects unchecked direct pushes. The PR runs ordinary CI and auto-merges
+# only when the exact generated head passes its required check.
 #
 # vercel.json is intentionally NOT gitignored: Vercel needs it on main
 # at deploy time. It stays on main but is bot-regenerated.
@@ -20,7 +20,11 @@ on:
       - main
     paths:
       - 'docs/api/route-fragments/*.json'
+      - '.github/workflows/regenerate-routes.yml'
   workflow_dispatch:
+  schedule:
+    # Fallback for merges made with GITHUB_TOKEN, which do not trigger push CI.
+    - cron: '11,41 * * * *'
 
 permissions:
   contents: write
@@ -37,8 +41,11 @@ jobs:
     # Skip bot's own landing commit so post-merge regen never loops.
     if: github.actor != 'github-actions[bot]'
     steps:
-      - name: Check out repository
+      - name: Check out current main
         uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -72,16 +79,57 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           python3 scripts/generate_route_burndown.py --check
 
-      - name: Commit regenerated files back to main
+      - name: Open or refresh CI-gated regeneration PR
+        env:
+          GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vercel.json docs/api/v2-route-inventory.json \
             docs/api/route-fragments/vercel-rewrites.json AGENTS.md
+          branch='automation/route-regeneration/current'
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo '::error::PR_REBASE_TOKEN is required so the generated PR triggers normal CI.'
+            exit 1
+          fi
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --head "$branch" --base main --json number --jq '.[0].number // empty')"
           if git diff --cached --quiet; then
-            echo "No regenerated changes; nothing to commit."
+            echo 'No regenerated changes; current main artifacts are fresh.'
+            if [[ -n "$existing" ]]; then
+              gh pr close "$existing" --repo "$GITHUB_REPOSITORY" \
+                --comment 'Current main already matches generated artifacts; this bot-only PR is obsolete.'
+            fi
             exit 0
           fi
-          git commit -m "chore(routes): regenerate routing artifacts [skip ci]"
-          git push
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$branch"
+          git commit -m 'chore(routes): regenerate routing artifacts'
+          git remote set-url origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          remote_sha="$(git ls-remote origin "refs/heads/$branch" | awk '{print $1}')"
+          if [[ -n "$remote_sha" ]]; then
+            # Refresh only our dedicated bot branch, with a lease so other
+            # writers cannot be silently overwritten.
+            git push --force-with-lease="refs/heads/$branch:$remote_sha" \
+              -u origin "$branch"
+          else
+            git push -u origin "$branch"
+          fi
+          if [[ -n "$existing" ]]; then
+            pr="$existing"
+            echo "Refreshed regeneration PR #$pr on the latest main."
+          else
+            pr="$(gh pr create --repo "$GITHUB_REPOSITORY" \
+              --base main --head "$branch" \
+              --title 'chore(routes): regenerate checked routing artifacts' \
+              --body 'Bot-generated route artifacts only. CI verifies deterministic output at the exact PR head before the required CI Summary check permits merge.
+
+          Refs #4931. No generated files are written directly to protected main.
+
+          <!-- route-regeneration:bot-owned -->')"
+            echo "Opened regeneration PR $pr."
+          fi
+          # No bypass and no [skip ci]: GitHub enforces CI Summary on this PR.
+          gh pr merge --repo "$GITHUB_REPOSITORY" --auto --merge "$pr"
