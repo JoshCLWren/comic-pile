@@ -1894,7 +1894,7 @@ mod db_tests {
         .await
         .expect("update tag");
         assert_eq!(updated.name, "Reading list");
-        assert_eq!(updated.color, "blue");
+        assert_eq!(updated.color, "#3B82F6");
 
         let Json(assigned) = assign_tag(
             State(state.clone()),
