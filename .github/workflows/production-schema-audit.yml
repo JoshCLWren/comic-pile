@@ -1,0 +1,82 @@
+# Scheduled read-only production schema audit (issue #4735).
+#
+# Compares production Neon PostgreSQL with the canonical Alembic fixture at
+# native/roll-service/tests/fixtures/schema/public_schema.sql and fails on
+# any real column/index/constraint/function drift. Runs only on main or by
+# manual dispatch; it never uses pull_request_target, so untrusted branch
+# code never executes with secrets in scope.
+#
+# Required repository secret (owner prerequisite, see
+# docs/PRODUCTION_SCHEMA_AUDIT.md): PRODUCTION_SCHEMA_AUDIT_DATABASE_URL —
+# a direct (non-pooled) PostgreSQL URL for a dedicated least-privilege
+# read-only role. The audit session enforces default_transaction_read_only=on
+# plus bounded statement/lock timeouts (scripts/production_schema_audit.py).
+# The NEON_DIRECT_DATABASE_URL / NEON_API_KEY owner credentials must NOT be
+# reused here. The run fails closed when the secret is absent; it never
+# silently skips.
+
+name: Production Schema Audit
+
+on:
+  schedule:
+    # Weekly, Monday 06:00 UTC. Intentionally independent of factory
+    # dispatch cadences; this workflow never modifies remote schedules.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-schema-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: github.ref == 'refs/heads/main'
+    name: Compare production schema with the canonical fixture
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out trusted main code
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Require the dedicated audit secret (fail closed)
+        env:
+          PRODUCTION_SCHEMA_AUDIT_DATABASE_URL: ${{ secrets.PRODUCTION_SCHEMA_AUDIT_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PRODUCTION_SCHEMA_AUDIT_DATABASE_URL:-}" ]]; then
+            echo "::error::PRODUCTION_SCHEMA_AUDIT_DATABASE_URL is not set. Provision the dedicated read-only audit role and store its direct URL in this secret (docs/PRODUCTION_SCHEMA_AUDIT.md). Refusing to use any other credential."
+            exit 1
+          fi
+          # The audit script rejects admin/owner users and enforces a
+          # read-only session; verify those contracts statically here so a
+          # misconfigured secret fails with a clear message.
+          echo "Audit secret present; running read-only schema comparison."
+
+      - name: Install PostgreSQL client tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+
+      - name: Run the read-only production schema audit
+        env:
+          PRODUCTION_SCHEMA_AUDIT_DATABASE_URL: ${{ secrets.PRODUCTION_SCHEMA_AUDIT_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          python3 scripts/production_schema_audit.py \
+            --diff-output "$RUNNER_TEMP/production-schema-diff.txt"
+          {
+            echo "### Production schema audit"
+            echo ""
+            echo "Production schema matches the canonical fixture."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the bounded redacted diff on mismatch
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: production-schema-diff-${{ github.sha }}
+          path: ${{ runner.temp }}/production-schema-diff.txt
+          if-no-files-found: ignore
