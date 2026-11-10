@@ -32,7 +32,7 @@ def test_model_preflight_distinguishes_model_absence_from_catalog_failure(
         model_command.write_text(
             "#!/usr/bin/env bash\n"
             '[[ "$1" == models && "$2" == --standalone ]] || exit 2\n'
-            f"printf '%s' {catalog!r}\n",
+            f"printf '%b' {catalog!r}\n",
             encoding="utf-8",
         )
     model_command.chmod(0o755)
