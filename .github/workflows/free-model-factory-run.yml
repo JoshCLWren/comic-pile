@@ -757,8 +757,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           # Fresh runners can initially expose only OpenCode's older bundled catalog.
-          if ! bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL"; then
-            printf 'control_plane_failure\tOpenCode catalog not ready for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+          model_wait_status=0
+          bash .github/scripts/wait-opencode-model.sh "$RUNTIME_MODEL" || model_wait_status=$?
+          if (( model_wait_status == 3 )); then
+            printf 'model_unavailable\tOpenCode catalog did not expose exact model: %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
+            exit 1
+          elif (( model_wait_status != 0 )); then
+            printf 'control_plane_failure\tOpenCode catalog could not be read reliably for %s\n' "$RUNTIME_MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
             exit 1
           fi
 
