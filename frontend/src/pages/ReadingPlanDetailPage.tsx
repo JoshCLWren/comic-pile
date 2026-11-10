@@ -1,5 +1,5 @@
 import { displayCblRepository, displayCblSourcePath, displayCblSourceTitle, displayReadingListName } from '../utils/cblSourceDisplay'
-import { ReaderIssueActions, ReadNowIssueButton } from '../components/ReaderIssueActions'
+import { ReaderIssueActions } from '../components/ReaderIssueActions'
 import CompactIssueCardTrigger from '../components/CompactIssueCardTrigger'
 import { useIssueCards, indexIssueCards } from '../hooks/useIssueCards'
 import type { IssueCard } from '../services/issueCardsApi'
@@ -31,7 +31,7 @@ function issueLabel(issue: ReadingPlanReaderIssue): string {
   return issue.label?.trim() ? issue.label : `${issue.thread_title} #${issue.issue_number}`
 }
 
-function availabilityLabel(issue: ReadingPlanReaderIssue): string {
+export function availabilityLabel(issue: ReadingPlanReaderIssue): string {
   if (issue.availability === 'excluded') return 'Excluded from collection'
   if (issue.availability === 'inactive') return 'Series is inactive'
   if (issue.availability === 'read') return 'Read'
@@ -307,14 +307,14 @@ export default function ReadingPlanDetailPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {continueIssue && (
-            <ReadNowIssueButton
+            <CompactIssueCardTrigger
               issueId={continueIssue.issue_id}
-              threadId={continueIssue.thread_id}
-              label="Read next issue"
-              primary
               threadTitle={continueIssue.thread_title}
               issueNumber={continueIssue.issue_number}
-              isRead={continueIssue.availability === 'read'}
+              status={continueIssue.availability === 'read' ? 'read' : 'unread'}
+              card={cardsByIssue.get(continueIssue.issue_id)}
+              actionLabel="Read next issue"
+              expandedVariant="featured"
             />
           )}
           {editableListId != null ? (

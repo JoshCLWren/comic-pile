@@ -22,6 +22,7 @@ pub mod issue_handler;
 pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
+pub mod legacy_dependencies;
 pub mod openapi;
 pub mod option_inputs;
 pub mod queue;
@@ -415,6 +416,23 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/dependencies/{dependency_id}",
             delete(dependencies::delete_dependency),
+        )
+        .route(
+            "/api/v1/dependencies/blocked",
+            get(legacy_dependencies::blocked),
+        )
+        .route("/api/v1/dependencies/", post(legacy_dependencies::create))
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            get(legacy_dependencies::get),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            patch(legacy_dependencies::update),
+        )
+        .route(
+            "/api/v1/dependencies/{dependency_id}",
+            delete(legacy_dependencies::delete),
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))

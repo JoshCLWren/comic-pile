@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import ReadingPlanDetailPage from '../pages/ReadingPlanDetailPage'
+import ReadingPlanDetailPage, { availabilityLabel } from '../pages/ReadingPlanDetailPage'
 import { continuityPlansApi, type ReadingPlanReaderView } from '../services/api-continuity-plans'
 import { tagsApi } from '../services/api-tags'
 import { threadsApi } from '../services/api-threads'
@@ -267,17 +267,17 @@ describe('ReadingPlanDetailPage', () => {
     expect(within(upcoming).queryByRole('button', { name: 'Move to front' })).not.toBeInTheDocument()
   })
 
-  it('retries a failed header card load on the same plan without selecting a Roll', async () => {
+  it('opens the featured header card from the parent batch without an extra metadata request', async () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Age of Apocalypse' })
     await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95]))
-    fetchCards.mockRejectedValueOnce(new Error('cards offline'))
     fireEvent.click(screen.getByRole('button', { name: 'Read next issue' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('cards offline')
+    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Issue X-Men #95' })).toHaveLength(2))
+    const featured = screen.getAllByTestId('comic-issue-card').find((node) => node.dataset.variant === 'featured')
+    expect(featured).toBeDefined()
+    expect(fetchCards).toHaveBeenCalledExactlyOnceWith([75, 95])
     expect(patchIssue).not.toHaveBeenCalled()
     expect(mockSetPending).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
-    await waitFor(() => expect(screen.getAllByRole('article', { name: 'Issue X-Men #95' })).toHaveLength(2))
     expect(screen.getByRole('heading', { name: 'Age of Apocalypse' })).toBeInTheDocument()
   })
 
@@ -494,5 +494,50 @@ describe('ReadingPlanDetailPage', () => {
     renderPage('not-a-number')
     expect(screen.getByRole('alert')).toHaveTextContent('Invalid reading plan ID.')
     expect(mockGetReader).not.toHaveBeenCalled()
+  })
+
+  it('prefers an explicit issue label when present', async () => {
+    const labeled = { ...availableIssue, label: 'Opening chapter' }
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      available_now: [labeled],
+      blocked_next: [],
+      lanes: [{ id: 'main', name: 'Main', order: 0, issues: [labeled] }],
+    })
+    renderPage()
+    expect(await screen.findByText('Opening chapter')).toBeInTheDocument()
+  })
+
+  it('tolerates an empty plan total while rendering a read row', async () => {
+    mockGetReader.mockResolvedValue({
+      ...readerView,
+      progress: { total_issues: 0, read_issues: 0 },
+      available_now: [],
+      blocked_next: [],
+      lanes: [
+        {
+          id: 'main',
+          name: 'Main',
+          order: 0,
+          issues: [
+            { ...availableIssue, occurrence_id: 'read-1', issue_id: 201, availability: 'read' as const, status: 'read' },
+          ],
+        },
+      ],
+    })
+    renderPage()
+    expect(await screen.findByTestId('reading-plan-reader')).toBeInTheDocument()
+  })
+})
+
+describe('availabilityLabel', () => {
+  it('covers every availability outcome', () => {
+    const base = { ...availableIssue }
+    expect(availabilityLabel({ ...base, availability: 'excluded' })).toBe('Excluded from collection')
+    expect(availabilityLabel({ ...base, availability: 'inactive' })).toBe('Series is inactive')
+    expect(availabilityLabel({ ...base, availability: 'read' })).toBe('Read')
+    expect(availabilityLabel({ ...base, availability: 'blocked' })).toBe('Blocked by')
+    expect(availabilityLabel({ ...base, availability: 'available' })).toBe('Available now')
+    expect(availabilityLabel({ ...base, availability: 'later' })).toBe('Upcoming')
   })
 })

@@ -28,11 +28,29 @@ export function ComicIssueCover({
   threadTitle,
   issueNumber,
   variant = 'standard',
+  frameClassName,
+  frameStyle,
+  imageClassName = 'h-full w-full',
+  altText,
+  testId = 'comic-issue-cover',
+  placeholderTestId = 'comic-issue-cover-placeholder',
+  onImageLoad,
+  children,
 }: {
   coverImageUrl: string | null
   threadTitle: string
   issueNumber: string
   variant?: ComicIssueCardVariant
+  /** Optional host geometry for Roll; the image source is never transformed. */
+  frameClassName?: string
+  frameStyle?: CSSProperties
+  imageClassName?: string
+  /** Featured Roll art is decorative because the exact title is adjacent. */
+  altText?: string
+  testId?: string
+  placeholderTestId?: string
+  onImageLoad?: (img: HTMLImageElement) => void
+  children?: ReactNode
 }) {
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const hasCover = coverImageUrl != null && coverImageUrl !== '' && failedUrl !== coverImageUrl
@@ -47,22 +65,23 @@ export function ComicIssueCover({
 
   return (
     <div
-      className={`relative ${sizeClass} shrink-0 overflow-hidden rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-hover)]`}
-      style={{ aspectRatio: '2 / 3' }}
-      data-testid="comic-issue-cover"
+      className={`relative ${frameClassName ?? sizeClass} shrink-0 overflow-hidden rounded-lg border border-[var(--theme-border)] bg-[var(--theme-bg-hover)]`}
+      style={frameStyle ?? { aspectRatio: '2 / 3' }}
+      data-testid={testId}
     >
       {hasCover ? (
         <ImageWithLoading
           src={coverImageUrl}
-          alt={`Cover for ${issueLabel}`}
+          alt={altText ?? `Cover for ${issueLabel}`}
           loading={eager ? 'eager' : 'lazy'}
-          className="h-full w-full"
+          className={imageClassName}
+          onLoad={onImageLoad}
           onError={() => setFailedUrl(coverImageUrl)}
         />
       ) : (
         <div
           className="flex h-full w-full flex-col items-center justify-center gap-1 p-1 text-center"
-          data-testid="comic-issue-cover-placeholder"
+          data-testid={placeholderTestId}
           aria-label={`No cover for ${issueLabel}`}
         >
           <span className="text-[10px] font-black uppercase tracking-wider text-[var(--theme-text-dim)]">
@@ -70,6 +89,7 @@ export function ComicIssueCover({
           </span>
         </div>
       )}
+      {hasCover && children}
     </div>
   )
 }
@@ -81,20 +101,28 @@ export function ComicIssueIdentity({
   status,
   rating,
   variant = 'standard',
+  heading = false,
+  headingTestId,
+  showStatus = true,
 }: {
   threadTitle: string
   issueNumber: string
   status: 'read' | 'unread'
   rating: number | null
   variant?: ComicIssueCardVariant
+  /** Roll is a featured heading; its completion state lives in DecisionCard. */
+  heading?: boolean
+  headingTestId?: string
+  showStatus?: boolean
 }) {
   const titleClass = variant === 'featured' ? 'text-xl' : 'text-sm'
+  const Title = heading ? 'h2' : 'p'
   return (
     <div className="min-w-0">
-      <p className={`break-words font-bold leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
+      <Title data-testid={headingTestId} className={`break-words ${heading ? 'font-black' : 'font-bold'} leading-snug text-[var(--theme-text-primary)] ${titleClass}`}>
         {threadTitle} <span className="text-[var(--theme-comic-accent)]">#{issueNumber}</span>
-      </p>
-      <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
+      </Title>
+      {showStatus && <p className="mt-1 text-xs text-[var(--theme-text-muted)]">
         {status === 'read' ? (
           <>
             <span className="font-semibold text-[var(--theme-success)]">Read</span>
@@ -103,7 +131,7 @@ export function ComicIssueIdentity({
         ) : (
           <span className="font-semibold text-[var(--theme-text-dim)]">Unread</span>
         )}
-      </p>
+      </p>}
     </div>
   )
 }
