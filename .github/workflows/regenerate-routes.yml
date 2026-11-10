@@ -131,5 +131,5 @@ jobs:
           <!-- route-regeneration:bot-owned -->')"
             echo "Opened regeneration PR $pr."
           fi
-          # No bypass and no [skip ci]: GitHub enforces CI Summary on this PR.
+          # No bypass and no CI-skipping commit marker: GitHub enforces CI Summary.
           gh pr merge --repo "$GITHUB_REPOSITORY" --auto --merge "$pr"
