@@ -55,7 +55,10 @@ pub struct DependencyResponse {
     pub target_issue_id: Option<i32>,
     pub source_thread_id: Option<i32>,
     pub target_thread_id: Option<i32>,
+    #[serde(default)]
+    #[schema(default = true)]
     pub is_issue_level: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: String,
     pub note: Option<String>,
     pub source_label: Option<String>,

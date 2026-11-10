@@ -3874,19 +3874,20 @@
         "description": "Issue-level dependency response mirroring the Python `DependencyResponse`\nfields the Dependency Builder consumes (`warning`, labels, thread ids).",
         "required": [
           "id",
-          "is_issue_level",
           "created_at"
         ],
         "properties": {
           "created_at": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "integer",
             "format": "int32"
           },
           "is_issue_level": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": true
           },
           "note": {
             "type": [

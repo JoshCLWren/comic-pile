@@ -11055,9 +11055,11 @@ export interface components {
          *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
          */
         NativeDependencyResponse: {
+            /** Format: date-time */
             created_at: string;
             /** Format: int32 */
             id: number;
+            /** @default true */
             is_issue_level: boolean;
             note?: string | null;
             /** Format: int32 */
