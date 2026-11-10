@@ -74,6 +74,10 @@ Deployed runtime by cutover owner (`METHOD path -> runtime`):
 - #4684 (16): `GET /api/v2/continuity-plans/{plan_id}/reader -> native-rust`; `GET /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/continuity-plans/{plan_id}/recovery -> native-rust`; `POST /api/v2/dependencies/ -> native-rust`; `DELETE /api/v2/dependencies/{dependency_id} -> native-rust`; `DELETE /api/v2/issues/{issue_id} -> native-rust`; `GET /api/v2/reading-graph -> native-rust`; `POST /api/v2/reading-graph/repairs -> native-rust`; `GET /api/v2/reading-lists -> native-rust`; `POST /api/v2/reading-lists -> native-rust`; `DELETE /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id} -> native-rust`; `PUT /api/v2/reading-lists/{list_id} -> native-rust`; `GET /api/v2/reading-lists/{list_id}/reader -> native-rust`; `PUT /api/v2/threads/{thread_id}/issue-order -> native-rust`; `POST /api/v2/threads/{thread_id}/issues -> native-rust`
 <!-- route-burndown:end -->
 
+### Route generation ownership (bot-owned)
+
+Route PRs must touch only `docs/api/route-fragments/*.json` source fragments (excluding `docs/api/route-fragments/vercel-rewrites.json`). Never hand-edit `vercel.json`, `docs/api/v2-route-inventory.json`, the `<!-- route-burndown -->` section above, or `docs/api/route-fragments/vercel-rewrites.json`. Those files are bot-owned and regenerated post-merge by `.github/workflows/regenerate-routes.yml` (runs `python3 scripts/generate_route_burndown.py` then `node scripts/generate_vercel_routes.mjs`, then the burndown generator again so burndown enrichment is preserved; both `--check` gates must pass). `vercel.json` stays on `main` for Vercel deploy (do not gitignore it); the previous `main` truth remains valid until the bot lands.
+
 ## MANDATORY: Frontend Visual Policy
 
 **Any task that changes frontend code, UI behavior, layout, styling, or visual treatment MUST read `docs/FRONTEND_VISUAL_GRAMMAR.md` before making changes.**
