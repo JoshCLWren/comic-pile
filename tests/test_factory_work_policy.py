@@ -289,11 +289,11 @@ def test_reserved_review_worker_prefers_factory_review():
 
 def test_non_reserved_worker_preserves_product_capacity():
     """Ordinary workers keep product implementation moving alongside review."""
-    # Worker 9 is outside the idle (~25%) review-first cohort under the ratio.
-    assert not policy.review_capacity_worker("9")
+    # Worker 8 is outside the review-first cohort even with one pending review.
+    assert not policy.review_capacity_worker("8")
     review = candidate(kind="pr", number=1390, stage="factory:review", producer="43")
     issue = candidate(kind="issue", number=1500, lane=5)
-    ordered = policy.order_candidates_for_worker([review, issue], "9")
+    ordered = policy.order_candidates_for_worker([review, issue], "8")
     assert ordered[0] == issue
 
 
