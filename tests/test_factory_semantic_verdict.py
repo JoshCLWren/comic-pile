@@ -268,3 +268,22 @@ def test_recover_verdict_rejects_invalid_pr_and_head(tmp_path: Path) -> None:
             f"factory_recover_semantic_verdict model workspace 30 {recovery_log} 1 {bad_head} 'mission'"
         )
         assert result.returncode == 2, f"head={bad_head!r} should be rejected, got {result.returncode}"
+
+
+def test_recovery_reads_primary_ready_with_no_report(tmp_path: Path) -> None:
+    """A primary READY result with no parseable report is handled correctly during worker handoff."""
+    primary = tmp_path / "primary.log"
+    recovery = tmp_path / "recovery.log"
+    # Primary has READY marker but no FACTORY_ACCEPTANCE_V1 report
+    primary.write_text("FACTORY_GATE_READY\n")
+    recovery.write_text(
+        "FACTORY_ACCEPTANCE_V1=" + json.dumps(recovery_report()) + "\n"
+        + "FACTORY_GATE_READY\n"
+    )
+    call = (
+        "factory_append_recovered_acceptance_report "
+        f"{primary} {recovery} {POLICY} {RECOVERY_HEAD}"
+    )
+    assert run_bash(call).returncode == 0
+    assert primary.read_text().count("FACTORY_ACCEPTANCE_V1=") == 1
+    assert run_bash(f"factory_has_acceptance_report {primary} {POLICY}").returncode == 0
