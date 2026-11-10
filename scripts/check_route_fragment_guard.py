@@ -152,6 +152,34 @@ def agents_block_changed_for_refs(base: str, head: str) -> bool:
     return agents_block_changed(base_text, head_text)
 
 
+def regenerated_agents_only(base_text: str, head_text: str) -> bool:
+    """Require all AGENTS.md edits to stay inside the generated route block."""
+    base_block = extract_agents_block(base_text)
+    head_block = extract_agents_block(head_text)
+    if base_block is None or head_block is None:
+        return False
+    return base_text.replace(base_block, "", 1) == head_text.replace(
+        head_block, "", 1
+    )
+
+
+def regenerated_pr_violations(
+    changed_files: list[str], base: str, head: str
+) -> list[str]:
+    """Reject anything outside bot-owned artifacts, including AGENTS guidance."""
+    allowed = GENERATED_PATHS | {AGENTS_PATH}
+    violations = sorted(path for path in changed_files if path not in allowed)
+    if not changed_files:
+        violations.append("regeneration PR has no changed artifacts")
+    if AGENTS_PATH in changed_files:
+        merge_base = _git_text("merge-base", base, head).strip()
+        base_text = _git_text("show", f"{merge_base}:{AGENTS_PATH}")
+        head_text = _git_text("show", f"{head}:{AGENTS_PATH}")
+        if not regenerated_agents_only(base_text, head_text):
+            violations.append(f"{AGENTS_PATH} (changes outside route-burndown block)")
+    return violations
+
+
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments.
 
@@ -168,6 +196,11 @@ def parse_args() -> argparse.Namespace:
         "--head",
         default="HEAD",
         help="Head revision for the three-dot diff (default: HEAD).",
+    )
+    parser.add_argument(
+        "--allow-generated",
+        action="store_true",
+        help="Permit only reproducible generated artifacts in the trusted regeneration PR.",
     )
     return parser.parse_args()
 
@@ -203,6 +236,21 @@ def main() -> int:
         print(f"route fragment guard failed to compute diff: {exc}")
         return 2
     changed_files = [line.strip() for line in listing.splitlines() if line.strip()]
+    if args.allow_generated:
+        try:
+            violations = regenerated_pr_violations(
+                changed_files, args.base, args.head
+            )
+        except subprocess.CalledProcessError as exc:
+            print(f"route regeneration guard failed to inspect diff: {exc}")
+            return 2
+        if violations:
+            print("::error::Regeneration PR contains non-generated changes.")
+            for violation in violations:
+                print(f"  - {violation}")
+            return 1
+        print("Regeneration artifact scope passed; full CI verifies determinism.")
+        return 0
     agents_changed = False
     if AGENTS_PATH in changed_files:
         try:
