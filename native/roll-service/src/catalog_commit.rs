@@ -6,7 +6,6 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Json as AxumJson, State},
-    http::StatusCode,
     Json,
 };
 use hmac::{Hmac, Mac};
@@ -64,14 +63,14 @@ pub struct CommitResponse {
 }
 
 fn conflict(code: &str) -> ApiError {
-    ApiError(StatusCode::CONFLICT, code.to_string())
+    ApiError::Conflict(code.to_string())
 }
 fn unprocessable(code: &str) -> ApiError {
     // 422 Unprocessable Entity matches Python's HTTP_422_UNPROCESSABLE_CONTENT
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, code.to_string())
+    ApiError::Unprocessable(code.to_string())
 }
 fn unauthorized(code: &str) -> ApiError {
-    ApiError(StatusCode::UNAUTHORIZED, code.to_string())
+    ApiError::Unauthorized(code.to_string())
 }
 
 fn now_f64() -> f64 {
@@ -97,10 +96,7 @@ fn hex_digest(bytes: &[u8]) -> String {
 
 fn hmac_sha256_hex(secret: &str, message: &str) -> Result<String, ApiError> {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "signature unavailable".to_string(),
-        )
+        ApiError::Internal("signature unavailable".to_string())
     })?;
     mac.update(message.as_bytes());
     Ok(hex_digest(&mac.finalize().into_bytes()))
@@ -1168,10 +1164,7 @@ async fn persist_commit_series_mapping_handler(
         },
     };
     let response_json = serde_json::to_value(&response).map_err(|_| {
-        ApiError(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "serialization failed".to_string(),
-        )
+        ApiError::Internal("serialization failed".to_string())
     })?;
 
     tx.execute(
