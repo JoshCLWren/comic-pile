@@ -222,6 +222,11 @@ fn app() -> Router {
         .route("/api/v2/reading-sessions", post(native_dispatch))
         .route("/api/sessions/{session_id}", get(native_dispatch))
         .route("/api/v1/sessions/{session_id}", get(native_dispatch))
+        .route("/api/sessions/{session_id}/snapshots", get(native_dispatch))
+        .route(
+            "/api/v1/sessions/{session_id}/snapshots",
+            get(native_dispatch),
+        )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
