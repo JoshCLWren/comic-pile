@@ -380,9 +380,20 @@ async def test_retired_roll_mutation_endpoint_not_found(
 
 
 @pytest.mark.asyncio
-async def test_retired_roll_mutation_absent_from_openapi(auth_client: AsyncClient) -> None:
-    """The retired Roll mutation is no longer advertised as an active capability."""
+@pytest.mark.parametrize(
+    ("path", "method"),
+    [
+        ("/api/v1/roll/", "post"),
+        ("/api/v1/roll/set-die", "post"),
+        ("/api/v1/roll/clear-manual-die", "post"),
+        ("/api/v1/roll/session-mode", "patch"),
+    ],
+)
+async def test_retired_roll_mutation_absent_from_openapi(
+    auth_client: AsyncClient, path: str, method: str
+) -> None:
+    """Retired Roll mutations are no longer advertised as active capabilities."""
     response = await auth_client.get("/openapi.json")
     assert response.status_code == 200
     paths = response.json()["paths"]
-    assert "post" not in paths.get("/api/v1/roll/", {})
+    assert method not in paths.get(path, {})

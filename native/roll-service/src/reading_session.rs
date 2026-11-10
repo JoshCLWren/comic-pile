@@ -240,22 +240,29 @@ pub(crate) async fn dice(
     let row = tx.query_opt("SELECT die_after, context::text FROM events WHERE session_id = $1
       AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1",
       &[&session.id]).await.map_err(session_error)?;
-    let automatic = if let Some(row) = row {
+    let (automatic, had_die_event) = if let Some(row) = row {
         let context: Option<&str> = row.try_get(1).map_err(session_error)?;
-        automatic_die_after(
-            row.try_get(0).map_err(session_error)?,
-            &context
-                .and_then(|s| serde_json::from_str(s).ok())
-                .unwrap_or(Value::Null),
+        (
+            automatic_die_after(
+                row.try_get(0).map_err(session_error)?,
+                &context
+                    .and_then(|s| serde_json::from_str(s).ok())
+                    .unwrap_or(Value::Null),
+            ),
+            true,
         )
     } else {
-        session.start_die
+        (session.start_die, false)
     };
-    // Python truthiness: a legacy zero override is not a manual selection.
-    Ok((
-        session.manual_die.filter(|v| *v != 0).unwrap_or(automatic),
-        automatic,
-    ))
+    // Event-derived die wins (#4352): the manual_die column is a legacy
+    // fallback only when the session has no die-changing events. Python
+    // truthiness: a legacy zero override is not a manual selection.
+    let current = if had_die_event {
+        automatic
+    } else {
+        session.manual_die.filter(|v| *v != 0).unwrap_or(automatic)
+    };
+    Ok((current, automatic))
 }
 
 /// Same IANA tzdata as Python ZoneInfo. Reject path traversal before filesystem lookup.

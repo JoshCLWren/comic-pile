@@ -38,16 +38,71 @@ WITH auth AS (
             'volume', 'person_credits', 'character_credits', 'team_credits',
             'story_arc_credits', 'date_last_updated'
           ], false) THEN TRUE
-      WHEN m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL THEN
-        LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <=
-          to_char(now() AT TIME ZONE 'UTC' - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+      -- Provider revision newer than our deep fetch: always stale.
+      WHEN m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+        AND m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
+        AND LEFT(replace(
+          m.metadata->'raw_provider_payload'->>'date_last_updated', ' ', 'T'), 19) >
+          LEFT(m.metadata->>'deep_metadata_refreshed_at', 19)
+      THEN TRUE
+      -- A deep response with empty creator_credits / person_credits is a
+      -- genuine fetch but is not permanently healthy: recheck after 7 days,
+      -- materially sooner than the 30-day window for complete rows, so a
+      -- late-arriving or repaired provider roster is picked up without a
+      -- hot loop. Malformed/absent credit arrays count as empty (safe: a
+      -- repair is enqueued rather than suppressing it). Mirrors
+      -- comicvine_repair::needs_provider_fetch exactly.
       WHEN m.provider_updated_at IS NOT NULL THEN
         (m.metadata->'raw_provider_payload'->>'date_last_updated' IS NOT NULL
           AND LEFT(replace(
             m.metadata->'raw_provider_payload'->>'date_last_updated', ' ', 'T'), 19) <
           to_char(m.provider_updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS'))
-        OR m.provider_updated_at <= now()-interval '30 days'
-      ELSE m.updated_at <= now()-interval '30 days'
+        OR (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
+          )
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '7 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+        )
+        OR (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
+          )
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
+        )
+        OR (
+          m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+        )
+      ELSE
+        (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
+          )
+          AND m.updated_at <= now()-interval '7 days'
+        )
+        OR (
+          m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL
+          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days', 'YYYY-MM-DD"T"HH24:MI:SS')
+        )
+        OR (
+          NOT (
+            (jsonb_typeof(COALESCE(m.metadata->'creator_credits', '[]'::jsonb)) = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'creator_credits') = 'array' THEN m.metadata->'creator_credits' ELSE '[]'::jsonb END) > 0)
+            OR (jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array'
+              AND jsonb_array_length(CASE WHEN jsonb_typeof(m.metadata->'raw_provider_payload'->'person_credits') = 'array' THEN m.metadata->'raw_provider_payload'->'person_credits' ELSE '[]'::jsonb END) > 0)
+          )
+          AND m.metadata->>'deep_metadata_refreshed_at' IS NULL
+        )
     END AS needs_repair
   FROM mapped m
 ), enqueue AS (
@@ -61,9 +116,13 @@ WITH auth AS (
     SET state='pending', attempts=0, next_attempt_at=now(),
       lease_expires_at=NULL, last_error=NULL, completed_at=NULL, updated_at=now()
     WHERE (
-      comicvine_metadata_refresh_requests.state IN ('completed', 'no_credits')
+      comicvine_metadata_refresh_requests.state = 'completed'
       AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
         comicvine_metadata_refresh_requests.completed_at <= now()-interval '30 days')
+    ) OR (
+      comicvine_metadata_refresh_requests.state = 'no_credits'
+      AND (comicvine_metadata_refresh_requests.completed_at IS NULL OR
+        comicvine_metadata_refresh_requests.completed_at <= now()-interval '7 days')
     ) OR (
       comicvine_metadata_refresh_requests.state='failed'
       AND comicvine_metadata_refresh_requests.next_attempt_at <= now()
@@ -259,6 +318,7 @@ pub struct IssueIntelligence {
     refresh_retry_after_seconds: Option<i64>,
 }
 
+/// Convert a JSON value to a string if it's non-empty.
 fn as_string(value: &Value) -> Option<String> {
     match value {
         Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
@@ -267,12 +327,14 @@ fn as_string(value: &Value) -> Option<String> {
     }
 }
 
+/// Convert a JSON value to an i64 ID if possible.
 fn as_id(value: &Value) -> Option<i64> {
     value
         .as_i64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok()))
 }
 
+/// Get references from metadata, trying primary field first then fallback.
 fn refs<'a>(metadata: &'a Value, primary: &str, fallback: &str) -> &'a [Value] {
     metadata
         .get(primary)
@@ -282,6 +344,10 @@ fn refs<'a>(metadata: &'a Value, primary: &str, fallback: &str) -> &'a [Value] {
         .unwrap_or(&[])
 }
 
+/// Extract and merge creator credits from metadata.
+///
+/// Creates a unified list of creators by merging duplicate IDs while
+/// preserving all roles. Uses person_credits first, then creator_credits.
 fn creators(metadata: &Value) -> Vec<Creator> {
     let mut result: Vec<Creator> = Vec::new();
     for credit in refs(metadata, "person_credits", "creator_credits") {
@@ -317,6 +383,9 @@ fn creators(metadata: &Value) -> Vec<Creator> {
     result
 }
 
+/// Extract series ID and name from metadata.
+///
+/// Handles both modern volume object format and legacy volume_id fields.
 fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
     if metadata["volume"].is_object() {
         (
@@ -331,6 +400,9 @@ fn series(metadata: &Value) -> (Option<i64>, Option<String>) {
     }
 }
 
+/// Extract the best available image URL from metadata.
+///
+/// Tries image_url, primary_image, then various image sizes in order of preference.
 fn image(metadata: &Value) -> Option<String> {
     as_string(&metadata["image_url"])
         .or_else(|| as_string(&metadata["primary_image"]))
@@ -341,6 +413,10 @@ fn image(metadata: &Value) -> Option<String> {
         })
 }
 
+/// Convert HTML text to plain text by removing tags and decoding entities.
+///
+/// Strips HTML tags, decodes HTML entities, and normalizes whitespace.
+/// Returns None if the result is empty.
 fn plain_text(value: &Value) -> Option<String> {
     let source = value.as_str()?.trim();
     if source.is_empty() {
@@ -373,6 +449,10 @@ fn plain_text(value: &Value) -> Option<String> {
     }
 }
 
+/// Determine the metadata status based on repair state and content.
+///
+/// Returns a status string and optional retry delay in seconds.
+/// Priority order: repair state > deep fetch status > credit availability.
 fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
     if let Some(repair) = repair {
         let active = match repair.state.as_str() {
@@ -419,6 +499,10 @@ fn status(mapped: &Mapped, repair: Option<&Repair>) -> (String, Option<i64>) {
     }
 }
 
+/// Build the complete issue intelligence response from mapped data.
+///
+/// Constructs the IssueIntelligence struct by processing metadata,
+/// story arcs, and related issues. Sorts and limits related issues.
 fn response(
     mapped: Mapped,
     repair: Option<Repair>,
@@ -631,6 +715,127 @@ mod tests {
         assert!(READ_SQL.contains("WHERE f.needs_repair"));
         assert!(!READ_SQL.contains("FOR UPDATE SKIP LOCKED"));
         assert_eq!(as_id(&json!("29319")), Some(29319));
+    }
+    #[test]
+    fn deep_refresh_timestamp_comparisons_use_utc_text_on_both_sides() {
+        // Metadata is JSON text, but now() yields timestamptz.
+        // Mixing them is a PostgreSQL 42883 error on every intelligence read.
+        assert_eq!(
+            READ_SQL
+                .matches("LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char(")
+                .count(),
+            3,
+            "both fallback freshness branches must use UTC text thresholds"
+        );
+        assert!(
+            !READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' <= now()"),
+            "never compare JSON text directly with a PostgreSQL timestamp"
+        );
+    }
+
+    #[test]
+    fn malformed_credit_fields_never_reach_jsonb_array_length() {
+        // PostgreSQL does not guarantee short-circuit evaluation of AND.
+        // jsonb_array_length on JSON null, an object, or a scalar raises an
+        // error and turns the ComicVine intelligence endpoint into HTTP 500.
+        // Every call must receive CASE-normalized arrays, including when
+        // provider metadata is missing or malformed.
+        assert_eq!(
+            READ_SQL
+                .matches("jsonb_array_length(CASE WHEN jsonb_typeof(")
+                .count(),
+            8,
+            "all credit-length checks must handle non-array JSON safely"
+        );
+        assert!(
+            !READ_SQL.contains("jsonb_array_length(COALESCE("),
+            "COALESCE cannot protect against non-array JSON values"
+        );
+        assert!(
+            !READ_SQL.contains("jsonb_array_length(m.metadata->"),
+            "never call array_length directly on untrusted provider JSON"
+        );
+    }
+
+    #[test]
+    fn empty_credits_use_seven_day_recheck_and_provider_revision() {
+        // Reader policy must mirror comicvine_repair::needs_provider_fetch.
+        assert!(
+            READ_SQL.contains("interval '7 days'"),
+            "empty credits need a 7-day recheck, not a 30-day lock"
+        );
+        assert!(READ_SQL.contains("state = 'no_credits'"));
+        assert!(
+            READ_SQL.contains("state = 'completed'"),
+            "completed rows keep the 30-day window"
+        );
+        assert!(
+            READ_SQL.contains("date_last_updated"),
+            "provider revision must be compared against the deep fetch"
+        );
+        // Malformed/absent credit arrays count as empty (safe direction).
+        assert!(READ_SQL.contains("jsonb_typeof"));
+        // Both freshness branches (provider_updated_at and updated_at) must use
+        // the same NOT (has credits) predicate: a row has credits iff either
+        // creator_credits or person_credits is non-empty (R1 regression).
+        // Two NOT (has credits) sub-conditions per branch x 2 branches = 4.
+        assert_eq!(
+            READ_SQL.matches("NOT (").count(),
+            4,
+            "both branches must use NOT (has credits)"
+        );
+    }
+    #[test]
+    fn credited_rows_refresh_after_30_days() {
+        // Both freshness branches must allow a credited row with a 31-day-old
+        // deep_metadata_refreshed_at to be considered stale, i.e., the 30-day
+        // window must not be guarded by a NOT(has credits) predicate.
+        assert!(
+            READ_SQL.contains("m.metadata->>'deep_metadata_refreshed_at' IS NOT NULL\n          AND LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'"),
+            "30-day refresh must apply to credited rows"
+        );
+        // Count only the deep-metadata freshness branches; the enqueue
+        // completed_at window is a separate 30-day retry guard.
+        assert_eq!(
+            READ_SQL
+                .matches("LEFT(m.metadata->>'deep_metadata_refreshed_at', 19) <= to_char((now() AT TIME ZONE 'UTC') - interval '30 days'")
+                .count(),
+            2,
+            "two 30-day freshness branches, one per freshness path"
+        );
+    }
+    #[test]
+    fn seven_creators_read_through_production_path() {
+        // Issue #24 shape: seven person credits. The production read path is
+        // creators() -> response(), not cached_has_credits alone. Confirm all
+        // seven creators survive the merge, including role merging.
+        let seven = (1..=7)
+            .map(|i| json!({"id": i, "name": format!("Creator {i}"), "role": "writer"}))
+            .collect::<Vec<_>>();
+        let metadata = json!({"person_credits": seven});
+        let people = creators(&metadata);
+        assert_eq!(people.len(), 7);
+        assert_eq!(people[0].name, "Creator 1");
+        assert_eq!(people[6].name, "Creator 7");
+        assert_eq!(people[6].creator_id, Some(7));
+        // Wire projection through response() preserves all seven.
+        let mapped = Mapped {
+            external_id: "1196188".into(),
+            external_url: None,
+            metadata: json!({
+                "name": "Issue 24", "volume": {"id": 1, "name": "Absolute Superman"},
+                "person_credits": seven,
+                "cover_date": "2026-01-01", "store_date": "2026-01-01",
+                "raw_provider_payload": {"id": 1, "name": "Issue 24", "issue_number": "24",
+                    "cover_date": "2026-01-01", "store_date": "2026-01-01", "image": {},
+                    "volume": {"id": 1, "name": "Absolute Superman"},
+                    "person_credits": seven, "character_credits": [], "team_credits": [],
+                    "story_arc_credits": [], "date_last_updated": "2026-01-01T00:00:00+00:00"}
+            }),
+        };
+        let wire = serde_json::to_value(response(mapped, None, vec![], vec![])).unwrap();
+        assert_eq!(wire["creators"].as_array().unwrap().len(), 7);
+        assert_eq!(wire["metadata_status"], "complete");
     }
     #[test]
     fn render_the_existing_issue_intelligence_shape() {

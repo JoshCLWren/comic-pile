@@ -445,7 +445,7 @@ export function ComicIdentity({ issueId }: ComicIdentityProps) {
                 case 'deep_fetched_no_credits':
                   return (
                     <p className="text-[11px] text-[var(--theme-text-muted)] italic" data-testid="creator-status-no-credits">
-                      Credits not available
+                      ComicVine currently has no creator credits
                     </p>
                   );
                 default:
