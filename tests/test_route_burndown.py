@@ -486,6 +486,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "continuity-rules",
         "creators",
         "custom-cbl",
+        "demo",
         "dependencies",
         "issues",
         "preferences",
@@ -608,8 +609,15 @@ def test_generated_rewrite_fragment_excludes_global_catch_all() -> None:
 def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     """AGENTS.md generated section reflects vercel.json destinations."""
     agents = AGENTS_PATH.read_text(encoding="utf-8")
+    inventory = load_json(INVENTORY_PATH)
+    burndown = inventory.get("burndown")
+    assert isinstance(burndown, dict)
+    total = burndown.get("total_live_operations")
+    native = burndown.get("native_rust")
+    python = burndown.get("python_fastapi")
+    assert isinstance(total, int) and isinstance(native, int) and isinstance(python, int)
     assert "<!-- route-burndown:begin" in agents
-    assert "Live v2 operations: 41 (40 native-rust + 1 python orphan)" in agents
+    assert f"Live v2 operations: {total} ({native} native-rust + {python} python orphan)" in agents
     assert "`/api/native_roll.rs`, `/api/native_issue.rs`" in agents
     assert (
         "Python orphan: `GET /api/v2/reading-boundaries/{thread_id} "
