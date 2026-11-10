@@ -3663,3 +3663,6 @@ def test_dedicated_review_route_is_limited_to_exact_head_semantic_stage() -> Non
     assert "reason='exact-head-semantic-review-only'" in workflow
     assert "python3 .github/scripts/factory-work-controller.py release" in workflow
     assert "mandatory real OpenCode smoke" in workflow
+    assert "name: Register composite OpenRouter model for semantic review only" in workflow
+    assert "if: steps.lane.outputs.reason == 'exact-head-semantic-review-only'" in workflow
+    assert 'modelID: "openrouter/free"' in workflow
