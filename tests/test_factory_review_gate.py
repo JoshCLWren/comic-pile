@@ -3670,3 +3670,17 @@ def test_dedicated_review_route_is_limited_to_exact_head_semantic_stage() -> Non
     assert "name: Register composite OpenRouter model for semantic review only" in workflow
     assert "if: steps.lane.outputs.reason == 'exact-head-semantic-review-only'" in workflow
     assert 'modelID: "openrouter/free"' in workflow
+
+
+def test_composite_review_model_is_not_truncated_before_provenance_check() -> None:
+    """The trusted runner must retain openrouter/free, not the bare free suffix."""
+    workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
+    marker = "Composite free review route: validating by real OpenCode smoke"
+    assert workflow.count(marker) == 1
+    composite_preflight = workflow.split(marker, 1)[1].split("\n          fi", 1)[0]
+    assert 'echo "model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in composite_preflight
+    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in composite_preflight
+    assert 'echo "model=${RUNTIME_MODEL#*/}"' not in composite_preflight
+    assert "FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model" in workflow
+    assert "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model" in workflow
+
