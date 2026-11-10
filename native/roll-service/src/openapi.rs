@@ -209,11 +209,17 @@ impl utoipa::Modify for NativeSecurityAddon {
 pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 72] = [
     ("delete", "/api/v1/continuity-rules/{rule_id}"),
     ("delete", "/api/v1/dependencies/{dependency_id}"),
-    ("delete", "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}"),
+    (
+        "delete",
+        "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}",
+    ),
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
-    ("get", "/api/v1/comicvine/series/{comicvine_volume_id}/import-status"),
+    (
+        "get",
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    ),
     ("get", "/api/v1/continuity-rules/"),
     ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v1/dependencies/blocked"),

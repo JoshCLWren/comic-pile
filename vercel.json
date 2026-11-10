@@ -487,6 +487,65 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/custom\\-cbls$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/[^/]+$",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/[^/]+/export$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions/[^/]+$",
+      "methods": [
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/[^/]+/reader$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/custom\\-cbls/issue\\-search$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/dependencies/$",
       "methods": [
         "POST"
@@ -961,73 +1020,6 @@
     },
     {
       "src": "^/api/v1/creators/team\\-chemistry$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/[^/]+$",
-      "methods": [
-        "GET",
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/[^/]+/export$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions$",
-      "methods": [
-        "GET",
-        "PUT",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/[^/]+/overlap\\-decisions/[^/]+$",
-      "methods": [
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/[^/]+/reader$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/custom\\-cbls/issue\\-search$",
       "methods": [
         "GET",
         "OPTIONS"

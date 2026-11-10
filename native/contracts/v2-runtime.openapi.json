@@ -221,6 +221,508 @@
         ]
       }
     },
+    "/api/v1/custom-cbls": {
+      "get": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_list_documentation",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReadingListSummary"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_create_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingListWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/issue-search": {
+      "get": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_search_documentation",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/IssueSearchResult"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}": {
+      "get": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_get_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_update_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadingListWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/export": {
+      "get": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_export_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/overlap-decisions": {
+      "get": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_get_overlap_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_put_overlap_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OverlapDecisionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "409": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/overlap-decisions/{decision_id}": {
+      "delete": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_delete_overlap_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapDecisionSetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/reader": {
+      "get": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_reader_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadingListReader"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply": {
+      "post": {
+        "tags": [
+          "custom-cbls"
+        ],
+        "operationId": "custom_cbl_apply_documentation",
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "plan_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {}
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "404": {
+            "description": ""
+          },
+          "422": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/dependencies/": {
       "post": {
         "tags": [
@@ -4654,6 +5156,35 @@
           }
         }
       },
+      "IssueSearchResult": {
+        "type": "object",
+        "required": [
+          "issue_id",
+          "thread_id",
+          "series_name",
+          "issue_number",
+          "status"
+        ],
+        "properties": {
+          "issue_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": "string"
+          },
+          "series_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "LoginRequest": {
         "type": "object",
         "description": "Request body for username/password login.\n\nLogin deliberately does not impose the registration minimum length: accounts\ncreated before the current policy must still be able to sign in. An empty\npassword is rejected by bcrypt verification with the same non-enumerating\n401 as any other incorrect credential, matching Python.",
@@ -4696,6 +5227,105 @@
             }
           }
         ]
+      },
+      "OverlapDecisionItem": {
+        "type": "object",
+        "required": [
+          "id",
+          "continuing_volume_id",
+          "waiting_volume_id",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "continuing_volume_id": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "waiting_volume_id": {
+            "type": "string"
+          }
+        }
+      },
+      "OverlapDecisionSetResponse": {
+        "type": "object",
+        "required": [
+          "list_id",
+          "updated_at",
+          "decisions",
+          "candidate_volumes"
+        ],
+        "properties": {
+          "candidate_volumes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverlapVolumeCandidate"
+            }
+          },
+          "decisions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OverlapDecisionItem"
+            }
+          },
+          "list_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        }
+      },
+      "OverlapDecisionWrite": {
+        "type": "object",
+        "required": [
+          "continuing_volume_id",
+          "waiting_volume_id"
+        ],
+        "properties": {
+          "continuing_volume_id": {
+            "type": "string"
+          },
+          "expected_updated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "waiting_volume_id": {
+            "type": "string"
+          }
+        }
+      },
+      "OverlapVolumeCandidate": {
+        "type": "object",
+        "required": [
+          "thread_id",
+          "thread_title",
+          "volume_id"
+        ],
+        "properties": {
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": "string"
+          },
+          "volume_id": {
+            "type": "string"
+          }
+        }
       },
       "PasswordResetResponse": {
         "type": "object",
