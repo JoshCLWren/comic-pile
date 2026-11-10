@@ -490,19 +490,20 @@ pub async fn list_completed_threads(
     let mut rows = rows;
     let next_page_token = if rows.len() > page_size as usize {
         rows.truncate(page_size as usize);
-        let last = rows.last().expect("non-empty page");
-        Some(encode_cursor(&QueueCursor {
-            sort: sort.to_string(),
-            search,
-            values: vec![
-                last.created_at
-                    .strip_suffix('Z')
-                    .map(|value| format!("{value}+00:00"))
-                    .unwrap_or_else(|| last.created_at.clone()),
-                last.id.to_string(),
-            ],
-            execution: "legacy".to_string(),
-        }))
+        rows.last().map(|last| {
+            encode_cursor(&QueueCursor {
+                sort: sort.to_string(),
+                search,
+                values: vec![
+                    last.created_at
+                        .strip_suffix('Z')
+                        .map(|value| format!("{value}+00:00"))
+                        .unwrap_or_else(|| last.created_at.clone()),
+                    last.id.to_string(),
+                ],
+                execution: "legacy".to_string(),
+            })
+        })
     } else {
         None
     };
