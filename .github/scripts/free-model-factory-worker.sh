@@ -515,6 +515,11 @@ while :; do
   (( agent_timeout >= 300 )) || break
 done
 
+if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
+  record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
+  exit 2
+fi
+
 if [[ "$MODE" == 'pr' ]]; then
   pr_lifecycle="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}" 2>/dev/null || true)"
   if [[ -n "$pr_lifecycle" ]]; then

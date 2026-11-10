@@ -33,6 +33,19 @@ beforeEach(() => {
 })
 
 describe('compact shared issue entry across dense lists', () => {
+  it('keeps a Reading Plan header label while opening the same exact issue card', async () => {
+    setup(<CompactIssueCardTrigger
+      issueId={37} card={card} threadTitle="Hellboy" issueNumber="9"
+      actionLabel="Read next issue" expandedVariant="featured"
+    />)
+    const next = screen.getByRole('button', { name: 'Read next issue' })
+    expect(next).toHaveTextContent('Read next issue')
+    await userEvent.click(next)
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue Hellboy #9')
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('data-variant', 'featured')
+    expect(fetchCards).not.toHaveBeenCalled()
+  })
+
   it('uses the owning list batch, renders exact cover, and opens the shared card without a second request', async () => {
     setup(<CompactIssueCardTrigger
       issueId={37} card={card} threadTitle="stale title" issueNumber="1" status="unread"
@@ -66,6 +79,39 @@ describe('compact shared issue entry across dense lists', () => {
     await waitFor(() => expect(fetchCards).toHaveBeenCalledOnce())
     expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue Fallback series #Annual 1')
     expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
+  })
+
+  it('does not adopt a different issue returned from a mis-scoped card lookup', async () => {
+    fetchCards.mockResolvedValue([{ ...card, issue_id: 999, rating: 5 }])
+    setup(<CompactIssueCardTrigger
+      issueId={37} threadTitle="B.P.R.D." issueNumber="Annual 1" status="unread"
+    />)
+    await userEvent.click(screen.getByRole('button', { name: 'Reading and mapping actions for B.P.R.D. #Annual 1' }))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledExactlyOnceWith([37]))
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue B.P.R.D. #Annual 1')
+    expect(screen.queryByRole('img', { name: 'Cover for Hellboy #9' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Read now' })).toBeEnabled()
+  })
+
+  it('discards a cached issue cover when a virtualized row changes its canonical issue id', async () => {
+    fetchCards.mockResolvedValueOnce([card]).mockResolvedValueOnce([])
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
+    const row = (issueId: number, title: string, number: string) => (
+      <QueryClientProvider client={queryClient}>
+        <CompactIssueCardTrigger issueId={issueId} threadTitle={title} issueNumber={number} />
+      </QueryClientProvider>
+    )
+    const { rerender } = render(row(37, 'Hellboy', '9'))
+    await userEvent.click(screen.getByRole('button', { name: 'Reading and mapping actions for Hellboy #9' }))
+    expect((await screen.findAllByRole('img', { name: 'Cover for Hellboy #9' }))[0]).toHaveAttribute('src', card.cover_image_url)
+    rerender(row(38, 'B.P.R.D.', 'Annual 2'))
+    await waitFor(() => expect(fetchCards).toHaveBeenCalledWith([38]))
+    expect(screen.getByRole('button', { name: 'Reading and mapping actions for B.P.R.D. #Annual 2' })).toBeEnabled()
+    expect(screen.queryByRole('img', { name: 'Cover for Hellboy #9' })).not.toBeInTheDocument()
+    expect(screen.getByTestId('comic-issue-card')).toHaveAttribute('aria-label', 'Issue B.P.R.D. #Annual 2')
+    expect(screen.getAllByTestId('comic-issue-cover-placeholder')).toHaveLength(2)
   })
 
   it('offers retry after a failed metadata batch but keeps manual action available', async () => {

@@ -221,6 +221,224 @@
         ]
       }
     },
+    "/api/v1/dependencies/": {
+      "post": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "create_legacy_dependency",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid dependency"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Issue not found"
+          },
+          "409": {
+            "description": "Reading constraint cycle: nothing was changed"
+          },
+          "422": {
+            "description": "Validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/blocked": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "list_blocked_legacy_dependencies",
+        "responses": {
+          "200": {
+            "description": "Blocked thread ids",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/dependencies/{dependency_id}": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "get_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "delete_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "dependencies"
+        ],
+        "operationId": "update_legacy_dependency",
+        "parameters": [
+          {
+            "name": "dependency_id",
+            "in": "path",
+            "description": "Dependency id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyNoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Dependency",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Dependency not found"
+          },
+          "422": {
+            "description": "Note must be at most 255 characters or validation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/identity-inbox": {
       "get": {
         "tags": [
@@ -3639,6 +3857,17 @@
           }
         },
         "additionalProperties": false
+      },
+      "DependencyNoteUpdate": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       },
       "DependencyResponse": {
         "type": "object",
