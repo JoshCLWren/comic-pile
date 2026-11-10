@@ -6,7 +6,6 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -165,16 +164,16 @@ pub struct ListQuery {
 // ---------------------------------------------------------------------------
 
 fn bad_request(detail: &str) -> ApiError {
-    ApiError(StatusCode::BAD_REQUEST, detail.to_string())
+    ApiError::BadRequest(detail.to_string())
 }
 fn not_found(detail: &str) -> ApiError {
-    ApiError(StatusCode::NOT_FOUND, detail.to_string())
+    ApiError::NotFound(detail.to_string())
 }
 fn forbidden(detail: &str) -> ApiError {
-    ApiError(StatusCode::FORBIDDEN, detail.to_string())
+    ApiError::Forbidden(detail.to_string())
 }
 fn conflict(detail: &str) -> ApiError {
-    ApiError(StatusCode::CONFLICT, detail.to_string())
+    ApiError::Conflict(detail.to_string())
 }
 
 fn normalize_tag_name(name: &str) -> String {
