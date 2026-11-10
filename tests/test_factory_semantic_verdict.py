@@ -300,8 +300,12 @@ def test_composite_recovery_handoff_requires_complete_trusted_issue_rubric(
     )
     # Three *independently described* entries; no wrapper may generate these.
     complete = recovery_report()
+    items = complete["items"]
+    assert isinstance(items, list)
+    original_item = items[0]
+    assert isinstance(original_item, dict)
     complete["items"] = [
-        {**complete["items"][0], "id": f"A{i}"}
+        {**original_item, "id": f"A{i}"}
         for i in range(1, 4)
     ]
     primary = tmp_path / "primary.log"
