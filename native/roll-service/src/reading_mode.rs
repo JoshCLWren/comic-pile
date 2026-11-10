@@ -34,7 +34,7 @@ use crate::{
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
-use axum::{extract::State, http::StatusCode, Json};
+use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -299,6 +299,7 @@ fn suggest_reading_mode_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use std::collections::BTreeMap;
 
     fn test_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
