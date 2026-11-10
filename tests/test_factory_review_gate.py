@@ -3652,35 +3652,22 @@ def test_review_route_rejects_inconsistent_runtime_provenance(
         module.model_for_trusted_review_session("52")
 
 
-def test_dedicated_review_route_is_limited_to_exact_head_semantic_stage() -> None:
-    """Only a leased semantic review may use the composite route."""
+def test_review_restores_per_worker_provider_instead_of_a_shared_composite() -> None:
+    """Review must not force all independent workers onto one quota domain."""
     workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
-    condition = '.kind == "pr" and .stage == "factory:review"'
-    assert condition in workflow
-    assert "source='openrouter-free'" in workflow
-    assert "model='openrouter/free'" in workflow
-    assert "runtime_model='openrouter/free'" in workflow
-    assert "reason='exact-head-semantic-review-only'" in workflow
-    assert "python3 .github/scripts/factory-work-controller.py release" in workflow
-    assert "mandatory real OpenCode smoke" in workflow
-    worker = (SCRIPTS / "free-model-factory-worker.sh").read_text()
-    assert 'if [[ "$RUNTIME_MODEL" == \'openrouter/free\' ]]' in worker
-    assert '"$MODE" != pr || "$ASSIGNED_PR_STAGE" != \'factory:review\'' in worker
-    assert "composite semantic review route lost its review-stage assignment" in worker
-    assert "name: Register composite OpenRouter model for semantic review only" in workflow
-    assert "if: steps.lane.outputs.reason == 'exact-head-semantic-review-only'" in workflow
-    assert 'modelID: "openrouter/free"' in workflow
+    assert "reason='exact-head-semantic-review-only'" not in workflow
+    assert "Register composite OpenRouter model for semantic review only" not in workflow
+    assert "Factory $worker: routing leased semantic review via" not in workflow
+    assert 'row="$(awk -F' in workflow
+    assert 'echo "source=$source"' in workflow
+    assert 'echo "runtime_model=$runtime_model"' in workflow
 
 
-def test_composite_review_model_is_not_truncated_before_provenance_check() -> None:
-    """The trusted runner must retain openrouter/free, not the bare free suffix."""
+def test_review_uses_existing_model_preflight_and_provider_rotation() -> None:
+    """Review keeps the same catalog and smoke failover used for building PRs."""
     workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
-    marker = "Composite free review route: validating by real OpenCode smoke"
-    assert workflow.count(marker) == 1
-    composite_preflight = workflow.split(marker, 1)[1].split("\n          fi", 1)[0]
-    assert 'echo "model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in composite_preflight
-    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in composite_preflight
-    assert 'echo "model=${RUNTIME_MODEL#*/}"' not in composite_preflight
-    assert "FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model" in workflow
-    assert "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model" in workflow
-
+    assert '[[ "${SOURCE:-}" == opencode-free || "${SOURCE:-}" == openrouter-free ]]' in workflow
+    assert '[[ "${RUNTIME_MODEL:-}" != \'openrouter/free\' ]]' not in workflow
+    assert 'attempted+=("$model")' in workflow
+    assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in workflow
+    assert "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model" in workflow

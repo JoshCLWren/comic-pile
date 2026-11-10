@@ -102,7 +102,7 @@ FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 90
 FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
 # Incident #2309: engage completion-stage backpressure earlier so review/repair
 # drain wins before open PRs pile into conflicts.
-FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 8)
+FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS = env_positive_int('FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS', 1800)
@@ -787,11 +787,11 @@ def build_candidates(
 def review_share_for_backlog(review_backlog: int) -> float:
     """Return the review-first worker share for the current completion pressure.
 
-    Uses a continuous ratio instead of hard-coded absolute tiers: 25% at idle,
-    rising to 90% as completion-stage backlog approaches a reference depth of 20.
+    Use a continuous ratio: 25% at idle, rising to 90% by three pending
+    completion PRs. Reserve reviewers before new issue intake can outrun them.
     """
     depth = max(0, int(review_backlog))
-    return min(0.90, 0.25 + (0.65 * min(depth, 20) / 20.0))
+    return min(0.90, 0.25 + (0.65 * min(depth, 3) / 3.0))
 
 
 def review_capacity_worker(worker: str, *, review_backlog: int = 0) -> bool:

@@ -117,7 +117,8 @@ def completion_worker_target(demand: FleetDemand) -> int:
     The allocator is work-conserving and derived from current queue figures:
     - no completion demand consumes no completion workers;
     - no production demand lets completion consume the idle fleet;
-    - mixed demand receives a proportional share of idle capacity;
+    - when three or more PRs need completion, reserve up to 90% of idle slots;
+    - smaller queues still use proportional allocation;
     - any non-empty completion queue gets at least one worker when capacity exists;
     - assignments never exceed either completion queue depth or idle capacity.
     """
@@ -127,6 +128,8 @@ def completion_worker_target(demand: FleetDemand) -> int:
         return min(demand.completion, demand.idle_workers)
 
     proportional = math.ceil(demand.idle_workers * demand.completion_share)
+    if demand.completion >= 3:
+        proportional = max(proportional, math.ceil(demand.idle_workers * 0.90))
     return min(demand.completion, demand.idle_workers, max(1, proportional))
 
 

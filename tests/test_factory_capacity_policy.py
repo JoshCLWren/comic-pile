@@ -35,8 +35,8 @@ def test_completion_uses_full_idle_fleet_when_no_production_waits():
 def test_mixed_workload_allocates_capacity_by_current_demand_ratio():
     current = demand(completion=30, production=10, idle=20)
     assert current.completion_share == 0.75
-    assert policy.completion_worker_target(current) == 15
-    assert policy.production_worker_target(current) == 5
+    assert policy.completion_worker_target(current) == 18
+    assert policy.production_worker_target(current) == 2
 
 
 def test_small_completion_queue_does_not_capture_the_whole_fleet():
@@ -120,3 +120,16 @@ def test_omniroute_reenable_restores_free_entry_capacity(monkeypatch):
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     assert policy.omniroute_enabled() is True
     assert policy.remaining_omniroute_free_entry_slots(0) == policy.DEFAULT_OMNIROUTE_FREE_ENTRY_CAP
+
+
+def test_backlogged_completion_beats_unbounded_fresh_issue_intake():
+    """Eight review PRs need eight finishers, not one reviewer versus 100 new issues."""
+    current = demand(completion=8, production=100, idle=12)
+    assert policy.completion_worker_target(current) == 8
+    assert policy.production_worker_target(current) == 4
+
+
+def test_three_pending_prs_trigger_completion_priority_without_starving_capacity():
+    current = demand(completion=3, production=1000, idle=20)
+    assert policy.completion_worker_target(current) == 3
+    assert policy.production_worker_target(current) == 17
