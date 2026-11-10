@@ -247,3 +247,24 @@ def test_ci_summary_gates_regeneration_proof() -> None:
     assert "generate_vercel_routes.mjs --check" in proof["run"]
     assert "generate_route_burndown.py --check" in proof["run"]
     assert "rust-ingress" in ci["jobs"]["check-all-jobs"]["needs"]
+
+
+def test_regeneration_auto_merge_dispatches_production_after_merge() -> None:
+    """Only a real merged artifact PR may dispatch production via trusted main."""
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/regenerate-routes.yml").read_text(encoding="utf-8")
+    )
+    on = workflow.get("on", workflow.get(True))
+    assert "closed" in on["pull_request_target"]["types"]
+    publisher = workflow["jobs"]["regenerate"]
+    assert publisher["permissions"]["actions"] == "write"
+    script = publisher["steps"][-1]["run"]
+    assert "trap dispatch_deploy_after_merges EXIT" in script
+    assert "factory_dispatch_production_deploy" in script
+    assert "DEPLOY_TOKEN" in script
+    handler = workflow["jobs"]["deploy-after-regeneration"]
+    assert handler["permissions"]["actions"] == "write"
+    assert "github.event.pull_request.merged == true" in handler["if"]
+    assert "automation/route-regeneration/current" in handler["if"]
+    assert handler["steps"][0]["with"]["ref"] == "main"
+    assert "factory_dispatch_production_deploy" in handler["steps"][-1]["run"]
