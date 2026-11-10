@@ -30,7 +30,6 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -107,7 +106,7 @@ pub struct TasteVerdictRequest {
 }
 
 fn unprocessable(detail: &str) -> ApiError {
-    ApiError(StatusCode::UNPROCESSABLE_ENTITY, detail.to_string())
+    ApiError::Unprocessable(detail.to_string())
 }
 
 /// Validate an optional theme exactly like the Python `ThemeId` literal.
@@ -474,6 +473,7 @@ fn set_taste_signal_verdict_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::StatusCode;
     use utoipa::OpenApi;
 
     #[test]
@@ -487,7 +487,7 @@ mod tests {
         assert_eq!(validate_theme(None).expect("omitted theme"), None);
         let error = validate_theme(Some("neon-pink".to_string()))
             .expect_err("unknown theme must be rejected");
-        assert_eq!(error.0, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[test]
@@ -498,14 +498,16 @@ mod tests {
         assert_eq!(
             validate_signal_type("color")
                 .expect_err("unknown signal type")
-                .0,
+                .status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
         for verdict in VERDICTS {
             assert!(validate_verdict(verdict).is_ok());
         }
         assert_eq!(
-            validate_verdict("love-it").expect_err("unknown verdict").0,
+            validate_verdict("love-it")
+                .expect_err("unknown verdict")
+                .status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
     }
