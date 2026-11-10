@@ -169,7 +169,10 @@ def test_full_surface_matches_deployed_ingress() -> None:
     shadowed_v1 = [
         item for item in v1_ops if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_v1) == 54
+    assert len(shadowed_v1) == sum(
+        item.get("ingress_destination") == "/api/native_roll.rs"
+        for item in v1_ops
+    )
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/creators"
@@ -299,18 +302,62 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in v1_ops
         if str(item.get("path", "")).startswith("/api/v1/releases")
     )
+    assert all(
+        item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+        if str(item.get("path", "")).startswith("/api/v1/tags")
+    )
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/users/me/preferences"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
+        and item.get("burndown_status") == "shadowed by Rust"
+        and item.get("owning_issue") == 4834
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "PATCH"
+        and item.get("path") == "/api/v1/users/me/preferences"
+        and item.get("burndown_status") == "shadowed by Rust"
+        and item.get("owning_issue") == 4834
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/users/me/taste-signals"
+        and item.get("burndown_status") == "shadowed by Rust"
+        and item.get("owning_issue") == 4834
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "PUT"
+        and item.get("path")
+        == "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict"
+        and item.get("burndown_status") == "shadowed by Rust"
+        and item.get("owning_issue") == 4834
         for item in v1_ops
     )
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/reading-mode"
-        and item.get("burndown_status")
-        == "live transitional Python with callers"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/reading-mode"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/reading-mode/dismiss-suggestion"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
+    assert any(
+        item.get("method") == "POST"
+        and item.get("path") == "/api/v1/reading-mode/suggest"
+        and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
     assert any(

@@ -454,6 +454,17 @@ if (( assignment_status != 0 )); then
   exit "$assignment_status"
 fi
 
+# Dispatch and worker execution each check the authoritative leased stage.
+# If the lease was repurposed while Entry started, the composite review model
+# must never run implementation, review-findings repairs, or CI repairs.
+if [[ "$RUNTIME_MODEL" == 'openrouter/free' ]] \
+  && [[ "$MODE" != pr || "$ASSIGNED_PR_STAGE" != 'factory:review' ]]; then
+  log "control_plane_failure: dedicated review model cannot execute ${MODE} #${NUMBER} stage ${ASSIGNED_PR_STAGE:-none}"
+  record_terminal_outcome control_plane_failure 'composite semantic review route lost its review-stage assignment'
+  release_owned_targets 'composite-review-stage-changed' || true
+  exit 2
+fi
+
 log "executing control-plane assignment: ${MODE} #${NUMBER}; runtime ${RUNTIME_MODEL}; budget ${BUDGET_SECONDS}s"
 fork_route=1
 if factory_route_fork_assignment; then fork_route=0; else fork_route=$?; fi

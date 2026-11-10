@@ -16,28 +16,28 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/reading-mode",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading\\-mode$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/reading-mode",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading\\-mode$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/reading-mode/dismiss-suggestion",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/reading-mode/suggest",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading\\-mode/suggest$"
     }
   ]
