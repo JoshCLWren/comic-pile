@@ -198,7 +198,10 @@ pub const DEPLOYED_V2_OPERATIONS: [(&str, &str); 62] = [
     ("delete", "/api/v2/dependencies/{dependency_id}"),
     ("delete", "/api/v2/issues/{issue_id}"),
     ("delete", "/api/v2/reading-lists/{list_id}"),
-    ("get", "/api/v1/comicvine/series/{comicvine_volume_id}/import-status"),
+    (
+        "get",
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    ),
     ("get", "/api/v1/continuity-rules/"),
     ("get", "/api/v1/continuity-rules/{rule_id}"),
     ("get", "/api/v1/dependencies/blocked"),
