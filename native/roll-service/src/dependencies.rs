@@ -26,6 +26,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -76,9 +77,18 @@ pub struct ThreadDependenciesResponse {
 
 const THREAD_OWNED_SQL: &str = "SELECT t.id FROM threads t WHERE t.id = $1 AND t.user_id = $2";
 
-const THREAD_BLOCKING_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at::text, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE si.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+const THREAD_BLOCKING_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE si.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
 
-const THREAD_BLOCKED_BY_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at::text, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+const THREAD_BLOCKED_BY_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+
+fn format_dependency_created_at(created_at: DateTime<Utc>) -> String {
+    let precision = if created_at.timestamp_subsec_micros() == 0 {
+        SecondsFormat::Secs
+    } else {
+        SecondsFormat::Micros
+    };
+    created_at.to_rfc3339_opts(precision, true)
+}
 
 fn thread_row_to_response(row: &tokio_postgres::Row) -> DependencyResponse {
     let source_thread_id: i32 = row.get(5);
@@ -94,7 +104,7 @@ fn thread_row_to_response(row: &tokio_postgres::Row) -> DependencyResponse {
         source_thread_id: Some(source_thread_id),
         target_thread_id: Some(target_thread_id),
         is_issue_level: true,
-        created_at: row.get(3),
+        created_at: format_dependency_created_at(row.get(3)),
         note: row.get(4),
         source_label: Some(issue_label(&source_thread_title, &source_issue_number)),
         target_label: Some(issue_label(&target_thread_title, &target_issue_number)),
@@ -617,7 +627,7 @@ mod tests {
              INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
              VALUES (301,21,'1','unread',NOW(),1),(401,22,'1','unread',NOW(),1);
              INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,note,created_at)
-             VALUES (301,401,'reader','A',NULL,NOW());",
+             VALUES (301,401,'reader','A',NULL,TIMESTAMPTZ '2026-11-10 12:00:00.123000+00');",
         )
         .await
         .expect("thread dependency fixtures");
@@ -629,6 +639,11 @@ mod tests {
         assert_eq!(alpha.0.blocking.len(), 1);
         assert_eq!(alpha.0.blocked_by.len(), 0);
         assert_eq!(alpha.0.blocking[0].target_label.as_deref(), Some("Beta #1"));
+        let response_json = serde_json::to_value(&alpha.0).expect("serialize dependency response");
+        assert_eq!(
+            response_json["blocking"][0]["created_at"],
+            "2026-11-10T12:00:00.123000Z"
+        );
         let beta = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(22))
             .await
             .expect("beta thread dependencies");
@@ -643,5 +658,16 @@ mod tests {
             .expect_err("missing thread is 404");
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
         assert_eq!(missing.detail(), "Thread 999 not found");
+    }
+
+    #[test]
+    fn thread_dependency_timestamp_without_fraction_matches_python_json() {
+        let created_at = DateTime::parse_from_rfc3339("2026-11-10T12:00:00Z")
+            .expect("timestamp")
+            .with_timezone(&Utc);
+        assert_eq!(
+            format_dependency_created_at(created_at),
+            "2026-11-10T12:00:00Z"
+        );
     }
 }
