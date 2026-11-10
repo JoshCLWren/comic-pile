@@ -888,6 +888,19 @@ def has_actionable_review_findings(excerpt: str) -> bool:
             continue
         if line.startswith(("diff --git ", "index ", "--- ", "+++ ", "@@ ", "#", "//", "/*", "{", "}")):
             continue
+        # OpenCode streams tool activity together with the model's final
+        # explanation. A command transcript is evidence of inspection, not an
+        # actionable diagnosis, even when its text contains English words.
+        if line.startswith(("> ", "→ ", "$ ", "↳ ")):
+            continue
+        if re.match(r"^[0-9a-f]{7,40}\\s", line):
+            continue
+        if re.match(r"^(?:commit |Author:|Date:|On branch |nothing to commit|working tree clean)", line, re.I):
+            continue
+        if re.match(r"^\\S+\\s+\\|\\s+\\d+\\s", line) or re.match(
+            r"^\\d+ files? changed(?:,|$)", line
+        ):
+            continue
         # Unified diff additions/deletions and standalone source expressions
         # are not a model diagnosis, even when they contain English words.
         if re.match(r"^[+-](?:[^ ]| {2,})", line):
