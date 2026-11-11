@@ -39,7 +39,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "DB-free double-submit CSRF token issue; no PostgreSQL statement"
+      },
+      "db_free": true
     },
     {
       "method": "POST",
@@ -53,7 +60,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 2,
+        "total_statements": 5,
+        "basis": "user lookup 1 + reset-token delete 1 + insert 1 inside one transaction (+2 tx control); enumeration-safe; set-based"
+      }
     },
     {
       "method": "POST",
@@ -83,7 +96,13 @@
       "consumers": [],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "user lookup 1 + conditional revocation insert 1; set-based"
+      }
     },
     {
       "method": "GET",
@@ -94,7 +113,13 @@
       "consumers": [],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "auth extractor 1 + user profile read 1; set-based, independent of library size"
+      }
     },
     {
       "method": "POST",
@@ -107,7 +132,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "user/revocation lookup 1 + refresh-token revocation insert 1; set-based"
+      }
     },
     {
       "method": "POST",
@@ -120,7 +151,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "existing-account check 1 + conditional insert 1; bcrypt in Rust; set-based"
+      }
     },
     {
       "method": "POST",
@@ -134,7 +171,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 2,
+        "total_statements": 4,
+        "basis": "single-use token consume 1 + password update 1 inside one transaction (+2 tx control); bcrypt in Rust; set-based"
+      }
     },
     {
       "method": "GET",
