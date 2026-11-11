@@ -875,3 +875,76 @@ jobs:
             echo "Dispatch outputs missing or untrustworthy (dispatched_count=${dispatched_count:-<unset>}, dispatch_failed=${dispatch_failed:-<unset>}); chaining roster successor"
             chain_roster_successor
           fi
+
+  # Offer the existing trusted Qwen reviewer on each factory roster tick.
+  # This uses the same factory review controller and post-review merge gate.
+  ollama_review:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster' && !inputs.target)
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+      pull-requests: read
+      issues: read
+    concurrency:
+      group: factory-local-ollama-selector
+      cancel-in-progress: false
+    steps:
+      - name: Offer one unclaimed PR to local Ollama reviewer
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_PROVIDER_URL: ${{ secrets.REVIEW_PROVIDER_URL || secrets.LOCAL_OLLAMA_URL }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${REVIEW_PROVIDER_URL:-}" ]]; then
+            echo 'Local Ollama URL is not configured; leaving standard factory lanes running'
+            exit 0
+          fi
+
+          # The 4-GB GPU takes one review at a time. Also honor Factory 77's
+          # numbered lease so the local reviewer cannot steal its target.
+          runs="$(gh run list --repo "$GITHUB_REPOSITORY" \
+            --workflow local-ollama-review.yml --limit 50 --json status)"
+          active="$(jq '[.[] | select(.status == "in_progress" or .status == "queued" or .status == "waiting" or .status == "pending" or .status == "requested")] | length' <<< "$runs")"
+          if (( active > 0 )); then
+            echo "Local Ollama already has ${active} active review run(s)"
+            exit 0
+          fi
+          # The issues API includes both PRs and issues; gh issue list does not.
+          leases="$(gh api "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=factory%3A77&per_page=1")"
+          if [[ "$(jq 'length' <<< "$leases")" != 0 ]]; then
+            echo 'Factory 77 currently owns another target; leaving its lease untouched'
+            exit 0
+          fi
+
+          prs="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json number,isDraft,labels)"
+          pr="$(jq -r '
+            [.[] | select(.isDraft == false)
+            | select(any(.labels[]?; .name == "factory:review"))
+            | select(any(.labels[]?; .name == "factory:unowned"))
+            | select(all(.labels[]?; (.name | test("^factory:[0-9]+$") | not)))]
+            | sort_by(.number) | .[0].number // empty
+          ' <<< "$prs")"
+          if [[ -z "$pr" ]]; then
+            echo 'No unclaimed factory review PR is currently eligible for Ollama'
+            exit 0
+          fi
+          # Re-read before dispatch. The reviewer checks again before inference
+          # and attestation, so a concurrent claim still fails closed.
+          current="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr}")"
+          if ! jq -e '
+            .state == "open" and .draft == false and .base.ref == "main"
+            and any(.labels[]?; .name == "factory:review")
+            and any(.labels[]?; .name == "factory:unowned")
+            and all(.labels[]?; (.name | test("^factory:[0-9]+$") | not))
+          ' <<< "$current" >/dev/null; then
+            echo "PR #${pr} changed ownership or stage; skipping Ollama dispatch"
+            exit 0
+          fi
+          echo "Dispatching automatic local Ollama review of PR #${pr}"
+          gh workflow run local-ollama-review.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main -f "pr=${pr}"
