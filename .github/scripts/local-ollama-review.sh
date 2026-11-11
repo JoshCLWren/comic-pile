@@ -62,14 +62,15 @@ checks = subprocess.run(
 prompt = (
     "You are the independent semantic reviewer for a factory PR. Inspect the exact PR head and "
     "decide whether every issue criterion is actually satisfied by this diff. Do not infer or "
-    "fabricate evidence. Return one JSON object only with this shape: "
-    '{"verdict":"APPROVE"|"REJECT","reason":"...","acceptance":{"issue":NUMBER,'
-    '"head":"FULL_SHA","issue_digest":"SHA256","items":[{"id":"A1","status":"pass",'
-    '"file":"CHANGED_FILE","evidence":"specific fact from the diff, at least 30 characters",'
-    '"test":"named test or check and what it verifies"}]}}. '
-    "For REJECT, still include every rubric item with status pass only where justified; the "
-    "runner fails closed if the report is incomplete. Each cited file must be one of the changed "
-    "paths. Use the exact issue number, full head, and digest below.\n\nIssue rubric:\n" +
+    "fabricate evidence. Return one complete JSON object, not Markdown. Set verdict "
+    "to APPROVE only if every acceptance item is justified; otherwise use REJECT "
+    "with actionable findings in reason. An APPROVE must include acceptance with "
+    "issue (integer), head (exact SHA), issue_digest (exact digest), and items "
+    "for EVERY rubric criterion A1 through the last. Each item needs id, status=pass, "
+    "file (one changed path), evidence (specific behavior, 30+ characters), and "
+    "test (named check with observed result). Keep output concise but complete. "
+    "Never invent file paths, test outcomes or acceptance evidence. "
+    "Use the exact issue number, full head and digest below.\n\nIssue rubric:\n" +
     acceptance.rubric(body) + "\n\nChanged paths:\n" + "\n".join(changed) +
     "\n\nExact head: " + head + "\nIssue: " + issue +
     "\nIssue digest: " + acceptance.digest(body) +
