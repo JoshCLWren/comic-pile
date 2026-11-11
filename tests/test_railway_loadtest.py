@@ -24,15 +24,26 @@ def test_resolve_safe_profile_requires_no_token() -> None:
     """The default profile contains only unauthenticated routes."""
     routes, token = resolve_routes("control-safe", "MISSING_BENCHMARK_TOKEN")
 
-    assert [route.path for route in routes] == ["/health", "/api/v2/auth/csrf"]
+    assert [route.path for route in routes] == ["/api/v2/health", "/api/v2/auth/csrf"]
     assert token is None
+
+
+def test_health_profile_targets_native_rust_liveness() -> None:
+    """The public bare /health route retired to a Vercel 404 (#4740).
+
+    The maintained production benchmark must never request a retired public
+    route again; production liveness is the native Rust route.
+    """
+    retired = {"/health", "/docs", "/redoc", "/openapi.json"}
+    assert ROUTES["health"].path == "/api/v2/health"
+    assert not retired.intersection(route.path for route in ROUTES.values())
 
 
 def test_summarize_reports_percentiles_statuses_and_bytes() -> None:
     """Summary statistics include latency, throughput, statuses, and response bytes."""
     samples = [
-        RequestSample("/health", 10.0, 200, 10, None),
-        RequestSample("/health", 20.0, 200, 20, None),
+        RequestSample("/api/v2/health", 10.0, 200, 10, None),
+        RequestSample("/api/v2/health", 20.0, 200, 20, None),
         RequestSample("/api/v2/auth/csrf", 30.0, 503, 30, None),
         RequestSample("/api/v2/auth/csrf", 40.0, None, 0, "ReadTimeout"),
     ]
@@ -53,7 +64,7 @@ def test_summarize_reports_percentiles_statuses_and_bytes() -> None:
 
 def test_summarize_counts_redirects_as_errors() -> None:
     """Summary success accounting matches request-level 2xx handling."""
-    samples = [RequestSample("/health", 10.0, 302, 0, "HTTPStatus302")]
+    samples = [RequestSample("/api/v2/health", 10.0, 302, 0, "HTTPStatus302")]
 
     result = summarize(samples, 1.0)
 
@@ -64,15 +75,15 @@ def test_summarize_counts_redirects_as_errors() -> None:
 def test_summarize_by_route_keeps_route_results_separate() -> None:
     """Combined scenarios expose independent statistics for every route."""
     samples = [
-        RequestSample("/health", 10.0, 200, 10, None),
+        RequestSample("/api/v2/health", 10.0, 200, 10, None),
         RequestSample("/api/v2/auth/csrf", 20.0, 200, 20, None),
     ]
 
     result = summarize_by_route(samples, 2.0)
 
-    assert list(result) == ["/api/v2/auth/csrf", "/health"]
+    assert list(result) == ["/api/v2/auth/csrf", "/api/v2/health"]
     assert result["/api/v2/auth/csrf"]["requests"] == 1
-    assert result["/health"]["requests_per_second"] == 0.5
+    assert result["/api/v2/health"]["requests_per_second"] == 0.5
 
 
 @pytest.mark.asyncio
@@ -93,7 +104,7 @@ async def test_request_id_propagates_and_non_2xx_failure_is_redacted() -> None:
         sample = await request_once(
             client,
             ROUTES["health"],
-            "https://example.test/health",
+            "https://example.test/api/v2/health",
             {},
             32,
             4,
@@ -107,7 +118,7 @@ async def test_request_id_propagates_and_non_2xx_failure_is_redacted() -> None:
     assert seen_headers["request_id"] == sample.failure["request_id"]
     assert sample.error == "HTTPStatus503"
     assert str(sample.failure["timestamp"]).endswith("Z")
-    assert sample.failure["route"] == "/health"
+    assert sample.failure["route"] == "/api/v2/health"
     assert sample.failure["http_status"] == 503
     assert "super-secret" not in str(sample.failure)
     assert "abc123" not in str(sample.failure)
