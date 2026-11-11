@@ -727,7 +727,8 @@ async fn build_plan_db(
 
     // Get issues with mappings for this series (local catalog path)
     let mut issues_with_mappings: Vec<Value> = Vec::new();
-    let series_info: Option<Value>;
+    let mut series_info: Option<Value>;
+    let mut roster_rows: Vec<Value> = Vec::new();
 
     if let Some(sr) = series_row {
         let meta: Value = sr
@@ -764,13 +765,13 @@ async fn build_plan_db(
             }));
         }
     } else {
-        // No local series - would need ComicVine. Cannot rebuild identically.
-        // Return unavailable; commit will see digest mismatch -> stale, which is safe.
-        return Ok(unavailable_plan(
-            origin_issue_id,
-            "series_not_found",
-            scope_mode,
-        ));
+        // A brand-new provider volume is a normal valid preview. Rebuild its
+        // complete roster instead of turning every signed preview into a 409.
+        let (provider_series, fetched_roster) =
+            crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await?;
+        series_info = Some(provider_series);
+        issues_with_mappings = fetched_roster.clone();
+        roster_rows = fetched_roster;
     }
 
     // Include origin if it has a confirmed mapping not already in list
@@ -794,6 +795,7 @@ async fn build_plan_db(
                 "confidence": origin.try_get::<_, Option<f64>>(8).ok().flatten(),
                 "classification": "unresolved",
                 "_is_origin": true,
+                "_identity_metadata": origin.try_get::<_, Option<Value>>(9).ok().flatten(),
             }));
         }
     }
@@ -809,6 +811,7 @@ async fn build_plan_db(
         &origin_issue_number,
         &mut counts,
     );
+    attach_verified_roster_metadata(&mut classified, &roster_rows);
     let scope_key = derive_scope_key(&classified, origin_issue_id);
     let scope_status = if scope_key.is_some() {
         "available"
