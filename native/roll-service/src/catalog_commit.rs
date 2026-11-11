@@ -739,22 +739,27 @@ async fn build_plan_db(
         // Load mapped issues for this series
         let mapped = conn
             .query(
-                "SELECT i.id, i.issue_number, i.title, i.thread_id, t.title, m.status,
-                        e.provider, e.external_id, m.confidence
+                "SELECT i.id, i.issue_number, e.metadata_json::text, i.thread_id,
+                        t.title, m.status, e.provider, e.external_id, m.confidence
                  FROM issues i
                  JOIN threads t ON t.id = i.thread_id AND t.user_id = $1
                  JOIN issue_external_identity_mappings m ON m.issue_id = i.id
                  JOIN external_identities e ON e.id = m.external_identity_id
-                 WHERE e.provider = $2",
-                &[&user_id, &provider],
+                 JOIN thread_external_series_mappings tsm ON tsm.thread_id = t.id
+                   AND tsm.external_identity_id = $3 AND tsm.status = 'confirmed'
+                 WHERE e.provider = $2 AND e.entity_type = 'issue'",
+                &[&user_id, &provider, &sr.get::<_, i32>(0)],
             )
             .await
             .map_err(db::query_error)?;
         for r in mapped {
+            let metadata_text: Option<String> = r.get(2);
+            let identity_meta: Value = metadata_text.as_deref()
+                .and_then(|raw| serde_json::from_str(raw).ok()).unwrap_or(Value::Null);
             issues_with_mappings.push(serde_json::json!({
                 "issue_id": r.get::<_, i32>(0),
                 "issue_number": r.get::<_, Option<String>>(1).unwrap_or_default(),
-                "title": r.get::<_, Option<String>>(2),
+                "title": identity_meta.get("name"),
                 "thread_id": r.get::<_, Option<i32>>(3),
                 "thread_title": r.get::<_, Option<String>>(4),
                 "current_mapping_status": r.get::<_, Option<String>>(5),
@@ -762,6 +767,7 @@ async fn build_plan_db(
                 "external_id": r.get::<_, Option<String>>(7),
                 "confidence": r.get::<_, Option<f64>>(8),
                 "classification": "unresolved",
+                "_identity_metadata": identity_meta,
             }));
         }
     } else {
