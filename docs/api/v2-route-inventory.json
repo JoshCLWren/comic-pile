@@ -402,7 +402,14 @@
       "consumers": [],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 2,
+        "total_statements": 5,
+        "grows_with_data": false,
+        "basis": "auth 1 + queue row load 1 + optional Option E inputs 1 (+2 tx control when enabled); set-based"
+      }
     },
     {
       "method": "PATCH",
