@@ -20,9 +20,15 @@ gh_retry() {
   return 1
 }
 
-HEAD="$(gh_retry gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq .head.sha)"
-ISSUE="$(gh pr view "$PR" --json body --jq .body | grep -oE 'Closes #[0-9]+|Fixes #[0-9]+|Resolves #[0-9]+' | grep -oE '[0-9]+' | head -1 || true)"
-[ -n "$ISSUE" ] || ISSUE="4825"
+# Resolve the current target and linked issue through the canonical policy.
+# Do not infer a fallback issue, consume inference on a merged PR, or steal leases.
+gh_retry gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" > /tmp/local-review-target.json
+target="$(python3 .github/scripts/local_review_contract.py target /tmp/local-review-target.json)"
+HEAD="$(jq -er .head <<< "$target")"
+ISSUE="$(jq -er .issue <<< "$target")"
+NON_CLOSING="$(jq -er .non_closing <<< "$target")"
+echo "Local review: open PR #${PR}, exact head ${HEAD}, issue #${ISSUE}"
+
 gh_retry gh pr diff "$PR" > /tmp/p.patch
 truncate -s 16000 /tmp/p.patch || true
 
@@ -37,6 +43,8 @@ import subprocess
 import sys
 
 head, issue, pr, model = sys.argv[1:]
+sys.path.insert(0, ".github/scripts")
+import local_review_contract as contract
 spec = importlib.util.spec_from_file_location("factory_issue_acceptance", ".github/scripts/factory_issue_acceptance.py")
 assert spec and spec.loader
 acceptance = importlib.util.module_from_spec(spec)
@@ -54,14 +62,15 @@ checks = subprocess.run(
 prompt = (
     "You are the independent semantic reviewer for a factory PR. Inspect the exact PR head and "
     "decide whether every issue criterion is actually satisfied by this diff. Do not infer or "
-    "fabricate evidence. Return one JSON object only with this shape: "
-    '{"verdict":"APPROVE"|"REJECT","reason":"...","acceptance":{"issue":NUMBER,'
-    '"head":"FULL_SHA","issue_digest":"SHA256","items":[{"id":"A1","status":"pass",'
-    '"file":"CHANGED_FILE","evidence":"specific fact from the diff, at least 30 characters",'
-    '"test":"named test or check and what it verifies"}]}}. '
-    "For REJECT, still include every rubric item with status pass only where justified; the "
-    "runner fails closed if the report is incomplete. Each cited file must be one of the changed "
-    "paths. Use the exact issue number, full head, and digest below.\n\nIssue rubric:\n" +
+    "fabricate evidence. Return one complete JSON object, not Markdown. Set verdict "
+    "to APPROVE only if every acceptance item is justified; otherwise use REJECT "
+    "with actionable findings in reason. An APPROVE must include acceptance with "
+    "issue (integer), head (exact SHA), issue_digest (exact digest), and items "
+    "for EVERY rubric criterion A1 through the last. Each item needs id, status=pass, "
+    "file (one changed path), evidence (specific behavior, 30+ characters), and "
+    "test (named check with observed result). Keep output concise but complete. "
+    "Never invent file paths, test outcomes or acceptance evidence. "
+    "Use the exact issue number, full head and digest below.\n\nIssue rubric:\n" +
     acceptance.rubric(body) + "\n\nChanged paths:\n" + "\n".join(changed) +
     "\n\nExact head: " + head + "\nIssue: " + issue +
     "\nIssue digest: " + acceptance.digest(body) +
@@ -72,65 +81,97 @@ prompt = (
     "\n\nPatch:\n" +
     open("/tmp/p.patch", encoding="utf-8").read()[:14000]
 )
-json.dump({"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": 1400}, open("/tmp/req.json", "w"))
+json.dump(contract.make_request(model, prompt, len(acceptance.requirements(body))), open("/tmp/req.json", "w"))
 PY
 
-for attempt in 1 2 3 4 5; do
-  if curl -fsS -m 360 -X POST "${REVIEW_PROVIDER_URL%/}/v1/chat/completions" \
-    -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
-    --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err; then
-    break
+# Complete JSON responses only. Transport failures and incomplete model output
+# are separate: retry incomplete output once, without inventing evidence.
+review_valid=false
+for semantic_attempt in 1 2; do
+  delivered=false
+  for transport_attempt in 1 2 3; do
+    if curl -fsS --connect-timeout 20 -m 900 -X POST "${REVIEW_PROVIDER_URL%/}/v1/chat/completions" \
+      -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
+      --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err; then
+      delivered=true
+      break
+    fi
+    echo "Provider transport attempt $transport_attempt failed" >&2
+    cat /tmp/curl.err >&2
+    if [[ "$transport_attempt" != 3 ]]; then sleep 10; fi
+  done
+  if [[ "$delivered" != true ]]; then
+    echo "::error::Review provider unavailable after three attempts" >&2
+    exit 1
   fi
-  echo "provider attempt $attempt failed, retrying in 10s" >&2
-  cat /tmp/curl.err >&2
-  [ "$attempt" = 5 ] && { echo "REVIEW_PROVIDER_URL unreachable after 5 tries; failing loudly" >&2; exit 1; }
-  sleep 10
-done
 
-# Validate the model's complete report against the fresh issue body and exact
-# diff before invoking the trusted controller.
-review_status=0
-python3 - "$HEAD" "$ISSUE" "$PR" <<'PY' || review_status=$?
+  if python3 .github/scripts/local_review_contract.py response /tmp/resp.json \
+    > /tmp/local-review-payload.json &&
+    python3 - "$HEAD" "$ISSUE" "$PR" "$NON_CLOSING" <<'PY'
 import importlib.util
 import json
 import os
 import subprocess
 import sys
 
-head, issue, pr = sys.argv[1:]
-spec = importlib.util.spec_from_file_location("factory_issue_acceptance", ".github/scripts/factory_issue_acceptance.py")
+head, issue, pr, non_closing = sys.argv[1:]
+spec = importlib.util.spec_from_file_location(
+    "factory_issue_acceptance", ".github/scripts/factory_issue_acceptance.py"
+)
 assert spec and spec.loader
 acceptance = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(acceptance)
 repo = os.environ["GITHUB_REPOSITORY"]
-body = json.loads(subprocess.check_output(["gh", "api", f"repos/{repo}/issues/{issue}"], text=True))["body"]
-response = json.load(open("/tmp/resp.json", encoding="utf-8"))
-content = response["choices"][0]["message"]["content"]
-start = content.find("{")
-if start < 0:
-    raise SystemExit("provider did not return a JSON review")
-payload = json.JSONDecoder().raw_decode(content[start:])[0]
-verdict = str(payload.get("verdict", "")).upper()
+body = json.loads(subprocess.check_output(
+    ["gh", "api", f"repos/{repo}/issues/{issue}"], text=True
+))["body"]
+payload = json.load(open("/tmp/local-review-payload.json", encoding="utf-8"))
+verdict = payload["verdict"]
+reason = payload["reason"]
 report = payload.get("acceptance")
-log = f"### Factory semantic review · Factory 77 · {verdict or 'UNKNOWN'}\nExact head {head}.\n{payload.get('reason', '')}\n"
-if verdict != "APPROVE":
-    open("/tmp/opencode-factory-77.log", "w", encoding="utf-8").write(log)
-    print(f"local verdict: {verdict or 'UNKNOWN'}")
-    raise SystemExit(10)
-changed = [path for path in subprocess.check_output(["gh", "pr", "diff", pr, "--name-only"], text=True).splitlines() if path]
-errors = acceptance.validate(report, int(issue), head, body, changed)
-if errors:
-    raise SystemExit("invalid provider acceptance report: " + "; ".join(errors))
-open("/tmp/opencode-factory-77.log", "w", encoding="utf-8").write(
-    log + f"# comic-pile-factory-authoritative-diff-evidence\ngh pr diff {pr}\n" +
-    "FACTORY_ACCEPTANCE_V1=" + json.dumps(report, separators=(",", ":")) + "\n"
+if verdict == "APPROVE":
+    changed = subprocess.check_output(
+        ["gh", "pr", "diff", pr, "--name-only"], text=True
+    ).splitlines()
+    errors = acceptance.validate(
+        report, int(issue), head, body, changed, non_closing=non_closing == "true"
+    )
+    if errors:
+        raise SystemExit("invalid provider acceptance report: " + "; ".join(errors))
+log = (
+    f"### Factory semantic review · Factory 77 · {verdict}\n"
+    f"Exact head {head}.\n{reason}\n"
+    f"# comic-pile-factory-authoritative-diff-evidence\ngh pr diff {pr}\n"
 )
-print(f"validated provider acceptance for issue {issue}")
+if verdict == "APPROVE":
+    log += "FACTORY_ACCEPTANCE_V1=" + json.dumps(report, separators=(",", ":")) + "\n"
+open("/tmp/opencode-factory-77.log", "w", encoding="utf-8").write(log)
+print(f"Validated {verdict} from local provider for issue #{issue}")
 PY
-[ "$review_status" -eq 0 ] || {
-  [ "$review_status" -eq 10 ] && exit 0
-  exit "$review_status"
-}
+  then
+    review_valid=true
+    break
+  fi
+  if [[ "$semantic_attempt" == 2 ]]; then
+    echo "::error::Local reviewer did not produce complete valid JSON after two attempts" >&2
+    exit 1
+  fi
+  echo "Incomplete semantic review; retrying once with a larger output budget" >&2
+  jq '.max_tokens = 8192' /tmp/req.json > /tmp/local-review-retry.json
+  mv /tmp/local-review-retry.json /tmp/req.json
+done
+[[ "$review_valid" == true ]] || exit 1
+
+# Check the current GitHub head and ownership again after CPU inference.
+gh_retry gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" > /tmp/local-review-current.json
+python3 .github/scripts/local_review_contract.py target \
+  /tmp/local-review-current.json --expected-head "$HEAD" > /dev/null
+
+# A reject returns the PR to repair; it is not authority to close the PR.
+controller_verdict=approve
+if [[ "$(jq -er .verdict /tmp/local-review-payload.json)" == REJECT ]]; then
+  controller_verdict=repair
+fi
 
 # Only the trusted controller posts the review attestation as github-actions[bot].
 gh pr edit "$PR" --add-label "factory:review,factory:77" >/dev/null 2>&1 || true
@@ -140,7 +181,7 @@ gh issue comment "$PR" --body-file /tmp/claim.txt >/dev/null
 # The controller alone authorizes readiness. A model verdict or an existing
 # factory:approved label must never trigger a merge on its own.
 review_result="$(python3 .github/scripts/factory-review-controller.py review --worker 77 --pr "$PR" \
-  --reviewed-head "$HEAD" --verdict approve --review-log /tmp/opencode-factory-77.log)"
+  --reviewed-head "$HEAD" --verdict "$controller_verdict" --review-log /tmp/opencode-factory-77.log)"
 printf '%s\n' "$review_result"
 
 # Wake the existing canonical merge drain immediately after exact-head readiness.
