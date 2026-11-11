@@ -22,13 +22,15 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: local-ollama-review-${{ inputs.pr || github.event.client_payload.pr }}
+  # A single 4-GB GPU serves both manual and fleet-triggered reviews.
+  group: local-ollama-review
+  queue: max
   cancel-in-progress: false
 
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
         with:

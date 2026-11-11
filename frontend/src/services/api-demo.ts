@@ -1,5 +1,5 @@
 import { defaultHttpClient, type HttpClient } from './httpClient'
-import type { RollResponse } from '../types'
+import { createNativeV2Client } from '../generated/nativeV2Client'
 
 /**
  * Build the guest demo service bound to an HTTP client.
@@ -12,8 +12,9 @@ import type { RollResponse } from '../types'
  * @returns The demo API bound to `client`.
  */
 export function createDemoApi(client: HttpClient) {
+  const nativeV2 = createNativeV2Client(client)
   return {
-    roll: () => client.get<RollResponse>('/v1/demo/roll'),
+    roll: () => nativeV2.readDemoRoll(),
   }
 }
 

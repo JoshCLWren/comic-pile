@@ -219,6 +219,10 @@ run_agent() {
     mission="Implement the full closure-critical acceptance contract for this issue with code and focused tests. Do not stop at planning or optional polish."
   fi
 
+  if [[ "$mode" == 'pr' && -n "${FACTORY_FAST_CHECK_FEEDBACK_FILE:-}" ]]; then
+    mission+=" This is a same-lease fast-check repair, not a fresh review. The prior unpushed edits are still in this worktree. Read the local trusted fast-check log at ${FACTORY_FAST_CHECK_FEEDBACK_FILE}, correct the concrete failures while retaining valid changes, and run focused validation. The wrapper will independently rerun scope and pre-push checks. Do not commit or push."
+  fi
+
   prompt="Read AGENTS.md, docs/ISSUE_EXECUTION_PROTOCOL.md, docs/AUTONOMOUS_FACTORY_POLICY.md, docs/CHATGPT_FACTORY_PROMPT.md, and docs/FACTORY_GITHUB_VISIBILITY.md first. Follow the canonical product-first factory policy.  Edit only the assigned target, run focused validation, and use GitHub for review context. Do not commit or push; the wrapper persists changes. Do not merge or close the assigned pull request; the trusted wrapper and review controller own the final lifecycle transition after your terminal verdict. Do not switch models, providers, or routes. A provider failure is a result for this lane, not permission to fall back to another paid or unrequested route. Do not enable auto-merge, push main, touch production databases, or alter automation schedules. Run context: Worker: ${WORKER_ID}; source: ${SOURCE}; model: ${MODEL}; runtime: ${RUNTIME_MODEL}; target: ${target}. ${mission}"
 
   bash "$TRUSTED_KILO_HELPER" \

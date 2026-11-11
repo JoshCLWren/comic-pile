@@ -48,7 +48,7 @@ const PUBLIC_ENTRIES = {
   '/register': [],
   '/forgot-password': PUBLIC_CREDENTIAL_FORM_TARGET,
   '/reset-password': PUBLIC_CREDENTIAL_FORM_TARGET,
-  '/demo': budget(...GUEST_AUTH_PROBE, 'GET /api/v1/demo/roll x1'),
+  '/demo': budget(...GUEST_AUTH_PROBE, 'GET /api/v2/demo-roll x1'),
   '/': GUEST_AUTH_PROBE,
   '/unknown': GUEST_AUTH_PROBE,
   '/rate': GUEST_AUTH_PROBE,

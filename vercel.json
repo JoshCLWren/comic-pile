@@ -697,6 +697,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[0-9]+/dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
       "methods": [
         "GET"
@@ -729,6 +736,13 @@
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
       "methods": [
         "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/demo-roll$",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -1172,6 +1186,14 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/api/v1/demo/roll$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
       "methods": [
         "GET",
@@ -1286,14 +1308,6 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+/connected$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/dependencies$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1636,14 +1650,6 @@
     },
     {
       "src": "^/api/v1/cron/release\\-sync$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/demo/roll$",
       "methods": [
         "GET",
         "OPTIONS"
