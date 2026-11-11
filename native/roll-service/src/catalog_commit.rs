@@ -960,6 +960,62 @@ fn dedupe_rows_by_issue(issues: &[Value]) -> Vec<Value> {
     rows.into_iter().map(|(_, row)| row).collect()
 }
 
+fn build_sibling_mapping_rows(
+    siblings: &[Value],
+    roster: &[Value],
+    provider: &str,
+) -> Vec<Value> {
+    let mut by_number: HashMap<String, Vec<&Value>> = HashMap::new();
+    for entry in roster {
+        let number = entry.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let key = normalize_issue_number(number);
+        if !key.is_empty() {
+            by_number.entry(key).or_default().push(entry);
+        }
+    }
+    let mut result = Vec::new();
+    for issue in siblings {
+        let number = issue.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        if number.is_empty() {
+            continue;
+        }
+        // Confirmed sibling evidence cannot be overwritten by a new volume
+        // proposal, even if the provider roster has another issue number.
+        if issue.get("current_mapping_status").and_then(Value::as_str) == Some("confirmed") {
+            result.push(issue.clone());
+            continue;
+        }
+        let key = normalize_issue_number(number);
+        let matching = by_number.get(&key);
+        let mut row = issue.clone();
+        let state = match matching.map_or(0, Vec::len) {
+            1 => {
+                if let Some(matched) = matching.and_then(|m| m.first()) {
+                    if let Some(obj) = row.as_object_mut() {
+                        obj.insert("provider".to_owned(), serde_json::json!(provider));
+                        obj.insert("external_id".to_owned(),
+                            matched.get("external_id").cloned().unwrap_or(Value::Null));
+                        let old_title = obj.get("title").cloned().unwrap_or(Value::Null);
+                        obj.insert("title".to_owned(),
+                            matched.get("title").filter(|v| !v.is_null()).cloned()
+                                .unwrap_or(old_title));
+                        obj.insert("confidence".to_owned(),
+                            matched.get("confidence").cloned().unwrap_or(Value::Null));
+                    }
+                }
+                "unique"
+            }
+            n if n > 1 => "duplicate",
+            _ => "none",
+        };
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("_sibling_roster".to_owned(), serde_json::json!(state));
+        }
+        result.push(row);
+    }
+    result
+}
+
 fn classify_rows(
     issues: &[Value],
     provider: &str,
