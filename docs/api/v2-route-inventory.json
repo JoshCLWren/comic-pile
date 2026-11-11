@@ -26,7 +26,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped metrics statement; set-based"
+      }
     },
     {
       "method": "GET",
@@ -209,7 +215,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 5,
+        "transaction_control_statements": 0,
+        "total_statements": 5,
+        "basis": "auth extractor 1 + plan lookup 1 + linked sources 1 + saved issues 1 + candidate lists 1; set-based"
+      }
     },
     {
       "method": "POST",
@@ -222,7 +234,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 6,
+        "transaction_control_statements": 2,
+        "total_statements": 8,
+        "basis": "auth extractor 1 + advisory lock 1 + plan lookup 1 + list lookup 1 + source rows 1 + conditional update/insert 1 (+2 tx control); set-based"
+      }
     },
     {
       "owning_issue": 4855,
