@@ -115,6 +115,8 @@ _RUNTIME_COMMAND_PATHS: Final = frozenset(
         "/api/v1/identity-inbox/{mapping_id}/reject",
         "/api/v1/identity-inbox/{mapping_id}/skip",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+        # Retain the existing v1 command URL while replacing Python with Rust.
+        "/api/v1/custom-cbls/issue-search",
     }
 )
 
