@@ -707,6 +707,14 @@ async fn build_plan_db(
     let origin_mapping_provider: Option<String> = origin.try_get(6).ok();
     let origin_mapping_eid: Option<String> = origin.try_get(7).ok();
 
+    if scope_mode == "queue_thread_bootstrap" {
+        return build_queue_bootstrap_plan_db(
+            conn, user_id, origin_issue_id, provider,
+            provider_series_external_id, origin_thread_id,
+            &origin_issue_number, &origin, None,
+        ).await;
+    }
+
     // Try to find series info locally
     let series_row = conn
         .query_opt(
@@ -763,22 +771,6 @@ async fn build_plan_db(
             "series_not_found",
             scope_mode,
         ));
-    }
-
-    // If queue_thread_bootstrap, use that flow
-    if scope_mode == "queue_thread_bootstrap" {
-        return build_queue_bootstrap_plan_db(
-            conn,
-            user_id,
-            origin_issue_id,
-            provider,
-            provider_series_external_id,
-            origin_thread_id,
-            &origin_issue_number,
-            &origin,
-            series_info,
-        )
-        .await;
     }
 
     // Include origin if it has a confirmed mapping not already in list
@@ -1104,23 +1096,250 @@ fn derive_scope_key_str(rows: &[Value], origin_issue_id: i32) -> String {
 
 #[allow(clippy::too_many_arguments)]
 async fn build_queue_bootstrap_plan_db(
-    _conn: &tokio_postgres::Client,
-    _user_id: i32,
+    conn: &tokio_postgres::Client,
+    user_id: i32,
     origin_issue_id: i32,
-    _provider: &str,
-    _provider_series_external_id: &str,
-    _origin_thread_id: Option<i32>,
+    provider: &str,
+    provider_series_external_id: &str,
+    origin_thread_id: Option<i32>,
     _origin_issue_number: &str,
-    _origin: &tokio_postgres::Row,
+    origin: &tokio_postgres::Row,
     _series_info: Option<Value>,
 ) -> Result<Value, ApiError> {
-    // Queue bootstrap requires live ComicVine roster; DB-only rebuild cannot
-    // produce an identical plan. Return unavailable -> commit will be stale-safe.
-    Ok(unavailable_plan(
-        origin_issue_id,
-        "provider_roster_unavailable",
-        "queue_thread_bootstrap",
-    ))
+    let Some(thread_id) = origin_thread_id else {
+        return Ok(unavailable_plan(origin_issue_id, "origin_issue_without_thread", "queue_thread_bootstrap"));
+    };
+    // The Queue preview relies on an actual, complete provider roster to
+    // prove cardinality. Do not replace that evidence with local guesses.
+    let (series_info, roster) = crate::comicvine_repair::catalog_volume_roster(
+        provider_series_external_id,
+    ).await?;
+    if roster.is_empty() {
+        return Ok(unavailable_plan(origin_issue_id, "provider_roster_unavailable", "queue_thread_bootstrap"));
+    }
+    let thread_title: String = origin.try_get::<_, Option<String>>(4)
+        .map_err(db::query_error)?.unwrap_or_default();
+    let volume_title = series_info.get("name").and_then(Value::as_str).unwrap_or("");
+    if !volume_identity_matches(&thread_title, volume_title) {
+        return Ok(unavailable_plan(
+            origin_issue_id,
+            "queue_thread_bootstrap_volume_identity_mismatch",
+            "queue_thread_bootstrap",
+        ));
+    }
+    let db_rows = conn.query(
+        "SELECT i.id, i.issue_number, i.thread_id, t.title, m.status,
+                e.provider, e.external_id, m.confidence, e.metadata_json::text
+         FROM issues i
+         JOIN threads t ON t.id = i.thread_id AND t.user_id = $2
+         LEFT JOIN issue_external_identity_mappings m ON m.issue_id = i.id
+         LEFT JOIN external_identities e ON e.id = m.external_identity_id
+         WHERE i.thread_id = $1
+         ORDER BY i.position, i.id",
+        &[&thread_id, &user_id],
+    ).await.map_err(db::query_error)?;
+    let local: Vec<Value> = db_rows.iter().map(|r| {
+        let meta_string: Option<String> = r.get(8);
+        let meta: Value = meta_string.as_deref()
+            .and_then(|raw| serde_json::from_str(raw).ok())
+            .unwrap_or(Value::Null);
+        serde_json::json!({
+            "issue_id": r.get::<_, i32>(0),
+            "issue_number": r.get::<_, Option<String>>(1),
+            "title": meta.get("name"),
+            "thread_id": r.get::<_, Option<i32>>(2),
+            "thread_title": r.get::<_, Option<String>>(3),
+            "current_mapping_status": r.get::<_, Option<String>>(4),
+            "provider": r.get::<_, Option<String>>(5),
+            "external_id": r.get::<_, Option<String>>(6),
+            "confidence": r.get::<_, Option<f64>>(7),
+            "_identity_metadata": meta,
+        })
+    }).collect();
+    if local.is_empty() {
+        return Ok(unavailable_plan(origin_issue_id, "thread_has_no_issues", "queue_thread_bootstrap"));
+    }
+    let mut counts = empty_counts();
+    let mut classified = classify_queue_bootstrap_rows(
+        &dedupe_rows_by_issue(&local), &roster, provider, &mut counts,
+    );
+    attach_verified_roster_metadata(&mut classified, &roster);
+    let scope_key = derive_scope_key(&classified, origin_issue_id);
+    let basis = if scope_key.is_some() {
+        "queue_thread_bootstrap_exact_match"
+    } else {
+        "queue_thread_bootstrap_no_exact_match"
+    };
+    let status = if scope_key.is_some() { "available" } else { "unavailable" };
+    if scope_key.is_none() {
+        counts = empty_counts();
+        classified.clear();
+    }
+    let issue_numbers: Vec<String> = classified.iter()
+        .filter_map(|r| r.get("issue_number").and_then(Value::as_str).map(str::to_owned))
+        .filter(|s| !s.is_empty())
+        .collect();
+    let digest = plan_state_digest(
+        provider, provider_series_external_id, origin_issue_id,
+        scope_key.as_deref(), basis, &classified, "queue_thread_bootstrap",
+    );
+    Ok(serde_json::json!({
+        "scope": {
+            "status": status,
+            "scope_key": scope_key,
+            "origin_issue_id": origin_issue_id,
+            "series_label": series_info.get("name"),
+            "basis": basis,
+        },
+        "provider_series": series_info,
+        "counts": counts,
+        "rows": classified,
+        "scope_key": scope_key,
+        "issue_numbers": issue_numbers,
+        "state_digest": digest,
+    }))
+}
+
+fn normalize_volume_title(value: &str) -> (String, Option<String>) {
+    // Python treats suffixes like "(1940)" and "(2011-2016)" as edition
+    // evidence, preserving explicit disagreements between launch years.
+    let suffix = regex::Regex::new(r"\s*\((\d{4})(?:-\d{4})?\)\s*$").ok();
+    let launch = suffix.as_ref()
+        .and_then(|regex| regex.captures(value))
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()));
+    let stripped = suffix.as_ref().map(|r| r.replace(value, ""))
+        .map(|text| text.to_string()).unwrap_or_else(|| value.to_string());
+    (stripped.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" "), launch)
+}
+
+fn volume_identity_matches(thread_title: &str, volume_title: &str) -> bool {
+    let (thread, thread_year) = normalize_volume_title(thread_title);
+    let (volume, volume_year) = normalize_volume_title(volume_title);
+    if thread.is_empty() || volume.is_empty() || thread != volume {
+        return false;
+    }
+    !matches!((thread_year, volume_year), (Some(a), Some(b)) if a != b)
+}
+
+fn classify_queue_bootstrap_rows(
+    local_rows: &[Value],
+    roster: &[Value],
+    provider: &str,
+    counts: &mut Value,
+) -> Vec<Value> {
+    let mut by_number: HashMap<String, Vec<&Value>> = HashMap::new();
+    for item in roster {
+        let number = item.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let normalized = normalize_issue_number(number);
+        if !normalized.is_empty() {
+            by_number.entry(normalized).or_default().push(item);
+        }
+    }
+    let mut local_number_counts: HashMap<String, usize> = HashMap::new();
+    for item in local_rows {
+        let number = item.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        if is_special_issue(number) || is_ambiguous_issue(number) {
+            continue;
+        }
+        let normalized = normalize_issue_number(number);
+        if !normalized.is_empty() {
+            *local_number_counts.entry(normalized).or_default() += 1;
+        }
+    }
+    let confirmed_external_ids: HashSet<String> = local_rows.iter().filter_map(|row| {
+        if row.get("current_mapping_status").and_then(Value::as_str) == Some("confirmed") {
+            row.get("external_id").and_then(Value::as_str).map(str::to_owned)
+        } else { None }
+    }).collect();
+    let mut consumed_ids: HashSet<String> = HashSet::new();
+    let mut out = Vec::new();
+    for info in local_rows {
+        let mut row = info.clone();
+        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let normalized = normalize_issue_number(number);
+        let matches = by_number.get(&normalized);
+        let match_count = matches.map_or(0, Vec::len);
+        let mapping_status = row.get("current_mapping_status").and_then(Value::as_str);
+        let mapping_provider = row.get("provider").and_then(Value::as_str);
+        let classification = if is_special_issue(number) {
+            "excluded_special"
+        } else if mapping_status == Some("confirmed") && mapping_provider != Some(provider) {
+            "needs_review_conflict"
+        } else if is_ambiguous_issue(number) {
+            "needs_review_ambiguous"
+        } else if mapping_status == Some("confirmed") {
+            if match_count == 0 {
+                "unresolved"
+            } else if match_count > 1 {
+                "needs_review_ambiguous"
+            } else if matches.and_then(|v| v.first())
+                .and_then(|r| r.get("external_id")).and_then(Value::as_str)
+                != row.get("external_id").and_then(Value::as_str)
+            {
+                "needs_review_conflict"
+            } else {
+                "already_confirmed"
+            }
+        } else if !normalized.is_empty()
+            && local_number_counts.get(&normalized) == Some(&1)
+            && match_count == 1
+        {
+            let match_row = matches.and_then(|v| v.first());
+            if let Some(match_row) = match_row {
+                if let Some(external_id) = match_row.get("external_id").and_then(Value::as_str) {
+                    consumed_ids.insert(external_id.to_owned());
+                }
+                if let Some(object) = row.as_object_mut() {
+                    object.insert("provider".to_owned(), serde_json::json!(provider));
+                    object.insert("external_id".to_owned(), match_row.get("external_id").cloned().unwrap_or(Value::Null));
+                    let old_title = object.get("title").cloned().unwrap_or(Value::Null);
+                    object.insert("title".to_owned(),
+                        match_row.get("title").filter(|t| !t.is_null()).cloned().unwrap_or(old_title));
+                    object.insert("confidence".to_owned(), match_row.get("confidence").cloned().unwrap_or(Value::Null));
+                }
+            }
+            "safe_exact_match"
+        } else if !normalized.is_empty()
+            && (local_number_counts.get(&normalized).is_some_and(|v| *v > 1) || match_count > 1)
+        {
+            "needs_review_ambiguous"
+        } else {
+            "unresolved"
+        };
+        if let Some(c) = counts.get(classification).and_then(Value::as_i64) {
+            counts[classification] = serde_json::json!(c + 1);
+        }
+        let id = row.get("issue_id").and_then(Value::as_i64).unwrap_or_default();
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("row_id".to_owned(), serde_json::json!(format!("issue:{id}")));
+            obj.insert("classification".to_owned(), serde_json::json!(classification));
+            obj.insert("proposed_mapping".to_owned(), serde_json::json!(
+                matches!(classification, "safe_exact_match" | "already_confirmed")
+            ));
+            obj.insert("default_selected".to_owned(), serde_json::json!(classification == "safe_exact_match"));
+        }
+        out.push(row);
+    }
+    for item in roster {
+        let eid = item.get("external_id").and_then(Value::as_str).unwrap_or("");
+        if consumed_ids.contains(eid) || confirmed_external_ids.contains(eid) {
+            continue;
+        }
+        let mut row = item.clone();
+        if let Some(c) = counts.get("unresolved").and_then(Value::as_i64) {
+            counts["unresolved"] = serde_json::json!(c + 1);
+        }
+        let id = row.get("issue_id").and_then(Value::as_i64).unwrap_or_default();
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("_roster_only".to_owned(), serde_json::json!(true));
+            obj.insert("row_id".to_owned(), serde_json::json!(format!("roster:{id}")));
+            obj.insert("classification".to_owned(), serde_json::json!("unresolved"));
+            obj.insert("proposed_mapping".to_owned(), serde_json::json!(false));
+            obj.insert("default_selected".to_owned(), serde_json::json!(false));
+        }
+        out.push(row);
+    }
+    out
 }
 
 /// A concurrent identical request may have inserted the receipt after our
