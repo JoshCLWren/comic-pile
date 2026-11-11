@@ -73,9 +73,15 @@ def test_roster_workers_are_recognized_as_owned() -> None:
 def test_three_digit_factory_owners_are_recognized_but_malformed_are_rejected() -> None:
     """Recognize valid IDs without granting unknown IDs assignment authority."""
     pattern = re.compile(EXPECTED_OWNER_RE)
-    for label in ("factory:80", "factory:99", "factory:100", "factory:104", "factory:107", "factory:999"):
+    for label in (
+        "factory:80", "factory:99", "factory:100", "factory:104",
+        "factory:107", "factory:999",
+    ):
         assert pattern.fullmatch(label), f"{label} must be a recognizable owner"
-    for label in ("factory:0", "factory:00", "factory:01", "factory:0104", "factory:abc", "factory:"):
+    for label in (
+        "factory:0", "factory:00", "factory:01", "factory:0104",
+        "factory:abc", "factory:",
+    ):
         assert not pattern.fullmatch(label), f"{label} must not be a valid owner"
 
 
@@ -92,8 +98,9 @@ def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_worke
 
     # The controller checks both canonical decimal spelling and roster membership.
     source = (SCRIPTS / "factory-work-controller.py").read_text(encoding="utf-8")
-    assert "worker not in worker_sources()" in source
+    assert "worker in worker_sources()" in source
     assert "unsupported fixed-model worker" in source
+    assert "is_authorized_fixed_worker(worker)" in source
 
 
 
