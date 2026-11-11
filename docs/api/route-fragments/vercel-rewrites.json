@@ -8,6 +8,7 @@
     "continuity-rules",
     "creators",
     "custom-cbl",
+    "demo",
     "dependencies",
     "issues",
     "preferences",
@@ -349,6 +350,13 @@
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
       "methods": [
         "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/demo-roll$",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -785,6 +793,14 @@
     },
     {
       "src": "^/api/v1/custom\\-cbls/issue\\-search$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/demo/roll$",
       "methods": [
         "GET",
         "OPTIONS"
