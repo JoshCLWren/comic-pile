@@ -73,7 +73,7 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     monkeypatch.setattr(CONTROLLER, "gh_json", github)
     # This retry-history fixture explicitly simulates retired worker 48.
     # Production dispatch must still require real roster membership.
-    monkeypatch.setattr(CONTROLLER, "worker_sources", lambda: {"46": "kilo-auto", "48": "nvidia"})
+    monkeypatch.setattr(CONTROLLER, "worker_sources", lambda: {"46": "kilo-auto", "48": "nvidia", "53": "nvidia"})
     monkeypatch.setattr(CONTROLLER, "quota_pause_for", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "runtime_quota_block_reason", lambda worker: None)
     monkeypatch.setattr(CONTROLLER, "worker_has_active_lease", lambda worker: False)
