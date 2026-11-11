@@ -136,3 +136,43 @@ def test_review_shell_has_valid_bash_syntax() -> None:
         text=True, capture_output=True, check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("scope", "expected", "should_succeed"),
+    [
+        ({"non_closing": False}, "false", True),
+        ({"non_closing": True}, "true", True),
+        ({}, "", False),
+        ({"non_closing": None}, "", False),
+        ({"non_closing": "false"}, "", False),
+    ],
+)
+def test_review_shell_accepts_explicit_false_scope_under_errexit(
+    scope: dict, expected: str, should_succeed: bool
+) -> None:
+    """Prevent jq -e from dropping normal closing-linked PRs before inference."""
+    import shutil
+    import subprocess
+
+    script = (ROOT / ".github/scripts/local-ollama-review.sh").read_text()
+    assignment = next(
+        line for line in script.splitlines() if line.startswith("NON_CLOSING=")
+    )
+    assert 'then tostring else error(' in assignment
+    if not shutil.which("jq"):
+        pytest.skip("jq is not installed in this test environment")
+    command = (
+        "target=\"$1\"\n"
+        + assignment + "\n"
+        + 'printf "%s" "$NON_CLOSING"\n'
+    )
+    result = subprocess.run(
+        ["bash", "-euo", "pipefail", "-c", command, "review-test", __import__("json").dumps(scope)],
+        text=True, capture_output=True, check=False,
+    )
+    if should_succeed:
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == expected
+    else:
+        assert result.returncode != 0
