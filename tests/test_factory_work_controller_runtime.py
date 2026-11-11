@@ -186,10 +186,11 @@ def test_assign_candidate_rolls_first_target_back_when_second_write_fails(
     assert (602, "factory:unowned", None) in calls
 
 
+@pytest.mark.parametrize("worker", ["13", "104", "105", "106", "107"])
 def test_pr_assignment_preserves_existing_workflow_stage(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str
 ) -> None:
-    """Verify pr assignment preserves existing workflow stage."""
+    """A real three-digit worker can claim a PR without losing its stage."""
     candidate = controller.Candidate("pr", 1603, 2, 3, "2026-08-16T12:00:00Z")
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
@@ -204,8 +205,8 @@ def test_pr_assignment_preserves_existing_workflow_stage(
         lambda number, owner, stage=None: calls.append((number, owner, stage)),
     )
 
-    assert controller.assign_candidate(candidate, "13") is True
-    assert calls == [(1603, "factory:13", None)]
+    assert controller.assign_candidate(candidate, worker) is True
+    assert calls == [(1603, f"factory:{worker}", None)]
 
 
 def test_assign_candidate_verifies_post_write_owner(
