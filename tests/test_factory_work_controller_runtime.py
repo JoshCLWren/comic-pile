@@ -27,12 +27,16 @@ def controller() -> types.ModuleType:
     # longer on the live roster. Keep that test data explicit, never relax
     # the production assignment check.
     real_sources = module.worker_sources
-    module.worker_sources = lambda: {
-        **real_sources(),
-        "13": "nvidia",
-        "17": "nvidia",
-        "59": "nvidia",
-    }
+    setattr(
+        module,
+        "worker_sources",
+        lambda: {
+            **real_sources(),
+            "13": "nvidia",
+            "17": "nvidia",
+            "59": "nvidia",
+        },
+    )
     return module
 
 
