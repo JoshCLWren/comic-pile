@@ -271,6 +271,12 @@ def test_full_surface_matches_deployed_ingress() -> None:
         and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
+    assert any(
+        item.get("method") == "GET"
+        and item.get("path") == "/api/v1/threads/{thread_id}/dependencies"
+        and item.get("burndown_status") == "shadowed by Rust"
+        for item in v1_ops
+    )
     shadowed_unversioned = [
         item
         for item in unversioned_ops

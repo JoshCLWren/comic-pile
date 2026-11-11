@@ -196,6 +196,14 @@ export interface GetReadingListRequest {
 
 export type GetReadingListResponse = components['schemas']['ReadingList']
 
+export interface GetThreadDependenciesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type GetThreadDependenciesResponse = components['schemas']['NativeThreadDependenciesResponse']
+
 export interface GetThreadIssueDependenciesRequest {
   path: {
     thread_id: number
@@ -451,6 +459,7 @@ export interface NativeV2Client {
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
+  getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
@@ -617,6 +626,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     getReadingList(args: GetReadingListRequest) {
       return client.get<GetReadingListResponse>(
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
+      )
+    },
+    getThreadDependencies(args: GetThreadDependenciesRequest) {
+      return client.get<GetThreadDependenciesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
       )
     },
     getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest) {
