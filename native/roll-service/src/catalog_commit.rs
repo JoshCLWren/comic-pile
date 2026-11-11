@@ -880,119 +880,151 @@ fn series_info_from_meta(external_id: &str, meta: &Value) -> Value {
     })
 }
 
-// Classification helpers (simplified but matching key behaviors)
+// Mirror Python catalog.py's stable preview classification and dedupe rules.
 fn normalize_issue_number(value: &str) -> String {
-    let stripped = value.trim().trim_end_matches('.');
-    if stripped.chars().all(|c| c.is_ascii_digit() || c == ',') && !stripped.is_empty() {
-        // matches (?:\d+|\d{1,3}(?:,\d{3})+)
-        stripped.replace(',', "")
-    } else {
-        String::new()
+    let stripped = value.trim().strip_suffix('.').unwrap_or(value.trim());
+    if !stripped.is_empty() && stripped.bytes().all(|b| b.is_ascii_digit()) {
+        return stripped.to_string();
     }
+    let groups: Vec<&str> = stripped.split(',').collect();
+    if groups.len() > 1
+        && (1..=3).contains(&groups[0].len())
+        && groups[0].bytes().all(|b| b.is_ascii_digit())
+        && groups[1..].iter().all(|g| g.len() == 3 && g.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return groups.join("");
+    }
+    String::new()
 }
+
 fn is_special_issue(issue_number: &str) -> bool {
     let stripped = issue_number.trim().to_lowercase();
     if stripped.is_empty() {
         return true;
     }
-    // roman numerals are ambiguous, not special
-    if stripped.chars().all(|c| matches!(c, 'i' | 'v' | 'x')) && !stripped.is_empty() {
+    if stripped.chars().all(|c| matches!(c, 'i' | 'v' | 'x')) {
         return false;
     }
-    let keywords = [
-        "annual",
-        "special",
-        "hc",
-        "tpb",
-        "gn",
-        "omnibus",
-        "deluxe",
-        "absolute",
-        "hardcover",
-        "trade paperback",
-        "graphic novel",
+    let words = [
+        "annual", "special", "hc", "tpb", "gn", "omnibus", "deluxe",
+        "absolute", "hardcover", "trade paperback", "graphic novel",
     ];
-    for k in keywords {
-        if stripped.contains(k) {
-            return true;
-        }
-    }
-    if !stripped.chars().any(|c| c.is_ascii_digit()) {
+    let tokens: Vec<&str> = stripped.split(|c: char| !c.is_alphabetic()).filter(|x| !x.is_empty()).collect();
+    if words.iter().any(|w| if w.contains(' ') { stripped.contains(w) } else { tokens.contains(w) }) {
         return true;
     }
-    false
+    if !stripped.bytes().any(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    // Python treats a nonnumeric trailing decimal suffix as special.
+    stripped.rsplit_once('.').is_some_and(|(_, tail)| !tail.is_empty() && !tail.bytes().any(|c| c.is_ascii_digit()))
 }
+
+fn is_ambiguous_issue(issue_number: &str) -> bool {
+    normalize_issue_number(issue_number).is_empty()
+}
+
+fn row_precedence_key(row: &Value) -> (u8, u8, u8, String, String) {
+    let status = row.get("current_mapping_status").and_then(Value::as_str).unwrap_or("");
+    let rank = match status {
+        "confirmed" => 0,
+        "candidate" => 1,
+        "unresolved" => 2,
+        "rejected" => 3,
+        _ => 4,
+    };
+    (
+        u8::from(row.get("thread_id").is_none_or(Value::is_null)),
+        u8::from(row.get("_sibling_roster").and_then(Value::as_str) != Some("unique")),
+        rank,
+        row.get("external_id").and_then(Value::as_str).unwrap_or("").to_owned(),
+        row.get("issue_number").and_then(Value::as_str).unwrap_or("").to_owned(),
+    )
+}
+
+fn dedupe_rows_by_issue(issues: &[Value]) -> Vec<Value> {
+    let mut unique: HashMap<i64, Value> = HashMap::new();
+    for row in issues {
+        let Some(issue_id) = row.get("issue_id").and_then(Value::as_i64) else {
+            continue;
+        };
+        unique.entry(issue_id).and_modify(|old| {
+            if row_precedence_key(row) < row_precedence_key(old) {
+                *old = row.clone();
+            }
+        }).or_insert_with(|| row.clone());
+    }
+    let mut rows: Vec<(i64, Value)> = unique.into_iter().collect();
+    rows.sort_by_key(|(id, _)| *id);
+    rows.into_iter().map(|(_, row)| row).collect()
+}
+
 fn classify_rows(
     issues: &[Value],
     provider: &str,
     origin_issue_number: &str,
     counts: &mut Value,
 ) -> Vec<Value> {
-    let mut result = Vec::new();
-    // dedupe by issue_id (simplified)
-    let mut seen: HashMap<i64, Value> = HashMap::new();
-    for info in issues {
-        if let Some(id) = info.get("issue_id").and_then(|v| v.as_i64()) {
-            seen.entry(id).or_insert_with(|| info.clone());
+    let candidates = dedupe_rows_by_issue(issues);
+    let mut normalized_counts: HashMap<String, usize> = HashMap::new();
+    for row in &candidates {
+        if row.get("_is_origin").and_then(Value::as_bool) == Some(true) {
+            continue;
         }
-    }
-    let mut candidates: Vec<(i64, Value)> = seen.into_iter().collect();
-    candidates.sort_by_key(|(id, _)| *id);
-
-    for (_id, info) in candidates {
-        let issue_number = info
-            .get("issue_number")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let classification = if is_special_issue(issue_number) {
-            "excluded_special"
-        } else if info.get("current_mapping_status").and_then(|v| v.as_str()) == Some("confirmed") {
-            "already_confirmed"
-        } else if normalize_issue_number(issue_number)
-            == normalize_issue_number(origin_issue_number)
-            && !normalize_issue_number(issue_number).is_empty()
-        {
-            "safe_exact_match"
-        } else {
-            "unresolved"
-        };
-        let issue_id = info.get("issue_id").and_then(|v| v.as_i64()).unwrap_or(0);
-        let row_id = format!("issue:{issue_id}");
-        let proposed =
-            classification == "safe_exact_match" || classification == "already_confirmed";
-        let default_selected = classification == "safe_exact_match";
-        if let Some(c) = counts.get_mut(classification).and_then(|v| v.as_i64()) {
-            counts[classification] = serde_json::json!(c + 1);
-        }
-        let mut row = info.clone();
-        if let Some(obj) = row.as_object_mut() {
-            obj.insert("row_id".to_string(), serde_json::json!(row_id));
-            obj.insert(
-                "classification".to_string(),
-                serde_json::json!(classification),
-            );
-            obj.insert("proposed_mapping".to_string(), serde_json::json!(proposed));
-            obj.insert(
-                "default_selected".to_string(),
-                serde_json::json!(default_selected),
-            );
-            obj.insert(
-                "provider".to_string(),
-                serde_json::json!(info
-                    .get("provider")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(provider)),
-            );
-            if info.get("metadata_refresh_required").is_none() {
-                obj.insert(
-                    "metadata_refresh_required".to_string(),
-                    serde_json::json!(false),
-                );
+        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        if !is_special_issue(number) && !is_ambiguous_issue(number) {
+            let normalized = normalize_issue_number(number);
+            if !normalized.is_empty() {
+                *normalized_counts.entry(normalized).or_default() += 1;
             }
         }
-        result.push(row);
     }
-    result
+
+    let mut out = Vec::with_capacity(candidates.len());
+    for mut row in candidates {
+        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let status = row.get("current_mapping_status").and_then(Value::as_str);
+        let conflicting = status == Some("confirmed")
+            && row.get("provider").and_then(Value::as_str) != Some(provider);
+        let normalized = normalize_issue_number(number);
+        let origin_normalized = normalize_issue_number(origin_issue_number);
+        let classification = if is_special_issue(number) {
+            "excluded_special"
+        } else if conflicting {
+            "needs_review_conflict"
+        } else if is_ambiguous_issue(number) {
+            "needs_review_ambiguous"
+        } else if status == Some("confirmed") {
+            "already_confirmed"
+        } else if !normalized.is_empty() && normalized == origin_normalized {
+            if normalized_counts.get(&normalized) == Some(&1) {
+                "safe_exact_match"
+            } else {
+                "needs_review_ambiguous"
+            }
+        } else {
+            match row.get("_sibling_roster").and_then(Value::as_str) {
+                Some("unique") => "safe_exact_match",
+                Some("duplicate") => "needs_review_ambiguous",
+                _ => "unresolved",
+            }
+        };
+        let id = row.get("issue_id").and_then(Value::as_i64).unwrap_or_default();
+        let roster_only = row.get("_roster_only").and_then(Value::as_bool).unwrap_or(false);
+        let prefix = if roster_only { "roster:" } else { "issue:" };
+        let proposed = matches!(classification, "safe_exact_match" | "already_confirmed");
+        if let Some(c) = counts.get(classification).and_then(Value::as_i64) {
+            counts[classification] = serde_json::json!(c + 1);
+        }
+        if let Some(map) = row.as_object_mut() {
+            map.insert("row_id".to_owned(), serde_json::json!(format!("{prefix}{id}")));
+            map.insert("classification".to_owned(), serde_json::json!(classification));
+            map.insert("proposed_mapping".to_owned(), serde_json::json!(proposed));
+            map.insert("default_selected".to_owned(), serde_json::json!(classification == "safe_exact_match"));
+        }
+        out.push(row);
+    }
+    out
 }
 
 fn derive_scope_key(rows: &[Value], origin_issue_id: i32) -> Option<String> {
