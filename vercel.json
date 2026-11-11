@@ -435,6 +435,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/sessions/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/threads/[0-9]+$",
       "methods": [
         "GET"
@@ -531,6 +538,28 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/reading\\-mode$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading\\-mode/suggest$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/releases/$",
       "methods": [
         "GET",
@@ -567,6 +596,93 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/sessions/[^/]+/snapshots$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/$",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/[^/]+/$",
+      "methods": [
+        "GET",
+        "PUT",
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/[^/]+/assign/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/[^/]+/bulk\\-assign/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/[^/]+/bulk\\-unassign/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/[^/]+/unassign/$",
+      "methods": [
+        "DELETE"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/[^/]+/usage/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/effective/issue/[^/]+/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/effective/plan/[^/]+/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/effective/thread/[^/]+/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/tags/effective/thread/[^/]+/issues/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
       "methods": [
         "POST"
@@ -581,7 +697,50 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[0-9]+/dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/completed/threads$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/preferences$",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/taste\\-signals$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
+      "methods": [
+        "PUT"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v2/demo-roll$",
       "methods": [
         "GET"
       ],
@@ -680,14 +839,6 @@
       "src": "^/api/sessions/[^/]+/restore\\-session\\-start$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/sessions/[^/]+/snapshots$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1035,6 +1186,14 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/api/v1/demo/roll$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
       "methods": [
         "GET",
@@ -1083,31 +1242,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/reading\\-mode$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-mode/suggest$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/sessions/$",
       "methods": [
         "GET",
@@ -1132,14 +1266,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/sessions/[^/]+/snapshots$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/sessions/correction\\-examples$",
       "methods": [
         "GET",
@@ -1149,97 +1275,6 @@
     },
     {
       "src": "^/api/v1/sessions/current/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/$",
-      "methods": [
-        "GET",
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/[^/]+/$",
-      "methods": [
-        "GET",
-        "PUT",
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/[^/]+/assign/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/[^/]+/bulk\\-assign/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/[^/]+/bulk\\-unassign/$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/[^/]+/unassign/$",
-      "methods": [
-        "DELETE",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/[^/]+/usage/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/effective/issue/[^/]+/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/effective/plan/[^/]+/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/effective/thread/[^/]+/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/tags/effective/thread/[^/]+/issues/$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1273,14 +1308,6 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+/connected$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/dependencies$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1409,14 +1436,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/threads/completed/threads$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/threads/excluded/threads$",
       "methods": [
         "GET",
@@ -1452,31 +1471,6 @@
       "src": "^/api/v1/threads:getBlockingInfo$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/preferences$",
-      "methods": [
-        "GET",
-        "PATCH",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/taste\\-signals$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
-      "methods": [
-        "PUT",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1656,14 +1650,6 @@
     },
     {
       "src": "^/api/v1/cron/release\\-sync$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/demo/roll$",
       "methods": [
         "GET",
         "OPTIONS"

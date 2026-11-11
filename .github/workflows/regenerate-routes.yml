@@ -6,10 +6,10 @@ name: Regenerate Routes (Post-Merge)
 # (excluding the generated vercel-rewrites.json artifact). vercel.json,
 # docs/api/v2-route-inventory.json, docs/api/route-fragments/
 # vercel-rewrites.json, and the AGENTS.md route-burndown section are
-# bot-owned and are regenerated here on push to main. This workflow does
-# not gate merges or block deploy: the previous main vercel.json remains
-# valid until the bot lands (deploy-production also runs on schedule),
-# and bot commits carry [skip ci] so they do not re-trigger CI.
+# bot-owned and are regenerated here after source fragments land.
+# Regeneration is published as a PR because main's required CI Summary rule
+# rejects unchecked direct pushes. The PR runs ordinary CI and auto-merges
+# only when the exact generated head passes its required check.
 #
 # vercel.json is intentionally NOT gitignored: Vercel needs it on main
 # at deploy time. It stays on main but is bot-regenerated.
@@ -20,7 +20,13 @@ on:
       - main
     paths:
       - 'docs/api/route-fragments/*.json'
+      - '.github/workflows/regenerate-routes.yml'
   workflow_dispatch:
+  pull_request_target:
+    types: [closed]
+  schedule:
+    # Fallback for merges made with GITHUB_TOKEN, which do not trigger push CI.
+    - cron: '11,41 * * * *'
 
 permissions:
   contents: write
@@ -34,11 +40,19 @@ jobs:
     name: Regenerate routing artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Skip bot's own landing commit so post-merge regen never loops.
-    if: github.actor != 'github-actions[bot]'
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    # The separate merged-PR handler below deploys after auto-merge.
+    # Skip bot landing commits to prevent post-merge regeneration loops.
+    if: github.event_name != 'pull_request_target' && github.actor != 'github-actions[bot]'
     steps:
-      - name: Check out repository
+      - name: Check out current main
         uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -72,16 +86,105 @@ jobs:
           node scripts/generate_vercel_routes.mjs --check
           python3 scripts/generate_route_burndown.py --check
 
-      - name: Commit regenerated files back to main
+      - name: Open or refresh CI-gated regeneration PR
+        env:
+          GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}
+          DEPLOY_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add vercel.json docs/api/v2-route-inventory.json \
             docs/api/route-fragments/vercel-rewrites.json AGENTS.md
+          branch='automation/route-regeneration/current'
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo '::error::PR_REBASE_TOKEN is required so the generated PR triggers normal CI.'
+            exit 1
+          fi
+          existing="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open \
+            --head "$branch" --base main --json number --jq '.[0].number // empty')"
           if git diff --cached --quiet; then
-            echo "No regenerated changes; nothing to commit."
+            echo 'No regenerated changes; current main artifacts are fresh.'
+            if [[ -n "$existing" ]]; then
+              gh pr close "$existing" --repo "$GITHUB_REPOSITORY" \
+                --comment 'Current main already matches generated artifacts; this bot-only PR is obsolete.'
+            fi
             exit 0
           fi
-          git commit -m "chore(routes): regenerate routing artifacts [skip ci]"
-          git push
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -C "$branch"
+          git commit -m 'chore(routes): regenerate routing artifacts'
+          git remote set-url origin \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          remote_sha="$(git ls-remote origin "refs/heads/$branch" | awk '{print $1}')"
+          if [[ -n "$existing" && -n "$remote_sha" ]]; then
+            git fetch --no-tags origin "$branch"
+            if git diff --quiet FETCH_HEAD HEAD -- \
+              vercel.json docs/api/v2-route-inventory.json \
+              docs/api/route-fragments/vercel-rewrites.json AGENTS.md; then
+              echo "Regenerated files match existing PR #$existing; preserving its exact CI head."
+              exit 0
+            fi
+          fi
+          if [[ -n "$remote_sha" ]]; then
+            # Refresh only our dedicated bot branch, with a lease so other
+            # writers cannot be silently overwritten.
+            git push --force-with-lease="refs/heads/$branch:$remote_sha" \
+              -u origin "$branch"
+          else
+            git push -u origin "$branch"
+          fi
+          if [[ -n "$existing" ]]; then
+            pr="$existing"
+            echo "Refreshed regeneration PR #$pr on the latest main."
+          else
+            pr="$(gh pr create --repo "$GITHUB_REPOSITORY" \
+              --base main --head "$branch" \
+              --title 'chore(routes): regenerate checked routing artifacts' \
+              --body 'Bot-generated route artifacts only. CI verifies deterministic output at the exact PR head before the required CI Summary check permits merge.
+
+          Refs #4931. No generated files are written directly to protected main.
+
+          <!-- route-regeneration:bot-owned -->')"
+            echo "Opened regeneration PR $pr."
+          fi
+          # If the PR was already mergeable and the merge lands synchronously,
+          # dispatch production on exit. Normally CI is still running and a
+          # separate pull_request_target/closed job handles the eventual merge.
+          # shellcheck source=/dev/null
+          source .github/scripts/factory-dispatch-production-deploy.sh
+          dispatch_deploy_after_merges() {
+            if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)" == 'MERGED' ]]; then
+              GH_TOKEN="$DEPLOY_TOKEN" factory_dispatch_production_deploy "Route regeneration PR #$pr merged"
+            fi
+          }
+          trap dispatch_deploy_after_merges EXIT
+          # No bypass and no CI-skipping commit marker: GitHub enforces CI Summary.
+          if [[ "$(gh pr view "$pr" --repo "$GITHUB_REPOSITORY" --json autoMergeRequest --jq '.autoMergeRequest != null')" == 'true' ]]; then
+            echo "PR #$pr already has auto-merge enabled."
+          else
+            gh pr merge --repo "$GITHUB_REPOSITORY" --auto --merge "$pr"
+          fi
+
+  deploy-after-regeneration:
+    name: Dispatch production after generated artifacts merge
+    if: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'automation/route-regeneration/current' && contains(github.event.pull_request.body, '<!-- route-regeneration:bot-owned -->') }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Dispatch deploy for merged route artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # The event is already merged. Never run code from the PR head.
+          # shellcheck source=/dev/null
+          source .github/scripts/factory-dispatch-production-deploy.sh
+          factory_dispatch_production_deploy "Route regeneration PR #${PR_NUMBER} merged"

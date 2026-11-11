@@ -280,7 +280,9 @@ def main() -> None:
     assert 'omniroute/auto' not in model_discovery
     assert 'auto/best-free' not in model_discovery
     installer = Path('.github/scripts/install-opencode-v2.sh').read_text(encoding='utf-8')
-    assert '@opencode/cli@latest' in installer
+    assert 'npm view @opencode/cli versions --json' in installer
+    assert '"@opencode/cli@$candidate"' in installer
+    assert 'No working published OpenCode v2 CLI' in installer
     assert 'OPENCODE_VERSION:' not in model_discovery
     assert 'OPENCODE_VERSION:' not in runner
     assert 'bash .github/scripts/install-opencode-v2.sh' in model_discovery

@@ -43,6 +43,7 @@ SAFE_RESPONSE_HEADERS: Final[frozenset[str]] = frozenset(
         "traceparent",
         "tracestate",
         "via",
+        "x-comicpile-api-runtime",
         "x-request-id",
         "x-railway-request-id",
     }
@@ -59,7 +60,9 @@ class Route:
 
 
 ROUTES: Final[dict[str, Route]] = {
-    "health": Route("health", "/health", False),
+    # Public bare /health retired to a Vercel 404 (#4740); benchmark native Rust
+    # liveness instead. Never reintroduce a retired public Python-only route.
+    "health": Route("health", "/api/v2/health", False),
     "csrf": Route("csrf", "/api/v2/auth/csrf", False),
     "threads": Route("threads", "/api/v2/threads", True),
 }

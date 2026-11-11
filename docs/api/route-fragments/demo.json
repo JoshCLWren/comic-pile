@@ -1,0 +1,41 @@
+{
+  "family": "demo",
+  "owned_path_patterns": [
+    "^/api/v2/demo-roll$",
+    "^/api/v1/demo/roll$"
+  ],
+  "defaults": {
+    "owning_issue": 4855
+  },
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/demo-roll",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/demo-roll$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-demo.ts"
+      ],
+      "db_free": true,
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "Static guest fixture; native ingress bypasses application state and PostgreSQL"
+      }
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/demo/roll",
+      "dest": "/api/index.py",
+      "src": "^/api/v1/demo/roll$",
+      "runtime": "python-fastapi",
+      "status": "transitional",
+      "consumers": []
+    }
+  ]
+}

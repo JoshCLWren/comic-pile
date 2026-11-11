@@ -154,7 +154,7 @@ describe('public route network budgets', () => {
     const app = renderAppAtRoute('/demo', {
       auth: 'guest',
       handlers: {
-        'GET /api/v1/demo/roll': () => ({ status: 503, data: { detail: 'unavailable' } }),
+        'GET /api/v2/demo-roll': () => ({ status: 503, data: { detail: 'unavailable' } }),
       },
     })
     await app.settle()
@@ -164,7 +164,7 @@ describe('public route network budgets', () => {
       screen.getByTestId('demo-retry').click()
     })
 
-    expect(app.rows(app.ledger.since(base))).toEqual(['GET /api/v1/demo/roll x1'])
+    expect(app.rows(app.ledger.since(base))).toEqual(['GET /api/v2/demo-roll x1'])
   })
 
   test.each(['/rate', '/analytics', '/roll'])(
