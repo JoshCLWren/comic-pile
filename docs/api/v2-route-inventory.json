@@ -312,7 +312,13 @@
       "path": "/api/v2/issues/cards",
       "ingress_destination": "/api/native_issue.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "auth extractor 1 + owner-scoped card projection 1; set-based"
+      }
     },
     {
       "runtime": "native-rust",
@@ -355,7 +361,13 @@
       "path": "/api/v2/issues/{issue_id}/comicvine",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement; set-based"
+      }
     },
     {
       "method": "GET",
