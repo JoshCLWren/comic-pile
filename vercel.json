@@ -740,6 +740,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v2/demo-roll$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/dependencies/[0-9]+$",
       "methods": [
         "DELETE"
@@ -1172,6 +1179,14 @@
     },
     {
       "src": "^/api/v1/custom\\-cbls/issue\\-search$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/demo/roll$",
       "methods": [
         "GET",
         "OPTIONS"
@@ -1635,14 +1650,6 @@
     },
     {
       "src": "^/api/v1/cron/release\\-sync$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/demo/roll$",
       "methods": [
         "GET",
         "OPTIONS"
