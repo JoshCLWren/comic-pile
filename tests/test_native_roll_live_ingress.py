@@ -286,7 +286,8 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
 def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
     """Both native entrypoints must register the method and path sent by Vercel."""
     service, ingresses = _production_routes()
-    for route in _vercel_routes():
+    routes = _vercel_routes()
+    for route in routes:
         function = route.get("dest")
         if not isinstance(function, str) or function not in ingresses:
             continue
