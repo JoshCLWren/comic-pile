@@ -15,6 +15,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
+use chrono::{DateTime, NaiveDateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -25,6 +26,30 @@ use tokio_postgres::Transaction;
 /// Same advisory-lock namespace the other constraint writers use to serialize
 /// one reader's cross-list writes within a transaction.
 const QUEUE_LOCK_NAMESPACE: i32 = 699001;
+
+/// Match Pydantic datetime JSON, including UTC Z and microsecond precision.
+fn format_decision_timestamp(value: DateTime<Utc>) -> String {
+    let precision = if value.timestamp_subsec_micros() == 0 {
+        SecondsFormat::Secs
+    } else {
+        SecondsFormat::Micros
+    };
+    value.to_rfc3339_opts(precision, true)
+}
+
+/// Compare absolute instants, never PostgreSQL `::text` to client ISO strings.
+/// Python accepts both aware tokens and naive UTC values on this endpoint.
+fn decision_version_matches(value: &str, current: DateTime<Utc>) -> Result<bool, ApiError> {
+    let expected = DateTime::parse_from_rfc3339(value)
+        .map(|dt| dt.with_timezone(&Utc))
+        .or_else(|_| {
+            NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f")
+                .map(|dt| dt.and_utc())
+        })
+        .map_err(|_| bad_request("expected_updated_at must be a valid ISO timestamp"))?;
+    Ok(expected == current)
+}
+
 
 /// Serialize one reader's cross-list constraint writes for the transaction.
 async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
@@ -319,17 +344,17 @@ async fn decision_set(
 ) -> Result<OverlapDecisionSetResponse, ApiError> {
     let list = conn
         .query_opt(
-            "SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2",
+            "SELECT overlap_decisions_updated_at FROM custom_cbl_lists WHERE id=$1 AND user_id=$2",
             &[&list_id, &user_id],
         )
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
-    let updated_at: String = list.get(0);
+    let updated_at = format_decision_timestamp(list.get(0));
     let rows = conn
         .query(
             "SELECT d.id,'comicvine:'||c.external_id,'comicvine:'||w.external_id,
-                    d.created_at::text,d.updated_at::text
+                    d.created_at,d.updated_at
              FROM custom_cbl_overlap_decisions d
              JOIN external_identities c ON c.id=d.continuing_external_identity_id
              JOIN external_identities w ON w.id=d.waiting_external_identity_id
@@ -359,8 +384,8 @@ async fn decision_set(
                 id: row.get(0),
                 continuing_volume_id: row.get(1),
                 waiting_volume_id: row.get(2),
-                created_at: row.get(3),
-                updated_at: row.get(4),
+                created_at: format_decision_timestamp(row.get(3)),
+                updated_at: format_decision_timestamp(row.get(4)),
             })
             .collect(),
         candidate_volumes: candidates
@@ -405,17 +430,15 @@ pub async fn put_overlap_decision(
         .await
         .map_err(db::query_error)?;
     lock_reader(&tx, user.id()).await?;
-    let current = tx.query_opt("SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&list_id, &user.id()]).await.map_err(db::query_error)?.ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
-    let current_at: String = current.get(0);
-    if request
-        .expected_updated_at
-        .as_deref()
-        .is_some_and(|value| value != current_at)
-    {
+    let current = tx.query_opt("SELECT overlap_decisions_updated_at FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE", &[&list_id, &user.id()]).await.map_err(db::query_error)?.ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
+    let current_at: DateTime<Utc> = current.get(0);
+    if let Some(expected) = request.expected_updated_at.as_deref() {
+        if !decision_version_matches(expected, current_at)? {
         return Err(ApiError::with_status(
             StatusCode::CONFLICT,
             "The Reading List's overlap decisions changed since they were read",
         ));
+        }
     }
     let ids = tx.query("SELECT id,external_id FROM external_identities WHERE provider='comicvine' AND entity_type='series' AND external_id=ANY($1::text[])", &[&vec![continuing, waiting]]).await.map_err(db::query_error)?;
     let mut identity_ids = std::collections::HashMap::new();
@@ -457,15 +480,15 @@ pub async fn delete_overlap_decision(
     lock_reader(&tx, user.id()).await?;
     let current = tx
         .query_opt(
-            "SELECT overlap_decisions_updated_at::text FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE",
+            "SELECT overlap_decisions_updated_at FROM custom_cbl_lists WHERE id=$1 AND user_id=$2 FOR UPDATE",
             &[&list_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::with_status(StatusCode::NOT_FOUND, "Reading List not found"))?;
-    let current_at: String = current.get(0);
+    let current_at: DateTime<Utc> = current.get(0);
     if let Some(expected) = query.get("expected_updated_at") {
-        if expected != &current_at {
+        if !decision_version_matches(expected, current_at)? {
             return Err(ApiError::with_status(
                 StatusCode::CONFLICT,
                 "The Reading List's overlap decisions changed since they were read",
