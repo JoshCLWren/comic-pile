@@ -27,6 +27,7 @@ def _run(*, stage: str, mode: str, budget: int) -> subprocess.CompletedProcess[s
 set -Eeuo pipefail
 EXPECTED_HEAD=base
 WORKER=933
+OWNER=factory:933
 FACTORY_PUSH_BLOCKED_REASON=''
 GITHUB_REPOSITORY=JoshCLWren/comic-pile
 ASSIGNED_PR_STAGE='@STAGE@'
@@ -116,7 +117,7 @@ def test_trusted_checks_retry_before_push(
         assert "status=0" in result.stdout
         assert "git:add" in result.stderr
         assert "git:commit" in result.stderr
-        assert "pushed" in result.stderr
+        assert "pushed" in result.stderr.splitlines()
         assert "stage:factory:review" in result.stderr
         assert "git:reset" not in result.stderr
         assert "reported-failure" not in result.stderr
@@ -128,7 +129,7 @@ def test_trusted_checks_retry_before_push(
         assert "reported-failure" in result.stderr
         assert "git:add" not in result.stderr
         assert "git:commit" not in result.stderr
-        assert "pushed" not in result.stderr
+        assert "pushed" not in result.stderr.splitlines()
 
 
 def test_all_repair_agent_lanes_read_original_fast_check_diagnostics() -> None:
