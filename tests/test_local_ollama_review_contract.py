@@ -152,6 +152,7 @@ def test_review_shell_accepts_explicit_false_scope_under_errexit(
     scope: dict, expected: str, should_succeed: bool
 ) -> None:
     """Prevent jq -e from dropping normal closing-linked PRs before inference."""
+    import json
     import shutil
     import subprocess
 
@@ -168,7 +169,7 @@ def test_review_shell_accepts_explicit_false_scope_under_errexit(
         + 'printf "%s" "$NON_CLOSING"\n'
     )
     result = subprocess.run(
-        ["bash", "-euo", "pipefail", "-c", command, "review-test", __import__("json").dumps(scope)],
+        ["bash", "-euo", "pipefail", "-c", command, "review-test", json.dumps(scope)],
         text=True, capture_output=True, check=False,
     )
     if should_succeed:
