@@ -27,6 +27,8 @@ OPENAPI = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 _BUDGETED_OPERATIONS = frozenset(
     {
         ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
+        ("post", "/api/v2/dependencies/"),
+        ("delete", "/api/v2/dependencies/{dependency_id}"),
         ("get", "/api/v2/demo-roll"),
         ("get", "/api/v2/roll/die-state"),
         ("get", "/api/v2/roll/eligible-issue-ids"),
@@ -56,14 +58,12 @@ _BUDGETED_OPERATIONS = frozenset(
 # silently — a new native operation must arrive with its budget.
 _KNOWN_BUDGET_GAPS = frozenset(
     {
-        ("delete", "/api/v2/dependencies/{dependency_id}"),
         ("delete", "/api/v2/issues/{issue_id}"),
         ("get", "/api/v2/issues/{issue_id}/comicvine"),
         ("get", "/api/v2/queue-entries/{thread_id}"),
         ("get", "/api/v2/roll/bootstrap"),
         ("patch", "/api/v2/issues/{issue_id}"),
         ("patch", "/api/v2/queue-entries/{thread_id}"),
-        ("post", "/api/v2/dependencies/"),
         ("post", "/api/v2/issues/cards"),
         ("post", "/api/v2/queue-orders"),
         ("post", "/api/v2/reading-graph/repairs"),

@@ -273,7 +273,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 10,
+        "transaction_control_statements": 2,
+        "total_statements": 12,
+        "basis": "auth extractor 1 + advisory lock 1 + source owned-issue 1 + target owned-issue 1 + duplicate check 1 + next-unread check 1 + insert 1 + refresh_blocked_threads 2 + graph_preflight Option E snapshot 1 (+2 tx control); set-based"
+      }
     },
     {
       "runtime": "native-rust",
@@ -286,7 +292,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 5,
+        "transaction_control_statements": 2,
+        "total_statements": 7,
+        "basis": "auth extractor 1 + advisory lock 1 + owner-scoped delete 1 + refresh_blocked_threads 2 (+2 tx control); set-based"
+      }
     },
     {
       "runtime": "native-rust",
