@@ -608,6 +608,94 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
     }
 }
 
+/// Hydrate user-confirmed catalog identities *inline after commit*, using a
+/// single request-wide budget. A provider failure never undoes the completed
+/// identity transaction. No detached tasks are left running after the response.
+pub(crate) async fn hydrate_catalog_commit(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+) {
+    if committed_issue_ids.is_empty() || budget.is_zero() {
+        return;
+    }
+    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+        return;
+    };
+    if api_key.is_empty() {
+        return;
+    }
+
+    // The timeout encloses both database queries and provider requests; it
+    // cannot become N * provider_timeout for a large sibling confirmation.
+    let run = async {
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let rows = match conn
+            .query(
+                "SELECT DISTINCT e.id, e.external_id
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 JOIN issues i ON i.id = m.issue_id
+                 JOIN threads t ON t.id = i.thread_id
+                 WHERE m.issue_id = ANY($1::integer[])
+                   AND t.user_id = $2
+                   AND m.status = 'confirmed'
+                   AND m.evidence_source = 'user_series_confirmation'
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                 ORDER BY e.id",
+                &[&committed_issue_ids, &user_id],
+            )
+            .await
+        {
+            Ok(rows) => rows,
+            Err(_) => return,
+        };
+        for row in rows {
+            let id: i32 = row.get(0);
+            let external_id: String = row.get(1);
+            let Some(comicvine_id) = issue_id(&external_id) else {
+                continue;
+            };
+            let Ok(provider_data) = provider_issue(comicvine_id, &api_key).await else {
+                continue;
+            };
+            let Ok((patch, _, external_url, provider_updated_at)) =
+                normalized_metadata(&provider_data, comicvine_id)
+            else {
+                continue;
+            };
+            let Ok(json_patch) = serde_json::to_string(&patch) else {
+                continue;
+            };
+            // The identity transaction has committed; a failed metadata
+            // refresh is best-effort and must not cause a client retry.
+            if let Err(err) = conn.execute(
+                "UPDATE external_identities
+                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
+                                      || ($2::text)::jsonb)::json,
+                     external_url = COALESCE($3, external_url),
+                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
+                     updated_at = now()
+                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
+                &[&id, &json_patch, &external_url, &provider_updated_at],
+            ).await {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&err),
+                    "catalog commit metadata hydration failed"
+                );
+            }
+        }
+    };
+    if tokio::time::timeout(budget, run).await.is_err() {
+        tracing::info!("catalog commit inline hydration budget exhausted");
+    }
+}
+
 /// CRON_SECRET authenticated, awaited Rust repair batch. No detached task or silent success.
 pub async fn drain(
     State(state): State<Arc<AppState>>,
