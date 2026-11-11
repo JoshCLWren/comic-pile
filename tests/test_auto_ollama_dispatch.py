@@ -18,15 +18,19 @@ REVIEWER = ROOT / ".github/workflows/local-ollama-review.yml"
 def dispatch_script() -> str:
     """Extract the executable script from the dedicated roster-dispatch job."""
     source = DISPATCHER.read_text(encoding="utf-8")
-    job = source.split("\n  ollama_review:\n", 1)[1]
-    return textwrap.dedent(job.split("        run: |\n", 1)[1])
+    step = source.split(
+        "      - name: Offer one unclaimed PR to local Ollama reviewer\n", 1,
+    )[1].split("      - name: Self-perpetuate roster cadence\n", 1)[0]
+    return textwrap.dedent(step.split("        run: |\n", 1)[1])
 
 
 def test_canonical_roster_offers_ollama_without_manual_dispatch() -> None:
     """Keep the automatic Qwen review attached to roster and watchdog ticks."""
     workflow = DISPATCHER.read_text(encoding="utf-8")
     reviewer = REVIEWER.read_text(encoding="utf-8")
-    job = workflow.split("\n  ollama_review:\n", 1)[1]
+    job = workflow.split(
+        "      - name: Offer one unclaimed PR to local Ollama reviewer", 1,
+    )[1].split("      - name: Self-perpetuate roster cadence", 1)[0]
     assert "github.event_name == 'schedule'" in job
     assert "inputs.mode == 'roster'" in job
     assert "!inputs.target" in job
