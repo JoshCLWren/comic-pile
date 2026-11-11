@@ -903,13 +903,40 @@ _persist_pr_changes_untraced() {
   if ! reject_out_of_scope_diff 'pr' "$pr" "$base_ref"; then
     return 1
   fi
-  if ! factory_run_fast_checks "$base_ref" "/tmp/factory-fast-checks-${WORKER}.log" >&2; then
-    log "fast checks failed for pr #${pr}; not pushing (log: /tmp/factory-fast-checks-${WORKER}.log)" >&2
-    factory_report_fast_check_failure 'pr' "$pr" "/tmp/factory-fast-checks-${WORKER}.log"
-    git reset --hard "$base_ref" >/dev/null
-    git clean -fd >/dev/null
-    FACTORY_PUSH_BLOCKED_REASON='fast-checks-failed'
-    return 1
+  local fast_check_log="/tmp/factory-fast-checks-${WORKER}.log"
+  if ! factory_run_fast_checks "$base_ref" "$fast_check_log" >&2; then
+    local retry_timeout=0 retry_passed=0
+    # Keep useful, unpushed repairs in this ephemeral worktree for one bounded
+    # correction. Previously we hard-reset immediately, forcing the next
+    # worker to rediscover the same check failure on an unchanged PR head.
+    # Review-only work and all other persistence paths retain their behavior.
+    if [[ "${ASSIGNED_PR_STAGE:-}" == 'factory:changes-requested' ]] \
+      && declare -F remaining >/dev/null \
+      && declare -F run_agent >/dev/null; then
+      retry_timeout=$(( $(remaining) - 300 ))
+      (( retry_timeout > 900 )) && retry_timeout=900
+      if (( retry_timeout >= 300 )); then
+        log "PR #${pr} failed trusted pre-push checks; offering one same-lease correction (no push yet)"
+        if FACTORY_FAST_CHECK_FEEDBACK_FILE="$fast_check_log" \
+          run_agent pr "$pr" "$retry_timeout"; then
+          # The correction can add files or rewrite the diff. Recheck BOTH
+          # independent guards; a model's own success message proves nothing.
+          if reject_out_of_scope_diff 'pr' "$pr" "$base_ref" \
+            && factory_run_fast_checks "$base_ref" "$fast_check_log" >&2; then
+            retry_passed=1
+          fi
+        fi
+      fi
+    fi
+    if (( ! retry_passed )); then
+      log "fast checks still failed for pr #${pr}; discarding unpushed edits (log: ${fast_check_log})" >&2
+      factory_report_fast_check_failure 'pr' "$pr" "$fast_check_log"
+      git reset --hard "$base_ref" >/dev/null
+      git clean -fd >/dev/null
+      FACTORY_PUSH_BLOCKED_REASON='fast-checks-failed'
+      return 1
+    fi
+    log "PR #${pr} corrected fast-check failures in the same lease; safe persistence gates passed"
   fi
   git add -A
   git commit -m "factory: advance PR #${pr} with $(factory_advance_display)"
