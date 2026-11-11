@@ -113,7 +113,7 @@ def _matching_concrete_path(source: str, template: str) -> str | None:
     concrete = _concrete_path(template)
     if re.fullmatch(_vercel_pattern(source), concrete):
         return concrete
-    suffix = re.search(r"(:[A-Za-z][A-Za-z0-9_-]*)\$$", source)
+    suffix = re.search(r"(:[A-Za-z][A-Za-z0-9_-]*)\$", source)
     if suffix:
         candidate = concrete + suffix.group(1)
         if re.fullmatch(_vercel_pattern(source), candidate):
@@ -286,8 +286,7 @@ def test_every_cutover_rust_handler_has_native_public_http_ingress() -> None:
 def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
     """Both native entrypoints must register the method and path sent by Vercel."""
     service, ingresses = _production_routes()
-    routes = _vercel_routes()
-    for route in routes:
+    for route in _vercel_routes():
         function = route.get("dest")
         if not isinstance(function, str) or function not in ingresses:
             continue

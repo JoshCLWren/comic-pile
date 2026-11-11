@@ -48,6 +48,7 @@ _RUNTIME_LEGACY_PATHS: Final = frozenset(
         "/api/v1/releases/",
         "/api/v1/releases/{release_id}",
         "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+        "/api/v1/threads/{thread_id}/dependencies",
         "/api/v1/threads/{thread_id}/issue-dependencies",
         "/api/v1/threads/completed/threads",
         "/api/v1/custom-cbls",
@@ -113,8 +114,7 @@ _RUNTIME_COMMAND_PATHS: Final = frozenset(
         "/api/v1/identity-inbox/{mapping_id}/defer",
         "/api/v1/identity-inbox/{mapping_id}/reject",
         "/api/v1/identity-inbox/{mapping_id}/skip",
-        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",        "/api/v1/custom-cbls/issue-search",
-
+        "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
     }
 )
 
@@ -249,6 +249,34 @@ def test_checked_in_native_v2_contracts_are_valid_openapi_documents() -> None:
     for path in _contract_paths():
         _assert_baseline_contract(path, _load_document(path))
     _assert_baseline_contract(RUNTIME_CONTRACT, _load_document(RUNTIME_CONTRACT))
+
+
+def test_native_dependency_response_preserves_python_schema_contract() -> None:
+    """The same-path thread dependency response keeps Python field semantics."""
+    native_document = _load_document(RUNTIME_CONTRACT)
+    client_document = _load_document(REPO_ROOT / "frontend/src/generated/openapi.json")
+    native_components = _object_mapping(native_document.get("components"), label="native components")
+    client_components = _object_mapping(client_document.get("components"), label="client components")
+    native_schemas = _object_mapping(native_components.get("schemas"), label="native schemas")
+    client_schemas = _object_mapping(client_components.get("schemas"), label="client schemas")
+    native = _object_mapping(native_schemas.get("DependencyResponse"), label="native dependency")
+    python = _object_mapping(client_schemas.get("DependencyResponse"), label="Python dependency")
+    native_fields = _object_mapping(native.get("properties"), label="native dependency fields")
+    python_fields = _object_mapping(python.get("properties"), label="Python dependency fields")
+
+    assert native_fields.keys() == python_fields.keys()
+    assert native.get("required") == python.get("required") == ["id", "created_at"]
+    native_created_at = _object_mapping(native_fields.get("created_at"), label="native created_at")
+    python_created_at = _object_mapping(python_fields.get("created_at"), label="Python created_at")
+    assert native_created_at.get("type") == python_created_at.get("type") == "string"
+    assert native_created_at.get("format") == python_created_at.get("format") == "date-time"
+    native_issue_level = _object_mapping(
+        native_fields.get("is_issue_level"), label="native is_issue_level"
+    )
+    python_issue_level = _object_mapping(
+        python_fields.get("is_issue_level"), label="Python is_issue_level"
+    )
+    assert native_issue_level.get("default") == python_issue_level.get("default") is True
 
 
 def test_checked_in_native_v2_target_paths_are_resource_shaped_and_authenticated() -> None:

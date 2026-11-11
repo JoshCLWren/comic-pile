@@ -282,6 +282,14 @@ export interface GetReadingListRequest {
 
 export type GetReadingListResponse = components['schemas']['ReadingList']
 
+export interface GetThreadDependenciesRequest {
+  path: {
+    thread_id: number
+  }
+}
+
+export type GetThreadDependenciesResponse = components['schemas']['NativeThreadDependenciesResponse']
+
 export interface GetThreadIssueDependenciesRequest {
   path: {
     thread_id: number
@@ -384,6 +392,8 @@ export interface ReadRequest {
 }
 
 export type ReadResponse = components['schemas']['PlanReaderResponse']
+
+export type ReadDemoRollResponse = components['schemas']['DemoRoll']
 
 export interface ReadReadingListRequest {
   path: {
@@ -548,6 +558,7 @@ export interface NativeV2Client {
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
+  getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
@@ -566,6 +577,7 @@ export interface NativeV2Client {
   offer(args: OfferRequest): Promise<OfferResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   read(args: ReadRequest): Promise<ReadResponse>
+  readDemoRoll(): Promise<ReadDemoRollResponse>
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
@@ -774,6 +786,11 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v2/reading-lists/${encodeURIComponent(String(args.path.list_id))}`,
       )
     },
+    getThreadDependencies(args: GetThreadDependenciesRequest) {
+      return client.get<GetThreadDependenciesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/dependencies`,
+      )
+    },
     getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest) {
       return client.get<GetThreadIssueDependenciesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
@@ -859,6 +876,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<ReadResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reader`,
       )
+    },
+    readDemoRoll() {
+      return client.get<ReadDemoRollResponse>("/v2/demo-roll")
     },
     readReadingList(args: ReadReadingListRequest) {
       return client.get<ReadReadingListResponse>(

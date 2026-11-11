@@ -289,18 +289,20 @@ def test_reserved_review_worker_prefers_factory_review():
 
 def test_non_reserved_worker_preserves_product_capacity():
     """Ordinary workers keep product implementation moving alongside review."""
-    # Worker 9 is outside the idle (~25%) review-first cohort under the ratio.
-    assert not policy.review_capacity_worker("9")
+    # Worker 8 is outside the review-first cohort even with one pending review.
+    assert not policy.review_capacity_worker("8")
     review = candidate(kind="pr", number=1390, stage="factory:review", producer="43")
     issue = candidate(kind="issue", number=1500, lane=5)
-    ordered = policy.order_candidates_for_worker([review, issue], "9")
+    ordered = policy.order_candidates_for_worker([review, issue], "8")
     assert ordered[0] == issue
 
 
 def test_review_share_scales_continuously_with_backlog():
     """Completion pressure uses a ratio, not absolute magic tiers."""
     assert policy.review_share_for_backlog(0) == 0.25
-    assert policy.review_share_for_backlog(10) == 0.25 + (0.65 * 10 / 20.0)
+    assert policy.review_share_for_backlog(1) == 0.25 + (0.65 / 3.0)
+    assert policy.review_share_for_backlog(3) == 0.90
+    assert policy.review_share_for_backlog(10) == 0.90
     assert policy.review_share_for_backlog(20) == 0.90
     assert policy.review_share_for_backlog(80) == 0.90
     idle = sum(1 for worker in range(6, 76) if policy.review_capacity_worker(str(worker), review_backlog=0))

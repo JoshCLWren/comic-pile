@@ -26,6 +26,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -54,7 +55,10 @@ pub struct DependencyResponse {
     pub target_issue_id: Option<i32>,
     pub source_thread_id: Option<i32>,
     pub target_thread_id: Option<i32>,
+    #[serde(default)]
+    #[schema(default = true)]
     pub is_issue_level: bool,
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: String,
     pub note: Option<String>,
     pub source_label: Option<String>,
@@ -62,6 +66,55 @@ pub struct DependencyResponse {
     pub source_issue_thread_id: Option<i32>,
     pub target_issue_thread_id: Option<i32>,
     pub warning: Option<String>,
+}
+
+/// Wire parity with Python `ThreadDependenciesResponse`
+/// (`app/schemas/dependency.py`): the `blocking` list holds edges where this
+/// thread's issues block others, `blocked_by` holds edges where this thread's
+/// issues are blocked. Each entry is the enriched `DependencyResponse`.
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ThreadDependenciesResponse {
+    pub blocking: Vec<DependencyResponse>,
+    pub blocked_by: Vec<DependencyResponse>,
+}
+
+const THREAD_OWNED_SQL: &str = "SELECT t.id FROM threads t WHERE t.id = $1 AND t.user_id = $2";
+
+const THREAD_BLOCKING_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE si.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+
+const THREAD_BLOCKED_BY_SQL: &str = "SELECT d.id, d.source_issue_id, d.target_issue_id, d.created_at, d.note, si.thread_id, ti.thread_id, st.title, si.issue_number, tt.title, ti.issue_number FROM dependencies d JOIN issues si ON si.id = d.source_issue_id JOIN threads st ON st.id = si.thread_id JOIN issues ti ON ti.id = d.target_issue_id JOIN threads tt ON tt.id = ti.thread_id WHERE ti.thread_id = $1 AND st.user_id = $2 AND tt.user_id = $2 ORDER BY d.id";
+
+fn format_dependency_created_at(created_at: DateTime<Utc>) -> String {
+    let precision = if created_at.timestamp_subsec_micros() == 0 {
+        SecondsFormat::Secs
+    } else {
+        SecondsFormat::Micros
+    };
+    created_at.to_rfc3339_opts(precision, true)
+}
+
+fn thread_row_to_response(row: &tokio_postgres::Row) -> DependencyResponse {
+    let source_thread_id: i32 = row.get(5);
+    let target_thread_id: i32 = row.get(6);
+    let source_thread_title: String = row.get(7);
+    let source_issue_number: String = row.get(8);
+    let target_thread_title: String = row.get(9);
+    let target_issue_number: String = row.get(10);
+    DependencyResponse {
+        id: row.get(0),
+        source_issue_id: Some(row.get(1)),
+        target_issue_id: Some(row.get(2)),
+        source_thread_id: Some(source_thread_id),
+        target_thread_id: Some(target_thread_id),
+        is_issue_level: true,
+        created_at: format_dependency_created_at(row.get(3)),
+        note: row.get(4),
+        source_label: Some(issue_label(&source_thread_title, &source_issue_number)),
+        target_label: Some(issue_label(&target_thread_title, &target_issue_number)),
+        source_issue_thread_id: Some(source_thread_id),
+        target_issue_thread_id: Some(target_thread_id),
+        warning: None,
+    }
 }
 
 fn bad_request(detail: &str) -> ApiError {
@@ -312,6 +365,42 @@ pub async fn delete_dependency(
     Ok(Json(serde_json::json!({"message": "Dependency deleted"})))
 }
 
+/// `GET /api/v1/threads/{thread_id}/dependencies`
+///
+/// Lists dependencies where this thread blocks others (`blocking`) and where
+/// it is blocked (`blocked_by`). Owner-scoped: a missing or foreign thread is
+/// a 404 with the Python detail text. Each direction is one bounded JOIN
+/// ordered by dependency id; labels mirror Python `enrich_dependencies`
+/// (`"{title} #{issue_number}"`, `is_issue_level=true`).
+pub async fn get_thread_dependencies(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(thread_id): Path<i32>,
+) -> Result<Json<ThreadDependenciesResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let owned = connection
+        .query_opt(THREAD_OWNED_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    if owned.is_none() {
+        return Err(ApiError::NotFound(format!("Thread {thread_id} not found")));
+    }
+    let blocking_rows = connection
+        .query(THREAD_BLOCKING_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    let blocking = blocking_rows.iter().map(thread_row_to_response).collect();
+    let blocked_by_rows = connection
+        .query(THREAD_BLOCKED_BY_SQL, &[&thread_id, &user.id()])
+        .await
+        .map_err(db::query_error)?;
+    let blocked_by = blocked_by_rows.iter().map(thread_row_to_response).collect();
+    Ok(Json(ThreadDependenciesResponse {
+        blocking,
+        blocked_by,
+    }))
+}
+
 /// Documentation-only operation for the mounted dependency create.
 #[utoipa::path(
     post,
@@ -351,6 +440,26 @@ pub fn create_dependency_documentation() {}
 )]
 #[allow(dead_code)]
 pub fn delete_dependency_documentation() {}
+
+/// Documentation-only operation for the mounted thread-dependencies read.
+#[utoipa::path(
+    get,
+    path = "/api/v1/threads/{thread_id}/dependencies",
+    tag = "dependencies",
+    description = "List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.",
+    params(
+        ("thread_id" = i32, Path, description = "Owned thread identifier")
+    ),
+    responses(
+        (status = 200, description = "Thread dependencies", body = ThreadDependenciesResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Thread not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn get_thread_dependencies_documentation() {}
 
 #[cfg(test)]
 mod tests {
@@ -455,5 +564,113 @@ mod tests {
             .contains("2 issues"));
         assert!(ahead_warning("139", 4, "139", 4).is_none());
         assert!(ahead_warning("138", 3, "139", 4).is_none());
+    }
+
+    #[test]
+    fn thread_dependencies_wire_matches_python_shape() {
+        let entry = DependencyResponse {
+            id: 11,
+            source_issue_id: Some(101),
+            target_issue_id: Some(201),
+            source_thread_id: Some(11),
+            target_thread_id: Some(12),
+            is_issue_level: true,
+            created_at: "2026-11-08 20:19:24.123456".into(),
+            note: Some("Note visible in list".into()),
+            source_label: Some("Alpha #1".into()),
+            target_label: Some("Beta #1".into()),
+            source_issue_thread_id: Some(11),
+            target_issue_thread_id: Some(12),
+            warning: None,
+        };
+        let value = serde_json::to_value(ThreadDependenciesResponse {
+            blocking: vec![entry.clone()],
+            blocked_by: vec![],
+        })
+        .expect("serializable thread dependencies");
+        assert!(value["blocking"].is_array());
+        assert!(value["blocked_by"].is_array());
+        assert_eq!(value["blocking"][0]["source_label"], "Alpha #1");
+        assert_eq!(value["blocking"][0]["note"], "Note visible in list");
+        assert_eq!(value["blocking"][0]["is_issue_level"], true);
+        assert_eq!(value["blocked_by"].as_array().expect("array").len(), 0);
+    }
+
+    #[test]
+    fn thread_dependencies_sql_preserves_python_parity() {
+        assert!(THREAD_OWNED_SQL.contains("t.user_id = $2"));
+        for sql in [THREAD_BLOCKING_SQL, THREAD_BLOCKED_BY_SQL] {
+            assert!(sql.contains("ORDER BY d.id"), "bounded ordering");
+            assert!(sql.contains("st.user_id = $2"), "source owner scope");
+            assert!(sql.contains("tt.user_id = $2"), "target owner scope");
+            assert!(sql.contains("JOIN issues si"), "source joins");
+            assert!(sql.contains("JOIN threads st"), "source thread join");
+        }
+        assert!(THREAD_BLOCKING_SQL.contains("si.thread_id = $1"));
+        assert!(THREAD_BLOCKED_BY_SQL.contains("ti.thread_id = $1"));
+        assert!(!THREAD_BLOCKING_SQL.contains(';'));
+        assert!(!THREAD_BLOCKED_BY_SQL.contains(';'));
+    }
+
+    #[tokio::test]
+    async fn thread_dependencies_handler_separates_blocking_and_blocked_by() {
+        let Some(state) = crate::test_support::test_state(2).await else {
+            return;
+        };
+        let _db_guard = crate::test_support::reset_for_test(&state).await;
+        let conn = state
+            .pool
+            .get()
+            .await
+            .expect("disposable Postgres connection");
+        conn.batch_execute(
+            "INSERT INTO users (id, username) VALUES (1,'thread-deps-owner');
+             INSERT INTO threads (id,title,format,issues_remaining,queue_position,status,user_id,created_at)
+             VALUES (21,'Alpha','comic',0,1,'active',1,NOW()),(22,'Beta','comic',0,2,'active',1,NOW());
+             INSERT INTO issues (id,thread_id,issue_number,status,created_at,position)
+             VALUES (301,21,'1','unread',NOW(),1),(401,22,'1','unread',NOW(),1);
+             INSERT INTO dependencies (source_issue_id,target_issue_id,origin,classification,note,created_at)
+             VALUES (301,401,'reader','A',NULL,TIMESTAMPTZ '2026-11-10 12:00:00.123000+00');",
+        )
+        .await
+        .expect("thread dependency fixtures");
+        drop(conn);
+        let user = crate::auth::AuthenticatedUser::for_test(1);
+        let alpha = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(21))
+            .await
+            .expect("alpha thread dependencies");
+        assert_eq!(alpha.0.blocking.len(), 1);
+        assert_eq!(alpha.0.blocked_by.len(), 0);
+        assert_eq!(alpha.0.blocking[0].target_label.as_deref(), Some("Beta #1"));
+        let response_json = serde_json::to_value(&alpha.0).expect("serialize dependency response");
+        assert_eq!(
+            response_json["blocking"][0]["created_at"],
+            "2026-11-10T12:00:00.123000Z"
+        );
+        let beta = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(22))
+            .await
+            .expect("beta thread dependencies");
+        assert_eq!(beta.0.blocking.len(), 0);
+        assert_eq!(beta.0.blocked_by.len(), 1);
+        assert_eq!(
+            beta.0.blocked_by[0].source_label.as_deref(),
+            Some("Alpha #1")
+        );
+        let missing = get_thread_dependencies(State(state.clone()), user, axum::extract::Path(999))
+            .await
+            .expect_err("missing thread is 404");
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        assert_eq!(missing.detail(), "Thread 999 not found");
+    }
+
+    #[test]
+    fn thread_dependency_timestamp_without_fraction_matches_python_json() {
+        let created_at = DateTime::parse_from_rfc3339("2026-11-10T12:00:00Z")
+            .expect("timestamp")
+            .with_timezone(&Utc);
+        assert_eq!(
+            format_dependency_created_at(created_at),
+            "2026-11-10T12:00:00Z"
+        );
     }
 }

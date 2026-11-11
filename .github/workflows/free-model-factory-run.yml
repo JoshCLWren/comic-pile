@@ -219,28 +219,6 @@ jobs:
             reason='missing-OpenCode-credential'
           fi
 
-          # Trusted, leased stage decides the execution route, never PR text.
-          # Review only: do not consume or preflight the worker's authoring
-          # model. Repair and implementation still use their roster model.
-          assignment="$(python3 .github/scripts/factory-work-controller.py inspect --worker "$worker")"
-          if jq -e '.kind == "pr" and .stage == "factory:review"' <<< "$assignment" >/dev/null; then
-            if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-              echo "::error::OPENROUTER_API_KEY is required for dedicated factory semantic review"
-              python3 .github/scripts/factory-work-controller.py release \
-                --worker "$worker" --reason review-router-credential-unavailable || true
-              exit 1
-            fi
-            source='openrouter-free'
-            model='openrouter/free'
-            runtime_model='openrouter/free'
-            deepseek_mode='normal'
-            branch_suffix='openrouter-review'
-            display='OpenRouter Free · independent semantic review'
-            configured=true
-            reason='exact-head-semantic-review-only'
-            echo "Factory $worker: routing leased semantic review via $runtime_model"
-          fi
-
           {
             echo "deepseek_mode=$deepseek_mode"
             echo "worker=$worker"
@@ -293,31 +271,6 @@ jobs:
       - name: Install current OpenCode 2
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.source != 'kilo-auto'
         run: bash .github/scripts/install-opencode-v2.sh
-
-      - name: Register composite OpenRouter model for semantic review only
-        if: steps.lane.outputs.reason == 'exact-head-semantic-review-only'
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          config="$HOME/.config/opencode/opencode.json"
-          temp="$(mktemp)"
-          jq '.providers.openrouter.models.free = {
-            modelID: "openrouter/free",
-            name: "OpenRouter Free Models Router (independent semantic review)",
-            capabilities: {
-              tools: true,
-              input: ["text"],
-              output: ["text"]
-            },
-            limit: {
-              context: 64000,
-              output: 8192
-            }
-          }' "$config" > "$temp"
-          install -m 600 "$temp" "$config"
-          rm -f "$temp"
-          # Fail closed if the isolated review route was not registered.
-          jq -e '.providers.openrouter.models.free.modelID == "openrouter/free"' "$config" >/dev/null
 
       - name: Configure authenticated DeepSeek OpenCode credential
         if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode == 'authenticated'
@@ -426,20 +379,6 @@ jobs:
               exit 0
               ;;
             openrouter-free)
-              # The exact-head semantic review router is fixed even if
-              # OmniRoute is later enabled. Never feed it to free-model
-              # candidate rotation or substitute a coding model.
-              if [[ "$LANE_RUNTIME_MODEL" == 'openrouter/free' ]]; then
-                {
-                  echo "source=openrouter-free"
-                  echo "model=openrouter/free"
-                  echo "runtime_model=openrouter/free"
-                  echo "display=$LANE_DISPLAY"
-                  echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                  echo "reason=dedicated-composite-semantic-review"
-                } >> "$GITHUB_OUTPUT"
-                exit 0
-              fi
               # Keep OpenRouter's known-free route while OmniRoute is disabled.
               if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
                 {
@@ -821,18 +760,6 @@ jobs:
           DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
         run: |
           set -Eeuo pipefail
-          # openrouter/free is a composite route. Its current backing model
-          # need not appear as an exact static OpenCode catalog entry; the
-          # mandatory real OpenCode smoke below is its execution proof.
-          if [[ "$RUNTIME_MODEL" == 'openrouter/free' ]]; then
-            echo 'Composite free review route: validating by real OpenCode smoke'
-            # Preserve the complete composite identifier as the trusted review
-            # model. Returning only "free" here breaks the controller's
-            # (source, model, runtime) provenance invariant after smoke.
-            echo "model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
-            echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           # Dynamic free-model lanes try each model at most once, within their
           # own provider. Pinned experiments and other sources never fall back.
           if [[ "$DEEPSEEK_MODE" == normal ]] && \
@@ -1021,8 +948,7 @@ jobs:
           # Dynamic catalog workers retry distinct, proven-free models within this job.
           # Pinned DeepSeek and other provider lanes retain their existing smoke.
           if [[ "${DEEPSEEK_MODE:-}" == normal ]] && \
-            [[ "${SOURCE:-}" == opencode-free || "${SOURCE:-}" == openrouter-free ]] && \
-            [[ "${RUNTIME_MODEL:-}" != 'openrouter/free' ]]; then
+            [[ "${SOURCE:-}" == opencode-free || "${SOURCE:-}" == openrouter-free ]]; then
             [[ -z "$(git status --porcelain)" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
             catalog="$RUNNER_TEMP/factory-${SOURCE}-catalog"
             comments="$RUNNER_TEMP/factory-model-preflight-comments.json"
