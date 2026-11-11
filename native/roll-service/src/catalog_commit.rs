@@ -1683,6 +1683,73 @@ async fn persist_commit_series_mapping_handler(
 mod tests {
     use super::*;
 
+    #[test]
+    fn queue_bootstrap_requires_volume_identity_and_unique_roster_numbers() {
+        assert!(volume_identity_matches("Batman", "Batman (1940)"));
+        assert!(volume_identity_matches("Batman (2011-2016)", "Batman (2011)"));
+        assert!(!volume_identity_matches("Batman (2011)", "Batman (1940)"));
+        assert!(!volume_identity_matches("Green Lantern", "Batman (1940)"));
+        assert!(!volume_identity_matches("", "Batman"));
+
+        let local = vec![
+            serde_json::json!({"issue_id":1, "issue_number":"1", "thread_id":7, "thread_title":"Batman",
+                "current_mapping_status":null, "provider":null, "external_id":null}),
+            serde_json::json!({"issue_id":2, "issue_number":"2", "thread_id":7, "thread_title":"Batman",
+                "current_mapping_status":null, "provider":null, "external_id":null}),
+            serde_json::json!({"issue_id":3, "issue_number":"2", "thread_id":7, "thread_title":"Batman",
+                "current_mapping_status":null, "provider":null, "external_id":null}),
+            serde_json::json!({"issue_id":4, "issue_number":"Annual 1", "thread_id":7, "thread_title":"Batman",
+                "current_mapping_status":null, "provider":null, "external_id":null}),
+        ];
+        let roster = vec![
+            serde_json::json!({"issue_id":3001,"issue_number":"1","external_id":"3001",
+                "provider":"comicvine","thread_id":null,"_roster_only":true}),
+            serde_json::json!({"issue_id":3002,"issue_number":"2","external_id":"3002",
+                "provider":"comicvine","thread_id":null,"_roster_only":true}),
+            serde_json::json!({"issue_id":3003,"issue_number":"3","external_id":"3003",
+                "provider":"comicvine","thread_id":null,"_roster_only":true}),
+        ];
+        let mut counts = empty_counts();
+        let plan = classify_queue_bootstrap_rows(&local, &roster, "comicvine", &mut counts);
+        assert_eq!(plan[0]["row_id"], "issue:1");
+        assert_eq!(plan[0]["classification"], "safe_exact_match");
+        assert_eq!(plan[0]["external_id"], "3001");
+        assert_eq!(plan[1]["classification"], "needs_review_ambiguous");
+        assert_eq!(plan[2]["classification"], "needs_review_ambiguous");
+        assert_eq!(plan[3]["classification"], "excluded_special");
+        assert_eq!(plan[4]["row_id"], "roster:3002");
+        assert_eq!(plan[5]["row_id"], "roster:3003");
+        assert_eq!(counts["safe_exact_match"], 1);
+        assert_eq!(counts["needs_review_ambiguous"], 2);
+        assert_eq!(counts["excluded_special"], 1);
+        assert_eq!(counts["unresolved"], 2);
+        assert_eq!(derive_scope_key(&plan, 1).as_deref(), Some("exact:1:1"));
+    }
+
+    #[test]
+    fn fresh_provider_roster_uses_roster_ids_not_comicpile_issue_ids() {
+        let roster = vec![
+            serde_json::json!({"issue_id":4001,"issue_number":"1","thread_id":null,
+                "_roster_only":true,"provider":"comicvine","external_id":"4001"}),
+            serde_json::json!({"issue_id":4002,"issue_number":"1","thread_id":null,
+                "_roster_only":true,"provider":"comicvine","external_id":"4002"}),
+            serde_json::json!({"issue_id":4003,"issue_number":"2","thread_id":null,
+                "_roster_only":true,"provider":"comicvine","external_id":"4003"}),
+        ];
+        let mut counts = empty_counts();
+        let rows = classify_rows(&roster, "comicvine", "1", &mut counts);
+        assert_eq!(rows[0]["row_id"], "roster:4001");
+        assert_eq!(rows[0]["classification"], "needs_review_ambiguous");
+        assert_eq!(rows[1]["classification"], "needs_review_ambiguous");
+        assert_eq!(rows[2]["classification"], "unresolved");
+        assert!(derive_scope_key(&rows, 12).is_none());
+
+        let mut counts = empty_counts();
+        let rows = classify_rows(&roster, "comicvine", "2", &mut counts);
+        assert_eq!(rows[2]["classification"], "safe_exact_match");
+        assert_eq!(derive_scope_key(&rows, 12).as_deref(), Some("exact:12:2"));
+    }
+
     #[tokio::test]
     async fn persist_commit_writes_identity_mappings_and_receipt() {
         let state = crate::test_support::test_state(1)
