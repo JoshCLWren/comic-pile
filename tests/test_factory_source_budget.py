@@ -199,6 +199,8 @@ def test_controller_assign_continues_when_budget_allows(monkeypatch: pytest.Monk
     """A worker within budget proceeds past the gate to the capacity check."""
     controller = _load_controller()
     seen = _arm_assign(monkeypatch, controller, None)
+    # Retired Requesty worker 92 is deliberately simulated for this gate test.
+    monkeypatch.setattr(controller, "worker_sources", lambda: {"92": "requesty"})
     with pytest.raises(_ReachedCapacityError):
         controller.assign("92")
     assert seen == ["92"]
