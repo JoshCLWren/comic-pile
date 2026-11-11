@@ -3,7 +3,7 @@
 //! Preview token verification and plan/state-digest revalidation must remain
 //! compatible with the Python preview implementation until #4842 migrates preview.
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{auth::AuthenticatedUser, comicvine_repair, db, ApiError, AppState};
 use axum::{
     extract::{Json as AxumJson, State},
     Json,
@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 type HmacSha256 = Hmac<Sha256>;
@@ -254,6 +254,7 @@ pub async fn commit_series_mapping_handler(
     user: AuthenticatedUser,
     AxumJson(req): AxumJson<CommitRequest>,
 ) -> Result<Json<CommitResponse>, ApiError> {
+    let started = Instant::now();
     let normalized_key = req.idempotency_key.trim().to_string();
     if normalized_key.is_empty() {
         return Err(conflict(ERROR_IDEMPOTENCY_CONFLICT));
@@ -370,11 +371,24 @@ pub async fn commit_series_mapping_handler(
     )
     .await?;
 
-    // Post-commit hydration is best-effort and deferred in Rust for now;
-    // Python's inline hydration is bounded and failures don't roll back identity.
-    // The response includes hydration_queued_issue_ids as the contract requires.
+    // Mirror Python's request-relative inline hydration deadline (#3776).
+    // No detached serverless work, and no provider error can roll back identity.
+    let budget = inline_hydration_budget(started.elapsed());
+    comicvine_repair::hydrate_catalog_commit(
+        &state,
+        user.id(),
+        &response.confirmed_issue_ids,
+        budget,
+    )
+    .await;
 
     Ok(Json(response))
+}
+
+fn inline_hydration_budget(elapsed: Duration) -> Duration {
+    // 10s browser deadline minus 1.5s routing/response reserve; hydration
+    // must not consume more than 3s or the remainder of that request.
+    Duration::from_secs_f64((8.5_f64 - elapsed.as_secs_f64()).clamp(0.0, 3.0))
 }
 
 fn plan_scope_status(plan: &Value) -> &str {
@@ -1375,6 +1389,13 @@ mod tests {
         // approved_row_ids sorts before preview_token
         let expected_material = r#"{"approved_row_ids":["issue:1"],"preview_token":"tok"}"#;
         assert_eq!(fp, sha256_hex(expected_material));
+    }
+
+    #[test]
+    fn catalog_inline_hydration_budget_matches_request_deadline() {
+        assert_eq!(inline_hydration_budget(Duration::ZERO), Duration::from_secs(3));
+        assert_eq!(inline_hydration_budget(Duration::from_secs(7)), Duration::from_millis(1500));
+        assert!(inline_hydration_budget(Duration::from_secs(9)).is_zero());
     }
 
     #[test]
