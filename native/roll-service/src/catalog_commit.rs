@@ -1808,7 +1808,8 @@ async fn persist_commit_series_mapping_handler(
     let existing = tx
         .query(
             "SELECT provider, entity_type, external_id, metadata_json FROM external_identities
-         WHERE provider = ANY($1) AND external_id = ANY($2)",
+         WHERE provider = ANY($1) AND external_id = ANY($2)
+         ORDER BY provider, entity_type, external_id FOR UPDATE",
             &[&providers, &external_ids],
         )
         .await
@@ -1839,6 +1840,7 @@ async fn persist_commit_series_mapping_handler(
             "issue".to_owned(),
             row_eid.to_owned(),
         ));
+        let metadata_known = previous.is_some();
         let issue_meta_json = fill_missing_metadata(previous, row.get("_provider_metadata"));
         // upsert external identity
         let identity = tx
@@ -1846,9 +1848,14 @@ async fn persist_commit_series_mapping_handler(
                 "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
                  VALUES ($1, 'issue', $2, $3, NOW(), NOW())
                  ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET
-                   metadata_json = EXCLUDED.metadata_json, updated_at = NOW()
+                   metadata_json = CASE
+                     WHEN $4::boolean OR COALESCE(external_identities.metadata_json::jsonb, '{}'::jsonb) = '{}'::jsonb
+                       THEN EXCLUDED.metadata_json
+                     ELSE external_identities.metadata_json
+                   END,
+                   updated_at = NOW()
                  RETURNING id",
-                &[&row_provider, &row_eid, &issue_meta_json],
+                &[&row_provider, &row_eid, &issue_meta_json, &metadata_known],
             )
             .await
             .map_err(db::query_error)?;
@@ -1875,22 +1882,26 @@ async fn persist_commit_series_mapping_handler(
     }
 
     // series identity + thread links
-    let series_meta_json = fill_missing_metadata(
-        existing_metadata.get(&(
-            provider.to_owned(),
-            "series".to_owned(),
-            series_external_id.to_owned(),
-        )),
-        series_metadata,
-    );
+    let previous_series = existing_metadata.get(&(
+        provider.to_owned(),
+        "series".to_owned(),
+        series_external_id.to_owned(),
+    ));
+    let series_metadata_known = previous_series.is_some();
+    let series_meta_json = fill_missing_metadata(previous_series, series_metadata);
     let series_identity = tx
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
              VALUES ($1, 'series', $2, $3, NOW(), NOW())
              ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET
-               metadata_json = EXCLUDED.metadata_json, updated_at = NOW()
+               metadata_json = CASE
+                 WHEN $4::boolean OR COALESCE(external_identities.metadata_json::jsonb, '{}'::jsonb) = '{}'::jsonb
+                   THEN EXCLUDED.metadata_json
+                 ELSE external_identities.metadata_json
+               END,
+               updated_at = NOW()
              RETURNING id",
-            &[&provider, &series_external_id, &series_meta_json],
+            &[&provider, &series_external_id, &series_meta_json, &series_metadata_known],
         )
         .await
         .map_err(db::query_error)?;
@@ -2215,6 +2226,89 @@ mod tests {
             serde_json::to_value(&response).expect("original response JSON"),
             serde_json::to_value(&stored_after).expect("stored response JSON"),
         );
+    }
+
+    #[tokio::test]
+    async fn concurrent_commit_without_roster_metadata_preserves_richer_identity() {
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let _db = crate::test_support::reset_for_test(&state).await;
+        let mut first = state.pool.get().await.expect("first connection");
+        let mut second = state.pool.get().await.expect("second connection");
+        first
+            .batch_execute(
+                "INSERT INTO users (id, username, created_at, is_admin)
+             VALUES (1, 'catalog-concurrent-test', now(), false);
+             INSERT INTO threads (id, user_id, title, format, issues_remaining,
+               queue_position, status, total_issues, created_at, is_blocked,
+               is_test, manual_creator_credits, queue_position_is_manual)
+             VALUES (10, 1, 'Test Series', 'Comic', 1, 1, 'active', 1,
+               now(), false, false, '[]', false);
+             INSERT INTO issues (id, thread_id, issue_number, status, created_at, position)
+             VALUES (100, 10, '1', 'unread', now(), 1);",
+            )
+            .await
+            .expect("seed concurrent commit");
+        let rich = vec![serde_json::json!({
+            "issue_id":100, "thread_id":10, "provider":"comicvine",
+            "external_id":"issue-100", "classification":"safe_exact_match",
+            "row_id":"issue:100", "_provider_metadata":{"name":"Rich Issue","issue_number":"1"}
+        })];
+        let sparse = vec![serde_json::json!({
+            "issue_id":100, "thread_id":10, "provider":"comicvine",
+            "external_id":"issue-100", "classification":"safe_exact_match",
+            "row_id":"issue:100"
+        })];
+        let rich_series = serde_json::json!({"name":"Rich Series"});
+        let (rich_result, sparse_result) = tokio::join!(
+            persist_commit_series_mapping_handler(
+                &mut first,
+                1,
+                &rich,
+                "comicvine",
+                "series-10",
+                "rich-key",
+                "rich-fp",
+                &rich,
+                Some(&rich_series),
+            ),
+            persist_commit_series_mapping_handler(
+                &mut second,
+                1,
+                &sparse,
+                "comicvine",
+                "series-10",
+                "sparse-key",
+                "sparse-fp",
+                &sparse,
+                None,
+            ),
+        );
+        rich_result.expect("rich commit");
+        sparse_result.expect("sparse concurrent commit");
+        let metadata: Value = first
+            .query_one(
+                "SELECT metadata_json FROM external_identities
+             WHERE provider = 'comicvine' AND entity_type = 'issue'
+               AND external_id = 'issue-100'",
+                &[],
+            )
+            .await
+            .expect("final issue metadata")
+            .get(0);
+        assert_eq!(metadata["name"], "Rich Issue");
+        let series: Value = first
+            .query_one(
+                "SELECT metadata_json FROM external_identities
+             WHERE provider = 'comicvine' AND entity_type = 'series'
+               AND external_id = 'series-10'",
+                &[],
+            )
+            .await
+            .expect("final series metadata")
+            .get(0);
+        assert_eq!(series["name"], "Rich Series");
     }
 
     #[test]
