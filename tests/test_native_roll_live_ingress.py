@@ -102,6 +102,25 @@ def _concrete_path(path: str) -> str:
     return concrete
 
 
+def _matching_concrete_path(source: str, template: str) -> str | None:
+    """Find a real URL covered by a rewrite and the registered Axum template.
+
+    Axum permits a named final capture to consume a literal action suffix,
+    such as :apply in a single {plan_id_action} segment. Vercel's
+    rewrite contains the literal suffix, while a plain numeric substitution
+    lacks it. Derive the suffix from the rewrite rather than hardcode routes.
+    """
+    concrete = _concrete_path(template)
+    if re.fullmatch(_vercel_pattern(source), concrete):
+        return concrete
+    suffix = re.search(r"(:[A-Za-z][A-Za-z0-9_-]*)\$$", source)
+    if suffix:
+        candidate = concrete + suffix.group(1)
+        if re.fullmatch(_vercel_pattern(source), candidate):
+            return candidate
+    return None
+
+
 def _production_routes() -> tuple[
     set[tuple[str, str]], dict[str, set[tuple[str, str]]]
 ]:
@@ -294,12 +313,12 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 (registered_method, path)
                 for registered_method, path in ingresses[function]
                 if registered_method == method
-                and re.fullmatch(_vercel_pattern(source), _concrete_path(path))
+                and (concrete := _matching_concrete_path(source, path)) is not None
                 # A prior static rewrite owns its concrete path before this
                 # broader parameter rewrite is considered by Vercel.
                 and not any(
                     isinstance(previous_source := previous.get("src"), str)
-                    and re.fullmatch(_vercel_pattern(previous_source), _concrete_path(path))
+                    and re.fullmatch(_vercel_pattern(previous_source), concrete)
                     and (
                         (previous_methods := previous.get("methods")) is None
                         or isinstance(previous_methods, list)
@@ -317,7 +336,9 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 "but that entrypoint has no matching registered Rust route"
             )
             for registered_method, path in matching_ingress:
-                actual = _destination(routes, registered_method, _concrete_path(path))
+                concrete = _matching_concrete_path(source, path)
+                assert concrete is not None
+                actual = _destination(routes, registered_method, concrete)
                 assert actual == function, (
                     f"Vercel sends {registered_method} {path} to {actual!r}, "
                     f"not the expected {function!r}"
@@ -327,6 +348,17 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                     f"Vercel sends {method} {source} to {function}, "
                     "but the shared native Rust service does not register it"
                 )
+
+
+def test_axum_action_capture_matches_literal_vercel_suffix() -> None:
+    """Single capture contains the action suffix rather than dropping it."""
+    template = "/api/v2/example/{plan_id_action}"
+    pattern = r"^/api/v2/example/[^/]+:apply$"
+    assert _matching_concrete_path(pattern, template) == "/api/v2/example/42:apply"
+    assert _matching_concrete_path(r"^/api/v2/example/[^/]+:publish$", template) == (
+        "/api/v2/example/42:publish"
+    )
+    assert _matching_concrete_path(r"^/api/v2/other/[^/]+:apply$", template) is None
 
 
 def test_issue_patch_uses_numeric_public_route_and_only_its_native_entrypoint() -> None:
