@@ -1027,6 +1027,58 @@ fn classify_rows(
     out
 }
 
+fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
+    let mut by_number: HashMap<String, Vec<&Value>> = HashMap::new();
+    for record in roster {
+        let number = record.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        by_number.entry(normalize_issue_number(number)).or_default().push(record);
+    }
+    for row in rows {
+        if row.get("thread_id").and_then(Value::as_i64).is_none() {
+            continue;
+        }
+        let class = row.get("classification").and_then(Value::as_str);
+        if !matches!(class, Some("safe_exact_match" | "already_confirmed")) {
+            continue;
+        }
+        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let normalized = normalize_issue_number(number);
+        let Some(matches) = by_number.get(&normalized) else { continue };
+        if matches.len() != 1
+            || matches[0].get("external_id").and_then(Value::as_str)
+                != row.get("external_id").and_then(Value::as_str)
+        {
+            continue;
+        }
+        let raw = matches[0].get("_provider_metadata");
+        let old_title = row.get("title").cloned().unwrap_or(Value::Null);
+        let title = if old_title.is_null() {
+            raw.and_then(|v| v.get("name")).cloned().unwrap_or(Value::Null)
+        } else {
+            old_title
+        };
+        let metadata = row.get("_identity_metadata").cloned().unwrap_or(Value::Null);
+        let volume_name = metadata.get("volume").and_then(|v| v.get("name"))
+            .or_else(|| metadata.get("volume_name"))
+            .and_then(Value::as_str)
+            .filter(|v| !v.is_empty());
+        let incomplete = metadata.get("issue_number")
+            .is_none_or(|v| v.is_null() || v.as_str().is_some_and(str::is_empty))
+            || volume_name.is_none();
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("_roster_verified".to_owned(), serde_json::json!(true));
+            obj.insert("title".to_owned(), title);
+            if let Some(raw) = raw {
+                obj.insert("_provider_metadata".to_owned(), raw.clone());
+            }
+            if class == Some("already_confirmed") && incomplete {
+                obj.insert("metadata_refresh_required".to_owned(), serde_json::json!(raw.is_some()));
+                obj.insert("default_selected".to_owned(), serde_json::json!(raw.is_some()));
+            }
+        }
+    }
+}
+
 fn derive_scope_key(rows: &[Value], origin_issue_id: i32) -> Option<String> {
     for row in rows {
         if row.get("classification").and_then(|v| v.as_str()) == Some("safe_exact_match") {
