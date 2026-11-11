@@ -7,7 +7,7 @@
 
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_constraints::ValidatedReadingInputs,
-    ApiError, AppState,
+    reading_list, ApiError, AppState,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -172,6 +172,38 @@ pub struct OverlapDecisionWrite {
     pub continuing_volume_id: String,
     pub waiting_volume_id: String,
     pub expected_updated_at: Option<String>,
+}
+
+/// Python's historical CustomCBLResponse includes these arrays even on
+/// collection creation and detail reads. Keep the additive v1 compatibility
+/// fields at the legacy boundary; the canonical v2 Reading List stays intact.
+fn legacy_cbl_response<T: Serialize>(value: &T) -> Result<serde_json::Value, ApiError> {
+    let mut json = serde_json::to_value(value).map_err(|_| {
+        ApiError::Internal("Custom CBL serialization failed".to_owned())
+    })?;
+    json["predecessor_changes"] = serde_json::json!([]);
+    json["warnings"] = serde_json::json!([]);
+    Ok(json)
+}
+
+pub async fn get_legacy_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(list_id): Path<i32>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let Json(list) =
+        reading_list::get_reading_list(State(state), user, Path(list_id)).await?;
+    Ok(Json(legacy_cbl_response(&list)?))
+}
+
+pub async fn create_legacy_cbl(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(request): Json<reading_list::ReadingListWrite>,
+) -> Result<(StatusCode, Json<serde_json::Value>), ApiError> {
+    let (status, Json(list)) =
+        reading_list::create_reading_list(State(state), user, Json(request)).await?;
+    Ok((status, Json(legacy_cbl_response(&list)?)))
 }
 
 #[utoipa::path(get, path = "/api/v1/custom-cbls", tag = "custom-cbls",
@@ -808,6 +840,18 @@ pub async fn apply(
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    #[test]
+    fn legacy_cbl_response_keeps_python_default_arrays() {
+        let response = legacy_cbl_response(&serde_json::json!({
+            "id": 10, "name": "Reading", "entries": [],
+        })).expect("legacy response");
+        assert_eq!(response["predecessor_changes"], serde_json::json!([]));
+        assert_eq!(response["warnings"], serde_json::json!([]));
+        assert_eq!(response["entries"], serde_json::json!([]));
+    }
+
+
 
     async fn state_and_connection() -> (Arc<AppState>, tokio::sync::MutexGuard<'static, ()>) {
         let state = crate::test_support::test_state(3)
