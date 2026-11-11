@@ -26,7 +26,7 @@ gh_retry gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" > /tmp/local-review-tar
 target="$(python3 .github/scripts/local_review_contract.py target /tmp/local-review-target.json)"
 HEAD="$(jq -er .head <<< "$target")"
 ISSUE="$(jq -er .issue <<< "$target")"
-NON_CLOSING="$(jq -er .non_closing <<< "$target")"
+NON_CLOSING="$(jq -er '.non_closing | if type == "boolean" then tostring else error("non_closing must be boolean") end' <<< "$target")"
 echo "Local review: open PR #${PR}, exact head ${HEAD}, issue #${ISSUE}"
 
 gh_retry gh pr diff "$PR" > /tmp/p.patch
