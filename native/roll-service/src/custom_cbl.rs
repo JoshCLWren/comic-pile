@@ -894,13 +894,20 @@ mod tests {
         )
         .await
         .expect("seed overlap decision fixture");
+        let token = decision_set(&conn, 1, 201)
+            .await
+            .expect("read current overlap version")
+            .updated_at;
         drop(conn);
 
         let _ = delete_overlap_decision(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
             Path((201, 801)),
-            Query(std::collections::HashMap::new()),
+            Query(std::collections::HashMap::from([(
+                "expected_updated_at".to_string(),
+                token,
+            )])),
         )
         .await
         .expect("delete overlap decision");
@@ -937,6 +944,10 @@ mod tests {
         )
         .await
         .expect("seed overlap decision put fixture");
+        let token = decision_set(&conn, 1, 201)
+            .await
+            .expect("read current overlap version")
+            .updated_at;
         drop(conn);
 
         let response = put_overlap_decision(
@@ -946,7 +957,7 @@ mod tests {
             Json(OverlapDecisionWrite {
                 continuing_volume_id: "comicvine:1001".to_string(),
                 waiting_volume_id: "comicvine:1002".to_string(),
-                expected_updated_at: None,
+                expected_updated_at: Some(token),
             }),
         )
         .await
@@ -973,5 +984,27 @@ mod tests {
             .expect("read put decision")
             .get(0);
         assert_eq!(stored, 1);
+    }
+
+    #[test]
+    fn overlap_tokens_compare_instants_and_keep_python_utc_wire_format() {
+        use chrono::TimeZone;
+        let current = Utc
+            .with_ymd_and_hms(2026, 11, 10, 12, 0, 0)
+            .single()
+            .expect("valid UTC time");
+        assert_eq!(format_decision_timestamp(current), "2026-11-10T12:00:00Z");
+        assert!(decision_version_matches("2026-11-10T07:00:00-05:00", current).unwrap());
+        assert!(decision_version_matches("2026-11-10T12:00:00", current).unwrap());
+        assert!(!decision_version_matches("2026-11-10T12:00:01Z", current).unwrap());
+        let with_micros = current + chrono::Duration::microseconds(123456);
+        assert_eq!(
+            format_decision_timestamp(with_micros),
+            "2026-11-10T12:00:00.123456Z"
+        );
+        assert_eq!(
+            decision_version_matches("invalid", current).unwrap_err().status(),
+            StatusCode::UNPROCESSABLE_ENTITY
+        );
     }
 }
