@@ -688,7 +688,8 @@ async fn build_plan_db(
     // Load origin issue owned by user
     let origin = conn
         .query_opt(
-            "SELECT i.id, i.issue_number, i.title, i.thread_id, t.title as thread_title,
+            "SELECT i.id, i.issue_number, e.metadata_json->>'name' AS title,
+                    i.thread_id, t.title as thread_title,
                     m.status as current_mapping_status, e.provider, e.external_id, m.confidence,
                     e.metadata_json
              FROM issues i
@@ -734,7 +735,7 @@ async fn build_plan_db(
     // Try to find series info locally
     let series_row = conn
         .query_opt(
-            "SELECT e.id, e.external_id, e.metadata_json FROM external_identities e
+            "SELECT e.id, e.external_id, e.metadata_json, e.external_url FROM external_identities e
              WHERE e.provider = $1 AND e.entity_type = 'series' AND e.external_id = $2",
             &[&provider, &provider_series_external_id],
         )
@@ -751,7 +752,12 @@ async fn build_plan_db(
             .try_get::<_, Option<Value>>(2)
             .map_err(db::query_error)?
             .unwrap_or(Value::Null);
-        series_info = Some(series_info_from_meta(provider_series_external_id, &meta));
+        let external_url: Option<String> = sr.try_get(3).map_err(db::query_error)?;
+        series_info = Some(series_info_from_meta(
+            provider_series_external_id,
+            &meta,
+            external_url.as_deref(),
+        ));
         // Load mapped issues for this series
         let mapped = conn
             .query(
@@ -967,14 +973,14 @@ async fn build_plan_db(
     }))
 }
 
-fn series_info_from_meta(external_id: &str, meta: &Value) -> Value {
+fn series_info_from_meta(external_id: &str, meta: &Value, external_url: Option<&str>) -> Value {
     serde_json::json!({
         "id": external_id,
         "name": meta.get("name"),
         "publisher": meta.get("publisher").and_then(|p| if p.is_object() { p.get("name").cloned() } else { Some(p.clone()) }),
         "start_year": meta.get("start_year"),
         "count_of_issues": meta.get("count_of_issues"),
-        "site_detail_url": meta.get("site_detail_url"),
+        "site_detail_url": external_url,
         "image": meta.get("image"),
     })
 }
@@ -2124,8 +2130,10 @@ mod tests {
                      (id, thread_id, issue_number, status, created_at, position)
                  VALUES (100, 10, '1', 'unread', now(), 1);
                  INSERT INTO external_identities
-                     (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                     (provider, entity_type, external_id, external_url, metadata_json,
+                      created_at, updated_at)
                  VALUES ('comicvine', 'series', 'series-10',
+                         'https://comicvine.example/series-10',
                          '{"name":"Trusted Series","publisher":{"id":9,"name":""}}'::jsonb,
                          now(), now());"#,
             )
@@ -2193,6 +2201,20 @@ mod tests {
             .get(0);
         assert_eq!(series_metadata["name"], "Trusted Series");
         assert_eq!(series_metadata["publisher"]["name"], "Publisher");
+        let plan = build_plan_db(
+            &connection,
+            1,
+            100,
+            "comicvine",
+            "series-10",
+            "confirmed_origin",
+        )
+        .await
+        .expect("rebuild local series plan");
+        assert_eq!(
+            plan["provider_series"]["site_detail_url"],
+            "https://comicvine.example/series-10"
+        );
 
         let receipt = connection
             .query_one(
