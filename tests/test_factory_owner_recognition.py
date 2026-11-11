@@ -87,9 +87,10 @@ def test_three_digit_factory_owners_are_recognized_but_malformed_are_rejected() 
 
 def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_workers() -> None:
     """Worker 104-107 are in the source of truth, not just admitted by a regex."""
+    roster_file = ROOT / ".github" / "free-model-factories.tsv"
     roster_ids = {
         fields[0]
-        for raw in (ROOT / ".github" / "free-model-factories.tsv").read_text(encoding="utf-8").splitlines()
+        for raw in roster_file.read_text(encoding="utf-8").splitlines()
         if raw and not raw.startswith("#")
         if len(fields := raw.split("\t")) >= 2
     }
