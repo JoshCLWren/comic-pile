@@ -116,3 +116,13 @@ def test_script_uses_controller_and_never_claims_truncated_or_stale_review() -> 
     assert 'gh_retry gh workflow run factory-ready-merge-drain.yml' in script
     assert 'gh pr merge' not in script
     assert 'timeout-minutes: 45' in workflow
+
+
+def test_review_shell_has_valid_bash_syntax() -> None:
+    import subprocess
+
+    result = subprocess.run(
+        ["bash", "-n", str(ROOT / ".github/scripts/local-ollama-review.sh")],
+        text=True, capture_output=True, check=False,
+    )
+    assert result.returncode == 0, result.stderr
