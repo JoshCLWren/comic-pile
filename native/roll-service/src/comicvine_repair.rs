@@ -232,7 +232,12 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
+async fn provider_response(
+    resource: &str,
+    extra_query: &str,
+    api_key: &str,
+) -> Result<Value, ProviderFailure> {
+    // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err(ProviderFailure::Unavailable);
@@ -274,8 +279,7 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         let _connection_guard = ConnectionGuard(tokio::spawn(async move {
             let _ = connection.await;
         }));
-        let path =
-            format!("/api/issue/4000-{id}/?api_key={api_key}&format=json&field_list={FIELDS}");
+        let path = format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}");
         let request = http::Request::builder()
             .method("GET")
             .uri(path)
@@ -347,10 +351,7 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         if payload["status_code"].as_i64() != Some(1) {
             return Err(ProviderFailure::Unavailable);
         }
-        payload
-            .get("results")
-            .cloned()
-            .ok_or(ProviderFailure::InvalidPayload)
+        Ok(payload)
     };
     tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
@@ -361,6 +362,110 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
             );
             ProviderFailure::Timeout
         })?
+}
+
+async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
+    provider_response(
+        &format!("issue/4000-{id}"),
+        &format!("&field_list={FIELDS}"),
+        api_key,
+    )
+    .await?
+    .get("results")
+    .cloned()
+    .ok_or(ProviderFailure::InvalidPayload)
+}
+
+/// Read the same ComicVine volume and complete, validated issue roster used
+/// by the Python preview builder. Never turn an outage or partial roster into
+/// an empty successful plan: doing so can approve a wrong comic identity.
+pub(crate) async fn catalog_volume_roster(
+    external_id: &str,
+) -> Result<(Value, Vec<Value>), ApiError> {
+    let unavailable = || ApiError::ServiceUnavailable("provider_unavailable".to_owned());
+    let volume_id = external_id
+        .parse::<u32>()
+        .ok()
+        .filter(|v| *v > 0)
+        .ok_or_else(unavailable)?;
+    let api_key = std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .ok_or_else(unavailable)?;
+    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &api_key)
+        .await
+        .map_err(|_| unavailable())?;
+    let volume_info = volume
+        .get("results")
+        .filter(|v| v.is_object())
+        .ok_or_else(unavailable)?;
+    let series_info = json!({
+        "id": volume_info.get("id").map(ToString::to_string).map(|v| v.trim_matches('"').to_string()),
+        "name": volume_info.get("name"),
+        "publisher": volume_info.get("publisher").and_then(|p| p.get("name")),
+        "start_year": volume_info.get("start_year"),
+        "count_of_issues": volume_info.get("count_of_issues"),
+        "site_detail_url": volume_info.get("site_detail_url"),
+        "image": volume_info.get("image"),
+    });
+
+    let mut roster = Vec::new();
+    let mut offset = 0_usize;
+    let mut expected_total: Option<usize> = None;
+    loop {
+        let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
+        let page = provider_response("issues", &query, &api_key)
+            .await
+            .map_err(|_| unavailable())?;
+        let results = page
+            .get("results")
+            .and_then(Value::as_array)
+            .ok_or_else(unavailable)?;
+        if expected_total.is_none() {
+            expected_total = page
+                .get("number_of_total_results")
+                .and_then(Value::as_u64)
+                .and_then(|n| usize::try_from(n).ok());
+        }
+        for row in results {
+            if row.get("volume").and_then(|v| v.get("id")).and_then(Value::as_u64)
+                .is_some_and(|id| id != u64::from(volume_id))
+            {
+                return Err(unavailable());
+            }
+            let Some(issue_number) = row.get("issue_number").filter(|v| !v.is_null()) else {
+                continue;
+            };
+            let Some(pid) = row.get("id").and_then(Value::as_i64).filter(|id| *id > 0) else {
+                continue;
+            };
+            let number = issue_number.as_str().map(str::to_owned).unwrap_or_else(|| issue_number.to_string());
+            roster.push(json!({
+                "issue_id": pid,
+                "issue_number": number,
+                "title": row.get("name"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": row,
+            }));
+        }
+        offset += results.len();
+        if results.len() < 100 || expected_total.is_some_and(|n| offset >= n) {
+            break;
+        }
+        // Reject a truncated or pathological roster rather than silently
+        // authorizing false unique matches. The full provider roster is
+        // required to prove issue-number cardinality.
+        if offset >= 10_000 {
+            return Err(unavailable());
+        }
+    }
+    Ok((series_info, roster))
 }
 
 async fn claim(state: &AppState) -> Result<Option<Job>, ApiError> {
