@@ -428,7 +428,10 @@ pub(crate) async fn catalog_volume_roster(
                 .and_then(|n| usize::try_from(n).ok());
         }
         for row in results {
-            if row.get("volume").and_then(|v| v.get("id")).and_then(Value::as_u64)
+            if row
+                .get("volume")
+                .and_then(|v| v.get("id"))
+                .and_then(Value::as_u64)
                 .is_some_and(|id| id != u64::from(volume_id))
             {
                 return Err(unavailable());
@@ -439,7 +442,10 @@ pub(crate) async fn catalog_volume_roster(
             let Some(pid) = row.get("id").and_then(Value::as_i64).filter(|id| *id > 0) else {
                 continue;
             };
-            let number = issue_number.as_str().map(str::to_owned).unwrap_or_else(|| issue_number.to_string());
+            let number = issue_number
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| issue_number.to_string());
             roster.push(json!({
                 "issue_id": pid,
                 "issue_number": number,
@@ -779,16 +785,19 @@ pub(crate) async fn hydrate_catalog_commit(
             };
             // The identity transaction has committed; a failed metadata
             // refresh is best-effort and must not cause a client retry.
-            if let Err(err) = conn.execute(
-                "UPDATE external_identities
+            if let Err(err) = conn
+                .execute(
+                    "UPDATE external_identities
                  SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
                                       || ($2::text)::jsonb)::json,
                      external_url = COALESCE($3, external_url),
                      provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
                      updated_at = now()
                  WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
-                &[&id, &json_patch, &external_url, &provider_updated_at],
-            ).await {
+                    &[&id, &json_patch, &external_url, &provider_updated_at],
+                )
+                .await
+            {
                 tracing::warn!(
                     error_kind = crate::error_kind(&err),
                     "catalog commit metadata hydration failed"

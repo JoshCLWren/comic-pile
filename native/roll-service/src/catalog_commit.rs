@@ -119,13 +119,28 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 }
 
 /// Canonical JSON matching Python json.dumps(obj, sort_keys=True) default separators.
-/// Python defaults: separators=(', ', ': '), ensure_ascii=True (but our payloads are ASCII).
+/// Python defaults: separators=(', ', ': '), ensure_ascii=True.
+fn python_json_string(value: &str) -> String {
+    let encoded = serde_json::to_string(value).unwrap_or_else(|_| "\"\"".to_string());
+    let mut ascii = String::with_capacity(encoded.len());
+    for ch in encoded.chars() {
+        if ch.is_ascii() {
+            ascii.push(ch);
+        } else {
+            for unit in ch.encode_utf16(&mut [0; 2]).iter() {
+                ascii.push_str(&format!("\\u{unit:04x}"));
+            }
+        }
+    }
+    ascii
+}
+
 fn canonical_json(v: &Value) -> String {
     match v {
         Value::Null => "null".to_string(),
         Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
         Value::Number(n) => n.to_string(),
-        Value::String(s) => serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string()),
+        Value::String(s) => python_json_string(s),
         Value::Array(a) => {
             let items: Vec<String> = a.iter().map(canonical_json).collect();
             format!("[{}]", items.join(", "))
@@ -135,13 +150,7 @@ fn canonical_json(v: &Value) -> String {
             keys.sort();
             let items: Vec<String> = keys
                 .into_iter()
-                .map(|k| {
-                    format!(
-                        "{}: {}",
-                        serde_json::to_string(k).unwrap_or_default(),
-                        canonical_json(&m[k])
-                    )
-                })
+                .map(|k| format!("{}: {}", python_json_string(k), canonical_json(&m[k])))
                 .collect();
             format!("{{{}}}", items.join(", "))
         }
@@ -709,10 +718,17 @@ async fn build_plan_db(
 
     if scope_mode == "queue_thread_bootstrap" {
         return build_queue_bootstrap_plan_db(
-            conn, user_id, origin_issue_id, provider,
-            provider_series_external_id, origin_thread_id,
-            &origin_issue_number, &origin, None,
-        ).await;
+            conn,
+            user_id,
+            origin_issue_id,
+            provider,
+            provider_series_external_id,
+            origin_thread_id,
+            &origin_issue_number,
+            &origin,
+            None,
+        )
+        .await;
     }
 
     // Try to find series info locally
@@ -754,8 +770,10 @@ async fn build_plan_db(
             .map_err(db::query_error)?;
         for r in mapped {
             let metadata_text: Option<String> = r.get(2);
-            let identity_meta: Value = metadata_text.as_deref()
-                .and_then(|raw| serde_json::from_str(raw).ok()).unwrap_or(Value::Null);
+            let identity_meta: Value = metadata_text
+                .as_deref()
+                .and_then(|raw| serde_json::from_str(raw).ok())
+                .unwrap_or(Value::Null);
             issues_with_mappings.push(serde_json::json!({
                 "issue_id": r.get::<_, i32>(0),
                 "issue_number": r.get::<_, Option<String>>(1).unwrap_or_default(),
@@ -784,8 +802,13 @@ async fn build_plan_db(
                      AND status = 'confirmed'
                  )",
                 &[&thread_id, &sr.get::<_, i32>(0)],
-            ).await.map_err(db::query_error)?.get::<_, bool>(0)
-        } else { false };
+            )
+            .await
+            .map_err(db::query_error)?
+            .get::<_, bool>(0)
+        } else {
+            false
+        };
         if origin_confirmed || linked_thread {
             // This lookup is best-effort only for locally confirmed series:
             // Python falls back to local rows on provider 503.
@@ -800,8 +823,9 @@ async fn build_plan_db(
                 }
                 roster_rows = roster;
                 if let Some(thread_id) = origin_thread_id {
-                    let siblings = conn.query(
-                        "SELECT i.id, i.issue_number, i.thread_id, t.title,
+                    let siblings = conn
+                        .query(
+                            "SELECT i.id, i.issue_number, i.thread_id, t.title,
                                 m.status, e.provider, e.external_id, m.confidence,
                                 e.metadata_json::text
                          FROM issues i
@@ -810,29 +834,37 @@ async fn build_plan_db(
                          LEFT JOIN external_identities e ON e.id = m.external_identity_id
                          WHERE i.thread_id = $1 AND i.id <> $3
                          ORDER BY i.position, i.id",
-                        &[&thread_id, &user_id, &origin_issue_id],
-                    ).await.map_err(db::query_error)?;
-                    let rows: Vec<Value> = siblings.iter().map(|row| {
-                        let meta_text: Option<String> = row.get(8);
-                        let metadata: Value = meta_text.as_deref()
-                            .and_then(|raw| serde_json::from_str(raw).ok())
-                            .unwrap_or(Value::Null);
-                        serde_json::json!({
-                            "issue_id": row.get::<_, i32>(0),
-                            "issue_number": row.get::<_, Option<String>>(1),
-                            "title": metadata.get("name"),
-                            "thread_id": row.get::<_, Option<i32>>(2),
-                            "thread_title": row.get::<_, Option<String>>(3),
-                            "current_mapping_status": row.get::<_, Option<String>>(4),
-                            "provider": row.get::<_, Option<String>>(5),
-                            "external_id": row.get::<_, Option<String>>(6),
-                            "confidence": row.get::<_, Option<f64>>(7),
-                            "_identity_metadata": metadata,
+                            &[&thread_id, &user_id, &origin_issue_id],
+                        )
+                        .await
+                        .map_err(db::query_error)?;
+                    let rows: Vec<Value> = siblings
+                        .iter()
+                        .map(|row| {
+                            let meta_text: Option<String> = row.get(8);
+                            let metadata: Value = meta_text
+                                .as_deref()
+                                .and_then(|raw| serde_json::from_str(raw).ok())
+                                .unwrap_or(Value::Null);
+                            serde_json::json!({
+                                "issue_id": row.get::<_, i32>(0),
+                                "issue_number": row.get::<_, Option<String>>(1),
+                                "title": metadata.get("name"),
+                                "thread_id": row.get::<_, Option<i32>>(2),
+                                "thread_title": row.get::<_, Option<String>>(3),
+                                "current_mapping_status": row.get::<_, Option<String>>(4),
+                                "provider": row.get::<_, Option<String>>(5),
+                                "external_id": row.get::<_, Option<String>>(6),
+                                "confidence": row.get::<_, Option<f64>>(7),
+                                "_identity_metadata": metadata,
+                            })
                         })
-                    }).collect();
-                    issues_with_mappings.extend(
-                        build_sibling_mapping_rows(&rows, &roster_rows, provider)
-                    );
+                        .collect();
+                    issues_with_mappings.extend(build_sibling_mapping_rows(
+                        &rows,
+                        &roster_rows,
+                        provider,
+                    ));
                 }
             }
         }
@@ -957,7 +989,9 @@ fn normalize_issue_number(value: &str) -> String {
     if groups.len() > 1
         && (1..=3).contains(&groups[0].len())
         && groups[0].bytes().all(|b| b.is_ascii_digit())
-        && groups[1..].iter().all(|g| g.len() == 3 && g.bytes().all(|b| b.is_ascii_digit()))
+        && groups[1..]
+            .iter()
+            .all(|g| g.len() == 3 && g.bytes().all(|b| b.is_ascii_digit()))
     {
         return groups.join("");
     }
@@ -973,18 +1007,38 @@ fn is_special_issue(issue_number: &str) -> bool {
         return false;
     }
     let words = [
-        "annual", "special", "hc", "tpb", "gn", "omnibus", "deluxe",
-        "absolute", "hardcover", "trade paperback", "graphic novel",
+        "annual",
+        "special",
+        "hc",
+        "tpb",
+        "gn",
+        "omnibus",
+        "deluxe",
+        "absolute",
+        "hardcover",
+        "trade paperback",
+        "graphic novel",
     ];
-    let tokens: Vec<&str> = stripped.split(|c: char| !c.is_alphabetic()).filter(|x| !x.is_empty()).collect();
-    if words.iter().any(|w| if w.contains(' ') { stripped.contains(w) } else { tokens.contains(w) }) {
+    let tokens: Vec<&str> = stripped
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|x| !x.is_empty())
+        .collect();
+    if words.iter().any(|w| {
+        if w.contains(' ') {
+            stripped.contains(w)
+        } else {
+            tokens.contains(w)
+        }
+    }) {
         return true;
     }
     if !stripped.bytes().any(|c| c.is_ascii_digit()) {
         return true;
     }
     // Python treats a nonnumeric trailing decimal suffix as special.
-    stripped.rsplit_once('.').is_some_and(|(_, tail)| !tail.is_empty() && !tail.bytes().any(|c| c.is_ascii_digit()))
+    stripped
+        .rsplit_once('.')
+        .is_some_and(|(_, tail)| !tail.is_empty() && !tail.bytes().any(|c| c.is_ascii_digit()))
 }
 
 fn is_ambiguous_issue(issue_number: &str) -> bool {
@@ -992,7 +1046,10 @@ fn is_ambiguous_issue(issue_number: &str) -> bool {
 }
 
 fn row_precedence_key(row: &Value) -> (u8, u8, u8, String, String) {
-    let status = row.get("current_mapping_status").and_then(Value::as_str).unwrap_or("");
+    let status = row
+        .get("current_mapping_status")
+        .and_then(Value::as_str)
+        .unwrap_or("");
     let rank = match status {
         "confirmed" => 0,
         "candidate" => 1,
@@ -1004,8 +1061,14 @@ fn row_precedence_key(row: &Value) -> (u8, u8, u8, String, String) {
         u8::from(row.get("thread_id").is_none_or(Value::is_null)),
         u8::from(row.get("_sibling_roster").and_then(Value::as_str) != Some("unique")),
         rank,
-        row.get("external_id").and_then(Value::as_str).unwrap_or("").to_owned(),
-        row.get("issue_number").and_then(Value::as_str).unwrap_or("").to_owned(),
+        row.get("external_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned(),
+        row.get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_owned(),
     )
 }
 
@@ -1015,25 +1078,27 @@ fn dedupe_rows_by_issue(issues: &[Value]) -> Vec<Value> {
         let Some(issue_id) = row.get("issue_id").and_then(Value::as_i64) else {
             continue;
         };
-        unique.entry(issue_id).and_modify(|old| {
-            if row_precedence_key(row) < row_precedence_key(old) {
-                *old = row.clone();
-            }
-        }).or_insert_with(|| row.clone());
+        unique
+            .entry(issue_id)
+            .and_modify(|old| {
+                if row_precedence_key(row) < row_precedence_key(old) {
+                    *old = row.clone();
+                }
+            })
+            .or_insert_with(|| row.clone());
     }
     let mut rows: Vec<(i64, Value)> = unique.into_iter().collect();
     rows.sort_by_key(|(id, _)| *id);
     rows.into_iter().map(|(_, row)| row).collect()
 }
 
-fn build_sibling_mapping_rows(
-    siblings: &[Value],
-    roster: &[Value],
-    provider: &str,
-) -> Vec<Value> {
+fn build_sibling_mapping_rows(siblings: &[Value], roster: &[Value], provider: &str) -> Vec<Value> {
     let mut by_number: HashMap<String, Vec<&Value>> = HashMap::new();
     for entry in roster {
-        let number = entry.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = entry
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let key = normalize_issue_number(number);
         if !key.is_empty() {
             by_number.entry(key).or_default().push(entry);
@@ -1041,7 +1106,10 @@ fn build_sibling_mapping_rows(
     }
     let mut result = Vec::new();
     for issue in siblings {
-        let number = issue.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = issue
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if number.is_empty() {
             continue;
         }
@@ -1059,14 +1127,23 @@ fn build_sibling_mapping_rows(
                 if let Some(matched) = matching.and_then(|m| m.first()) {
                     if let Some(obj) = row.as_object_mut() {
                         obj.insert("provider".to_owned(), serde_json::json!(provider));
-                        obj.insert("external_id".to_owned(),
-                            matched.get("external_id").cloned().unwrap_or(Value::Null));
+                        obj.insert(
+                            "external_id".to_owned(),
+                            matched.get("external_id").cloned().unwrap_or(Value::Null),
+                        );
                         let old_title = obj.get("title").cloned().unwrap_or(Value::Null);
-                        obj.insert("title".to_owned(),
-                            matched.get("title").filter(|v| !v.is_null()).cloned()
-                                .unwrap_or(old_title));
-                        obj.insert("confidence".to_owned(),
-                            matched.get("confidence").cloned().unwrap_or(Value::Null));
+                        obj.insert(
+                            "title".to_owned(),
+                            matched
+                                .get("title")
+                                .filter(|v| !v.is_null())
+                                .cloned()
+                                .unwrap_or(old_title),
+                        );
+                        obj.insert(
+                            "confidence".to_owned(),
+                            matched.get("confidence").cloned().unwrap_or(Value::Null),
+                        );
                     }
                 }
                 "unique"
@@ -1094,7 +1171,10 @@ fn classify_rows(
         if row.get("_is_origin").and_then(Value::as_bool) == Some(true) {
             continue;
         }
-        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = row
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if !is_special_issue(number) && !is_ambiguous_issue(number) {
             let normalized = normalize_issue_number(number);
             if !normalized.is_empty() {
@@ -1105,7 +1185,10 @@ fn classify_rows(
 
     let mut out = Vec::with_capacity(candidates.len());
     for mut row in candidates {
-        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = row
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let status = row.get("current_mapping_status").and_then(Value::as_str);
         let conflicting = status == Some("confirmed")
             && row.get("provider").and_then(Value::as_str) != Some(provider);
@@ -1132,18 +1215,33 @@ fn classify_rows(
                 _ => "unresolved",
             }
         };
-        let id = row.get("issue_id").and_then(Value::as_i64).unwrap_or_default();
-        let roster_only = row.get("_roster_only").and_then(Value::as_bool).unwrap_or(false);
+        let id = row
+            .get("issue_id")
+            .and_then(Value::as_i64)
+            .unwrap_or_default();
+        let roster_only = row
+            .get("_roster_only")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let prefix = if roster_only { "roster:" } else { "issue:" };
         let proposed = matches!(classification, "safe_exact_match" | "already_confirmed");
         if let Some(c) = counts.get(classification).and_then(Value::as_i64) {
             counts[classification] = serde_json::json!(c + 1);
         }
         if let Some(map) = row.as_object_mut() {
-            map.insert("row_id".to_owned(), serde_json::json!(format!("{prefix}{id}")));
-            map.insert("classification".to_owned(), serde_json::json!(classification));
+            map.insert(
+                "row_id".to_owned(),
+                serde_json::json!(format!("{prefix}{id}")),
+            );
+            map.insert(
+                "classification".to_owned(),
+                serde_json::json!(classification),
+            );
             map.insert("proposed_mapping".to_owned(), serde_json::json!(proposed));
-            map.insert("default_selected".to_owned(), serde_json::json!(classification == "safe_exact_match"));
+            map.insert(
+                "default_selected".to_owned(),
+                serde_json::json!(classification == "safe_exact_match"),
+            );
         }
         out.push(row);
     }
@@ -1153,8 +1251,14 @@ fn classify_rows(
 fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
     let mut by_number: HashMap<String, Vec<&Value>> = HashMap::new();
     for record in roster {
-        let number = record.get("issue_number").and_then(Value::as_str).unwrap_or("");
-        by_number.entry(normalize_issue_number(number)).or_default().push(record);
+        let number = record
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        by_number
+            .entry(normalize_issue_number(number))
+            .or_default()
+            .push(record);
     }
     for row in rows {
         if row.get("thread_id").and_then(Value::as_i64).is_none() {
@@ -1164,9 +1268,15 @@ fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
         if !matches!(class, Some("safe_exact_match" | "already_confirmed")) {
             continue;
         }
-        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let already_confirmed = class == Some("already_confirmed");
+        let number = row
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let normalized = normalize_issue_number(number);
-        let Some(matches) = by_number.get(&normalized) else { continue };
+        let Some(matches) = by_number.get(&normalized) else {
+            continue;
+        };
         if matches.len() != 1
             || matches[0].get("external_id").and_then(Value::as_str)
                 != row.get("external_id").and_then(Value::as_str)
@@ -1176,16 +1286,24 @@ fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
         let raw = matches[0].get("_provider_metadata");
         let old_title = row.get("title").cloned().unwrap_or(Value::Null);
         let title = if old_title.is_null() {
-            raw.and_then(|v| v.get("name")).cloned().unwrap_or(Value::Null)
+            raw.and_then(|v| v.get("name"))
+                .cloned()
+                .unwrap_or(Value::Null)
         } else {
             old_title
         };
-        let metadata = row.get("_identity_metadata").cloned().unwrap_or(Value::Null);
-        let volume_name = metadata.get("volume").and_then(|v| v.get("name"))
+        let metadata = row
+            .get("_identity_metadata")
+            .cloned()
+            .unwrap_or(Value::Null);
+        let volume_name = metadata
+            .get("volume")
+            .and_then(|v| v.get("name"))
             .or_else(|| metadata.get("volume_name"))
             .and_then(Value::as_str)
             .filter(|v| !v.is_empty());
-        let incomplete = metadata.get("issue_number")
+        let incomplete = metadata
+            .get("issue_number")
             .is_none_or(|v| v.is_null() || v.as_str().is_some_and(str::is_empty))
             || volume_name.is_none();
         if let Some(obj) = row.as_object_mut() {
@@ -1194,9 +1312,15 @@ fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
             if let Some(raw) = raw {
                 obj.insert("_provider_metadata".to_owned(), raw.clone());
             }
-            if class == Some("already_confirmed") && incomplete {
-                obj.insert("metadata_refresh_required".to_owned(), serde_json::json!(raw.is_some()));
-                obj.insert("default_selected".to_owned(), serde_json::json!(raw.is_some()));
+            if already_confirmed && incomplete {
+                obj.insert(
+                    "metadata_refresh_required".to_owned(),
+                    serde_json::json!(raw.is_some()),
+                );
+                obj.insert(
+                    "default_selected".to_owned(),
+                    serde_json::json!(raw.is_some()),
+                );
             }
         }
     }
@@ -1238,19 +1362,31 @@ async fn build_queue_bootstrap_plan_db(
     _series_info: Option<Value>,
 ) -> Result<Value, ApiError> {
     let Some(thread_id) = origin_thread_id else {
-        return Ok(unavailable_plan(origin_issue_id, "origin_issue_without_thread", "queue_thread_bootstrap"));
+        return Ok(unavailable_plan(
+            origin_issue_id,
+            "origin_issue_without_thread",
+            "queue_thread_bootstrap",
+        ));
     };
     // The Queue preview relies on an actual, complete provider roster to
     // prove cardinality. Do not replace that evidence with local guesses.
-    let (series_info, roster) = crate::comicvine_repair::catalog_volume_roster(
-        provider_series_external_id,
-    ).await?;
+    let (series_info, roster) =
+        crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await?;
     if roster.is_empty() {
-        return Ok(unavailable_plan(origin_issue_id, "provider_roster_unavailable", "queue_thread_bootstrap"));
+        return Ok(unavailable_plan(
+            origin_issue_id,
+            "provider_roster_unavailable",
+            "queue_thread_bootstrap",
+        ));
     }
-    let thread_title: String = origin.try_get::<_, Option<String>>(4)
-        .map_err(db::query_error)?.unwrap_or_default();
-    let volume_title = series_info.get("name").and_then(Value::as_str).unwrap_or("");
+    let thread_title: String = origin
+        .try_get::<_, Option<String>>(4)
+        .map_err(db::query_error)?
+        .unwrap_or_default();
+    let volume_title = series_info
+        .get("name")
+        .and_then(Value::as_str)
+        .unwrap_or("");
     if !volume_identity_matches(&thread_title, volume_title) {
         return Ok(unavailable_plan(
             origin_issue_id,
@@ -1258,8 +1394,9 @@ async fn build_queue_bootstrap_plan_db(
             "queue_thread_bootstrap",
         ));
     }
-    let db_rows = conn.query(
-        "SELECT i.id, i.issue_number, i.thread_id, t.title, m.status,
+    let db_rows = conn
+        .query(
+            "SELECT i.id, i.issue_number, i.thread_id, t.title, m.status,
                 e.provider, e.external_id, m.confidence, e.metadata_json::text
          FROM issues i
          JOIN threads t ON t.id = i.thread_id AND t.user_id = $2
@@ -1267,32 +1404,45 @@ async fn build_queue_bootstrap_plan_db(
          LEFT JOIN external_identities e ON e.id = m.external_identity_id
          WHERE i.thread_id = $1
          ORDER BY i.position, i.id",
-        &[&thread_id, &user_id],
-    ).await.map_err(db::query_error)?;
-    let local: Vec<Value> = db_rows.iter().map(|r| {
-        let meta_string: Option<String> = r.get(8);
-        let meta: Value = meta_string.as_deref()
-            .and_then(|raw| serde_json::from_str(raw).ok())
-            .unwrap_or(Value::Null);
-        serde_json::json!({
-            "issue_id": r.get::<_, i32>(0),
-            "issue_number": r.get::<_, Option<String>>(1),
-            "title": meta.get("name"),
-            "thread_id": r.get::<_, Option<i32>>(2),
-            "thread_title": r.get::<_, Option<String>>(3),
-            "current_mapping_status": r.get::<_, Option<String>>(4),
-            "provider": r.get::<_, Option<String>>(5),
-            "external_id": r.get::<_, Option<String>>(6),
-            "confidence": r.get::<_, Option<f64>>(7),
-            "_identity_metadata": meta,
+            &[&thread_id, &user_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let local: Vec<Value> = db_rows
+        .iter()
+        .map(|r| {
+            let meta_string: Option<String> = r.get(8);
+            let meta: Value = meta_string
+                .as_deref()
+                .and_then(|raw| serde_json::from_str(raw).ok())
+                .unwrap_or(Value::Null);
+            serde_json::json!({
+                "issue_id": r.get::<_, i32>(0),
+                "issue_number": r.get::<_, Option<String>>(1),
+                "title": meta.get("name"),
+                "thread_id": r.get::<_, Option<i32>>(2),
+                "thread_title": r.get::<_, Option<String>>(3),
+                "current_mapping_status": r.get::<_, Option<String>>(4),
+                "provider": r.get::<_, Option<String>>(5),
+                "external_id": r.get::<_, Option<String>>(6),
+                "confidence": r.get::<_, Option<f64>>(7),
+                "_identity_metadata": meta,
+            })
         })
-    }).collect();
+        .collect();
     if local.is_empty() {
-        return Ok(unavailable_plan(origin_issue_id, "thread_has_no_issues", "queue_thread_bootstrap"));
+        return Ok(unavailable_plan(
+            origin_issue_id,
+            "thread_has_no_issues",
+            "queue_thread_bootstrap",
+        ));
     }
     let mut counts = empty_counts();
     let mut classified = classify_queue_bootstrap_rows(
-        &dedupe_rows_by_issue(&local), &roster, provider, &mut counts,
+        &dedupe_rows_by_issue(&local),
+        &roster,
+        provider,
+        &mut counts,
     );
     attach_verified_roster_metadata(&mut classified, &roster);
     let scope_key = derive_scope_key(&classified, origin_issue_id);
@@ -1301,18 +1451,32 @@ async fn build_queue_bootstrap_plan_db(
     } else {
         "queue_thread_bootstrap_no_exact_match"
     };
-    let status = if scope_key.is_some() { "available" } else { "unavailable" };
+    let status = if scope_key.is_some() {
+        "available"
+    } else {
+        "unavailable"
+    };
     if scope_key.is_none() {
         counts = empty_counts();
         classified.clear();
     }
-    let issue_numbers: Vec<String> = classified.iter()
-        .filter_map(|r| r.get("issue_number").and_then(Value::as_str).map(str::to_owned))
+    let issue_numbers: Vec<String> = classified
+        .iter()
+        .filter_map(|r| {
+            r.get("issue_number")
+                .and_then(Value::as_str)
+                .map(str::to_owned)
+        })
         .filter(|s| !s.is_empty())
         .collect();
     let digest = plan_state_digest(
-        provider, provider_series_external_id, origin_issue_id,
-        scope_key.as_deref(), basis, &classified, "queue_thread_bootstrap",
+        provider,
+        provider_series_external_id,
+        origin_issue_id,
+        scope_key.as_deref(),
+        basis,
+        &classified,
+        "queue_thread_bootstrap",
     );
     Ok(serde_json::json!({
         "scope": {
@@ -1335,12 +1499,23 @@ fn normalize_volume_title(value: &str) -> (String, Option<String>) {
     // Python treats suffixes like "(1940)" and "(2011-2016)" as edition
     // evidence, preserving explicit disagreements between launch years.
     let suffix = regex::Regex::new(r"\s*\((\d{4})(?:-\d{4})?\)\s*$").ok();
-    let launch = suffix.as_ref()
+    let launch = suffix
+        .as_ref()
         .and_then(|regex| regex.captures(value))
         .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()));
-    let stripped = suffix.as_ref().map(|r| r.replace(value, ""))
-        .map(|text| text.to_string()).unwrap_or_else(|| value.to_string());
-    (stripped.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" "), launch)
+    let stripped = suffix
+        .as_ref()
+        .map(|r| r.replace(value, ""))
+        .map(|text| text.to_string())
+        .unwrap_or_else(|| value.to_string());
+    (
+        stripped
+            .to_lowercase()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
+        launch,
+    )
 }
 
 fn volume_identity_matches(thread_title: &str, volume_title: &str) -> bool {
@@ -1360,7 +1535,10 @@ fn classify_queue_bootstrap_rows(
 ) -> Vec<Value> {
     let mut by_number: HashMap<String, Vec<&Value>> = HashMap::new();
     for item in roster {
-        let number = item.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = item
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let normalized = normalize_issue_number(number);
         if !normalized.is_empty() {
             by_number.entry(normalized).or_default().push(item);
@@ -1368,7 +1546,10 @@ fn classify_queue_bootstrap_rows(
     }
     let mut local_number_counts: HashMap<String, usize> = HashMap::new();
     for item in local_rows {
-        let number = item.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = item
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if is_special_issue(number) || is_ambiguous_issue(number) {
             continue;
         }
@@ -1377,16 +1558,26 @@ fn classify_queue_bootstrap_rows(
             *local_number_counts.entry(normalized).or_default() += 1;
         }
     }
-    let confirmed_external_ids: HashSet<String> = local_rows.iter().filter_map(|row| {
-        if row.get("current_mapping_status").and_then(Value::as_str) == Some("confirmed") {
-            row.get("external_id").and_then(Value::as_str).map(str::to_owned)
-        } else { None }
-    }).collect();
+    let confirmed_external_ids: HashSet<String> = local_rows
+        .iter()
+        .filter_map(|row| {
+            if row.get("current_mapping_status").and_then(Value::as_str) == Some("confirmed") {
+                row.get("external_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            } else {
+                None
+            }
+        })
+        .collect();
     let mut consumed_ids: HashSet<String> = HashSet::new();
     let mut out = Vec::new();
     for info in local_rows {
         let mut row = info.clone();
-        let number = row.get("issue_number").and_then(Value::as_str).unwrap_or("");
+        let number = row
+            .get("issue_number")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         let normalized = normalize_issue_number(number);
         let matches = by_number.get(&normalized);
         let match_count = matches.map_or(0, Vec::len);
@@ -1403,8 +1594,10 @@ fn classify_queue_bootstrap_rows(
                 "unresolved"
             } else if match_count > 1 {
                 "needs_review_ambiguous"
-            } else if matches.and_then(|v| v.first())
-                .and_then(|r| r.get("external_id")).and_then(Value::as_str)
+            } else if matches
+                .and_then(|v| v.first())
+                .and_then(|r| r.get("external_id"))
+                .and_then(Value::as_str)
                 != row.get("external_id").and_then(Value::as_str)
             {
                 "needs_review_conflict"
@@ -1422,11 +1615,23 @@ fn classify_queue_bootstrap_rows(
                 }
                 if let Some(object) = row.as_object_mut() {
                     object.insert("provider".to_owned(), serde_json::json!(provider));
-                    object.insert("external_id".to_owned(), match_row.get("external_id").cloned().unwrap_or(Value::Null));
+                    object.insert(
+                        "external_id".to_owned(),
+                        match_row.get("external_id").cloned().unwrap_or(Value::Null),
+                    );
                     let old_title = object.get("title").cloned().unwrap_or(Value::Null);
-                    object.insert("title".to_owned(),
-                        match_row.get("title").filter(|t| !t.is_null()).cloned().unwrap_or(old_title));
-                    object.insert("confidence".to_owned(), match_row.get("confidence").cloned().unwrap_or(Value::Null));
+                    object.insert(
+                        "title".to_owned(),
+                        match_row
+                            .get("title")
+                            .filter(|t| !t.is_null())
+                            .cloned()
+                            .unwrap_or(old_title),
+                    );
+                    object.insert(
+                        "confidence".to_owned(),
+                        match_row.get("confidence").cloned().unwrap_or(Value::Null),
+                    );
                 }
             }
             "safe_exact_match"
@@ -1440,19 +1645,38 @@ fn classify_queue_bootstrap_rows(
         if let Some(c) = counts.get(classification).and_then(Value::as_i64) {
             counts[classification] = serde_json::json!(c + 1);
         }
-        let id = row.get("issue_id").and_then(Value::as_i64).unwrap_or_default();
+        let id = row
+            .get("issue_id")
+            .and_then(Value::as_i64)
+            .unwrap_or_default();
         if let Some(obj) = row.as_object_mut() {
-            obj.insert("row_id".to_owned(), serde_json::json!(format!("issue:{id}")));
-            obj.insert("classification".to_owned(), serde_json::json!(classification));
-            obj.insert("proposed_mapping".to_owned(), serde_json::json!(
-                matches!(classification, "safe_exact_match" | "already_confirmed")
-            ));
-            obj.insert("default_selected".to_owned(), serde_json::json!(classification == "safe_exact_match"));
+            obj.insert(
+                "row_id".to_owned(),
+                serde_json::json!(format!("issue:{id}")),
+            );
+            obj.insert(
+                "classification".to_owned(),
+                serde_json::json!(classification),
+            );
+            obj.insert(
+                "proposed_mapping".to_owned(),
+                serde_json::json!(matches!(
+                    classification,
+                    "safe_exact_match" | "already_confirmed"
+                )),
+            );
+            obj.insert(
+                "default_selected".to_owned(),
+                serde_json::json!(classification == "safe_exact_match"),
+            );
         }
         out.push(row);
     }
     for item in roster {
-        let eid = item.get("external_id").and_then(Value::as_str).unwrap_or("");
+        let eid = item
+            .get("external_id")
+            .and_then(Value::as_str)
+            .unwrap_or("");
         if consumed_ids.contains(eid) || confirmed_external_ids.contains(eid) {
             continue;
         }
@@ -1460,10 +1684,16 @@ fn classify_queue_bootstrap_rows(
         if let Some(c) = counts.get("unresolved").and_then(Value::as_i64) {
             counts["unresolved"] = serde_json::json!(c + 1);
         }
-        let id = row.get("issue_id").and_then(Value::as_i64).unwrap_or_default();
+        let id = row
+            .get("issue_id")
+            .and_then(Value::as_i64)
+            .unwrap_or_default();
         if let Some(obj) = row.as_object_mut() {
             obj.insert("_roster_only".to_owned(), serde_json::json!(true));
-            obj.insert("row_id".to_owned(), serde_json::json!(format!("roster:{id}")));
+            obj.insert(
+                "row_id".to_owned(),
+                serde_json::json!(format!("roster:{id}")),
+            );
             obj.insert("classification".to_owned(), serde_json::json!("unresolved"));
             obj.insert("proposed_mapping".to_owned(), serde_json::json!(false));
             obj.insert("default_selected".to_owned(), serde_json::json!(false));
@@ -1511,6 +1741,41 @@ async fn persist_commit_or_replay(
     }
 }
 
+fn fill_missing_metadata(existing: Option<&Value>, incoming: Option<&Value>) -> Value {
+    let Some(incoming) = incoming.and_then(Value::as_object) else {
+        return existing.cloned().unwrap_or_else(|| serde_json::json!({}));
+    };
+    let mut merged = incoming.clone();
+    if let Some(previous) = existing.and_then(Value::as_object) {
+        for (key, value) in previous {
+            if !value.is_null() && value != "" {
+                merged.insert(key.clone(), value.clone());
+            }
+        }
+        for key in ["volume", "publisher", "image"] {
+            if let (Some(Value::Object(old)), Some(Value::Object(new))) =
+                (previous.get(key), incoming.get(key))
+            {
+                if old.get("id").is_some_and(|id| !id.is_null())
+                    && new.get("id").is_some_and(|id| !id.is_null())
+                    && old.get("id") != new.get("id")
+                {
+                    merged.insert(key.to_owned(), Value::Object(new.clone()));
+                } else {
+                    let mut reference = new.clone();
+                    for (field, value) in old {
+                        if !value.is_null() && value != "" {
+                            reference.insert(field.clone(), value.clone());
+                        }
+                    }
+                    merged.insert(key.to_owned(), Value::Object(reference));
+                }
+            }
+        }
+    }
+    Value::Object(merged)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn persist_commit_series_mapping_handler(
     conn: &mut deadpool_postgres::Object,
@@ -1526,6 +1791,32 @@ async fn persist_commit_series_mapping_handler(
     let tx = conn.transaction().await.map_err(db::query_error)?;
     let mut confirmed_issue_ids: Vec<i32> = Vec::new();
     let mut thread_ids: Vec<i32> = Vec::new();
+    let mut providers = vec![provider.to_owned()];
+    let mut external_ids = vec![series_external_id.to_owned()];
+    for row in approved_rows {
+        if let Some(value) = row.get("provider").and_then(Value::as_str) {
+            providers.push(value.to_owned());
+        }
+        if let Some(value) = row.get("external_id").and_then(Value::as_str) {
+            external_ids.push(value.to_owned());
+        }
+    }
+    providers.sort();
+    providers.dedup();
+    external_ids.sort();
+    external_ids.dedup();
+    let existing = tx
+        .query(
+            "SELECT provider, entity_type, external_id, metadata_json FROM external_identities
+         WHERE provider = ANY($1) AND external_id = ANY($2)",
+            &[&providers, &external_ids],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let existing_metadata: HashMap<(String, String, String), Value> = existing
+        .into_iter()
+        .map(|row| ((row.get(0), row.get(1), row.get(2)), row.get(3)))
+        .collect();
 
     for row in approved_rows {
         let Some(issue_id) = row
@@ -1543,14 +1834,21 @@ async fn persist_commit_series_mapping_handler(
             .get("external_id")
             .and_then(|v| v.as_str())
             .unwrap_or("");
+        let previous = existing_metadata.get(&(
+            row_provider.to_owned(),
+            "issue".to_owned(),
+            row_eid.to_owned(),
+        ));
+        let issue_meta_json = fill_missing_metadata(previous, row.get("_provider_metadata"));
         // upsert external identity
         let identity = tx
             .query_one(
                 "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
-                 VALUES ($1, 'issue', $2, '{}'::jsonb, NOW(), NOW())
-                 ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET updated_at = NOW()
+                 VALUES ($1, 'issue', $2, $3, NOW(), NOW())
+                 ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET
+                   metadata_json = EXCLUDED.metadata_json, updated_at = NOW()
                  RETURNING id",
-                &[&row_provider, &row_eid],
+                &[&row_provider, &row_eid, &issue_meta_json],
             )
             .await
             .map_err(db::query_error)?;
@@ -1577,12 +1875,20 @@ async fn persist_commit_series_mapping_handler(
     }
 
     // series identity + thread links
-    let series_meta_json = series_metadata.cloned().unwrap_or(Value::Null);
+    let series_meta_json = fill_missing_metadata(
+        existing_metadata.get(&(
+            provider.to_owned(),
+            "series".to_owned(),
+            series_external_id.to_owned(),
+        )),
+        series_metadata,
+    );
     let series_identity = tx
         .query_one(
             "INSERT INTO external_identities (provider, entity_type, external_id, metadata_json, created_at, updated_at)
              VALUES ($1, 'series', $2, $3, NOW(), NOW())
-             ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET updated_at = NOW()
+             ON CONFLICT (provider, entity_type, external_id) DO UPDATE SET
+               metadata_json = EXCLUDED.metadata_json, updated_at = NOW()
              RETURNING id",
             &[&provider, &series_external_id, &series_meta_json],
         )
@@ -1686,7 +1992,10 @@ mod tests {
     #[test]
     fn queue_bootstrap_requires_volume_identity_and_unique_roster_numbers() {
         assert!(volume_identity_matches("Batman", "Batman (1940)"));
-        assert!(volume_identity_matches("Batman (2011-2016)", "Batman (2011)"));
+        assert!(volume_identity_matches(
+            "Batman (2011-2016)",
+            "Batman (2011)"
+        ));
         assert!(!volume_identity_matches("Batman (2011)", "Batman (1940)"));
         assert!(!volume_identity_matches("Green Lantern", "Batman (1940)"));
         assert!(!volume_identity_matches("", "Batman"));
@@ -1759,7 +2068,7 @@ mod tests {
         let mut connection = state.pool.get().await.expect("database connection");
         connection
             .batch_execute(
-                "INSERT INTO users (id, username, created_at, is_admin)
+                r#"INSERT INTO users (id, username, created_at, is_admin)
                  VALUES (1, 'catalog-commit-test', now(), false);
                  INSERT INTO threads
                      (id, user_id, title, format, issues_remaining, queue_position, status,
@@ -1769,7 +2078,12 @@ mod tests {
                          '[]', false);
                  INSERT INTO issues
                      (id, thread_id, issue_number, status, created_at, position)
-                 VALUES (100, 10, '1', 'unread', now(), 1);",
+                 VALUES (100, 10, '1', 'unread', now(), 1);
+                 INSERT INTO external_identities
+                     (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES ('comicvine', 'series', 'series-10',
+                         '{"name":"Trusted Series","publisher":{"id":9,"name":""}}'::jsonb,
+                         now(), now());"#,
             )
             .await
             .expect("seed catalog commit schema");
@@ -1780,7 +2094,9 @@ mod tests {
             "provider": "comicvine",
             "external_id": "issue-100",
             "classification": "safe_exact_match",
-            "row_id": "issue:100"
+            "row_id": "issue:100",
+            "_provider_metadata": {"name":"Issue One","issue_number":"1",
+                "volume":{"id":10,"name":"Test Series"}}
         })];
         let response = persist_commit_series_mapping_handler(
             &mut connection,
@@ -1791,7 +2107,8 @@ mod tests {
             "catalog-commit-test-key",
             "catalog-commit-test-fingerprint",
             &approved_rows,
-            Some(&serde_json::json!({"name": "Test Series"})),
+            Some(&serde_json::json!({"name": "Test Series",
+                "publisher":{"id":9,"name":"Publisher"}})),
         )
         .await
         .expect("persist catalog commit");
@@ -1810,6 +2127,28 @@ mod tests {
         assert_eq!(mapping.get::<_, String>(0), "comicvine");
         assert_eq!(mapping.get::<_, String>(1), "issue-100");
         assert_eq!(mapping.get::<_, String>(2), "confirmed");
+        let issue_metadata: Value = connection
+            .query_one(
+                "SELECT metadata_json FROM external_identities
+             WHERE entity_type = 'issue' AND external_id = 'issue-100'",
+                &[],
+            )
+            .await
+            .expect("issue identity metadata")
+            .get(0);
+        assert_eq!(issue_metadata["name"], "Issue One");
+        assert_eq!(issue_metadata["volume"]["name"], "Test Series");
+        let series_metadata: Value = connection
+            .query_one(
+                "SELECT metadata_json FROM external_identities
+             WHERE entity_type = 'series' AND external_id = 'series-10'",
+                &[],
+            )
+            .await
+            .expect("series identity metadata")
+            .get(0);
+        assert_eq!(series_metadata["name"], "Trusted Series");
+        assert_eq!(series_metadata["publisher"]["name"], "Publisher");
 
         let receipt = connection
             .query_one(
@@ -1882,6 +2221,24 @@ mod tests {
     fn canonical_json_matches_python_sort_keys_default_separators() {
         let v = serde_json::json!({"b": 1, "a": 2});
         assert_eq!(canonical_json(&v), r#"{"a": 2, "b": 1}"#);
+        let unicode = serde_json::json!({"issue_numbers": ["Été", "🦇"]});
+        assert_eq!(
+            canonical_json(&unicode),
+            r#"{"issue_numbers": ["\u00c9t\u00e9", "\ud83e\udd87"]}"#
+        );
+    }
+
+    #[test]
+    fn metadata_merge_preserves_populated_and_fills_nested_references() {
+        let old = serde_json::json!({"name":"Trusted","volume":{"id":10,"name":""},
+            "credits":["deep"]});
+        let new = serde_json::json!({"name":"New","issue_number":"1",
+            "volume":{"id":10,"name":"Volume"}, "credits":["shallow"]});
+        let merged = fill_missing_metadata(Some(&old), Some(&new));
+        assert_eq!(merged["name"], "Trusted");
+        assert_eq!(merged["issue_number"], "1");
+        assert_eq!(merged["volume"]["name"], "Volume");
+        assert_eq!(merged["credits"], serde_json::json!(["deep"]));
     }
 
     #[test]
@@ -1894,8 +2251,14 @@ mod tests {
 
     #[test]
     fn catalog_inline_hydration_budget_matches_request_deadline() {
-        assert_eq!(inline_hydration_budget(Duration::ZERO), Duration::from_secs(3));
-        assert_eq!(inline_hydration_budget(Duration::from_secs(7)), Duration::from_millis(1500));
+        assert_eq!(
+            inline_hydration_budget(Duration::ZERO),
+            Duration::from_secs(3)
+        );
+        assert_eq!(
+            inline_hydration_budget(Duration::from_secs(7)),
+            Duration::from_millis(1500)
+        );
         assert!(inline_hydration_budget(Duration::from_secs(9)).is_zero());
     }
 
