@@ -12,6 +12,7 @@ pub mod config;
 pub mod continuity_rules;
 pub mod creators;
 pub mod db;
+pub mod demo;
 pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
@@ -479,6 +480,7 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_repair::drain),
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
+        .route("/api/v2/demo-roll", get(demo::read_demo_roll))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
         .route(
             "/api/v2/roll/eligible-issue-ids",

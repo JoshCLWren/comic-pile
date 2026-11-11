@@ -5041,6 +5041,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/demo-roll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Generated contract for the public guest sample. */
+        get: operations["read_demo_roll_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/dependencies/": {
         parameters: {
             query?: never;
@@ -9687,6 +9704,35 @@ export interface components {
             mode?: ("strict" | "loose") | null;
             /** Name */
             name: string;
+        };
+        /** @description The product-owned deterministic guest Roll fixture. */
+        DemoRoll: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
         };
         /**
          * DependencyCreate
@@ -21765,6 +21811,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    read_demo_roll_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deterministic sample Roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoRoll"];
+                };
             };
         };
     };

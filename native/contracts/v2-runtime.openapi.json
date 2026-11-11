@@ -1340,6 +1340,27 @@
         ]
       }
     },
+    "/api/v2/demo-roll": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Generated contract for the public guest sample.",
+        "operationId": "read_demo_roll_documentation",
+        "responses": {
+          "200": {
+            "description": "Deterministic sample Roll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoRoll"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/dependencies/": {
       "post": {
         "tags": [
@@ -3828,6 +3849,102 @@
         "properties": {
           "csrf_token": {
             "type": "string"
+          }
+        }
+      },
+      "DemoRoll": {
+        "type": "object",
+        "description": "The product-owned deterministic guest Roll fixture.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "properties": {
+          "die_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
           }
         }
       },

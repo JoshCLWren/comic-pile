@@ -9,7 +9,7 @@ use axum::{
     Json, Router,
 };
 use comicpile_roll_service::{
-    auth::BackgroundTasks, config::Config, router as roll_router, AppState,
+    auth::BackgroundTasks, config::Config, demo, router as roll_router, AppState,
 };
 use std::{
     future::Future,
@@ -42,6 +42,16 @@ async fn native_health() -> Response {
     response
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
+}
+
+/// Serve the guest fixture without constructing database or auth state.
+async fn native_demo() -> Response {
+    let mut response = demo::read_demo_roll().await.into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    eprintln!("native_roll route=/api/v2/demo-roll runtime=rust status=200");
     response
 }
 
@@ -232,6 +242,7 @@ fn app() -> Router {
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/roll/die-state", get(native_dispatch))
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
+        .route("/api/v2/demo-roll", get(native_demo))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
@@ -424,6 +435,31 @@ mod tests {
     use vercel_runtime::{AppState as VercelState, LogContext};
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
+
+    #[tokio::test]
+    async fn guest_demo_ingress_needs_no_auth_or_database_state() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .uri("/api/v2/demo-roll")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("guest demo response");
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
+        let body: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(body["title"], "Sample: The Dark Knight Returns (Demo)");
+        assert_eq!(body["result"], 4);
+        assert!(body.get("user_id").is_none());
+    }
 
     #[tokio::test]
     async fn v1_issue_read_ingress_preserves_same_path_and_requires_auth() {

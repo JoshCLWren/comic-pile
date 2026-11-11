@@ -307,6 +307,8 @@ export interface ReadRequest {
 
 export type ReadResponse = components['schemas']['PlanReaderResponse']
 
+export type ReadDemoRollResponse = components['schemas']['DemoRoll']
+
 export interface ReadReadingListRequest {
   path: {
     list_id: number
@@ -478,6 +480,7 @@ export interface NativeV2Client {
   offer(args: OfferRequest): Promise<OfferResponse>
   preview(args: PreviewRequest): Promise<PreviewResponse>
   read(args: ReadRequest): Promise<ReadResponse>
+  readDemoRoll(): Promise<ReadDemoRollResponse>
   readReadingList(args: ReadReadingListRequest): Promise<ReadReadingListResponse>
   readingBoundaryBatch(args: ReadingBoundaryBatchRequest): Promise<ReadingBoundaryBatchResponse>
   readingGraph(): Promise<ReadingGraphResponse>
@@ -718,6 +721,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<ReadResponse>(
         `/v2/continuity-plans/${encodeURIComponent(String(args.path.plan_id))}/reader`,
       )
+    },
+    readDemoRoll() {
+      return client.get<ReadDemoRollResponse>("/v2/demo-roll")
     },
     readReadingList(args: ReadReadingListRequest) {
       return client.get<ReadReadingListResponse>(
