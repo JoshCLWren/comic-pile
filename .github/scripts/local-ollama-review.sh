@@ -141,8 +141,7 @@ if verdict == "APPROVE":
 log = (
     f"### Factory semantic review · Factory 77 · {verdict}\n"
     f"Exact head {head}.\n{reason}\n"
-    f"# comic-pile-factory-authoritative-diff-evidence\n"
-    f"gh pr diff {pr}\n"
+    f"# comic-pile-factory-authoritative-diff-evidence\ngh pr diff {pr}\n"
 )
 if verdict == "APPROVE":
     log += "FACTORY_ACCEPTANCE_V1=" + json.dumps(report, separators=(",", ":")) + "\n"
