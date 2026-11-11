@@ -437,7 +437,13 @@
       "path": "/api/v2/reading-lists",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "auth extractor 1 + list summary query 1; set-based"
+      }
     },
     {
       "runtime": "native-rust",
@@ -463,7 +469,13 @@
       "path": "/api/v2/reading-lists/{list_id}",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 4,
+        "transaction_control_statements": 2,
+        "total_statements": 6,
+        "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control); set-based"
+      }
     },
     {
       "runtime": "native-rust",
@@ -476,7 +488,13 @@
       "path": "/api/v2/reading-lists/{list_id}",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 0,
+        "total_statements": 3,
+        "basis": "auth extractor 1 + list load 1 + entries load 1; set-based"
+      }
     },
     {
       "runtime": "native-rust",
@@ -502,7 +520,13 @@
       "path": "/api/v2/reading-lists/{list_id}/reader",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 4,
+        "transaction_control_statements": 2,
+        "total_statements": 6,
+        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based"
+      }
     },
     {
       "method": "POST",

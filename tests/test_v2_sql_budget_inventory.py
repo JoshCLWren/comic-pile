@@ -41,6 +41,10 @@ _BUDGETED_OPERATIONS = frozenset(
         ("post", "/api/v2/auth/register"),
         ("post", "/api/v2/auth/reset-password"),
         ("post", "/api/v2/reading-boundaries"),
+        ("get", "/api/v2/reading-lists"),
+        ("get", "/api/v2/reading-lists/{list_id}"),
+        ("get", "/api/v2/reading-lists/{list_id}/reader"),
+        ("delete", "/api/v2/reading-lists/{list_id}"),
     }
 )
 
@@ -51,14 +55,10 @@ _KNOWN_BUDGET_GAPS = frozenset(
     {
         ("delete", "/api/v2/dependencies/{dependency_id}"),
         ("delete", "/api/v2/issues/{issue_id}"),
-        ("delete", "/api/v2/reading-lists/{list_id}"),
         ("get", "/api/v2/analytics/metrics"),
         ("get", "/api/v2/continuity-plans/{plan_id}/recovery"),
         ("get", "/api/v2/issues/{issue_id}/comicvine"),
         ("get", "/api/v2/queue-entries/{thread_id}"),
-        ("get", "/api/v2/reading-lists"),
-        ("get", "/api/v2/reading-lists/{list_id}"),
-        ("get", "/api/v2/reading-lists/{list_id}/reader"),
         ("get", "/api/v2/roll/bootstrap"),
         ("patch", "/api/v2/issues/{issue_id}"),
         ("patch", "/api/v2/queue-entries/{thread_id}"),
