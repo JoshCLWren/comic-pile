@@ -17,6 +17,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+use unicode_casefold::UnicodeCaseFold;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -1315,8 +1316,11 @@ fn attach_verified_roster_metadata(rows: &mut [Value], roster: &[Value]) {
         if let Some(obj) = row.as_object_mut() {
             obj.insert("_roster_verified".to_owned(), serde_json::json!(true));
             obj.insert("title".to_owned(), title);
-            if let Some(raw) = raw {
-                obj.insert("_provider_metadata".to_owned(), raw.clone());
+            if let Some(raw) = raw.filter(|value| value.is_object()) {
+                obj.insert(
+                    "_provider_metadata".to_owned(),
+                    crate::comicvine_repair::normalize_roster_issue_metadata(raw),
+                );
             }
             if already_confirmed && incomplete {
                 obj.insert(
@@ -1516,7 +1520,8 @@ fn normalize_volume_title(value: &str) -> (String, Option<String>) {
         .unwrap_or_else(|| value.to_string());
     (
         stripped
-            .to_lowercase()
+            .case_fold()
+            .collect::<String>()
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" "),
@@ -2042,6 +2047,7 @@ mod tests {
     #[test]
     fn queue_bootstrap_requires_volume_identity_and_unique_roster_numbers() {
         assert!(volume_identity_matches("Batman", "Batman (1940)"));
+        assert!(volume_identity_matches("STRASSE", "Straße"));
         assert!(volume_identity_matches(
             "Batman (2011-2016)",
             "Batman (2011)"
@@ -2140,16 +2146,23 @@ mod tests {
             .await
             .expect("seed catalog commit schema");
 
-        let approved_rows = vec![serde_json::json!({
+        let mut approved_rows = vec![serde_json::json!({
             "issue_id": 100,
+            "issue_number": "1",
             "thread_id": 10,
             "provider": "comicvine",
             "external_id": "issue-100",
             "classification": "safe_exact_match",
-            "row_id": "issue:100",
-            "_provider_metadata": {"name":"Issue One","issue_number":"1",
-                "volume":{"id":10,"name":"Test Series"}}
+            "row_id": "issue:100"
         })];
+        let roster = vec![serde_json::json!({
+            "issue_number":"1", "external_id":"issue-100",
+            "_provider_metadata": {"name":"Issue One","issue_number":"1",
+                "volume":{"id":10,"name":"Test Series","unused":"raw-only"},
+                "image":{"original_url":"https://comicvine.example/cover.jpg"},
+                "person_credits":[{"id":7,"name":"Writer","role":"writer"}]}
+        })];
+        attach_verified_roster_metadata(&mut approved_rows, &roster);
         let response = persist_commit_series_mapping_handler(
             &mut connection,
             1,
@@ -2190,6 +2203,16 @@ mod tests {
             .get(0);
         assert_eq!(issue_metadata["name"], "Issue One");
         assert_eq!(issue_metadata["volume"]["name"], "Test Series");
+        assert!(issue_metadata["volume"].get("unused").is_none());
+        assert_eq!(
+            issue_metadata["primary_image"],
+            "https://comicvine.example/cover.jpg"
+        );
+        assert_eq!(issue_metadata["creator_credits"][0]["role"], "writer");
+        assert_eq!(
+            issue_metadata["raw_provider_payload"]["volume"]["unused"],
+            "raw-only"
+        );
         let series_metadata: Value = connection
             .query_one(
                 "SELECT metadata_json FROM external_identities

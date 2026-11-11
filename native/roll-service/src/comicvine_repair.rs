@@ -160,6 +160,44 @@ fn compact_refs(value: &Value) -> Value {
     )
 }
 
+/// Normalize a roster row for catalog commit without claiming a deep refresh.
+pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
+    let volume = result
+        .get("volume")
+        .and_then(Value::as_object)
+        .map(|source| {
+            let mut compact = Map::new();
+            for field in ["id", "name", "api_detail_url", "site_detail_url"] {
+                if let Some(value) = source.get(field) {
+                    compact.insert(field.to_owned(), value.clone());
+                }
+            }
+            Value::Object(compact)
+        });
+    let primary_image = result
+        .get("image")
+        .and_then(Value::as_object)
+        .and_then(|image| {
+            ["original_url", "super_url", "medium_url", "small_url"]
+                .iter()
+                .filter_map(|key| image.get(*key).and_then(Value::as_str))
+                .find(|value| !value.is_empty())
+        });
+    json!({
+        "name": result.get("name"),
+        "issue_number": result.get("issue_number"),
+        "cover_date": result.get("cover_date"),
+        "store_date": result.get("store_date"),
+        "volume": volume,
+        "primary_image": primary_image,
+        "creator_credits": compact_refs(&result["person_credits"]),
+        "characters": compact_refs(&result["character_credits"]),
+        "teams": compact_refs(&result["team_credits"]),
+        "story_arcs": compact_refs(&result["story_arc_credits"]),
+        "raw_provider_payload": result,
+    })
+}
+
 fn normalized_metadata(
     result: &Value,
     expected_id: u32,
