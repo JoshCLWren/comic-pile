@@ -371,7 +371,14 @@
       "path": "/api/v2/issues/{issue_id}",
       "ingress_destination": "/api/native_issue.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 25,
+        "transaction_control_statements": 2,
+        "total_statements": 27,
+        "grows_with_data": true,
+        "basis": "approximate worst-case for persist (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot); refine via parity harness"
+      }
     },
     {
       "runtime": "native-rust",
@@ -422,7 +429,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 10,
+        "transaction_control_statements": 2,
+        "total_statements": 12,
+        "grows_with_data": false,
+        "basis": "approximate worst-case reposition (locks, rows, reseat, tracking, graph preflight); refine via parity harness"
+      }
     },
     {
       "method": "POST",
@@ -435,7 +449,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": true,
+        "basis": "approximate worst-case queue order creation; refine via parity harness"
+      }
     },
     {
       "method": "POST",
@@ -499,7 +520,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 6,
+        "transaction_control_statements": 2,
+        "total_statements": 8,
+        "grows_with_data": false,
+        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness"
+      }
     },
     {
       "runtime": "native-rust",
@@ -632,7 +660,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 20,
+        "transaction_control_statements": 2,
+        "total_statements": 22,
+        "grows_with_data": false,
+        "basis": "approximate worst-case session initialization; refine via parity harness"
+      }
     },
     {
       "method": "GET",
@@ -646,7 +681,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": false,
+        "basis": "auth + session bootstrap + option inputs + die + snoozes; refine via parity harness"
+      }
     },
     {
       "method": "POST",
@@ -659,7 +701,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 12,
+        "transaction_control_statements": 2,
+        "total_statements": 14,
+        "grows_with_data": false,
+        "basis": "approximate worst-case standalone dice mutation; refine via parity harness"
+      }
     },
     {
       "method": "GET",
@@ -712,7 +761,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 15,
+        "transaction_control_statements": 2,
+        "total_statements": 17,
+        "grows_with_data": true,
+        "basis": "approximate worst-case offer transaction; refine via parity harness"
+      }
     },
     {
       "method": "POST",
@@ -725,7 +781,14 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 10,
+        "transaction_control_statements": 2,
+        "total_statements": 12,
+        "grows_with_data": false,
+        "basis": "approximate worst-case reset transaction; refine via parity harness"
+      }
     },
     {
       "runtime": "native-rust",

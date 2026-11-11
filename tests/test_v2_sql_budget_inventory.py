@@ -26,58 +26,54 @@ OPENAPI = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 
 _BUDGETED_OPERATIONS = frozenset(
     {
-        ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
-        ("post", "/api/v2/threads/{thread_id}/issues"),
-        ("put", "/api/v2/threads/{thread_id}/issue-order"),
-        ("get", "/api/v2/queue-entries/{thread_id}"),
-        ("post", "/api/v2/reading-lists"),
-        ("put", "/api/v2/reading-lists/{list_id}"),
-        ("delete", "/api/v2/issues/{issue_id}"),
-        ("get", "/api/v2/issues/{issue_id}/comicvine"),
-        ("post", "/api/v2/issues/cards"),
-        ("post", "/api/v2/dependencies/"),
         ("delete", "/api/v2/dependencies/{dependency_id}"),
-        ("get", "/api/v2/demo-roll"),
-        ("get", "/api/v2/roll/die-state"),
-        ("get", "/api/v2/roll/eligible-issue-ids"),
-        ("get", "/api/v2/reading-graph"),
+        ("delete", "/api/v2/issues/{issue_id}"),
+        ("delete", "/api/v2/reading-lists/{list_id}"),
         ("get", "/api/v2/analytics/metrics"),
-        ("get", "/api/v2/continuity-plans/{plan_id}/recovery"),
-        ("post", "/api/v2/continuity-plans/{plan_id}/recovery"),
-        ("get", "/api/v2/threads"),
-        ("post", "/api/v2/auth/login"),
         ("get", "/api/v2/auth/csrf"),
         ("get", "/api/v2/auth/me"),
+        ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
+        ("get", "/api/v2/continuity-plans/{plan_id}/recovery"),
+        ("get", "/api/v2/demo-roll"),
+        ("get", "/api/v2/issues/{issue_id}/comicvine"),
+        ("get", "/api/v2/queue-entries/{thread_id}"),
+        ("get", "/api/v2/reading-graph"),
+        ("get", "/api/v2/reading-lists"),
+        ("get", "/api/v2/reading-lists/{list_id}"),
+        ("get", "/api/v2/reading-lists/{list_id}/reader"),
+        ("get", "/api/v2/roll/bootstrap"),
+        ("get", "/api/v2/roll/die-state"),
+        ("get", "/api/v2/roll/eligible-issue-ids"),
+        ("get", "/api/v2/threads"),
+        ("patch", "/api/v2/issues/{issue_id}"),
+        ("patch", "/api/v2/queue-entries/{thread_id}"),
         ("post", "/api/v2/auth/forgot-password"),
+        ("post", "/api/v2/auth/login"),
         ("post", "/api/v2/auth/logout"),
         ("post", "/api/v2/auth/refresh"),
         ("post", "/api/v2/auth/register"),
         ("post", "/api/v2/auth/reset-password"),
+        ("post", "/api/v2/continuity-plans/{plan_id}/recovery"),
+        ("post", "/api/v2/dependencies/"),
+        ("post", "/api/v2/issues/cards"),
+        ("post", "/api/v2/queue-orders"),
         ("post", "/api/v2/reading-boundaries"),
-        ("get", "/api/v2/reading-lists"),
-        ("get", "/api/v2/reading-lists/{list_id}"),
-        ("get", "/api/v2/reading-lists/{list_id}/reader"),
-        ("delete", "/api/v2/reading-lists/{list_id}"),
+        ("post", "/api/v2/reading-graph/repairs"),
+        ("post", "/api/v2/reading-lists"),
+        ("post", "/api/v2/reading-sessions"),
+        ("post", "/api/v2/roll/dice-command"),
+        ("post", "/api/v2/roll/offer"),
+        ("post", "/api/v2/roll/reset"),
+        ("post", "/api/v2/threads/{thread_id}/issues"),
+        ("put", "/api/v2/reading-lists/{list_id}"),
+        ("put", "/api/v2/threads/{thread_id}/issue-order"),
     }
 )
 
 # Native operations without a recorded sql_budget. Shrink this set as each
 # operation gains a budget (or records a non-DB exemption); never grow it
 # silently — a new native operation must arrive with its budget.
-_KNOWN_BUDGET_GAPS = frozenset(
-    {
-        ("get", "/api/v2/roll/bootstrap"),
-        ("patch", "/api/v2/issues/{issue_id}"),
-        ("patch", "/api/v2/queue-entries/{thread_id}"),
-        ("post", "/api/v2/queue-orders"),
-        ("post", "/api/v2/reading-graph/repairs"),
-        ("post", "/api/v2/reading-sessions"),
-        ("post", "/api/v2/roll/dice-command"),
-        ("post", "/api/v2/roll/offer"),
-        ("post", "/api/v2/roll/reset"),
-    }
-)
-
+_KNOWN_BUDGET_GAPS = frozenset()
 
 def _inventory_operations() -> list[dict[str, object]]:
     """Load and validate the inventory operations."""
