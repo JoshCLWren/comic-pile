@@ -770,6 +770,72 @@ async fn build_plan_db(
                 "_identity_metadata": identity_meta,
             }));
         }
+
+        // Generic sibling previews are legal only after the anchor carries
+        // confirmed provider evidence or its thread has a confirmed link to
+        // this exact volume. Mere thread membership proves nothing.
+        let origin_confirmed = origin_mapping_status.as_deref() == Some("confirmed")
+            && origin_mapping_provider.as_deref() == Some(provider);
+        let linked_thread = if let Some(thread_id) = origin_thread_id {
+            conn.query_one(
+                "SELECT EXISTS (
+                   SELECT 1 FROM thread_external_series_mappings
+                   WHERE thread_id = $1 AND external_identity_id = $2
+                     AND status = 'confirmed'
+                 )",
+                &[&thread_id, &sr.get::<_, i32>(0)],
+            ).await.map_err(db::query_error)?.get::<_, bool>(0)
+        } else { false };
+        if origin_confirmed || linked_thread {
+            // This lookup is best-effort only for locally confirmed series:
+            // Python falls back to local rows on provider 503.
+            if let Ok((provider_info, roster)) =
+                crate::comicvine_repair::catalog_volume_roster(provider_series_external_id).await
+            {
+                if let (Some(local), Some(fetched)) = (
+                    series_info.as_mut().and_then(Value::as_object_mut),
+                    provider_info.as_object(),
+                ) {
+                    local.extend(fetched.clone());
+                }
+                roster_rows = roster;
+                if let Some(thread_id) = origin_thread_id {
+                    let siblings = conn.query(
+                        "SELECT i.id, i.issue_number, i.thread_id, t.title,
+                                m.status, e.provider, e.external_id, m.confidence,
+                                e.metadata_json::text
+                         FROM issues i
+                         JOIN threads t ON t.id = i.thread_id AND t.user_id = $2
+                         LEFT JOIN issue_external_identity_mappings m ON m.issue_id = i.id
+                         LEFT JOIN external_identities e ON e.id = m.external_identity_id
+                         WHERE i.thread_id = $1 AND i.id <> $3
+                         ORDER BY i.position, i.id",
+                        &[&thread_id, &user_id, &origin_issue_id],
+                    ).await.map_err(db::query_error)?;
+                    let rows: Vec<Value> = siblings.iter().map(|row| {
+                        let meta_text: Option<String> = row.get(8);
+                        let metadata: Value = meta_text.as_deref()
+                            .and_then(|raw| serde_json::from_str(raw).ok())
+                            .unwrap_or(Value::Null);
+                        serde_json::json!({
+                            "issue_id": row.get::<_, i32>(0),
+                            "issue_number": row.get::<_, Option<String>>(1),
+                            "title": metadata.get("name"),
+                            "thread_id": row.get::<_, Option<i32>>(2),
+                            "thread_title": row.get::<_, Option<String>>(3),
+                            "current_mapping_status": row.get::<_, Option<String>>(4),
+                            "provider": row.get::<_, Option<String>>(5),
+                            "external_id": row.get::<_, Option<String>>(6),
+                            "confidence": row.get::<_, Option<f64>>(7),
+                            "_identity_metadata": metadata,
+                        })
+                    }).collect();
+                    issues_with_mappings.extend(
+                        build_sibling_mapping_rows(&rows, &roster_rows, provider)
+                    );
+                }
+            }
+        }
     } else {
         // A brand-new provider volume is a normal valid preview. Rebuild its
         // complete roster instead of turning every signed preview into a 409.
