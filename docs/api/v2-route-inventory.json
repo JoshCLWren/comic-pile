@@ -333,7 +333,13 @@
       "path": "/api/v2/issues/{issue_id}",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 14,
+        "transaction_control_statements": 2,
+        "total_statements": 16,
+        "basis": "auth extractor 1 + reader lock 1 + issue lookup 1 + thread lock 1 + reference_names 5 (lists, plans, node-plans, dependencies, events) + delete 1 + position reseat 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 (+2 tx control); set-based"
+      }
     },
     {
       "runtime": "native-rust",
