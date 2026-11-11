@@ -697,7 +697,9 @@ async fn build_plan_db(
              JOIN threads t ON t.id = i.thread_id AND t.user_id = $1
              LEFT JOIN issue_external_identity_mappings m ON m.issue_id = i.id
              LEFT JOIN external_identities e ON e.id = m.external_identity_id
-             WHERE i.id = $2",
+             WHERE i.id = $2
+             ORDER BY m.id NULLS LAST
+             LIMIT 1",
             &[&user_id, &origin_issue_id],
         )
         .await
@@ -2224,6 +2226,19 @@ mod tests {
             .get(0);
         assert_eq!(series_metadata["name"], "Trusted Series");
         assert_eq!(series_metadata["publisher"]["name"], "Publisher");
+        connection
+            .batch_execute(
+                "INSERT INTO external_identities
+               (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+             VALUES ('comicvine', 'issue', 'candidate-100', '{}'::json, now(), now());
+             INSERT INTO issue_external_identity_mappings
+               (issue_id, external_identity_id, status, evidence_source, confidence,
+                created_at, updated_at, evidence_json)
+             SELECT 100, id, 'candidate', 'test', 0.5, now(), now(), '{}'::json
+             FROM external_identities WHERE external_id = 'candidate-100';",
+            )
+            .await
+            .expect("seed second valid mapping for origin issue");
         let plan = build_plan_db(
             &connection,
             1,
