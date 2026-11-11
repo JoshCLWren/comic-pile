@@ -43,13 +43,11 @@ fn decision_version_matches(value: &str, current: DateTime<Utc>) -> Result<bool,
     let expected = DateTime::parse_from_rfc3339(value)
         .map(|dt| dt.with_timezone(&Utc))
         .or_else(|_| {
-            NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f")
-                .map(|dt| dt.and_utc())
+            NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f").map(|dt| dt.and_utc())
         })
         .map_err(|_| bad_request("expected_updated_at must be a valid ISO timestamp"))?;
     Ok(expected == current)
 }
-
 
 /// Serialize one reader's cross-list constraint writes for the transaction.
 async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
@@ -434,10 +432,10 @@ pub async fn put_overlap_decision(
     let current_at: DateTime<Utc> = current.get(0);
     if let Some(expected) = request.expected_updated_at.as_deref() {
         if !decision_version_matches(expected, current_at)? {
-        return Err(ApiError::with_status(
-            StatusCode::CONFLICT,
-            "The Reading List's overlap decisions changed since they were read",
-        ));
+            return Err(ApiError::with_status(
+                StatusCode::CONFLICT,
+                "The Reading List's overlap decisions changed since they were read",
+            ));
         }
     }
     let ids = tx.query("SELECT id,external_id FROM external_identities WHERE provider='comicvine' AND entity_type='series' AND external_id=ANY($1::text[])", &[&vec![continuing, waiting]]).await.map_err(db::query_error)?;
@@ -1003,7 +1001,9 @@ mod tests {
             "2026-11-10T12:00:00.123456Z"
         );
         assert_eq!(
-            decision_version_matches("invalid", current).unwrap_err().status(),
+            decision_version_matches("invalid", current)
+                .unwrap_err()
+                .status(),
             StatusCode::UNPROCESSABLE_ENTITY
         );
     }
