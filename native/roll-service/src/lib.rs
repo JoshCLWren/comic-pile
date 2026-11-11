@@ -562,11 +562,11 @@ pub fn router(state: Arc<AppState>) -> Router {
         // deliberately retained behind the same paths until production proof.
         .route(
             "/api/v1/custom-cbls",
-            get(reading_list::list_reading_lists).post(reading_list::create_reading_list),
+            get(reading_list::list_reading_lists).post(custom_cbl::create_legacy_cbl),
         )
         .route(
             "/api/v1/custom-cbls/{list_id}",
-            get(reading_list::get_reading_list).put(reading_list::update_reading_list),
+            get(custom_cbl::get_legacy_cbl).put(reading_list::update_reading_list),
         )
         .route(
             "/api/v1/custom-cbls/{list_id}/reader",
