@@ -287,7 +287,7 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
     """Both native entrypoints must register the method and path sent by Vercel."""
     service, ingresses = _production_routes()
     routes = _vercel_routes()
-    for route_index, route in enumerate(routes):
+    for route in routes:
         function = route.get("dest")
         if not isinstance(function, str) or function not in ingresses:
             continue
@@ -313,19 +313,7 @@ def test_native_vercel_rewrites_target_registered_rust_http_methods() -> None:
                 (registered_method, path)
                 for registered_method, path in ingresses[function]
                 if registered_method == method
-                and (concrete := _matching_concrete_path(source, path)) is not None
-                # A prior static rewrite owns its concrete path before this
-                # broader parameter rewrite is considered by Vercel.
-                and not any(
-                    isinstance(previous_source := previous.get("src"), str)
-                    and re.fullmatch(_vercel_pattern(previous_source), concrete)
-                    and (
-                        (previous_methods := previous.get("methods")) is None
-                        or isinstance(previous_methods, list)
-                        and method in previous_methods
-                    )
-                    for previous in routes[:route_index]
-                )
+                and _matching_concrete_path(source, path) is not None
             }
             # A parameter rewrite can legitimately also match a literal
             # sibling (for example /custom-cbls/{list_id} and /issue-search).
