@@ -1193,7 +1193,10 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     Dispatch failures release any lease created by the dispatcher and
     do not strand ownership.
     """
-    if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-9][0-9])', worker):
+    # A roster ID is authoritative, not a two-digit regex ceiling. Validate
+    # canonical positive decimal spelling and actual roster membership before
+    # any lease, GitHub API write, or provider dispatch.
+    if not re.fullmatch(r'(?:[6-9]|[1-9][0-9]+)', worker) or worker not in worker_sources():
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     quota_pause = quota_pause_for(worker)
     if quota_pause is not None:
