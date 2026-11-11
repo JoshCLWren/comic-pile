@@ -158,6 +158,15 @@ def test_part_of_link_is_review_only_and_crlf_safe():
     assert acceptance.linked_issue_mode(
         "factory/54-4010-cbl", "Part of #4348."
     ) == (4010, False)
+    assert acceptance.linked_issue_mode(
+        "factory/75-4740-opencode-free", "Part of #4740."
+    ) == (4740, True)
+    assert acceptance.linked_issue_mode(
+        "factory/75-4740-opencode-free", "Part of #4740 and governed by #4335."
+    ) == (4740, True)
+    assert acceptance.linked_issue_mode(
+        "factory/75-4740-opencode-free", "Closes #4740.\nPart of #4740."
+    ) == (4740, False)
     assert acceptance.linked_issue_mode("local/x", "Advances #4348.") == (None, False)
     assert acceptance.linked_issue_mode("local/x", "- Part of #4348.") == (None, False)
 
