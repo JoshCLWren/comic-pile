@@ -36,6 +36,21 @@ def controller() -> types.ModuleType:
     return module
 
 
+
+def test_three_digit_assignment_checks_canonical_id_and_live_roster(
+    controller: types.ModuleType,
+) -> None:
+    """Actual roster members 104-107 can dispatch; unknown IDs cannot."""
+    authorized = controller.is_authorized_fixed_worker
+    roster = controller.worker_sources()
+    assert all(str(worker) in roster for worker in range(104, 108))
+    for worker in range(104, 108):
+        assert authorized(str(worker))
+    for invalid in ("108", "999", "0", "00", "0104", "+104", "104 ", "abc", ""):
+        assert not authorized(invalid)
+
+
+
 def test_stale_fixed_lease_releases_but_live_worker_is_not_stolen(
     controller: types.ModuleType,
 ) -> None:
