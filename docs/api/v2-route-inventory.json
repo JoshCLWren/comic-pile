@@ -758,7 +758,14 @@
       "path": "/api/v2/threads/{thread_id}/issue-order",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": false,
+        "basis": "auth 1 + reader lock 1 + thread lock 1 + issues load 1 + constraints defer 1 + reseat positions 1 + recreate tracking 1 + graph_preflight 1 (+2 tx control); set-based"
+      }
     },
     {
       "runtime": "native-rust",
@@ -771,7 +778,14 @@
       "path": "/api/v2/threads/{thread_id}/issues",
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 11,
+        "transaction_control_statements": 2,
+        "total_statements": 13,
+        "grows_with_data": true,
+        "basis": "auth 1 + reader lock 1 + thread lock 1 + existing issues load 1 + constraints defer 1 + (optional position reseat 1) + one issue insert 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 + total count 1 (+2 tx control); grows with issue count"
+      }
     }
   ],
   "full_surface": {

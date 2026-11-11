@@ -27,6 +27,8 @@ OPENAPI = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 _BUDGETED_OPERATIONS = frozenset(
     {
         ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
+        ("post", "/api/v2/threads/{thread_id}/issues"),
+        ("put", "/api/v2/threads/{thread_id}/issue-order"),
         ("get", "/api/v2/queue-entries/{thread_id}"),
         ("post", "/api/v2/reading-lists"),
         ("put", "/api/v2/reading-lists/{list_id}"),
@@ -73,8 +75,6 @@ _KNOWN_BUDGET_GAPS = frozenset(
         ("post", "/api/v2/roll/dice-command"),
         ("post", "/api/v2/roll/offer"),
         ("post", "/api/v2/roll/reset"),
-        ("post", "/api/v2/threads/{thread_id}/issues"),
-        ("put", "/api/v2/threads/{thread_id}/issue-order"),
     }
 )
 
