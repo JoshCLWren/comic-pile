@@ -90,7 +90,9 @@ The report is evidence, not a synthetic pass badge. A large drop in request coun
 
 ## `Server-Timing` is absent from the current Vercel deployment
 
-Observed against the live production deployment (`https://comic-pile.vercel.app/health`) and the local container path:
+Observed during the Python deployment era against the now-retired public bare
+`/health` URL (it returns a Vercel 404 since #4740; production liveness is
+`GET /api/v2/health`), alongside the local container path:
 
 - Running the same middleware over real HTTP locally returns all four headers: `X-Request-ID`, `X-App-Cache`, `X-App-DB-Queries`, and `Server-Timing`.
 - Responses observed through the current Vercel container deployment include `X-Request-ID`, `X-App-Cache`, and `X-App-DB-Queries`, but not `Server-Timing`.

@@ -4251,10 +4251,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Thread Dependencies
-         * @description List dependencies where a thread blocks others and where it is blocked.
+         * Documentation-only operation for the mounted thread-dependencies read.
+         * @description List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.
          */
-        get: operations["list_thread_dependencies_api_v1_threads__thread_id__dependencies_get"];
+        get: operations["get_thread_dependencies_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5035,6 +5035,23 @@ export interface paths {
         get: operations["preview_documentation"];
         put?: never;
         post: operations["relink_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/demo-roll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Generated contract for the public guest sample. */
+        get: operations["read_demo_roll_documentation"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9688,6 +9705,35 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** @description The product-owned deterministic guest Roll fixture. */
+        DemoRoll: {
+            /** Format: int32 */
+            die_size: number;
+            explanation?: string | null;
+            format: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: int32 */
+            issues_remaining: number;
+            /** Format: int32 */
+            next_issue_id?: number | null;
+            next_issue_number?: string | null;
+            /** Format: int32 */
+            offset: number;
+            /** Format: int32 */
+            queue_position: number;
+            reading_progress?: string | null;
+            /** Format: int32 */
+            result: number;
+            /** Format: int32 */
+            snoozed_count: number;
+            /** Format: int32 */
+            thread_id: number;
+            title: string;
+            /** Format: int32 */
+            total_issues?: number | null;
+        };
         /**
          * DependencyCreate
          * @description Schema for creating dependencies.
@@ -11055,9 +11101,11 @@ export interface components {
          *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
          */
         NativeDependencyResponse: {
+            /** Format: date-time */
             created_at: string;
             /** Format: int32 */
             id: number;
+            /** @default true */
             is_issue_level: boolean;
             note?: string | null;
             /** Format: int32 */
@@ -11289,6 +11337,16 @@ export interface components {
             series_name?: string | null;
             /** Format: int32 */
             thread_id?: number | null;
+        };
+        /**
+         * @description Wire parity with Python `ThreadDependenciesResponse`
+         *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
+         *     thread's issues block others, `blocked_by` holds edges where this thread's
+         *     issues are blocked. Each entry is the enriched `DependencyResponse`.
+         */
+        NativeThreadDependenciesResponse: {
+            blocked_by: components["schemas"]["NativeDependencyResponse"][];
+            blocking: components["schemas"]["NativeDependencyResponse"][];
         };
         /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
         NativeThreadIssueDependenciesResponse: {
@@ -20452,34 +20510,47 @@ export interface operations {
             };
         };
     };
-    list_thread_dependencies_api_v1_threads__thread_id__dependencies_get: {
+    get_thread_dependencies_documentation: {
         parameters: {
             query?: never;
             header?: never;
             path: {
+                /** @description Owned thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Thread dependencies */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadDependenciesResponse"];
+                    "application/json": components["schemas"]["NativeThreadDependenciesResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Not authenticated */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -21740,6 +21811,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    read_demo_roll_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deterministic sample Roll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DemoRoll"];
+                };
             };
         };
     };

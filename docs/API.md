@@ -438,9 +438,16 @@ twin). It serves fabricated fixtures rather than database reads, so a demo
 interaction cannot create library, queue, rating, or reading-history rows, and
 nothing here is imported into a real account.
 
-### GET /v1/demo/roll
+### GET /v2/demo-roll
 
-Return the single deterministic seeded sample roll.
+Return the single deterministic seeded sample roll from native Rust. The guest
+Demo page requests `/api/v2/demo-roll`; the response uses a fabricated fixture
+and does not access PostgreSQL.
+
+The former `/api/v1/demo/roll` Python operation remains temporarily for
+post-deployment verification and has no live frontend caller. It will be
+retired after the native operation is proven through a successful production
+Demo request.
 
 **Auth**: none required
 **Response**: `200 OK`

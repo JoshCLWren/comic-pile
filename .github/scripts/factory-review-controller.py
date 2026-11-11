@@ -306,32 +306,38 @@ def explicit_part_of_issue(body: str) -> int | None:
     return int(match.group("issue")) if match else None
 
 
-def linked_issue_mode_for_pr(pr_number: int, branch: str | None) -> tuple[int | None, bool]:
+def linked_issue_mode_for_pr(
+    pr_number: int, branch: str | None, *, body: str | None = None
+) -> tuple[int | None, bool]:
     """Resolve a PR's issue and whether the link is review-only.
 
-    Precedence keeps every existing ownership signal authoritative: the
-    canonical factory branch identity first, then GitHub's explicit
-    closes/fixes/resolves reference, then the canonical non-closing
-    ``Part of #N.`` line. A casual #number mention is not an issue-ownership
-    claim, and ``Part of`` authorizes review only; merge-time closure still
-    follows explicit closing references alone.
+    A canonical factory branch retains issue ownership, but a matching
+    ``Part of #N.`` line makes its PR non-closing unless the body explicitly
+    claims closure. Without a factory branch, explicit closing references
+    take precedence over a canonical non-closing ``Part of`` line. Mismatched
+    references cannot redirect issue identity or relax acceptance; merge-time
+    closure still follows explicit closing references alone.
 
     Args:
         pr_number: Pull request number.
         branch: Pull request head branch.
+        body: Optional already-fetched PR description to avoid redundant API reads.
 
     Returns:
         ``(issue, non_closing)``; ``non_closing`` is true only for a ``Part of``
         link.
     """
+    if body is None:
+        body = str(pr_json(pr_number).get("body") or "")
     linked = linked_issue_from_branch(branch)
-    if linked is not None:
-        return linked, False
-    body = str(pr_json(pr_number).get("body") or "")
     match = re.search(
         r"(?i)\b(?:closes?|fix(?:es|ed)?|resolves?|resolved)\s+#(\d+)",
         body,
     )
+    if linked is not None:
+        # The canonical branch selects the issue, not the PR's closure scope.
+        # Honor a matching explicit Part of only when no closing claim exists.
+        return linked, match is None and explicit_part_of_issue(body) == linked
     if match:
         return int(match.group(1)), False
     issue = explicit_part_of_issue(body)
@@ -1885,7 +1891,9 @@ def handle_review(
     # only for the exact issue revision + PR head it verified.
     accepted_contract_marker: str | None = None
     if verdict == "approve":
-        issue_number, non_closing = linked_issue_mode_for_pr(pr_number, branch)
+        issue_number, non_closing = linked_issue_mode_for_pr(
+            pr_number, branch, body=str(pr.get("body") or "")
+        )
         if issue_number is None:
             return return_to_review(
                 pr_number=pr_number, branch=branch, worker=worker,

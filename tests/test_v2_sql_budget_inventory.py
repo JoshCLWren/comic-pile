@@ -27,6 +27,7 @@ OPENAPI = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 _BUDGETED_OPERATIONS = frozenset(
     {
         ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
+        ("get", "/api/v2/demo-roll"),
         ("get", "/api/v2/reading-graph"),
         ("get", "/api/v2/threads"),
         ("post", "/api/v2/auth/login"),
@@ -119,10 +120,12 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
     control = budget.get("transaction_control_statements")
     total = budget.get("total_statements")
     basis = budget.get("basis")
-    assert isinstance(application, int) and application > 0
+    assert isinstance(application, int) and application >= 0
     assert isinstance(control, int) and control >= 0
     assert isinstance(total, int)
     assert total == application + control
+    if total == 0:
+        assert operation.get("db_free") is True
     assert isinstance(basis, str) and basis.strip() != ""
     return budget
 

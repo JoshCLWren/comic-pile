@@ -775,6 +775,54 @@
         }
       }
     },
+    "/api/v1/threads/{thread_id}/dependencies": {
+      "get": {
+        "tags": [
+          "dependencies"
+        ],
+        "summary": "Documentation-only operation for the mounted thread-dependencies read.",
+        "description": "List owner-scoped dependency edges where one thread blocks others and where it is blocked. Wire parity with Python GET /api/v1/threads/{thread_id}/dependencies: {blocking, blocked_by} of enriched DependencyResponse entries ordered by dependency id.",
+        "operationId": "get_thread_dependencies_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Thread dependencies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadDependenciesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/threads/{thread_id}/issue-dependencies": {
       "get": {
         "tags": [
@@ -1290,6 +1338,27 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/v2/demo-roll": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Generated contract for the public guest sample.",
+        "operationId": "read_demo_roll_documentation",
+        "responses": {
+          "200": {
+            "description": "Deterministic sample Roll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoRoll"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v2/dependencies/": {
@@ -3783,6 +3852,102 @@
           }
         }
       },
+      "DemoRoll": {
+        "type": "object",
+        "description": "The product-owned deterministic guest Roll fixture.",
+        "required": [
+          "thread_id",
+          "title",
+          "format",
+          "issues_remaining",
+          "queue_position",
+          "die_size",
+          "result",
+          "offset",
+          "snoozed_count"
+        ],
+        "properties": {
+          "die_size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "explanation": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "format": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "issues_remaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "next_issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "next_issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "queue_position": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "reading_progress": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "result": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "snoozed_count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "title": {
+            "type": "string"
+          },
+          "total_issues": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          }
+        }
+      },
       "DependencyCreateRequest": {
         "type": "object",
         "description": "Flat wire request mirroring the Python `DependencyCreate` payload so the\nDependency Builder migrates without changing its semantics.",
@@ -3826,19 +3991,20 @@
         "description": "Issue-level dependency response mirroring the Python `DependencyResponse`\nfields the Dependency Builder consumes (`warning`, labels, thread ids).",
         "required": [
           "id",
-          "is_issue_level",
           "created_at"
         ],
         "properties": {
           "created_at": {
-            "type": "string"
+            "type": "string",
+            "format": "date-time"
           },
           "id": {
             "type": "integer",
             "format": "int32"
           },
           "is_issue_level": {
-            "type": "boolean"
+            "type": "boolean",
+            "default": true
           },
           "note": {
             "type": [
@@ -6831,6 +6997,28 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "ThreadDependenciesResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `ThreadDependenciesResponse`\n(`app/schemas/dependency.py`): the `blocking` list holds edges where this\nthread's issues block others, `blocked_by` holds edges where this thread's\nissues are blocked. Each entry is the enriched `DependencyResponse`.",
+        "required": [
+          "blocking",
+          "blocked_by"
+        ],
+        "properties": {
+          "blocked_by": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyResponse"
+            }
+          },
+          "blocking": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyResponse"
+            }
           }
         }
       },

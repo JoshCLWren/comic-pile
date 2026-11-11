@@ -6,10 +6,10 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 41,
-    "native_rust": 40,
+    "total_live_operations": 42,
+    "native_rust": 41,
     "python_fastapi": 1,
-    "native_rust_status": 40,
+    "native_rust_status": 41,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 1
@@ -177,6 +177,26 @@
       "consumers": [
         "frontend/src/services/api-reading-plan-recovery.ts"
       ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
+    {
+      "owning_issue": 4855,
+      "method": "GET",
+      "path": "/api/v2/demo-roll",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-demo.ts"
+      ],
+      "db_free": true,
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "Static guest fixture; native ingress bypasses application state and PostgreSQL"
+      },
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
@@ -592,17 +612,17 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 66,
-      "v1_live_python": 123,
-      "v1_orphaned": 8,
+      "v1_shadowed_by_rust": 67,
+      "v1_live_python": 121,
+      "v1_orphaned": 9,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 79,
-      "total_live_python": 141,
-      "total_orphaned": 10
+      "total_shadowed_by_rust": 80,
+      "total_live_python": 139,
+      "total_orphaned": 11
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
@@ -1625,16 +1645,14 @@
         "verified_against": "vercel.json"
       },
       {
+        "owning_issue": 4855,
         "method": "GET",
         "path": "/api/v1/demo/roll",
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": null,
-        "consumers": [
-          "frontend/src/services/api-demo.ts"
-        ],
+        "consumers": [],
         "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {
@@ -2989,8 +3007,8 @@
           "frontend/src/services/api-reading-orders.ts",
           "frontend/src/services/api-threads.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {

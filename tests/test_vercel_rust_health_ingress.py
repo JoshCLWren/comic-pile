@@ -58,3 +58,22 @@ def test_deploy_smoke_asserts_native_health_and_retains_negative_login() -> None
     assert "/api/v2/auth/login" in login_smoke
     assert "401" in login_smoke
     assert "x-comicpile-api-runtime" in login_smoke
+
+
+def test_deploy_workflow_requests_no_python_health_or_docs_routes() -> None:
+    """A deploy alone must issue no request to retired Python health/docs handlers.
+
+    Every production request the deploy workflow makes targets a native v2
+    route, so the deployment smoke can never warm or billably start Python via
+    the retired public bare routes (#4740).
+    """
+    production_targets = [
+        line.strip()
+        for line in WORKFLOW.splitlines()
+        if "https://comic-pile.vercel.app" in line
+    ]
+    assert production_targets, "Deploy smoke must still probe production"
+    for target in production_targets:
+        stripped = target.replace("/api/v2/health", "")
+        for path in ("/health", "/docs", "/redoc", "/openapi.json"):
+            assert path not in stripped, (target, path)
