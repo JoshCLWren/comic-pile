@@ -23,6 +23,16 @@ def controller() -> types.ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    # Existing runtime fixtures exercise historical worker IDs that are no
+    # longer on the live roster. Keep that test data explicit, never relax
+    # the production assignment check.
+    real_sources = module.worker_sources
+    module.worker_sources = lambda: {
+        **real_sources(),
+        "13": "nvidia",
+        "17": "nvidia",
+        "59": "nvidia",
+    }
     return module
 
 
