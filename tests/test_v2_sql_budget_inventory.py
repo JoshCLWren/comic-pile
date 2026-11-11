@@ -28,6 +28,8 @@ _BUDGETED_OPERATIONS = frozenset(
     {
         ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
         ("get", "/api/v2/demo-roll"),
+        ("get", "/api/v2/roll/die-state"),
+        ("get", "/api/v2/roll/eligible-issue-ids"),
         ("get", "/api/v2/reading-graph"),
         ("get", "/api/v2/threads"),
         ("post", "/api/v2/auth/login"),
@@ -53,8 +55,6 @@ _KNOWN_BUDGET_GAPS = frozenset(
         ("get", "/api/v2/reading-lists/{list_id}"),
         ("get", "/api/v2/reading-lists/{list_id}/reader"),
         ("get", "/api/v2/roll/bootstrap"),
-        ("get", "/api/v2/roll/die-state"),
-        ("get", "/api/v2/roll/eligible-issue-ids"),
         ("patch", "/api/v2/issues/{issue_id}"),
         ("patch", "/api/v2/queue-entries/{thread_id}"),
         ("post", "/api/v2/auth/forgot-password"),

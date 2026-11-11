@@ -512,7 +512,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement: current die, approved ladder source and last roll; set-based, independent of library size, no per-row N+1"
+      }
     },
     {
       "method": "GET",
@@ -525,7 +531,13 @@
       ],
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
+      "verified_against": "vercel.json",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement: Option E snapshot, die and pending offer; set-based, independent of library size, no per-row N+1"
+      }
     },
     {
       "method": "POST",
