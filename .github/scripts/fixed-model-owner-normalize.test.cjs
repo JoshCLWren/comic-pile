@@ -87,3 +87,32 @@ test('branch provenance remains a last-resort bootstrap', async () => {
   assert.equal(state.calls.comments, 1);
   assert.ok(state.calls.labels[0].includes('factory:39'));
 });
+
+test('three-digit roster owners survive normalization and branch recovery', async () => {
+  const owned = harness({
+    labels: ['factory', 'factory:104', 'factory:review'],
+    comments: ['<!-- free-model-factory-owner:104 -->'],
+    branch: 'factory/107-4960-opencode-free',
+  });
+  await normalize(owned);
+  assert.equal(owned.calls.comments, 0);
+  assert.equal(owned.calls.labels.length, 1);
+  assert.ok(owned.calls.labels[0].includes('factory:104'));
+  assert.ok(!owned.calls.labels[0].includes('factory:107'));
+
+  const fromBranch = harness({
+    labels: ['factory:review'],
+    branch: 'factory/107-4960-opencode-free',
+  });
+  await normalize(fromBranch);
+  assert.ok(fromBranch.calls.labels[0].includes('factory:107'));
+
+  const fromMarker = harness({
+    labels: ['factory:review'],
+    comments: ['<!-- free-model-factory-owner:105 -->'],
+    branch: 'factory/107-4960-opencode-free',
+  });
+  await normalize(fromMarker);
+  assert.ok(fromMarker.calls.labels[0].includes('factory:105'));
+  assert.ok(!fromMarker.calls.labels[0].includes('factory:107'));
+});
