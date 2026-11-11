@@ -310,6 +310,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[0-9]+/dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
       "methods": [
         "GET"
@@ -899,14 +906,6 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+/connected$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/threads/[^/]+/dependencies$",
       "methods": [
         "GET",
         "OPTIONS"
