@@ -120,10 +120,12 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
     control = budget.get("transaction_control_statements")
     total = budget.get("total_statements")
     basis = budget.get("basis")
+    grows = budget.get("grows_with_data")
     assert isinstance(application, int) and application >= 0
     assert isinstance(control, int) and control >= 0
     assert isinstance(total, int)
     assert total == application + control
+    assert isinstance(grows, bool)
     if total == 0:
         assert operation.get("db_free") is True
     assert isinstance(basis, str) and basis.strip() != ""
