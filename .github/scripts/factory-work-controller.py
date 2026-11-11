@@ -1179,6 +1179,18 @@ def runtime_quota_block_reason(worker: str) -> str | None:
     return None
 
 
+def is_authorized_fixed_worker(worker: str) -> bool:
+    """Accept canonical worker IDs only when the roster actually contains them.
+
+    Owner-label parsers deliberately recognize any positive decimal ID to
+    preserve existing lease state, but assignment is restricted to the roster.
+    """
+    return (
+        re.fullmatch(r'(?:[6-9]|[1-9][0-9]+)', worker) is not None
+        and worker in worker_sources()
+    )
+
+
 def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
@@ -1193,10 +1205,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     Dispatch failures release any lease created by the dispatcher and
     do not strand ownership.
     """
-    # A roster ID is authoritative, not a two-digit regex ceiling. Validate
-    # canonical positive decimal spelling and actual roster membership before
-    # any lease, GitHub API write, or provider dispatch.
-    if not re.fullmatch(r'(?:[6-9]|[1-9][0-9]+)', worker) or worker not in worker_sources():
+    if not is_authorized_fixed_worker(worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     quota_pause = quota_pause_for(worker)
     if quota_pause is not None:
