@@ -1,11 +1,11 @@
 name: Factory Completion Drain
 
 on:
-  # Recalculate immediately whenever either the dispatcher or an individual
-  # worker finishes. Worker completion is a capacity-change event: a lease may
-  # have been released and the queue may have changed, so reallocate on demand.
+  # Recalculate when a worker finishes and releases capacity. Do not watch
+  # the dispatcher here: this workflow now wakes that dispatcher, and watching
+  # its completion would create a self-triggering Actions loop with no work.
   workflow_run:
-    workflows: ["Fixed Model Factory Dispatcher", "Fixed Model Factory Entry"]
+    workflows: ["Fixed Model Factory Entry"]
     types: [completed]
   # Recovery heartbeat only. Normal allocation should be driven by state-change
   # events above rather than by this clock.
