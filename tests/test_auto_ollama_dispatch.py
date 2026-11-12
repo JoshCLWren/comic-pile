@@ -57,10 +57,16 @@ elif args[:2] == ["api", "repos/example/comic-pile/issues?state=open&labels=fact
     print(json.dumps([{"number": 99}] if os.environ.get("LEASED") else []))
 elif args[:2] == ["pr", "list"]:
     print(json.dumps([
-        {"number": 11, "isDraft": False, "labels": [{"name": "factory:77"}, {"name": "factory:review"}]},
-        {"number": 12, "isDraft": True, "labels": [{"name": "factory:review"}, {"name": "factory:unowned"}]},
-        {"number": 13, "isDraft": False, "labels": [{"name": "factory:changes-requested"}, {"name": "factory:unowned"}]},
-        {"number": 14, "isDraft": False, "labels": [{"name": "factory:review"}, {"name": "factory:unowned"}]},
+        {"number": 10, "isDraft": False, "labels": [{"name": "factory:review"}, {"name": "factory:unowned"}],
+         "headRefName": "misc/unlinked", "body": "Part of #4737 / #4335."},
+        {"number": 11, "isDraft": False, "labels": [{"name": "factory:77"}, {"name": "factory:review"}],
+         "headRefName": "fix/issue-11", "body": "Closes #11."},
+        {"number": 12, "isDraft": True, "labels": [{"name": "factory:review"}, {"name": "factory:unowned"}],
+         "headRefName": "fix/issue-12", "body": "Closes #12."},
+        {"number": 13, "isDraft": False, "labels": [{"name": "factory:changes-requested"}, {"name": "factory:unowned"}],
+         "headRefName": "fix/issue-13", "body": "Closes #13."},
+        {"number": 14, "isDraft": False, "labels": [{"name": "factory:review"}, {"name": "factory:unowned"}],
+         "headRefName": "fix/issue-14", "body": "Closes #14."},
     ]))
 elif args[:2] == ["api", "repos/example/comic-pile/pulls/14"]:
     print(json.dumps({
@@ -128,3 +134,10 @@ def test_missing_provider_url_leaves_other_workers_undisturbed(tmp_path: Path) -
     )
     assert result.returncode == 0, result.stderr
     assert "not configured" in result.stdout
+
+def test_ollama_dispatcher_preflights_canonical_issue_links() -> None:
+    """An unlinked older PR cannot indefinitely starve a valid review target."""
+    script = dispatch_script()
+    assert "--json number,isDraft,labels,headRefName,body" in script
+    assert "local_review_contract.py select /dev/stdin" in script
+    assert 'gh workflow run local-ollama-review.yml' in script
