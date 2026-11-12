@@ -74,7 +74,7 @@ def select_review_candidate(prs: list[Mapping[str, Any]]) -> int | None:
         if not isinstance(pr, dict):
             continue
         number = pr.get("number")
-        if type(number) is not int or number <= 0 or pr.get("isDraft") is not False:
+        if not isinstance(number, int) or isinstance(number, bool) or number <= 0 or pr.get("isDraft") is not False:
             continue
         labels = pr.get("labels")
         if not isinstance(labels, list):
