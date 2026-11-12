@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import sys
 import time
 from datetime import datetime, timezone
@@ -18,6 +19,10 @@ from factory_work_policy import eligibility
 
 TELEMETRY_MARKER = "<!-- factory-completion-funnel:v1 -->"
 TELEMETRY_ISSUE = "1093"
+# Stable, verified GitHub Actions telemetry comment on issue #1093. The exact
+# comment is checked for our marker before PATCH; never scan 1,900+ registry
+# comments or create another comment when this anchor is missing.
+TELEMETRY_COMMENT_ID = 5396686993
 
 
 def load_controller():
@@ -103,6 +108,9 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
         )
         health = {}
     capacity = controller.capacity_report(candidates, health, now_epoch=now_epoch)
+    # Signal-only dispatch may reuse the same authoritative read-only snapshot.
+    # Actual claims still refresh live labels/head in the serialized dispatcher.
+    capacity["owned_workers"] = sorted(owned)
     idle = sum(
         candidate["worker"] not in owned
         and controller.worker_is_executable(
@@ -122,6 +130,11 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
 def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
     """Persist demand, allocation, and claim results for operational verification."""
     selected = list(result.get("selected_workers") or [])
+    # Most explicit wakeups have no executable work. Avoid a write, and even
+    # the marker verification read, for those empty signals. Cron still keeps
+    # the shared operational report fresh every five minutes.
+    if not selected and os.environ.get("GITHUB_EVENT_NAME") != "schedule":
+        return
     assignments = list(result.get("assignments") or [])
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     body = "\n".join(
@@ -166,68 +179,38 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
         ]
     )
     try:
-        comments = controller.flatten_pages(
-            controller.gh_json(
-                [
-                    "api",
-                    "--paginate",
-                    "--slurp",
-                    f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments?per_page=100",
-                ]
+        endpoint = f"repos/{controller.REPO}/issues/comments/{TELEMETRY_COMMENT_ID}"
+        current = controller.gh_json(["api", endpoint])
+        # Comment IDs survive edits. Fail closed if the comment was removed,
+        # moved, or repurposed instead of overwriting unrelated information.
+        if (
+            not isinstance(current, dict)
+            or current.get("id") != TELEMETRY_COMMENT_ID
+            or TELEMETRY_MARKER not in str(current.get("body") or "")
+            or str(current.get("issue_url") or "").rstrip("/")
+            != f"https://api.github.com/repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}"
+        ):
+            print(
+                "[factory-completion] telemetry anchor missing/mismatched; "
+                "skipping update without registry pagination",
+                file=sys.stderr,
             )
-        )
-        existing = next(
-            (
-                str(comment.get("id"))
-                for comment in comments
-                if TELEMETRY_MARKER in str(comment.get("body") or "")
-            ),
-            "",
-        )
-        method = "PATCH" if existing else "POST"
-        endpoint = (
-            f"repos/{controller.REPO}/issues/comments/{existing}"
-            if existing
-            else f"repos/{controller.REPO}/issues/{TELEMETRY_ISSUE}/comments"
-        )
-        controller.run_gh(["api", "--method", method, endpoint, "-f", f"body={body}"])
+            return
+        controller.run_gh(["api", "--method", "PATCH", endpoint, "-f", f"body={body}"])
     except RuntimeError as exc:
         print(f"[factory-completion] unable to persist funnel telemetry: {exc}", file=sys.stderr)
 
 
 def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]) -> dict[str, object]:
-    """Signal the dispatcher with demand and capacity without assigning or launching.
+    """Signal the dispatcher using the already-fetched, read-only demand snapshot.
 
-    Capacity refill may perform recovery/reconciliation but does not
-    directly assign workers or launch entries. Healthy one-for-one
-    refill signals an explicit-worker dispatcher mode that cannot create
-    a self-perpetuating roster chain. Broad bootstrap signals roster mode.
-
-    The executable worker set is derived from the capacity report passed in
-    by current_demand() so it stays consistent with the measured idle_workers
-    count instead of re-deriving health from an empty snapshot.
+    The serialized dispatcher, not this signal-only workflow, reconciles stale
+    leases and performs authoritative live rechecks before any claim or launch.
+    Duplicating reconciliation here consumed active-run, issue and PR API pages
+    again for every worker completion, even when no work could be claimed.
     """
     target = completion_worker_target(demand)
-    now_epoch = int(time.time())
-    try:
-        work_controller = controller.load_controller()
-        owned = controller.owned_worker_ids(
-            work_controller.list_issues() + work_controller.list_prs()
-        )
-
-        # Perform recovery/reconciliation without assignment
-        work_controller.reconcile_stale_leases(now_epoch=now_epoch)
-        work_controller.reconcile_contradictory_labels()
-    except RuntimeError as exc:
-        # Signal-only path must stay fail-open: when GitHub evidence is
-        # unavailable (e.g. no gh auth in CI), still wake the dispatcher
-        # with demand/capacity data instead of crashing.
-        print(
-            f"[factory-completion] signal evidence unavailable; "
-            f"continuing without reconciliation: {exc}",
-            file=sys.stderr,
-        )
-        owned = set()
+    owned = set(capacity.get("owned_workers") or [])
 
     executable_candidates = list(capacity.get("executable_candidates") or [])
     eligible = [
