@@ -1,0 +1,77 @@
+name: Factory-only Fast Merge
+
+# This write-enabled workflow checks out trusted main only, never PR heads.
+# The policy switch lives in .github/factory-fast-merge.json.
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize, labeled]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Optional PR number, otherwise scan open PRs'
+        required: false
+        type: string
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: read
+  issues: write
+
+concurrency:
+  group: factory-only-fast-merge
+  cancel-in-progress: false
+
+jobs:
+  fast-merge:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout trusted main only
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Merge eligible factory-only PRs after required CI
+        id: merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr || '' }}
+          CI_HEAD: ${{ github.event.workflow_run.head_sha || '' }}
+        run: |
+          set -Eeuo pipefail
+          args=(--repo "$GITHUB_REPOSITORY")
+          if [[ -n "$PR_NUMBER" ]]; then
+            args+=(--pr "$PR_NUMBER")
+          elif [[ -n "$CI_HEAD" ]]; then
+            args+=(--head "$CI_HEAD")
+          fi
+          python3 .github/scripts/factory-fast-merge.py "${args[@]}" > "$RUNNER_TEMP/fast-merge-result.json"
+          cat "$RUNNER_TEMP/fast-merge-result.json"
+          count="$(jq -r '.merged | length' "$RUNNER_TEMP/fast-merge-result.json")"
+          echo "merged_count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile merged issues and dispatch production
+        if: steps.merge.outputs.merged_count != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_post_merge_closure.py --sweep || {
+            echo "::warning::Post-merge sweep failed; existing drain can retry"
+          }
+          source .github/scripts/factory-dispatch-production-deploy.sh
+          factory_dispatch_production_deploy \
+            "Factory-only Fast Merge merged ${{ steps.merge.outputs.merged_count }} PR(s)"
