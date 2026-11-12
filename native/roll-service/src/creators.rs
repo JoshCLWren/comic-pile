@@ -829,7 +829,8 @@ mod tests {
         let projected = serde_json::json!([
             {"id": 7, "name": "Brian K. Vaughan", "role": "writer"},
             {"id": 12, "name": "Steve McNiven", "role": "penciler"}
-        ]).to_string();
+        ])
+        .to_string();
         let credits = extract_creator_credit_list(
             &serde_json::from_str::<Value>(&projected).expect("valid projected metadata"),
         );
@@ -900,8 +901,7 @@ mod tests {
             second.items[0].canonical_creator_key
         );
 
-        let minimum =
-            creator_list_from_inputs(&inputs, Some("steve"), "average_rating", 20, 0, 2);
+        let minimum = creator_list_from_inputs(&inputs, Some("steve"), "average_rating", 20, 0, 2);
         assert_eq!(minimum.total, 0);
         let matching =
             creator_list_from_inputs(&inputs, Some("vaughan"), "average_rating", 20, 0, 2);
