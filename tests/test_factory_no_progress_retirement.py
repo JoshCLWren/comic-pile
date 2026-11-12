@@ -2,14 +2,15 @@
 from __future__ import annotations
 
 import sys
+import importlib
 from pathlib import Path
 
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-import factory_no_progress_retirement as retire  # noqa: E402
-import factory_work_policy as policy  # noqa: E402
+retire = importlib.import_module("factory_no_progress_retirement")
+policy = importlib.import_module("factory_work_policy")
 
 NOW = 1_794_485_000
 HEAD = "a" * 40
