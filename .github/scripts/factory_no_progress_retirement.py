@@ -94,6 +94,8 @@ def candidate_reason(
     """Require trustworthy three-strike evidence on the unchanged PR head."""
     head = pr.get("head") or {}
     base = pr.get("base") or {}
+    head_repo = head.get("repo") or {}
+    base_repo = base.get("repo") or {}
     sha = str(head.get("sha") or "").lower()
     branch = str(head.get("ref") or "")
     number = pr.get("number")
@@ -106,8 +108,8 @@ def candidate_reason(
         or linked != issue.get("number")
         or issue.get("state") != "open"
         or not SHA_RE.fullmatch(sha)
-        or head.get("repo", {}).get("full_name") != REPO
-        or base.get("repo", {}).get("full_name") != REPO
+        or head_repo.get("full_name") != REPO
+        or base_repo.get("full_name") != REPO
         or base.get("ref") != "main"
         or is_manual_only(pr.get("body"))
         or is_manual_only(issue.get("body"))
@@ -121,12 +123,13 @@ def candidate_reason(
         or not {"factory", "factory:unowned"} <= issue_labels
         or pr_labels & BLOCKED_LABELS
         or issue_labels & BLOCKED_LABELS
+        or "ralph-status:done" in issue_labels
         or any(OWNER_RE.fullmatch(label) for label in pr_labels | issue_labels)
         or len(pr_labels & STAGES) != 1
         or "factory:ready" in pr_labels
         or "factory:ci" in pr_labels
         or "factory:blocked" in issue_labels
-        or pr.get("mergeable") is False
+        or pr.get("mergeable") is not True
         or pr.get("mergeable_state") == "dirty"
     ):
         return None
@@ -254,6 +257,14 @@ def retire_pr(number: int, *, now_epoch: int) -> dict[str, Any]:
         or any(OWNER_RE.fullmatch(label) for label in labels_of(latest))
     ):
         return {"pr": number, "status": "changed-before-close"}
+
+    final_issue = read_issue(linked)
+    if (
+        final_issue.get("state") != "open"
+        or "factory:unowned" not in labels_of(final_issue)
+        or any(OWNER_RE.fullmatch(label) for label in labels_of(final_issue))
+    ):
+        return {"pr": number, "status": "issue-changed-before-close"}
 
     gh([
         "pr", "close", str(number), "--repo", REPO, "--comment",
