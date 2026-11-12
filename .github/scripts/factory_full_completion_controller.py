@@ -90,6 +90,20 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
     issues = work_controller.list_issues()
     prs = work_controller.list_prs()
     completion, production = raw_work_demand(policy, issues, prs)
+    if completion == 0:
+        # This workflow only wakes completion workers. With no completion
+        # demand, there is no reason to paginate the heartbeat registry,
+        # compute provider health, or read in-flight entry capacity. Production
+        # intake still runs through the separate serialized dispatcher.
+        return (
+            FleetDemand(completion=0, production=production, idle_workers=0),
+            {
+                "owned_workers": [],
+                "executable_candidates": [],
+                "capacity_scan_skipped": True,
+                "executable_slot_capacity": 0,
+            },
+        )
 
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
     manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
@@ -160,6 +174,8 @@ def persist_funnel_telemetry(controller, result: dict[str, object]) -> None:
                 )
                 or "none"
             ),
+            "Completion capacity evidence: "
+            + ("not measured; no completion demand" if result.get("capacity_scan_skipped") else "measured"),
             f"Completion share: {float(result.get('completion_share', 0.0)):.3f}",
             f"Completion target: {result.get('completion_target', 0)}",
             f"Workers selected: {len(selected)}",
@@ -238,6 +254,7 @@ def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]
         "completion_target": target,
         "idle_executable_workers": len(eligible),
         "capacity": capacity,
+        "capacity_scan_skipped": bool(capacity.get("capacity_scan_skipped", False)),
         "assignments": [],
     }
 
