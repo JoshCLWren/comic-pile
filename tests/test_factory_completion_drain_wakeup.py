@@ -49,9 +49,27 @@ def test_completion_drain_reports_dispatched_wakeups_not_fake_assignments() -> N
     assert "dispatched=${ASSIGNED" not in report["run"]
 
 
-def test_completion_drain_does_not_trigger_itself_forever() -> None:
-    """Dispatcher wakeups cannot in turn cause unbounded completion wakeups."""
+def test_completion_drain_uses_explicit_signals_not_recursive_workflow_events() -> None:
+    """One worker wakeup, no dispatcher/worker workflow_run feedback paths."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert 'workflows: ["Fixed Model Factory Entry"]' in workflow
-    assert 'workflows: ["Fixed Model Factory Dispatcher"' not in workflow
+    assert "workflow_run:" not in workflow
+    assert "workflow_dispatch:" in workflow
     assert "cron: '*/5 * * * *'" in workflow
+
+
+def test_worker_exit_dispatches_completion_after_releasing_lease() -> None:
+    """A worker's completion, even on failure, wakes the trusted dispatcher."""
+    entry = ROOT / ".github/workflows/free-model-factory-entry.yml"
+    with entry.open(encoding="utf-8") as stream:
+        jobs = yaml.safe_load(stream)["jobs"]
+    worker = jobs["run"]
+    wake = jobs["signal_completion"]
+    assert "free-model-factory-run.yml" in worker["uses"]
+    assert wake["needs"] == "run"
+    assert "always()" in wake["if"]
+    assert wake["permissions"]["actions"] == "write"
+    script = wake["steps"][0]["run"]
+    assert "gh workflow run factory-completion-drain.yml" in script
+    assert "--ref main" in script
+    assert "free-model-factory-entry.yml" not in script
+    assert "factory-work-controller.py" not in script
