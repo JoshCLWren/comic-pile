@@ -298,6 +298,6 @@ def test_review_excerpt_rejects_many_files_when_minimum_evidence_wont_fit() -> N
 def test_local_review_prompt_requires_substantive_reason_for_approve_and_reject() -> None:
     """The model prompt explicitly meets the strict response validator."""
     shell = (ROOT / ".github/scripts/local-ollama-review.sh").read_text()
-    assert '"For BOTH APPROVE and REJECT, include a reason "' in shell
+    assert "For BOTH APPROVE and REJECT, include a reason" in shell
     assert '"string of at least 30 characters explaining concrete, independently checked evidence; "' in shell
     assert 'contract.review_patch_excerpt(open("/tmp/p.patch"' in shell
