@@ -154,7 +154,7 @@ def test_untrusted_reset_cannot_clear_issue_retries(
 def test_retirement_writes_handoff_before_close_and_preserves_branch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    actions: list[tuple[str, object]] = []
+    actions: list[tuple[str, list[str]]] = []
     monkeypatch.setattr(retire, "read_pr", lambda number: pr())
     monkeypatch.setattr(retire, "read_issue", lambda number: issue())
     monkeypatch.setattr(
@@ -163,7 +163,7 @@ def test_retirement_writes_handoff_before_close_and_preserves_branch(
     )
     monkeypatch.setattr(
         retire, "restore_issue_intake",
-        lambda payload: actions.append(("requeue", payload["number"])),
+        lambda payload: actions.append(("requeue", [str(payload["number"])])),
     )
     monkeypatch.setattr(
         retire, "gh",
@@ -173,7 +173,7 @@ def test_retirement_writes_handoff_before_close_and_preserves_branch(
     assert result["status"] == "retired"
     assert actions[0][0] == "gh"
     assert actions[0][1][:2] == ["issue", "comment"]
-    assert actions[1] == ("requeue", ISSUE)
+    assert actions[1] == ("requeue", [str(ISSUE)])
     assert actions[2][1][:2] == ["pr", "close"]
     assert "--delete-branch" not in actions[2][1]
     assert HEAD in " ".join(actions[2][1])
