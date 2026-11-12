@@ -874,7 +874,7 @@ jobs:
           gh workflow run local-ollama-review.yml \
             --repo "$GITHUB_REPOSITORY" --ref main -f "pr=${pr}"
 
-      - name: Self-perpetuate roster cadence
+      - name: Queue roster successor outside assignment lease lock
         if: always() && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'roster')) && !inputs.target && steps.rotisserie_install.outcome == 'success' && (steps.api_budget.outputs.allow == 'true' || steps.api_budget.outputs.quota_deferred == 'true')
         continue-on-error: true
         shell: bash
@@ -888,12 +888,11 @@ jobs:
           BUDGET_UNREADABLE: ${{ steps.dispatch_workers.outputs.budget_unreadable }}
         run: |
           set -Eeuo pipefail
-          # GitHub throttles scheduled delivery to roughly hourly. Roster-mode
-          # dispatch is not subject to that throttle, but it must not
-          # self-perpetuate on a trustworthy zero-work tick: chain only when at
-          # least one entry workflow was dispatched or dispatch failed before
-          # a trustworthy zero-work result. The hourly cron and recovery
-          # workflow restart a broken chain.
+          # GitHub throttles scheduled delivery to roughly hourly. Only
+          # roster-mode work schedules a successor, and a trustworthy zero-work
+          # tick ends that chain. Dispatch the independent delay workflow NOW,
+          # then release both this job's shared assignment lock and this
+          # workflow's ingress lock. The successor cannot claim any work.
           dispatched_count="${DISPATCHED_COUNT:-}"
           dispatch_failed="${DISPATCH_FAILED:-}"
 
@@ -905,8 +904,8 @@ jobs:
           fi
 
           # A valid low REST budget must not kill the roster chain until GitHub's
-          # next hourly watchdog. Wait without API polling, then enqueue exactly
-          # one successor after the observed installation quota reset.
+          # next hourly watchdog. Delegate the quota-reset delay without polling
+          # or holding either concurrency lock.
           defer_until_reset() {
             local reset_epoch="${API_RESET_EPOCH:-}" now_epoch delay_seconds
             if ! [[ "$reset_epoch" =~ ^[0-9]+$ && ${#reset_epoch} -le 11 ]]; then
@@ -920,10 +919,9 @@ jobs:
               echo "::warning::REST quota reset delay ${delay_seconds}s is implausible; refusing chain"
               return 1
             fi
-            echo "REST reserve reached; resuming roster after quota reset in ${delay_seconds}s"
-            sleep "$delay_seconds"
-            gh workflow run fixed-model-factory-dispatch.yml \
-              --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+            echo "REST reserve reached; queueing roster for quota reset in ${delay_seconds}s"
+            gh workflow run fixed-model-factory-roster-successor.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f "delay_seconds=$delay_seconds"
           }
 
           if [[ "${QUOTA_DEFERRED:-}" == "true" || "${BUDGET_DEFERRED:-}" == "true" ]]; then
@@ -932,9 +930,10 @@ jobs:
           fi
 
           chain_roster_successor() {
-            sleep 240
-            gh workflow run fixed-model-factory-dispatch.yml \
-              --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+            # Never sleep while holding fixed-model-factory-dispatch's shared
+            # assignment lock or its workflow-level ingress lock.
+            gh workflow run fixed-model-factory-roster-successor.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f delay_seconds=240
           }
 
           if [[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]; then
