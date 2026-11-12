@@ -23,7 +23,32 @@ def controller() -> types.ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    # Existing runtime fixtures exercise historical worker IDs that are no
+    # longer on the live roster. Keep that test data explicit, never relax
+    # the production assignment check.
+    real_sources = module.worker_sources
+    module.__dict__["worker_sources"] = lambda: {
+        **real_sources(),
+        "13": "nvidia",
+        "17": "nvidia",
+        "59": "nvidia",
+    }
     return module
+
+
+
+def test_three_digit_assignment_checks_canonical_id_and_live_roster(
+    controller: types.ModuleType,
+) -> None:
+    """Actual roster members 104-107 can dispatch; unknown IDs cannot."""
+    authorized = controller.is_authorized_fixed_worker
+    roster = controller.worker_sources()
+    assert all(str(worker) in roster for worker in range(104, 108))
+    for worker in range(104, 108):
+        assert authorized(str(worker))
+    for invalid in ("108", "999", "0", "00", "0104", "+104", "104 ", "abc", ""):
+        assert not authorized(invalid)
+
 
 
 def test_stale_fixed_lease_releases_but_live_worker_is_not_stolen(
@@ -161,10 +186,11 @@ def test_assign_candidate_rolls_first_target_back_when_second_write_fails(
     assert (602, "factory:unowned", None) in calls
 
 
+@pytest.mark.parametrize("worker", ["13", "104", "105", "106", "107"])
 def test_pr_assignment_preserves_existing_workflow_stage(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str
 ) -> None:
-    """Verify pr assignment preserves existing workflow stage."""
+    """A real three-digit worker can claim a PR without losing its stage."""
     candidate = controller.Candidate("pr", 1603, 2, 3, "2026-08-16T12:00:00Z")
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
@@ -179,8 +205,8 @@ def test_pr_assignment_preserves_existing_workflow_stage(
         lambda number, owner, stage=None: calls.append((number, owner, stage)),
     )
 
-    assert controller.assign_candidate(candidate, "13") is True
-    assert calls == [(1603, "factory:13", None)]
+    assert controller.assign_candidate(candidate, worker) is True
+    assert calls == [(1603, f"factory:{worker}", None)]
 
 
 def test_assign_candidate_verifies_post_write_owner(

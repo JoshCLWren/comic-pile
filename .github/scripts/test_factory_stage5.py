@@ -61,6 +61,22 @@ def no_diff_marker(
     )
 
 
+def test_three_digit_workers_require_canonical_roster_membership(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """New roster workers work, but unlisted or malformed IDs cannot claim."""
+    controller = load_controller()
+    monkeypatch.setattr(
+        controller,
+        "worker_sources",
+        lambda: {"11": "nvidia", "104": "nvidia", "107": "nvidia"},
+    )
+    for worker in ("11", "104", "107"):
+        assert controller.is_authorized_fixed_worker(worker)
+    for worker in ("5", "108", "999", "0104", "104x", "0", ""):
+        assert not controller.is_authorized_fixed_worker(worker)
+
+
 def test_retry_budget_exhausts_at_limit() -> None:
     target = issue(31)
     below = build_candidates(
