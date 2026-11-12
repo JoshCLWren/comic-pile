@@ -293,21 +293,3 @@ def test_review_excerpt_rejects_many_files_when_minimum_evidence_wont_fit() -> N
     with pytest.raises(contract.ReviewContractError, match="complete evidence"):
         contract.review_patch_excerpt(patch, 256)
 
-
-
-def test_review_candidate_skips_unlinked_older_pr_without_stealing_leases() -> None:
-    """Select the oldest actually reviewable PR using canonical issue semantics."""
-    labels = [{"name": "factory:review"}, {"name": "factory:unowned"}]
-    candidates = [
-        {"number": 7, "isDraft": False, "labels": labels,
-         "headRefName": "misc/no-link", "body": "Part of #4737 / #4335."},
-        {"number": 9, "isDraft": False, "labels": labels,
-         "headRefName": "fix/4978-eligible", "body": "Closes #4978."},
-        {"number": 8, "isDraft": False, "labels": labels + [{"name": "factory:77"}],
-         "headRefName": "fix/4978-owned", "body": "Closes #4978."},
-        {"number": 10, "isDraft": False, "labels": labels,
-         "headRefName": "misc/non-closing", "body": "Part of #4737."},
-    ]
-    assert contract.select_review_candidate(candidates) == 9
-    assert contract.select_review_candidate(candidates[:1]) is None
-    assert contract.select_review_candidate(candidates[3:]) == 10

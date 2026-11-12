@@ -61,42 +61,6 @@ def target(pr: Mapping[str, Any], expected_head: str | None = None) -> dict[str,
     return {"head": head, "issue": issue, "non_closing": non_closing}
 
 
-
-def select_review_candidate(prs: list[Mapping[str, Any]]) -> int | None:
-    """Choose the oldest unclaimed PR whose linked issue can actually be reviewed.
-
-    Reject invalid issue links before dispatching an expensive GPU run. The
-    reviewer still re-fetches exact head, lease and issue before inference.
-    """
-    policy = _issue_policy()
-    candidates: list[int] = []
-    for pr in prs:
-        if not isinstance(pr, dict):
-            continue
-        number = pr.get("number")
-        if not isinstance(number, int) or isinstance(number, bool) or number <= 0 or pr.get("isDraft") is not False:
-            continue
-        labels = pr.get("labels")
-        if not isinstance(labels, list):
-            continue
-        names = {
-            str(item.get("name", "")) for item in labels if isinstance(item, dict)
-        }
-        if not {"factory:review", "factory:unowned"} <= names:
-            continue
-        if any(OWNER_RE.fullmatch(name) for name in names):
-            continue
-        branch = pr.get("headRefName")
-        body = pr.get("body")
-        if not isinstance(branch, str) or not isinstance(body, str):
-            continue
-        linked, _ = policy.linked_issue_mode(branch, body)
-        if linked is None or linked <= 0:
-            continue
-        candidates.append(number)
-    return min(candidates, default=None)
-
-
 def make_request(model: str, prompt: str, criteria_count: int) -> dict[str, Any]:
     """Give the full acceptance rubric room to finish and require JSON mode."""
     if criteria_count <= 0:
@@ -269,23 +233,16 @@ def main() -> None:
     tgt.add_argument("--expected-head")
     response = sub.add_parser("response")
     response.add_argument("file")
-    selection = sub.add_parser("select")
-    selection.add_argument("file")
     args = parser.parse_args()
     try:
         with open(args.file, encoding="utf-8") as handle:
             data = json.load(handle)
-        if args.command == "select":
-            if not isinstance(data, list):
-                raise ReviewContractError("review candidate input must be an array")
-            result = {"pr": select_review_candidate(data)}
+        if not isinstance(data, dict):
+            raise ReviewContractError("input must be a JSON object")
+        if args.command == "target":
+            result = target(data, expected_head=args.expected_head)
         else:
-            if not isinstance(data, dict):
-                raise ReviewContractError("input must be a JSON object")
-            if args.command == "target":
-                result = target(data, expected_head=args.expected_head)
-            else:
-                result = parse_response(data)
+            result = parse_response(data)
     except (OSError, json.JSONDecodeError, ReviewContractError) as exc:
         parser.exit(2, f"local review contract: {exc}\n")
     print(json.dumps(result, separators=(",", ":")))
