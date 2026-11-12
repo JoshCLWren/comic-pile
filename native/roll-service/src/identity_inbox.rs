@@ -1204,7 +1204,7 @@ mod tests {
         )
         .await;
         let overlong_err = overlong.expect_err("overlong rejection_reason must fail validation");
-        assert_eq!(overlong_err.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(overlong_err.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
         // Skip: mapping 1 flips to rejected with the skip marker.
         let skipped = skip(
