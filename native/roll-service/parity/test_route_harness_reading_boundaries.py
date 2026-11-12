@@ -29,6 +29,7 @@ from app.models import Issue, Thread, User
 
 from route_harness import (
     RouteMeasurement,
+    assert_declared_budget,
     measure_route,
     run_rust_example,
 )
@@ -44,7 +45,7 @@ LARGE_BATCH = 200
 # Statement counts are isolated to the route role; database-wide xacts and
 # blocks remain contextual telemetry.
 # The budget itself is 9 application statements in one read transaction.
-MAX_MEASURED_STATEMENTS = 30
+MAX_MEASURED_STATEMENTS = 11
 
 
 async def _seed_threads(
@@ -102,6 +103,9 @@ def _assert_budget_shape(small: RouteMeasurement, large: RouteMeasurement) -> No
     # isolated role's measured statements must remain bounded instead.
     assert small.db_statements is not None
     assert large.db_statements is not None
+    assert_declared_budget(
+        "POST", "/api/v2/reading-boundaries", small.db_statements, large.db_statements
+    )
     assert small.db_statements <= MAX_MEASURED_STATEMENTS
     assert large.db_statements <= MAX_MEASURED_STATEMENTS
     assert large.db_statements <= small.db_statements + 5

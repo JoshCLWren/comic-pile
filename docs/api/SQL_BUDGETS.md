@@ -22,5 +22,6 @@ visible to the counter.
 `pg_stat_database` transaction and block deltas, HTTP response bytes, wall
 time, and child CPU are reported separately. Those database-wide deltas can
 include unrelated connections and are contextual telemetry, not exact route
-counts. The remaining unmeasured route budgets require parity fixtures under
-#4737 before that issue can close.
+counts. The source registry currently marks 31 operations `pending-fixture`
+and the issue read-rate path `partial-branch`; these are explicit proof gaps
+under #4737, not passing measurement evidence.

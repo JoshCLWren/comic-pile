@@ -150,6 +150,21 @@ def test_budget_source_matches_generated_inventory() -> None:
     for key, source in sources.items():
         assert key in inventory, f"stale SQL budget source {key}"
         assert inventory[key].get("sql_budget") == source["sql_budget"]
+        budget = source["sql_budget"]
+        assert isinstance(budget, dict)
+        proof_reference = budget.get("proof_reference")
+        assert isinstance(proof_reference, str) and (ROOT / proof_reference).is_file(), key
+        status = budget.get("measurement_status")
+        if status in {"measured", "partial-branch"}:
+            test_reference = budget.get("measured_test_reference")
+            assert isinstance(test_reference, str) and (ROOT / test_reference).is_file(), key
+            route_prefix = key[1].split("{", 1)[0]
+            assert route_prefix in (ROOT / test_reference).read_text(encoding="utf-8"), key
+        elif status == "db-free":
+            assert source.get("db_free") is True, key
+        else:
+            assert status == "pending-fixture", key
+            assert "measured_test_reference" not in budget, key
 
 
 def test_every_budget_is_a_deployed_native_operation() -> None:

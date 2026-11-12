@@ -59,11 +59,13 @@ async def test_preferences_statements_bounded() -> None:
             "RUST_ROLL_TEST_URI": PREFERENCES_URI,
         }
         _, _, s_before = await db_counters(engine)
-        await run_rust_example(BINARY, env)
+        single_response, _, _, _ = await run_rust_example(BINARY, env)
+        assert single_response.get("status") == 200, single_response
+        assert isinstance(single_response.get("body"), dict)
         _, _, s_after = await db_counters(engine)
         delta = (s_after - s_before) if s_before is not None and s_after is not None else None
         print(f"preferences_delta={delta}", flush=True)
         assert delta is not None, "pg_stat_statements is required"
-        assert delta <= 10, f"preferences read issued {delta} statements"
+        assert delta <= 4, f"preferences read issued {delta} statements"
     finally:
         await engine.dispose()

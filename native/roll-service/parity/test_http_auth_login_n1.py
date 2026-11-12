@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.auth import hash_password
 from app.models import User
 
-from route_harness import db_counters, run_rust_example
+from route_harness import assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-auth-login-n1-secret"
 EXAMPLE = (
@@ -64,6 +64,6 @@ async def test_auth_login_statements_bounded() -> None:
         assert delta is not None, "pg_stat_statements must measure the isolated service role"
         # Six handler statements, two transaction controls and two cold-pool
         # checkout probes are the measured maximum for one successful login.
-        assert delta <= 10, f"auth login issued {delta} statements"
+        assert_declared_budget("POST", "/api/v2/auth/login", delta)
     finally:
         await engine.dispose()
