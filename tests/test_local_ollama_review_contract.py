@@ -233,7 +233,7 @@ def test_review_patch_balances_changed_line_heavy_files_without_losing_tail() ->
         assert f"diff --git a/src/f{i}.py" in excerpt
     assert "diff --git a/tests/test_roster.py" in excerpt
     assert "test_worker_107_can_claim" in excerpt
-    assert "changed lines omitted" in excerpt
+    assert "other changed lines from this file omitted" in excerpt
 
 
 def test_local_review_shell_uses_balanced_full_diff_instead_of_prefix_truncation() -> None:
