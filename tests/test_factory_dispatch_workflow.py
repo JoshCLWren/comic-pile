@@ -8,6 +8,7 @@ WORKFLOW = (
     / "workflows"
     / "fixed-model-factory-dispatch.yml"
 )
+SUCCESSOR = WORKFLOW.with_name("fixed-model-factory-roster-successor.yml")
 
 
 # Keep dispatcher assertions tied to the checked-in workflow contract.
@@ -41,7 +42,8 @@ def test_roster_dispatch_mode_cannot_fall_through_to_smoke_selection() -> None:
     assert "mode:" in workflow
     assert "default: smoke" in workflow
     assert '"$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster' in workflow
-    assert "-f mode=roster" in workflow
+    assert "fixed-model-factory-roster-successor.yml" in workflow
+    assert "-f mode=roster" in SUCCESSOR.read_text(encoding="utf-8")
 
 
 def test_recovery_watchdog_dispatches_explicit_roster_mode() -> None:
@@ -75,9 +77,13 @@ def test_roster_chain_is_serialized_and_keeps_hourly_watchdog() -> None:
     assert "cancel-in-progress: false" in workflow
     assert "queue: single" in workflow  # duplicate roster ingress coalesces
     assert "- cron: '7 * * * *'" in workflow
-    assert "Self-perpetuate roster cadence" in workflow
+    assert "Queue roster successor outside assignment lease lock" in workflow
     assert "inputs.mode == 'roster'" in workflow
-    assert "sleep 240" in workflow
+    assert "delay_seconds=240" in workflow
+    assert "sleep 240" not in workflow.split(
+        "Queue roster successor outside assignment lease lock", 1
+    )[1]
+    assert 'sleep "$DELAY_SECONDS"' in SUCCESSOR.read_text(encoding="utf-8")
 
 
 def test_roster_tick_defaults_to_twelve_workers_with_source_diverse_seed() -> None:
@@ -121,7 +127,7 @@ def test_dispatch_step_emits_dispatched_count_and_dispatch_failed_outputs() -> N
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     dispatch_step = workflow.split("Resolve and dispatch fixed workers", 1)[1].split(
-        "Self-perpetuate roster cadence", 1
+        "Queue roster successor outside assignment lease lock", 1
     )[0]
     assert "id: dispatch_workers" in workflow
     assert 'echo "dispatched_count=${dispatched_count}" >> "$GITHUB_OUTPUT"' in dispatch_step
@@ -142,15 +148,18 @@ def test_capacity_exhausted_early_exit_is_trustworthy_zero() -> None:
 def test_roster_chain_gates_on_dispatched_count_and_dispatch_failed() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
-    chain_step = workflow.split("Self-perpetuate roster cadence", 1)[1]
+    chain_step = workflow.split("Queue roster successor outside assignment lease lock", 1)[1]
     assert "steps.dispatch_workers.outputs.dispatched_count" in chain_step
     assert "steps.dispatch_workers.outputs.dispatch_failed" in chain_step
     assert '[[ "$dispatch_failed" == "true" || ( "$dispatched_count" =~ ^[0-9]+$ && "$dispatched_count" -gt 0 ) ]]' in chain_step
     assert '[[ "$dispatched_count" == "0" && "$dispatch_failed" == "false" ]]' in chain_step
     assert "Trustworthy zero-work tick: ending bounded roster session" in chain_step
-    # chained successor still sleeps then triggers the roster mode
-    assert "sleep 240" in chain_step
-    assert "-f mode=roster" in chain_step
+    # The dispatcher immediately queues the timer, which sleeps outside the
+    # lease lock before dispatching a single roster-mode cycle.
+    assert "delay_seconds=240" in chain_step
+    assert "sleep 240" not in chain_step
+    assert "gh workflow run fixed-model-factory-roster-successor.yml" in chain_step
+    assert "-f mode=roster" in SUCCESSOR.read_text(encoding="utf-8")
 
 
 def test_roster_chain_step_still_fires_on_always_for_schedule_or_roster() -> None:
@@ -210,7 +219,7 @@ def test_dispatch_fails_closed_when_actions_installation_budget_is_low_or_unread
 def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     batch = workflow.split("Dispatching workers through centralized assignment:", 1)[1].split(
-        "Self-perpetuate roster cadence", 1
+        "Queue roster successor outside assignment lease lock", 1
     )[0]
     assert "gh api rate_limit --jq '.resources.core.remaining'" in batch
     assert "remaining_core < 450" in batch
@@ -220,7 +229,7 @@ def test_dispatch_batch_checks_live_quota_and_defers_roster_until_reset() -> Non
     assert 'echo "budget_unreadable=${budget_unreadable}" >> "$GITHUB_OUTPUT"' in batch
     assert "if ! [[ \"$remaining_core\" =~ ^[0-9]+$ ]]" in batch
     assert "if (( remaining_core < 450 )); then" in batch
-    chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[0]
+    chain = workflow.split("- name: Queue roster successor outside assignment lease lock", 1)[1].split("run: |", 1)[0]
     assert "steps.api_budget.outputs.allow == 'true'" in chain
     assert "steps.api_budget.outputs.quota_deferred == 'true'" in chain
     assert "steps.dispatch_workers.outputs.budget_deferred != 'true'" not in chain
@@ -293,12 +302,13 @@ def test_quota_deferred_roster_chains_once_after_verified_reset_without_polling(
     assert gate.index('echo "quota_deferred=true"') > gate.index("remaining < 1200")
     assert "gh api rate_limit" in gate
 
-    chain = workflow.split("- name: Self-perpetuate roster cadence", 1)[1]
+    chain = workflow.split("- name: Queue roster successor outside assignment lease lock", 1)[1]
     script = textwrap.dedent(chain.split("run: |", 1)[1])
     assert "defer_until_reset" in script
     assert '[[ "$reset_epoch" =~ ^[0-9]+$' in script
     assert "delay_seconds > 3700" in script
-    assert 'sleep "$delay_seconds"' in script
+    assert 'sleep "$delay_seconds"' not in script
+    assert "gh workflow run fixed-model-factory-roster-successor.yml" in script
     assert "gh api rate_limit" not in script
 
     # Stubs capture commands rather than sleeping or dispatching Actions.
@@ -321,19 +331,21 @@ gh() { printf 'gh:%s\\n' "$*"; }
     )
     assert result.returncode == 0, result.stderr
     commands = [line for line in result.stdout.splitlines() if line.startswith(("sleep:", "gh:"))]
-    assert len(commands) == 2
-    assert 60 <= int(commands[0].removeprefix("sleep:")) <= 75
-    assert commands[1] == (
-        "gh:workflow run fixed-model-factory-dispatch.yml "
-        "--repo JoshCLWren/comic-pile --ref main -f mode=roster"
+    assert len(commands) == 1
+    assert commands[0].startswith(
+        "gh:workflow run fixed-model-factory-roster-successor.yml "
+        "--repo JoshCLWren/comic-pile --ref main -f delay_seconds="
     )
+    assert 60 <= int(commands[0].rsplit("=", 1)[1]) <= 75
+    assert "sleep:" not in result.stdout
 
     batch = {**base, "QUOTA_DEFERRED": "", "BUDGET_DEFERRED": "true"}
     rerun = subprocess.run(
         ["bash", "-c", stub + script], env=batch, text=True, capture_output=True, check=False
     )
     assert rerun.returncode == 0, rerun.stderr
-    assert rerun.stdout.count("gh:workflow run fixed-model-factory-dispatch.yml") == 1
+    assert rerun.stdout.count("gh:workflow run fixed-model-factory-roster-successor.yml") == 1
+    assert "sleep:" not in rerun.stdout
 
     invalid = {**base, "API_RESET_EPOCH": "not-an-epoch"}
     blocked = subprocess.run(
@@ -369,7 +381,7 @@ def test_non_quota_roster_keeps_normal_cadence_and_stops_on_no_work() -> None:
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
     script = textwrap.dedent(
-        workflow.split("- name: Self-perpetuate roster cadence", 1)[1].split("run: |", 1)[1]
+        workflow.split("- name: Queue roster successor outside assignment lease lock", 1)[1].split("run: |", 1)[1]
     )
     stub = """
 sleep() { printf 'sleep:%s\\n' "$1"; }
@@ -388,8 +400,11 @@ gh() { printf 'gh:%s\\n' "$*"; }
         ["bash", "-c", stub + script], env=env, text=True, capture_output=True, check=False
     )
     assert active.returncode == 0, active.stderr
-    assert "sleep:240" in active.stdout
-    assert active.stdout.count("gh:workflow run fixed-model-factory-dispatch.yml") == 1
+    assert "sleep:" not in active.stdout
+    assert active.stdout.count(
+        "gh:workflow run fixed-model-factory-roster-successor.yml "
+        "--repo JoshCLWren/comic-pile --ref main -f delay_seconds=240"
+    ) == 1
 
     idle = subprocess.run(
         ["bash", "-c", stub + script],
