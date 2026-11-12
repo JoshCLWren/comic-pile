@@ -177,3 +177,127 @@ def test_review_shell_accepts_explicit_false_scope_under_errexit(
         assert result.stdout == expected
     else:
         assert result.returncode != 0
+
+
+def test_patch_excerpt_preserves_short_complete_diff() -> None:
+    """Small patches retain their entire original diff and context."""
+    patch = (
+        "diff --git a/app.py b/app.py\n"
+        "@@ -1 +1 @@\n"
+        "-old\n+new\n"
+    )
+    assert contract.review_patch_excerpt(patch) == patch
+
+
+def test_review_patch_keeps_late_worker_lease_test_after_large_context() -> None:
+    """Late worker tests survive oversized earlier-file context."""
+    patch = (
+        "diff --git a/src/large.py b/src/large.py\n"
+        "@@ -1,1000 +1,1000 @@\n"
+        + (" unchanged context that should not consume model tokens\n" * 450)
+        + "+def dispatch(worker): return worker\n"
+        + "diff --git a/tests/test_factory_work_controller_runtime.py "
+        "b/tests/test_factory_work_controller_runtime.py\n"
+        "@@ -1 +1,4 @@\n"
+        "+def test_three_digit_worker_104_lease_write():\n"
+        "+    assert lease_owner(104) == 'factory:104'\n"
+    )
+    assert len(patch) > 16_000
+    excerpt = contract.review_patch_excerpt(patch, 14_000)
+    assert len(excerpt) <= 14_000
+    assert "diff --git a/src/large.py" in excerpt
+    assert "diff --git a/tests/test_factory_work_controller_runtime.py" in excerpt
+    assert "test_three_digit_worker_104_lease_write" in excerpt
+    assert "factory:104" in excerpt
+    assert "DIFF EXCERPT" in excerpt
+
+
+def test_review_patch_balances_changed_line_heavy_files_without_losing_tail() -> None:
+    """Budgeting covers each file even with many added source lines."""
+    files = [
+        (
+            f"diff --git a/src/f{i}.py b/src/f{i}.py\n"
+            "@@ -1 +1,1200 @@\n"
+            + "".join(f"+changed_line_{i}_{j} = True\n" for j in range(180))
+        )
+        for i in range(6)
+    ]
+    files.append(
+        "diff --git a/tests/test_roster.py b/tests/test_roster.py\n"
+        "@@ -1 +1 @@\n"
+        "+def test_worker_107_can_claim(): assert True\n"
+    )
+    excerpt = contract.review_patch_excerpt("".join(files), 3000)
+    assert len(excerpt) <= 3000
+    for i in range(6):
+        assert f"diff --git a/src/f{i}.py" in excerpt
+    assert "diff --git a/tests/test_roster.py" in excerpt
+    assert "test_worker_107_can_claim" in excerpt
+    assert "other changed lines from this file omitted" in excerpt
+
+
+def test_local_review_shell_uses_balanced_full_diff_instead_of_prefix_truncation() -> None:
+    """The trusted review shell calls the bounded across-file projector."""
+    shell = (ROOT / ".github/scripts/local-ollama-review.sh").read_text()
+    assert "truncate -s 16000 /tmp/p.patch" not in shell
+    assert 'contract.review_patch_excerpt(open("/tmp/p.patch"' in shell
+    assert 'read()[:14000]' not in shell
+
+
+
+def test_patch_excerpt_preserves_mode_only_metadata_when_oversized() -> None:
+    """A permission-only change remains visible after stripping context."""
+    patch = (
+        "diff --git a/scripts/reviewer.sh b/scripts/reviewer.sh\n"
+        "old mode 100755\n"
+        "new mode 100644\n"
+        "diff --git a/src/large.py b/src/large.py\n"
+        "@@ -1 +1 @@\n"
+        + (" irrelevant unchanged context\n" * 100)
+        + "+fixed = True\n"
+    )
+    result = contract.review_patch_excerpt(patch, 700)
+    assert "old mode 100755" in result
+    assert "new mode 100644" in result
+    assert "diff --git a/src/large.py" in result
+
+
+def test_patch_excerpt_keeps_whole_changed_lines_or_fails_closed() -> None:
+    """No semantic reviewer receives a severed changed line as evidence."""
+    patch = (
+        "diff --git a/src/f.py b/src/f.py\n"
+        "@@ -1 +1,100 @@\n"
+        + "".join(f"+changed_value_{i} = {i}\n" for i in range(100))
+        + "diff --git a/tests/test_f.py b/tests/test_f.py\n"
+        "@@ -1 +1 @@\n"
+        "+def test_last_worker_107(): assert True\n"
+    )
+    result = contract.review_patch_excerpt(patch, 700)
+    originals = set(patch.splitlines())
+    for line in result.splitlines():
+        if line.startswith(("+", "-")):
+            assert line in originals
+    assert "+def test_last_worker_107(): assert True" in result
+    assert "other changed lines" in result
+
+
+def test_review_excerpt_rejects_many_files_when_minimum_evidence_wont_fit() -> None:
+    """Fail closed rather than dropping a file from a tight review budget."""
+    patch = "".join(
+        f"diff --git a/very_long_path_{i}_some_test_name.py "
+        f"b/very_long_path_{i}_some_test_name.py\n"
+        "@@ -1 +1 @@\n"
+        f"+value_{i} = True\n"
+        for i in range(12)
+    )
+    with pytest.raises(contract.ReviewContractError, match="complete evidence"):
+        contract.review_patch_excerpt(patch, 256)
+
+
+
+def test_local_review_prompt_requires_substantive_reason_for_approve_and_reject() -> None:
+    """The model prompt explicitly meets the strict response validator."""
+    shell = (ROOT / ".github/scripts/local-ollama-review.sh").read_text()
+    assert "For BOTH APPROVE and REJECT, include a reason" in shell
+    assert '"string of at least 30 characters explaining concrete, independently checked evidence; "' in shell
+    assert 'contract.review_patch_excerpt(open("/tmp/p.patch"' in shell
