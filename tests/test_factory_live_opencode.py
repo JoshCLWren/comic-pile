@@ -230,7 +230,7 @@ def test_deprecated_smoke_model_rotates_only_exact_selector(
     outcome = tmp_path / "outcome"
     assert selector.record_smoke_failure(log, runtime, outcome) is expected
     if expected:
-        assert outcome.read_text() == f"model_unavailable\\tModel deprecated: {runtime}\\n"
+        assert outcome.read_text() == f"model_unavailable\tModel deprecated: {runtime}\n"
     else:
         assert not outcome.exists()
 
