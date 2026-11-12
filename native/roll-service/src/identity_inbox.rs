@@ -871,7 +871,7 @@ pub async fn defer(
 
     let it = tx
         .query_opt(
-            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1",
+            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 FOR UPDATE OF i",
             &[&issue_id],
         )
         .await
@@ -930,7 +930,7 @@ pub async fn skip(
 
     let it = tx
         .query_opt(
-            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1",
+            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 FOR UPDATE OF i",
             &[&issue_id],
         )
         .await
