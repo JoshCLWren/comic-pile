@@ -909,4 +909,125 @@ mod tests {
         assert_eq!(matching.items[0].ratings_count, 2);
         assert_eq!(matching.items[0].average_rating, Some(4.75));
     }
+
+    #[tokio::test]
+    async fn creator_search_decodes_confirmed_json_credits_from_the_real_database() {
+        // Use the canonical Alembic schema and DML-only test role. A fake
+        // in-memory credit fixture would miss the JSON-column decoding bug.
+        let state = crate::test_support::test_state(4)
+            .await
+            .expect("disposable creator test database");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let mut user_ids = Vec::new();
+        {
+            let connection = crate::db::checkout(&state)
+                .await
+                .expect("seed creator database");
+            for (username, creator, person_id) in [
+                ("creator-search-owner", "Chris Claremont", 40468_i64),
+                ("creator-search-other", "Chris Other", 40469_i64),
+            ] {
+                let user_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO users (username, created_at)
+                         VALUES ($1, now()) RETURNING id",
+                        &[&username],
+                    )
+                    .await
+                    .expect("insert user")
+                    .get(0);
+                user_ids.push(user_id);
+                let thread_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO threads
+                         (user_id, title, format, status, issues_remaining, queue_position, created_at)
+                         VALUES ($1, 'Creator regression', 'comic', 'active', 0, 1, now())
+                         RETURNING id",
+                        &[&user_id],
+                    )
+                    .await
+                    .expect("insert thread")
+                    .get(0);
+                let issue_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO issues
+                         (thread_id, issue_number, status, position, created_at)
+                         VALUES ($1, '1', 'read', 1, now()) RETURNING id",
+                        &[&thread_id],
+                    )
+                    .await
+                    .expect("insert issue")
+                    .get(0);
+                let metadata = serde_json::json!({
+                    "creator_credits": [{
+                        "id": person_id,
+                        "name": creator,
+                        "role": "writer"
+                    }]
+                })
+                .to_string();
+                let external_id = format!("4000-{person_id}");
+                let identity_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO external_identities
+                         (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                         VALUES ('comicvine', 'issue', $1, $2::json, now(), now())
+                         RETURNING id",
+                        &[&external_id, &metadata],
+                    )
+                    .await
+                    .expect("insert confirmed identity")
+                    .get(0);
+                connection
+                    .execute(
+                        "INSERT INTO issue_external_identity_mappings
+                         (issue_id, external_identity_id, status, created_at, updated_at)
+                         VALUES ($1, $2, 'confirmed', now(), now())",
+                        &[&issue_id, &identity_id],
+                    )
+                    .await
+                    .expect("confirm creator mapping");
+                connection
+                    .execute(
+                        "INSERT INTO events
+                         (type, timestamp, user_id, thread_id, issue_id, rating)
+                         VALUES ('rate', now(), $1, $2, $3, 4.5)",
+                        &[&user_id, &thread_id, &issue_id],
+                    )
+                    .await
+                    .expect("rate mapped issue");
+            }
+        }
+
+        let owner = user_ids[0];
+        let inputs = load_full_inputs(&state, owner)
+            .await
+            .expect("decode confirmed JSON credits from PostgreSQL");
+        assert_eq!(inputs.issue_creator_credits.len(), 1);
+        assert_eq!(inputs.effective_ratings.len(), 1);
+        let browse = creator_list_from_inputs(&inputs, None, "name", 20, 0, 0);
+        assert_eq!(browse.total, 1);
+        assert_eq!(browse.items[0].display_name, "Chris Claremont");
+
+        let matched = creator_list_from_inputs(&inputs, Some("CHRIS"), "name", 20, 0, 0);
+        assert_eq!(matched.total, 1);
+        assert_eq!(matched.items[0].display_name, browse.items[0].display_name);
+        assert_eq!(matched.items[0].ratings_count, 1);
+        assert_eq!(
+            creator_list_from_inputs(&inputs, Some("missing"), "name", 20, 0, 0).total,
+            0
+        );
+        assert_eq!(
+            creator_list_from_inputs(&inputs, Some("other"), "name", 20, 0, 0).total,
+            0,
+            "search must not leak another user's creators"
+        );
+
+        let other_inputs = load_full_inputs(&state, user_ids[1])
+            .await
+            .expect("second user's credits");
+        let other = creator_list_from_inputs(&other_inputs, Some("Chris"), "name", 20, 0, 0);
+        assert_eq!(other.total, 1);
+        assert_eq!(other.items[0].display_name, "Chris Other");
+    }
 }
