@@ -971,7 +971,7 @@ mod tests {
                     .query_one(
                         "INSERT INTO external_identities
                          (provider, entity_type, external_id, metadata_json, created_at, updated_at)
-                         VALUES ('comicvine', 'issue', $1, $2::json, now(), now())
+                         VALUES ('comicvine', 'issue', $1, ($2::text)::json, now(), now())
                          RETURNING id",
                         &[&external_id, &metadata],
                     )
