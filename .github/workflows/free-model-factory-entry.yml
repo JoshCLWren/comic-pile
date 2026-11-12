@@ -22,3 +22,25 @@ jobs:
     with:
       worker: ${{ inputs.worker }}
     secrets: inherit
+
+  # The preceding job owns the entire worker lease and its release. A
+  # completion wakeup is therefore a signal only, never an assignment.
+  signal_completion:
+    name: Wake completion drain after worker exits
+    needs: run
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Signal completed worker capacity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          # A workflow_run event from a GITHUB_TOKEN-launched worker is not
+          # reliably delivered. Explicit workflow_dispatch is supported and
+          # the drain's concurrency group coalesces bursts of completions.
+          gh workflow run factory-completion-drain.yml \
+            --repo "$GITHUB_REPOSITORY" --ref main
