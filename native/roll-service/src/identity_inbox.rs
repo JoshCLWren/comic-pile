@@ -743,10 +743,10 @@ pub async fn reject(
             "rejection_reason is required when rejecting a candidate",
         ));
     }
-    // The column is varchar(500); reject early with the same 422 the Python
+    // The column is varchar(500); reject early with the same 400 the Python
     // max_length=500 validator produces instead of a database error.
     if rejection_reason.chars().count() > 500 {
-        return Err(unprocessable(
+        return Err(bad_request(
             "rejection_reason must be at most 500 characters",
         ));
     }
@@ -1204,7 +1204,7 @@ mod tests {
         )
         .await;
         let overlong_err = overlong.expect_err("overlong rejection_reason must fail validation");
-        assert_eq!(overlong_err.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(overlong_err.status(), StatusCode::BAD_REQUEST);
 
         // Skip: mapping 1 flips to rejected with the skip marker.
         let skipped = skip(
