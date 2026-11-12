@@ -71,7 +71,7 @@ async def test_roll_resources_statements_do_not_grow_with_library_size() -> None
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
         small_ids = small_body.get("issue_ids")
-        assert isinstance(small_ids, list) and small_ids
+        assert isinstance(small_ids, list) and len(small_ids) == 5
         _, _, s_after = await db_counters(engine)
         small_delta = (s_after - s_before) if s_before is not None and s_after is not None else None
 
@@ -96,7 +96,8 @@ async def test_roll_resources_statements_do_not_grow_with_library_size() -> None
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
         large_ids = large_body.get("issue_ids")
-        assert isinstance(large_ids, list) and large_ids
+        assert isinstance(large_ids, list) and len(large_ids) == 6
+        assert set(small_ids).issubset(set(large_ids))
         _, _, s_after2 = await db_counters(engine)
         large_delta = (s_after2 - s_before2) if s_before2 is not None and s_after2 is not None else None
 

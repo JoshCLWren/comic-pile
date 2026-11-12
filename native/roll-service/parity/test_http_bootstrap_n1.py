@@ -66,7 +66,7 @@ async def test_bootstrap_statements_do_not_grow_with_library_size() -> None:
         small_body = small_response.get("body")
         assert isinstance(small_body, dict)
         small_rollable = small_body.get("rollable")
-        assert isinstance(small_rollable, list) and small_rollable
+        assert isinstance(small_rollable, list) and len(small_rollable) == 5
         _, _, s_after = await db_counters(engine)
         small_delta = (s_after - s_before) if s_before is not None and s_after is not None else None
 
@@ -88,7 +88,10 @@ async def test_bootstrap_statements_do_not_grow_with_library_size() -> None:
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
         large_rollable = large_body.get("rollable")
-        assert isinstance(large_rollable, list) and large_rollable
+        # Roll presents at most the current d6 faces. The extra face proves
+        # the 200-thread fixture reached the projection rather than returning
+        # the same truncated five-row result.
+        assert isinstance(large_rollable, list) and len(large_rollable) == 6
         _, _, s_after2 = await db_counters(engine)
         large_delta = (s_after2 - s_before2) if s_before2 is not None and s_after2 is not None else None
 

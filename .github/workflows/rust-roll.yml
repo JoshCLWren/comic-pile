@@ -19,6 +19,7 @@ on:
       - '.github/workflows/rust-roll.yml'
       - 'scripts/export_roll_test_schema.py'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
+      - 'docs/api/sql-budget-sources.json'
   push:
     branches: [main]
     paths:
@@ -38,6 +39,7 @@ on:
       - '.github/workflows/rust-roll.yml'
       - 'scripts/export_roll_test_schema.py'
       - 'tests/fixtures/roll-v2/auth-matrix.json'
+      - 'docs/api/sql-budget-sources.json'
   workflow_dispatch:
 
 permissions:
@@ -103,9 +105,6 @@ jobs:
             "ALTER SYSTEM SET pg_stat_statements.track = 'all'"
           docker exec -u postgres "$service_id" psql -d postgres -c \
             'SELECT pg_reload_conf()'
-          PGPASSWORD=native-local-test psql \
-            -h 127.0.0.1 -U postgres -d native_auth_test \
-            -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
       - name: Apply Alembic schema to the test database
         working-directory: .
         run: uv run alembic upgrade head
@@ -132,6 +131,11 @@ jobs:
           fi
       - name: Build scalar parity runner
         run: cargo build --locked --examples
+      - name: Create SQL measurement extension for parity
+        run: |
+          PGPASSWORD=native-local-test psql \
+            -h 127.0.0.1 -U postgres -d native_auth_test \
+            -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
       - name: Python versus Rust scalar parity
         working-directory: .
         env:
