@@ -1722,94 +1722,31 @@
       },
       {
         "method": "GET",
-        "path": "/api/v1/identity-inbox",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox"
       },
       {
         "method": "GET",
-        "path": "/api/v1/identity-inbox/search/issues",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox/search/issues"
       },
       {
         "method": "GET",
-        "path": "/api/v1/identity-inbox/{mapping_id}",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox/{mapping_id}"
       },
       {
         "method": "POST",
-        "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox/{mapping_id}/confirm"
       },
       {
         "method": "POST",
-        "path": "/api/v1/identity-inbox/{mapping_id}/defer",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox/{mapping_id}/defer"
       },
       {
         "method": "POST",
-        "path": "/api/v1/identity-inbox/{mapping_id}/reject",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox/{mapping_id}/reject"
       },
       {
         "method": "POST",
-        "path": "/api/v1/identity-inbox/{mapping_id}/skip",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
+        "path": "/api/v1/identity-inbox/{mapping_id}/skip"
       },
       {
         "method": "GET",
