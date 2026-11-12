@@ -243,3 +243,53 @@ def test_local_review_shell_uses_balanced_full_diff_instead_of_prefix_truncation
     assert 'contract.review_patch_excerpt(open("/tmp/p.patch"' in shell
     assert 'read()[:14000]' not in shell
 
+
+
+def test_patch_excerpt_preserves_mode_only_metadata_when_oversized() -> None:
+    """A permission-only change remains visible after stripping context."""
+    patch = (
+        "diff --git a/scripts/reviewer.sh b/scripts/reviewer.sh\n"
+        "old mode 100755\n"
+        "new mode 100644\n"
+        "diff --git a/src/large.py b/src/large.py\n"
+        "@@ -1 +1 @@\n"
+        + (" irrelevant unchanged context\n" * 100)
+        + "+fixed = True\n"
+    )
+    result = contract.review_patch_excerpt(patch, 700)
+    assert "old mode 100755" in result
+    assert "new mode 100644" in result
+    assert "diff --git a/src/large.py" in result
+
+
+def test_patch_excerpt_keeps_whole_changed_lines_or_fails_closed() -> None:
+    """No semantic reviewer receives a severed changed line as evidence."""
+    patch = (
+        "diff --git a/src/f.py b/src/f.py\n"
+        "@@ -1 +1,100 @@\n"
+        + "".join(f"+changed_value_{i} = {i}\n" for i in range(100))
+        + "diff --git a/tests/test_f.py b/tests/test_f.py\n"
+        "@@ -1 +1 @@\n"
+        "+def test_last_worker_107(): assert True\n"
+    )
+    result = contract.review_patch_excerpt(patch, 700)
+    originals = set(patch.splitlines())
+    for line in result.splitlines():
+        if line.startswith(("+", "-")):
+            assert line in originals
+    assert "+def test_last_worker_107(): assert True" in result
+    assert "other changed lines" in result
+
+
+def test_review_excerpt_rejects_many_files_when_minimum_evidence_wont_fit() -> None:
+    """Fail closed rather than dropping a file from a tight review budget."""
+    patch = "".join(
+        f"diff --git a/very_long_path_{i}_some_test_name.py "
+        f"b/very_long_path_{i}_some_test_name.py\n"
+        "@@ -1 +1 @@\n"
+        f"+value_{i} = True\n"
+        for i in range(12)
+    )
+    with pytest.raises(contract.ReviewContractError, match="complete evidence"):
+        contract.review_patch_excerpt(patch, 256)
+

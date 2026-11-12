@@ -117,12 +117,11 @@ def parse_response(response: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def review_patch_excerpt(patch: str, max_chars: int = 14_000) -> str:
-    """Keep every changed file visible to a bounded-context semantic reviewer.
+    """Retain whole changed lines from every file in a bounded review prompt.
 
-    For oversized diffs, omit *unchanged* context first. A simple prefix
-    truncation loses the last test files, producing false "missing tests"
-    findings. If the changed-line projection is also too large, distribute
-    the remaining budget across files rather than dropping the tail.
+    A prefix truncation can hide the decisive tests at the end of a PR. Strip
+    unchanged context first, then distribute any further reduction fairly
+    across files. Never cut a changed line into an unverifiable fragment.
     """
     if max_chars < 256:
         raise ReviewContractError("review patch budget is too small")
@@ -138,46 +137,89 @@ def review_patch_excerpt(patch: str, max_chars: int = 14_000) -> str:
         "also be omitted if marked. An excerpt is not proof that tests or "
         "behavior are absent.\n"
     )
-    sections: list[str] = []
+    metadata = (
+        "diff --git ", "index ", "@@ ", "--- ", "+++ ", "old mode ",
+        "new mode ", "new file mode ", "deleted file mode ",
+        "rename from ", "rename to ",
+    )
+    sections: list[list[str]] = []
     for chunk in chunks:
         significant = [
             line for line in chunk.splitlines(keepends=True)
-            if line.startswith((
-                "diff --git ", "@@ ", "--- ", "+++ ", "new file mode ",
-                "deleted file mode ", "rename from ", "rename to ", "+", "-",
-            ))
+            if line.startswith(metadata) or line.startswith(("+", "-"))
         ]
-        sections.append("".join(significant))
-    budget = max_chars - len(header)
-    if sum(map(len, sections)) <= budget:
-        return header + "".join(sections)
+        if not significant or not significant[0].startswith("diff --git "):
+            raise ReviewContractError("diff file header was lost during projection")
+        sections.append(significant)
 
-    omission = "\n[... changed lines omitted within this file ...]\n"
-    header_lengths = [len(part.partition("\n")[0]) + 1 for part in sections]
-    minimum = max(header_lengths) + len(omission)
-    if sum(min(len(part), minimum) for part in sections) > budget:
+    budget = max_chars - len(header)
+    projected = "".join("".join(section) for section in sections)
+    if len(projected) <= budget:
+        return header + projected
+
+    omission = "[... other changed lines from this file omitted ...]\n"
+    required: list[set[int]] = []
+    for lines in sections:
+        keep = {0}
+        changes = [
+            i for i, line in enumerate(lines)
+            if line.startswith(("+", "-")) and not line.startswith(("+++ ", "--- "))
+        ]
+        for i, line in enumerate(lines):
+            if line.startswith((
+                "@@ ", "old mode ", "new mode ", "new file mode ",
+                "deleted file mode ", "rename from ", "rename to ",
+            )):
+                keep.add(i)
+        if changes:
+            keep.update((changes[0], changes[-1]))
+        elif not any(
+            line.startswith(("old mode ", "new mode ", "new file mode ",
+                             "deleted file mode ", "rename from ", "rename to "))
+            for line in lines
+        ):
+            raise ReviewContractError("diff file lacks a reviewable changed line")
+        required.append(keep)
+
+    # Reserve a single explicit omission marker per file. When this minimum
+    # will not fit, fail closed instead of silently producing fake evidence.
+    used = len(header) + len(omission) * len(sections)
+    used += sum(
+        len(lines[i])
+        for lines, keep in zip(sections, required, strict=True)
+        for i in keep
+    )
+    if used > max_chars:
         raise ReviewContractError(
-            "diff is too large to give every changed file a safe review excerpt"
+            "diff is too large to preserve complete evidence for every changed file"
         )
 
-    low, high = minimum, budget
-    while low < high:
-        mid = (low + high + 1) // 2
-        if sum(min(len(part), mid) for part in sections) <= budget:
-            low = mid
-        else:
-            high = mid - 1
+    remaining = max_chars - used
+    optional = [
+        [i for i in range(len(lines)) if i not in keep]
+        for lines, keep in zip(sections, required, strict=True)
+    ]
+    # Round-robin keeps a large early source file from crowding out late tests.
+    while any(optional):
+        progressed = False
+        for lines, keep, pending in zip(sections, required, optional, strict=True):
+            if not pending:
+                continue
+            index = pending.pop(0)
+            size = len(lines[index])
+            if size <= remaining:
+                keep.add(index)
+                remaining -= size
+                progressed = True
+        if not progressed:
+            break
 
-    chosen: list[str] = []
-    for section in sections:
-        if len(section) <= low:
-            chosen.append(section)
-            continue
-        available = low - len(omission)
-        start = max(len(section.partition("\n")[0]) + 1, available // 2)
-        end = available - start
-        chosen.append(section[:start] + omission + section[-end:])
-    excerpt = header + "".join(chosen)
+    result = [header]
+    for lines, keep in zip(sections, required, strict=True):
+        result.extend(line for i, line in enumerate(lines) if i in keep)
+        if len(keep) != len(lines):
+            result.append(omission)
+    excerpt = "".join(result)
     if len(excerpt) > max_chars:
         raise ReviewContractError("diff excerpt exceeded review context budget")
     return excerpt
