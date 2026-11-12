@@ -72,13 +72,6 @@ pub struct IdentityInboxResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
-pub struct IdentityInboxActionRequest {
-    pub external_identity_id: Option<i32>,
-    pub rejection_reason: Option<String>,
-    pub search_query: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct IdentityInboxActionResponse {
     pub success: bool,
     pub message: String,
@@ -750,6 +743,13 @@ pub async fn reject(
             "rejection_reason is required when rejecting a candidate",
         ));
     }
+    // The column is varchar(500); reject early with the same 422 the Python
+    // max_length=500 validator produces instead of a database error.
+    if rejection_reason.chars().count() > 500 {
+        return Err(unprocessable(
+            "rejection_reason must be at most 500 characters",
+        ));
+    }
 
     let mut conn = db::checkout(&state).await?;
     let tx = conn
@@ -774,7 +774,7 @@ pub async fn reject(
 
     let it = tx
         .query_opt(
-            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1",
+            "SELECT t.user_id FROM issues i JOIN threads t ON t.id = i.thread_id WHERE i.id = $1 FOR UPDATE OF i",
             &[&issue_id],
         )
         .await
@@ -833,12 +833,6 @@ pub async fn reject(
         .await
         .map_err(db::query_error)?;
     }
-    tx.execute(
-        "UPDATE issue_external_identity_mappings SET updated_at=NOW() WHERE issue_id=$1",
-        &[&issue_id],
-    )
-    .await
-    .map_err(db::query_error)?;
     tx.commit().await.map_err(db::query_error)?;
 
     let updated = fetch_item(&state, user.id(), mapping_id).await?;
@@ -1087,21 +1081,95 @@ mod tests {
         assert_eq!(body["total"], 0);
     }
 
+    async fn query_mapping(
+        state: &std::sync::Arc<AppState>,
+        mapping_id: i32,
+    ) -> tokio_postgres::Row {
+        let conn = state.pool.get().await.unwrap();
+        conn.query_one(
+            "SELECT status, evidence_source, confidence, rejection_reason
+             FROM issue_external_identity_mappings WHERE id = $1",
+            &[&mapping_id],
+        )
+        .await
+        .unwrap()
+    }
+
+    async fn seed_inbox_fixture(state: &std::sync::Arc<AppState>) {
+        let conn = state.pool.get().await.unwrap();
+        conn.batch_execute(
+            "INSERT INTO users (id, username, is_admin, created_at) VALUES (1,'u',false,NOW());
+             INSERT INTO threads (id, title, format, issues_remaining, queue_position, status, created_at, user_id)
+                 VALUES (1,'Saga','single',5,1,'active',NOW(),1);
+             INSERT INTO issues (id, thread_id, issue_number, status, created_at, \"position\")
+                 VALUES (1,1,'1','queued',NOW(),1);
+             INSERT INTO external_identities (id, provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                 VALUES (1,'comicvine','issue','cv-1','{}'::json,NOW(),NOW()),
+                        (2,'comicvine','issue','cv-2','{}'::json,NOW(),NOW());
+             INSERT INTO issue_external_identity_mappings
+                 (id, issue_id, external_identity_id, status, evidence_json, created_at, updated_at)
+                 VALUES (1,1,1,'candidate','{}'::json,NOW(),NOW()),
+                        (2,1,2,'unresolved','{}'::json,NOW(),NOW())",
+        )
+        .await
+        .unwrap();
+    }
+
     #[tokio::test]
     async fn mutation_handlers_reach_database_write_boundary() {
         let Some(state) = test_support::test_state(2).await else {
             return;
         };
         let _guard = test_support::reset_for_test(&state).await;
+        seed_inbox_fixture(&state).await;
         let user = AuthenticatedUser::for_test(1);
-        let request = ActionRequest {
-            external_identity_id: Some(1),
-            rejection_reason: Some("not a match".to_string()),
-            search_query: None,
-        };
 
-        let _ = confirm(State(state.clone()), user, Path(1), Json(request)).await;
-        let _ = reject(
+        // Confirm: mapping 1 becomes confirmed user evidence; the sibling
+        // unresolved mapping for the same provider is rejected.
+        let confirmed = confirm(
+            State(state.clone()),
+            user,
+            Path(1),
+            Json(ActionRequest {
+                external_identity_id: Some(1),
+                rejection_reason: None,
+                search_query: None,
+            }),
+        )
+        .await
+        .expect("confirm must succeed")
+        .0;
+        assert_eq!(confirmed.message, "Candidate confirmed successfully");
+        let row = query_mapping(&state, 1).await;
+        assert_eq!(row.get::<_, String>(0), "confirmed");
+        assert_eq!(
+            row.get::<_, Option<String>>(1).as_deref(),
+            Some("user_confirmed")
+        );
+        assert_eq!(row.get::<_, Option<f64>>(2), Some(1.0));
+        assert!(row.get::<_, Option<String>>(3).is_none());
+        let sibling = query_mapping(&state, 2).await;
+        assert_eq!(sibling.get::<_, String>(0), "rejected");
+        assert_eq!(
+            sibling.get::<_, Option<String>>(3).as_deref(),
+            Some("replaced by user-confirmed candidate")
+        );
+
+        // Defer: mapping 1 flips to deferred.
+        let deferred = defer(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+        )
+        .await
+        .expect("defer must succeed")
+        .0;
+        assert_eq!(deferred.message, "Item deferred for later review");
+        let row = query_mapping(&state, 1).await;
+        assert_eq!(row.get::<_, String>(0), "deferred");
+
+        // Reject: mapping 1 flips to rejected with the supplied reason.
+        let rejected = reject(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
             Path(1),
@@ -1111,13 +1179,47 @@ mod tests {
                 search_query: None,
             }),
         )
+        .await
+        .expect("reject must succeed")
+        .0;
+        assert_eq!(rejected.message, "Candidate rejected");
+        let row = query_mapping(&state, 1).await;
+        assert_eq!(row.get::<_, String>(0), "rejected");
+        assert_eq!(
+            row.get::<_, Option<String>>(3).as_deref(),
+            Some("not a match")
+        );
+
+        // Reject over the varchar(500)/max_length bound fails validation
+        // instead of reaching the database.
+        let overlong = reject(
+            State(state.clone()),
+            AuthenticatedUser::for_test(1),
+            Path(1),
+            Json(ActionRequest {
+                external_identity_id: Some(1),
+                rejection_reason: Some("x".repeat(501)),
+                search_query: None,
+            }),
+        )
         .await;
-        let _ = defer(
+        assert!(overlong.is_err());
+
+        // Skip: mapping 1 flips to rejected with the skip marker.
+        let skipped = skip(
             State(state.clone()),
             AuthenticatedUser::for_test(1),
             Path(1),
         )
-        .await;
-        let _ = skip(State(state), AuthenticatedUser::for_test(1), Path(1)).await;
+        .await
+        .expect("skip must succeed")
+        .0;
+        assert_eq!(skipped.message, "Item skipped");
+        let row = query_mapping(&state, 1).await;
+        assert_eq!(row.get::<_, String>(0), "rejected");
+        assert_eq!(
+            row.get::<_, Option<String>>(3).as_deref(),
+            Some("skipped by user")
+        );
     }
 }
