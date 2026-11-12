@@ -866,9 +866,13 @@ mod tests {
         let inputs = scoped_creator_fixture();
         let browse = creator_list_from_inputs(&inputs, None, "name", 20, 0, 0);
         assert_eq!(browse.total, 3);
-        assert!(browse.items.iter().any(|item| item.display_name == "Brian K. Vaughan"));
+        assert!(browse
+            .items
+            .iter()
+            .any(|item| item.display_name == "Brian K. Vaughan"));
 
-        let matching = creator_list_from_inputs(&inputs, Some("  VAUGHAN  ".trim()), "name", 20, 0, 0);
+        let matching =
+            creator_list_from_inputs(&inputs, Some("  VAUGHAN  ".trim()), "name", 20, 0, 0);
         assert_eq!(matching.total, 1);
         assert_eq!(matching.items[0].canonical_creator_key, "creator:7");
         assert_eq!(matching.items[0].display_name, "Brian K. Vaughan");
@@ -891,11 +895,16 @@ mod tests {
         let second = creator_list_from_inputs(&inputs, None, "ratings_count", 1, 1, 0);
         assert_eq!(second.total, 3);
         assert_eq!(second.items.len(), 1);
-        assert_ne!(first.items[0].canonical_creator_key, second.items[0].canonical_creator_key);
+        assert_ne!(
+            first.items[0].canonical_creator_key,
+            second.items[0].canonical_creator_key
+        );
 
-        let minimum = creator_list_from_inputs(&inputs, Some("brian"), "average_rating", 20, 0, 2);
+        let minimum =
+            creator_list_from_inputs(&inputs, Some("steve"), "average_rating", 20, 0, 2);
         assert_eq!(minimum.total, 0);
-        let matching = creator_list_from_inputs(&inputs, Some("vaughan"), "average_rating", 20, 0, 2);
+        let matching =
+            creator_list_from_inputs(&inputs, Some("vaughan"), "average_rating", 20, 0, 2);
         assert_eq!(matching.total, 1);
         assert_eq!(matching.items[0].ratings_count, 2);
         assert_eq!(matching.items[0].average_rating, Some(4.75));
