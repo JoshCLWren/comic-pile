@@ -180,6 +180,7 @@ def test_review_shell_accepts_explicit_false_scope_under_errexit(
 
 
 def test_patch_excerpt_preserves_short_complete_diff() -> None:
+    """Small patches retain their entire original diff and context."""
     patch = (
         "diff --git a/app.py b/app.py\n"
         "@@ -1 +1 @@\n"
@@ -189,6 +190,7 @@ def test_patch_excerpt_preserves_short_complete_diff() -> None:
 
 
 def test_review_patch_keeps_late_worker_lease_test_after_large_context() -> None:
+    """Late worker tests survive oversized earlier-file context."""
     patch = (
         "diff --git a/src/large.py b/src/large.py\n"
         "@@ -1,1000 +1,1000 @@\n"
@@ -211,6 +213,7 @@ def test_review_patch_keeps_late_worker_lease_test_after_large_context() -> None
 
 
 def test_review_patch_balances_changed_line_heavy_files_without_losing_tail() -> None:
+    """Budgeting covers each file even with many added source lines."""
     files = [
         (
             f"diff --git a/src/f{i}.py b/src/f{i}.py\n"
@@ -234,6 +237,7 @@ def test_review_patch_balances_changed_line_heavy_files_without_losing_tail() ->
 
 
 def test_local_review_shell_uses_balanced_full_diff_instead_of_prefix_truncation() -> None:
+    """The trusted review shell calls the bounded across-file projector."""
     shell = (ROOT / ".github/scripts/local-ollama-review.sh").read_text()
     assert "truncate -s 16000 /tmp/p.patch" not in shell
     assert 'contract.review_patch_excerpt(open("/tmp/p.patch"' in shell
