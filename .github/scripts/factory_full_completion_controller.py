@@ -210,7 +210,12 @@ def signal_dispatch(controller, demand: FleetDemand, capacity: dict[str, object]
     again for every worker completion, even when no work could be claimed.
     """
     target = completion_worker_target(demand)
-    owned = set(capacity.get("owned_workers") or [])
+    owned_snapshot = capacity.get("owned_workers")
+    owned = (
+        set(map(str, owned_snapshot))
+        if isinstance(owned_snapshot, (list, tuple, set))
+        else set()
+    )
 
     executable_candidates = list(capacity.get("executable_candidates") or [])
     eligible = [
