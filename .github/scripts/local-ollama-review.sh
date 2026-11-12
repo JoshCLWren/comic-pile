@@ -30,7 +30,7 @@ NON_CLOSING="$(jq -er '.non_closing | if type == "boolean" then tostring else er
 echo "Local review: open PR #${PR}, exact head ${HEAD}, issue #${ISSUE}"
 
 gh_retry gh pr diff "$PR" > /tmp/p.patch
-truncate -s 16000 /tmp/p.patch || true
+# Preserve the entire trusted diff; bound only the model-facing excerpt.
 
 # Build the prompt from the authoritative issue rubric and exact changed paths.
 # The model must return the complete structured report; this script never
@@ -78,8 +78,9 @@ prompt = (
     "\n\nPR body (authoritative validation claims; verify them against the diff):\n" +
     pr_data.get("body", "")[:8000] +
     "\n\nCurrent CI checks for the exact PR head:\n" + checks[:6000] +
-    "\n\nPatch:\n" +
-    open("/tmp/p.patch", encoding="utf-8").read()[:14000]
+    "\n\nPatch evidence (full when short; across-file changed-line excerpts "
+    "when oversized, with omissions marked):\n" +
+    contract.review_patch_excerpt(open("/tmp/p.patch", encoding="utf-8").read())
 )
 json.dump(contract.make_request(model, prompt, len(acceptance.requirements(body))), open("/tmp/req.json", "w"))
 PY

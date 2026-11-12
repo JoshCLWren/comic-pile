@@ -115,6 +115,74 @@ def parse_response(response: Mapping[str, Any]) -> dict[str, Any]:
     return parsed
 
 
+
+def review_patch_excerpt(patch: str, max_chars: int = 14_000) -> str:
+    """Keep every changed file visible to a bounded-context semantic reviewer.
+
+    For oversized diffs, omit *unchanged* context first. A simple prefix
+    truncation loses the last test files, producing false "missing tests"
+    findings. If the changed-line projection is also too large, distribute
+    the remaining budget across files rather than dropping the tail.
+    """
+    if max_chars < 256:
+        raise ReviewContractError("review patch budget is too small")
+    if len(patch) <= max_chars:
+        return patch
+
+    chunks = [part for part in re.split(r"(?=^diff --git )", patch, flags=re.M) if part]
+    if not chunks or not all(part.startswith("diff --git ") for part in chunks):
+        raise ReviewContractError("oversized diff has no trustworthy per-file headers")
+
+    header = (
+        "DIFF EXCERPT: unchanged context is omitted; some changed lines may "
+        "also be omitted if marked. An excerpt is not proof that tests or "
+        "behavior are absent.\n"
+    )
+    sections: list[str] = []
+    for chunk in chunks:
+        significant = [
+            line for line in chunk.splitlines(keepends=True)
+            if line.startswith((
+                "diff --git ", "@@ ", "--- ", "+++ ", "new file mode ",
+                "deleted file mode ", "rename from ", "rename to ", "+", "-",
+            ))
+        ]
+        sections.append("".join(significant))
+    budget = max_chars - len(header)
+    if sum(map(len, sections)) <= budget:
+        return header + "".join(sections)
+
+    omission = "\n[... changed lines omitted within this file ...]\n"
+    header_lengths = [len(part.partition("\n")[0]) + 1 for part in sections]
+    minimum = max(header_lengths) + len(omission)
+    if sum(min(len(part), minimum) for part in sections) > budget:
+        raise ReviewContractError(
+            "diff is too large to give every changed file a safe review excerpt"
+        )
+
+    low, high = minimum, budget
+    while low < high:
+        mid = (low + high + 1) // 2
+        if sum(min(len(part), mid) for part in sections) <= budget:
+            low = mid
+        else:
+            high = mid - 1
+
+    chosen: list[str] = []
+    for section in sections:
+        if len(section) <= low:
+            chosen.append(section)
+            continue
+        available = low - len(omission)
+        start = max(len(section.partition("\n")[0]) + 1, available // 2)
+        end = available - start
+        chosen.append(section[:start] + omission + section[-end:])
+    excerpt = header + "".join(chosen)
+    if len(excerpt) > max_chars:
+        raise ReviewContractError("diff excerpt exceeded review context budget")
+    return excerpt
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
