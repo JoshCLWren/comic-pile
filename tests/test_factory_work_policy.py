@@ -892,13 +892,14 @@ def _generation_attempts(
     stage: str = "factory:changes-requested",
     conflicted: bool = False,
     now: int = 2_000_000_000,
+    reason: str = "repair-no-persisted-change-handoff",
 ):
     comments = [
         {
             "author_association": "OWNER",
             "body": (
                 "<!-- comic-pile-factory-claim-released-v3:"
-                f"pr-{number}:worker:{now - offset}:repair-no-persisted-change-handoff"
+                f"pr-{number}:worker:{now - offset}:{reason}"
                 f":sha={sha}:stage={stage}:conflicted={int(conflicted)} -->"
             ),
         }
@@ -929,10 +930,12 @@ def test_exhausted_pr_becomes_selectable_after_new_head():
     assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
 
 
-def test_exhausted_pr_becomes_selectable_after_new_actionable_review_state():
-    """New review findings on the same head immediately wake the PR."""
+def test_review_failure_budget_resets_for_new_actionable_review_state():
+    """A review-provider failure must not suppress newly actionable code repair."""
     head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    attempts = _generation_attempts(sha=head, stage="factory:review")
+    attempts = _generation_attempts(
+        sha=head, stage="factory:review", reason="review-agent-failed"
+    )
     still_review = pr_fixture(
         number=2264,
         issue=2200,
@@ -952,6 +955,40 @@ def test_exhausted_pr_becomes_selectable_after_new_actionable_review_state():
         no_diff_attempt_records=attempts,
     )
     assert any(item.kind == "pr" and item.number == 2264 for item in candidates)
+
+
+def test_no_change_repair_budget_survives_review_repair_stage_churn():
+    """A label-only handoff never replenishes an unchanged head's repair budget."""
+    now = 2_000_000_000
+    head = "a" * 40
+    stages = ["factory:review", "factory:changes-requested", "factory:review"]
+    comments = [
+        {
+            "author_association": "OWNER",
+            "body": (
+                "<!-- comic-pile-factory-claim-released-v3:pr-2264:worker:"
+                f"{now - offset}:repair-no-persisted-change-handoff"
+                f":sha={head}:stage={stage}:conflicted=0 -->"
+            ),
+        }
+        for offset, stage in enumerate(stages)
+    ]
+    attempts = policy.parse_no_diff_attempts_from_comments(comments, now_epoch=now)
+    assert len(attempts) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
+    for stage in ("factory:review", "factory:changes-requested"):
+        unchanged = pr_fixture(
+            number=2264, issue=2200,
+            labels=["factory", "factory:unowned", stage], head=head,
+        )
+        assert policy.build_candidates([], [unchanged], no_diff_attempt_records=attempts) == []
+
+    # Actual new code resets the repair budget, even after label oscillation.
+    pushed = pr_fixture(
+        number=2264, issue=2200,
+        labels=["factory", "factory:unowned", "factory:changes-requested"],
+        head="b" * 40,
+    )
+    assert policy.build_candidates([], [pushed], no_diff_attempt_records=attempts)
 
 
 def test_exhausted_pr_becomes_selectable_after_new_merge_conflict():

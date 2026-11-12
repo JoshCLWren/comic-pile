@@ -459,9 +459,10 @@ def matching_pr_no_diff_attempts(
 ) -> int:
     """Count no-diff retries that still apply to this exact PR generation.
 
-    Only markers that pin the current head SHA, workflow stage, and conflict
-    state consume the retry budget. A new push, newly actionable review stage,
-    or newly developed merge conflict starts a fresh budget immediately.
+    Only trusted markers pinned to the current head and conflict state count.
+    A repair that persisted no changes consumes the same budget across the
+    review/changes-requested handoff: a label flip is not new code. Other
+    failures remain stage-scoped. A new push or conflict starts a fresh budget.
     Unscoped legacy PR markers do not suppress a known current generation.
     """
     current_sha = head_sha.strip().lower()
@@ -473,7 +474,12 @@ def matching_pr_no_diff_attempts(
             continue
         if not attempt.sha or attempt.sha != current_sha:
             continue
-        if attempt.stage is None or attempt.stage != stage:
+        if attempt.stage is None:
+            continue
+        if attempt.stage != stage and not (
+            attempt.reason == 'repair-no-persisted-change-handoff'
+            and {attempt.stage, stage} <= {'factory:review', 'factory:changes-requested'}
+        ):
             continue
         if attempt.conflicted is None or attempt.conflicted != conflicted:
             continue
