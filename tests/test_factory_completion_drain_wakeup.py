@@ -47,3 +47,11 @@ def test_completion_drain_reports_dispatched_wakeups_not_fake_assignments() -> N
     assert report["env"]["SIGNALS"] == "${{ steps.wakeups.outputs.signaled }}"
     assert "dispatcher_wakeups=" in report["run"]
     assert "dispatched=${ASSIGNED" not in report["run"]
+
+
+def test_completion_drain_does_not_trigger_itself_forever() -> None:
+    """Dispatcher wakeups cannot in turn cause unbounded completion wakeups."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert 'workflows: ["Fixed Model Factory Entry"]' in workflow
+    assert 'workflows: ["Fixed Model Factory Dispatcher"' not in workflow
+    assert "cron: '*/5 * * * *'" in workflow
