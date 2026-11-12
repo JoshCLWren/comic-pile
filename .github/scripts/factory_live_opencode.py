@@ -26,6 +26,10 @@ MODEL_UNAVAILABLE_RE = re.compile(
     r"Error:\s*Model unavailable:\s*(?P<model>\S+)",
     re.IGNORECASE,
 )
+MODEL_DEPRECATED_RE = re.compile(
+    r"\bModel\s+(?P<model>[A-Za-z0-9][\w./:-]*)\s+has\s+been\s+deprecated\b",
+    re.IGNORECASE,
+)
 RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
@@ -119,6 +123,19 @@ def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Pat
     if runtime_model.startswith("opencode/") and FREE_QUOTA_RE.search(log_content):
         outcome_file.write_text(
             f"provider_quota\tOpenCode free quota exhausted for {runtime_model}\n",
+            encoding="utf-8",
+        )
+        return True
+    # A deprecated model may still appear in OpenCode's live catalog.
+    # Recognize only the exact requested selector, otherwise a different
+    # model mentioned in output could incorrectly poison the current one.
+    selector = runtime_model.split("/", 1)[-1]
+    if any(
+        match.group("model") in {runtime_model, selector}
+        for match in MODEL_DEPRECATED_RE.finditer(log_content)
+    ):
+        outcome_file.write_text(
+            f"model_unavailable\tModel deprecated: {runtime_model}\n",
             encoding="utf-8",
         )
         return True
