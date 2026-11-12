@@ -211,5 +211,24 @@ def test_workflow_uses_main_and_ci_trigger_without_running_pr_code() -> None:
     assert "persist-credentials: false" in workflow
     assert "factory-fast-merge.py" in workflow
     assert '"sha": head' in script
-    assert "factory_dispatch_production_deploy" in workflow
+    assert "factory_dispatch_production_deploy" in script
+    assert "dispatch_production(len(merged))" in script
     assert "factory_post_merge_closure.py --sweep" in workflow
+
+
+def test_production_dispatch_runs_from_merge_script(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Bot merges schedule a deploy without relying on push events."""
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **_kwargs: object) -> object:
+        """Record the trusted shell command instead of invoking a workflow."""
+        calls.append(args)
+        return type("Result", (), {"returncode": 0, "stderr": ""})()
+
+    monkeypatch.setattr(gate.subprocess, "run", fake_run)
+    gate.dispatch_production(2)
+    assert len(calls) == 1
+    assert "factory_dispatch_production_deploy" in calls[0][4]
+    assert "merged 2 PR(s)" in calls[0][-1]

@@ -72,6 +72,4 @@ jobs:
           python3 .github/scripts/factory_post_merge_closure.py --sweep || {
             echo "::warning::Post-merge sweep failed; existing drain can retry"
           }
-          source .github/scripts/factory-dispatch-production-deploy.sh
-          factory_dispatch_production_deploy \
-            "Factory-only Fast Merge merged ${{ steps.merge.outputs.merged_count }} PR(s)"
+          # The trusted Python merge path already dispatched production in finally.

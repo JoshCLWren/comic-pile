@@ -12,4 +12,4 @@ The **Factory-only Fast Merge** GitHub Action triggers on CI completion and pull
 
 Mixed factory/product PRs, forks, active leases, blocked/security-labeled PRs, and changes to the fast-merge policy itself are ineligible. Unknown paths fail closed. This workflow checks out **main only** and never executes untrusted PR code with its write token.
 
-After merging, it invokes existing post-merge reconciliation and the Deploy Production dispatcher. If CI is pending, failed, or unavailable, the PR remains open; it does not forge approvals or weaken branch protection.
+After merging, the Python merge path invokes the existing Deploy Production dispatcher in a finally block even when a later PR fails; the workflow then runs the post-merge reconciliation sweep. If CI is pending, failed, or unavailable, the PR remains open; it does not forge approvals or weaken branch protection.

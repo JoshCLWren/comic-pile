@@ -249,6 +249,28 @@ def handle(repo: str, number: int) -> tuple[bool, str]:
     return True, str(result.get("sha", ""))
 
 
+
+def dispatch_production(merged_count: int) -> None:
+    """Dispatch production after any bot merge, even if later PR handling fails."""
+    if merged_count <= 0:
+        return
+    command = (
+        'source .github/scripts/factory-dispatch-production-deploy.sh; '
+        'factory_dispatch_production_deploy "$1"'
+    )
+    result = subprocess.run(
+        [
+            "bash", "-euo", "pipefail", "-c", command, "factory-fast-merge",
+            f"Factory-only Fast Merge merged {merged_count} PR(s)",
+        ],
+        capture_output=True, text=True, timeout=120, check=False,
+    )
+    if result.returncode:
+        raise RuntimeError(
+            "Post-merge production dispatch failed: " + result.stderr[:400]
+        )
+
+
 def main() -> None:
     """Evaluate the owner-enabled policy and report merged PR numbers."""
     parser = argparse.ArgumentParser()
@@ -269,12 +291,17 @@ def main() -> None:
         return
     merged: list[int] = []
     skipped: list[dict[str, Any]] = []
-    for number in numbers(args.repo, pr=args.pr, head=args.head):
-        did_merge, reason = handle(args.repo, number)
-        if did_merge:
-            merged.append(number)
-        else:
-            skipped.append({"pr": number, "reason": reason})
+    try:
+        for number in numbers(args.repo, pr=args.pr, head=args.head):
+            did_merge, reason = handle(args.repo, number)
+            if did_merge:
+                merged.append(number)
+            else:
+                skipped.append({"pr": number, "reason": reason})
+    finally:
+        # GitHub's GITHUB_TOKEN merge emits no push event. Do not lose the
+        # deployment if a later PR fails during this same scan.
+        dispatch_production(len(merged))
     print(json.dumps({"enabled": True, "merged": merged, "skipped": skipped}))
 
 
