@@ -99,7 +99,7 @@ def _run_timer(tmp_path: Path, delay: str) -> tuple[subprocess.CompletedProcess[
     for name in ("sleep", "gh"):
         executable = tmp_path / name
         executable.write_text(
-            "#!/bin/sh\nprintf '%s\\n' '" + name + "' \"$*\" >> \"$TRACE\"\n",
+            "#!/bin/sh\nprintf '%s %s\\n' '" + name + "' \"$*\" >> \"$TRACE\"\n",
             encoding="utf-8",
         )
         executable.chmod(0o755)
