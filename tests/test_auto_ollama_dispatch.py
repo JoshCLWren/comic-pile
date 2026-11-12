@@ -20,7 +20,7 @@ def dispatch_script() -> str:
     source = DISPATCHER.read_text(encoding="utf-8")
     step = source.split(
         "      - name: Offer one unclaimed PR to local Ollama reviewer\n", 1,
-    )[1].split("      - name: Self-perpetuate roster cadence\n", 1)[0]
+    )[1].split("      - name: Queue roster successor outside assignment lease lock\n", 1)[0]
     return textwrap.dedent(step.split("        run: |\n", 1)[1])
 
 
@@ -30,7 +30,7 @@ def test_canonical_roster_offers_ollama_without_manual_dispatch() -> None:
     reviewer = REVIEWER.read_text(encoding="utf-8")
     job = workflow.split(
         "      - name: Offer one unclaimed PR to local Ollama reviewer", 1,
-    )[1].split("      - name: Self-perpetuate roster cadence", 1)[0]
+    )[1].split("      - name: Queue roster successor outside assignment lease lock", 1)[0]
     assert "github.event_name == 'schedule'" in job
     assert "inputs.mode == 'roster'" in job
     assert "!inputs.target" in job
