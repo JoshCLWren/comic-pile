@@ -1,14 +1,10 @@
 name: Factory Completion Drain
 
 on:
-  # Recalculate when a worker finishes and releases capacity. Do not watch
-  # the dispatcher here: this workflow now wakes that dispatcher, and watching
-  # its completion would create a self-triggering Actions loop with no work.
-  workflow_run:
-    workflows: ["Fixed Model Factory Entry"]
-    types: [completed]
-  # Recovery heartbeat only. Normal allocation should be driven by state-change
-  # events above rather than by this clock.
+  # Worker Entry explicitly uses workflow_dispatch after its worker job
+  # finishes. GITHUB_TOKEN-launched entries can suppress workflow_run events,
+  # so that event is not a reliable capacity signal or an additional trigger.
+  # Recovery heartbeat only: keep scheduling independent of worker completion.
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
