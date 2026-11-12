@@ -981,8 +981,8 @@ mod tests {
                 connection
                     .execute(
                         "INSERT INTO issue_external_identity_mappings
-                         (issue_id, external_identity_id, status, created_at, updated_at)
-                         VALUES ($1, $2, 'confirmed', now(), now())",
+                         (issue_id, external_identity_id, status, created_at, updated_at, evidence_json)
+                         VALUES ($1, $2, 'confirmed', now(), now(), '{}'::json)",
                         &[&issue_id, &identity_id],
                     )
                     .await
