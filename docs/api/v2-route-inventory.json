@@ -1721,92 +1721,92 @@
         "verified_against": "vercel.json"
       },
       {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4833,
+        "consumers": [
+          "frontend/src/services/api-identity.ts"
+        ],
         "method": "GET",
         "path": "/api/v1/identity-inbox",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4833,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "GET",
         "path": "/api/v1/identity-inbox/search/issues",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4833,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "GET",
         "path": "/api/v1/identity-inbox/{mapping_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4833,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4833,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/defer",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
+        "verified_against": "vercel.json"
+      },
+      {
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4833,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
-      {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/reject",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
-        "consumers": [
-          "frontend/src/services/api-identity.ts"
-        ],
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
-        "method": "POST",
-        "path": "/api/v1/identity-inbox/{mapping_id}/skip",
         "runtime": "native-rust",
         "status": "target",
         "owning_issue": 4833,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
+        "method": "POST",
+        "path": "/api/v1/identity-inbox/{mapping_id}/skip",
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "native Rust",
         "verified_against": "vercel.json"
