@@ -41,6 +41,7 @@ on:
       - '.github/workflows/free-model-factory-entry.yml'
       - '.github/workflows/free-model-factory-run.yml'
       - '.github/scripts/factory-work-controller.py'
+      - '.github/scripts/factory_no_progress_retirement.py'
       - '.github/scripts/factory_attempt_history.py'
       - '.github/scripts/stale_pr_decay.py'
       - '.github/scripts/factory-review-controller.py'
@@ -239,6 +240,15 @@ jobs:
         run: |
           set -Eeuo pipefail
           python3 .github/scripts/factory_migration_lane.py reconcile
+
+      - name: Retire exact-head PR attempts with exhausted no-progress repairs
+        if: steps.api_budget.outputs.allow == 'true' && !inputs.target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_no_progress_retirement.py
 
       - name: Check main health (block merges onto red main)
         if: steps.api_budget.outputs.allow == 'true' && !inputs.target
