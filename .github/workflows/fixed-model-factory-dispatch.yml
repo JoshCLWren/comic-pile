@@ -839,14 +839,11 @@ jobs:
           fi
 
           prs="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
-            --json number,isDraft,labels)"
-          pr="$(jq -r '
-            [.[] | select(.isDraft == false)
-            | select(any(.labels[]?; .name == "factory:review"))
-            | select(any(.labels[]?; .name == "factory:unowned"))
-            | select(all(.labels[]?; (.name | test("^factory:[0-9]+$") | not)))]
-            | sort_by(.number) | .[0].number // empty
-          ' <<< "$prs")"
+            --json number,isDraft,labels,headRefName,body)"
+          # Preflight linked-issue syntax before consuming a GPU review slot.
+          # The reviewer re-fetches the PR and validates the exact head/lease.
+          pr="$(python3 .github/scripts/local_review_contract.py select /dev/stdin \
+            <<< "$prs" | jq -r '.pr // empty')"
           if [[ -z "$pr" ]]; then
             echo 'No unclaimed factory review PR is currently eligible for Ollama'
             exit 0

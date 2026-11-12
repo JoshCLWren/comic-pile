@@ -301,3 +301,20 @@ def test_local_review_prompt_requires_substantive_reason_for_approve_and_reject(
     assert "For BOTH APPROVE and REJECT, include a reason" in shell
     assert '"string of at least 30 characters explaining concrete, independently checked evidence; "' in shell
     assert 'contract.review_patch_excerpt(open("/tmp/p.patch"' in shell
+
+def test_review_candidate_skips_unlinked_older_pr_without_stealing_leases() -> None:
+    """Select the oldest actually reviewable PR using canonical issue semantics."""
+    labels = [{"name": "factory:review"}, {"name": "factory:unowned"}]
+    candidates = [
+        {"number": 7, "isDraft": False, "labels": labels,
+         "headRefName": "misc/no-link", "body": "Part of #4737 / #4335."},
+        {"number": 9, "isDraft": False, "labels": labels,
+         "headRefName": "fix/4978-eligible", "body": "Closes #4978."},
+        {"number": 8, "isDraft": False, "labels": labels + [{"name": "factory:77"}],
+         "headRefName": "fix/4978-owned", "body": "Closes #4978."},
+        {"number": 10, "isDraft": False, "labels": labels,
+         "headRefName": "misc/non-closing", "body": "Part of #4737."},
+    ]
+    assert contract.select_review_candidate(candidates) == 9
+    assert contract.select_review_candidate(candidates[:1]) is None
+    assert contract.select_review_candidate(candidates[3:]) == 10
