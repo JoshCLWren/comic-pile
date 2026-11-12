@@ -63,7 +63,7 @@ async def test_preferences_statements_bounded() -> None:
         _, _, s_after = await db_counters(engine)
         delta = (s_after - s_before) if s_before is not None and s_after is not None else None
         print(f"preferences_delta={delta}", flush=True)
-        if delta is not None:
-            assert delta <= 10, f"preferences read issued {delta} statements"
+        assert delta is not None, "pg_stat_statements is required"
+        assert delta <= 10, f"preferences read issued {delta} statements"
     finally:
         await engine.dispose()

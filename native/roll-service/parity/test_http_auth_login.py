@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -54,7 +55,10 @@ async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
             }
         )
         process = await asyncio.create_subprocess_exec(
-            "native/roll-service/target/debug/examples/http_auth_login",
+            str(
+                Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
+                / "debug/examples/http_auth_login"
+            ),
             env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

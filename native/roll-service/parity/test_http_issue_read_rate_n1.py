@@ -104,9 +104,9 @@ async def test_issue_read_rate_statements_do_not_grow_with_library_size() -> Non
         large_delta = (s_after2 - s_before2) if s_before2 is not None and s_after2 is not None else None
 
         print(f"small_delta={small_delta} large_delta={large_delta}", flush=True)
-        if small_delta is not None and large_delta is not None:
-            assert large_delta <= small_delta + 2, (
-                f"statement count grew with library size: {small_delta} -> {large_delta}"
-            )
+        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        assert large_delta <= small_delta + 2, (
+            f"statement count grew with library size: {small_delta} -> {large_delta}"
+        )
     finally:
         await engine.dispose()

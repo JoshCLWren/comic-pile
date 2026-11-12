@@ -279,6 +279,15 @@ def _register_dependencies(app: FastAPI) -> None:
     app.include_router(dependency.router, prefix="/api/v1", tags=["dependencies"])
 
 
+def _register_demo(app: FastAPI) -> None:
+    """Register the unauthenticated guest demo router."""
+    from app.api import demo
+
+    # Guest demo (#2757): versioned-only new client resource, so no bare
+    # /api/* twin. It is intentionally unauthenticated and read-only.
+    app.include_router(demo.router, prefix="/api/v1/demo", tags=["demo"])
+
+
 def _register_catalog(app: FastAPI) -> None:
     """Register catalog series-mapping routers (absolute ``/api/v1`` paths)."""
     from app.api import catalog
@@ -373,6 +382,7 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         ),
         _register_dependencies,
     ),
+    RouterMount("demo", frozenset({"demo"}), _register_demo),
     RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
     RouterMount("identity-inbox", frozenset({"identity-inbox"}), _register_identity_inbox),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),

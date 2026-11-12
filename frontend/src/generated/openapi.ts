@@ -1805,6 +1805,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/demo/roll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Demo Roll
+         * @description Return the single deterministic seeded demo roll.
+         *
+         *     Returns:
+         *         A fresh copy of the seeded sample roll. No authentication, database
+         *         session, or persistence is involved, so a guest demo interaction can
+         *         never create library, queue, or reading-history rows.
+         */
+        get: operations["demo_roll_api_v1_demo_roll_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dependencies/": {
         parameters: {
             query?: never;
@@ -17400,6 +17425,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demo_roll_api_v1_demo_roll_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RollResponse"];
                 };
             };
         };

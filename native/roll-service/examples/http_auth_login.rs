@@ -69,10 +69,15 @@ async fn register(
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let username = std::env::var("RUST_ROLL_TEST_USERNAME")?;
     let password = std::env::var("RUST_ROLL_TEST_PASSWORD")?;
+    let app = router(Arc::new(AppState::new(Config::from_env()?)?));
+    if std::env::var("RUST_ROLL_TEST_BUDGET_ONLY").as_deref() == Ok("1") {
+        let valid = login(&app, &username, &password).await?;
+        println!("{}", json!({"valid": valid}));
+        return Ok(());
+    }
     let register_username = std::env::var("RUST_ROLL_TEST_REGISTER_USERNAME")?;
     let register_email = std::env::var("RUST_ROLL_TEST_REGISTER_EMAIL")?;
     let register_password = std::env::var("RUST_ROLL_TEST_REGISTER_PASSWORD")?;
-    let app = router(Arc::new(AppState::new(Config::from_env()?)?));
 
     // The canonical application schema has users.created_at NOT NULL with no
     // server default. Registration must write it explicitly; a handcrafted test

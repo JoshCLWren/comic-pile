@@ -1,0 +1,501 @@
+{
+  "schema_version": 1,
+  "description": "Editable SQL budget metadata for generated native v2 route inventory; measured parity coverage is tracked by #4737.",
+  "operations": [
+    {
+      "method": "GET",
+      "path": "/api/v2/analytics/metrics",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped metrics statement; set-based",
+        "grows_with_data": false,
+        "max_statements": 1
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/auth/csrf",
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "DB-free double-submit CSRF token issue; no PostgreSQL statement",
+        "grows_with_data": false,
+        "max_statements": 0
+      },
+      "db_free": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/forgot-password",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 2,
+        "total_statements": 5,
+        "basis": "user lookup 1 + reset-token delete 1 + insert 1 inside one transaction (+2 tx control); enumeration-safe; set-based",
+        "grows_with_data": false,
+        "max_statements": 5
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/login",
+      "sql_budget": {
+        "application_statements": 6,
+        "transaction_control_statements": 2,
+        "total_statements": 8,
+        "basis": "optimistic gate 2 (counts + user fetch) + serialized decision 4 (2 advisory locks + recount + conditional insert/delete) (+2 tx control); set-based, index-backed, independent of attempt history; bcrypt in Rust, no plaintext secret in SQL; measured cold-pool path adds two SELECT 1 checkout probes",
+        "grows_with_data": false,
+        "max_statements": 10,
+        "runtime_overhead_statements": 2
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/logout",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "user lookup 1 + conditional revocation insert 1; set-based",
+        "grows_with_data": false,
+        "max_statements": 2
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/auth/me",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "auth extractor 1 + user profile read 1; set-based, independent of library size",
+        "grows_with_data": false,
+        "max_statements": 2
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/refresh",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "user/revocation lookup 1 + refresh-token revocation insert 1; set-based",
+        "grows_with_data": false,
+        "max_statements": 2
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/register",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "existing-account check 1 + conditional insert 1; bcrypt in Rust; set-based",
+        "grows_with_data": false,
+        "max_statements": 2
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/auth/reset-password",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 2,
+        "total_statements": 4,
+        "basis": "single-use token consume 1 + password update 1 inside one transaction (+2 tx control); bcrypt in Rust; set-based",
+        "grows_with_data": false,
+        "max_statements": 4
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "basis": "auth 1 + plan/sources/release reads 4 + authoritative list read 2 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "grows_with_data": false,
+        "max_statements": 10
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "sql_budget": {
+        "application_statements": 5,
+        "transaction_control_statements": 0,
+        "total_statements": 5,
+        "basis": "auth extractor 1 + plan lookup 1 + linked sources 1 + saved issues 1 + candidate lists 1; set-based",
+        "grows_with_data": false,
+        "max_statements": 5
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "sql_budget": {
+        "application_statements": 6,
+        "transaction_control_statements": 2,
+        "total_statements": 8,
+        "basis": "auth extractor 1 + advisory lock 1 + plan lookup 1 + list lookup 1 + source rows 1 + conditional update/insert 1 (+2 tx control); set-based",
+        "grows_with_data": false,
+        "max_statements": 8
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/demo-roll",
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "Static guest fixture; native ingress bypasses application state and PostgreSQL",
+        "grows_with_data": false,
+        "max_statements": 0
+      },
+      "db_free": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/dependencies/",
+      "sql_budget": {
+        "application_statements": 10,
+        "transaction_control_statements": 2,
+        "total_statements": 12,
+        "basis": "auth extractor 1 + advisory lock 1 + source owned-issue 1 + target owned-issue 1 + duplicate check 1 + next-unread check 1 + insert 1 + refresh_blocked_threads 2 + graph_preflight Option E snapshot 1 (+2 tx control); set-based",
+        "grows_with_data": false,
+        "max_statements": 12
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/dependencies/{dependency_id}",
+      "sql_budget": {
+        "application_statements": 5,
+        "transaction_control_statements": 2,
+        "total_statements": 7,
+        "basis": "auth extractor 1 + advisory lock 1 + owner-scoped delete 1 + refresh_blocked_threads 2 (+2 tx control); set-based",
+        "grows_with_data": false,
+        "max_statements": 7
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/issues/cards",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "auth extractor 1 + owner-scoped card projection 1; set-based",
+        "grows_with_data": false,
+        "max_statements": 2
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/issues/{issue_id}",
+      "sql_budget": {
+        "application_statements": 14,
+        "transaction_control_statements": 2,
+        "total_statements": 16,
+        "basis": "auth extractor 1 + reader lock 1 + issue lookup 1 + thread lock 1 + reference_names 5 (lists, plans, node-plans, dependencies, events) + delete 1 + position reseat 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 (+2 tx control); set-based",
+        "grows_with_data": false,
+        "max_statements": 16
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/issues/{issue_id}",
+      "sql_budget": {
+        "application_statements": 25,
+        "transaction_control_statements": 2,
+        "total_statements": 27,
+        "grows_with_data": true,
+        "basis": "approximate worst-case for persist (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot); refine via parity harness",
+        "max_statements": 27
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/issues/{issue_id}/comicvine",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement; set-based",
+        "grows_with_data": false,
+        "max_statements": 1
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 2,
+        "total_statements": 5,
+        "grows_with_data": false,
+        "basis": "auth 1 + queue row load 1 + optional Option E inputs 1 (+2 tx control when enabled); set-based",
+        "max_statements": 5
+      }
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v2/queue-entries/{thread_id}",
+      "sql_budget": {
+        "application_statements": 10,
+        "transaction_control_statements": 2,
+        "total_statements": 12,
+        "grows_with_data": false,
+        "basis": "approximate worst-case reposition (locks, rows, reseat, tracking, graph preflight); refine via parity harness",
+        "max_statements": 12
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/queue-orders",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": true,
+        "basis": "approximate worst-case queue order creation; refine via parity harness",
+        "max_statements": 10
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-boundaries",
+      "sql_budget": {
+        "application_statements": 9,
+        "transaction_control_statements": 2,
+        "total_statements": 11,
+        "basis": "auth 1 + boundary label reads 7 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "grows_with_data": false,
+        "max_statements": 11
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-graph",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 2,
+        "total_statements": 4,
+        "basis": "auth 1 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "grows_with_data": false,
+        "max_statements": 4
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-graph/repairs",
+      "sql_budget": {
+        "application_statements": 6,
+        "transaction_control_statements": 2,
+        "total_statements": 8,
+        "grows_with_data": false,
+        "basis": "preview path: option diagnostics 1 (+2 tx) or confirm path adds lock+delete+reload; worst case shown; refine via parity harness",
+        "max_statements": 8
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "auth extractor 1 + list summary query 1; set-based",
+        "grows_with_data": false,
+        "max_statements": 2
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-lists",
+      "sql_budget": {
+        "application_statements": 7,
+        "transaction_control_statements": 2,
+        "total_statements": 9,
+        "grows_with_data": true,
+        "basis": "auth 1 + lock 1 + owned-issue check 1 + list insert 1 + graph_preflight 1 + entries load 1 + one entry insert 1 (+2 tx control); grows with entry count",
+        "max_statements": 9
+      }
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "sql_budget": {
+        "application_statements": 4,
+        "transaction_control_statements": 2,
+        "total_statements": 6,
+        "basis": "auth extractor 1 + advisory lock 1 + unlinked check 1 + delete 1 (+2 tx control); set-based",
+        "grows_with_data": false,
+        "max_statements": 6
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 0,
+        "total_statements": 3,
+        "basis": "auth extractor 1 + list load 1 + entries load 1; set-based",
+        "grows_with_data": false,
+        "max_statements": 3
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/reading-lists/{list_id}",
+      "sql_budget": {
+        "application_statements": 11,
+        "transaction_control_statements": 2,
+        "total_statements": 13,
+        "grows_with_data": true,
+        "basis": "auth 1 + lock 1 + old entries load 1 + owned-issue check 1 + list update 1 + entries delete 1 + one entry insert 1 + graph_preflight 1 + new entries load 1 + list reload 1 (+2 tx control); grows with entry count",
+        "max_statements": 13
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/reading-lists/{list_id}/reader",
+      "sql_budget": {
+        "application_statements": 4,
+        "transaction_control_statements": 2,
+        "total_statements": 6,
+        "basis": "auth extractor 1 + list load 1 + entries load 1 + Option E snapshot 1 (+2 tx control); set-based",
+        "grows_with_data": false,
+        "max_statements": 6
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/reading-sessions",
+      "sql_budget": {
+        "application_statements": 20,
+        "transaction_control_statements": 2,
+        "total_statements": 22,
+        "grows_with_data": false,
+        "basis": "approximate worst-case session initialization; refine via parity harness",
+        "max_statements": 22
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/bootstrap",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": false,
+        "basis": "auth + session bootstrap + option inputs + die + snoozes; refine via parity harness",
+        "max_statements": 10
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/dice-command",
+      "sql_budget": {
+        "application_statements": 12,
+        "transaction_control_statements": 2,
+        "total_statements": 14,
+        "grows_with_data": false,
+        "basis": "approximate worst-case standalone dice mutation; refine via parity harness",
+        "max_statements": 14
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/die-state",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement: current die, approved ladder source and last roll; set-based, independent of library size, no per-row N+1",
+        "grows_with_data": false,
+        "max_statements": 1
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/roll/eligible-issue-ids",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "auth folded into one owner-scoped statement: Option E snapshot, die and pending offer; set-based, independent of library size, no per-row N+1",
+        "grows_with_data": false,
+        "max_statements": 1
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/offer",
+      "sql_budget": {
+        "application_statements": 15,
+        "transaction_control_statements": 2,
+        "total_statements": 17,
+        "grows_with_data": true,
+        "basis": "approximate worst-case offer transaction; refine via parity harness",
+        "max_statements": 17
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/roll/reset",
+      "sql_budget": {
+        "application_statements": 10,
+        "transaction_control_statements": 2,
+        "total_statements": 12,
+        "grows_with_data": false,
+        "basis": "approximate worst-case reset transaction; refine via parity harness",
+        "max_statements": 12
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/threads",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "default legacy path: one page statement including auth, total, lists and rows; option_e preview adds auth 1 + one-statement Option E snapshot 1 (+2 tx control) when activated; set-based, independent of library size, no per-row N+1",
+        "grows_with_data": false,
+        "max_statements": 1
+      }
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v2/threads/{thread_id}/issue-order",
+      "sql_budget": {
+        "application_statements": 8,
+        "transaction_control_statements": 2,
+        "total_statements": 10,
+        "grows_with_data": false,
+        "basis": "auth 1 + reader lock 1 + thread lock 1 + issues load 1 + constraints defer 1 + reseat positions 1 + recreate tracking 1 + graph_preflight 1 (+2 tx control); set-based",
+        "max_statements": 10
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/threads/{thread_id}/issues",
+      "sql_budget": {
+        "application_statements": 11,
+        "transaction_control_statements": 2,
+        "total_statements": 13,
+        "grows_with_data": true,
+        "basis": "auth 1 + reader lock 1 + thread lock 1 + existing issues load 1 + constraints defer 1 + (optional position reseat 1) + one issue insert 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 + total count 1 (+2 tx control); grows with issue count",
+        "max_statements": 13
+      }
+    }
+  ]
+}

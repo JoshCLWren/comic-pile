@@ -25418,6 +25418,29 @@
         ]
       }
     },
+    "/api/v1/demo/roll": {
+      "get": {
+        "description": "Return the single deterministic seeded demo roll.\n\nReturns:\n    A fresh copy of the seeded sample roll. No authentication, database\n    session, or persistence is involved, so a guest demo interaction can\n    never create library, queue, or reading-history rows.",
+        "operationId": "demo_roll_api_v1_demo_roll_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Demo Roll",
+        "tags": [
+          "demo",
+          "demo"
+        ]
+      }
+    },
     "/api/v1/dependencies/": {
       "post": {
         "operationId": "create_legacy_dependency",

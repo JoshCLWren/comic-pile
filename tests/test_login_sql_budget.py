@@ -100,11 +100,14 @@ def test_login_sql_budget_matches_handler_call_sites() -> None:
     assert budget.get("application_statements") == expected
     assert budget.get("transaction_control_statements") == 2
     assert budget.get("total_statements") == expected + 2
+    assert budget.get("runtime_overhead_statements") == 2
+    assert budget.get("max_statements") == expected + 4
     assert budget.get("basis") == (
         "optimistic gate 2 (counts + user fetch) + serialized decision 4 "
         "(2 advisory locks + recount + conditional insert/delete) (+2 tx control); "
         "set-based, index-backed, independent of attempt history; "
-        "bcrypt in Rust, no plaintext secret in SQL"
+        "bcrypt in Rust, no plaintext secret in SQL; measured cold-pool path "
+        "adds two SELECT 1 checkout probes"
     )
 
 
