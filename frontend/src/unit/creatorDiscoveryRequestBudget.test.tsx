@@ -333,6 +333,86 @@ describe('creator detail request budget', () => {
   })
 })
 
+describe('creator search request and rendering contract', () => {
+  it('sends debounced name searches through axios and renders the filtered backend pages', async () => {
+    const creators = [
+      {
+        canonical_creator_key: 'creator:7',
+        display_name: 'Brian K. Vaughan',
+        normalized_roles: ['writer'],
+        average_rating: 4.75,
+        ratings_count: 2,
+      },
+      {
+        canonical_creator_key: 'creator:12',
+        display_name: 'Steve McNiven',
+        normalized_roles: ['penciler'],
+        average_rating: 4,
+        ratings_count: 1,
+      },
+    ]
+    installDomainLedger(
+      {
+        ...creatorHandlers,
+        'GET /api/v1/creators': (request) => {
+          const term = request.query.search?.[0]?.toLowerCase() ?? ''
+          const minimum = Number(request.query.min_ratings?.[0] ?? 0)
+          const offset = Number(request.query.offset?.[0] ?? 0)
+          const limit = Number(request.query.limit?.[0] ?? 20)
+          const items = creators.filter(
+            (creator) => creator.display_name.toLowerCase().includes(term) && creator.ratings_count >= minimum,
+          )
+          return { data: makeCreatorPage({ items: items.slice(offset, offset + limit), total: items.length, offset, limit }) }
+        },
+      },
+      'creator search regression',
+    )
+
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/creators']}>
+          <Routes>
+            <Route path="/creators" element={<CreatorsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByText('Brian K. Vaughan')).toBeInTheDocument()
+    expect(await screen.findByText('Steve McNiven')).toBeInTheDocument()
+    const initialRequests = ledger.requests.length
+    const search = screen.getByRole('searchbox', { name: 'Search creators by name' })
+
+    fireEvent.change(search, { target: { value: 'VAUGHAN' } })
+    expect(ledger.requests).toHaveLength(initialRequests)
+    await waitFor(() => expect(ledger.requests).toHaveLength(initialRequests + 1))
+    expect(ledger.requests.at(-1)?.query.search).toEqual(['VAUGHAN'])
+    expect(ledger.requests.at(-1)?.query.offset).toBeUndefined()
+    expect(await screen.findByText('Showing 1 of 1 creators')).toBeInTheDocument()
+    expect(screen.getByText('Brian K. Vaughan')).toBeInTheDocument()
+    expect(screen.queryByText('Steve McNiven')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Minimum rated'), { target: { value: '3' } })
+    await waitFor(() => expect(ledger.requests.at(-1)?.query.min_ratings).toEqual(['3']))
+    expect(await screen.findByText('No creators match “VAUGHAN”.')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Minimum rated'), { target: { value: '0' } })
+    await screen.findByText('Brian K. Vaughan')
+
+    fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'ratings_count' } })
+    await waitFor(() => expect(ledger.requests.at(-1)?.query.sort).toEqual(['ratings_count']))
+    expect(await screen.findByText('Showing 1 of 1 creators')).toBeInTheDocument()
+
+    fireEvent.change(search, { target: { value: 'nobody' } })
+    expect(await screen.findByText('No creators match “nobody”.')).toBeInTheDocument()
+    expect(ledger.requests.at(-1)?.query.search).toEqual(['nobody'])
+
+    fireEvent.change(search, { target: { value: '' } })
+    expect(await screen.findByText('Showing 2 of 2 creators')).toBeInTheDocument()
+    expect(ledger.requests.at(-1)?.query.search).toBeUndefined()
+    expect(screen.getByText('Steve McNiven')).toBeInTheDocument()
+  })
+})
+
 describe('creator search cancellation', () => {
   it('aborts a superseded creator-list request instead of leaving it in flight', async () => {
     const calls: Array<{
