@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import pytest
