@@ -1,7 +1,8 @@
 {
   "family": "identity-inbox",
   "owned_path_patterns": [
-    "^/api/v1/identity\\-inbox(?:/.*)?$"
+    "^/api/v1/identity\\-inbox(?:/.*)?$",
+    "^/api/identity\\-inbox(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "native-rust",
@@ -60,6 +61,55 @@
       "path": "/api/v1/identity-inbox/{mapping_id}/skip",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/identity\\-inbox/[^/]+/skip$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/identity-inbox",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/identity-inbox/search/issues",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox/search/issues$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/identity-inbox/{mapping_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox/[^/]+$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/identity-inbox/{mapping_id}/confirm",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox/[^/]+/confirm$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/identity-inbox/{mapping_id}/defer",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox/[^/]+/defer$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/identity-inbox/{mapping_id}/reject",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox/[^/]+/reject$"
+    },
+    {
+      "bucket": "unversioned_operations",
+      "method": "POST",
+      "path": "/api/identity-inbox/{mapping_id}/skip",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/identity\\-inbox/[^/]+/skip$"
     }
   ]
 }
