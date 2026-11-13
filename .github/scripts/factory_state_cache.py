@@ -96,13 +96,20 @@ def _publish(key: str, owner: str, data: list[dict[str, Any]], ttl_seconds: int)
     # A lock that expired or changed owner may not publish an older snapshot.
     _run(
         """
-        UPDATE public.factory_state_kv
-           SET payload=$3::jsonb, fetched_at=now(),
-               expires_at=now() + $4::int * interval '1 second',
-               refresh_owner=NULL, refresh_until=NULL, updated_at=now()
-         WHERE cache_key=$1 AND refresh_owner=$2
+        WITH refreshed AS (
+            UPDATE public.factory_state_kv
+               SET payload=$3::jsonb, fetched_at=now(),
+                   expires_at=now() + $4::int * interval '1 second',
+                   refresh_owner=NULL, refresh_until=NULL, updated_at=now()
+             WHERE cache_key=$1 AND refresh_owner=$2
+             RETURNING cache_key
+        )
+        INSERT INTO public.factory_state_events (source, event_type, detail)
+        SELECT 'github-actions', 'cache_refresh',
+               jsonb_build_object('key', cache_key, 'records', $5::int)
+          FROM refreshed
         """,
-        key, owner, json.dumps(data), ttl_seconds,
+        key, owner, json.dumps(data), ttl_seconds, len(data),
     )
 
 
