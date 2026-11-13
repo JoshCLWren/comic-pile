@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import yaml
 
 SCRIPTS = Path(__file__).resolve().parents[1] / ".github/scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -106,7 +107,12 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "release_lease(REPO, worker, claim_token, 'claim-rollback')" in controller
     assert "record_heartbeat_comments(REPO, changes)" in collector
     assert "Persist classified worker completion in Neon" in observer
-    assert "factory-state-cache" not in untrusted
+    trusted_cleanup = yaml.safe_load(untrusted)["jobs"]["release_pre_session_lease"]
+    model_job = yaml.safe_load(untrusted)["jobs"]["factory"]
+    assert "factory-state-cache" not in str(model_job)
+    assert "NEON_API_KEY" not in str(model_job)
+    assert any(step.get("uses") == "./.github/actions/factory-state-cache"
+               for step in trusted_cleanup["steps"])
     assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
     assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
@@ -137,7 +143,9 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
     assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
-    assert "factory-state-cache" not in (root / ".github/workflows/free-model-factory-run.yml").read_text()
+    reusable = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
+    assert "factory-state-cache" not in str(reusable["jobs"]["factory"])
+    assert "NEON_API_KEY" not in str(reusable["jobs"]["factory"])
 
 
 def test_verified_lease_renewal_is_only_called_after_actions_liveness() -> None:
