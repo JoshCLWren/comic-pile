@@ -107,7 +107,8 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "record_heartbeat_comments(REPO, changes)" in collector
     assert "Persist classified worker completion in Neon" in observer
     assert "factory-state-cache" not in untrusted
-    assert "factory-state-cache" not in entry
+    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
+    assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
 def test_trusted_heartbeat_events_extend_current_nonexpired_lease() -> None:
