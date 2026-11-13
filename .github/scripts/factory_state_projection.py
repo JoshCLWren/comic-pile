@@ -139,8 +139,8 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                    FROM incoming
                    ON CONFLICT (cache_key) DO UPDATE SET
                      payload=EXCLUDED.payload,updated_at=now(),fetched_at=now()
-                   WHERE (factory_state_kv.payload->0->>'source_updated_at')
-                         <= (EXCLUDED.payload->0->>'source_updated_at')
+                   WHERE (COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
+                         <= (COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                      AND (factory_state_kv.payload->0->'item'
                           IS DISTINCT FROM EXCLUDED.payload->0->'item'
                           OR factory_state_kv.payload->0->>'state' != 'open')
@@ -156,7 +156,7 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                    WHERE cache_key LIKE $1
                      AND cache_key != $2
                      AND payload->0->>'state'='open'
-                     AND (payload->0->>'observed_at') <= $3
+                     AND (payload->0->>'observed_at')::timestamptz <= $3::timestamptz
                      AND NOT (cache_key=ANY($4::text[]))
                    RETURNING cache_key""",
                 prefix + "%", _marker(repo,kind), started,
@@ -218,8 +218,8 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
                    VALUES ($1,$2::jsonb,now(),'2100-01-01'::timestamptz,now())
                    ON CONFLICT(cache_key) DO UPDATE SET
                      payload=EXCLUDED.payload,updated_at=now()
-                   WHERE (factory_state_kv.payload->0->>'source_updated_at')
-                         <= (EXCLUDED.payload->0->>'source_updated_at')
+                   WHERE (COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
+                         <= (COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                      AND (factory_state_kv.payload->0->'item'
                           IS DISTINCT FROM EXCLUDED.payload->0->'item'
                           OR factory_state_kv.payload->0->>'state' !=
