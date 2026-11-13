@@ -10,8 +10,6 @@ import asyncio
 import json
 import os
 import re
-import sys
-import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -92,6 +90,8 @@ def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = 900) ->
     if not 60 <= ttl <= 86400:
         raise ValueError("invalid factory lease TTL")
     if not enabled():
+        if os.environ.get("FACTORY_NEON_LEASE_REQUIRED") == "true":
+            raise RuntimeError("trusted factory dispatcher requires Neon transaction lease connection")
         return ""
     return asyncio.run(_acquire(repo, worker, numbers, ttl))
 
