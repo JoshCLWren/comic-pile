@@ -71,3 +71,32 @@ def test_ci_summary_requires_real_checks(fork: bool, failed: str | None) -> None
     shell = shell.replace("${{ needs.factory_fast_preflight.outputs.eligible }}", "false")
     result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True, check=False)
     assert result.returncode == (0 if failed is None else 1), result.stdout + result.stderr
+
+
+def test_fast_lane_ci_summary_requires_successful_trusted_preflight() -> None:
+    """Eligible factory PRs skip product tests but still need an authentic preflight."""
+    jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
+    preflight = jobs["factory_fast_preflight"]
+    assert preflight["permissions"] == {"contents": "read", "pull-requests": "read"}
+    checkout = preflight["steps"][0]
+    assert checkout["with"]["ref"] == "main"
+    assert checkout["with"]["persist-credentials"] is False
+    policy = preflight["steps"][1]["run"]
+    assert "gate.factory_candidate(pr, files, repo)" in policy
+    assert "gate.enabled(Path(" in policy
+
+    for preflight_result in ("success", "failure"):
+        results = dict.fromkeys(jobs["check-all-jobs"]["needs"], "skipped")
+        results["factory_fast_preflight"] = preflight_result
+        shell = jobs["check-all-jobs"]["steps"][0]["run"]
+        shell = re.sub(
+            r"\$\{\{ needs\.([a-z_-]+)\.result }}",
+            lambda match: results[match[1]], shell,
+        )
+        shell = shell.replace("${{ needs.factory_fast_preflight.outputs.eligible }}", "true")
+        result = subprocess.run(
+            ["bash", "-c", shell], capture_output=True, text=True, check=False,
+        )
+        assert result.returncode == (0 if preflight_result == "success" else 1), (
+            result.stdout + result.stderr
+        )
