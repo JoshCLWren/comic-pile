@@ -37,7 +37,11 @@ def test_attempt_registry_uses_shared_neon_snapshot_and_preserves_run_filter() -
     assert "from factory_completion_controller import registry_comments" in workflow
     assert "print(json.dumps(registry_comments()))" in workflow
     assert '| jq -rs --arg run "$COMPLETED_RUN_ID"' in workflow
-    assert 'issues/1093/comments?per_page=100' not in workflow
+    # A 120-second cached snapshot can predate the completed run. Permit
+    # only a bounded live "since" read on exact run miss, never full history.
+    assert 'issues/1093/comments?per_page=100&since=${since}' in workflow
+    assert 'gh api --paginate \\\n                "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' not in workflow
+    assert workflow.index('if [[ -z "$attempt_body" ]]') < workflow.index('since="$(date -u')
     assert "uses: ./.github/actions/factory-state-cache" in workflow
 
 
