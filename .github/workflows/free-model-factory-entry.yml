@@ -43,5 +43,63 @@ jobs:
           # reliably delivered. Explicit workflow_dispatch is supported and
           # the drain's concurrency group coalesces bursts of completions.
           gh workflow run factory-completion-drain.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main \
-            -f source_run_id="$GITHUB_RUN_ID"
+            --repo "$GITHUB_REPOSITORY" --ref main
+
+  # Persist the terminal outcome in this trusted, *separate* runner after the
+  # model execution job exits. The capacity drain can remain blocked behind
+  # dispatch serialization without delaying durable lifecycle recording.
+  # The reusable model job does not receive Neon secrets.
+  persist_outcome:
+    name: Persist trusted worker outcome in Neon
+    needs: run
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Configure restricted Neon factory event ledger
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Classify and persist this completed worker
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::Invalid trusted worker ID"
+            exit 1
+          }
+          # This is the authoritative Entry run ID. The job can run while
+          # the parent workflow's capacity-wakeup job is still executing.
+          jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100")"
+          job_id="$(jq -r '[.jobs[] | select(.name == "run / factory" and .status == "completed") | .id][0] // empty' <<< "$jobs")"
+          [[ "$job_id" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::The reusable factory job has not completed"
+            exit 1
+          }
+          # Write ANSI-colored logs to a local file, never to a terminal.
+          gh api --allow-escape-sequences \
+            "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
+            > "$RUNNER_TEMP/factory-entry.log"
+          python3 .github/scripts/classify-fixed-model-run.py \
+            --log "$RUNNER_TEMP/factory-entry.log" \
+            > "$RUNNER_TEMP/worker-outcome.json"
+          # Worker identity comes from the trusted dispatch input, *not* from
+          # any untrusted text in a model-generated log.
+          jq --arg worker "$INPUT_WORKER" '.worker = $worker' \
+            "$RUNNER_TEMP/worker-outcome.json" \
+            > "$RUNNER_TEMP/worker-outcome-attested.json"
+          python3 .github/scripts/factory_state_ledger.py runtime-outcome \
+            --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --file "$RUNNER_TEMP/worker-outcome-attested.json"

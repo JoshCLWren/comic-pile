@@ -62,9 +62,11 @@ success/failure *signals* from registry comments. These terminal signals are
 not liveness heartbeats and never extend a lease. The controller renews
 unexpired leases only for workers it independently verifies have active
 GitHub Actions runs, and clears token-matching Neon claims after verified
-GitHub label release. The worker Entry dispatches the trusted Completion Drain
-with its source run ID; a separate, non-model job classifies the finished
-factory-job log and persists the immutable completion/failure event. The
+GitHub label release. The worker Entry independently runs a trusted, non-model post-worker
+job to classify the finished factory-job log and persist the immutable
+completion/failure event. It separately dispatches the capacity Completion
+Drain. The outcome recorder does not share the drain's dispatcher concurrency
+lock, so capacity backlogs cannot postpone durable event recording. The
 runtime observer remains an idempotent backup when workflow_run notifications
 are delivered. Agent execution, including the local Qwen reviewer, never
 gets database credentials.
