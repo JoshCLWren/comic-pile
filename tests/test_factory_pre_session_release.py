@@ -62,6 +62,27 @@ def test_post_session_cleanup_runs_under_worker_lock() -> None:
     assert "factory-state-cache" not in json.dumps(workflow["jobs"]["factory"])
 
 
+def test_post_session_cleanup_executes_token_bound_release(tmp_path: Path) -> None:
+    """Run the real job command with a stand-in controller and restricted DSN."""
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    release = workflow["jobs"]["release_post_session_lease"]["steps"][3]
+    controller = tmp_path / ".github/scripts/factory-work-controller.py"
+    controller.parent.mkdir(parents=True)
+    controller.write_text("import json, sys\\nprint(json.dumps(sys.argv[1:]))\\n")
+    dsn = tmp_path / "restricted-dsn"
+    dsn.write_text("test-only-connection")
+    result = subprocess.run(
+        ["bash", "-c", release["run"]], cwd=tmp_path,
+        env={**os.environ, "FACTORY_WORKER": "45", "GITHUB_RUN_ID": "43455638659",
+             "FACTORY_STATE_DSN_FILE": str(dsn)},
+        capture_output=True, text=True, check=True,
+    )
+    assert json.loads(result.stdout) == [
+        "release", "--worker", "45", "--reason",
+        "post-session-exit-run-43455638659",
+    ]
+
+
 def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
     """Never run recovery code or carry model credentials from the smoke checkout."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
