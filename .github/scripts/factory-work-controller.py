@@ -1591,7 +1591,7 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         if owner_of(labels_of(item)) == owner:
             targets.append((int(item['number']), 'pr'))
     for number, kind in targets:
-        if not replace_factory_labels(number, 'factory:unowned'):
+        if replace_factory_labels(number, 'factory:unowned') is False:
             continue
         try:
             record_claim_released(number, worker, kind, reason)
