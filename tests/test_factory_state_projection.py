@@ -141,7 +141,7 @@ def test_missing_target_rejects_obsolete_open_event() -> None:
     import inspect
     statement = inspect.getsource(projection._ingest_event)
     assert "WHERE NOT EXISTS" in statement
-    assert "_marker(repo,kind)" in statement
+    assert "_marker(repo, kind)" in statement
 
 
 def test_live_event_is_read_only_after_acquiring_projection_lock() -> None:
