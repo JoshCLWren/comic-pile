@@ -68,7 +68,7 @@ def test_post_session_cleanup_executes_token_bound_release(tmp_path: Path) -> No
     release = workflow["jobs"]["release_post_session_lease"]["steps"][3]
     controller = tmp_path / ".github/scripts/factory-work-controller.py"
     controller.parent.mkdir(parents=True)
-    controller.write_text("import json, sys\\nprint(json.dumps(sys.argv[1:]))\\n")
+    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
     dsn = tmp_path / "restricted-dsn"
     dsn.write_text("test-only-connection")
     result = subprocess.run(
