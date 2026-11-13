@@ -1399,6 +1399,13 @@ jobs:
           ref: main
           persist-credentials: false
       - uses: ./.github/actions/factory-syntax
+      # Only this trusted, separate cleanup job receives the Neon DSN.
+      # The model-running factory job above must never see it.
+      - name: Configure restricted Neon factory lease release
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
       - name: Release lease after pre-session abort
         shell: bash
         env:
@@ -1408,6 +1415,11 @@ jobs:
           set -Eeuo pipefail
           [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
             echo 'Invalid worker ID; refusing lease recovery' >&2
+            exit 1
+          }
+          # Never clear GitHub ownership without the transactional Neon ledger.
+          [[ -s "${FACTORY_STATE_DSN_FILE:-}" ]] || {
+            echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
           python3 .github/scripts/factory-work-controller.py release \
