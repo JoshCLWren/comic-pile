@@ -30,7 +30,7 @@ from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
 from factory_state_projection import projected_json, reconcile_snapshot
-from factory_state_ledger import acquire_lease, release_lease, release_worker as release_neon_worker
+from factory_state_ledger import acquire_lease, release_lease, release_worker as release_neon_worker, renew_verified_workers, worker_claim
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -1002,6 +1002,12 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
             + ', '.join(sorted(unresolved_runs)),
             file=sys.stderr,
         )
+    # The current Actions run roster is already verified. Renew only the
+    # existing reservations of workers still demonstrably executing.
+    try:
+        renew_verified_workers(REPO, [str(worker) for worker in active])
+    except Exception as exc:
+        print(f'[factory-controller] verified Neon renewal deferred ({type(exc).__name__})', file=sys.stderr)
     issue_items, pr_items = list_issues(), list_prs()
     targets = {
         int(item["number"]): item
@@ -1009,6 +1015,8 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
     }
     pairs = paired_owned_targets(issue_items, pr_items)
     released: list[int] = []
+    prior_claims: dict[str, tuple[str, list[int]] | None] = {}
+    released_workers: set[str] = set()
     for number, owner in owned_targets(issue_items, pr_items):
         # Manual-only holds cannot be changed by replace_factory_labels.
         # Avoid paginating their comment histories on every dispatch pass.
@@ -1052,6 +1060,14 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
         ):
             continue
         ttl = FIXED_LEASE_TTL_SECONDS if fixed_owner else LOCAL_LEASE_TTL_SECONDS
+        if fixed_owner:
+            worker_id = fixed_owner.group('worker')
+            if worker_id not in prior_claims:
+                try:
+                    prior_claims[worker_id] = worker_claim(REPO, worker_id)
+                except Exception as exc:
+                    prior_claims[worker_id] = None
+                    print(f'[factory-controller] claim snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
         if not replace_factory_labels(
             number,
             'factory:unowned',
@@ -1062,10 +1078,27 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
         ):
             continue
         released.append(number)
+        if fixed_owner:
+            released_workers.add(fixed_owner.group('worker'))
         print(
             f'[factory-controller] released stale {owner} lease on #{number}',
             file=sys.stderr,
         )
+    for worker_id in released_workers:
+        snapshot = prior_claims.get(worker_id)
+        if snapshot is None:
+            continue
+        token, claim_numbers = snapshot
+        try:
+            # Every target of the original token must have relinquished its
+            # label. A newer Neon claim never matches this captured token.
+            if all(
+                not target_owned_by(number, f'factory:{worker_id}')
+                for number in claim_numbers
+            ):
+                release_lease(REPO, worker_id, token, 'stale-lease-reconciled')
+        except Exception as exc:
+            print(f'[factory-controller] stale Neon release deferred ({type(exc).__name__})', file=sys.stderr)
     return released
 
 
