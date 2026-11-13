@@ -38,6 +38,12 @@ jobs:
         with:
           ref: main
 
+      - name: Configure shared Neon factory discovery cache
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Select healthy completion wakeups from current demand
         id: batch
         shell: bash

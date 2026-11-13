@@ -211,6 +211,13 @@ jobs:
           fi
           echo "allow=true" >> "$GITHUB_OUTPUT"
 
+      - name: Configure shared Neon factory discovery cache
+        if: steps.api_budget.outputs.allow == 'true'
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Advance selected issue or pull request
         if: inputs.target
         shell: bash
