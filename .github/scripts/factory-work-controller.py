@@ -29,7 +29,7 @@ from factory_quota_pause import describe as describe_quota_pause, is_paused as q
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
-from factory_state_projection import projected_json, reconcile_snapshot
+from factory_state_projection import enabled as projection_enabled, projected_json, reconcile_snapshot
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -81,13 +81,15 @@ def list_issues() -> list[dict[str, Any]]:
     if projected is not None:
         return projected
     started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    issues = cached_json(
-        f"{REPO}:open-issues",
-        lambda _previous: cast(list[dict[str, Any]], gh_json([
+    def fetch_issues(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return cast(list[dict[str, Any]], gh_json([
             'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
             '--json', 'number,title,body,labels,createdAt,updatedAt',
-        ])),
-        ttl_seconds=45,
+        ]))
+    # A reconciliation watermark is safe only against a truly live GitHub
+    # listing. A 45-second cache snapshot could tombstone newer webhook targets.
+    issues = fetch_issues([]) if projection_enabled() else cached_json(
+        f"{REPO}:open-issues", fetch_issues, ttl_seconds=45,
     )
     reconcile_snapshot(REPO, "issue", issues, started)
     return issues
@@ -99,13 +101,13 @@ def list_prs() -> list[dict[str, Any]]:
     if projected is not None:
         return projected
     started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    prs = cached_json(
-        f"{REPO}:open-prs",
-        lambda _previous: cast(list[dict[str, Any]], gh_json([
+    def fetch_prs(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return cast(list[dict[str, Any]], gh_json([
             'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
             '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
-        ])),
-        ttl_seconds=45,
+        ]))
+    prs = fetch_prs([]) if projection_enabled() else cached_json(
+        f"{REPO}:open-prs", fetch_prs, ttl_seconds=45,
     )
     reconcile_snapshot(REPO, "pr", prs, started)
     return prs
