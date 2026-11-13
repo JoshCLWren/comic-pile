@@ -29,6 +29,7 @@ from factory_quota_pause import describe as describe_quota_pause, is_paused as q
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
+from factory_state_projection import projected_json, reconcile_snapshot
 from factory_state_ledger import acquire_lease, release_lease, release_worker as release_neon_worker
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -76,27 +77,41 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
 
 
 def list_issues() -> list[dict[str, Any]]:
-    """Share the discovery snapshot; lease writes still re-read GitHub live."""
-    return cached_json(
-        f"{REPO}:open-issues",
-        lambda _previous: cast(list[dict[str, Any]], gh_json([
+    """Use shared Neon projections; discover only on a cache refresh."""
+    projected = projected_json(REPO, "issue")
+    if projected is not None:
+        return cast(list[dict[str, Any]], projected)
+
+    def fetch_issues(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        issues = cast(list[dict[str, Any]], gh_json([
             'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
             '--json', 'number,title,body,labels,createdAt,updatedAt',
-        ])),
-        ttl_seconds=45,
-    )
+        ]))
+        # Only a genuinely live GitHub read may advance the reconciliation
+        # watermark. A cached read skips this callback entirely.
+        reconcile_snapshot(REPO, "issue", issues, started)
+        return issues
+
+    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """Share PR discovery; exact-head review and merge gates never use cache."""
-    return cached_json(
-        f"{REPO}:open-prs",
-        lambda _previous: cast(list[dict[str, Any]], gh_json([
+    """Use Neon PR projections; keep exact-head review/merge gates live."""
+    projected = projected_json(REPO, "pr")
+    if projected is not None:
+        return cast(list[dict[str, Any]], projected)
+
+    def fetch_prs(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        prs = cast(list[dict[str, Any]], gh_json([
             'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
             '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
-        ])),
-        ttl_seconds=45,
-    )
+        ]))
+        reconcile_snapshot(REPO, "pr", prs, started)
+        return prs
+
+    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=45)
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:

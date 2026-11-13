@@ -1,0 +1,39 @@
+name: Factory Target Projection Ingest
+
+# Trusted webhook consumer: main checkout only; never executes PR branch code.
+on:
+  issues:
+    types: [opened, edited, closed, reopened, labeled, unlabeled, assigned, unassigned]
+  pull_request_target:
+    types: [opened, edited, synchronize, closed, reopened, labeled, unlabeled, ready_for_review, converted_to_draft]
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    if: github.event.repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Resolve restricted factory state connection
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Apply one issue or PR event to Neon
+        if: env.FACTORY_STATE_DSN_FILE != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_state_projection.py ingest \
+            --repo "$GITHUB_REPOSITORY" \
+            --event-id "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --file "$GITHUB_EVENT_PATH"
