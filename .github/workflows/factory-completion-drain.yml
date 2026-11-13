@@ -32,73 +32,6 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  persist_outcome:
-    # The worker Entry dispatches this trusted job directly. workflow_run
-    # notifications are not reliable for GITHUB_TOKEN-launched entries.
-    if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          persist-credentials: false
-
-      - name: Configure restricted Neon factory event ledger
-        uses: ./.github/actions/factory-state-cache
-        with:
-          neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
-
-      - name: Classify and persist the completed worker attempt
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-        run: |
-          set -Eeuo pipefail
-          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || {
-            echo "::error::Invalid worker entry run ID"
-            exit 1
-          }
-          metadata="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")"
-          jq -e --arg repo "$GITHUB_REPOSITORY" '
-            .event == "workflow_dispatch"
-            and .path == ".github/workflows/free-model-factory-entry.yml"
-            and .head_repository.full_name == $repo
-          ' <<< "$metadata" >/dev/null
-          jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100")"
-          job_id="$(jq -r '[.jobs[] | select(.name == "run / factory" and .status == "completed") | .id][0] // empty' <<< "$jobs")"
-          [[ "$job_id" =~ ^[1-9][0-9]*$ ]] || {
-            echo "::error::Worker's factory job is not complete"
-            exit 1
-          }
-          # The parent entry can still be finishing its signal job, but its
-          # reusable factory job has already completed and has final logs.
-          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
-            > "$RUNNER_TEMP/factory-entry.log"
-          python3 .github/scripts/classify-fixed-model-run.py \
-            --log "$RUNNER_TEMP/factory-entry.log" > "$RUNNER_TEMP/worker-outcome.json"
-          worker="$(jq -r '.worker // empty' "$RUNNER_TEMP/worker-outcome.json")"
-          if [[ -z "$worker" ]]; then
-            worker="$(jq -r '.inputs.worker // empty' <<< "$metadata")"
-            [[ "$worker" =~ ^[1-9][0-9]*$ ]] || {
-              echo "::error::Unable to attest worker identity"
-              exit 1
-            }
-            jq --arg worker "$worker" '
-              .worker = $worker
-              | .outcome_class = "control_plane_failure"
-              | .persisted_work = false
-            ' "$RUNNER_TEMP/worker-outcome.json" > "$RUNNER_TEMP/worker-outcome-fallback.json"
-            mv "$RUNNER_TEMP/worker-outcome-fallback.json" "$RUNNER_TEMP/worker-outcome.json"
-          fi
-          python3 .github/scripts/factory_state_ledger.py runtime-outcome \
-            --repo "$GITHUB_REPOSITORY" --run-id "$SOURCE_RUN_ID" \
-            --file "$RUNNER_TEMP/worker-outcome.json"
-
   drain:
     concurrency:
       group: fixed-model-factory-dispatch
@@ -192,3 +125,71 @@ jobs:
           SIGNALS: ${{ steps.wakeups.outputs.signaled }}
         run: |
           echo "Demand completion=${COMPLETION:-0} production=${PRODUCTION:-0}; target=${TARGET:-0}; dispatcher_wakeups=${SIGNALS:-0} (leases owned by dispatcher)"
+
+  persist_outcome:
+    # The worker Entry dispatches this trusted job directly. workflow_run
+    # notifications are not reliable for GITHUB_TOKEN-launched entries.
+    if: github.event_name == 'workflow_dispatch' && inputs.source_run_id != ''
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Configure restricted Neon factory event ledger
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Classify and persist the completed worker attempt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::Invalid worker entry run ID"
+            exit 1
+          }
+          metadata="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}")"
+          jq -e --arg repo "$GITHUB_REPOSITORY" '
+            .event == "workflow_dispatch"
+            and .path == ".github/workflows/free-model-factory-entry.yml"
+            and .head_repository.full_name == $repo
+          ' <<< "$metadata" >/dev/null
+          jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100")"
+          job_id="$(jq -r '[.jobs[] | select(.name == "run / factory" and .status == "completed") | .id][0] // empty' <<< "$jobs")"
+          [[ "$job_id" =~ ^[1-9][0-9]*$ ]] || {
+            echo "::error::Worker's factory job is not complete"
+            exit 1
+          }
+          # The parent entry can still be finishing its signal job, but its
+          # reusable factory job has already completed and has final logs.
+          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
+            > "$RUNNER_TEMP/factory-entry.log"
+          python3 .github/scripts/classify-fixed-model-run.py \
+            --log "$RUNNER_TEMP/factory-entry.log" > "$RUNNER_TEMP/worker-outcome.json"
+          worker="$(jq -r '.worker // empty' "$RUNNER_TEMP/worker-outcome.json")"
+          if [[ -z "$worker" ]]; then
+            worker="$(jq -r '.inputs.worker // empty' <<< "$metadata")"
+            [[ "$worker" =~ ^[1-9][0-9]*$ ]] || {
+              echo "::error::Unable to attest worker identity"
+              exit 1
+            }
+            jq --arg worker "$worker" '
+              .worker = $worker
+              | .outcome_class = "control_plane_failure"
+              | .persisted_work = false
+            ' "$RUNNER_TEMP/worker-outcome.json" > "$RUNNER_TEMP/worker-outcome-fallback.json"
+            mv "$RUNNER_TEMP/worker-outcome-fallback.json" "$RUNNER_TEMP/worker-outcome.json"
+          fi
+          python3 .github/scripts/factory_state_ledger.py runtime-outcome \
+            --repo "$GITHUB_REPOSITORY" --run-id "$SOURCE_RUN_ID" \
+            --file "$RUNNER_TEMP/worker-outcome.json"
+
