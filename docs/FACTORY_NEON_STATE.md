@@ -1,8 +1,13 @@
-# Neon-backed factory discovery state and event projections
+# Neon-backed factory discovery and coordination
 
-This isolated database is a shared discovery cache with event-maintained
-issue/PR projections. It never authorizes a GitHub label mutation, review,
-required check, or merge. Ownership changes still require live GitHub validation.
+The isolated database supports both a shared discovery cache and an atomic
+worker reservation ledger. Neon is authoritative for **transactional factory
+worker reservations**; GitHub remains authoritative for live target labels,
+review verdicts, required checks, exact heads, and merge authorization.
+
+The dispatcher needs **both** a fresh GitHub ownership check and a successful
+Neon transaction to assign work. A Neon conflict or outage does not fall back
+to a potentially duplicate claim in trusted dispatcher jobs.
 
 ## Provisioning
 
@@ -42,6 +47,28 @@ Concurrent readers wait up to three seconds for the refreshing job. On a
 database failure or prolonged lock contention, the original live GitHub read
 remains available. There is no grant of authority from stale data.
 
+## Worker lifecycle and transactional leases
+
+The trusted dispatcher now atomically reserves a worker and every associated
+issue/PR target under a PostgreSQL transaction advisory lock. Existing
+`factory_state_kv` rows store keys `factory-lease-v1:<repo>:worker:<id>`
+and `factory-lease-v1:<repo>:target:<number>`, with one claim UUID and a
+15-minute safety expiration. This is **not** the 75-second cache refresh
+lock. A failed claim rolls back only its own UUID after verifying GitHub labels;
+a verified explicit release clears the whole claim.
+
+The trusted completion collector records recent worker-start/heartbeat changes
+from verified GitHub registry comments, while the trusted runtime observer
+records classified completion or failure for each immutable Actions run ID.
+Events are deduplicated by run/status or source-comment ID/update timestamp.
+Agent execution, including the local Qwen code reviewer, never gets database
+credentials.
+
+These first-stage leases deliberately retain the live GitHub target checks.
+Worker health and stale-run reconciliation still use some GitHub API reads.
+Per-item issue/PR projections and event-triggered selective reconciliation are
+follow-up work; **do not claim this change alone eliminates broad discovery**.
+
 ## Event-fed target projections
 
 A trusted `Factory Target Projection Ingest` workflow receives GitHub
@@ -67,11 +94,13 @@ If Neon is not configured or a projection read fails, the existing shared
 GitHub discovery cache remains as a fallback. Exact-head CI/review/merge and
 label ownership checks are still performed live at mutation boundaries.
 
+
 ## Safety and freshness
 
-Discovery results may be up to the TTL old. Every lease acquisition and every
+Discovery results may be up to the TTL old. Every label mutation and every
 exact-head review, CI, and merge gate still rechecks current GitHub state at its
-mutation boundary. A cache record never by itself allows a merge. Work selection
+mutation boundary. A trusted dispatcher without a Neon connection refuses new
+assignments rather than inventing ownership. A cache record never by itself allows a merge. Work selection
 can briefly lag a new issue or PR; it must not bypass controls.
 
 The Neon database shares the existing Neon project's compute, so avoid
@@ -103,7 +132,8 @@ read path and must be investigated rather than described as cached.
 
 ## Remaining API work
 
-This cache removes redundant shared discovery reads. It now ingests issue/PR webhook events and repairs projections on a 30-minute
-cadence, but **does not** eliminate per-PR review, CI, or ready-merge checks. Those actions must remain live at the
+Issue/PR events now update individual Neon projections and a live listing
+reconciles drift every 30 minutes. Exact-head checks and merge verification
+remain live GitHub operations. Those actions must remain live at the
 authoritative mutation boundary. Other workflow-specific full scans should be
 measured separately instead of assuming this cache fixes the entire quota.

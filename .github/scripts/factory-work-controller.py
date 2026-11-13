@@ -29,7 +29,8 @@ from factory_quota_pause import describe as describe_quota_pause, is_paused as q
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
-from factory_state_projection import enabled as projection_enabled, projected_json, reconcile_snapshot
+from factory_state_projection import projected_json, reconcile_snapshot
+from factory_state_ledger import acquire_lease, release_lease, release_worker as release_neon_worker
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -76,41 +77,41 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
 
 
 def list_issues() -> list[dict[str, Any]]:
-    """Read event-maintained Neon issues; periodically reconcile against GitHub."""
+    """Use shared Neon projections; discover only on a cache refresh."""
     projected = projected_json(REPO, "issue")
     if projected is not None:
-        return projected
-    started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        return cast(list[dict[str, Any]], projected)
+
     def fetch_issues(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return cast(list[dict[str, Any]], gh_json([
+        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        issues = cast(list[dict[str, Any]], gh_json([
             'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
             '--json', 'number,title,body,labels,createdAt,updatedAt',
         ]))
-    # A reconciliation watermark is safe only against a truly live GitHub
-    # listing. A 45-second cache snapshot could tombstone newer webhook targets.
-    issues = fetch_issues([]) if projection_enabled() else cached_json(
-        f"{REPO}:open-issues", fetch_issues, ttl_seconds=45,
-    )
-    reconcile_snapshot(REPO, "issue", issues, started)
-    return issues
+        # Only a genuinely live GitHub read may advance the reconciliation
+        # watermark. A cached read skips this callback entirely.
+        reconcile_snapshot(REPO, "issue", issues, started)
+        return issues
+
+    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """Read event-maintained Neon PRs; GitHub live gates still authorize work."""
+    """Use Neon PR projections; keep exact-head review/merge gates live."""
     projected = projected_json(REPO, "pr")
     if projected is not None:
-        return projected
-    started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        return cast(list[dict[str, Any]], projected)
+
     def fetch_prs(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return cast(list[dict[str, Any]], gh_json([
+        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        prs = cast(list[dict[str, Any]], gh_json([
             'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
             '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
         ]))
-    prs = fetch_prs([]) if projection_enabled() else cached_json(
-        f"{REPO}:open-prs", fetch_prs, ttl_seconds=45,
-    )
-    reconcile_snapshot(REPO, "pr", prs, started)
-    return prs
+        reconcile_snapshot(REPO, "pr", prs, started)
+        return prs
+
+    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=45)
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
@@ -494,14 +495,31 @@ def assign_candidate(
     if worker_has_active_lease(worker):
         return False
 
+    # Acquire one atomic worker + issue/PR reservation before mutating GitHub.
+    # GitHub live checks remain required; a Neon conflict never grants a claim.
+    try:
+        claim_token = acquire_lease(REPO, worker, numbers, FIXED_LEASE_TTL_SECONDS)
+    except Exception as exc:
+        print(f'[factory-controller] Neon lease unavailable; refusing duplicate-risk assignment ({type(exc).__name__})', file=sys.stderr)
+        return False
+    if claim_token is None:
+        return False
+
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
-        for claimed_number in claimed_numbers:
+        try:
+            for claimed_number in claimed_numbers:
+                try:
+                    if target_owned_by(claimed_number, owner):
+                        replace_factory_labels(claimed_number, 'factory:unowned')
+                except Exception:
+                    pass
+        finally:
+            # A failed GitHub write must not strand the Neon claim.
             try:
-                if target_owned_by(claimed_number, owner):
-                    replace_factory_labels(claimed_number, 'factory:unowned')
-            except Exception:
-                pass
+                release_lease(REPO, worker, claim_token, 'claim-rollback')
+            except Exception as exc:
+                print(f'[factory-controller] Neon claim rollback failed ({type(exc).__name__})', file=sys.stderr)
     claimed: list[int] = []
     try:
         for number in numbers:
@@ -1588,12 +1606,21 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         if owner_of(labels_of(item)) == owner:
             targets.append((int(item['number']), 'pr'))
     for number, kind in targets:
-        replace_factory_labels(number, 'factory:unowned')
+        if replace_factory_labels(number, 'factory:unowned') is False:
+            continue
         try:
             record_claim_released(number, worker, kind, reason)
         except Exception:
             pass
         released.append(number)
+    # Only clear the Neon reservation once every originally held GitHub target
+    # has actually released its owner label.
+    if targets and len(released) == len(targets):
+        try:
+            if all(not target_owned_by(number, owner) for number, _ in targets):
+                release_neon_worker(REPO, worker, reason)
+        except Exception as exc:
+            print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
     return released
 
 

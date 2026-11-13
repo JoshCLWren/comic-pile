@@ -79,6 +79,8 @@ concurrency:
 jobs:
   dispatch:
     if: "!inputs.target || github.ref == 'refs/heads/main'"
+    env:
+      FACTORY_NEON_LEASE_REQUIRED: 'true'
     concurrency:
       group: fixed-model-factory-dispatch
       queue: max

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 import sys
 from datetime import UTC, datetime
 from typing import Any
@@ -19,6 +20,11 @@ RECONCILE_SECONDS = 1800
 
 
 def enabled() -> bool:
+    """Return whether a restricted trusted-factory Neon connection is configured.
+
+    Returns:
+        True when an on-runner connection file path is set.
+    """
     return bool(os.environ.get("FACTORY_STATE_DSN_FILE"))
 
 
@@ -40,8 +46,15 @@ def _object(value: Any) -> Any:
     return json.loads(value) if isinstance(value, str) else value
 
 
-def normalize_event(event: dict[str, Any]) -> tuple[str, int, dict[str, Any], str] | None:
-    """Convert a GitHub issues/pull_request_target payload to gh CLI list shape."""
+def normalize_event(event: dict[str, object]) -> tuple[str, int, dict[str, object], str] | None:
+    """Normalize GitHub events into the factory queue's discovery fields.
+
+    Args:
+        event: GitHub issue or pull request event object.
+
+    Returns:
+        Kind, number, normalized record and state, or None for invalid data.
+    """
     is_pr = "pull_request" in event
     raw = event.get("pull_request") if is_pr else event.get("issue")
     if not isinstance(raw, dict) or not isinstance(raw.get("number"), int):
@@ -95,8 +108,16 @@ async def _read_projection(repo: str, kind: str) -> list[dict[str, Any]] | None:
         await conn.close()
 
 
-def projected_json(repo: str, kind: str) -> list[dict[str, Any]] | None:
-    """Return a complete, recently reconciled projection or None to bootstrap."""
+def projected_json(repo: str, kind: str) -> list[dict[str, object]] | None:
+    """Return projected open items only while reconciliation is recent.
+
+    Args:
+        repo: GitHub owner/repository.
+        kind: Either issue or pr.
+
+    Returns:
+        Current open items, or None when discovery must repair a stale snapshot.
+    """
     if not enabled():
         return None
     try:
@@ -190,7 +211,15 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
         await conn.close()
 
 
-def reconcile_snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: str) -> None:
+def reconcile_snapshot(repo: str, kind: str, items: list[dict[str, object]], started: str) -> None:
+    """Record one live GitHub inventory to repair missing or closed projections.
+
+    Args:
+        repo: GitHub owner/repository.
+        kind: Issue or PR.
+        items: Results from a live GitHub listing, never cached.
+        started: UTC watermark from before the GitHub read.
+    """
     if not enabled():
         return
     try:
@@ -200,10 +229,44 @@ def reconcile_snapshot(repo: str, kind: str, items: list[dict[str, Any]], starte
         print(f"[factory-projection] reconciliation unavailable ({type(exc).__name__})", file=sys.stderr)
 
 
+def _authoritative_event(repo: str, event: dict[str, Any]) -> dict[str, Any]:
+    """Read the *one* current GitHub target, ignoring webhook delivery order.
+
+    Args:
+        repo: Expected GitHub owner/repository.
+        event: Untrusted incoming event identifying the issue or PR.
+
+    Returns:
+        An event envelope containing the currently authoritative GitHub item.
+
+    Raises:
+        RuntimeError: When the exact target cannot be verified via GitHub.
+    """
+    kind = "pull_request" if "pull_request" in event else "issue"
+    raw = event.get(kind)
+    if not isinstance(raw, dict) or type(raw.get("number")) is not int:
+        return event
+    number = raw["number"]
+    path = "pulls" if kind == "pull_request" else "issues"
+    response = subprocess.run(
+        ["gh", "api", f"repos/{repo}/{path}/{number}"],
+        capture_output=True, text=True, check=False, timeout=20,
+    )
+    if response.returncode:
+        raise RuntimeError(f"GitHub could not verify {kind} #{number}")
+    try:
+        current = json.loads(response.stdout)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"Invalid GitHub response for {kind} #{number}") from exc
+    if not isinstance(current, dict) or current.get("number") != number:
+        raise RuntimeError(f"Unexpected GitHub target identity for {kind} #{number}")
+    return {kind: current}
+
+
 async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool:
     import asyncpg
 
-    record = normalize_event(event)
+    record = normalize_event(_authoritative_event(repo, event))
     if record is None:
         return False
     kind, number, item, state = record
@@ -220,7 +283,15 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
             row = await conn.fetchrow(
                 """INSERT INTO public.factory_state_kv
                      (cache_key,payload,fetched_at,expires_at,updated_at)
-                   VALUES ($1,$2::jsonb,now(),'2100-01-01'::timestamptz,now())
+                   SELECT $1,$2::jsonb,now(),'2100-01-01'::timestamptz,now()
+                   WHERE NOT EXISTS (
+                     SELECT 1 FROM public.factory_state_kv
+                      WHERE cache_key=$3
+                        AND fetched_at >
+                          COALESCE(NULLIF($2::jsonb->0->>'source_updated_at','')::timestamptz,
+                                   'epoch'::timestamptz)
+                        AND $2::jsonb->0->>'state'='open'
+                   )
                    ON CONFLICT(cache_key) DO UPDATE SET
                      payload=EXCLUDED.payload,updated_at=now()
                    WHERE (COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
@@ -230,7 +301,7 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
                           OR factory_state_kv.payload->0->>'state' !=
                              EXCLUDED.payload->0->>'state')
                    RETURNING cache_key""",
-                _target_key(repo,kind,number), value,
+                _target_key(repo,kind,number), value, _marker(repo,kind),
             )
             if row is None:
                 return False
@@ -247,13 +318,31 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
         await conn.close()
 
 
-def ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool:
+def ingest_event(repo: str, event_id: str, event: dict[str, object]) -> bool:
+    """Apply one current target through restricted Neon event ingestion.
+
+    Args:
+        repo: GitHub repository.
+        event_id: Trusted job/delivery identifier.
+        event: Original untrusted webhook envelope.
+
+    Returns:
+        True if the current target changed.
+
+    Raises:
+        RuntimeError: If Neon or live GitHub target verification fails.
+    """
     if not enabled():
         raise RuntimeError("event ingestion requires trusted Neon credentials")
     return asyncio.run(_ingest_event(repo, event_id, event))
 
 
 def main() -> int:
+    """Read one trusted GitHub Actions event and ingest its target.
+
+    Returns:
+        Zero for a successful ingest run.
+    """
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["ingest"])
