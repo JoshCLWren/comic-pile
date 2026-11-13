@@ -93,6 +93,13 @@ export default function HistoryPage() {
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
           <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
         </div>
+        <button
+          type="button"
+          onClick={() => void refetch()}
+          className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
+        >
+          Refresh
+        </button>
       </header>
 
       {events.length > 0 ? (
