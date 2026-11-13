@@ -30,13 +30,15 @@ def test_healthy_entry_completion_refills_same_worker() -> None:
     assert 'gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"' in text
 
 
-def test_attempt_registry_pages_are_slurped_exactly_once() -> None:
-    """Paginated issue comments must remain a page stream for jq to slurp once."""
-    text = _workflow_text()
+def test_attempt_registry_uses_shared_neon_snapshot_and_preserves_run_filter() -> None:
+    """Completion evidence still identifies the exact run without full history scans."""
+    workflow = _workflow_text()
 
-    assert 'gh api --paginate --slurp' not in text
-    assert 'gh api --paginate \\\n                "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' in text
-    assert '| jq -rs --arg run "$COMPLETED_RUN_ID"' in text
+    assert "from factory_completion_controller import registry_comments" in workflow
+    assert "print(json.dumps(registry_comments()))" in workflow
+    assert '| jq -rs --arg run "$COMPLETED_RUN_ID"' in workflow
+    assert 'issues/1093/comments?per_page=100' not in workflow
+    assert "uses: ./.github/actions/factory-state-cache" in workflow
 
 
 def test_unhealthy_failure_does_not_immediately_reuse_capacity() -> None:
