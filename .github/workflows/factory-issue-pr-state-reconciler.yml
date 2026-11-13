@@ -61,7 +61,29 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
+      - name: Guard recovery sweeps on the Actions installation REST budget
+        id: api_budget
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          if ! snapshot="$(gh api rate_limit 2>&1)"; then
+            echo "::warning::Rate limit unreadable; defer this recovery sweep"
+            echo "allow=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          remaining="$(jq -r '.resources.core.remaining // -1' <<< "$snapshot")"
+          if ! [[ "$remaining" =~ ^[0-9]+$ ]] || (( remaining < 1200 )); then
+            echo "::warning::REST budget ${remaining} below factory reserve; defer recovery without consuming more quota"
+            echo "allow=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Factory issue reconciliation budget: ${remaining} requests remain"
+          echo "allow=true" >> "$GITHUB_OUTPUT"
+
       - name: Enroll repository PRs missing factory labels
+        if: steps.api_budget.outputs.allow != 'false'
         uses: actions/github-script@v9
         with:
           script: |
@@ -76,6 +98,7 @@ jobs:
             }
 
       - name: Reconcile linked issue from trusted canonical PR history
+        if: steps.api_budget.outputs.allow != 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
