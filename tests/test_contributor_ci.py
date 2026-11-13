@@ -27,7 +27,8 @@ def test_fork_build_is_read_only_and_cannot_publish() -> None:
     assert trusted["permissions"]["packages"] == "write"
     assert any(step.get("with", {}).get("push") is True for step in trusted["steps"])
     coverage = jobs["coverage-gate"]
-    assert coverage["needs"] == ["build", "build-fork", "test-unit"]
+    assert coverage["needs"] == ["factory_fast_preflight", "build", "build-fork", "test-unit"]
+    assert "needs.factory_fast_preflight.outputs.eligible != 'true'" in coverage["if"]
     assert "needs.test-unit.result == 'success'" in coverage["if"]
     assert "needs.build-fork.result == 'success'" in coverage["if"]
     assert any(
@@ -39,7 +40,8 @@ def test_fork_build_is_read_only_and_cannot_publish() -> None:
         "frontend-unit-tests", "migration-health", "test-unit", "ui-audit",
     ):
         job = jobs[name]
-        assert job["needs"] == ["build", "build-fork"]
+        assert job["needs"] == ["factory_fast_preflight", "build", "build-fork"]
+        assert "needs.factory_fast_preflight.outputs.eligible != 'true'" in job["if"]
         assert "always()" in job["if"]
         assert "needs.build-fork.result == 'success'" in job["if"]
         if name != "ui-audit":
@@ -51,7 +53,7 @@ def test_fork_build_is_read_only_and_cannot_publish() -> None:
 
 
 @pytest.mark.parametrize("fork", [False, True])
-@pytest.mark.parametrize("failed", [None, "test-unit", "python-typecheck", "coverage-gate", "build"])
+@pytest.mark.parametrize("failed", [None, "test-unit", "python-typecheck", "coverage-gate", "build", "factory_fast_preflight"])
 def test_ci_summary_requires_real_checks(fork: bool, failed: str | None) -> None:
     """Execute the actual summary shell for each build path and failed gate."""
     jobs = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
@@ -63,8 +65,9 @@ def test_ci_summary_requires_real_checks(fork: bool, failed: str | None) -> None
         results[failed] = "failure"
     shell = jobs["check-all-jobs"]["steps"][0]["run"]
     shell = re.sub(
-        r"\$\{\{ needs\.([a-z-]+)\.result }}",
+        r"\$\{\{ needs\.([a-z_-]+)\.result }}",
         lambda match: results[match[1]], shell,
     )
+    shell = shell.replace("${{ needs.factory_fast_preflight.outputs.eligible }}", "false")
     result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True, check=False)
     assert result.returncode == (0 if failed is None else 1), result.stdout + result.stderr
