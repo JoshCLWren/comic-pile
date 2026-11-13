@@ -57,12 +57,17 @@ and `factory-lease-v1:<repo>:target:<number>`, with one claim UUID and a
 lock. A failed claim rolls back only its own UUID after verifying GitHub labels;
 a verified explicit release clears the whole claim.
 
-The trusted completion collector records recent worker-start/heartbeat changes
-from verified GitHub registry comments, while the trusted runtime observer
-records classified completion or failure for each immutable Actions run ID.
-Events are deduplicated by run/status or source-comment ID/update timestamp.
-Agent execution, including the local Qwen code reviewer, never gets database
-credentials.
+The trusted completion collector records verified worker starts and
+success/failure *signals* from registry comments. These terminal signals are
+not liveness heartbeats and never extend a lease. The controller renews
+unexpired leases only for workers it independently verifies have active
+GitHub Actions runs, and clears token-matching Neon claims after verified
+GitHub label release. The worker Entry dispatches the trusted Completion Drain
+with its source run ID; a separate, non-model job classifies the finished
+factory-job log and persists the immutable completion/failure event. The
+runtime observer remains an idempotent backup when workflow_run notifications
+are delivered. Agent execution, including the local Qwen reviewer, never
+gets database credentials.
 
 These first-stage leases deliberately retain the live GitHub target checks.
 Worker health and stale-run reconciliation still use some GitHub API reads.
@@ -81,6 +86,11 @@ code, and uses the existing restricted `factory_state_rw` Neon connection.
 It normalizes GitHub webhook fields into the same shape used by the controller
 (`number`, labels, timestamps, and for PRs head SHA, draft and merge metadata).
 Closed targets are tombstoned, not returned as work.
+
+The first trusted webhook bootstraps each missing complete issue/PR snapshot
+once under per-kind advisory locks, without repeated full scans across concurrent
+events. Webhook events read one live target *inside* the advisory transaction,
+ensuring equal-timestamp deliveries cannot reorder authoritative state.
 
 Once bootstrapped, the dispatcher reads projected open issues and PRs from Neon
 instead of repeatedly running broad GitHub lists. A full GitHub discovery
