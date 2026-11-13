@@ -163,3 +163,17 @@ def test_terminal_identity_fallback_uses_attested_run_title() -> None:
     assert '.display_title // ""' in drain
     assert "fixed-model entry$" in drain
     assert "worker=\"$(jq -r" in drain
+
+
+def test_terminal_collector_can_download_ansi_colored_worker_logs() -> None:
+    """The current gh CLI rejects raw job logs containing ANSI escape codes."""
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    assert 'gh api --allow-escape-sequences \\' in workflow
+    assert '"repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"' in workflow
+    assert '> "$RUNNER_TEMP/factory-entry.log"' in workflow
+    assert "factory_state_ledger.py runtime-outcome" in workflow
+    # The opt-out is only safe for redirected file output, never terminal output.
+    assert "--allow-escape-sequences" not in (
+        root / ".github/workflows/free-model-factory-run.yml"
+    ).read_text()
