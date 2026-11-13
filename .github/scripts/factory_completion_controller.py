@@ -526,7 +526,15 @@ def registry_comments() -> list[dict[str, Any]]:
             from urllib.parse import quote
             endpoint += f"&since={quote(since, safe='')}"
         pages = gh_json(["api", "--paginate", "--slurp", endpoint])
-        return flatten_pages(pages)
+        changes = flatten_pages(pages)
+        # The trusted completion collector turns edited heartbeat comments into
+        # deduplicated lifecycle events. Worker/model jobs receive no DSN.
+        try:
+            from factory_state_ledger import record_heartbeat_comments
+            record_heartbeat_comments(REPO, changes)
+        except Exception as exc:
+            print(f"[factory-completion] Neon heartbeat ingestion deferred ({type(exc).__name__})", file=sys.stderr)
+        return changes
 
     return cached_json(
         f"{REPO}:registry-comments",
