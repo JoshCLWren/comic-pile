@@ -140,13 +140,15 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     )
     model_job = reusable["jobs"]["factory"]
     cleanup_job = reusable["jobs"]["release_pre_session_lease"]
+    completed_cleanup_job = reusable["jobs"]["release_post_session_lease"]
     assert "factory-state-cache" not in str(model_job)
     assert "FACTORY_STATE_DSN_FILE" not in str(model_job)
     assert "NEON_API_KEY" not in str(model_job)
-    assert any(
-        step.get("uses") == "./.github/actions/factory-state-cache"
-        for step in cleanup_job["steps"]
-    )
+    for trusted_job in (cleanup_job, completed_cleanup_job):
+        assert any(
+            step.get("uses") == "./.github/actions/factory-state-cache"
+            for step in trusted_job["steps"]
+        )
 
     # The Entry owns two isolated runner jobs: its reusable model runner and a
     # trusted post-run collector. Permit Neon only in the latter job.
