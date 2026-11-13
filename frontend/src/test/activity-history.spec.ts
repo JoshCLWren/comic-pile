@@ -138,6 +138,10 @@ test('History renders the reported activity sequence once through load-more and 
 
   // A refresh re-reads the first page without re-rendering any step twice.
   await page.getByRole('button', { name: 'Refresh' }).click()
+  // Wait for the refresh response to complete before checking request counts.
+  await page.waitForResponse(
+    (response) => response.url().endsWith('/api/v2/activity') && response.request().method() === 'GET',
+  )
   await expect(rows).toHaveCount(displays.length)
   await expect(rows.nth(0)).toContainText('Rated Third Series #2 ⭐4.5')
   await expect(page.getByText(/⭐4\.5/)).toHaveCount(1)
