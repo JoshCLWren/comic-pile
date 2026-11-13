@@ -1,7 +1,8 @@
-# Neon-backed factory state snapshots
+# Neon-backed factory discovery state and event projections
 
-This database is a persistent **shared discovery cache**, not the authority for
-GitHub labels, leases, review verdicts, checks, or merge authorization.
+This isolated database is a shared discovery cache with event-maintained
+issue/PR projections. It never authorizes a GitHub label mutation, review,
+required check, or merge. Ownership changes still require live GitHub validation.
 
 ## Provisioning
 
@@ -41,6 +42,31 @@ Concurrent readers wait up to three seconds for the refreshing job. On a
 database failure or prolonged lock contention, the original live GitHub read
 remains available. There is no grant of authority from stale data.
 
+## Event-fed target projections
+
+A trusted `Factory Target Projection Ingest` workflow receives GitHub
+`issues` and `pull_request_target` events and stores each changed target in
+the existing `factory_state_kv` table under
+`factory-projection-v1:<repo>:<issue|pr>:<number>`.
+
+The webhook job checks out **main**, never the PR head, runs no model-generated
+code, and uses the existing restricted `factory_state_rw` Neon connection.
+It normalizes GitHub webhook fields into the same shape used by the controller
+(`number`, labels, timestamps, and for PRs head SHA, draft and merge metadata).
+Closed targets are tombstoned, not returned as work.
+
+Once bootstrapped, the dispatcher reads projected open issues and PRs from Neon
+instead of repeatedly running broad GitHub lists. A full GitHub discovery
+snapshot rechecks each kind every **30 minutes** when the dispatcher next
+needs the data, repairing missing webhooks, stale labels, and missed closures.
+Snapshot writes use a transaction lock shared with webhook writes, timestamp
+ordering, and a full-snapshot watermark to avoid overwriting newer events.
+Only changed target rows produce reconciliation events.
+
+If Neon is not configured or a projection read fails, the existing shared
+GitHub discovery cache remains as a fallback. Exact-head CI/review/merge and
+label ownership checks are still performed live at mutation boundaries.
+
 ## Safety and freshness
 
 Discovery results may be up to the TTL old. Every lease acquisition and every
@@ -77,8 +103,7 @@ read path and must be investigated rather than described as cached.
 
 ## Remaining API work
 
-This cache removes redundant shared discovery reads. It does **not** yet ingest
-all GitHub events into individual issue/PR rows, nor eliminate all per-PR review
-or ready-merge verification calls. Those actions must remain live at the
+This cache removes redundant shared discovery reads. It now ingests issue/PR webhook events and repairs projections on a 30-minute
+cadence, but **does not** eliminate per-PR review, CI, or ready-merge checks. Those actions must remain live at the
 authoritative mutation boundary. Other workflow-specific full scans should be
 measured separately instead of assuming this cache fixes the entire quota.
