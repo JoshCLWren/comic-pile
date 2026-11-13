@@ -41,7 +41,8 @@ QUOTA_RE = re.compile(
     r"(?:monthly|daily|weekly|free) usage limit(?: reached)?|"
     r"reached your [a-z ]*usage limit|"
     r"insufficient[ _](?:credits|balance|quota)|exceeded your current quota|"
-    r"quota[ _](?:exceeded|exhausted)",
+    r"quota[ _](?:exceeded|exhausted)|free-models-per-day-high-balance|"
+    r"rate limit exceeded: free-models-per-day[^\\s]*",
     re.I,
 )
 RATE_LIMIT_RE = re.compile(
@@ -578,6 +579,11 @@ class ClassifierTests(unittest.TestCase):
                 result = classify(self.BASE + f"model invocation failed: {response}\n")
                 self.assertEqual(result.outcome, "MODEL MISSING")
                 self.assertEqual(result.outcome_class, "model_unavailable")
+
+    def test_openrouter_daily_free_pool_exhaustion_is_quota(self) -> None:
+        """Daily free-provider budget exhaustion must not be treated as transient throttle."""
+        result = classify(self.BASE + "Error: Rate limit exceeded: free-models-per-day-high-balance.\\n")
+        self.assertEqual(result.outcome_class, "provider_quota")
 
     def test_model_stream_interruption_is_provider_failure(self) -> None:
         """Interrupted provider responses use the canonical transient provider failure."""
