@@ -64,6 +64,13 @@ jobs:
           echo 'publish=true' >> "$GITHUB_OUTPUT"
           cat "$RUNNER_TEMP/runtime-outcome.json"
 
+      - name: Configure shared Neon factory registry cache
+        if: steps.runtime.outputs.publish == 'true'
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Update durable attempt-outcome marker
         if: steps.runtime.outputs.publish == 'true'
         shell: bash
@@ -92,8 +99,17 @@ jobs:
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nAttempt outcome: %s\nExact OpenCode model proven: %s\nSelected: %s\nPersisted useful work: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
             "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$outcome_class" "$proven" "$selected" "$persisted" "$detail" "$now" "$RUN_URL")"
-          comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+          # The shared snapshot usually has the worker's existing durable
+          # marker. Avoid paginating every historical comment on each completed
+          # worker run. A missing cached marker MUST be verified against live
+          # history before a new comment is created, preventing duplicates.
+          comment_id="$(python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps(registry_comments()))' \
             | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          if [[ -z "$comment_id" ]]; then
+            echo "No cached attempt marker for Factory ${WORKER}; verifying live history before creating one"
+            comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+              | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          fi
           existing_run=''
           if [[ -n "$comment_id" ]]; then
             existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" --jq '.body' \
