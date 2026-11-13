@@ -24,10 +24,10 @@ on:
     types: [created]
   workflow_dispatch:
   schedule:
-    # PR events cannot repair issues whose last canonical PR was closed before
-    # this reconciler existed. Periodically recompute every open factory issue
-    # so stale ready/review/building labels cannot permanently block intake.
-    - cron: '*/15 * * * *'
+    # PR events handle ordinary changes immediately. An hourly safety sweep
+    # recovers stuck historical review/building/ready issue labels without
+    # repeatedly paging the full PR history every 15 minutes.
+    - cron: '31 * * * *'
 
 permissions:
   contents: read
@@ -291,16 +291,22 @@ jobs:
             exit 0
           fi
 
-          # Blank reconciliation is also issue-centric and uses the exact same
-          # trusted-history calculation. Restrict the sweep to existing factory
-          # issues so unrelated issues are never introduced by branch-shaped data.
-          # Do not refetch the same full PR list once per open factory issue.
+          # The hourly recovery sweep only needs issues in a stale-capable
+          # stage. Most open factory issues are ordinary unowned backlog items:
+          # no history scan or per-issue reads are needed for those. PR events
+          # still reconcile individual issues regardless of their stage.
+          # Capture the list explicitly so a failed CLI request fails the job.
+          factory_issues="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label factory \
+            --limit 1000 --json number,labels \
+            --jq '.[] | select(any(.labels[]?; .name | test("^factory:(building|review|changes-requested|ci|ready)$"))) | .number')"
+          if [[ -z "$factory_issues" ]]; then
+            echo "Factory issue recovery: no stale-capable stages; skipping PR history pagination"
+            exit 0
+          fi
+
+          # Reuse one historical PR snapshot for the selected issues only.
           SWEEP_PULLS="$(gh api --paginate --slurp \
             "repos/${GITHUB_REPOSITORY}/pulls?state=all&per_page=100")"
-          # Capture the issue list explicitly: a process-substitution failure is
-          # invisible to `set -e` and would let a failed sweep exit green.
-          factory_issues="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label factory \
-            --limit 1000 --json number --jq '.[].number')"
           while IFS= read -r issue; do
             [[ -n "$issue" ]] || continue
             state="$(gh issue view "$issue" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || true)"
