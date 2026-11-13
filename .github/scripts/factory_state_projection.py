@@ -133,6 +133,7 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
     if not all(isinstance(item, dict) and isinstance(item.get("number"), int) for item in items):
         raise ValueError("invalid GitHub list snapshot")
     prefix = _prefix(repo, kind)
+    started_at = datetime.fromisoformat(started.replace("Z", "+00:00"))
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     projection = [{
         "key": _target_key(repo, kind, int(item["number"])),
@@ -171,13 +172,13 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                           < COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz)
                      )
                    RETURNING cache_key""",
-                json.dumps(projection), started,
+                json.dumps(projection), started_at,
             )
             removed = await conn.fetch(
                 """UPDATE public.factory_state_kv SET
                      payload=jsonb_set(
                        jsonb_set(payload,'{0,state}','"closed"'::jsonb),
-                       '{0,source_updated_at}',to_jsonb($3::text)),
+                       '{0,source_updated_at}',to_jsonb($5::text)),
                      updated_at=now()
                    WHERE cache_key LIKE $1
                      AND cache_key != $2
@@ -185,8 +186,8 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                      AND (payload->0->>'observed_at')::timestamptz <= $3::timestamptz
                      AND NOT (cache_key=ANY($4::text[]))
                    RETURNING cache_key""",
-                prefix + "%", _marker(repo,kind), started,
-                [entry["key"] for entry in projection],
+                prefix + "%", _marker(repo,kind), started_at,
+                [entry["key"] for entry in projection], started,
             )
             await conn.execute(
                 """INSERT INTO public.factory_state_kv
