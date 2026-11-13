@@ -1223,4 +1223,61 @@ mod tests {
             Some("skipped by user")
         );
     }
+
+    #[tokio::test]
+    async fn mutation_handlers_reject_mappings_owned_by_another_user() {
+        let Some(state) = test_support::test_state(2).await else {
+            return;
+        };
+        let _guard = test_support::reset_for_test(&state).await;
+        seed_inbox_fixture(&state).await;
+        // The seeded thread belongs to user 1, so every mutation attempt from
+        // user 2 must be refused without touching the stored mapping.
+        let intruder = AuthenticatedUser::for_test(2);
+
+        let confirm_err = confirm(
+            State(state.clone()),
+            intruder,
+            Path(1),
+            Json(ActionRequest {
+                external_identity_id: Some(1),
+                rejection_reason: None,
+                search_query: None,
+            }),
+        )
+        .await
+        .expect_err("confirm must refuse another user's mapping");
+        assert_eq!(confirm_err.status(), StatusCode::BAD_REQUEST);
+
+        let reject_err = reject(
+            State(state.clone()),
+            intruder,
+            Path(1),
+            Json(ActionRequest {
+                external_identity_id: Some(1),
+                rejection_reason: Some("not a match".to_string()),
+                search_query: None,
+            }),
+        )
+        .await
+        .expect_err("reject must refuse another user's mapping");
+        assert_eq!(reject_err.status(), StatusCode::BAD_REQUEST);
+
+        let defer_err = defer(State(state.clone()), intruder, Path(1))
+            .await
+            .expect_err("defer must refuse another user's mapping");
+        assert_eq!(defer_err.status(), StatusCode::BAD_REQUEST);
+
+        let skip_err = skip(State(state.clone()), intruder, Path(1))
+            .await
+            .expect_err("skip must refuse another user's mapping");
+        assert_eq!(skip_err.status(), StatusCode::BAD_REQUEST);
+
+        let row = query_mapping(&state, 1).await;
+        assert_eq!(row.get::<_, String>(0), "candidate");
+        assert!(row.get::<_, Option<String>>(3).is_none());
+        let sibling = query_mapping(&state, 2).await;
+        assert_eq!(sibling.get::<_, String>(0), "unresolved");
+        assert!(sibling.get::<_, Option<String>>(3).is_none());
+    }
 }

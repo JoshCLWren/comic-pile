@@ -47,6 +47,28 @@ DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
 # the pg_trgm GIN operator class unqualified. Qualify it so the fixture replays
 # against an empty search_path the same way production objects live in public.
 _UNQUALIFIED_GIN_TRGM_OPS = re.compile(r"(?<![\w.])gin_trgm_ops\b")
+# PostgreSQL 18's pg_dump preserves the per-column attribute version with
+# `ALTER TABLE ONLY ... ALTER COLUMN ... SET (pg_attver=N);` statements. The
+# marker is client-version noise: it describes no column type, constraint, or
+# index, and the canonical fixture is dumped against the PostgreSQL 16 server
+# the native Roll suite uses. Keeping it would make the fixture depend on
+# whichever pg_dump happens to run, so it is stripped like the other
+# version-dependent dump output.
+_ATTVER_STATEMENT = re.compile(
+    r"ALTER TABLE ONLY .+ ALTER COLUMN .+ SET \(pg_attver=\d+\);"
+)
+
+
+def _is_attver_statement(line: str) -> bool:
+    """Return whether one dump line is a PostgreSQL 18 attribute-version marker.
+
+    Args:
+        line: One stripped dump line.
+
+    Returns:
+        True for `ALTER TABLE ONLY ... ALTER COLUMN ... SET (pg_attver=N);`.
+    """
+    return _ATTVER_STATEMENT.fullmatch(line) is not None
 
 
 def _qualify_extension_operator_classes(sql: str) -> str:
@@ -78,6 +100,8 @@ def _normalize(raw: str) -> str:
         if stripped in DROPPED_SETTINGS:
             continue
         if stripped in DROPPED_STATEMENTS:
+            continue
+        if _is_attver_statement(stripped):
             continue
         kept.append(line)
     return _qualify_extension_operator_classes("\n".join(kept).rstrip("\n") + "\n")
@@ -291,6 +315,8 @@ def _normalize_catalog(sql: str) -> str:
         if stripped.startswith("SELECT pg_catalog.set_config('search_path'"):
             continue
         if stripped in DROPPED_SETTINGS or stripped in DROPPED_STATEMENTS:
+            continue
+        if _is_attver_statement(stripped):
             continue
         if stripped.startswith("GRANT ") or stripped.startswith("REVOKE "):
             continue

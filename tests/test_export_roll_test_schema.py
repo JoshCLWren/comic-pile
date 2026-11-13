@@ -2,6 +2,7 @@
 
 from scripts.export_roll_test_schema import (
     _normalize,
+    _normalize_catalog,
     _qualify_extension_operator_classes,
 )
 
@@ -50,3 +51,41 @@ def test_normalize_qualifies_trigram_ops_and_strips_dump_banners() -> None:
     assert " gin_trgm_ops)" not in normalized.replace("public.gin_trgm_ops)", "")
     assert normalized.endswith("\n")
     assert not normalized.endswith("\n\n")
+
+
+def test_normalize_strips_postgres18_attribute_version_markers() -> None:
+    """PostgreSQL 18 pg_dump attribute-version markers never reach the fixture."""
+    raw = (
+        "CREATE TABLE public.alembic_version (\n"
+        "    version_num character varying(32) NOT NULL\n"
+        ");\n"
+        "ALTER TABLE ONLY public.alembic_version "
+        "ALTER COLUMN version_num SET (pg_attver=26796624);\n"
+        "ALTER TABLE ONLY public.issues "
+        'ALTER COLUMN "position" SET (pg_attver=28926072);\n'
+        "ALTER TABLE ONLY public.threads "
+        "ADD CONSTRAINT ck_threads_status CHECK ((status = ANY (ARRAY['active'])));\n"
+    )
+
+    normalized = _normalize(raw)
+
+    assert "pg_attver" not in normalized
+    assert "CREATE TABLE public.alembic_version" in normalized
+    assert "ck_threads_status" in normalized
+    assert normalized.endswith("\n")
+
+
+def test_normalize_catalog_strips_postgres18_attribute_version_markers() -> None:
+    """The order-insensitive comparison ignores attribute-version markers."""
+    raw = (
+        "ALTER TABLE ONLY public.alembic_version "
+        "ALTER COLUMN version_num SET (pg_attver=26796624);\n"
+        "CREATE TABLE public.alembic_version (\n"
+        "    version_num character varying(32) NOT NULL\n"
+        ");\n"
+    )
+
+    normalized = _normalize_catalog(raw)
+
+    assert "pg_attver" not in normalized
+    assert "CREATE TABLE public.alembic_version" in normalized
