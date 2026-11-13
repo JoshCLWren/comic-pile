@@ -116,7 +116,7 @@ pub async fn create_release_source(
         .await
         .map_err(db::query_error)?;
     
-    let row = result.into_iter().next().unwrap();
+    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create release source".to_string()))?;
     let source = ReleaseSourceResponse {
         id: row.get(0),
         thread_id: row.get(1),
@@ -164,7 +164,8 @@ pub async fn list_release_sources(
                     r.provider_issue_count, r.enabled, r.last_synced_at::text,
                     r.created_at::text, r.updated_at::text
              FROM reading_plan_release_sources r
-             JOIN reading_plan_issues pi ON pi.issue_id=r.thread_id
+             JOIN issues i ON i.thread_id=r.thread_id
+             JOIN reading_plan_issues pi ON pi.issue_id=i.id
              WHERE pi.plan_id=$1
              ORDER BY r.created_at, r.id",
             &[&plan_id],
@@ -221,7 +222,8 @@ pub async fn list_release_sources_for_reader(
                     r.provider_title, r.provider_publisher, r.provider_start_year,
                     r.provider_issue_count, r.enabled, r.last_synced_at::text
              FROM reading_plan_release_sources r
-             JOIN reading_plan_issues pi ON pi.issue_id=r.thread_id
+             JOIN issues i ON i.thread_id=r.thread_id
+             JOIN reading_plan_issues pi ON pi.issue_id=i.id
              WHERE pi.plan_id=$1
              ORDER BY r.created_at, r.id",
             &[&plan_id],
@@ -288,7 +290,7 @@ pub async fn update_release_source(
         .await
         .map_err(db::query_error)?;
     
-    let updated_row = result.into_iter().next().unwrap();
+    let updated_row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to update release source".to_string()))?;
     let source = ReleaseSourceResponse {
         id: updated_row.get(0),
         thread_id: updated_row.get(1),

@@ -1,0 +1,135 @@
+{
+  "family": "continuity-plans",
+  "owned_path_patterns": [
+    "^/api/v2/continuity\\-plans(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "native-rust",
+    "status": "target",
+    "owning_issue": 5027,
+    "consumers": [
+      "frontend/src/services/api-continuity-plans.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "PUT",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/membership",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/membership$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/dependencies/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/dependencies/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/from-reading-order",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/from\\-reading\\-order$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/release-sources/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/release\\-sources/$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/release\\-sources/$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/release-sources/reader",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/release\\-sources/reader$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "PATCH",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/release\\-sources/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "DELETE",
+      "path": "/api/v2/continuity-plans/release-sources/{source_id}",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/release\\-sources/[^/]+$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/reader",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/reader$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "GET",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$"
+    },
+    {
+      "bucket": "v2_operations",
+      "method": "POST",
+      "path": "/api/v2/continuity-plans/{plan_id}/recovery",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/continuity\\-plans/[^/]+/recovery$"
+    }
+  ]
+}

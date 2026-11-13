@@ -104,7 +104,7 @@ pub async fn create_continuity_plan(
         if let Some(issue_id) = node.get("issue_id").and_then(|v| v.as_i64()) {
             let exists: bool = conn
                 .query_opt(
-                    "SELECT 1 FROM issues WHERE id=$1 AND user_id=$2",
+                    "SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id=$1 AND t.user_id=$2",
                     &[&issue_id, &user.id()],
                 )
                 .await
@@ -127,14 +127,14 @@ pub async fn create_continuity_plan(
                 &user.id(),
                 &payload.name,
                 &payload.ordering_mode,
-                &serde_json::to_value(&payload.nodes).unwrap(),
-                &serde_json::to_value(&payload.lanes).unwrap(),
+                &serde_json::to_value(&payload.nodes).map_err(|e| ApiError::Internal(format!("Failed to serialize nodes: {}", e)))?,
+                &serde_json::to_value(&payload.lanes).map_err(|e| ApiError::Internal(format!("Failed to serialize lanes: {}", e)))?,
             ],
         )
         .await
         .map_err(db::query_error)?;
     
-    let row = result.into_iter().next().unwrap();
+    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
     let plan = ContinuityPlanResponse {
         id: row.get(0),
         name: row.get(1),
@@ -207,7 +207,7 @@ pub async fn update_continuity_plan(
         if let Some(issue_id) = node.get("issue_id").and_then(|v| v.as_i64()) {
             let issue_exists: bool = conn
                 .query_opt(
-                    "SELECT 1 FROM issues WHERE id=$1 AND user_id=$2",
+                    "SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id=$1 AND t.user_id=$2",
                     &[&issue_id, &user.id()],
                 )
                 .await
@@ -230,8 +230,8 @@ pub async fn update_continuity_plan(
             &[
                 &payload.name,
                 &payload.ordering_mode,
-                &serde_json::to_value(&payload.nodes).unwrap(),
-                &serde_json::to_value(&payload.lanes).unwrap(),
+                &serde_json::to_value(&payload.nodes).map_err(|e| ApiError::Internal(format!("Failed to serialize nodes: {}", e)))?,
+                &serde_json::to_value(&payload.lanes).map_err(|e| ApiError::Internal(format!("Failed to serialize lanes: {}", e)))?,
                 &plan_id,
                 &user.id(),
             ],
@@ -239,7 +239,7 @@ pub async fn update_continuity_plan(
         .await
         .map_err(db::query_error)?;
     
-    let row = result.into_iter().next().unwrap();
+    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
     let plan = ContinuityPlanResponse {
         id: row.get(0),
         name: row.get(1),
@@ -303,7 +303,7 @@ pub async fn get_continuity_plan_membership(
     let issue_rows = conn
         .query(
             "SELECT r.issue_id, r.display_position, r.occurrence_id,
-                    i.issue_number, t.title, i.status, i.is_checkpoint
+                    i.issue_number, t.title, i.status, r.is_checkpoint
              FROM reading_plan_issues r
              JOIN issues i ON i.id=r.issue_id
              JOIN threads t ON t.id=i.thread_id AND t.user_id=$2
@@ -333,7 +333,7 @@ pub async fn get_continuity_plan_membership(
     let dependency_rows = conn
         .query(
             "SELECT d.id, d.source_issue_id, d.target_issue_id, d.explanation
-             FROM plan_dependencies pd
+             FROM reading_plan_dependencies pd
              JOIN dependencies d ON d.id=pd.dependency_id
              WHERE pd.plan_id=$1",
             &[&plan_id],
@@ -406,7 +406,7 @@ pub async fn link_plan_dependency_edge(
     // Check if dependency is already linked to this plan
     let exists: bool = conn
         .query_opt(
-            "SELECT 1 FROM plan_dependencies WHERE plan_id=$1 AND dependency_id=$2",
+            "SELECT 1 FROM reading_plan_dependencies WHERE plan_id=$1 AND dependency_id=$2",
             &[&plan_id, &dependency_id],
         )
         .await
@@ -421,7 +421,7 @@ pub async fn link_plan_dependency_edge(
     
     // Link the dependency
     conn.execute(
-        "INSERT INTO plan_dependencies (plan_id, dependency_id) VALUES ($1, $2)",
+        "INSERT INTO reading_plan_dependencies (plan_id, dependency_id) VALUES ($1, $2)",
         &[&plan_id, &dependency_id],
     ).await.map_err(db::query_error)?;
     
@@ -458,7 +458,7 @@ pub async fn unlink_plan_dependency_edge(
     // Remove the dependency link
     let result = conn
         .execute(
-            "DELETE FROM plan_dependencies WHERE plan_id=$1 AND dependency_id=$2",
+            "DELETE FROM reading_plan_dependencies WHERE plan_id=$1 AND dependency_id=$2",
             &[&plan_id, &dependency_id],
         )
         .await
@@ -477,17 +477,118 @@ pub async fn unlink_plan_dependency_edge(
 pub async fn adopt_reading_order(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(payload): Json<serde_json::Value>, // TODO: Define proper schema
+    Json(payload): Json<serde_json::Value>,
 ) -> Result<Json<ContinuityPlanResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
     
-    // TODO: Implement reading order adoption logic
-    // This is a placeholder - the actual implementation would need to:
-    // 1. Verify the reading order exists and is owned by the user
-    // 2. Create a new continuity plan from the reading order
-    // 3. Set up the appropriate source links
+    // Extract reading order ID from payload
+    let reading_order_id = payload.get("reading_order_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| ApiError::BadRequest("reading_order_id is required".to_string()))? as i32;
     
-    Err(ApiError::Internal("Reading order adoption not yet implemented".to_string()))
+    let plan_name = payload.get("plan_name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::BadRequest("plan_name is required".to_string()))?;
+    
+    let lane_id = payload.get("lane_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    
+    let lane_name = payload.get("lane_name")
+        .and_then(|v| v.as_str());
+    
+    // Verify reading order ownership
+    let order_exists: bool = conn
+        .query_opt(
+            "SELECT 1 FROM custom_cbl_lists WHERE id=$1 AND user_id=$2",
+            &[&reading_order_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    
+    if !order_exists {
+        return Err(ApiError::NotFound("Reading order not found".to_string()));
+    }
+    
+    // Get reading order entries
+    let order_entries = conn
+        .query(
+            "SELECT issue_id FROM custom_cbl_entries WHERE list_id=$1 ORDER BY position",
+            &[&reading_order_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    
+    let issue_ids: Vec<i32> = order_entries.into_iter().map(|row| row.get(0)).collect();
+    
+    // Verify all issues are owned by the user
+    for issue_id in &issue_ids {
+        let owned: bool = conn
+            .query_opt(
+                "SELECT 1 FROM issues i JOIN threads t ON t.id=i.thread_id WHERE i.id=$1 AND t.user_id=$2",
+                &[issue_id, &user.id()],
+            )
+            .await
+            .map_err(db::query_error)?
+            .is_some();
+        
+        if !owned {
+            return Err(ApiError::BadRequest(
+                format!("Issue {} not found or not owned by user", issue_id)
+            ));
+        }
+    }
+    
+    // Create nodes from reading order
+    let mut nodes = Vec::new();
+    for (position, &issue_id) in issue_ids.iter().enumerate() {
+        nodes.push(serde_json::json!({
+            "issue_id": issue_id,
+            "position": position + 1,
+            "occurrence_id": format!("reading_order:{}", reading_order_id),
+        }));
+    }
+    
+    // Create lanes if provided
+    let lanes = if let Some(lane_name) = lane_name {
+        vec![serde_json::json!({
+            "name": lane_name,
+            "position": 1,
+        })]
+    } else {
+        Vec::new()
+    };
+    
+    // Create the continuity plan
+    let result = conn
+        .query(
+            "INSERT INTO continuity_plans (user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+             RETURNING id, name, ordering_mode, nodes_json, lanes_json, created_at::text, updated_at::text",
+            &[
+                &user.id(),
+                &plan_name,
+                &"reading-order".to_string(), // Use a specific ordering mode for adopted plans
+                &serde_json::to_value(&nodes).map_err(|e| ApiError::Internal(format!("Failed to serialize nodes: {}", e)))?,
+                &serde_json::to_value(&lanes).map_err(|e| ApiError::Internal(format!("Failed to serialize lanes: {}", e)))?,
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    
+    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
+    let plan = ContinuityPlanResponse {
+        id: row.get(0),
+        name: row.get(1),
+        ordering_mode: row.get(2),
+        nodes_json: row.get(3),
+        lanes_json: row.get(4),
+        created_at: row.get(5),
+        updated_at: row.get(6),
+    };
+    
+    Ok(Json(plan))
 }
 
 #[utoipa::path(
@@ -626,6 +727,7 @@ pub fn unlink_plan_dependency_edge_documentation() {}
         (status = 201, description = "Plan created from reading order", body = ContinuityPlanResponse),
         (status = 400, description = "Invalid request"),
         (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Reading order not found"),
         (status = 409, description = "Order validation conflict")
     ),
     security(("HTTPBearer" = []))
