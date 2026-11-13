@@ -3050,6 +3050,24 @@ export interface paths {
         };
         /** Documentation-only operation for the mounted releases list handler. */
         get: operations["releases_list"];
+        /** Documentation-only operation for the mounted releases publish handler. */
+        put: operations["releases_publish"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/source": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documentation-only operation for the mounted releases source handler. */
+        get: operations["releases_reconcile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3069,6 +3087,23 @@ export interface paths {
         get: operations["releases_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{release_id}/retract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Documentation-only operation for the mounted releases retract handler. */
+        post: operations["releases_retract"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10928,6 +10963,31 @@ export interface components {
              */
             issue_number: string;
         };
+        /** @description Minimal release data for reconciliation endpoints (no body). */
+        MinimalReleaseResponse: {
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: date-time */
+            merged_at: string;
+            provenance_json: unknown;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order: number;
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
+            source_repository: string;
+            status: string;
+            summary: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            visibility: string;
+        };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
             issue_id?: number | null;
@@ -11197,6 +11257,11 @@ export interface components {
         /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
         NativeRefreshTokenRequest: {
             refresh_token: string;
+        };
+        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        NativeReleaseSourceResponse: {
+            exists: boolean;
+            release?: null | components["schemas"]["MinimalReleaseResponse"];
         };
         /** @description Request body for completing a password reset with a single-use token. */
         NativeResetPasswordRequest: {
@@ -12909,6 +12974,32 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        /** @description One complete release ledger record returned to trusted automation. */
+        ReleaseResponse: {
+            body?: string | null;
+            category: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** Format: date-time */
+            merged_at: string;
+            provenance_json: unknown;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order: number;
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
+            source_repository: string;
+            status: string;
+            summary: string;
+            title: string;
+            /** Format: date-time */
+            updated_at: string;
+            visibility: string;
+        };
         /**
          * ReleaseSourceCreate
          * @description Create a release source subscription.
@@ -12962,6 +13053,26 @@ export interface components {
         ReleaseSourceUpdate: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** @description Idempotent release publication payload from trusted automation. */
+        ReleaseUpsertRequest: {
+            body?: string | null;
+            category: string;
+            /** Format: date-time */
+            merged_at?: string;
+            provenance_json?: unknown;
+            /** Format: date-time */
+            released_at: string;
+            /** Format: int32 */
+            sort_order?: number;
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
+            source_repository: string;
+            status?: string;
+            summary: string;
+            title: string;
+            visibility?: string;
         };
         /**
          * ReplaceIdentityRequest
@@ -18923,6 +19034,114 @@ export interface operations {
             };
         };
     };
+    releases_publish: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseUpsertRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
+                };
+            };
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source identities conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_reconcile: {
+        parameters: {
+            query: {
+                source_repository: string;
+                source_pr_number?: number;
+                source_merge_sha?: string;
+            };
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeReleaseSourceResponse"];
+                };
+            };
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source identities identify different records */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing source identity or invalid query */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     releases_get: {
         parameters: {
             query?: never;
@@ -18944,6 +19163,51 @@ export interface operations {
             };
             /** @description Release not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    releases_retract: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
+            };
+            path: {
+                release_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseResponse"];
+                };
+            };
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

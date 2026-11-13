@@ -11115,6 +11115,83 @@
         "title": "MigrateToIssuesSimpleRequest",
         "type": "object"
       },
+      "MinimalReleaseResponse": {
+        "description": "Minimal release data for reconciliation endpoints (no body).",
+        "properties": {
+          "category": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "merged_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provenance_json": {},
+          "released_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sort_order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_merge_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_pr_number": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_repository": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_repository",
+          "merged_at",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "visibility",
+          "status",
+          "sort_order",
+          "provenance_json",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "NativeBoundaryEditorTarget": {
         "properties": {
           "issue_id": {
@@ -12120,6 +12197,28 @@
         },
         "required": [
           "refresh_token"
+        ],
+        "type": "object"
+      },
+      "NativeReleaseSourceResponse": {
+        "description": "Result of reconciling a GitHub source identity with the ledger.",
+        "properties": {
+          "exists": {
+            "type": "boolean"
+          },
+          "release": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
+              }
+            ]
+          }
+        },
+        "required": [
+          "exists"
         ],
         "type": "object"
       },
@@ -16651,6 +16750,89 @@
         ],
         "type": "object"
       },
+      "ReleaseResponse": {
+        "description": "One complete release ledger record returned to trusted automation.",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "merged_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provenance_json": {},
+          "released_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sort_order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_merge_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_pr_number": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_repository": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_repository",
+          "merged_at",
+          "released_at",
+          "category",
+          "title",
+          "summary",
+          "visibility",
+          "status",
+          "sort_order",
+          "provenance_json",
+          "created_at",
+          "updated_at"
+        ],
+        "type": "object"
+      },
       "ReleaseSourceCreate": {
         "description": "Create a release source subscription.",
         "properties": {
@@ -16771,6 +16953,69 @@
           "enabled"
         ],
         "title": "ReleaseSourceUpdate",
+        "type": "object"
+      },
+      "ReleaseUpsertRequest": {
+        "description": "Idempotent release publication payload from trusted automation.",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "category": {
+            "type": "string"
+          },
+          "merged_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "provenance_json": {},
+          "released_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "sort_order": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "source_merge_sha": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source_pr_number": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "source_repository": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_repository",
+          "released_at",
+          "category",
+          "title",
+          "summary"
+        ],
         "type": "object"
       },
       "ReplaceIdentityRequest": {
@@ -27669,6 +27914,127 @@
         "tags": [
           "releases"
         ]
+      },
+      "put": {
+        "operationId": "releases_publish",
+        "parameters": [
+          {
+            "description": "Server-only release-writer credential",
+            "in": "header",
+            "name": "x-release-writer-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseUpsertRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Invalid release writer credential"
+          },
+          "409": {
+            "description": "Source identities conflict"
+          },
+          "422": {
+            "description": "Request payload failed validation"
+          },
+          "503": {
+            "description": "Release writer authorization is not configured"
+          }
+        },
+        "summary": "Documentation-only operation for the mounted releases publish handler.",
+        "tags": [
+          "releases"
+        ]
+      }
+    },
+    "/api/v1/releases/source": {
+      "get": {
+        "operationId": "releases_reconcile",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source_repository",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_pr_number",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_merge_sha",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Server-only release-writer credential",
+            "in": "header",
+            "name": "x-release-writer-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeReleaseSourceResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Invalid release writer credential"
+          },
+          "409": {
+            "description": "Source identities identify different records"
+          },
+          "422": {
+            "description": "Missing source identity or invalid query"
+          },
+          "503": {
+            "description": "Release writer authorization is not configured"
+          }
+        },
+        "summary": "Documentation-only operation for the mounted releases source handler.",
+        "tags": [
+          "releases"
+        ]
       }
     },
     "/api/v1/releases/{release_id}": {
@@ -27701,6 +28067,56 @@
           }
         },
         "summary": "Documentation-only operation for the mounted releases get handler.",
+        "tags": [
+          "releases"
+        ]
+      }
+    },
+    "/api/v1/releases/{release_id}/retract": {
+      "post": {
+        "operationId": "releases_retract",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "release_id",
+            "required": true,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Server-only release-writer credential",
+            "in": "header",
+            "name": "x-release-writer-token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReleaseResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "description": "Invalid release writer credential"
+          },
+          "404": {
+            "description": "Release not found"
+          },
+          "503": {
+            "description": "Release writer authorization is not configured"
+          }
+        },
+        "summary": "Documentation-only operation for the mounted releases retract handler.",
         "tags": [
           "releases"
         ]

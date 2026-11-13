@@ -6,110 +6,15 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 47,
-    "native_rust": 46,
+    "total_live_operations": 42,
+    "native_rust": 41,
     "python_fastapi": 1,
-    "native_rust_status": 46,
+    "native_rust_status": 41,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 1
   },
   "operations": [
-    {
-      "owning_issue": 4849,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-releases.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v1/releases/",
-      "sql_budget": {
-        "application_statements": 2,
-        "transaction_control_statements": 0,
-        "total_statements": 2,
-        "basis": "one COUNT(*) over the published/public/readable filter plus one page SELECT with LIMIT/OFFSET; set-based, independent of library size, no per-row N+1"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "owning_issue": 4849,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-releases.ts"
-      ],
-      "method": "PUT",
-      "path": "/api/v1/releases/",
-      "sql_budget": {
-        "application_statements": 3,
-        "transaction_control_statements": 2,
-        "total_statements": 5,
-        "basis": "INSERT path: BEGIN + source-identity SELECT + INSERT ... RETURNING + COMMIT (2 application statements); UPDATE path adds one UPDATE and one follow-up SELECT (3 application statements); identity lookup runs inside the transaction, RETURNING keeps the insert to one statement"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "owning_issue": 4849,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-releases.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v1/releases/source",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "one SELECT over source_repository (+ source_pr_number/source_merge_sha) resolving minimal source projection; id/provenance keys only, no body fan-out"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "owning_issue": 4849,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-releases.ts"
-      ],
-      "method": "GET",
-      "path": "/api/v1/releases/{release_id}",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single primary-key lookup restricted to published/public/readable releases"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
-    {
-      "owning_issue": 4849,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/services/api-releases.ts"
-      ],
-      "method": "POST",
-      "path": "/api/v1/releases/{release_id}/retract",
-      "sql_budget": {
-        "application_statements": 3,
-        "transaction_control_statements": 2,
-        "total_statements": 5,
-        "basis": "BEGIN + SELECT ... WHERE status = 'published' guard + UPDATE status='retracted' + follow-up SELECT for the wire response + COMMIT; missing or already-retracted releases roll back with 404"
-      },
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
     {
       "method": "GET",
       "path": "/api/v2/analytics/metrics",
@@ -706,16 +611,16 @@
       "catch_all_dest": "/api/native_roll.rs",
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
-      "v1_total": 192,
-      "v1_shadowed_by_rust": 62,
+      "v1_total": 197,
+      "v1_shadowed_by_rust": 67,
       "v1_live_python": 121,
       "v1_orphaned": 9,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
-      "total_python_surface": 225,
-      "total_shadowed_by_rust": 75,
+      "total_python_surface": 230,
+      "total_shadowed_by_rust": 80,
       "total_live_python": 139,
       "total_orphaned": 11
     },
@@ -2468,6 +2373,71 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/releases/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/releases/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/releases/source",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/releases/{release_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/releases/{release_id}/retract",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {

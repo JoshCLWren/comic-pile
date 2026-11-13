@@ -1,10 +1,9 @@
 //! Same-path native What's New release ledger.
 //!
-//! The Python implementation was deleted once production traffic proved the
-//! native ingress serves these operations (see issue #4849). This module owns
-//! the writer-token authorization, idempotent source identity, public-read
-//! filters, provenance validation, deterministic copy repair, and response
-//! shapes.
+//! The five operations are served by this module behind the same
+//! `/api/v1/releases/` ingress; the former Python handler was removed in
+//! this change. Production runtime evidence for the native path is tracked
+//! by issue #4849 and is not asserted by this module.
 
 use crate::{db, ApiError, AppState};
 use axum::{

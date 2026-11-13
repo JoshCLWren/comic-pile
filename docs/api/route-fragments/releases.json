@@ -13,7 +13,7 @@
   },
   "operations": [
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/releases/",
       "dest": "/api/native_roll.rs",
@@ -26,7 +26,7 @@
       }
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/releases/",
       "dest": "/api/native_roll.rs",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/releases/source",
       "dest": "/api/native_roll.rs",
@@ -52,7 +52,7 @@
       }
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/releases/{release_id}",
       "dest": "/api/native_roll.rs",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "bucket": "operations",
+      "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/releases/{release_id}/retract",
       "dest": "/api/native_roll.rs",

@@ -63,6 +63,7 @@ class Operation:
     path_parameters: tuple[str, ...]
     has_query: bool
     has_body: bool
+    has_header: bool
 
     @property
     def has_required_input(self) -> bool:
@@ -271,6 +272,7 @@ def _build_operation(
 
     path_fields: list[tuple[str, bool, str]] = []
     query_fields: list[tuple[str, bool, str]] = []
+    header_fields: list[tuple[str, bool, str]] = []
     path_parameters: list[str] = []
     raw_parameters = operation.get("parameters")
     if isinstance(raw_parameters, list):
@@ -282,12 +284,14 @@ def _build_operation(
                 raise NativeClientGenerationError("parameter has no name")
             schema = _object(parameter.get("schema", {}), "parameter schema")
             type_text = _ts_type(schema)
+            required = parameter.get("required") is True
             if location == "path":
                 path_fields.append((parameter_name, False, type_text))
                 path_parameters.append(parameter_name)
             elif location == "query":
-                required = parameter.get("required") is True
                 query_fields.append((parameter_name, not required, type_text))
+            elif location == "header":
+                header_fields.append((parameter_name, not required, type_text))
             else:
                 raise NativeClientGenerationError(
                     f"{method.upper()} {path} has unsupported parameter "
@@ -306,6 +310,15 @@ def _build_operation(
                 optional=all(optional for _, optional, _ in query_fields),
                 type_text=None,
                 nested=tuple(query_fields),
+            )
+        )
+    if header_fields:
+        fields.append(
+            RequestField(
+                name="header",
+                optional=all(optional for _, optional, _ in header_fields),
+                type_text=None,
+                nested=tuple(header_fields),
             )
         )
 
@@ -336,6 +349,7 @@ def _build_operation(
         path_parameters=tuple(path_parameters),
         has_query=bool(query_fields),
         has_body=has_body,
+        has_header=bool(header_fields),
     )
 
 
@@ -363,7 +377,7 @@ def _render_request_type(operation: Operation) -> list[str]:
         lines.append(f"  {field.name}{optional}: {{")
         for name, nested_optional, type_text in field.nested:
             nested = "?" if nested_optional else ""
-            lines.append(f"    {name}{nested}: {type_text}")
+            lines.append(f"    {_property_name(name)}{nested}: {type_text}")
         lines.append("  }")
     lines.append("}")
     return lines
@@ -402,9 +416,16 @@ def _render_call(operation: Operation) -> list[str]:
     url = _render_url(operation)
     response = operation.response_name
     if operation.method in {"get", "delete"}:
-        if not operation.has_query:
+        options: list[str] = []
+        if operation.has_query:
+            options.append("params: compactQuery(args.query)")
+        if operation.has_header:
+            options.append("headers: args.header")
+        if not options:
             if not operation.path_parameters:
-                return [f"      return client.{operation.method}<{response}>({url})"]
+                return [
+                    f"      return client.{operation.method}<{response}>({url})"
+                ]
             return [
                 f"      return client.{operation.method}<{response}>(",
                 f"        {url},",
@@ -413,15 +434,32 @@ def _render_call(operation: Operation) -> list[str]:
         return [
             f"      return client.{operation.method}<{response}>(",
             f"        {url},",
-            "        { params: compactQuery(args.query) },",
+            "        { " + ", ".join(options) + " },",
             "      )",
         ]
     if operation.has_body and operation.request_name is not None:
+        if operation.has_header:
+            return [
+                f"      return client.{operation.method}<{response}, "
+                f"{operation.request_name}['body']>(",
+                f"        {url},",
+                "        args.body,",
+                "        { headers: args.header },",
+                "      )",
+            ]
         return [
             f"      return client.{operation.method}<{response}, "
             f"{operation.request_name}['body']>(",
             f"        {url},",
             "        args.body,",
+            "      )",
+        ]
+    if operation.has_header:
+        return [
+            f"      return client.{operation.method}<{response}>(",
+            f"        {url},",
+            "        undefined,",
+            "        { headers: args.header },",
             "      )",
         ]
     return [f"      return client.{operation.method}<{response}>({url})"]

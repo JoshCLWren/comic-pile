@@ -36,6 +36,15 @@ DROPPED_COMMENT_PREFIXES = (
     "-- Dumped from database version",
     "-- Dumped by pg_dump version",
 )
+# pg_dump built with newer PostgreSQL emits per-column storage parameters
+# (`ALTER TABLE ... SET (pg_attver=N)`) whose numeric value changes on every
+# freshly migrated throwaway database, so the CI fixture check could never
+# match byte-for-byte. They carry no portable schema information; the
+# canonical fixture describes types/keys/indexes/constraints, not this
+# storage-parameter bookkeeping.
+_PG_ATTVER_LINE = re.compile(
+    r"^ALTER TABLE ONLY \S+ ALTER COLUMN \S+ SET \(pg_attver=\d+\);$"
+)
 # pg_dump emits settings newer than the oldest server the suite supports
 # (PostgreSQL 16, the CI image). Loading them into 16 is a hard error.
 DROPPED_SETTINGS = ("SET transaction_timeout = 0;",)
@@ -78,6 +87,8 @@ def _normalize(raw: str) -> str:
         if stripped in DROPPED_SETTINGS:
             continue
         if stripped in DROPPED_STATEMENTS:
+            continue
+        if _PG_ATTVER_LINE.match(stripped):
             continue
         kept.append(line)
     return _qualify_extension_operator_classes("\n".join(kept).rstrip("\n") + "\n")
