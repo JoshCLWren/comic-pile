@@ -29,6 +29,7 @@ from factory_quota_pause import describe as describe_quota_pause, is_paused as q
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
+from factory_state_ledger import acquire_lease, release_lease, release_worker as release_neon_worker
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -479,14 +480,31 @@ def assign_candidate(
     if worker_has_active_lease(worker):
         return False
 
+    # Acquire one atomic worker + issue/PR reservation before mutating GitHub.
+    # GitHub live checks remain required; a Neon conflict never grants a claim.
+    try:
+        claim_token = acquire_lease(REPO, worker, numbers, FIXED_LEASE_TTL_SECONDS)
+    except Exception as exc:
+        print(f'[factory-controller] Neon lease unavailable; refusing duplicate-risk assignment ({type(exc).__name__})', file=sys.stderr)
+        return False
+    if claim_token is None:
+        return False
+
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
-        for claimed_number in claimed_numbers:
+        try:
+            for claimed_number in claimed_numbers:
+                try:
+                    if target_owned_by(claimed_number, owner):
+                        replace_factory_labels(claimed_number, 'factory:unowned')
+                except Exception:
+                    pass
+        finally:
+            # A failed GitHub write must not strand the Neon claim.
             try:
-                if target_owned_by(claimed_number, owner):
-                    replace_factory_labels(claimed_number, 'factory:unowned')
-            except Exception:
-                pass
+                release_lease(REPO, worker, claim_token, 'claim-rollback')
+            except Exception as exc:
+                print(f'[factory-controller] Neon claim rollback failed ({type(exc).__name__})', file=sys.stderr)
     claimed: list[int] = []
     try:
         for number in numbers:
@@ -1573,12 +1591,21 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         if owner_of(labels_of(item)) == owner:
             targets.append((int(item['number']), 'pr'))
     for number, kind in targets:
-        replace_factory_labels(number, 'factory:unowned')
+        if not replace_factory_labels(number, 'factory:unowned'):
+            continue
         try:
             record_claim_released(number, worker, kind, reason)
         except Exception:
             pass
         released.append(number)
+    # Only clear the Neon reservation once every originally held GitHub target
+    # has actually released its owner label.
+    if targets and len(released) == len(targets):
+        try:
+            if all(not target_owned_by(number, owner) for number, _ in targets):
+                release_neon_worker(REPO, worker, reason)
+        except Exception as exc:
+            print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
     return released
 
 
