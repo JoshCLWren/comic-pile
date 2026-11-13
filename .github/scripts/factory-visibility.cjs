@@ -999,13 +999,20 @@ async function reconcileMissingPrLabels({ github, context }) {
       lastPage = next.data;
       open.push(...lastPage);
     }
-    const missing = open.filter(pr =>
-      !Array.isArray(pr.labels) || !pr.labels.some(label => label.name === 'factory'));
-    if (missing.length === 0) {
-      console.log('Factory enrollment: all open PRs labeled; skipping per-PR reads and label catalog');
+    // A factory label alone is not complete enrollment: a valid PR must also
+    // have exactly one current owner and one stage. The scheduled recovery
+    // still repairs those partial or contradictory metadata states.
+    const incomplete = open.filter(pr => {
+      const labels = new Set(Array.isArray(pr.labels) ? pr.labels.map(label => label.name) : []);
+      const owners = [...labels].filter(isOwnerLabel);
+      const stages = STAGE_LABELS.filter(label => labels.has(label));
+      return !labels.has('factory') || owners.length !== 1 || stages.length !== 1;
+    });
+    if (incomplete.length === 0) {
+      console.log('Factory enrollment: all open PRs have complete ownership/stage metadata; skipping per-PR reads');
       return;
     }
-    candidates = { data: missing };
+    candidates = { data: incomplete };
   }
 
   let definitionsEnsured = false;
