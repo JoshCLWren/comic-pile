@@ -8,6 +8,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
   push:
     branches:
       - main
@@ -25,7 +26,57 @@ env:
   IMAGE_NAME: ${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
+  factory_fast_preflight:
+    name: Factory-only fast-lane preflight
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      eligible: ${{ steps.check.outputs.eligible }}
+    steps:
+      - name: Checkout trusted main policy
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Authenticate fast-lane candidate and scope
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+        run: |
+          set -euo pipefail
+          echo "eligible=false" >> "$GITHUB_OUTPUT"
+          if [[ -z "$PR_NUMBER" ]]; then
+            exit 0
+          fi
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          from pathlib import Path
+
+          path = Path(".github/scripts/factory-fast-merge.py")
+          spec = importlib.util.spec_from_file_location("factory_fast_merge", path)
+          if spec is None or spec.loader is None:
+              raise RuntimeError("Cannot load trusted factory merge policy")
+          gate = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(gate)
+          repo = os.environ["GITHUB_REPOSITORY"]
+          number = int(os.environ["PR_NUMBER"])
+          pr = gate.gh_api(f"repos/{repo}/pulls/{number}")
+          files = gate.pages(f"repos/{repo}/pulls/{number}/files")
+          allowed, reason = gate.factory_candidate(pr, files, repo)
+          print(f"Factory fast-lane eligibility for #{number}: {allowed}, {reason}")
+          if allowed:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+                  stream.write("eligible=true\n")
+          PY
+
   node-auth:
+    needs: [factory_fast_preflight]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true'
     name: TypeScript auth build and tests
     runs-on: ubuntu-latest
     defaults:
@@ -59,6 +110,8 @@ jobs:
       - run: npm test
 
   rust-ingress:
+    needs: [factory_fast_preflight]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true'
     name: Rust-default API ingress (real FastAPI registry)
     runs-on: ubuntu-latest
     steps:
@@ -98,6 +151,8 @@ jobs:
           node --test scripts/generate_vercel_routes.test.mjs
 
   factory-pr-auth:
+    needs: [factory_fast_preflight]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true'
     name: Factory PR authentication
     runs-on: ubuntu-latest
     permissions:
@@ -117,7 +172,8 @@ jobs:
       - run: node --test scripts/generate_vercel_routes.test.mjs
 
   build:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: [factory_fast_preflight]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     name: Build Docker Image
     runs-on: ubuntu-latest
     permissions:
@@ -165,8 +221,9 @@ jobs:
           echo "image-ref=${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image-name }}@${{ steps.build.outputs.digest }}" >> $GITHUB_OUTPUT
 
   build-fork:
+    needs: [factory_fast_preflight]
     name: Build Fork Docker Image
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -187,8 +244,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 15
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -232,8 +289,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 10
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -255,8 +312,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 15
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -278,8 +335,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 10
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -306,8 +363,8 @@ jobs:
   ui-audit:
     name: Rendered UI Audit (Chromium)
     runs-on: ubuntu-latest
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 20
     steps:
       - name: Check out repository
@@ -337,6 +394,8 @@ jobs:
           retention-days: 7
 
   production-runtime-migrations:
+    needs: [factory_fast_preflight]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true'
     name: Production Runtime Migrations
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -385,8 +444,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 10
     env:
       CI: true
@@ -453,8 +512,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -563,8 +622,8 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork, test-unit]
-    if: always() && needs.test-unit.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success')
+    needs: [factory_fast_preflight, build, build-fork, test-unit]
+    if: needs.factory_fast_preflight.outputs.eligible != 'true' && (always() && needs.test-unit.result == 'success' && (needs.build.result == 'success' || needs.build-fork.result == 'success'))
     timeout-minutes: 10
     env:
       PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
@@ -601,11 +660,20 @@ jobs:
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, build-fork, node-auth, rust-ingress, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit, coverage-gate]
+    needs: [factory_fast_preflight, build, build-fork, node-auth, rust-ingress, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit, coverage-gate]
     if: always()
     steps:
       - name: Check job results
         run: |
+          echo "Factory-only preflight: ${{ needs.factory_fast_preflight.result }}"
+          if [ "${{ needs.factory_fast_preflight.result }}" != "success" ]; then
+            echo "::error::Factory-only preflight did not succeed"
+            exit 1
+          fi
+          if [ "${{ needs.factory_fast_preflight.outputs.eligible }}" = "true" ]; then
+            echo "::notice::Trusted factory-only PR: CI Summary passed via fast-lane preflight"
+            exit 0
+          fi
           echo "Build: ${{ needs.build.result }}"
           echo "Fork build: ${{ needs.build-fork.result }}"
           echo "TypeScript auth: ${{ needs.node-auth.result }}"
