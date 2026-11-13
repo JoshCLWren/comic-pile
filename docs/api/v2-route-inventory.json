@@ -6,15 +6,28 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 42,
-    "native_rust": 41,
+    "total_live_operations": 43,
+    "native_rust": 42,
     "python_fastapi": 1,
-    "native_rust_status": 41,
+    "native_rust_status": 42,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 1
   },
   "operations": [
+    {
+      "owning_issue": 4822,
+      "method": "GET",
+      "path": "/api/v2/activity",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": [
+        "frontend/src/services/api-activity.ts"
+      ],
+      "ingress_destination": "/api/native_roll.rs",
+      "burndown_status": "native Rust",
+      "verified_against": "vercel.json"
+    },
     {
       "method": "GET",
       "path": "/api/v2/analytics/metrics",

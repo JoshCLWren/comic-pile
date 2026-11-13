@@ -410,6 +410,7 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
+        .route("/api/v2/activity", get(native_dispatch))
         .fallback(native_not_found)
 }
 

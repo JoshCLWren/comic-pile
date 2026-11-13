@@ -485,6 +485,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
     """Family fragments have stable ordering independent of filesystem order."""
     fragments = _load_route_fragments(FRAGMENT_DIR)
     assert [fragment.name for fragment in fragments] == [
+        "activity",
         "bug-reports",
         "catalog",
         "comicvine",

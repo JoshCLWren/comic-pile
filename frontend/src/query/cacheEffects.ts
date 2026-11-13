@@ -321,6 +321,10 @@ export async function invalidateAfterQueueMovement(
     client.invalidateQueries({
       queryKey: queryKeys.roll.issueCardsAll(),
     }),
+    // Snooze and roll mutations create new activity events, so the activity
+    // history must refresh too. Invalidate after all queue-movement operations
+    // including those that skip the session current refresh.
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     // Exclude/restore move a series across the active-queue boundary without
     // deleting it (#3807), so the excluded library view is a fourth surface
     // that changes membership. Reset it the same way the Queue list resets:
@@ -407,7 +411,6 @@ export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
     client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
-    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
   ])

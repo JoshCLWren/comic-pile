@@ -1,18 +1,7 @@
+import type { components } from '../generated/openapi'
 import { defaultHttpClient, type HttpClient } from './httpClient'
 
-export interface ActivityEvent {
-  event_id: number
-  event_type: string
-  timestamp: string
-  die_before: number | null
-  die_after: number | null
-  rating: number | null
-  thread_id: number | null
-  thread_title: string | null
-  issue_id: number | null
-  issue_number: string | null
-  action_display: string
-}
+export type ActivityEvent = components['schemas']['ActivityEvent']
 
 export interface ActivityPage {
   events: ActivityEvent[]

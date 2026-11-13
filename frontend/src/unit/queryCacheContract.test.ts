@@ -230,11 +230,12 @@ describe('targeted cache effects', () => {
       issues_remaining: thread.issues_remaining,
       last_rating: thread.last_rating,
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     // A rating writes a new "After rating" snapshot (#3468), so both the Roll
     // undo list (`undo.all`) and the session view's snapshot list
     // (`session.snapshotsAll`) must stop serving the pre-rating list.
@@ -390,11 +391,12 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.excluded.pages(),
     })
-    expect(invalidateQueries).toHaveBeenCalledTimes(5)
+    expect(invalidateQueries).toHaveBeenCalledTimes(6)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
     })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.roll.bootstrap(),
       exact: true,
@@ -417,6 +419,7 @@ describe('targeted cache effects', () => {
     // inside their own success path, so the row-action pass must not
     // re-invalidate that key: a second invalidation re-ran the session fetch
     // the mutation just settled. Every other movement surface still refreshes.
+    // (activity.all is included because snooze creates new activity events.)
     const { client, invalidateQueries, resetQueries } = createSpiedClient()
 
     await invalidateAfterQueueMovement(client, { skipSessionCurrent: true })
@@ -424,7 +427,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(4)
+    expect(invalidateQueries).toHaveBeenCalledTimes(5)
     expect(invalidateQueries).not.toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -444,6 +447,8 @@ describe('targeted cache effects', () => {
       queryKey: queryKeys.queue.activeCount(),
       exact: true,
     })
+    // Snooze/unsnooze creates activity events, so refresh the activity history too.
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.activity.all })
   })
 
   it('refreshes the undo surfaces while leaving session detail to its caller', async () => {
@@ -455,7 +460,7 @@ describe('targeted cache effects', () => {
     expect(resetQueries).toHaveBeenCalledTimes(2)
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.queue.pages() })
     expect(resetQueries).toHaveBeenCalledWith({ queryKey: queryKeys.excluded.pages() })
-    expect(invalidateQueries).toHaveBeenCalledTimes(8)
+    expect(invalidateQueries).toHaveBeenCalledTimes(9)
     expect(invalidateQueries).toHaveBeenCalledWith({
       queryKey: queryKeys.session.current(),
       exact: true,
@@ -484,6 +489,8 @@ describe('targeted cache effects', () => {
     })
     // The next undo reads from the snapshot list, so it cannot serve the pre-undo copy.
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: queryKeys.undo.all })
+    // (activity.all is included in the queue-movement effect since undo moves issues
+    // between active queue and excluded shelf and creates new activity events.)
 
     // SAFETY: mock call args are typed as `unknown[]`; narrowing the first arg
     // to the optional queryKey shape the test then indexes is the checked invariant.
