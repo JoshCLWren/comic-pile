@@ -612,7 +612,7 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 60,
+      "v1_shadowed_by_rust": 67,
       "v1_live_python": 121,
       "v1_orphaned": 9,
       "unversioned_total": 33,
@@ -620,7 +620,7 @@
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 73,
+      "total_shadowed_by_rust": 80,
       "total_live_python": 139,
       "total_orphaned": 11
     },
@@ -1723,92 +1723,92 @@
       {
         "method": "GET",
         "path": "/api/v1/identity-inbox",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "method": "GET",
         "path": "/api/v1/identity-inbox/search/issues",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "method": "GET",
         "path": "/api/v1/identity-inbox/{mapping_id}",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/defer",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/reject",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
         "method": "POST",
         "path": "/api/v1/identity-inbox/{mapping_id}/skip",
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4833,
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-identity.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
