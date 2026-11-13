@@ -191,9 +191,9 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                     entry["event_type"], int(entry["worker"]), json.dumps(entry),
                 )
                 inserted += 1
-                # Starts and trusted heartbeat updates extend a live claim.
-                # Neither can revive expired ownership or overwrite a new token.
-                if entry["event_type"] in {"worker_started", "worker_heartbeat"}:
+                # 'running' is an initial status marker, not a periodic
+                # liveness check. A terminal success/failure never renews.
+                if entry["event_type"] == "worker_started":
                     worker_key = _keys(repo, entry["worker"], [])[0]
                     row = await conn.fetchrow(
                         """SELECT payload FROM public.factory_state_kv
@@ -224,6 +224,97 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
     finally:
         await conn.close()
 
+
+
+async def _renew_verified(repo: str, workers: list[str]) -> int:
+    """Extend existing, unexpired reservations for verified running workers."""
+    import asyncpg
+
+    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=12)
+    renewed = 0
+    try:
+        async with conn.transaction():
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+                LEASE_PREFIX + repo,
+            )
+            for worker in sorted(set(workers)):
+                worker_key = _keys(repo, worker, [])[0]
+                raw = await conn.fetchval(
+                    """SELECT payload FROM public.factory_state_kv
+                       WHERE cache_key=$1 AND expires_at>now()""",
+                    worker_key,
+                )
+                if raw is None:
+                    continue
+                payload = json.loads(raw) if isinstance(raw, str) else raw
+                token = payload[0]["claim_id"]
+                await conn.execute(
+                    """UPDATE public.factory_state_kv
+                       SET expires_at=now() + interval '15 minutes',
+                           updated_at=now()
+                       WHERE expires_at>now()
+                         AND payload->0->>'claim_id'=$1
+                         AND (cache_key=$2 OR cache_key LIKE $3)""",
+                    token, worker_key, f"{LEASE_PREFIX}{repo}:target:%",
+                )
+                renewed += 1
+        return renewed
+    finally:
+        await conn.close()
+
+
+def renew_verified_workers(repo: str, workers: list[str]) -> int:
+    """Renew only workers verified alive by the trusted GitHub Actions controller.
+
+    Args:
+        repo: Repository whose worker claims are being extended.
+        workers: Numeric worker IDs observed in active GitHub Actions runs.
+
+    Returns:
+        Number of unexpired worker claim groups extended.
+    """
+    if not enabled() or not workers:
+        return 0
+    if any(not WORKER_RE.fullmatch(worker) for worker in workers):
+        raise ValueError("invalid verified worker ID")
+    return asyncio.run(_renew_verified(repo, workers))
+
+
+def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
+    """Capture the existing claim before a controller mutates ownership labels.
+
+    Args:
+        repo: GitHub repository.
+        worker: Numeric factory worker identifier.
+
+    Returns:
+        Existing claim ID and target numbers, or None if unavailable.
+
+    A token-bound release cannot remove a claim acquired after this snapshot.
+    """
+    if not enabled():
+        return None
+
+    async def _read() -> tuple[str, list[int]] | None:
+        import asyncpg
+
+        conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        try:
+            raw = await conn.fetchval(
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
+                _keys(repo, worker, [])[0],
+            )
+            if raw is None:
+                return None
+            payload = json.loads(raw) if isinstance(raw, str) else raw
+            return str(payload[0]["claim_id"]), [
+                int(number) for number in payload[0]["targets"]
+            ]
+        finally:
+            await conn.close()
+
+    return asyncio.run(_read())
 
 def record_events(repo: str, entries: list[dict[str, Any]]) -> int:
     if not enabled() or not entries:
@@ -257,7 +348,11 @@ def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
         if stamp < cutoff:
             continue
         status = outcome.group(1).strip().lower()
-        event_type = "worker_started" if status == "running" else "worker_heartbeat"
+        event_type = (
+            "worker_started" if status == "running"
+            else "worker_outcome_signal" if status in {"success", "failure"}
+            else "worker_heartbeat"
+        )
         events.append({
             "event_type": event_type,
             "event_id": f"heartbeat:{comment.get('id')}:{updated}:{status}",
