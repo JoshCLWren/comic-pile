@@ -107,7 +107,8 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "record_heartbeat_comments(REPO, changes)" in collector
     assert "Persist classified worker completion in Neon" in observer
     assert "factory-state-cache" not in untrusted
-    assert "factory-state-cache" not in entry
+    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
+    assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
 def test_trusted_heartbeat_events_extend_current_nonexpired_lease() -> None:
@@ -125,13 +126,17 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     root = Path(__file__).resolve().parents[1]
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
-    assert '-f source_run_id="$GITHUB_RUN_ID"' in entry
-    assert "persist_outcome:" in drain
-    assert '.path == ".github/workflows/free-model-factory-entry.yml"' in drain
-    assert ".head_repository.full_name == $repo" in drain
-    assert "actions/jobs/${job_id}/logs" in drain
-    assert "factory_state_ledger.py runtime-outcome" in drain
-    assert "factory-state-cache" not in entry
+    assert "persist_outcome:" in entry
+    assert "needs: run" in entry
+    assert "if: ${{ always() }}" in entry
+    assert "actions/jobs/${job_id}/logs" in entry
+    assert "factory_state_ledger.py runtime-outcome" in entry
+    assert "gh workflow run factory-completion-drain.yml" in entry
+    assert "persist_outcome:" not in drain
+    assert "source_run_id" not in drain
+    # Model execution is confined to the reusable runner, which has no Neon
+    # secret. The separate post-run collector receives the restricted DSN.
+    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
     assert "factory-state-cache" not in (root / ".github/workflows/free-model-factory-run.yml").read_text()
 
 
@@ -159,16 +164,17 @@ def test_terminal_event_idempotency_spans_classification_outcomes() -> None:
 def test_terminal_identity_fallback_uses_attested_run_title() -> None:
     """Actions run GET omits workflow_dispatch inputs for older Entry runs."""
     root = Path(__file__).resolve().parents[1]
-    drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
-    assert '.display_title // ""' in drain
-    assert "fixed-model entry$" in drain
-    assert "worker=\"$(jq -r" in drain
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    assert "INPUT_WORKER: ${{ inputs.worker }}" in entry
+    assert 'jq --arg worker "$INPUT_WORKER" ' in entry
+    assert "run / factory" in entry
+    assert "GITHUB_RUN_ID" in entry
 
 
 def test_terminal_collector_can_download_ansi_colored_worker_logs() -> None:
     """The current gh CLI rejects raw job logs containing ANSI escape codes."""
     root = Path(__file__).resolve().parents[1]
-    workflow = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    workflow = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert 'gh api --allow-escape-sequences \\' in workflow
     assert '"repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"' in workflow
     assert '> "$RUNNER_TEMP/factory-entry.log"' in workflow
@@ -177,3 +183,18 @@ def test_terminal_collector_can_download_ansi_colored_worker_logs() -> None:
     assert "--allow-escape-sequences" not in (
         root / ".github/workflows/free-model-factory-run.yml"
     ).read_text()
+
+
+def test_completion_persistence_is_not_queued_behind_dispatch() -> None:
+    """The only serialized entry signal is for capacity, never event writes."""
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    assert "  persist_outcome:" in entry
+    assert "  signal_completion:" in entry
+    collector = entry.split("  persist_outcome:", 1)[1]
+    assert "concurrency:" not in collector
+    assert "factory-state-cache" in collector
+    assert 'if: ${{ always() }}' in collector
+    assert "  persist_outcome:" not in drain
+    assert "group: factory-completion-drain-ingress" in drain
