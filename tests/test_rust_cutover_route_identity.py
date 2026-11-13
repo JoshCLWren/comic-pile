@@ -183,6 +183,15 @@ def test_current_runtime_routing_is_explicit_and_independent_of_version() -> Non
             "PUT",
             "/api/v1/users/me/taste-signals/creator/creator%3Awriter%3Adk/verdict",
         ): "/api/native_roll.rs",
+        # Identity Inbox operations are Rust cutovers (#4833); Python stays
+        # shadowed until production proof.
+        ("GET", "/api/v1/identity-inbox"): "/api/native_roll.rs",
+        ("GET", "/api/v1/identity-inbox/search/issues"): "/api/native_roll.rs",
+        ("GET", "/api/v1/identity-inbox/1"): "/api/native_roll.rs",
+        ("POST", "/api/v1/identity-inbox/1/confirm"): "/api/native_roll.rs",
+        ("POST", "/api/v1/identity-inbox/1/defer"): "/api/native_roll.rs",
+        ("POST", "/api/v1/identity-inbox/1/reject"): "/api/native_roll.rs",
+        ("POST", "/api/v1/identity-inbox/1/skip"): "/api/native_roll.rs",
     }
     for (method, path), destination in expected.items():
         actual = _route_destination(method, path)

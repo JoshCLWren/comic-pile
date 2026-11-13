@@ -17,49 +17,56 @@
       "method": "GET",
       "path": "/api/v1/identity-inbox",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox$"
+      "src": "^/api/v1/identity\\-inbox$",
+      "runtime": "native-rust"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/identity-inbox/search/issues",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox/search/issues$"
+      "src": "^/api/v1/identity\\-inbox/search/issues$",
+      "runtime": "native-rust"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/identity-inbox/{mapping_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox/[^/]+$"
+      "src": "^/api/v1/identity\\-inbox/[^/]+$",
+      "runtime": "native-rust"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$"
+      "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$",
+      "runtime": "native-rust"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/defer",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox/[^/]+/defer$"
+      "src": "^/api/v1/identity\\-inbox/[^/]+/defer$",
+      "runtime": "native-rust"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/reject",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox/[^/]+/reject$"
+      "src": "^/api/v1/identity\\-inbox/[^/]+/reject$",
+      "runtime": "native-rust"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/skip",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity\\-inbox/[^/]+/skip$"
+      "src": "^/api/v1/identity\\-inbox/[^/]+/skip$",
+      "runtime": "native-rust"
     }
   ]
 }
