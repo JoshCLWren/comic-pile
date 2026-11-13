@@ -150,10 +150,10 @@ pub async fn preview_plan_projection(
 
     let response = ReadingOrderProjectionPreview {
         plan_id,
-        plan_name,
-        plan_ordering_mode,
+        plan_name: projection.plan_name,
+        plan_ordering_mode: projection.plan_ordering_mode,
         reading_order_id: req.reading_order_id,
-        reading_order_name: "".to_string(),
+        reading_order_name: projection.reading_order_name,
         entries,
         conflicts,
         total_positions: projection.total_positions,
@@ -164,19 +164,202 @@ pub async fn preview_plan_projection(
 }
 
 async fn build_projection_plan(
-    _conn: &deadpool_postgres::Object,
-    _user_id: i32,
-    _plan_id: i32,
-    _reading_order_id: i32,
+    conn: &deadpool_postgres::Object,
+    user_id: i32,
+    plan_id: i32,
+    reading_order_id: i32,
 ) -> anyhow::Result<ProjectionPlan> {
     // Port from `app/services/reading_order_projection.build_projection_plan`
-    // This is a simplified version; full implementation would parse the
-    // continuity plan JSON and compute the projection.
+    // This is a deterministic projection without mutating any resource.
+
+    // 1. Load owned continuity plan
+    let plan_rows = conn
+        .query(
+            "SELECT p.id, p.name, p.ordering_mode, p.nodes_json, p.lanes_json FROM continuity_plans p WHERE p.id = $1 AND p.user_id = $2",
+            &[&plan_id, &user_id],
+        )
+        .await?;
+    let plan_row = plan_rows
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Plan {plan_id} not found"))?;
+    let plan_id: i32 = plan_row.get("id");
+    let plan_name: String = plan_row.get("name");
+    let plan_ordering_mode: String = plan_row.get("ordering_mode");
+    let nodes_json: serde_json::Value = plan_row.get("nodes_json");
+    let lanes_json: serde_json::Value = plan_row.get("lanes_json");
+
+    // 2. Load owned reading order
+    let order_rows = conn
+        .query(
+            "SELECT o.id, o.name FROM reading_orders o WHERE o.id = $1 AND o.user_id = $2",
+            &[&reading_order_id, &user_id],
+        )
+        .await?;
+    let order_row = order_rows
+        .into_iter()
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("Reading order {reading_order_id} not found"))?;
+    let reading_order_id: i32 = order_row.get("id");
+    let reading_order_name: String = order_row.get("name");
+
+    // 3. Parse and flatten plan nodes
+    let nodes: Vec<ContinuityPlanNode> = serde_json::from_value(nodes_json)
+        .map_err(|e| anyhow::anyhow!("Malformed plan nodes: {e}"))?;
+    
+    let lanes: Vec<serde_json::Value> = serde_json::from_value(lanes_json)
+        .map_err(|e| anyhow::anyhow!("Malformed plan lanes: {e}"))?;
+    let lane_orders: std::collections::HashMap<String, i32> = lanes
+        .iter()
+        .filter_map(|l| {
+            let id = l.get("id")?.as_str()?.to_string();
+            let order = l.get("order")?.as_i64()? as i32;
+            Some((id, order))
+        })
+        .collect();
+
+    let mut sorted_nodes = nodes.clone();
+    let dropped_node_ids: Vec<String> = nodes
+        .iter()
+        .filter(|n| !lane_orders.contains_key(&n.lane_id))
+        .map(|n| n.id.clone())
+        .collect();
+
+    if plan_ordering_mode == "strict_sequential" {
+        if lanes.len() != 1 {
+            return Err(anyhow::anyhow!("strict sequential plans must use exactly one lane"));
+        }
+        let single_lane_id = lanes[0].get("id").and_then(|v| v.as_str()).unwrap_or_default();
+        let nodes_in_lane: Vec<_> = sorted_nodes.iter().filter(|n| n.lane_id == single_lane_id).collect();
+        if nodes_in_lane.len() != nodes.len() {
+            return Err(anyhow::anyhow!("strict sequential plans must have all nodes in single lane"));
+        }
+        sorted_nodes.sort_by_key(|n| n.position);
+    } else {
+        sorted_nodes.sort_by(|a, b| {
+            let a_lane_order = lane_orders.get(&a.lane_id).unwrap_or(&0);
+            let b_lane_order = lane_orders.get(&b.lane_id).unwrap_or(&0);
+            a_lane_order.cmp(b_lane_order)
+                .then(a.position.cmp(&b.position))
+                .then(a.id.cmp(&b.id))
+        });
+    }
+
+    // 4. Resolve thread titles
+    let thread_ids: Vec<i32> = sorted_nodes
+        .iter()
+        .filter(|n| n.node_type == "thread")
+        .map(|n| n.ref_id)
+        .collect();
+    
+    let mut thread_titles = std::collections::HashMap::new();
+    if !thread_ids.is_empty() {
+        let title_rows = conn
+            .query(
+                "SELECT id, title FROM threads WHERE id = ANY($1) AND user_id = $2",
+                &[&thread_ids, &user_id],
+            )
+            .await?;
+        for row in title_rows {
+            let id: i32 = row.get("id");
+            let title: Option<String> = row.get("title");
+            thread_titles.insert(id, title);
+        }
+    }
+
+    // 5. Compute projection and conflicts
+    let mut conflicts = Vec::new();
+    let mut seen_thread_ids = std::collections::HashSet::new();
+    let mut thread_positions: std::collections::HashMap<i32, Vec<i32>> = std::collections::HashMap::new();
+    let mut preview_entries = Vec::new();
+
+    for node in &sorted_nodes {
+        if node.node_type != "thread" {
+            conflicts.push(ProjectionConflict {
+                code: "non_thread_node".to_string(),
+                message: format!("Reading order projection only supports thread nodes; {node.node_type} node {node.id} cannot be projected."),
+                node_id: Some(node.id.clone()),
+                thread_id: Some(node.ref_id),
+                existing_positions: vec![],
+            });
+            continue;
+        }
+        let thread_id = node.ref_id;
+        if thread_titles.contains_key(&thread_id) {
+            thread_positions.entry(thread_id).or_default().push(node.position);
+            if seen_thread_ids.contains(&thread_id) {
+                conflicts.push(ProjectionConflict {
+                    code: "duplicate_thread".to_string(),
+                    message: format!("Thread {thread_id} appears multiple times in the plan; deduplicate node positions before projection."),
+                    node_id: Some(node.id.clone()),
+                    thread_id: Some(thread_id),
+                    existing_positions: thread_positions[&thread_id].clone(),
+                });
+                continue;
+            }
+            seen_thread_ids.insert(thread_id);
+        } else {
+            conflicts.push(ProjectionConflict {
+                code: "missing_thread".to_string(),
+                message: format!("Thread {thread_id} from node {node.id} is not owned by the user."),
+                node_id: Some(node.id.clone()),
+                thread_id: Some(thread_id),
+                existing_positions: vec![],
+            });
+            continue;
+        }
+    }
+
+    let mut total_positions = 0;
+    if conflicts.is_empty() {
+        let existing_rows = conn
+            .query("SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1", &[&reading_order_id])
+            .await?;
+        let mut existing_positions = std::collections::HashMap::new();
+        for row in existing_rows {
+            let tid: i32 = row.get("thread_id");
+            let pos: i32 = row.get("position");
+            existing_positions.insert(tid, pos);
+        }
+
+        let mut current_pos = 1;
+        for node in &sorted_nodes {
+            let thread_id = node.ref_id;
+            let prior_pos = existing_positions.get(&thread_id);
+            let source = if prior_pos.is_none() {
+                "added".to_string()
+            } else if *prior_pos.unwrap() != current_pos {
+                "updated".to_string()
+            } else {
+                "existing".to_string()
+            };
+            preview_entries.push(ProjectionEntry {
+                thread_id,
+                thread_title: thread_titles.get(&thread_id).cloned().flatten(),
+                position: current_pos,
+                source,
+                source_node_id: Some(node.id.clone()),
+            });
+            current_pos += 1;
+        }
+        total_positions = std::cmp::max(preview_entries.len() as i32, existing_positions.len() as i32);
+    } else {
+        let existing_rows = conn
+            .query("SELECT 1 FROM reading_order_items WHERE reading_order_id = $1", &[&reading_order_id])
+            .await?;
+        total_positions = existing_rows.len() as i32;
+    }
+
     Ok(ProjectionPlan {
-        entries: vec![],
-        conflicts: vec![],
-        total_positions: 0,
-        dropped_node_ids: vec![],
+        plan_id,
+        plan_name,
+        plan_ordering_mode,
+        reading_order_id,
+        reading_order_name,
+        entries: preview_entries,
+        conflicts,
+        total_positions,
+        dropped_node_ids,
     })
 }
 
