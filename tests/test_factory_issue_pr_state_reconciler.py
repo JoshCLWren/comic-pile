@@ -68,7 +68,21 @@ def test_factory_issue_state_reconciler_has_periodic_sweep() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
 
     assert "  schedule:" in workflow
-    assert "    - cron: '*/15 * * * *'" in workflow
+    assert "    - cron: '31 * * * *'" in workflow
+
+
+def test_hourly_sweep_skips_history_when_no_stale_stages() -> None:
+    """Clean factory backlog must not trigger 5,000-PR history pagination."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    schedule = workflow.index("factory_issues=\"$(gh issue list")
+    no_work_exit = workflow.index('if [[ -z "$factory_issues" ]]', schedule)
+    full_history = workflow.index('SWEEP_PULLS="$(gh api --paginate --slurp', schedule)
+
+    assert "31 * * * *" in workflow
+    assert "--json number,labels" in workflow[schedule:full_history]
+    assert 'factory:(building|review|changes-requested|ci|ready)' in workflow[schedule:full_history]
+    assert schedule < no_work_exit < full_history
+    assert "exit 0" in workflow[no_work_exit:full_history]
 
 
 def test_ralph_status_blocked_issue_is_not_rewritten() -> None:
@@ -125,7 +139,7 @@ def test_reconcile_issue_skips_blocked_labels_before_replace() -> None:
     body = _reconcile_issue_body(workflow)
 
     assert "if: false" not in workflow
-    assert "    - cron: '*/15 * * * *'" in workflow
+    assert "    - cron: '31 * * * *'" in workflow
     skip_at = body.index("--blocked-by-labels-json")
     replace_at = body.index('replace_issue_state "$issue" "$stage"')
     assert skip_at < replace_at
