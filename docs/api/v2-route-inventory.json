@@ -612,7 +612,7 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 197,
-      "v1_shadowed_by_rust": 67,
+      "v1_shadowed_by_rust": 60,
       "v1_live_python": 121,
       "v1_orphaned": 9,
       "unversioned_total": 33,
@@ -620,7 +620,7 @@
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
       "total_python_surface": 230,
-      "total_shadowed_by_rust": 80,
+      "total_shadowed_by_rust": 73,
       "total_live_python": 139,
       "total_orphaned": 11
     },
