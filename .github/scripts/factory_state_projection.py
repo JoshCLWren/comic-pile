@@ -127,12 +127,34 @@ def projected_json(repo: str, kind: str) -> list[dict[str, object]] | None:
         return None
 
 
+def _snapshot_started_at(value: str) -> datetime:
+    """Parse a GitHub list watermark as a timezone-aware asyncpg parameter.
+
+    Args:
+        value: ISO-8601 timestamp, including an explicit UTC offset.
+
+    Returns:
+        A timezone-aware Python datetime suitable for asyncpg timestamptz.
+
+    Raises:
+        ValueError: If the timestamp is malformed or lacks a timezone.
+    """
+    try:
+        started_at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("invalid GitHub projection watermark") from exc
+    if started_at.tzinfo is None or started_at.utcoffset() is None:
+        raise ValueError("GitHub projection watermark requires timezone")
+    return started_at
+
+
 async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: str) -> tuple[int, int]:
     import asyncpg
 
     if not all(isinstance(item, dict) and isinstance(item.get("number"), int) for item in items):
         raise ValueError("invalid GitHub list snapshot")
     prefix = _prefix(repo, kind)
+    started_at = _snapshot_started_at(started)
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     projection = [{
         "key": _target_key(repo, kind, int(item["number"])),
@@ -171,13 +193,13 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                           < COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz)
                      )
                    RETURNING cache_key""",
-                json.dumps(projection), started,
+                json.dumps(projection), started_at,
             )
             removed = await conn.fetch(
                 """UPDATE public.factory_state_kv SET
                      payload=jsonb_set(
                        jsonb_set(payload,'{0,state}','"closed"'::jsonb),
-                       '{0,source_updated_at}',to_jsonb($3::text)),
+                       '{0,source_updated_at}',to_jsonb($5::text)),
                      updated_at=now()
                    WHERE cache_key LIKE $1
                      AND cache_key != $2
@@ -185,8 +207,8 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                      AND (payload->0->>'observed_at')::timestamptz <= $3::timestamptz
                      AND NOT (cache_key=ANY($4::text[]))
                    RETURNING cache_key""",
-                prefix + "%", _marker(repo,kind), started,
-                [entry["key"] for entry in projection],
+                prefix + "%", _marker(repo,kind), started_at,
+                [entry["key"] for entry in projection], started,
             )
             await conn.execute(
                 """INSERT INTO public.factory_state_kv
@@ -403,17 +425,21 @@ def bootstrap_missing(repo: str) -> None:
     """
     if not enabled():
         return
+    errors: list[str] = []
     for kind in ("issue", "pr"):
         try:
             created = asyncio.run(_bootstrap_kind(repo, kind))
             if created:
                 print(f"[factory-projection] initialized {kind} snapshot", file=sys.stderr)
         except Exception as exc:
+            errors.append(f"{kind}: {type(exc).__name__}")
             print(
-                f"[factory-projection] {kind} initialization deferred "
+                f"[factory-projection] {kind} initialization failed "
                 f"({type(exc).__name__})",
                 file=sys.stderr,
             )
+    if errors:
+        raise RuntimeError("Neon projection bootstrap failed: " + ", ".join(errors))
 
 
 def ingest_event(repo: str, event_id: str, event: dict[str, object]) -> bool:

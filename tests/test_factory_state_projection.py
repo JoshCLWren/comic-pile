@@ -171,3 +171,40 @@ def test_bootstrap_is_one_time_and_safe_under_concurrent_webhooks() -> None:
     assert "len(items) >= limit" in source
     assert "await _snapshot(repo, kind, items, started)" in source
     assert "bootstrap_missing(args.repo)" in inspect.getsource(projection.main)
+
+def test_snapshot_watermark_is_typed_for_asyncpg() -> None:
+    """The Neon timestamptz protocol requires datetime, never an ISO string."""
+    from datetime import UTC, datetime
+
+    at = projection._snapshot_started_at("2026-11-13T13:10:00Z")
+    assert isinstance(at, datetime)
+    assert at.tzinfo is not None
+    assert at.utcoffset().total_seconds() == 0
+    assert at == datetime(2026, 11, 13, 13, 10, tzinfo=UTC)
+    with pytest.raises(ValueError, match="requires timezone"):
+        projection._snapshot_started_at("2026-11-13T13:10:00")
+
+
+def test_snapshot_sql_has_distinct_text_and_timestamptz_parameters() -> None:
+    """Do not bind strings to asyncpg timestamptz or reuse typed placeholders."""
+    import inspect
+
+    source = inspect.getsource(projection._snapshot)
+    assert "json.dumps(projection), started_at" in source
+    assert '"{0,source_updated_at}"' not in source
+    assert "to_jsonb($5::text)" in source
+    assert 'prefix + "%", _marker(repo,kind), started_at' in source
+    assert '[entry["key"] for entry in projection], started' in source
+
+
+def test_bootstrap_does_not_report_success_after_sql_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An ingestion workflow must fail visibly until its snapshot exists."""
+    monkeypatch.setattr(projection, "enabled", lambda: True)
+
+    def failed(_coroutine: object) -> None:
+        _coroutine.close()
+        raise ValueError("database rejected typed parameter")
+
+    monkeypatch.setattr(projection.asyncio, "run", failed)
+    with pytest.raises(RuntimeError, match="Neon projection bootstrap failed"):
+        projection.bootstrap_missing("owner/repo")
