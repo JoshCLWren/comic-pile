@@ -1,5 +1,6 @@
 """Exercise trusted lease cleanup when a factory aborts before its worker starts."""
 
+import ast
 import json
 import os
 from pathlib import Path
@@ -126,3 +127,53 @@ def test_cleanup_refuses_label_release_without_neon_connection(tmp_path: Path) -
     assert result.returncode == 1
     assert result.stdout == ""
     assert "Neon factory lease connection missing" in result.stderr
+
+
+def _load_controller_release(helpers: dict[str, object]):
+    """Exercise the real release function without importing its GitHub CLI."""
+    source = (ROOT / ".github/scripts/factory-work-controller.py").read_text()
+    method = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "release_worker"
+    )
+    module = ast.Module(body=[method], type_ignores=[])
+    namespace: dict[str, object] = {
+        "REPO": "owner/repo",
+        "sys": __import__("sys"),
+        "list_issues": lambda: [],
+        "list_prs": lambda: [],
+        "owner_of": lambda labels: None,
+        "labels_of": lambda item: [],
+        "target_owned_by": lambda number, owner: False,
+        "release_lease": lambda *args: False,
+        **helpers,
+    }
+    exec(compile(module, "<factory-controller-release>", "exec"), namespace)
+    return namespace["release_worker"]
+
+
+def test_trusted_cleanup_fails_before_github_label_mutation_if_neon_unavailable() -> None:
+    calls: list[int] = []
+
+    def fail_snapshot(repo: str, worker: str):
+        raise ConnectionError("Neon unavailable")
+
+    release = _load_controller_release({
+        "worker_claim": fail_snapshot,
+        "list_issues": lambda: calls.append(1) or [],
+    })
+    with pytest.raises(ConnectionError, match="Neon unavailable"):
+        release("104", "pre-session-abort-run-43439464262")
+    assert calls == []
+
+
+def test_trusted_cleanup_retry_clears_original_claim_when_labels_already_released() -> None:
+    releases: list[tuple[object, ...]] = []
+    release = _load_controller_release({
+        "worker_claim": lambda repo, worker: ("old-claim-token", [4833, 5015]),
+        "release_lease": lambda *args: releases.append(args) or True,
+    })
+    assert release("45", "pre-session-abort-run-43450421076") == []
+    assert releases == [
+        ("owner/repo", "45", "old-claim-token", "pre-session-abort-run-43450421076")
+    ]
