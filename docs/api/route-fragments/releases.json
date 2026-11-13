@@ -4,48 +4,78 @@
     "^/api/v1/releases(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
-    "owning_issue": null,
+    "owning_issue": 4849,
+    "runtime": "native-rust",
+    "status": "target",
     "consumers": [
       "frontend/src/services/api-releases.ts"
     ]
   },
   "operations": [
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
       "path": "/api/v1/releases/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/releases/$"
+      "src": "^/api/v1/releases/$",
+      "sql_budget": {
+        "application_statements": 2,
+        "transaction_control_statements": 0,
+        "total_statements": 2,
+        "basis": "one COUNT(*) over the published/public/readable filter plus one page SELECT with LIMIT/OFFSET; set-based, independent of library size, no per-row N+1"
+      }
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "PUT",
       "path": "/api/v1/releases/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/releases/$"
+      "src": "^/api/v1/releases/$",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 2,
+        "total_statements": 5,
+        "basis": "INSERT path: BEGIN + source-identity SELECT + INSERT ... RETURNING + COMMIT (2 application statements); UPDATE path adds one UPDATE and one follow-up SELECT (3 application statements); identity lookup runs inside the transaction, RETURNING keeps the insert to one statement"
+      }
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
       "path": "/api/v1/releases/source",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/releases/source$"
+      "src": "^/api/v1/releases/source$",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "one SELECT over source_repository (+ source_pr_number/source_merge_sha) resolving minimal source projection; id/provenance keys only, no body fan-out"
+      }
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "GET",
       "path": "/api/v1/releases/{release_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/releases/[0-9]+$"
+      "src": "^/api/v1/releases/[0-9]+$",
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "single primary-key lookup restricted to published/public/readable releases"
+      }
     },
     {
-      "bucket": "v1_operations",
+      "bucket": "operations",
       "method": "POST",
       "path": "/api/v1/releases/{release_id}/retract",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/releases/[0-9]+/retract$"
+      "src": "^/api/v1/releases/[0-9]+/retract$",
+      "sql_budget": {
+        "application_statements": 3,
+        "transaction_control_statements": 2,
+        "total_statements": 5,
+        "basis": "BEGIN + SELECT ... WHERE status = 'published' guard + UPDATE status='retracted' + follow-up SELECT for the wire response + COMMIT; missing or already-retracted releases roll back with 404"
+      }
     }
   ]
 }

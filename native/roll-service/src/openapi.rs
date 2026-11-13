@@ -81,9 +81,11 @@ use utoipa::OpenApi;
         crate::continuity_rules::delete_documentation,
         // Writer-authorized releases operations (source/publish/retract) are
         // server-only automation, not browser-called, and require a header
-        // credential the browser SDK does not model. They stay documented by
-        // the retained Python schemas; only the public reads join this
-        // browser-facing native contract.
+        // credential the browser SDK does not model. The Python schemas that
+        // used to document them were deleted with the Python handler (#4849);
+        // these operations keep a byte-compatible wire contract at runtime and
+        // are covered by this module's Rust integration tests instead. Only
+        // the public reads join this browser-facing native contract.
         crate::releases::list_documentation,
         crate::releases::get_documentation,
         crate::comicvine_resolution::series_import_status_documentation,

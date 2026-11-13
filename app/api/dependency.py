@@ -303,7 +303,6 @@ def mount_subrouters() -> None:
     from app.api import issue_dependency_batch
     from app.api import reading_order_projection
     from app.api import reading_plan_release_source
-    from app.api import releases
     from app.api import roll_recovery_switch
 
     router.include_router(issue_dependency_batch.router)
@@ -319,7 +318,6 @@ def mount_subrouters() -> None:
     router.include_router(cbl_sources.router)
     router.include_router(custom_cbl.router)
     router.include_router(roll_recovery_switch.router, prefix="/roll")
-    router.include_router(releases.router, prefix="/releases")
 
     _subrouters_mounted = True
 

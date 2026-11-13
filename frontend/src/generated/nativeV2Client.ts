@@ -352,7 +352,7 @@ export interface ReleasesGetRequest {
   }
 }
 
-export type ReleasesGetResponse = components['schemas']['NativePublicReleaseResponse']
+export type ReleasesGetResponse = components['schemas']['PublicReleaseResponse']
 
 export interface ReleasesListRequest {
   query?: {
@@ -361,7 +361,7 @@ export interface ReleasesListRequest {
   }
 }
 
-export type ReleasesListResponse = components['schemas']['NativeReleaseListResponse']
+export type ReleasesListResponse = components['schemas']['ReleaseListResponse']
 
 export interface RelinkRequest {
   path: {

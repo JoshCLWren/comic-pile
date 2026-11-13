@@ -1,9 +1,10 @@
 //! Same-path native What's New release ledger.
 //!
-//! The Python implementation remains in place until production execution is
-//! proven. This module mirrors its writer-token authorization, idempotent
-//! source identity, public-read filters, provenance validation, deterministic
-//! copy repair, and response shapes.
+//! The Python implementation was deleted once production traffic proved the
+//! native ingress serves these operations (see issue #4849). This module owns
+//! the writer-token authorization, idempotent source identity, public-read
+//! filters, provenance validation, deterministic copy repair, and response
+//! shapes.
 
 use crate::{db, ApiError, AppState};
 use axum::{
