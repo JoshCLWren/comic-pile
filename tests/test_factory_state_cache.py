@@ -126,10 +126,22 @@ def test_workflows_inject_database_only_into_trusted_jobs():
         workflow = (root / ".github/workflows" / filename).read_text()
         assert "uses: ./.github/actions/factory-state-cache" in workflow
         assert "secrets.NEON_API_KEY" in workflow
-    for filename in ("free-model-factory-run.yml", "free-model-factory-entry.yml", "local-ollama-review.yml"):
+    for filename in ("free-model-factory-run.yml", "local-ollama-review.yml"):
         workflow = (root / ".github/workflows" / filename).read_text()
         assert "factory-state-cache" not in workflow
         assert "FACTORY_STATE_DSN_FILE" not in workflow
+
+    # The Entry owns two isolated runner jobs: its reusable model runner and a
+    # trusted post-run collector. Permit Neon only in the latter job.
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    executor, collector = entry.split("\n  persist_outcome:", 1)
+    assert "factory-state-cache" not in executor
+    assert "FACTORY_STATE_DSN_FILE" not in executor
+    assert "factory-state-cache" in collector
+    assert "needs: run" in collector
+    assert "if: ${{ always() }}" in collector
+    assert "actions: read" in collector
+    assert "run / factory" in collector
 
 
 def test_recovery_watchdog_loads_paginated_compatible_neon_registry() -> None:
