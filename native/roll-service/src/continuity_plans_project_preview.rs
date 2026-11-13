@@ -61,8 +61,8 @@ pub struct ReadingOrderProjectionPreview {
 pub struct ReadingOrderProjectionEntry {
     /// Thread ID.
     pub thread_id: i32,
-    /// Thread title.
-    pub thread_title: String,
+    /// Thread title, preserved as null when missing.
+    pub thread_title: Option<String>,
     /// Position in the reading order.
     pub position: i32,
     /// Source: "existing", "added", or "updated".
@@ -129,7 +129,7 @@ pub async fn preview_plan_projection(
         .into_iter()
         .map(|entry| ReadingOrderProjectionEntry {
             thread_id: entry.thread_id,
-            thread_title: entry.thread_title.unwrap_or_default(),
+            thread_title: entry.thread_title,
             position: entry.position,
             source: entry.source,
             source_node_id: entry.source_node_id,
