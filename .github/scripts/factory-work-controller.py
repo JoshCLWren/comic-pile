@@ -30,7 +30,7 @@ from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
 from factory_state_projection import projected_json, reconcile_snapshot
-from factory_state_ledger import acquire_lease, release_lease, release_worker as release_neon_worker, renew_verified_workers, worker_claim
+from factory_state_ledger import acquire_lease, release_lease, renew_verified_workers, worker_claim
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -1628,6 +1628,13 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
     ``factory:<worker>`` + ``factory:review`` until TTL expiry.
     """
     owner = f'factory:{worker}'
+    # Snapshot before any GitHub label mutation. Never fetch a possibly newer
+    # claim token after another dispatcher has reassigned this worker.
+    try:
+        original_claim = worker_claim(REPO, worker)
+    except Exception as exc:
+        print(f'[factory-controller] Neon release snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
+        original_claim = None
     released: list[int] = []
     issues = list_issues()
     prs = list_prs()
@@ -1648,10 +1655,13 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         released.append(number)
     # Only clear the Neon reservation once every originally held GitHub target
     # has actually released its owner label.
-    if targets and len(released) == len(targets):
+    if targets and len(released) == len(targets) and original_claim is not None:
         try:
-            if all(not target_owned_by(number, owner) for number, _ in targets):
-                release_neon_worker(REPO, worker, reason)
+            token, claim_numbers = original_claim
+            # Re-verify all targets attached to this *original* token, not
+            # merely whichever labels were present in the first snapshot.
+            if all(not target_owned_by(number, owner) for number in claim_numbers):
+                release_lease(REPO, worker, token, reason)
         except Exception as exc:
             print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
     return released
