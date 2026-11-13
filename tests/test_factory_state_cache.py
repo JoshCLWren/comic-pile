@@ -116,7 +116,13 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert "database_name=factory_state&role_name=factory_state_rw" in action
     assert '::add-mask::$uri' in action
     assert 'FACTORY_STATE_DSN_FILE=$dsn_file' in action
-    for filename in ("fixed-model-factory-dispatch.yml", "factory-completion-drain.yml", "factory-status-pages.yml"):
+    for filename in (
+        "fixed-model-factory-dispatch.yml",
+        "factory-completion-drain.yml",
+        "factory-status-pages.yml",
+        "fixed-model-factory-capacity-refill.yml",
+        "fixed-model-factory-dispatch-recovery.yml",
+    ):
         workflow = (root / ".github/workflows" / filename).read_text()
         assert "uses: ./.github/actions/factory-state-cache" in workflow
         assert "secrets.NEON_API_KEY" in workflow
@@ -124,3 +130,12 @@ def test_workflows_inject_database_only_into_trusted_jobs():
         workflow = (root / ".github/workflows" / filename).read_text()
         assert "factory-state-cache" not in workflow
         assert "FACTORY_STATE_DSN_FILE" not in workflow
+
+
+def test_recovery_watchdog_loads_paginated_compatible_neon_registry() -> None:
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/fixed-model-factory-dispatch-recovery.yml").read_text()
+    assert "from factory_completion_controller import registry_comments" in workflow
+    assert "json.dumps([registry_comments()])" in workflow
+    assert "issues/1093/comments?per_page=100" not in workflow
+    assert "factory_heartbeat_health.py" in workflow
+    assert "uses: ./.github/actions/factory-state-cache" in workflow
