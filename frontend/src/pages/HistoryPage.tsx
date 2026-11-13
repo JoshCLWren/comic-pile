@@ -36,6 +36,7 @@ export default function HistoryPage() {
     isPending,
     isRetrying,
     isError,
+    isFetchNextPageError,
     isLoadingMore,
     hasMore,
     loadMore,
@@ -135,10 +136,11 @@ export default function HistoryPage() {
       {isError && !isLoadingMore && events.length > 0 && (
         <div className="text-center py-4">
           <p className="text-sm font-bold text-red-400 mb-3">
-            Failed to load more history
+            {isFetchNextPageError ? 'Failed to load more history' : 'Failed to refresh history'}
           </p>
           <button
-            onClick={() => void loadMore()}
+            type="button"
+            onClick={() => void (isFetchNextPageError ? loadMore() : refetch())}
             className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
             Retry

@@ -36,3 +36,30 @@ it('continues with the server cursor and refreshes the same activity query', asy
   await act(async () => { await result.current.refetch() })
   expect(list).toHaveBeenCalledWith(null, 50)
 })
+
+it('flags a failed next-page fetch, then clears it once a refresh succeeds', async () => {
+  list.mockImplementation(async (token) => {
+    if (token === 'next') throw new Error('page 2 failed')
+    return { events: [event(1)], next_page_token: 'next' }
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  )
+  const { result } = renderHook(() => useActivity(), { wrapper })
+  await waitFor(() => expect(result.current.events).toHaveLength(1))
+
+  await act(async () => {
+    await result.current.loadMore().catch(() => undefined)
+  })
+  await waitFor(() => {
+    expect(result.current.isError).toBe(true)
+    expect(result.current.isFetchNextPageError).toBe(true)
+  })
+  // The loaded page survives the failure so a retry can resume the missing page.
+  expect(result.current.events.map((event) => event.event_id)).toEqual([1])
+
+  await act(async () => { await result.current.refetch() })
+  await waitFor(() => expect(result.current.isError).toBe(false))
+  expect(result.current.isFetchNextPageError).toBe(false)
+})

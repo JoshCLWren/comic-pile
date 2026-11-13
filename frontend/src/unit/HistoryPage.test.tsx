@@ -17,6 +17,7 @@ function activityState(overrides: Partial<ActivityState> = {}): ActivityState {
     isPending: false,
     isRetrying: false,
     isError: false,
+    isFetchNextPageError: false,
     error: null,
     isLoadingMore: false,
     hasMore: false,
@@ -320,7 +321,13 @@ it('loads more activity from the server cursor and offers a load-more retry', ()
   expect(screen.queryByRole('button', { name: 'Load More Activity' })).not.toBeInTheDocument()
 
   mockedUseActivity.mockReturnValue(
-    activityState({ events: [event(1)], isError: true, error: new Error('page 2'), loadMore }),
+    activityState({
+      events: [event(1)],
+      isError: true,
+      isFetchNextPageError: true,
+      error: new Error('page 2'),
+      loadMore,
+    }),
   )
   rerender(
     <MemoryRouter>
@@ -332,6 +339,30 @@ it('loads more activity from the server cursor and offers a load-more retry', ()
   expect(screen.getByText('Rolled First Series #1')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(loadMore).toHaveBeenCalledTimes(2)
+})
+
+it('retries the refresh, not the next page, when a background refresh fails', () => {
+  const loadMore = vi.fn()
+  const refetch = vi.fn()
+  mockedUseActivity.mockReturnValue(
+    activityState({
+      events: [event(1)],
+      isError: true,
+      isFetchNextPageError: false,
+      error: new Error('refresh failed'),
+      loadMore,
+      refetch,
+    }),
+  )
+  renderPage()
+
+  expect(screen.getByText('Failed to refresh history')).toBeInTheDocument()
+  expect(screen.queryByText('Failed to load more history')).not.toBeInTheDocument()
+  expect(screen.getByText('Rolled First Series #1')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(refetch).toHaveBeenCalledTimes(1)
+  expect(loadMore).not.toHaveBeenCalled()
 })
 
 it('refreshes the current activity query without dropping the list', () => {
@@ -374,4 +405,13 @@ it('offers Retry on an initial load failure (issue #3429)', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('Failed to load history')
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalledTimes(1)
+})
+
+it('renders an unparseable timestamp verbatim instead of inventing one', () => {
+  mockedUseActivity.mockReturnValue(
+    activityState({ events: [event(1, { timestamp: 'not-a-timestamp' })] }),
+  )
+  renderPage()
+
+  expect(screen.getByText('not-a-timestamp')).toBeInTheDocument()
 })

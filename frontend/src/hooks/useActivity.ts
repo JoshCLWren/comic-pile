@@ -26,6 +26,13 @@ export function useActivity(pageSize: number = DEFAULT_PAGE_SIZE) {
     error: query.error,
     isLoadingMore: query.isFetchingNextPage,
     hasMore: query.hasNextPage,
+    /**
+     * True when the current error came from the next-page request rather than
+     * the first load or a background refresh. A retry must resume the request
+     * that actually failed: `loadMore` for a next-page failure, `refetch` for
+     * every other failure (see `useInfiniteCollection.isFetchNextPageError`).
+     */
+    isFetchNextPageError: query.isFetchNextPageError,
     loadMore: query.fetchNextPage,
     refetch: query.refetch,
   }
