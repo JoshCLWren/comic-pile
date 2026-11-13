@@ -9,7 +9,7 @@ import asyncio
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from factory_state_cache import _dsn
@@ -112,7 +112,7 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
     if not all(isinstance(item, dict) and isinstance(item.get("number"), int) for item in items):
         raise ValueError("invalid GitHub list snapshot")
     prefix = _prefix(repo, kind)
-    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     projection = [{
         "key": _target_key(repo, kind, int(item["number"])),
         "item": item,
@@ -144,8 +144,13 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                      AND (factory_state_kv.payload->0->'item'
                           IS DISTINCT FROM EXCLUDED.payload->0->'item'
                           OR factory_state_kv.payload->0->>'state' != 'open')
+                     AND (
+                       (factory_state_kv.payload->0->>'observed_at')::timestamptz <= $2::timestamptz
+                       OR COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz)
+                          < COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz)
+                     )
                    RETURNING cache_key""",
-                json.dumps(projection),
+                json.dumps(projection), started,
             )
             removed = await conn.fetch(
                 """UPDATE public.factory_state_kv SET
@@ -206,7 +211,7 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
     source_updated_at = str(item.get("updatedAt") or "")
     value = json.dumps([{
         "item": item, "state": state, "source_updated_at": source_updated_at,
-        "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     }])
     conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
