@@ -62,7 +62,11 @@ success/failure *signals* from registry comments. These terminal signals are
 not liveness heartbeats and never extend a lease. The controller renews
 unexpired leases only for workers it independently verifies have active
 GitHub Actions runs, and clears token-matching Neon claims after verified
-GitHub label release. The worker Entry independently runs a trusted, non-model post-worker
+GitHub label release. Pre-session abort cleanup configures the restricted Neon
+connection in its own trusted runner before touching GitHub labels. If the
+connection is unavailable, it refuses a split release; the lease can expire
+and be reconciled safely instead. The coding/model job receives no Neon key
+or DSN. The worker Entry independently runs a trusted, non-model post-worker
 job to classify the finished factory-job log and persist the immutable
 completion/failure event. It separately dispatches the capacity Completion
 Drain. The outcome recorder does not share the drain's dispatcher concurrency

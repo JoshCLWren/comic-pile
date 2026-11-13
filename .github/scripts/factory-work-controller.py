@@ -1634,6 +1634,10 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         original_claim = worker_claim(REPO, worker)
     except Exception as exc:
         print(f'[factory-controller] Neon release snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
+        # A trusted pre-session abort must not strip GitHub owner labels if it
+        # cannot read the matching Neon reservation. Keep both sides intact.
+        if reason.startswith('pre-session-abort-run-'):
+            raise
         original_claim = None
     released: list[int] = []
     issues = list_issues()
@@ -1655,15 +1659,19 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         released.append(number)
     # Only clear the Neon reservation once every originally held GitHub target
     # has actually released its owner label.
-    if targets and len(released) == len(targets) and original_claim is not None:
+    if original_claim is not None and len(released) == len(targets):
         try:
             token, claim_numbers = original_claim
             # Re-verify all targets attached to this *original* token, not
             # merely whichever labels were present in the first snapshot.
+            # This also repairs retry attempts when a previous run already
+            # cleared the GitHub labels but could not reach Neon afterward.
             if all(not target_owned_by(number, owner) for number in claim_numbers):
                 release_lease(REPO, worker, token, reason)
         except Exception as exc:
             print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
+            if reason.startswith('pre-session-abort-run-'):
+                raise
     return released
 
 
