@@ -179,7 +179,9 @@ def test_snapshot_watermark_is_typed_for_asyncpg() -> None:
     at = projection._snapshot_started_at("2026-11-13T13:10:00Z")
     assert isinstance(at, datetime)
     assert at.tzinfo is not None
-    assert at.utcoffset().total_seconds() == 0
+    offset = at.utcoffset()
+    assert offset is not None
+    assert offset.total_seconds() == 0
     assert at == datetime(2026, 11, 13, 13, 10, tzinfo=UTC)
     with pytest.raises(ValueError, match="requires timezone"):
         projection._snapshot_started_at("2026-11-13T13:10:00")
@@ -201,8 +203,8 @@ def test_bootstrap_does_not_report_success_after_sql_failure(monkeypatch: pytest
     """An ingestion workflow must fail visibly until its snapshot exists."""
     monkeypatch.setattr(projection, "enabled", lambda: True)
 
-    def failed(_coroutine: object) -> None:
-        _coroutine.close()
+    def failed(coroutine) -> None:
+        coroutine.close()
         raise ValueError("database rejected typed parameter")
 
     monkeypatch.setattr(projection.asyncio, "run", failed)
