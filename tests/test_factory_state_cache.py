@@ -126,10 +126,27 @@ def test_workflows_inject_database_only_into_trusted_jobs():
         workflow = (root / ".github/workflows" / filename).read_text()
         assert "uses: ./.github/actions/factory-state-cache" in workflow
         assert "secrets.NEON_API_KEY" in workflow
-    for filename in ("free-model-factory-run.yml", "local-ollama-review.yml"):
-        workflow = (root / ".github/workflows" / filename).read_text()
-        assert "factory-state-cache" not in workflow
-        assert "FACTORY_STATE_DSN_FILE" not in workflow
+    # The local independent reviewer must never receive database credentials.
+    local_review = (root / ".github/workflows/local-ollama-review.yml").read_text()
+    assert "factory-state-cache" not in local_review
+    assert "FACTORY_STATE_DSN_FILE" not in local_review
+
+    # In the reusable workflow only the separate trusted cleanup runner can
+    # connect to Neon, not the agent/model execution job.
+    import yaml
+
+    reusable = yaml.safe_load(
+        (root / ".github/workflows/free-model-factory-run.yml").read_text()
+    )
+    model_job = reusable["jobs"]["factory"]
+    cleanup_job = reusable["jobs"]["release_pre_session_lease"]
+    assert "factory-state-cache" not in str(model_job)
+    assert "FACTORY_STATE_DSN_FILE" not in str(model_job)
+    assert "NEON_API_KEY" not in str(model_job)
+    assert any(
+        step.get("uses") == "./.github/actions/factory-state-cache"
+        for step in cleanup_job["steps"]
+    )
 
     # The Entry owns two isolated runner jobs: its reusable model runner and a
     # trusted post-run collector. Permit Neon only in the latter job.
