@@ -68,7 +68,9 @@ jobs:
           pr = gate.gh_api(f"repos/{repo}/pulls/{number}")
           files = gate.pages(f"repos/{repo}/pulls/{number}/files")
           allowed, reason = gate.factory_candidate(pr, files, repo)
-          print(f"Factory fast-lane eligibility for #{number}: {allowed}, {reason}")
+          switch_enabled = gate.enabled(Path(".github/factory-fast-merge.json"))
+          allowed = allowed and switch_enabled
+          print(f"Factory fast-lane eligibility for #{number}: {allowed}, switch enabled: {switch_enabled}, {reason}")
           if allowed:
               with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
                   stream.write("eligible=true\n")
