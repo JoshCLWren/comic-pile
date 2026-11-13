@@ -171,3 +171,46 @@ def test_bootstrap_is_one_time_and_safe_under_concurrent_webhooks() -> None:
     assert "len(items) >= limit" in source
     assert "await _snapshot(repo, kind, items, started)" in source
     assert "bootstrap_missing(args.repo)" in inspect.getsource(projection.main)
+
+
+def test_snapshot_uses_native_datetimes_for_asyncpg_timestamptz(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both reconciliation queries bind Python datetimes to asyncpg timestamptz."""
+    import asyncio
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    calls: list[tuple[str, tuple[object, ...]]] = []
+
+    class FakeTransaction:
+        async def __aenter__(self) -> None:
+            return None
+
+        async def __aexit__(self, *_args: object) -> None:
+            return None
+
+    class FakeConnection:
+        def transaction(self) -> FakeTransaction:
+            return FakeTransaction()
+
+        async def execute(self, *_args: object) -> str:
+            return "OK"
+
+        async def fetch(self, query: str, *args: object) -> list[object]:
+            calls.append((query, args))
+            return []
+
+        async def close(self) -> None:
+            return None
+
+    async def connect(**_kwargs: object) -> FakeConnection:
+        return FakeConnection()
+
+    monkeypatch.setitem(sys.modules, "asyncpg", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(projection, "_dsn", lambda: "test-postgres-dsn")
+    result = asyncio.run(projection._snapshot("owner/repo", "issue", [], "2026-11-13T13:07:00Z"))
+    assert result == (0, 0)
+    assert len(calls) == 2
+    assert isinstance(calls[0][1][1], datetime)
+    assert isinstance(calls[1][1][2], datetime)
+    assert calls[1][1][4] == "2026-11-13T13:07:00Z"
+    assert "to_jsonb($5::text)" in calls[1][0]
