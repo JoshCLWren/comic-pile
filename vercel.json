@@ -740,13 +740,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v2/activity$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v2/demo-roll$",
       "methods": [
         "GET"

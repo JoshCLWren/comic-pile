@@ -3,10 +3,12 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 import { queryKeys } from '../query/queryKeys'
 import { activityApi, type ActivityPage } from '../services/api-activity'
 
-export function useActivity() {
+const DEFAULT_PAGE_SIZE = 50
+
+export function useActivity(pageSize: number = DEFAULT_PAGE_SIZE) {
   const query = useInfiniteQuery({
-    queryKey: queryKeys.activity.pages(),
-    queryFn: ({ pageParam }) => activityApi.list(pageParam),
+    queryKey: queryKeys.activity.pages(pageSize),
+    queryFn: ({ pageParam }) => activityApi.list(pageParam, pageSize),
     // SAFETY: null is the first page cursor; subsequent pages carry server tokens.
     initialPageParam: null as string | null,
     getNextPageParam: (page: ActivityPage) => page.next_page_token ?? undefined,

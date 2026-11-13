@@ -10,9 +10,12 @@ export interface ActivityPage {
 
 export function createActivityApi(client: HttpClient) {
   return {
-    list: (pageToken: string | null = null): Promise<ActivityPage> =>
+    list: (pageToken: string | null = null, pageSize?: number): Promise<ActivityPage> =>
       client.get<ActivityPage>('/v2/activity', {
-        params: pageToken ? { page_token: pageToken } : undefined,
+        params: {
+          ...(pageToken ? { page_token: pageToken } : {}),
+          ...(pageSize ? { page_size: pageSize } : {}),
+        },
       }),
   }
 }

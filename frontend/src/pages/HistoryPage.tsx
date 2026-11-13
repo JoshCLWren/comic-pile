@@ -1,6 +1,6 @@
-import { useSessions } from '../hooks/useSession'
 import { Link } from 'react-router-dom'
-import type { SessionSummary } from '../types'
+import { useActivity } from '../hooks/useActivity'
+import type { ActivityEvent } from '../services/api-activity'
 
 /**
  * Shared recovery action for the bounded-loading and load-failure states.
@@ -20,17 +20,27 @@ function RetryHistoryButton({ onRetry }: { onRetry: () => void }) {
   )
 }
 
+function eventLabel(event: ActivityEvent): string {
+  const title = event.thread_title ?? 'Deleted series'
+  return event.issue_number ? `${title} #${event.issue_number}` : title
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString()
+}
+
 export default function HistoryPage() {
   const {
-    data: sessions,
+    events,
     isPending,
+    isRetrying,
+    isError,
     isLoadingMore,
     hasMore,
     loadMore,
-    error,
-    isRetrying,
     refetch,
-  } = useSessions()
+  } = useActivity()
 
   if (isPending) {
     // A timed-out first page stays pending through the shared retry policy
@@ -51,120 +61,29 @@ export default function HistoryPage() {
     return <div className="flex items-center justify-center h-screen">Loading...</div>
   }
 
-  if (error && !isLoadingMore && (!sessions || sessions.length === 0)) {
+  if (isError && !isLoadingMore && events.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4">
         <p role="alert" className="error-message">
-          Failed to load sessions
+          Failed to load history
         </p>
         <RetryHistoryButton onRetry={() => void refetch()} />
       </div>
     )
   }
 
-  if (!sessions || sessions.length === 0) {
+  if (!isPending && !isError && events.length === 0) {
     return (
       <div className="space-y-6 md:space-y-8 pb-20">
         <header className="flex flex-wrap items-end justify-between gap-3 px-2">
           <div>
             <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-            <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
+            <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
           </div>
         </header>
-        <div className="text-center text-stone-500">No sessions yet</div>
+        <div className="text-center text-stone-500">No activity yet</div>
       </div>
     )
-  }
-
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return ''
-    const date = new Date(dateStr)
-    if (Number.isNaN(date.getTime())) return ''
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }
-
-  const formatTime = (dateStr: string | null | undefined) => {
-    if (!dateStr) return ''
-    const date = new Date(dateStr)
-    if (Number.isNaN(date.getTime())) return ''
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
-  }
-
-  /**
-   * Unique accessible name for a session-detail link (#3687).
-   *
-   * Every card shows the same concise "View full session" text while the
-   * arrow stays aria-hidden, so without a distinct aria-label a screen reader
-   * announces dozens of identical links and cannot tell the cards apart. The
-   * stable session id keeps each name unique even when the start time is
-   * missing or unparseable, and the start date/time adds spoken context. The
-   * visible label is unchanged.
-   */
-  const buildSessionLinkLabel = (session: SessionSummary): string => {
-    const base = `View full session for session ${session.id}`
-    const date = formatDate(session.started_at)
-    const time = formatTime(session.started_at)
-    if (date && time) {
-      return `${base}, started ${date} at ${time}`
-    }
-    return base
-  }
-
-  const formatDuration = (startedAt: string | null | undefined, endedAt: string | null | undefined) => {
-    if (!startedAt || !endedAt) return null
-    const start = new Date(startedAt)
-    const end = new Date(endedAt)
-    const diffMs = end.getTime() - start.getTime()
-    if (!Number.isFinite(diffMs) || diffMs < 0) return null
-    const diffMins = Math.floor(diffMs / 60000)
-    const hours = Math.floor(diffMins / 60)
-    const mins = diffMins % 60
-    if (hours === 0) return `${mins}m`
-    if (mins === 0) return `${hours}h`
-    return `${hours}h ${mins}m`
-  }
-
-  const formatDiceProgression = (ladderPath: string | null | undefined, lastRolledResult: number | null | undefined) => {
-    if (!ladderPath) return ''
-    const dice = ladderPath.split(' → ')
-    const progression = dice.map(d => `d${d}`).join(' → ')
-
-    // Only a roll that landed on a number is reported; a missing or zero
-    // result would otherwise render a dangling "· Rolled" suffix.
-    if (lastRolledResult != null && lastRolledResult > 0) {
-      return `${progression} · Rolled ${lastRolledResult}`
-    }
-
-    return progression
-  }
-
-  const buildActivityLine = (
-    session: SessionSummary,
-  ): string | null => {
-    const parts: string[] = []
-
-    const issuesRead = session.active_thread?.issues_read
-    const lastRating = session.active_thread?.last_rating
-
-    // Add issues read information
-    if (issuesRead != null && issuesRead > 0) {
-      parts.push(`${issuesRead} ${issuesRead === 1 ? 'issue' : 'issues'} read`)
-    }
-
-    // Add rating information
-    if (lastRating != null) {
-      parts.push(`rated ${lastRating.toFixed(1)}`)
-    }
-
-    // Report the session's recorded start die, not the evolving current die,
-    // so past history never rewrites itself when the reader's current die
-    // setting changes (issue #4243).
-    const hasActivity = (issuesRead != null && issuesRead > 0) || lastRating != null
-    if (hasActivity && session.start_die != null) {
-      parts.push(`Die size d${session.start_die}`)
-    }
-
-    return parts.length > 0 ? parts.join(' · ') : null
   }
 
   return (
@@ -172,99 +91,31 @@ export default function HistoryPage() {
       <header className="flex flex-wrap items-end justify-between gap-3 px-2">
         <div>
           <h1 className="text-2xl md:text-4xl font-black tracking-tighter text-glow uppercase leading-none">History</h1>
-          <p className="mt-2 text-base font-semibold text-stone-500">Your reading session history</p>
+          <p className="mt-2 text-base font-semibold text-stone-500">Your reading activity</p>
         </div>
       </header>
 
-      <div id="sessions-list" className="border-y border-[var(--theme-border)] divide-y divide-[var(--theme-border)]" role="list" aria-label="Session history">
-        {sessions.map((session) => {
-          const duration = formatDuration(session.started_at, session.ended_at)
-          const isAbandonedRoll = (
-            !session.active_thread
-            && session.last_rolled_result == null
-            && (session.snapshot_count ?? 0) <= 1
-          )
-          const activityLine = session.active_thread
-            ? buildActivityLine(session)
-            : null
-          // The dice progression is rendered once per card, independently of the
-          // activity line, so a rated or read session never loses its ladder
-          // and roll (#3573).
-          const diceProgression = session.ladder_path
-            ? formatDiceProgression(session.ladder_path, session.last_rolled_result)
-            : ''
-          return (
-            <div key={session.id} role="listitem" className="flex gap-3 md:gap-4 py-4 px-2 md:px-3">
-              <div className="w-16 md:w-20 shrink-0">
-                <div className="text-xs font-bold leading-none text-stone-200">
-                  {formatDate(session.started_at)}
-                </div>
-                <div className="mt-1 text-[10px] font-bold uppercase tracking-widest leading-none text-stone-500">
-                  {formatTime(session.started_at)}
-                </div>
-              </div>
-
-              <div className="min-w-0 flex-1 space-y-1.5">
-                {isAbandonedRoll ? (
-                  <p className="text-sm font-bold text-[var(--theme-text-primary)]">
-                    No issue selected
-                  </p>
-                ) : session.active_thread ? (
-                  <>
-                    <p className="font-bold text-sm leading-tight text-stone-200 truncate">
-                      {session.active_thread.title}
-                      {session.active_thread.next_issue_number ? (
-                        <span className="text-stone-400"> · #{session.active_thread.next_issue_number}</span>
-                      ) : null}
-                      {session.active_thread.tags && session.active_thread.tags.length > 0 ? (
-                        <span className="text-stone-400">
-                          {' · ' + session.active_thread.tags.map(t => t.name).join(', ')}
-                        </span>
-                      ) : null}
-                    </p>
-                    {activityLine ? (
-                      <p className="text-xs text-stone-400">
-                        {activityLine}
-                      </p>
-                    ) : (
-                      <p className="text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                        {session.active_thread.issues_remaining != null
-                          ? `${session.active_thread.issues_remaining} left in queue`
-                          : 'In progress'}
-                      </p>
-                    )}
-                  </>
-                ) : null}
-
-                {diceProgression && (
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--theme-text-dim)]">
-                    {diceProgression}
-                  </p>
-                )}
-
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-stone-500 uppercase tracking-widest">
-                  {duration && <span>Duration: {duration}</span>}
-                  {(session.snapshot_count ?? 0) > 0 && (
-                    <Link
-                      to={`/sessions/${session.id}`}
-                      className="underline decoration-dotted underline-offset-2 hover:text-stone-300"
-                    >
-                      Snapshots ({session.snapshot_count})
-                    </Link>
-                  )}
-                  <Link
-                    to={`/sessions/${session.id}`}
-                    aria-label={buildSessionLinkLabel(session)}
-                    className="inline-flex items-center gap-1 text-stone-400 hover:text-stone-200 underline decoration-dotted underline-offset-4"
-                  >
-                    View full session <span aria-hidden>→</span>
+      {events.length > 0 ? (
+        <div role="list" aria-label="Reading activity" className="divide-y divide-[var(--theme-border)] border-y border-[var(--theme-border)]">
+          {events.map((event) => (
+            <div key={event.event_id} role="listitem" className="flex gap-3 px-2 py-4 md:gap-4 md:px-3">
+              <time dateTime={event.timestamp} className="w-28 shrink-0 text-xs text-[var(--theme-text-muted)]">
+                {formatTimestamp(event.timestamp)}
+              </time>
+              <div className="min-w-0 space-y-1">
+                <p className="text-sm font-semibold text-[var(--theme-text-primary)]">{event.action_display}</p>
+                {event.thread_id ? (
+                  <Link to={`/thread/${event.thread_id}${event.issue_id ? `?issue=${event.issue_id}` : ''}`} className="text-xs text-[var(--theme-personal-accent)] underline underline-offset-2">
+                    {eventLabel(event)}
                   </Link>
-                </div>
+                ) : (
+                  <p className="text-xs text-[var(--theme-text-dim)]">{eventLabel(event)}</p>
+                )}
               </div>
             </div>
-          )
-        })}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
       {isLoadingMore && (
         <div className="flex items-center justify-center py-8">
@@ -274,13 +125,13 @@ export default function HistoryPage() {
         </div>
       )}
 
-      {error && !isLoadingMore && (
+      {isError && !isLoadingMore && events.length > 0 && (
         <div className="text-center py-4">
           <p className="text-sm font-bold text-red-400 mb-3">
-            Failed to load more sessions
+            Failed to load more history
           </p>
           <button
-            onClick={loadMore}
+            onClick={() => void loadMore()}
             className="h-9 px-4 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
             Retry
@@ -291,10 +142,10 @@ export default function HistoryPage() {
       {hasMore && !isLoadingMore && (
         <div className="flex justify-center pt-4 pb-8">
           <button
-            onClick={loadMore}
+            onClick={() => void loadMore()}
             className="h-10 md:h-12 px-6 md:px-8 rounded-lg border border-[var(--theme-border)] text-xs font-bold text-[var(--theme-text-muted)] hover:text-[var(--theme-text-primary)] transition-colors"
           >
-            Load More Sessions
+            Load More Activity
           </button>
         </div>
       )}
