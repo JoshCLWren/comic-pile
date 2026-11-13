@@ -81,7 +81,8 @@ const MAX_PAGE_SIZE: i32 = 200;
 /// Event types the activity resource surfaces: exactly the actions that
 /// change or record the die, matching the owner's production verification
 /// query for #4822.
-const ACTIVITY_EVENT_TYPES: &str = "('roll', 'snooze', 'rate', 'manual_die', 'reset_dice')";
+const ACTIVITY_EVENT_TYPES: &str =
+    "('roll', 'snooze', 'unsnooze', 'rate', 'issue_unread', 'manual_die', 'reset_dice', 'undo')";
 
 /// The per-event projection: resolved thread reference, saved issue number and
 /// the linkage keys that pair one logical action's rows.
@@ -121,7 +122,8 @@ const SCOPED_EVENTS_CTE: &str = r#"scoped AS (
     LEFT JOIN threads t
         ON t.id = CASE WHEN e.type = 'roll'
                   THEN e.selected_thread_id ELSE e.thread_id END
-    LEFT JOIN issues i ON i.id = e.issue_id
+       AND t.user_id = e.user_id
+    LEFT JOIN issues i ON i.id = e.issue_id AND i.thread_id = t.id
     WHERE e.user_id = (SELECT user_id FROM me)
       AND e.type IN {ACTIVITY_EVENT_TYPES}
 )"#;
@@ -141,7 +143,7 @@ const LINKED_EVENTS_CTE: &str = r#"linked AS (
                id AS roll_id,
                context->>'roll_offer_key' AS offer_key
         FROM scoped
-        WHERE type = 'roll' AND context ? 'roll_offer_key'
+        WHERE type = 'roll' AND context::jsonb ? 'roll_offer_key'
         ORDER BY context->>'roll_offer_key', id DESC
     ) roll_pair
         ON s.type = 'snooze'
@@ -153,7 +155,7 @@ const LINKED_EVENTS_CTE: &str = r#"linked AS (
                context->>'issue_command_key' AS issue_key,
                issue_id
         FROM scoped
-        WHERE type = 'rate' AND context ? 'issue_command_key'
+        WHERE type = 'rate' AND context::jsonb ? 'issue_command_key'
         ORDER BY context->>'issue_command_key', id DESC
     ) rate_pair
         ON s.type = 'rate'
@@ -169,7 +171,7 @@ fn activity_statement() -> &'static str {
     static SQL: OnceLock<String> = OnceLock::new();
     SQL.get_or_init(|| {
         format!(
-            "WITH {FOLDED_AUTH_CTES},\n{SCOPED},\n{LINKED},\nclusters AS (\n    SELECT l.leader_id,\n           (extract(epoch FROM leader.ts) * 1000000)::bigint AS ts_us,\n           l.leader_id AS sort_id,\n           jsonb_agg(\n               jsonb_build_object(\n                   'event_id', l.id,\n                   'event_type', l.type,\n                   'timestamp', to_char(l.ts AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),\n                   'die_before', l.die,\n                   'die_after', l.die_after,\n                   'rating', l.rating,\n                   'thread_id', l.thread_id,\n                   'thread_title', l.thread_title,\n                   'issue_id', l.issue_id,\n                   'issue_number', l.issue_number\n               )\n               ORDER BY l.id\n           ) AS members\n    FROM linked l\n    JOIN linked leader ON leader.id = l.leader_id\n    GROUP BY l.leader_id, leader.ts\n)\nSELECT jsonb_build_object(\n    'auth', (SELECT jsonb_build_object(\n        'password_epoch', password_epoch,\n        'revoked', revoked\n    ) FROM auth),\n    'clusters', COALESCE((\n        SELECT jsonb_agg(jsonb_build_object('ts_us', p.ts_us, 'id', p.sort_id, 'events', p.members))\n        FROM (\n            SELECT ts_us, sort_id, members\n            FROM clusters\n            WHERE ($5::bigint IS NULL OR (ts_us, sort_id) < ($5::bigint, $6::int))\n            ORDER BY ts_us DESC, sort_id DESC\n            LIMIT $4\n        ) page\n    ), '[]'::jsonb)\n)::text",
+            "WITH {FOLDED_AUTH_CTES},\n{SCOPED},\n{LINKED},\nclusters AS (\n    SELECT l.leader_id,\n           (extract(epoch FROM leader.ts) * 1000000)::bigint AS ts_us,\n           l.leader_id AS sort_id,\n           jsonb_agg(\n               jsonb_build_object(\n                   'event_id', l.id,\n                   'event_type', l.type,\n                   'timestamp', to_char(l.ts AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),\n                   'die_before', l.die,\n                   'die_after', l.die_after,\n                   'rating', l.rating,\n                   'thread_id', l.thread_id,\n                   'thread_title', l.thread_title,\n                   'issue_id', l.issue_id,\n                   'issue_number', l.issue_number\n               )\n               ORDER BY l.id\n           ) AS members\n    FROM linked l\n    JOIN linked leader ON leader.id = l.leader_id\n    GROUP BY l.leader_id, leader.ts\n)\nSELECT jsonb_build_object(\n    'auth', (SELECT jsonb_build_object(\n        'password_epoch', password_epoch,\n        'revoked', revoked\n    ) FROM auth),\n    'clusters', COALESCE((\n        SELECT jsonb_agg(jsonb_build_object('ts_us', p.ts_us, 'id', p.sort_id, 'events', p.members) ORDER BY p.ts_us DESC, p.sort_id DESC)\n        FROM (\n            SELECT ts_us, sort_id, members\n            FROM clusters\n            WHERE ($5::bigint IS NULL OR (ts_us, sort_id) < ($5::bigint, $6::int))\n            ORDER BY ts_us DESC, sort_id DESC\n            LIMIT ($4::bigint + 1)\n        ) p\n    ), '[]'::jsonb)\n)::text",
             SCOPED = SCOPED_EVENTS_CTE
                 .replace("{ACTIVITY_EVENT_TYPES}", ACTIVITY_EVENT_TYPES),
             LINKED = LINKED_EVENTS_CTE,
@@ -238,10 +240,13 @@ pub async fn get_activity(
     claims: VerifiedAccessClaims,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<ActivityResponse>, ApiError> {
-    let page_size = params
-        .page_size
-        .unwrap_or(DEFAULT_PAGE_SIZE)
-        .clamp(1, MAX_PAGE_SIZE);
+    let page_size = params.page_size.unwrap_or(DEFAULT_PAGE_SIZE);
+    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
+        return Err(ApiError::BadRequest(
+            "Activity page size must be between 1 and 200".to_string(),
+        ));
+    }
+    let page_size = i64::from(page_size);
     let cursor = parse_cursor(params.page_token.as_deref())?;
     let (cursor_ts, cursor_id): (Option<i64>, Option<i32>) = match cursor {
         Some((ts_us, id)) => (Some(ts_us), Some(id)),
@@ -272,14 +277,14 @@ pub async fn get_activity(
     validate_folded_auth(&claims, payload.auth.as_ref())?;
 
     let mut events = Vec::new();
-    for cluster in &payload.clusters {
+    for cluster in payload.clusters.iter().take(page_size as usize) {
         events.extend(coalesce_cluster(cluster));
     }
 
-    let next_page_token = if payload.clusters.len() == page_size as usize {
+    let next_page_token = if payload.clusters.len() > page_size as usize {
         payload
             .clusters
-            .last()
+            .get(page_size as usize - 1)
             .map(|cluster| format!("{}:{}", cluster.ts_us, cluster.id))
     } else {
         None
@@ -345,12 +350,11 @@ fn coalesce_cluster(cluster: &ActivityCluster) -> Vec<ActivityEvent> {
             event.rating = event.rating.or(dice.rating);
         }
         event.action_display = action_display(&event);
-        events.push(event);
+        if !rate_pair || position == 0 {
+            events.push(event);
+        }
     }
     // Write order: the snooze precedes the roll it enabled.
-    if displayed.len() == 2 && displayed.iter().all(|row| row.event_type == "snooze" || row.event_type == "roll") {
-        events.reverse();
-    }
     events
 }
 
@@ -373,13 +377,22 @@ fn action_display(event: &ActivityEvent) -> String {
     };
     match event.event_type.as_str() {
         "roll" => format!("Rolled {subject}"),
-        "snooze" => format!("Snoozed {subject}{}", die_span(event.die_before, event.die_after)),
+        "snooze" => format!(
+            "Snoozed {subject}{}",
+            die_span(event.die_before, event.die_after)
+        ),
         "rate" => match event.rating {
             Some(rating) => format!("Rated {subject} ⭐{rating}"),
-            None => format!("Rated {subject}"),
+            None => format!("Read {subject}"),
         },
+        "issue_unread" => format!("Marked {subject} unread"),
+        "unsnooze" => format!("Unsnoozed {subject}"),
+        "undo" => format!("Undid {subject}"),
         "manual_die" => {
-            format!("Manual die selection{}", die_span(event.die_before, event.die_after))
+            format!(
+                "Manual die selection{}",
+                die_span(event.die_before, event.die_after)
+            )
         }
         "reset_dice" => "Reset dice".to_string(),
         other => format!("{} {subject}", other.to_uppercase()),
@@ -411,7 +424,7 @@ pub fn get_activity_documentation() {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::Config, router, test_support};
+    use crate::{router, test_support};
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -435,10 +448,7 @@ mod tests {
         format!("Bearer {token}")
     }
 
-    async fn get_activity_page(
-        app: axum::Router,
-        query: &str,
-    ) -> (StatusCode, Value) {
+    async fn get_activity_page(app: axum::Router, query: &str) -> (StatusCode, Value) {
         let path = if query.is_empty() {
             "/api/v2/activity".to_string()
         } else {
@@ -475,7 +485,9 @@ mod tests {
             .await
             .expect("disposable PostgreSQL required");
         let guard = test_support::reset_for_test(&state).await;
-        let connection = crate::db::checkout(&state).await.expect("fixture connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("fixture connection");
         connection
             .batch_execute(
                 r#"
@@ -497,6 +509,11 @@ mod tests {
                      issue_number, context)
                 VALUES (1, 'roll', '2026-11-08 15:42:35.028+00', 6, 3153, 1121330, '1',
                         '{"roll_offer_key":"roll-offer-first"}'::json);
+                -- 09:46:25.515 snooze d6 → d8 — clock_timestamp() mid-transaction.
+                INSERT INTO events
+                    (user_id, type, "timestamp", die, die_after, thread_id, context)
+                VALUES (1, 'snooze', '2026-11-08 15:46:25.515+00', 6, 8, 3153,
+                        '{"dice_command_key":"roll-offer-second-snooze","dice_command":{"kind":"reroll","thread_id":3153}}'::json);
                 -- 09:46:25.467 roll d8 — written AFTER the snooze below but
                 -- stamped with NOW() (transaction start), so its recorded
                 -- timestamp precedes the causal snooze.
@@ -505,22 +522,17 @@ mod tests {
                      issue_number, context)
                 VALUES (1, 'roll', '2026-11-08 15:46:25.467+00', 8, 3469, 25301, '2',
                         '{"roll_offer_key":"roll-offer-second","snoozed_thread_id":3153}'::json);
-                -- 09:46:25.515 snooze d6 → d8 — clock_timestamp() mid-transaction.
+                -- 09:46:34.105 snooze d8 → d10
                 INSERT INTO events
                     (user_id, type, "timestamp", die, die_after, thread_id, context)
-                VALUES (1, 'snooze', '2026-11-08 15:46:25.515+00', 6, 8, 3153,
-                        '{"dice_command_key":"roll-offer-second-snooze","dice_command":{"kind":"reroll","thread_id":3153}}'::json);
+                VALUES (1, 'snooze', '2026-11-08 15:46:34.105+00', 8, 10, 3469,
+                        '{"dice_command_key":"roll-offer-third-snooze","dice_command":{"kind":"reroll","thread_id":3469}}'::json);
                 -- 09:46:34.066 roll d10 (issue 52329, thread 8417)
                 INSERT INTO events
                     (user_id, type, "timestamp", die, selected_thread_id, issue_id,
                      issue_number, context)
                 VALUES (1, 'roll', '2026-11-08 15:46:34.066+00', 10, 8417, 52329, '2',
                         '{"roll_offer_key":"roll-offer-third","snoozed_thread_id":3469}'::json);
-                -- 09:46:34.105 snooze d8 → d10
-                INSERT INTO events
-                    (user_id, type, "timestamp", die, die_after, thread_id, context)
-                VALUES (1, 'snooze', '2026-11-08 15:46:34.105+00', 8, 10, 3469,
-                        '{"dice_command_key":"roll-offer-third-snooze","dice_command":{"kind":"reroll","thread_id":3469}}'::json);
                 -- 10:01:54.440 dice-command rate receipt (die 10 → 8)
                 INSERT INTO events
                     (user_id, type, "timestamp", die, die_after, thread_id, issue_id,
@@ -537,7 +549,7 @@ mod tests {
                 -- Another owner's event must never leak.
                 INSERT INTO events
                     (user_id, type, "timestamp", die, selected_thread_id, context)
-                VALUES (2, 'roll', '2026-11-08 15:50:00+00', 6, 3153,
+                VALUES (2, 'roll', '2026-11-08 15:50:00+00', 6, NULL,
                         '{"roll_offer_key":"other-user-key"}'::json);
                 "#,
             )
@@ -563,7 +575,7 @@ mod tests {
     async fn history_shows_the_reported_die_sequence_in_causal_order() {
         let (app, _guard) = seeded_app().await;
         let (status, body) = get_activity_page(app, "").await;
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(status, StatusCode::OK, "{body}");
 
         // Causal narrative: roll d6, snooze d6→d8, roll d8, snooze d8→d10,
         // roll d10, then ONE rating row for the paired receipts. The snooze
@@ -571,7 +583,7 @@ mod tests {
         // write order, not timestamp order, must win inside the pairs.
         assert_eq!(
             event_ids(&body),
-            vec![1, 3, 2, 5, 4, 7],
+            vec![7, 4, 5, 2, 3, 1],
             "snooze precedes its enabled roll despite the timestamp inversion"
         );
         let displays: Vec<&str> = body["events"]
@@ -583,12 +595,12 @@ mod tests {
         assert_eq!(
             displays,
             vec![
-                "Rolled First Series #1",
-                "Snoozed First Series (d6 → d8)",
-                "Rolled Second Series #2",
+                "Rated Third Series #2 ⭐4.5",
                 "Snoozed Second Series (d8 → d10)",
                 "Rolled Third Series #2",
-                "Rated Third Series #2 ⭐4.5",
+                "Snoozed First Series (d6 → d8)",
+                "Rolled Second Series #2",
+                "Rolled First Series #1",
             ]
         );
         // The paired rate rows collapse into one display.
@@ -603,7 +615,7 @@ mod tests {
         assert_eq!(ratings[0]["die_before"], 10);
         assert_eq!(ratings[0]["die_after"], 8);
         // Roll events resolve their offered thread from selected_thread_id.
-        let roll_8 = &body["events"][2];
+        let roll_8 = &body["events"][4];
         assert_eq!(roll_8["thread_id"], 3469);
         assert_eq!(roll_8["thread_title"], "Second Series");
         // Cross-user isolation.
@@ -618,28 +630,47 @@ mod tests {
         let (app, _guard) = seeded_app().await;
         // One cluster per page: each page must return a whole logical action.
         let (first_status, first) = get_activity_page(app.clone(), "page_size=1").await;
-        assert_eq!(first_status, StatusCode::OK);
-        assert_eq!(event_ids(&first).len(), 2, "first page holds the snooze/roll pair");
+        assert_eq!(first_status, StatusCode::OK, "{first}");
+        assert_eq!(event_ids(&first), vec![7], "newest rating is first");
         let token = first["next_page_token"].as_str().expect("cursor token");
 
         let (second_status, second) =
             get_activity_page(app.clone(), &format!("page_size=1&page_token={token}")).await;
-        assert_eq!(second_status, StatusCode::OK);
+        assert_eq!(second_status, StatusCode::OK, "{second}");
         let second_ids = event_ids(&second);
-        assert!(!second_ids.is_empty());
+        assert_eq!(second_ids, vec![4, 5], "snooze and roll stay on one page");
         for id in &second_ids {
             assert!(
                 !event_ids(&first).contains(id),
                 "a page boundary must never repeat a record"
             );
         }
+        let third_token = second["next_page_token"].as_str().expect("third cursor");
+        let (_, third) = get_activity_page(
+            app.clone(),
+            &format!("page_size=1&page_token={third_token}"),
+        )
+        .await;
+        assert_eq!(event_ids(&third), vec![2, 3]);
+        let fourth_token = third["next_page_token"].as_str().expect("fourth cursor");
+        let (_, fourth) = get_activity_page(
+            app.clone(),
+            &format!("page_size=1&page_token={fourth_token}"),
+        )
+        .await;
+        assert_eq!(event_ids(&fourth), vec![1]);
+        assert!(fourth["next_page_token"].is_null());
         // An empty token behaves like no token.
         let (empty_status, empty) = get_activity_page(app.clone(), "page_token=").await;
-        assert_eq!(empty_status, StatusCode::OK);
-        assert_eq!(event_ids(&empty), event_ids(&first).len().checked_sub(0).map(|_| event_ids(&first)).unwrap_or_default());
+        assert_eq!(empty_status, StatusCode::OK, "{empty}");
+        assert_eq!(event_ids(&empty), vec![7, 4, 5, 2, 3, 1]);
         // A malformed token is a client error, not a silently empty page.
-        let (bad_status, _) = get_activity_page(app, "page_token=not-a-cursor").await;
+        let (bad_status, _) = get_activity_page(app.clone(), "page_token=not-a-cursor").await;
         assert_eq!(bad_status, StatusCode::BAD_REQUEST);
+        let (zero_status, _) = get_activity_page(app.clone(), "page_size=0").await;
+        assert_eq!(zero_status, StatusCode::BAD_REQUEST);
+        let (large_status, _) = get_activity_page(app, "page_size=201").await;
+        assert_eq!(large_status, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
@@ -648,7 +679,9 @@ mod tests {
             .await
             .expect("disposable PostgreSQL required");
         let guard = test_support::reset_for_test(&state).await;
-        let connection = crate::db::checkout(&state).await.expect("fixture connection");
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("fixture connection");
         connection
             .batch_execute(
                 r#"
@@ -657,6 +690,10 @@ mod tests {
                 VALUES (1, 'snooze', '2026-11-08 15:00:00+00', 6, NULL);
                 INSERT INTO events (user_id, type, "timestamp", die)
                 VALUES (1, 'manual_die', '2026-11-08 16:00:00+00', 8);
+                INSERT INTO events (user_id, type, "timestamp", rating)
+                VALUES (1, 'rate', '2026-11-08 17:00:00+00', NULL);
+                INSERT INTO events (user_id, type, "timestamp")
+                VALUES (1, 'issue_unread', '2026-11-08 18:00:00+00');
                 "#,
             )
             .await
@@ -664,11 +701,19 @@ mod tests {
         drop(connection);
         let app = test_app(state);
         let (status, body) = get_activity_page(app, "").await;
-        assert_eq!(status, StatusCode::OK);
+        assert_eq!(status, StatusCode::OK, "{body}");
         let events = body["events"].as_array().unwrap();
-        assert_eq!(events.len(), 2);
-        assert_eq!(events[0]["event_type"], "manual_die");
-        assert_eq!(events[1]["event_type"], "snooze");
+        assert_eq!(events.len(), 4);
+        assert_eq!(
+            events[0]["action_display"],
+            "Marked a series that is no longer available unread"
+        );
+        assert_eq!(
+            events[1]["action_display"],
+            "Read a series that is no longer available"
+        );
+        assert_eq!(events[2]["event_type"], "manual_die");
+        assert_eq!(events[3]["event_type"], "snooze");
         drop(guard);
     }
 
@@ -677,7 +722,10 @@ mod tests {
         assert_eq!(parse_cursor(None).unwrap(), None);
         assert_eq!(parse_cursor(Some("")).unwrap(), None);
         assert_eq!(parse_cursor(Some("  ")).unwrap(), None);
-        assert_eq!(parse_cursor(Some("1731000000000000:42")).unwrap(), Some((1_731_000_000_000_000, 42)));
+        assert_eq!(
+            parse_cursor(Some("1731000000000000:42")).unwrap(),
+            Some((1_731_000_000_000_000, 42))
+        );
         assert!(parse_cursor(Some("junk")).is_err());
         assert!(parse_cursor(Some("12:bad")).is_err());
         assert!(parse_cursor(Some("bad:12")).is_err());
@@ -687,9 +735,12 @@ mod tests {
     fn statement_stays_owner_scoped_and_bounded() {
         let statement = activity_statement();
         assert!(statement.contains("WHERE e.user_id = (SELECT user_id FROM me)"));
-        assert!(statement.contains("LIMIT $4"));
+        assert!(statement.contains("LIMIT ($4::bigint + 1)"));
         assert!(statement.contains("(ts_us, sort_id) < ($5::bigint, $6::int)"));
-        assert!(!statement.contains("LIMIT $#" ), "placeholder must be valid SQL");
+        assert!(
+            !statement.contains("LIMIT $#"),
+            "placeholder must be valid SQL"
+        );
         // The rate pair and snooze/roll pair both key on durable linkage.
         assert!(statement.contains("roll_offer_key"));
         assert!(statement.contains("issue_command_key"));

@@ -60,6 +60,10 @@ function normalizedSessionParams(params?: SessionListParams) {
 }
 
 export const queryKeys = {
+  activity: {
+    all: ['activity'] as const,
+    pages: () => ['activity', 'pages'] as const,
+  },
   queue: {
     all: ['queue'] as const,
     pages: () => ['queue', 'pages'] as const,

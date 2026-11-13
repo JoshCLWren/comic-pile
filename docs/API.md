@@ -478,6 +478,20 @@ until the visitor explicitly signs up and separately chooses a save action.
 
 ---
 
+## Activity history
+
+### GET /api/v2/activity
+
+The History page reads this authenticated, owner-scoped Rust resource. It returns
+newest-first pages of logical actions as `events` and an optional
+`next_page_token`. Pass that token as `page_token` to continue; `page_size` must
+be 1–200 and defaults to 50. Each event includes its durable `event_id`,
+timestamp, `action_display`, die transition, rating, and saved issue and thread
+identity when available. Linked snooze and roll rows retain causal order within
+one page; a linked dice and issue rating receipt displays once. Deleted identity
+is shown as a historical label. Older session detail endpoints remain readable
+while their separate retirement work proceeds.
+
 ## Session
 
 Session tracking and history.

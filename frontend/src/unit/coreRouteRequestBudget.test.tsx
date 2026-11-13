@@ -603,19 +603,19 @@ describe('core route request budgets', () => {
     expect(onSearchChange).toHaveBeenCalledWith('robert')
   })
 
-  it('History cold-loads exactly one session list page', async () => {
+  it('History cold-loads exactly one activity page', async () => {
     const { calls, client } = createRequestRecorder((call) => {
-      if (call.url === '/v1/sessions/') return { sessions: [], next_page_token: null }
+      if (call.url === '/v2/activity') return { events: [], next_page_token: null }
       return {}
     })
     setDefaultHttpClient(client)
 
     render(renderAt('/history', <HistoryPage />))
 
-    await waitFor(() => expect(calls.some((call) => call.url === '/v1/sessions/')).toBe(true))
+    await waitFor(() => expect(calls.some((call) => call.url === '/v2/activity')).toBe(true))
     await drainSettledWork()
 
-    expect(requestCounts(calls)).toEqual({ 'GET /v1/sessions/': 1 })
+    expect(requestCounts(calls)).toEqual({ 'GET /v2/activity': 1 })
   })
 
   it('Session detail cold-loads details and snapshots exactly once', async () => {

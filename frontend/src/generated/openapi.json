@@ -177,6 +177,99 @@
         "title": "ActiveThreadInfo",
         "type": "object"
       },
+      "ActivityEvent": {
+        "description": "One displayed logical action row.",
+        "properties": {
+          "action_display": {
+            "type": "string"
+          },
+          "die_after": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "die_before": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "event_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "issue_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "event_type",
+          "timestamp",
+          "action_display"
+        ],
+        "type": "object"
+      },
+      "ActivityResponse": {
+        "description": "One page of the chronological owner-scoped activity history.",
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            },
+            "type": "array"
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "type": "object"
+      },
       "AnalyticsMetricsResponse": {
         "description": "Reading metrics and analytics for the authenticated user.",
         "properties": {
@@ -31694,6 +31787,66 @@
         "tags": [
           "taste-signals",
           "taste-signals"
+        ]
+      }
+    },
+    "/api/v2/activity": {
+      "get": {
+        "description": "The chronological owner-scoped activity history: every action that changed or recorded the die, with linked snooze/roll pairs kept causal and the dice/issue rate pair of one Roll completion shown once. Cursor pagination encodes the leader timestamp and id.",
+        "operationId": "get_activity_documentation",
+        "parameters": [
+          {
+            "description": "Number of logical actions per page (1-200, default 50)",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "format": "int32",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Server-issued cursor: leader epoch microseconds and id, e.g. 1731000000000000:1050513",
+            "in": "query",
+            "name": "page_token",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            },
+            "description": "One page of chronological owner activity"
+          },
+          "400": {
+            "description": "Malformed page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native activity projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Documentation-only operation for the mounted v2 activity history.",
+        "tags": [
+          "activity"
         ]
       }
     },

@@ -871,6 +871,66 @@
         ]
       }
     },
+    "/api/v2/activity": {
+      "get": {
+        "tags": [
+          "activity"
+        ],
+        "summary": "Documentation-only operation for the mounted v2 activity history.",
+        "description": "The chronological owner-scoped activity history: every action that changed or recorded the die, with linked snooze/roll pairs kept causal and the dice/issue rate pair of one Roll completion shown once. Cursor pagination encodes the leader timestamp and id.",
+        "operationId": "get_activity_documentation",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Number of logical actions per page (1-200, default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "Server-issued cursor: leader epoch microseconds and id, e.g. 1731000000000000:1050513",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of chronological owner activity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed page token"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "500": {
+            "description": "Invalid native activity projection"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v2/analytics/metrics": {
       "get": {
         "tags": [
@@ -2740,6 +2800,99 @@
             ]
           },
           "search_query": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "ActivityEvent": {
+        "type": "object",
+        "description": "One displayed logical action row.",
+        "required": [
+          "event_id",
+          "event_type",
+          "timestamp",
+          "action_display"
+        ],
+        "properties": {
+          "action_display": {
+            "type": "string"
+          },
+          "die_after": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "die_before": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "event_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "issue_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "issue_number": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "thread_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "thread_title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "ActivityResponse": {
+        "type": "object",
+        "description": "One page of the chronological owner-scoped activity history.",
+        "required": [
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActivityEvent"
+            }
+          },
+          "next_page_token": {
             "type": [
               "string",
               "null"

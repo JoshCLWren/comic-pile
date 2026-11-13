@@ -4853,6 +4853,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v2/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documentation-only operation for the mounted v2 activity history.
+         * @description The chronological owner-scoped activity history: every action that changed or recorded the die, with linked snooze/roll pairs kept causal and the dice/issue rate pair of one Roll completion shown once. Cursor pagination encodes the leader timestamp and id.
+         */
+        get: operations["get_activity_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v2/analytics/metrics": {
         parameters: {
             query?: never;
@@ -5740,6 +5760,31 @@ export interface components {
             title: string;
             /** Total Issues */
             total_issues?: number | null;
+        };
+        /** @description One displayed logical action row. */
+        ActivityEvent: {
+            action_display: string;
+            /** Format: int32 */
+            die_after?: number | null;
+            /** Format: int32 */
+            die_before?: number | null;
+            /** Format: int32 */
+            event_id: number;
+            event_type: string;
+            /** Format: int32 */
+            issue_id?: number | null;
+            issue_number?: string | null;
+            /** Format: double */
+            rating?: number | null;
+            /** Format: int32 */
+            thread_id?: number | null;
+            thread_title?: string | null;
+            timestamp: string;
+        };
+        /** @description One page of the chronological owner-scoped activity history. */
+        ActivityResponse: {
+            events: components["schemas"]["ActivityEvent"][];
+            next_page_token?: string | null;
         };
         /** @description Reading metrics and analytics for the authenticated user. */
         AnalyticsMetricsResponse: {
@@ -21314,6 +21359,59 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    get_activity_documentation: {
+        parameters: {
+            query?: {
+                /** @description Number of logical actions per page (1-200, default 50) */
+                page_size?: number;
+                /** @description Server-issued cursor: leader epoch microseconds and id, e.g. 1731000000000000:1050513 */
+                page_token?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of chronological owner activity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityResponse"];
+                };
+            };
+            /** @description Malformed page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid native activity projection */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -1,0 +1,17 @@
+{
+  "family": "activity",
+  "owned_path_patterns": ["^/api/v2/activity$"],
+  "defaults": {"owning_issue": 4822},
+  "operations": [
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/activity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/activity$",
+      "runtime": "native-rust",
+      "status": "target",
+      "consumers": ["frontend/src/services/api-activity.ts"]
+    }
+  ]
+}

@@ -144,6 +144,7 @@ export async function applyRatedThreadCache(
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     // A rating marks the current issue read, which can clear (or create) a
     // canonical reading blocker for any series. Every reading-boundaries read
     // lives under this prefix, so refresh it with the rest of the read state.
@@ -406,6 +407,7 @@ export async function invalidateAfterUndo(client: QueryClient): Promise<void> {
   await Promise.all([
     invalidateAfterQueueMovement(client),
     client.invalidateQueries({ queryKey: queryKeys.session.pages() }),
+    client.invalidateQueries({ queryKey: queryKeys.activity.all }),
     client.invalidateQueries({ queryKey: queryKeys.session.snapshotsAll() }),
     client.invalidateQueries({ queryKey: queryKeys.undo.all }),
   ])

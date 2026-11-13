@@ -172,6 +172,15 @@ export interface GetRequest {
 
 export type GetResponse = components['schemas']['NativeIdentityInboxResponse']
 
+export interface GetActivityRequest {
+  query?: {
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type GetActivityResponse = components['schemas']['ActivityResponse']
+
 export interface GetLegacyDependencyRequest {
   path: {
     dependency_id: number
@@ -458,6 +467,7 @@ export interface NativeV2Client {
   eligibleIssueIds(args?: EligibleIssueIdsRequest): Promise<EligibleIssueIdsResponse>
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
+  getActivity(args?: GetActivityRequest): Promise<GetActivityResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
@@ -614,6 +624,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     get(args: GetRequest) {
       return client.get<GetResponse>(
         `/v1/identity-inbox/${encodeURIComponent(String(args.path.mapping_id))}`,
+      )
+    },
+    getActivity(args: GetActivityRequest = {}) {
+      return client.get<GetActivityResponse>(
+        "/v2/activity",
+        { params: compactQuery(args.query) },
       )
     },
     getLegacyDependency(args: GetLegacyDependencyRequest) {

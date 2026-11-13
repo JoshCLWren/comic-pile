@@ -10,8 +10,8 @@ it synchronised with four independent sources:
 * the declared frontend service callers.
 
 API version is not implementation language: a v1 or v2 URL may be served by
-either runtime. Update this inventory in the same PR that verifiably changes a
-route's runtime, never by changing a client URL to find another implementation.
+either runtime. New route source fragments are included in contract checks
+before the post-merge route bot regenerates the deployed inventory.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ NATIVE_CONTRACT_PATH = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 GENERATED_SCHEMA_PATH = ROOT / "frontend" / "src" / "generated" / "openapi.json"
 VERCEL_CONFIG_PATH = ROOT / "vercel.json"
 FRONTEND_SERVICES = ROOT / "frontend" / "src" / "services"
+ROUTE_FRAGMENTS = ROOT / "docs" / "api" / "route-fragments"
 
 NATIVE_RUNTIME = "native-rust"
 PYTHON_RUNTIME = "python-fastapi"
@@ -103,6 +104,28 @@ def _inventory_operations() -> list[dict[str, Any]]:
             raise AssertionError(
                 f"operations[{index}].consumers must be an array of strings"
             )
+    return operations
+
+
+def _effective_operations() -> list[dict[str, Any]]:
+    """Overlay new editable route sources on the last generated deployment inventory."""
+    operations = _inventory_operations()
+    known = _inventory_set(operations)
+    for path in sorted(ROUTE_FRAGMENTS.glob("*.json")):
+        if path.name == "vercel-rewrites.json":
+            continue
+        fragment = _load_json(path)
+        defaults = fragment.get("defaults", {})
+        for entry in fragment.get("operations", []):
+            if not isinstance(entry, dict) or entry.get("bucket") != "operations":
+                continue
+            if not str(entry.get("path", "")).startswith("/api/v2/"):
+                continue
+            operation = {**defaults, **entry}
+            key = (str(operation["method"]).lower(), operation["path"])
+            if key not in known:
+                operations.append(operation)
+                known.add(key)
     return operations
 
 
@@ -221,7 +244,7 @@ def _native_method_names() -> dict[tuple[str, str], str]:
 
 def test_inventory_covers_every_live_v2_operation() -> None:
     """The inventory, generated client schema and native contract agree."""
-    operations = _inventory_operations()
+    operations = _effective_operations()
     assert all(operation["path"].startswith("/api/v2/") for operation in operations)
 
     generated = {
@@ -244,7 +267,7 @@ def test_inventory_covers_every_live_v2_operation() -> None:
 
 def test_declared_runtime_matches_production_ingress() -> None:
     """Every native operation reaches a native ingress destination."""
-    operations = _inventory_operations()
+    operations = _effective_operations()
     for operation in operations:
         method = operation["method"]
         path = operation["path"]
@@ -264,7 +287,7 @@ def test_declared_runtime_matches_production_ingress() -> None:
 def test_declared_consumers_are_the_real_service_callers() -> None:
     """The caller inventory exactly matches frontend service URL usage."""
     method_names = _native_method_names()
-    for operation in _inventory_operations():
+    for operation in _effective_operations():
         declared = set(operation["consumers"])
         method_name = method_names.get((operation["method"].lower(), operation["path"]))
         actual = _service_callers(operation["path"], method_name)
