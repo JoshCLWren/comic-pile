@@ -85,6 +85,20 @@ def test_hourly_sweep_skips_history_when_no_stale_stages() -> None:
     assert "exit 0" in workflow[no_work_exit:full_history]
 
 
+def test_automated_issue_sweep_defers_when_installation_quota_is_low() -> None:
+    """A low REST budget must not start either expensive scheduled scan."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    guard = workflow.index("Guard recovery sweeps on the Actions installation REST budget")
+    enroll = workflow.index("Enroll repository PRs missing factory labels")
+    history = workflow.index("Reconcile linked issue from trusted canonical PR history")
+    assert guard < enroll < history
+    assert "gh api rate_limit" in workflow[guard:enroll]
+    assert "remaining < 1200" in workflow[guard:enroll]
+    assert "allow=false" in workflow[guard:enroll]
+    assert "if: steps.api_budget.outputs.allow != 'false'" in workflow[enroll:history]
+    assert "if: steps.api_budget.outputs.allow != 'false'" in workflow[history:]
+
+
 def test_ralph_status_blocked_issue_is_not_rewritten() -> None:
     """A ralph-status:blocked issue must not get factory labels rewritten."""
     policy = _policy()
