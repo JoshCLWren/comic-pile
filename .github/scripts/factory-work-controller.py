@@ -1636,7 +1636,7 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         print(f'[factory-controller] Neon release snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
         # A trusted pre-session abort must not strip GitHub owner labels if it
         # cannot read the matching Neon reservation. Keep both sides intact.
-        if reason.startswith('pre-session-abort-run-'):
+        if reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-')):
             raise
         original_claim = None
     released: list[int] = []
@@ -1670,7 +1670,7 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
                 release_lease(REPO, worker, token, reason)
         except Exception as exc:
             print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
-            if reason.startswith('pre-session-abort-run-'):
+            if reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-')):
                 raise
     return released
 
