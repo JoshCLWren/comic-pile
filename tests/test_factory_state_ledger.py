@@ -108,3 +108,58 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "Persist classified worker completion in Neon" in observer
     assert "factory-state-cache" not in untrusted
     assert "factory-state-cache" not in entry
+
+
+def test_trusted_heartbeat_events_extend_current_nonexpired_lease() -> None:
+    import inspect
+
+    source = inspect.getsource(ledger._events)
+    assert 'entry["event_type"] == "worker_started"' in source
+    assert "def renew_verified_workers(" in inspect.getsource(ledger.renew_verified_workers)
+    assert "expires_at>now()" in inspect.getsource(ledger._renew_verified)
+    assert "AND expires_at>now()" in source
+    assert "payload->0->>'claim_id'=$2" in source
+
+
+def test_completion_dispatch_persists_real_worker_outcomes() -> None:
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    assert '-f source_run_id="$GITHUB_RUN_ID"' in entry
+    assert "persist_outcome:" in drain
+    assert '.path == ".github/workflows/free-model-factory-entry.yml"' in drain
+    assert ".head_repository.full_name == $repo" in drain
+    assert "actions/jobs/${job_id}/logs" in drain
+    assert "factory_state_ledger.py runtime-outcome" in drain
+    assert "factory-state-cache" not in entry
+    assert "factory-state-cache" not in (root / ".github/workflows/free-model-factory-run.yml").read_text()
+
+
+def test_verified_lease_renewal_is_only_called_after_actions_liveness() -> None:
+    import inspect
+
+    controller = (Path(__file__).resolve().parents[1] / ".github/scripts/factory-work-controller.py").read_text()
+    assert "renew_verified_workers(REPO, [str(worker) for worker in active])" in controller
+    assert "prior_claims[worker_id] = worker_claim(REPO, worker_id)" in controller
+    assert "release_lease(REPO, worker_id, token, 'stale-lease-reconciled')" in controller
+    assert "not target_owned_by(number, f'factory:{worker_id}')" in controller
+    assert '"worker_outcome_signal" if status in {"success", "failure"}' in inspect.getsource(
+        ledger.record_heartbeat_comments
+    )
+
+def test_terminal_event_idempotency_spans_classification_outcomes() -> None:
+    """A single source run cannot be counted as both success and failure."""
+    import inspect
+
+    source = inspect.getsource(ledger._events)
+    assert "detail->>'event_id'=$1 LIMIT 1" in source
+    assert "AND event_type=$1" not in source
+
+
+def test_terminal_identity_fallback_uses_attested_run_title() -> None:
+    """Actions run GET omits workflow_dispatch inputs for older Entry runs."""
+    root = Path(__file__).resolve().parents[1]
+    drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    assert '.display_title // ""' in drain
+    assert "fixed-model entry$" in drain
+    assert "worker=\"$(jq -r" in drain

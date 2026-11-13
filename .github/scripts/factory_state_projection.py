@@ -191,10 +191,12 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
             await conn.execute(
                 """INSERT INTO public.factory_state_kv
                    (cache_key,payload,fetched_at,expires_at,updated_at)
-                   VALUES ($1,'[]'::jsonb,now(),'2100-01-01'::timestamptz,now())
+                   VALUES ($1,jsonb_build_array(jsonb_build_object('started_at',$2::text)),
+                           now(),'2100-01-01'::timestamptz,now())
                    ON CONFLICT(cache_key) DO UPDATE SET
+                     payload=EXCLUDED.payload,
                      fetched_at=now(),updated_at=now()""",
-                _marker(repo,kind),
+                _marker(repo,kind), started,
             )
             changed = [*updated, *removed]
             for row in changed:
@@ -264,22 +266,35 @@ def _authoritative_event(repo: str, event: dict[str, Any]) -> dict[str, Any]:
 
 
 async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool:
+    """Serialize a one-target GitHub read and its Neon projection write."""
     import asyncpg
 
-    record = normalize_event(_authoritative_event(repo, event))
-    if record is None:
+    raw = event.get("pull_request") if "pull_request" in event else event.get("issue")
+    if not isinstance(raw, dict) or type(raw.get("number")) is not int:
         return False
-    kind, number, item, state = record
+    kind = "pr" if "pull_request" in event else "issue"
     prefix = _prefix(repo, kind)
-    source_updated_at = str(item.get("updatedAt") or "")
-    value = json.dumps([{
-        "item": item, "state": state, "source_updated_at": source_updated_at,
-        "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-    }])
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=35)
     try:
         async with conn.transaction():
-            await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", prefix)
+            # Move the live read *inside* the same advisory lock as the write.
+            # Two equal-timestamp close/reopen events can no longer apply an
+            # earlier observation after a later one.
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", prefix
+            )
+            record = normalize_event(_authoritative_event(repo, event))
+            if record is None:
+                return False
+            normalized_kind, number, item, state = record
+            if normalized_kind != kind:
+                raise ValueError("event kind changed during authoritative lookup")
+            source_updated_at = str(item.get("updatedAt") or "")
+            value = json.dumps([{
+                "item": item, "state": state,
+                "source_updated_at": source_updated_at,
+                "observed_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            }])
             row = await conn.fetchrow(
                 """INSERT INTO public.factory_state_kv
                      (cache_key,payload,fetched_at,expires_at,updated_at)
@@ -287,9 +302,13 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
                    WHERE NOT EXISTS (
                      SELECT 1 FROM public.factory_state_kv
                       WHERE cache_key=$3
-                        AND fetched_at >
-                          COALESCE(NULLIF($2::jsonb->0->>'source_updated_at','')::timestamptz,
-                                   'epoch'::timestamptz)
+                        AND COALESCE(
+                          NULLIF(payload->0->>'started_at','')::timestamptz,
+                          fetched_at
+                        ) >= COALESCE(
+                          NULLIF($2::jsonb->0->>'source_updated_at','')::timestamptz,
+                          'epoch'::timestamptz
+                        )
                         AND $2::jsonb->0->>'state'='open'
                    )
                    ON CONFLICT(cache_key) DO UPDATE SET
@@ -301,7 +320,7 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
                           OR factory_state_kv.payload->0->>'state' !=
                              EXCLUDED.payload->0->>'state')
                    RETURNING cache_key""",
-                _target_key(repo,kind,number), value, _marker(repo,kind),
+                _target_key(repo, kind, number), value, _marker(repo, kind),
             )
             if row is None:
                 return False
@@ -316,6 +335,85 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
             return True
     finally:
         await conn.close()
+
+
+async def _bootstrap_kind(repo: str, kind: str) -> bool:
+    """Initialize missing projection inventory once, under a shared DB lock."""
+    import asyncpg
+
+    prefix = _prefix(repo, kind)
+    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=35)
+    try:
+        async with conn.transaction():
+            # This separate lock serializes first-time full inventories across
+            # webhook runners. It does not block single-target webhook writes.
+            await conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))",
+                prefix + "bootstrap",
+            )
+            found = await conn.fetchval(
+                "SELECT 1 FROM public.factory_state_kv WHERE cache_key=$1",
+                _marker(repo, kind),
+            )
+            if found:
+                return False
+            if kind == "issue":
+                limit = 1000
+                command = [
+                    "gh", "issue", "list", "--repo", repo, "--state", "open",
+                    "--limit", str(limit),
+                    "--json", "number,title,body,labels,createdAt,updatedAt",
+                ]
+            else:
+                limit = 500
+                command = [
+                    "gh", "pr", "list", "--repo", repo, "--state", "open",
+                    "--limit", str(limit),
+                    "--json",
+                    "number,title,body,labels,headRefName,headRefOid,createdAt,"
+                    "updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository",
+                ]
+            started = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+            result = await asyncio.to_thread(
+                subprocess.run, command, capture_output=True, text=True,
+                timeout=60, check=False,
+            )
+            if result.returncode:
+                raise RuntimeError(f"GitHub {kind} inventory bootstrap failed")
+            try:
+                items = json.loads(result.stdout)
+            except (TypeError, ValueError) as exc:
+                raise RuntimeError("Invalid GitHub bootstrap inventory") from exc
+            if not isinstance(items, list) or len(items) >= limit:
+                raise RuntimeError("GitHub bootstrap listing is incomplete")
+            await _snapshot(repo, kind, items, started)
+            return True
+    finally:
+        await conn.close()
+
+
+def bootstrap_missing(repo: str) -> None:
+    """Bootstrap each absent issue/PR projection exactly once per repository.
+
+    Args:
+        repo: GitHub repository whose open targets require a baseline.
+
+    The advisory locks avoid redundant broad scans on simultaneous webhooks.
+    Failures leave the missing marker for a later retry.
+    """
+    if not enabled():
+        return
+    for kind in ("issue", "pr"):
+        try:
+            created = asyncio.run(_bootstrap_kind(repo, kind))
+            if created:
+                print(f"[factory-projection] initialized {kind} snapshot", file=sys.stderr)
+        except Exception as exc:
+            print(
+                f"[factory-projection] {kind} initialization deferred "
+                f"({type(exc).__name__})",
+                file=sys.stderr,
+            )
 
 
 def ingest_event(repo: str, event_id: str, event: dict[str, object]) -> bool:
@@ -353,6 +451,7 @@ def main() -> int:
     with open(args.file, encoding="utf-8") as stream:
         event = json.load(stream)
     changed = ingest_event(args.repo, args.event_id, event)
+    bootstrap_missing(args.repo)
     print(f"[factory-projection] target event applied={changed}")
     return 0
 

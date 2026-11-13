@@ -43,4 +43,5 @@ jobs:
           # reliably delivered. Explicit workflow_dispatch is supported and
           # the drain's concurrency group coalesces bursts of completions.
           gh workflow run factory-completion-drain.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main
+            --repo "$GITHUB_REPOSITORY" --ref main \
+            -f source_run_id="$GITHUB_RUN_ID"

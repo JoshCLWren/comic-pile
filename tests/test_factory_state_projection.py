@@ -141,4 +141,33 @@ def test_missing_target_rejects_obsolete_open_event() -> None:
     import inspect
     statement = inspect.getsource(projection._ingest_event)
     assert "WHERE NOT EXISTS" in statement
-    assert "_marker(repo,kind)" in statement
+    assert "_marker(repo, kind)" in statement
+
+
+def test_live_event_is_read_only_after_acquiring_projection_lock() -> None:
+    import inspect
+
+    source = inspect.getsource(projection._ingest_event)
+    assert source.index("pg_advisory_xact_lock") < source.index(
+        "normalize_event(_authoritative_event(repo, event))"
+    )
+
+
+def test_snapshot_marker_uses_beginning_of_github_listing() -> None:
+    import inspect
+
+    source = inspect.getsource(projection._snapshot)
+    assert "jsonb_build_object('started_at',$2::text)" in source
+    assert "_marker(repo,kind), started" in source
+    assert "payload=EXCLUDED.payload" in source
+
+
+def test_bootstrap_is_one_time_and_safe_under_concurrent_webhooks() -> None:
+    import inspect
+
+    source = inspect.getsource(projection._bootstrap_kind)
+    assert 'prefix + "bootstrap"' in source
+    assert "SELECT 1 FROM public.factory_state_kv WHERE cache_key=$1" in source
+    assert "len(items) >= limit" in source
+    assert "await _snapshot(repo, kind, items, started)" in source
+    assert "bootstrap_missing(args.repo)" in inspect.getsource(projection.main)
