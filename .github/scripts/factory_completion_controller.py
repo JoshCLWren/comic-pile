@@ -514,16 +514,25 @@ def load_policy() -> Any:
 
 
 def registry_comments() -> list[dict[str, Any]]:
-    """Fetch the heartbeat registry once for health-aware batch selection."""
-    pages = gh_json(
-        [
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{REPO}/issues/1093/comments?per_page=100",
-        ]
+    """Use one Neon registry snapshot, paging GitHub only for changed comments."""
+    scripts = str(Path(__file__).resolve().parent)
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    from factory_state_cache import cached_json, incremental_comments
+
+    def fetch_since(since: str | None) -> list[dict[str, Any]]:
+        endpoint = f"repos/{REPO}/issues/1093/comments?per_page=100"
+        if since:
+            from urllib.parse import quote
+            endpoint += f"&since={quote(since, safe='')}"
+        pages = gh_json(["api", "--paginate", "--slurp", endpoint])
+        return flatten_pages(pages)
+
+    return cached_json(
+        f"{REPO}:registry-comments",
+        lambda previous: incremental_comments(previous, fetch_since),
+        ttl_seconds=120,
     )
-    return flatten_pages(pages)
 
 
 def owned_worker_ids(items: Iterable[Mapping[str, Any]]) -> set[str]:
