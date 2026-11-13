@@ -122,3 +122,12 @@ jobs:
           else
             gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
           fi
+
+      - name: Persist classified worker completion in Neon
+        if: always() && steps.runtime.outputs.publish == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_state_ledger.py runtime-outcome \
+            --repo "$GITHUB_REPOSITORY" --run-id "$RUN_ID" \
+            --file "$RUNNER_TEMP/runtime-outcome.json"
