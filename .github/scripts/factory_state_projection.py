@@ -112,7 +112,7 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
     if not all(isinstance(item, dict) and isinstance(item.get("number"), int) for item in items):
         raise ValueError("invalid GitHub list snapshot")
     prefix = _prefix(repo, kind)
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     projection = [{
         "key": _target_key(repo, kind, int(item["number"])),
         "item": item,
@@ -149,7 +149,9 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
             )
             removed = await conn.fetch(
                 """UPDATE public.factory_state_kv SET
-                     payload=jsonb_set(payload,'{0,state}','"closed"'::jsonb),
+                     payload=jsonb_set(
+                       jsonb_set(payload,'{0,state}','"closed"'::jsonb),
+                       '{0,source_updated_at}',to_jsonb($3::text)),
                      updated_at=now()
                    WHERE cache_key LIKE $1
                      AND cache_key != $2
@@ -204,7 +206,7 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
     source_updated_at = str(item.get("updatedAt") or "")
     value = json.dumps([{
         "item": item, "state": state, "source_updated_at": source_updated_at,
-        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }])
     conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
