@@ -869,6 +869,43 @@ def test_smoke_failure_releases_review_lease_immediately(
     assert markers == [(2235, "42", "pr", "smoke-failure")]
 
 
+
+def test_explicit_release_cannot_delete_a_newer_neon_claim(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Capture the old claim before labels change, then release that token only."""
+    state = {"labels_modified": False}
+    released_tokens: list[str] = []
+
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [{
+        "number": 2235,
+        "labels": [{"name": "factory"}, {"name": "factory:42"}],
+    }])
+
+    def snapshot(_repo: str, _worker: str) -> tuple[str, list[int]]:
+        assert not state["labels_modified"], "claim token must precede label release"
+        return "old-token", [2235]
+
+    def replace_labels(_number: int, _owner: str) -> bool:
+        state["labels_modified"] = True
+        return True
+
+    monkeypatch.setattr(controller, "worker_claim", snapshot)
+    monkeypatch.setattr(controller, "replace_factory_labels", replace_labels)
+    monkeypatch.setattr(controller, "record_claim_released", lambda *args: None)
+    monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: False)
+    monkeypatch.setattr(
+        controller, "release_lease",
+        lambda _repo, _worker, token, _reason: released_tokens.append(token),
+    )
+
+    assert controller.release_worker("42", reason="finished") == [2235]
+    assert state["labels_modified"] is True
+    assert released_tokens == ["old-token"]
+
+
+
 def test_record_claim_released_uses_v3_marker(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
