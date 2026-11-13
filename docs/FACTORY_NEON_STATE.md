@@ -65,8 +65,13 @@ GitHub Actions runs, and clears token-matching Neon claims after verified
 GitHub label release. Pre-session abort cleanup configures the restricted Neon
 connection in its own trusted runner before touching GitHub labels. If the
 connection is unavailable, it refuses a split release; the lease can expire
-and be reconciled safely instead. The coding/model job receives no Neon key
-or DSN. The worker Entry independently runs a trusted, non-model post-worker
+and be reconciled safely instead. A separate post-session cleanup job runs
+inside the same per-worker concurrency lock after every executing worker exits,
+checks live GitHub target ownership, and releases the matching Neon claim.
+This also handles retries where the worker already removed its owner labels.
+Both trusted cleanup jobs refuse to release labels if the Neon connection is
+unavailable. The coding/model job receives no Neon key or DSN. The worker Entry
+independently runs a trusted, non-model post-worker
 job to classify the finished factory-job log and persist the immutable
 completion/failure event. It separately dispatches the capacity Completion
 Drain. The outcome recorder does not share the drain's dispatcher concurrency
