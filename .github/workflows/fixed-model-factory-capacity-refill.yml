@@ -121,6 +121,24 @@ jobs:
                   '
             )"
             if [[ -z "$attempt_body" ]]; then
+              # The shared registry can be 120s old. An exact completion event
+              # is authoritative work demand, so look up only recent changed
+              # comments before deciding its durable outcome is absent.
+              # Never page all ~1900 historical heartbeat comments here.
+              since="$(date -u -d '2 hours ago' '+%Y-%m-%dT%H:%M:%SZ')"
+              if ! recent="$(gh api --paginate --slurp \
+                "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100&since=${since}")"; then
+                echo "Run ${COMPLETED_RUN_ID}: recent completion evidence unreadable; refusing speculative refill" >&2
+                exit 1
+              fi
+              attempt_body="$(jq -r --arg run "$COMPLETED_RUN_ID" '
+                [.[][]?
+                 | select(.body | contains("<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-"))
+                 | select(.body | test("(?m)^Run: " + $run + "$"))
+                 | .body] | last // empty
+              ' <<< "$recent")"
+            fi
+            if [[ -z "$attempt_body" ]]; then
               echo "Run ${COMPLETED_RUN_ID} has no durable attempt outcome; refusing speculative refill"
               exit 0
             fi
