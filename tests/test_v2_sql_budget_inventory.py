@@ -32,6 +32,14 @@ _BUDGETED_OPERATIONS = frozenset(
         ("get", "/api/v2/threads"),
         ("post", "/api/v2/auth/login"),
         ("post", "/api/v2/reading-boundaries"),
+        # Same-path native-rust releases operations cut over from /api/v1
+        # (issue #4849): budgeted beside the v2 operations they sit beside in
+        # the route fragment, preserving the existing /api/v1/releases URLs.
+        ("get", "/api/v1/releases/"),
+        ("put", "/api/v1/releases/"),
+        ("get", "/api/v1/releases/source"),
+        ("get", "/api/v1/releases/{release_id}"),
+        ("post", "/api/v1/releases/{release_id}/retract"),
     }
 )
 
@@ -99,7 +107,7 @@ def _deployed_operations() -> set[tuple[str, str]]:
     return {
         (method.lower(), path)
         for path, operations in paths.items()
-        if path.startswith("/api/v2/")
+        if path.startswith("/api/v2/") or path.startswith("/api/v1/releases/")
         for method in operations
     }
 
