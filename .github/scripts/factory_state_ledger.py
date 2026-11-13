@@ -178,9 +178,9 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
             for entry in entries:
                 existing = await conn.fetchval(
                     """SELECT 1 FROM public.factory_state_events
-                       WHERE source='github-actions' AND event_type=$1
-                         AND detail->>'event_id'=$2 LIMIT 1""",
-                    entry["event_type"], entry["event_id"],
+                       WHERE source='github-actions'
+                         AND detail->>'event_id'=$1 LIMIT 1""",
+                    entry["event_id"],
                 )
                 if existing:
                     continue

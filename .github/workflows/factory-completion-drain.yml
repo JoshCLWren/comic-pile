@@ -177,7 +177,10 @@ jobs:
             --log "$RUNNER_TEMP/factory-entry.log" > "$RUNNER_TEMP/worker-outcome.json"
           worker="$(jq -r '.worker // empty' "$RUNNER_TEMP/worker-outcome.json")"
           if [[ -z "$worker" ]]; then
-            worker="$(jq -r '.inputs.worker // empty' <<< "$metadata")"
+            # Workflow-run metadata does not include dispatch inputs in the
+            # Actions REST response; the trusted run-name identifies this slot.
+            worker="$(jq -r '.display_title // ""' <<< "$metadata" \
+              | sed -n 's/^Factory \\([1-9][0-9]*\\) · fixed-model entry$/\\1/p')"
             [[ "$worker" =~ ^[1-9][0-9]*$ ]] || {
               echo "::error::Unable to attest worker identity"
               exit 1

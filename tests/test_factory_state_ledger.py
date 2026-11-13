@@ -146,3 +146,20 @@ def test_verified_lease_renewal_is_only_called_after_actions_liveness() -> None:
     assert '"worker_outcome_signal" if status in {"success", "failure"}' in inspect.getsource(
         ledger.record_heartbeat_comments
     )
+
+def test_terminal_event_idempotency_spans_classification_outcomes() -> None:
+    """A single source run cannot be counted as both success and failure."""
+    import inspect
+
+    source = inspect.getsource(ledger._events)
+    assert "detail->>'event_id'=$1 LIMIT 1" in source
+    assert "AND event_type=$1" not in source
+
+
+def test_terminal_identity_fallback_uses_attested_run_title() -> None:
+    """Actions run GET omits workflow_dispatch inputs for older Entry runs."""
+    root = Path(__file__).resolve().parents[1]
+    drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    assert '.display_title // ""' in drain
+    assert "fixed-model entry$" in drain
+    assert "worker=\"$(jq -r" in drain
