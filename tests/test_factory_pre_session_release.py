@@ -36,6 +36,53 @@ def test_cleanup_waits_for_factory_and_excludes_started_sessions() -> None:
     assert workflow["concurrency"]["cancel-in-progress"] is False
 
 
+def test_post_session_cleanup_runs_under_worker_lock() -> None:
+    """After a model session, the trusted cleanup releases both ownership ledgers."""
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    cleanup = workflow["jobs"]["release_post_session_lease"]
+    assert cleanup["needs"] == "factory"
+    assert cleanup["if"] == (
+        "${{ always() && needs.factory.outputs.worker_session_started == 'true' }}"
+    )
+    assert workflow["concurrency"]["group"] == "fixed-model-factory-${{ inputs.worker }}"
+    assert workflow["concurrency"]["cancel-in-progress"] is False
+    assert cleanup["runs-on"] == "ubuntu-latest"
+    assert cleanup["steps"][0]["with"] == {"ref": "main", "persist-credentials": False}
+    assert cleanup["steps"][2]["uses"] == "./.github/actions/factory-state-cache"
+    assert cleanup["steps"][2]["with"] == {
+        "neon-api-key": "${{ secrets.NEON_API_KEY }}",
+        "neon-project-id": "${{ vars.NEON_PROJECT_ID }}",
+    }
+    release = cleanup["steps"][3]
+    assert "post-session-exit-run-${GITHUB_RUN_ID}" in release["run"]
+    assert "refusing split release" in release["run"]
+    assert cleanup["permissions"] == {
+        "contents": "read", "issues": "write", "pull-requests": "write",
+    }
+    assert "factory-state-cache" not in json.dumps(workflow["jobs"]["factory"])
+
+
+def test_post_session_cleanup_executes_token_bound_release(tmp_path: Path) -> None:
+    """Run the real job command with a stand-in controller and restricted DSN."""
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    release = workflow["jobs"]["release_post_session_lease"]["steps"][3]
+    controller = tmp_path / ".github/scripts/factory-work-controller.py"
+    controller.parent.mkdir(parents=True)
+    controller.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n")
+    dsn = tmp_path / "restricted-dsn"
+    dsn.write_text("test-only-connection")
+    result = subprocess.run(
+        ["bash", "-c", release["run"]], cwd=tmp_path,
+        env={**os.environ, "FACTORY_WORKER": "45", "GITHUB_RUN_ID": "43455638659",
+             "FACTORY_STATE_DSN_FILE": str(dsn)},
+        capture_output=True, text=True, check=True,
+    )
+    assert json.loads(result.stdout) == [
+        "release", "--worker", "45", "--reason",
+        "post-session-exit-run-43455638659",
+    ]
+
+
 def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
     """Never run recovery code or carry model credentials from the smoke checkout."""
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -164,6 +211,22 @@ def test_trusted_cleanup_fails_before_github_label_mutation_if_neon_unavailable(
     })
     with pytest.raises(ConnectionError, match="Neon unavailable"):
         release("104", "pre-session-abort-run-43439464262")
+    assert calls == []
+
+
+def test_post_session_cleanup_fails_closed_on_neon_read_outage() -> None:
+    """A completed worker must not release GitHub labels without its Neon claim."""
+    calls: list[int] = []
+
+    def fail_snapshot(repo: str, worker: str):
+        raise ConnectionError("Neon unavailable")
+
+    release = _load_controller_release({
+        "worker_claim": fail_snapshot,
+        "list_issues": lambda: calls.append(1) or [],
+    })
+    with pytest.raises(ConnectionError, match="Neon unavailable"):
+        release("45", "post-session-exit-run-43455638659")
     assert calls == []
 
 
