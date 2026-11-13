@@ -250,7 +250,7 @@ test('hasManualOnlyDirective stays in lockstep with Python is_manual_only', () =
 });
 
 test('clean scheduled sweep performs one PR list read and no other GitHub API work', async () => {
-  const factoryLabels = [{ name: 'factory' }, { name: 'factory:ready' }];
+  const factoryLabels = [{ name: 'factory' }, { name: 'factory:ready' }, { name: 'factory:unowned' }];
   const { writes, reads, gets, labelReads, repoLabelReads } = await run({
     prs: [{ ...pr(1), labels: factoryLabels }, { ...pr(2), labels: factoryLabels }],
     labels: ['factory', 'factory:ready', 'factory:unowned'],
@@ -265,7 +265,7 @@ test('clean scheduled sweep performs one PR list read and no other GitHub API wo
 test('scheduled sweep only inspects PRs actually missing the factory label', async () => {
   const { writes, reads, gets, labelReads, repoLabelReads } = await run({
     prs: [
-      { ...pr(1), labels: [{ name: 'factory' }, { name: 'factory:review' }] },
+      { ...pr(1), labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }] },
       { ...pr(2), labels: [{ name: 'bug' }] },
     ],
     labels: ['bug'],
@@ -277,9 +277,22 @@ test('scheduled sweep only inspects PRs actually missing the factory label', asy
   assert.deepEqual(writes.map(write => write.issue_number), [2]);
 });
 
+test('scheduled sweep repairs partially labeled PRs while skipping complete PRs', async () => {
+  const { writes, gets } = await run({
+    prs: [
+      { ...pr(1), labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }] },
+      { ...pr(2), labels: [{ name: 'factory' }, { name: 'factory:local' }] },
+    ],
+    labels: ['factory', 'factory:local'],
+  });
+  assert.deepEqual(gets.map(request => request.pull_number), [2]);
+  assert.deepEqual(writes.map(write => write.issue_number), [2]);
+  assert.ok(writes[0].labels.includes('factory:review'));
+});
+
 test('full first page keeps looking for older unlabeled PRs without re-fetching page one', async () => {
   const labeled = Array.from({ length: 100 }, (_, index) => ({
-    ...pr(index + 1), labels: [{ name: 'factory' }],
+    ...pr(index + 1), labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }],
   }));
   const { writes, reads, gets } = await run({
     prs: [...labeled, { ...pr(101), labels: [{ name: 'bug' }] }],
