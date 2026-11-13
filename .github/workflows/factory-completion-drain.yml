@@ -171,7 +171,10 @@ jobs:
           }
           # The parent entry can still be finishing its signal job, but its
           # reusable factory job has already completed and has final logs.
-          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
+          # Logs are written only to a local file, never rendered to a TTY.
+          # gh 2.97+ rejects raw ANSI escape sequences unless explicitly allowed.
+          gh api --allow-escape-sequences \
+            "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
             > "$RUNNER_TEMP/factory-entry.log"
           python3 .github/scripts/classify-fixed-model-run.py \
             --log "$RUNNER_TEMP/factory-entry.log" > "$RUNNER_TEMP/worker-outcome.json"
