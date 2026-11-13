@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -60,16 +59,17 @@ def test_db_error_is_not_silenced_after_configured_claim(monkeypatch, tmp_path):
 
 
 def test_trusted_recent_running_heartbeat_is_recorded_once(monkeypatch):
-    import factory_work_policy
+    import importlib
+    factory_work_policy = importlib.import_module("factory_work_policy")
     monkeypatch.setattr(factory_work_policy, "comment_is_trusted", lambda c: c.get("trusted") is True)
     found = []
     monkeypatch.setattr(ledger, "record_events", lambda repo, entries: found.extend(entries) or len(entries))
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     body = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-42 -->\nOutcome: running\nRun: 43123\n"
     assert ledger.record_heartbeat_comments("owner/repo", [
         {"id": 15, "updated_at": now, "body": body, "trusted": True},
         {"id": 16, "updated_at": now, "body": body, "trusted": False},
-        {"id": 17, "updated_at": (datetime.now(timezone.utc)-timedelta(days=1)).isoformat(),
+        {"id": 17, "updated_at": (datetime.now(UTC)-timedelta(days=1)).isoformat(),
          "body": body, "trusted": True},
     ]) == 1
     assert found[0]["event_type"] == "worker_started"
