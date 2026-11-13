@@ -191,9 +191,9 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                     entry["event_type"], int(entry["worker"]), json.dumps(entry),
                 )
                 inserted += 1
-                # A currently running worker refreshes its *own* claim only.
-                # No heartbeat can create ownership or overwrite another claim.
-                if entry["event_type"] == "worker_started":
+                # Starts and trusted heartbeat updates extend a live claim.
+                # Neither can revive expired ownership or overwrite a new token.
+                if entry["event_type"] in {"worker_started", "worker_heartbeat"}:
                     worker_key = _keys(repo, entry["worker"], [])[0]
                     row = await conn.fetchrow(
                         """SELECT payload FROM public.factory_state_kv

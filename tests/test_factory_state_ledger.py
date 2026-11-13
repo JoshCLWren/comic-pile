@@ -108,3 +108,26 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "Persist classified worker completion in Neon" in observer
     assert "factory-state-cache" not in untrusted
     assert "factory-state-cache" not in entry
+
+
+def test_trusted_heartbeat_events_extend_current_nonexpired_lease() -> None:
+    import inspect
+
+    source = inspect.getsource(ledger._events)
+    assert 'entry["event_type"] in {"worker_started", "worker_heartbeat"}' in source
+    assert "AND expires_at>now()" in source
+    assert "payload->0->>'claim_id'=$2" in source
+
+
+def test_completion_dispatch_persists_real_worker_outcomes() -> None:
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    drain = (root / ".github/workflows/factory-completion-drain.yml").read_text()
+    assert '-f source_run_id="$GITHUB_RUN_ID"' in entry
+    assert "persist_outcome:" in drain
+    assert '.path == ".github/workflows/free-model-factory-entry.yml"' in drain
+    assert ".head_repository.full_name == $repo" in drain
+    assert "actions/jobs/${job_id}/logs" in drain
+    assert "factory_state_ledger.py runtime-outcome" in drain
+    assert "factory-state-cache" not in entry
+    assert "factory-state-cache" not in (root / ".github/workflows/free-model-factory-run.yml").read_text()
