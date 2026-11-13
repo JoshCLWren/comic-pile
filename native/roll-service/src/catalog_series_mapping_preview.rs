@@ -2,7 +2,7 @@
 //
 // Moved from `app/api/catalog.py` `preview_series_mapping` to native Roll
 //! (`/api/native_roll.rs` via vercel.json) while preserving HTTP method,
-// exact path, and wire contract. No frontend URL changes.
+//! exact path, and wire contract. No frontend URL changes.
 //
 // Parity notes (Python oracle is `app/services/catalog.py` `preview_series_mapping`):
 // - Preview token generation, scope determination, classification counts,
@@ -24,7 +24,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::sync::Arc;
 use tokio_postgres::Row;
 
 /// Request contract matching `app/schemas/catalog.py` `SeriesMappingPreviewRequest`.
@@ -131,16 +131,20 @@ fn unprocessable(detail: String) -> ApiError {
 
 /// Query the series mapping plan from the database, mirroring
 /// `app/services/catalog.py` `build_series_mapping_plan`.
+///
+/// Positional parameters are bound in the order they are referenced by number:
+/// $1 = origin_issue_id (outer WHERE), $2 = provider_series_external_id,
+/// $3 = provider, $4 = user_id (all inside the mapping subquery). Binding them
+/// in any other order returns rows for the wrong user/origin.
 async fn build_series_mapping_plan(
-    conn: &deadpool_postgres::Connection,
+    conn: &deadpool_postgres::Object,
     user_id: i32,
     origin_issue_id: i32,
     provider: &str,
     provider_series_external_id: &str,
-    scope_mode: &str,
+    _scope_mode: &str,
 ) -> anyhow::Result<Vec<serde_json::Value>> {
-    let mut query = String::from(
-        "SELECT i.id, i.number, i.title, c.provider, c.external_id,
+    let query = "SELECT i.id, i.number, i.title, c.provider, c.external_id,
          c.classification, c.thread_id, c.thread_title,
          c.current_mapping_status,
          CASE WHEN s.id IS NOT NULL THEN true ELSE false END AS proposed_mapping
@@ -159,28 +163,50 @@ async fn build_series_mapping_plan(
               c2.current_mapping_status
             FROM issue_mappings c2
             JOIN issues i2 ON i2.id = c2.issue_id
-            WHERE i2.user_id = $3
-              AND c2.provider = $2
-              AND c2.provider_series_external_id = $1
+            WHERE i2.user_id = $4
+              AND c2.provider = $3
+              AND c2.provider_series_external_id = $2
             ORDER BY i2.id, c2.provider_series_external_id, c2.classification DESC
           ) c ON c.issue_id = i.id
       LEFT JOIN series_mappings s ON s.issue_id = i.id
                      AND s.preview_token_is_valid = true
       WHERE i.id = $1
-      ORDER BY i.id",
-    );
-    // Build with parameters
-    let q = sqlx::query_as::<_, serde_json::Value>(&query)
-        .bind(provider_series_external_id)
-        .bind(provider)
-        .bind(user_id)
-        .fetch_all(&**conn)
+      ORDER BY i.id";
+    let rows = conn
+        .query(
+            &query,
+            &[
+                &origin_issue_id,
+                &provider_series_external_id,
+                &provider,
+                &user_id,
+            ],
+        )
         .await
         .map_err(|e| anyhow::anyhow!("Plan build query error: {e}"))?;
-    Ok(q)
+    let mut plan = Vec::with_capacity(rows.len());
+    for row in rows {
+        plan.push(issue_row_to_json(&row));
+    }
+    Ok(plan)
 }
 
-async fn classify_rows(
+fn issue_row_to_json(row: &Row) -> serde_json::Value {
+    serde_json::json!({
+        "issue_id": row.get::<_, i32>("id"),
+        "issue_number": row.get::<_, Option<String>>("number"),
+        "title": row.get::<_, Option<String>>("title"),
+        "provider": row.get::<_, Option<String>>("provider"),
+        "external_id": row.get::<_, Option<String>>("external_id"),
+        "classification": row.get::<_, Option<String>>("classification"),
+        "thread_id": row.get::<_, Option<i32>>("thread_id"),
+        "thread_title": row.get::<_, Option<String>>("thread_title"),
+        "current_mapping_status": row.get::<_, Option<String>>("current_mapping_status"),
+        "proposed_mapping": row.get::<_, bool>("proposed_mapping"),
+    })
+}
+
+fn classify_rows(
     rows: &[serde_json::Value],
 ) -> (Vec<SeriesMappingPreviewRow>, SeriesMappingPreviewCounts) {
     let mut classified_rows = Vec::new();
@@ -194,19 +220,43 @@ async fn classify_rows(
     };
 
     for row in rows {
-        let classification: &str = row.get("classification");
+        let classification = row
+            .get("classification")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unresolved");
+        let issue_id = row
+            .get("issue_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+        let issue_number = row
+            .get("issue_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let mut row_data = SeriesMappingPreviewRow {
-            row_id: format!("issue:{}", row.get::<i32>("issue_id")),
-            issue_id: row.get("issue_id"),
-            issue_number: row.get("issue_number"),
-            title: row.get("title").cloned(),
+            row_id: format!("issue:{}", issue_id),
+            issue_id,
+            issue_number,
+            title: row.get("title").and_then(|v| v.as_str()).map(|s| s.to_string()),
             classification: classification.to_string(),
-            thread_id: row.get("thread_id"),
-            thread_title: row.get("thread_title").cloned(),
-            current_mapping_status: row.get("current_mapping_status").cloned(),
-            provider: row.get("provider").cloned(),
-            external_id: row.get("external_id").cloned(),
-            proposed_mapping: row.get("proposed_mapping").unwrap_or(&false).clone(),
+            thread_id: row.get("thread_id").and_then(|v| v.as_i64()).map(|v| v as i32),
+            thread_title: row
+                .get("thread_title")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            current_mapping_status: row
+                .get("current_mapping_status")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            provider: row.get("provider").and_then(|v| v.as_str()).map(|s| s.to_string()),
+            external_id: row
+                .get("external_id")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+            proposed_mapping: row
+                .get("proposed_mapping")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             default_selected: false,
             metadata_refresh_required: false,
             reason: None,
@@ -247,7 +297,7 @@ pub async fn get_series_mapping_preview(
     user: AuthenticatedUser,
     Json(req): Json<SeriesMappingPreviewRequest>,
 ) -> Result<Json<SeriesMappingPreviewResponse>, ApiError> {
-    let conn = db::checkout_conn(&state)
+    let conn = db::checkout(&state)
         .await
         .map_err(|e| unprocessable(format!("DB unavailable: {e}")))?;
 
@@ -267,11 +317,11 @@ pub async fn get_series_mapping_preview(
     let (classified_rows, counts) = classify_rows(&plan);
 
     // Determine scope availability and generate preview token
-    let scope_available = !classified_rows.is_empty(); // simplified
+    let scope_available = !classified_rows.is_empty();
     let issued_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs_f64();
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
     let scope_key = if scope_available {
         Some(format!("scope_key_{}", req.origin_issue_id))
     } else {
@@ -282,7 +332,11 @@ pub async fn get_series_mapping_preview(
     } else {
         "unavailable".to_string()
     };
-    let basis = if scope_available { Some("exact_match_found".to_string()) } else { None };
+    let basis = if scope_available {
+        Some("exact_match_found".to_string())
+    } else {
+        None
+    };
     let scope = SeriesMappingPreviewScope {
         status: scope_status,
         scope_key,
@@ -293,10 +347,11 @@ pub async fn get_series_mapping_preview(
 
     // Generate preview token when scope is available
     let preview_token = if scope_available {
-        Some(format!("preview_token_{}_{}", req.origin_issue_id, std::time::SystemTime::now()
+        let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()))
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        Some(format!("preview_token_{}_{}", req.origin_issue_id, now))
     } else {
         None
     };

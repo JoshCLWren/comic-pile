@@ -2,7 +2,7 @@
 //
 // Moved from `app/api/cbl_sources.py` `preview_cbl_reading_graph` to native Roll
 //! (`/api/native_roll.rs` via vercel.json) while preserving HTTP method,
-// exact path, and wire contract. No frontend URL changes.
+//! exact path, and wire contract. No frontend URL changes.
 //
 // Parity notes (Python oracle is `app/services/reading_graph_preview_service.py` `preview_reading_graph`):
 // - Returns the prospective reading graph for a CBL selection without writing anything.
@@ -19,12 +19,12 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
 use serde::Serialize;
-use sqlx::postgres::PgRow;
+use std::collections::BTreeMap;
 
 /// Request contract matching `app/schemas/reading_graph_preview.py` `ReadingGraphPreviewRequest`.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -167,9 +167,10 @@ fn unprocessable(detail: String) -> ApiError {
 pub async fn preview_cbl_reading_graph(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
+    Path(source_list_id): Path<i32>,
     Json(req): Json<ReadingGraphPreviewRequest>,
 ) -> Result<Json<ReadingGraphPreview>, ApiError> {
-    let conn = db::checkout_conn(&state)
+    let conn = db::checkout(&state)
         .await
         .map_err(|e| unprocessable(format!("DB unavailable: {e}")))?;
 
@@ -177,7 +178,7 @@ pub async fn preview_cbl_reading_graph(
     // This mirrors `app/services/reading_graph_preview_service.py` `preview_reading_graph`.
 
     // 1. Verify the source list exists and is active
-    let source = verify_cbl_source_list(&conn, req.target_list_id.unwrap_or(0)).await.map_err(|e| {
+    let source = verify_cbl_source_list(&conn, source_list_id).await.map_err(|e| {
         unprocessable(format!("CBL source list error: {e}"))
     })?;
 
@@ -187,22 +188,37 @@ pub async fn preview_cbl_reading_graph(
     })?;
 
     // 3. Build entries by position
-    entries_by_position: {int(entry["cbl_position"]): entry for entry in report.entries}
-    selected_positions = sorted(set(request.included_positions))
-    unknown = [position for position in selected_positions if position not in entries_by_position]
-    if unknown:
-        raise _http_error(
-            "unknown_source_position",
-            f"Source positions are not part of list {source.list_id}: {unknown}",
-            status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY,
-        )
-
-    selected = [entries_by_position[position] for position in selected_positions]
+    let entries_by_position: BTreeMap<i32, serde_json::Value> = report
+        .entries
+        .iter()
+        .filter_map(|entry| {
+            entry
+                .get("cbl_position")
+                .and_then(|v| v.as_i64())
+                .map(|p| (p as i32, entry.clone()))
+        })
+        .collect();
+    let selected_positions: Vec<i32> = req.included_positions;
+    let unknown: Vec<i32> = selected_positions
+        .iter()
+        .filter(|position| !entries_by_position.contains_key(position))
+        .cloned()
+        .collect();
+    if !unknown.is_empty() {
+        return Err(unprocessable(format!(
+            "unknown_source_position: Source positions are not part of list {}: {:?}",
+            source.list_id, unknown
+        )));
+    }
+    let selected: Vec<serde_json::Value> = selected_positions
+        .iter()
+        .filter_map(|position| entries_by_position.get(position).cloned())
+        .collect();
 
     // 4. Evaluate the Option E graph (series nodes, overlaps, issues, cycles)
-    let graph = evaluate_option_e_graph(&conn, user.id(), source.list_id, selected).await.map_err(|e| {
-        unprocessable(format!("Option E graph error: {e}"))
-    })?;
+    let graph = evaluate_option_e_graph(&conn, user.id(), source.list_id, selected)
+        .await
+        .map_err(|e| unprocessable(format!("Option E graph error: {e}")))?;
 
     let response = ReadingGraphPreview {
         source_list_id: source.list_id,
@@ -220,12 +236,12 @@ pub async fn preview_cbl_reading_graph(
 }
 
 async fn verify_cbl_source_list(
-    _conn: &deadpool_postgres::Connection,
-    _list_id: i32,
+    _conn: &deadpool_postgres::Object,
+    list_id: i32,
 ) -> anyhow::Result<CBLSourceListDetail> {
     // Port from `app/services/cbl_source_service.py` `get_cbl_source_list_preview`
     Ok(CBLSourceListDetail {
-        id: _list_id,
+        id: list_id,
         name: "".to_string(),
         source_path: "".to_string(),
         source_repository: "".to_string(),
@@ -241,7 +257,7 @@ async fn verify_cbl_source_list(
 }
 
 async fn evaluate_option_e_graph(
-    _conn: &deadpool_postgres::Connection,
+    _conn: &deadpool_postgres::Object,
     _user_id: i32,
     _list_id: i32,
     _selected: Vec<serde_json::Value>,

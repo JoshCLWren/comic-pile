@@ -2,7 +2,7 @@
 //
 // Moved from `app/api/reading_order_projection.py` `preview_plan_projection` to native Roll
 //! (`/api/native_roll.rs` via vercel.json) while preserving HTTP method,
-// exact path, and wire contract. No frontend URL changes.
+//! exact path, and wire contract. No frontend URL changes.
 //
 // Parity notes (Python oracle is `app/services/reading_order_projection.py`):
 // - Projection is recomputed from the persisted plan JSON on every call so
@@ -20,13 +20,11 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
 use serde::Serialize;
-use sqlx::postgres::PgRow;
-use std::collections::{BTreeMap, BTreeSet};
 
 /// Request contract matching `app/schemas/reading_order.py` `ReadingOrderProjectionRequest`.
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
@@ -96,52 +94,65 @@ fn unprocessable(detail: String) -> ApiError {
 pub async fn preview_plan_projection(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(_req): Json<ReadingOrderProjectionRequest>,
+    Path(plan_id): Path<i32>,
+    Json(req): Json<ReadingOrderProjectionRequest>,
 ) -> Result<Json<ReadingOrderProjectionPreview>, ApiError> {
-    let conn = db::checkout_conn(&state)
+    let conn = db::checkout(&state)
         .await
         .map_err(|e| unprocessable(format!("DB unavailable: {e}")))?;
 
-    // Load the owned continuity plan
-    let plan = sqlx::query_as!(
-        PgRow,
-        "SELECT p.id, p.name, p.ordering_mode FROM continuity_plans p WHERE p.id = $1 AND p.user_id = $2",
-        // plan_id comes from the path, user_id from auth
-        0,  // placeholder - actual value from path extractor
-        user.id()
-    )
-    .fetch_one(&*conn)
-    .await
-    .map_err(|e| unprocessable(format!("Plan not found: {e}")))?;
+    // Load the owned continuity plan. plan_id comes from the path, user_id
+    // from auth; both are bound as distinct parameters.
+    let rows = conn
+        .query(
+            "SELECT p.id, p.name, p.ordering_mode FROM continuity_plans p WHERE p.id = $1 AND p.user_id = $2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(|e| unprocessable(format!("Plan load error: {e}")))?;
+    let plan_row = rows
+        .into_iter()
+        .next()
+        .ok_or_else(|| unprocessable(format!("Plan {plan_id} not found")))?;
+    let plan_name: String = plan_row.get("name");
+    let plan_ordering_mode: String = plan_row.get("ordering_mode");
 
     // Build the projection plan from the plan JSON
     // This mirrors `app/services/reading_order_projection.build_projection_plan`
-    let projection = build_projection_plan(&conn, user.id(), 0, 0).await.map_err(|e| {
-        unprocessable(format!("Projection build error: {e}"))
-    })?;
+    let projection = build_projection_plan(&conn, user.id(), plan_id, req.reading_order_id)
+        .await
+        .map_err(|e| unprocessable(format!("Projection build error: {e}")))?;
 
     // Convert to response format
-    let entries = projection.entries.into_iter().map(|entry| ReadingOrderProjectionEntry {
-        thread_id: entry.thread_id,
-        thread_title: entry.thread_title.unwrap_or_default(),
-        position: entry.position,
-        source: entry.source,
-        source_node_id: entry.source_node_id,
-    }).collect();
+    let entries = projection
+        .entries
+        .into_iter()
+        .map(|entry| ReadingOrderProjectionEntry {
+            thread_id: entry.thread_id,
+            thread_title: entry.thread_title.unwrap_or_default(),
+            position: entry.position,
+            source: entry.source,
+            source_node_id: entry.source_node_id,
+        })
+        .collect();
 
-    let conflicts = projection.conflicts.into_iter().map(|conflict| ReadingOrderProjectionConflict {
-        code: conflict.code,
-        message: conflict.message,
-        node_id: conflict.node_id.unwrap_or_default(),
-        thread_id: conflict.thread_id,
-        existing_positions: conflict.existing_positions.unwrap_or_default(),
-    }).collect();
+    let conflicts = projection
+        .conflicts
+        .into_iter()
+        .map(|conflict| ReadingOrderProjectionConflict {
+            code: conflict.code,
+            message: conflict.message,
+            node_id: conflict.node_id.unwrap_or_default(),
+            thread_id: conflict.thread_id,
+            existing_positions: conflict.existing_positions.unwrap_or_default(),
+        })
+        .collect();
 
     let response = ReadingOrderProjectionPreview {
-        plan_id: 0, // from path
-        plan_name: "".to_string(),
-        plan_ordering_mode: "".to_string(),
-        reading_order_id: 0, // from path
+        plan_id,
+        plan_name,
+        plan_ordering_mode,
+        reading_order_id: req.reading_order_id,
         reading_order_name: "".to_string(),
         entries,
         conflicts,
@@ -153,7 +164,7 @@ pub async fn preview_plan_projection(
 }
 
 async fn build_projection_plan(
-    _conn: &deadpool_postgres::Connection,
+    _conn: &deadpool_postgres::Object,
     _user_id: i32,
     _plan_id: i32,
     _reading_order_id: i32,

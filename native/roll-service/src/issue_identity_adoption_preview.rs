@@ -2,7 +2,7 @@
 //
 // Moved from `app/api/issue_identity.py` `api_cbl_adoption_preview` to native Roll
 //! (`/api/native_roll.rs` via vercel.json) while preserving HTTP method,
-// exact path, and wire contract. No frontend URL changes.
+//! exact path, and wire contract. No frontend URL changes.
 //
 // Parity notes (Python oracle is `app/services/cbl_reconciliation.py` `preview_cbl_adoption`
 // and `app/services/issue_identity_reconciliation.py` `_adoption_payload`):
@@ -19,19 +19,13 @@ use crate::{
     ApiError, AppState,
 };
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
 use serde::Serialize;
 use sqlx::postgres::PgRow;
-
-/// Request contract matching the adoption preview path parameters.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-pub struct IssueIdentityAdoptionPreviewRequest {
-    /// CBL source list ID.
-    pub list_id: i32,
-}
+use std::collections::BTreeMap;
 
 /// Response contract matching `app/schemas/cbl_adoption.py` `CBLAdoptionPreviewResponse`.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
@@ -137,14 +131,14 @@ fn unprocessable(detail: String) -> ApiError {
 pub async fn api_cbl_adoption_preview(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(req): Json<IssueIdentityAdoptionPreviewRequest>,
+    Path(list_id): Path<i32>,
 ) -> Result<Json<CBLAdoptionPreviewResponse>, ApiError> {
-    let conn = db::checkout_conn(&state)
+    let conn = db::checkout(&state)
         .await
         .map_err(|e| unprocessable(format!("DB unavailable: {e}")))?;
 
     // Reconcile the CBL source list, mirroring `app/services/cbl_reconciliation.py` `preview_cbl_adoption`
-    let report = reconcile_cbl_source_list(&conn, user.id(), req.list_id).await.map_err(|e| {
+    let report = reconcile_cbl_source_list(&conn, user.id(), list_id).await.map_err(|e| {
         unprocessable(format!("CBL reconciliation error: {e}"))
     })?;
 
@@ -192,7 +186,7 @@ pub async fn api_cbl_adoption_preview(
 
     let response = CBLAdoptionPreviewResponse {
         source: CBLSourceFingerprint {
-            source_list_id: req.list_id,
+            source_list_id: list_id,
             source_repository: "".to_string(), // from reconciliation
             source_path: "".to_string(), // from reconciliation
             content_hash: report.content_hash.clone(),
@@ -209,7 +203,7 @@ pub async fn api_cbl_adoption_preview(
 /// Reconcile one CBL source list, mirroring
 /// `app/services/cbl_reconciliation.py` `reconcile_cbl_source_list`.
 async fn reconcile_cbl_source_list(
-    _conn: &deadpool_postgres::Connection,
+    _conn: &deadpool_postgres::Object,
     _user_id: i32,
     _list_id: i32,
 ) -> anyhow::Result<CBLReconciliationReport> {
@@ -292,19 +286,18 @@ fn positions_by_decision(entries: &[CBLEntry], decision: &str) -> Vec<i32> {
         .collect()
 }
 
+/// Reconciliation report for one CBL source list.
+#[derive(Debug, Clone)]
+struct CBLReconciliationReport {
+    content_hash: String,
+    revision_sha: String,
+    total_positions: i32,
+    entries: Vec<serde_json::Value>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn request_schema_validates() {
-        let _req: IssueIdentityAdoptionPreviewRequest = serde_json::from_value(
-            serde_json::json!({
-                "list_id": 1,
-            })
-        )
-        .unwrap();
-    }
 
     #[test]
     fn response_schema_validates() {
