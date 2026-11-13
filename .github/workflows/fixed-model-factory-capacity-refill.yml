@@ -41,6 +41,12 @@ jobs:
         with:
           ref: main
 
+      - name: Configure shared Neon factory discovery cache
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Install REST-backed factory GitHub reads
         shell: bash
         run: |
@@ -103,8 +109,7 @@ jobs:
               exit 0
             }
             attempt_body="$(
-              gh api --paginate \
-                "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+              python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps(registry_comments()))' \
                 | jq -rs --arg run "$COMPLETED_RUN_ID" '
                     [
                       .[][]?
