@@ -11,7 +11,13 @@
       "src": "^/api/v2/activity$",
       "runtime": "native-rust",
       "status": "target",
-      "consumers": ["frontend/src/services/api-activity.ts"]
+      "consumers": ["frontend/src/services/api-activity.ts"],
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "One owner-scoped cursor page: a single statement folds authentication, ownership, the snooze/roll and dice/issue rate linkage, and the page limit with no per-row follow-up queries."
+      }
     }
   ]
 }

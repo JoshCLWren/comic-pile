@@ -50,3 +50,22 @@ def test_normalize_qualifies_trigram_ops_and_strips_dump_banners() -> None:
     assert " gin_trgm_ops)" not in normalized.replace("public.gin_trgm_ops)", "")
     assert normalized.endswith("\n")
     assert not normalized.endswith("\n\n")
+
+
+def test_normalize_drops_client_version_column_markers() -> None:
+    """Newer pg_dump `pg_attver` markers are metadata, not schema drift."""
+    raw = (
+        "CREATE TABLE public.alembic_version (\n"
+        "    version_num character varying(32) NOT NULL\n"
+        ");\n"
+        "ALTER TABLE ONLY public.alembic_version "
+        "ALTER COLUMN version_num SET (pg_attver=26796624);\n"
+        "ALTER TABLE public.events "
+        "ALTER COLUMN die SET (n_distinct=5);\n"
+    )
+
+    normalized = _normalize(raw)
+
+    assert "pg_attver" not in normalized
+    # Real column options still survive normalization.
+    assert "ALTER COLUMN die SET (n_distinct=5);" in normalized

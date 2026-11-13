@@ -615,7 +615,7 @@ describe('core route request budgets', () => {
     await waitFor(() => expect(calls.some((call) => call.url === '/v2/activity')).toBe(true))
     await drainSettledWork()
 
-    expect(requestCounts(calls)).toEqual({ 'GET /v2/activity': 1 })
+    expect(requestCounts(calls)).toEqual({ 'GET /v2/activity?page_size=50': 1 })
   })
 
   it('Session detail cold-loads details and snapshots exactly once', async () => {

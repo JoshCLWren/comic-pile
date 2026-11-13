@@ -47,6 +47,13 @@ DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
 # the pg_trgm GIN operator class unqualified. Qualify it so the fixture replays
 # against an empty search_path the same way production objects live in public.
 _UNQUALIFIED_GIN_TRGM_OPS = re.compile(r"(?<![\w.])gin_trgm_ops\b")
+# Newer pg_dump clients emit per-column `pg_attver` version markers that older
+# servers (and this PostgreSQL 16 fixture) cannot parse, so a client/toolchain
+# drift would otherwise rewrite every column line in the fixture. They are dump
+# metadata, not schema, so drop them like the other client-version banners.
+_PG_ATTVER_LINE = re.compile(
+    r"^ALTER TABLE .+ ALTER COLUMN .+ SET \(pg_attver=\d+\);$"
+)
 
 
 def _qualify_extension_operator_classes(sql: str) -> str:
@@ -67,7 +74,7 @@ def _qualify_extension_operator_classes(sql: str) -> str:
 
 
 def _normalize(raw: str) -> str:
-    """Strip psql-only meta-commands and version-dependent banners."""
+    """Strip psql-only meta-commands, version banners, and dump metadata."""
     kept: list[str] = []
     for line in raw.splitlines():
         stripped = line.strip()
@@ -78,6 +85,8 @@ def _normalize(raw: str) -> str:
         if stripped in DROPPED_SETTINGS:
             continue
         if stripped in DROPPED_STATEMENTS:
+            continue
+        if _PG_ATTVER_LINE.match(stripped):
             continue
         kept.append(line)
     return _qualify_extension_operator_classes("\n".join(kept).rstrip("\n") + "\n")

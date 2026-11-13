@@ -2,40 +2,80 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 import HistoryPage from '../pages/HistoryPage'
-import { useSessions } from '../hooks/useSession'
+import { useActivity } from '../hooks/useActivity'
+import type { ActivityEvent } from '../services/api-activity'
 
-vi.mock('../hooks/useSession', () => ({ useSessions: vi.fn() }))
+vi.mock('../hooks/useActivity', () => ({ useActivity: vi.fn() }))
 
-// SAFETY: the module is mocked, so the test supplies the return shape directly
-const mockedUseSessions = vi.mocked(useSessions) as any
+const mockedUseActivity = vi.mocked(useActivity)
+
+type ActivityState = ReturnType<typeof useActivity>
+
+function activityState(overrides: Partial<ActivityState> = {}): ActivityState {
+  return {
+    events: [],
+    isPending: false,
+    isRetrying: false,
+    isError: false,
+    error: null,
+    isLoadingMore: false,
+    hasMore: false,
+    loadMore: vi.fn(),
+    refetch: vi.fn(),
+    ...overrides,
+  }
+}
+
+function event(
+  event_id: number,
+  overrides: Partial<ActivityEvent> = {},
+): ActivityEvent {
+  return {
+    event_id,
+    event_type: 'roll',
+    timestamp: '2026-11-08T15:42:35.028Z',
+    die_before: 6,
+    die_after: null,
+    rating: null,
+    thread_id: 3153,
+    thread_title: 'First Series',
+    issue_id: 1121330,
+    issue_number: '1',
+    action_display: 'Rolled First Series #1',
+    ...overrides,
+  }
+}
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <HistoryPage />
+    </MemoryRouter>,
+  )
+}
 
 beforeEach(() => {
-  mockedUseSessions.mockReturnValue({ data: [], isLoading: false, hasMore: false, loadMore: vi.fn(), isLoadingMore: false })
+  mockedUseActivity.mockReturnValue(activityState())
 })
 
-it('renders empty history state', () => {
-  render(
-    <MemoryRouter>
-      <HistoryPage />
-    </MemoryRouter>
-  )
+it('renders the empty activity state', () => {
+  renderPage()
 
-  expect(screen.getByText('History')).toBeInTheDocument()
-  expect(screen.getByText('No sessions yet')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'History' })).toBeInTheDocument()
+  expect(screen.getByText('Your reading activity')).toBeInTheDocument()
+  expect(screen.getByText('No activity yet')).toBeInTheDocument()
+  expect(screen.queryByRole('list')).not.toBeInTheDocument()
 })
 
-it('shows no Export Summary control or internal export link in the empty state (issue #3572)', () => {
-  render(
-    <MemoryRouter>
-      <HistoryPage />
-    </MemoryRouter>
-  )
+it('keeps reader-facing export controls and internal export links out of history (issue #3572)', () => {
+  renderPage()
 
-  // The owner-approved removal takes the dead reader-facing export out of the
-  // empty branch too, while the header copy and empty-state navigation stay.
-  expect(screen.getByText('History')).toBeInTheDocument()
-  expect(screen.getByText('Your reading session history')).toBeInTheDocument()
-  expect(screen.getByText('No sessions yet')).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: /export summary/i })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /export summary/i })).not.toBeInTheDocument()
+  expect(screen.queryByText(/export summary/i)).not.toBeInTheDocument()
+
+  mockedUseActivity.mockReturnValue(activityState({ events: [event(1)] }))
+  renderPage()
 
   expect(screen.queryByRole('link', { name: /export summary/i })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /export summary/i })).not.toBeInTheDocument()
@@ -47,351 +87,278 @@ it('shows no Export Summary control or internal export link in the empty state (
   expect(hrefs.filter((href) => (href ?? '').includes('/export/'))).toEqual([])
 })
 
-it('keeps sessions and navigation without any Export Summary control or internal export link (issue #3572)', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 31,
-      started_at: '2024-01-01T10:00:00Z',
-      ended_at: '2024-01-01T10:30:00Z',
-      ladder_path: '6',
-      active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 2, last_rating: 4.5 },
-      last_rolled_result: 4,
-      current_die: 6,
-      start_die: 6,
-      snapshot_count: 1,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
+it('renders the reported 09:42 to 10:01 sequence in causal order with one rating row (issue #4822)', () => {
+  mockedUseActivity.mockReturnValue(
+    activityState({
+      events: [
+        event(7, {
+          event_type: 'rate',
+          timestamp: '2026-11-08T16:01:00Z',
+          die_before: 10,
+          die_after: 8,
+          rating: 4.5,
+          thread_id: 3480,
+          thread_title: 'Third Series',
+          issue_id: 1121332,
+          issue_number: '2',
+          action_display: 'Rated Third Series #2 ⭐4.5',
+        }),
+        event(4, {
+          event_type: 'snooze',
+          timestamp: '2026-11-08T15:58:00Z',
+          die_before: 8,
+          die_after: 10,
+          thread_id: 3470,
+          thread_title: 'Second Series',
+          issue_id: null,
+          issue_number: null,
+          action_display: 'Snoozed Second Series (d8 → d10)',
+        }),
+        event(5, {
+          event_type: 'roll',
+          timestamp: '2026-11-08T15:55:00Z',
+          thread_id: 3480,
+          thread_title: 'Third Series',
+          issue_id: 1121332,
+          issue_number: '2',
+          action_display: 'Rolled Third Series #2',
+        }),
+        event(2, {
+          event_type: 'snooze',
+          timestamp: '2026-11-08T15:50:00Z',
+          die_before: 6,
+          die_after: 8,
+          thread_id: 3153,
+          thread_title: 'First Series',
+          issue_id: null,
+          issue_number: null,
+          action_display: 'Snoozed First Series (d6 → d8)',
+        }),
+        event(3, {
+          event_type: 'roll',
+          timestamp: '2026-11-08T15:48:00Z',
+          thread_id: 3469,
+          thread_title: 'Second Series',
+          issue_id: 1121331,
+          issue_number: '2',
+          action_display: 'Rolled Second Series #2',
+        }),
+        event(1, {
+          timestamp: '2026-11-08T15:42:35.028Z',
+          thread_id: 3153,
+          thread_title: 'First Series',
+          issue_id: 1121330,
+          issue_number: '1',
+          action_display: 'Rolled First Series #1',
+        }),
+      ],
+    }),
+  )
 
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  renderPage()
 
-  // Normal history rendering and navigation are untouched by the removal.
-  expect(screen.getByText('History')).toBeInTheDocument()
-  expect(screen.getByText('Saga')).toBeInTheDocument()
-  expect(screen.getByRole('list')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /view full session/i })).toHaveAttribute('href', '/sessions/31')
-  expect(screen.getByText('Snapshots (1)')).toBeInTheDocument()
+  const rows = screen.getAllByRole('listitem')
+  expect(rows).toHaveLength(6)
+  expect(rows.map((row) => row.textContent)).toEqual([
+    expect.stringContaining('Rated Third Series #2 ⭐4.5'),
+    expect.stringContaining('Snoozed Second Series (d8 → d10)'),
+    expect.stringContaining('Rolled Third Series #2'),
+    expect.stringContaining('Snoozed First Series (d6 → d8)'),
+    expect.stringContaining('Rolled Second Series #2'),
+    expect.stringContaining('Rolled First Series #1'),
+  ])
 
-  expect(screen.queryByRole('link', { name: /export summary/i })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: /export summary/i })).not.toBeInTheDocument()
-  expect(screen.queryByText(/export summary/i)).not.toBeInTheDocument()
+  // The server folds the dice/issue rate receipts into exactly one visible row.
+  expect(screen.getAllByText(/⭐4\.5/)).toHaveLength(1)
+  expect(screen.getAllByText(/^Snoozed /)).toHaveLength(2)
+  expect(screen.getAllByText(/^Rolled /)).toHaveLength(3)
 
-  const hrefs = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href'))
-  expect(hrefs).not.toContain('/admin/export/summary/')
-  expect(hrefs).not.toContain('/api/admin/export/summary/')
-  expect(hrefs.filter((href) => (href ?? '').includes('/export/'))).toEqual([])
+  // The row keeps the server timestamp as its machine-readable time value.
+  expect(rows[0]?.querySelector('time')).toHaveAttribute(
+    'dateTime',
+    '2026-11-08T16:01:00Z',
+  )
+  expect(rows[5]?.querySelector('time')).toHaveAttribute(
+    'dateTime',
+    '2026-11-08T15:42:35.028Z',
+  )
 })
 
-it('labels an empty session as No issue selected', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 9,
-      started_at: '2024-01-01T10:00:00Z',
-      ended_at: null,
-      ladder_path: '6',
-      active_thread: null,
-      last_rolled_result: null,
-      current_die: 6,
-      start_die: 6,
-      snapshot_count: 1,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
+it('renders historical manual-die and reset rows with their recorded labels', () => {
+  mockedUseActivity.mockReturnValue(
+    activityState({
+      events: [
+        event(3, {
+          event_type: 'reset_dice',
+          timestamp: '2026-11-08T16:20:00Z',
+          die_before: null,
+          die_after: null,
+          thread_id: null,
+          thread_title: null,
+          issue_id: null,
+          issue_number: null,
+          action_display: 'Reset dice',
+        }),
+        event(2, {
+          event_type: 'manual_die',
+          timestamp: '2026-11-08T16:10:00Z',
+          die_before: 8,
+          die_after: null,
+          thread_id: null,
+          thread_title: null,
+          issue_id: null,
+          issue_number: null,
+          action_display: 'Manual die selection (d8)',
+        }),
+        event(1, {
+          event_type: 'rate',
+          timestamp: '2026-11-08T16:00:00Z',
+          rating: null,
+          thread_title: 'First Series',
+          issue_number: '4',
+          action_display: 'Read First Series #4',
+        }),
+      ],
+    }),
+  )
 
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  renderPage()
 
-  expect(screen.getByText('No issue selected')).toBeInTheDocument()
-  // The card still reports the start die so an empty session is never a
-  // summary-free card (#3573).
-  expect(screen.getByText('d6')).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: /view full session/i })).toHaveAttribute(
+  expect(screen.getByText('Reset dice')).toBeInTheDocument()
+  expect(screen.getByText('Manual die selection (d8)')).toBeInTheDocument()
+  expect(screen.getByText('Read First Series #4')).toBeInTheDocument()
+  // Historical rows without a live thread offer no fabricated navigation.
+  expect(screen.getAllByRole('link')).toHaveLength(1)
+  expect(screen.getByRole('link')).toHaveAttribute('href', '/thread/3153?issue=1121330')
+})
+
+it('labels deleted identities safely without fabricating a link', () => {
+  mockedUseActivity.mockReturnValue(
+    activityState({
+      events: [
+        event(2, {
+          thread_id: null,
+          thread_title: null,
+          issue_id: null,
+          issue_number: null,
+          action_display: 'Rolled a series that is no longer available',
+        }),
+        event(1, {
+          thread_id: null,
+          thread_title: null,
+          issue_id: 991,
+          issue_number: '5',
+          action_display: 'Marked issue #5 unread',
+        }),
+      ],
+    }),
+  )
+
+  renderPage()
+
+  expect(screen.getByText(/a series that is no longer available/)).toBeInTheDocument()
+  expect(screen.getByText('Marked issue #5 unread')).toBeInTheDocument()
+  expect(screen.getByText('Deleted series')).toBeInTheDocument()
+  expect(screen.getByText('Deleted series #5')).toBeInTheDocument()
+  expect(screen.queryByRole('link')).not.toBeInTheDocument()
+  expect(screen.queryByText(/\/thread\/null/)).not.toBeInTheDocument()
+})
+
+it('links a live thread and its issue, and a thread without an issue', () => {
+  mockedUseActivity.mockReturnValue(
+    activityState({
+      events: [
+        event(2, {
+          thread_id: 12,
+          thread_title: 'Big Shot',
+          issue_id: null,
+          issue_number: null,
+          action_display: 'Rolled Big Shot',
+        }),
+        event(1, {
+          thread_id: 3153,
+          thread_title: 'First Series',
+          issue_id: 1121330,
+          issue_number: '1',
+          action_display: 'Rolled First Series #1',
+        }),
+      ],
+    }),
+  )
+
+  renderPage()
+
+  expect(screen.getByRole('link', { name: 'Big Shot' })).toHaveAttribute(
     'href',
-    '/sessions/9',
+    '/thread/12',
+  )
+  expect(screen.getByRole('link', { name: 'First Series #1' })).toHaveAttribute(
+    'href',
+    '/thread/3153?issue=1121330',
   )
 })
 
-it('does not label an active session with a rolled result as abandoned', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 10,
-      started_at: '2024-01-01T10:00:00Z',
-      ended_at: null,
-      ladder_path: '6 → 8',
-      active_thread: { title: 'Saga', format: 'Comic' },
-      last_rolled_result: 4,
-      current_die: 8,
-      start_die: 8,
-      snapshot_count: 3,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  expect(screen.queryByText('No issue selected')).not.toBeInTheDocument()
-  expect(screen.queryByText('Abandoned roll')).not.toBeInTheDocument()
-  expect(screen.getByText('Saga')).toBeInTheDocument()
-})
-
-it('leads with comic identity and readable activity summary for a typical rated session', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 11,
-      started_at: '2024-08-23T10:00:00Z',
-      ended_at: '2024-08-23T10:45:00Z',
-      ladder_path: '6 → 4 → 6',
-      active_thread: {
-        title: 'Cable',
-        format: 'Comic',
-        next_issue_number: '62',
-        issues_read: 1,
-        last_rating: 4.5,
-      },
-      last_rolled_result: 3,
-      current_die: 6,
-      start_die: 6,
-      snapshot_count: 2,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  const listitem = screen.getByRole('listitem')
-  expect(listitem).toBeInTheDocument()
-
-  const titleBlock = listitem.querySelector('p.font-bold')
-  expect(titleBlock).not.toBeNull()
-  expect(titleBlock!.textContent).toContain('Cable')
-  expect(titleBlock!.textContent).toContain('#62')
-
-  expect(screen.getByText(/1 issue read/)).toBeInTheDocument()
-  expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
-
-  const dieLine = screen.getByText('d6 → d4 → d6 · Rolled 3')
-  expect(dieLine).toBeInTheDocument()
-  expect(dieLine).toHaveClass('text-[var(--theme-text-dim)]')
-  expect(listitem).toContainElement(dieLine)
-  // The progression and the roll stay visible exactly once for a rated card.
-  expect(screen.getAllByText(/^d\d/)).toHaveLength(1)
-
-  // Check that activity line contains read/rating info with die size
-  const activityLine = listitem.querySelector('p.text-xs')
-  expect(activityLine).not.toBeNull()
-  expect(activityLine!.textContent).toContain('1 issue read')
-  expect(activityLine!.textContent).toContain('rated 4.5')
-  expect(activityLine!.textContent).toContain('Die size d6')
-
-  const headlineIndex = listitem.children[1]!.children[0]!.compareDocumentPosition(dieLine)
-  expect(headlineIndex & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-})
-
-it('keeps the queue position and dice progression on a card without reading activity', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 13,
-      started_at: '2024-10-05T13:10:00Z',
-      ended_at: null,
-      ladder_path: '20',
-      active_thread: {
-        title: 'Hulk',
-        format: 'Comic',
-        next_issue_number: '5',
-        issues_remaining: 3,
-        issues_read: 0,
-        last_rating: null,
-      },
-      last_rolled_result: 7,
-      current_die: 20,
-      start_die: 20,
-      snapshot_count: 1,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  const listitem = screen.getByRole('listitem')
-  expect(screen.getByText('Hulk')).toBeInTheDocument()
-  expect(screen.getByText('3 left in queue')).toBeInTheDocument()
-  expect(screen.getByText('d20 · Rolled 7')).toBeInTheDocument()
-  expect(listitem).toContainElement(screen.getByText('d20 · Rolled 7'))
-  expect(screen.getAllByText(/^d\d/)).toHaveLength(1)
-})
-
-it('pluralizes issues read for multi-issue activity', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 12,
-      started_at: '2024-01-01T10:00:00Z',
-      ended_at: '2024-01-01T10:30:00Z',
-      ladder_path: '20',
-      active_thread: {
-        title: 'Saga',
-        format: 'Comic',
-        next_issue_number: '13',
-        issues_read: 3,
-        last_rating: 4.5,
-      },
-      last_rolled_result: 7,
-      current_die: 20,
-      start_die: 20,
-      snapshot_count: 2,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  expect(screen.getByText(/3 issues read/)).toBeInTheDocument()
-  expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
-})
-
-it('renders session rows with metadata, duration, and footer links', () => {
-  mockedUseSessions.mockReturnValue({ data: [
-    { id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6 → 8', active_thread: { title: 'Saga', format: 'Comic', next_issue_number: '13', issues_read: 3, last_rating: 4.5 }, last_rolled_result: 4, current_die: 6,
-      start_die: 6, snapshot_count: 2 },
-    { id: 2, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: null, active_thread: null, snapshot_count: 0 },
-    { id: 3, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T12:30:00Z', ladder_path: '20', active_thread: { title: 'Other', format: 'Manga' }, last_rolled_result: null, current_die: 20,
-      start_die: 20, snapshot_count: 1 },
-    { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null, start_die: null },
-    { id: 5, started_at: '2024-01-01T12:00:00Z', ended_at: '2024-01-01T11:00:00Z', ladder_path: '', active_thread: { title: 'Zero', format: 'Comic' }, last_rolled_result: 0, current_die: 4,
-      start_die: 4, snapshot_count: 0 },
-    { id: 6, started_at: 'bad', ended_at: 'bad', ladder_path: '6', active_thread: null, start_die: 6, snapshot_count: 0 },
-    { id: 7, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, start_die: null, snapshot_count: null },
-    { id: 8, started_at: 'bad', ended_at: 'bad', ladder_path: null, active_thread: null, start_die: null, snapshot_count: null },
-  ], isPending: false })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  expect(screen.getByRole('list')).toBeInTheDocument()
-  // One dice progression line per session that has a ladder path.
-  expect(screen.getAllByText(/^d\d/)).toHaveLength(3)
-  expect(screen.getByText(/d6 → d8/)).toBeInTheDocument()
-  expect(screen.getByText(/Rolled 4/)).toBeInTheDocument()
-  expect(screen.queryByText(/Rolled 0/)).not.toBeInTheDocument()
-  expect(screen.queryByText(/Dice progression:/)).not.toBeInTheDocument()
-  expect(screen.getByText(/#13/)).toBeInTheDocument()
-  expect(screen.getByText(/3 issues read/)).toBeInTheDocument()
-  expect(screen.getByText(/rated 4\.5/)).toBeInTheDocument()
-  expect(screen.getByText('Duration: 5m')).toBeInTheDocument()
-  expect(screen.getByText('Duration: 1h')).toBeInTheDocument()
-  expect(screen.getByText('Duration: 2h 30m')).toBeInTheDocument()
-  const snapshotsLink = screen.getByText('Snapshots (2)')
-  expect(snapshotsLink).toBeInTheDocument()
-  expect(snapshotsLink.closest('a')).toHaveAttribute('href', '/sessions/1')
-})
-
-it('renders loading and error states', () => {
-  mockedUseSessions.mockReturnValue({ data: null, isPending: true, isLoadingMore: false, hasMore: false, loadMore: vi.fn() })
-  const { rerender } = render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  expect(screen.getByText('Loading...')).toBeInTheDocument()
-  mockedUseSessions.mockReturnValue({ data: null, isPending: false, isLoadingMore: false, hasMore: false, loadMore: vi.fn(), error: new Error('no') })
-  rerender(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  expect(screen.getByText('Failed to load sessions')).toBeInTheDocument()
-})
-
-it('shows Load More button when hasMore is true', () => {
+it('loads more activity from the server cursor and offers a load-more retry', () => {
   const loadMore = vi.fn()
-  mockedUseSessions.mockReturnValue({
-    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: true,
-    loadMore,
-    error: null,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  const button = screen.getByText('Load More Sessions')
-  expect(button).toBeInTheDocument()
-  fireEvent.click(button)
-  expect(loadMore).toHaveBeenCalledTimes(1)
-})
+  mockedUseActivity.mockReturnValue(
+    activityState({ events: [event(1)], hasMore: true, loadMore }),
+  )
+  const { rerender } = renderPage()
 
-it('shows loading state when loading more', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null }],
-    isPending: false,
-    isLoadingMore: true,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  fireEvent.click(screen.getByRole('button', { name: 'Load More Activity' }))
+  expect(loadMore).toHaveBeenCalledTimes(1)
+
+  mockedUseActivity.mockReturnValue(
+    activityState({ events: [event(1)], isLoadingMore: true, hasMore: true, loadMore }),
+  )
+  rerender(
+    <MemoryRouter>
+      <HistoryPage />
+    </MemoryRouter>,
+  )
   expect(screen.getByText('Loading more...')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Load More Activity' })).not.toBeInTheDocument()
+
+  mockedUseActivity.mockReturnValue(
+    activityState({ events: [event(1)], isError: true, error: new Error('page 2'), loadMore }),
+  )
+  rerender(
+    <MemoryRouter>
+      <HistoryPage />
+    </MemoryRouter>,
+  )
+  expect(screen.getByText('Failed to load more history')).toBeInTheDocument()
+  // The already-loaded page stays visible while the next page is retried.
+  expect(screen.getByText('Rolled First Series #1')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+  expect(loadMore).toHaveBeenCalledTimes(2)
 })
 
-it('shows retry button on load more error', () => {
-  const loadMore = vi.fn()
-  mockedUseSessions.mockReturnValue({
-    data: [{ id: 1, started_at: '2024-01-01T10:00:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore,
-    error: new Error('load more failed'),
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  expect(screen.getByText('Failed to load more sessions')).toBeInTheDocument()
-  const retryButton = screen.getByText('Retry')
-  expect(retryButton).toBeInTheDocument()
-  fireEvent.click(retryButton)
-  expect(loadMore).toHaveBeenCalledTimes(1)
+it('refreshes the current activity query without dropping the list', () => {
+  const refetch = vi.fn()
+  mockedUseActivity.mockReturnValue(activityState({ events: [event(1)], refetch }))
+  renderPage()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
+  expect(refetch).toHaveBeenCalledTimes(1)
+  expect(screen.getByText('Rolled First Series #1')).toBeInTheDocument()
 })
 
 it('holds a bare spinner before any initial attempt has failed (issue #3429)', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [],
-    isPending: true,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-    failureCount: 0,
-    isRetrying: false,
-    refetch: vi.fn(),
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  mockedUseActivity.mockReturnValue(activityState({ isPending: true }))
+  renderPage()
+
   expect(screen.getByText('Loading...')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
 })
 
 it('offers Retry without a reload once an initial attempt has failed (issue #3429)', () => {
   const refetch = vi.fn()
-  mockedUseSessions.mockReturnValue({
-    data: [],
-    isPending: true,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-    failureCount: 1,
-    isRetrying: true,
-    refetch,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
+  mockedUseActivity.mockReturnValue(
+    activityState({ isPending: true, isRetrying: true, refetch }),
+  )
+  renderPage()
+
   expect(screen.getByRole('status')).toHaveTextContent('Still loading your history')
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalledTimes(1)
@@ -399,137 +366,12 @@ it('offers Retry without a reload once an initial attempt has failed (issue #342
 
 it('offers Retry on an initial load failure (issue #3429)', () => {
   const refetch = vi.fn()
-  mockedUseSessions.mockReturnValue({
-    data: [],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: new Error('timeout of 10000ms exceeded'),
-    failureCount: 4,
-    isRetrying: false,
-    refetch,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  expect(screen.getByRole('alert')).toHaveTextContent('Failed to load sessions')
+  mockedUseActivity.mockReturnValue(
+    activityState({ isError: true, error: new Error('timeout of 10000ms exceeded'), refetch }),
+  )
+  renderPage()
+
+  expect(screen.getByRole('alert')).toHaveTextContent('Failed to load history')
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(refetch).toHaveBeenCalledTimes(1)
-})
-
-it('keeps the bounded loading state visible during a user-initiated retry (issue #3429)', () => {
-  // React Query resets failureCount to 0 when refetch() starts. The page must
-  // stay on the bounded retry affordance instead of falling back to the bare
-  // splash the user just clicked Retry to escape.
-  const refetch = vi.fn()
-  mockedUseSessions.mockReturnValue({
-    data: [],
-    isPending: true,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-    failureCount: 0,
-    isRetrying: true,
-    refetch,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-  expect(screen.getByRole('status')).toHaveTextContent('Still loading your history')
-  expect(screen.queryByText('Loading...')).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
-})
-
-it('gives each session-detail link a unique accessible name (issue #3687)', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [
-      { id: 21, started_at: '2024-01-01T10:00:00Z', ended_at: '2024-01-01T10:05:00Z', ladder_path: '6', active_thread: { title: 'Saga', format: 'Comic' }, last_rolled_result: 4, current_die: 6,
-      start_die: 6, snapshot_count: 1 },
-      { id: 22, started_at: '2024-01-02T11:30:00Z', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, snapshot_count: 0 },
-    ],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  // Acceptance: two sessions rendered together, each reachable by its own
-  // accessible name, without depending on the aria-hidden arrow.
-  const first = screen.getByRole('link', { name: /^View full session for session 21,/ })
-  const second = screen.getByRole('link', { name: /^View full session for session 22,/ })
-  expect(first).toHaveAttribute('href', '/sessions/21')
-  expect(second).toHaveAttribute('href', '/sessions/22')
-
-  const firstName = first.getAttribute('aria-label') ?? ''
-  const secondName = second.getAttribute('aria-label') ?? ''
-  expect(firstName).not.toBe(secondName)
-  expect(firstName).not.toContain('→')
-  expect(secondName).not.toContain('→')
-
-  // The name carries the session start date and time alongside the id.
-  const expectedDate = new Date('2024-01-01T10:00:00Z').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
-  expect(firstName).toContain(`started ${expectedDate}`)
-  expect(firstName).toMatch(/ at \d{1,2}:\d{2} (AM|PM)/)
-
-  // The visible concise link label stays unchanged.
-  expect(first).toHaveTextContent('View full session')
-  expect(second).toHaveTextContent('View full session')
-})
-
-it('keeps detail-link names unique by session id when the start time is unusable (issue #3687)', () => {
-  mockedUseSessions.mockReturnValue({
-    data: [
-      { id: 4, started_at: 'bad', ended_at: null, ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: 0 },
-      { id: 8, started_at: null, ended_at: 'bad', ladder_path: null, active_thread: null, last_rolled_result: null, current_die: null, start_die: null, snapshot_count: null },
-    ],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  const first = screen.getByRole('link', { name: 'View full session for session 4' })
-  const second = screen.getByRole('link', { name: 'View full session for session 8' })
-  expect(first).toHaveAttribute('href', '/sessions/4')
-  expect(second).toHaveAttribute('href', '/sessions/8')
-  expect(first.getAttribute('aria-label')).not.toBe(second.getAttribute('aria-label'))
-})
-
-it('reports the session start die in activity line, not the evolving current die (issue #4243)', () => {
-  // The session started with d6 and has a rated activity. Even if the
-  // reader's current session uses a different manual die, the history card
-  // must always show the session's recorded start die.
-  mockedUseSessions.mockReturnValue({
-    data: [{
-      id: 1018071,
-      started_at: '2024-01-01T10:00:00Z',
-      ended_at: '2024-01-01T10:45:00Z',
-      ladder_path: '6 → 8 → 6',
-      active_thread: {
-        title: "Superman's Pal, Jimmy Olsen",
-        format: 'Comic',
-        next_issue_number: '#136',
-        issues_read: 1,
-        last_rating: 4.0,
-      },
-      last_rolled_result: 3,
-      current_die: 20,
-      start_die: 6,
-      snapshot_count: 2,
-    }],
-    isPending: false,
-    isLoadingMore: false,
-    hasMore: false,
-    loadMore: vi.fn(),
-    error: null,
-  })
-  render(<MemoryRouter><HistoryPage /></MemoryRouter>)
-
-  expect(screen.getByText(/rated 4\.0/)).toBeInTheDocument()
-  expect(screen.getByText(/Die size d6/)).toBeInTheDocument()
 })
