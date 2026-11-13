@@ -91,7 +91,7 @@ def test_fast_lane_ci_summary_requires_successful_trusted_preflight() -> None:
         shell = jobs["check-all-jobs"]["steps"][0]["run"]
         shell = re.sub(
             r"\$\{\{ needs\.([a-z_-]+)\.result }}",
-            lambda match: results[match[1]], shell,
+            lambda match, snapshot=results: snapshot[match[1]], shell,
         )
         shell = shell.replace("${{ needs.factory_fast_preflight.outputs.eligible }}", "true")
         result = subprocess.run(
