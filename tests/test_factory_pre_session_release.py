@@ -60,7 +60,7 @@ def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
     assert workflow["permissions"]["pull-requests"] == "write"
 
 
-@pytest.mark.parametrize("worker", ["1", "58", "99"])
+@pytest.mark.parametrize("worker", ["1", "58", "99", "100", "104", "107"])
 def test_cleanup_calls_existing_controller_with_run_provenance(
     tmp_path: Path, worker: str,
 ) -> None:
@@ -80,7 +80,7 @@ def test_cleanup_calls_existing_controller_with_run_provenance(
     ]
 
 
-@pytest.mark.parametrize("worker", ["", "0", "100", "local", "58; echo injected"])
+@pytest.mark.parametrize("worker", ["", "0", "00", "0104", "1000", "local", "104; echo injected"])
 def test_cleanup_rejects_invalid_worker_before_invoking_controller(
     tmp_path: Path, worker: str,
 ) -> None:
