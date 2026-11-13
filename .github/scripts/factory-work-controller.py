@@ -28,6 +28,7 @@ from factory_review_policy import recorded_pr_contributors, trusted_comment_bodi
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
+from factory_state_cache import cached_json
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -74,13 +75,27 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
 
 
 def list_issues() -> list[dict[str, Any]]:
-    """List open issues visible to the assignment controller."""
-    return cast(list[dict[str, Any]], gh_json(['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000', '--json', 'number,title,body,labels,createdAt,updatedAt']))
+    """Share the discovery snapshot; lease writes still re-read GitHub live."""
+    return cached_json(
+        f"{REPO}:open-issues",
+        lambda _previous: cast(list[dict[str, Any]], gh_json([
+            'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
+            '--json', 'number,title,body,labels,createdAt,updatedAt',
+        ])),
+        ttl_seconds=45,
+    )
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """List open pull requests including current mergeability."""
-    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository']))
+    """Share PR discovery; exact-head review and merge gates never use cache."""
+    return cached_json(
+        f"{REPO}:open-prs",
+        lambda _previous: cast(list[dict[str, Any]], gh_json([
+            'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
+            '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
+        ])),
+        ttl_seconds=45,
+    )
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
