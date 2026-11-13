@@ -174,6 +174,25 @@ def _backing_unavailable_for_intent(log: str, selected_model: str) -> bool:
     return False
 
 
+def _runtime_evidence(log: str) -> str:
+    """Exclude GitHub's echoed shell source and unrelated diagnostic text.
+
+    Actions prints each run-script command in cyan *before* it executes it.
+    Those lines contain both sides of conditionals, including quota errors
+    that never happened. Git checkout output and model tool reads can likewise
+    contain branch/file names with words such as 'quota' or '429'. Neither is
+    evidence of a provider failure.
+    """
+    evidence = []
+    for line in log.splitlines():
+        if "\x1b[36;1m" in line:
+            continue
+        payload = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", line).lstrip()
+        if payload.startswith(("* [new branch]", "remotes/origin/", '{"type":"tool_use"')):
+            continue
+        evidence.append(line)
+    return "\n".join(evidence)
+
 def classify(log: str) -> Result:
     """Classify a fixed-model factory Actions log into a structured outcome.
 
@@ -184,6 +203,7 @@ def classify(log: str) -> Result:
         Result describing worker, model, and terminal outcome.
 
     """
+    log = _runtime_evidence(log)
     lock = LOCK_RE.search(log)
     if not lock:
         return Result()
@@ -391,6 +411,33 @@ class ClassifierTests(unittest.TestCase):
     def assert_canonical(self, result: Result) -> None:
         """Assert one emitted class belongs to the durable factory contract."""
         self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
+
+    def test_echoed_quota_script_and_branch_names_are_not_provider_errors(self) -> None:
+        """Live Kilo logs contain conditional quota text even when no quota is hit."""
+        lock = (
+            "Factory 46 locked: source=kilo-auto model=auto/free "
+            "runtime=kilo/auto/free minute=:15 scheduler=dispatcher configured=true\n"
+        )
+        log = (
+            lock
+            + "2026-11-13T15:14:37.049Z \x1b[36;1m    echo 'Kilo quota exhausted; ending before session' >&2\x1b[0m\n"
+            + "2026-11-13T15:14:14.034Z  * [new branch] fix/3502-opencode-free-quota-classification\n"
+            + "2026-11-13T15:14:46.212Z   remotes/origin/fix/provider-429-test\n"
+            + '2026-11-13T15:15:09.755Z {"type":"tool_use","part":{"output":"quota exceeded in a readme"}}\n'
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5003 on work\n"
+            + "opened/updated PR #5003 for issue #4842\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "success")
+        self.assertTrue(result.persisted_work)
+
+    def test_real_quota_error_still_classifies_after_command_filtering(self) -> None:
+        log = self.BASE + (
+            "2026-11-13T15:14:37.049Z \x1b[36;1m echo 'quota exhausted'\x1b[0m\n"
+            "2026-11-13T15:14:39.001Z Error: API budget exhausted.\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_quota")
 
     def test_productive(self) -> None:
         """Productive runs with proof token and persisted work are healthy."""
