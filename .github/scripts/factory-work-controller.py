@@ -80,7 +80,7 @@ def list_issues() -> list[dict[str, Any]]:
     projected = projected_json(REPO, "issue")
     if projected is not None:
         return projected
-    started = datetime.now(timezone.utc).isoformat()
+    started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     issues = cached_json(
         f"{REPO}:open-issues",
         lambda _previous: cast(list[dict[str, Any]], gh_json([
@@ -98,7 +98,7 @@ def list_prs() -> list[dict[str, Any]]:
     projected = projected_json(REPO, "pr")
     if projected is not None:
         return projected
-    started = datetime.now(timezone.utc).isoformat()
+    started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     prs = cached_json(
         f"{REPO}:open-prs",
         lambda _previous: cast(list[dict[str, Any]], gh_json([
