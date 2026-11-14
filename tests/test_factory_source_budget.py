@@ -33,8 +33,10 @@ SOURCES = {
     "91": "orcarouter",
     "92": "requesty",
     "93": "requesty",
+    "119": "cloudflare-workers-ai",
+    "120": "cloudflare-workers-ai",
 }
-CAPS = {"orcarouter": 1, "requesty": 4}
+CAPS = {"orcarouter": 1, "requesty": 4, "cloudflare-workers-ai": 1}
 
 
 def test_committed_budgets_stay_under_account_limits() -> None:
@@ -61,6 +63,21 @@ def test_committed_roster_pins_smoked_router_lanes() -> None:
     }
     # tencent/hy4-preview-free hit OrcaRouter's free-tier prompt cap in smoke.
     assert "tencent/hy4-preview-free" not in {row["model"] for row in rows.values()}
+
+
+def test_cloudflare_free_source_guards_and_daily_cap() -> None:
+    """Workers Free pins are allowlisted and the dispatch cap is shared."""
+    assert roster.cloudflare_workers_ai_model_is_free("@cf/zai-org/glm-4.7-flash")
+    assert roster.cloudflare_workers_ai_model_is_free("@cf/google/gemma-4-26b-a4b-it")
+    assert not roster.cloudflare_workers_ai_model_is_free("@cf/zai-org/glm-5.3")
+    assert not roster.cloudflare_workers_ai_model_is_free("@cf/moonshotai/kimi-k2.7-code")
+    titles = ["Factory 119 · fixed-model entry"]
+    kept, messages = budget.filter_workers(
+        ["21", "119", "120"], titles=titles, caps=CAPS, sources=SOURCES
+    )
+    assert kept == ["21"]
+    assert len(messages) == 2
+    assert all("cloudflare-workers-ai" in msg for msg in messages)
 
 
 def test_router_pin_guards() -> None:
