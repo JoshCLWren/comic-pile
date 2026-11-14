@@ -324,10 +324,10 @@
     {
       "worker": "116",
       "source": "opencode-free",
-      "model": "big-pickle",
+      "model": "longcat-2.5-free",
       "minute": "20",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Big Pickle Free"
+      "display_name": "OpenCode LongCat 2.5 Free"
     }
   ],
   "expected_workers": [
