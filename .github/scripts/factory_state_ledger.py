@@ -380,6 +380,41 @@ def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
     return record_events(repo, events)
 
 
+
+def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
+    """Attribute a 180-second pinned-model smoke timeout to the provider.
+
+    Unlike a generic exit 124, this requires the actual Actions smoke step to
+    end with exit 124. The already-classified trusted outcome must be unknown,
+    pre-proof, and nonproductive. No model fault is inferred from shell source
+    alone or from the runner's subsequent cleanup.
+    """
+    if (
+        outcome.get("outcome_class") != "unknown_failure"
+        or outcome.get("exact_model_proven") is True
+        or outcome.get("persisted_work") is True
+        or not outcome.get("model") or not outcome.get("source")
+    ):
+        return outcome
+
+    # GitHub separates executed steps with a group header. Require the smoke
+    # command and terminal timeout inside the same step, not just anywhere
+    # in the complete worker log.
+    steps = re.split(r"##\[group\]Run ", job_log)
+    for step in steps:
+        if (
+            "timeout --signal=TERM --kill-after=10s 180s" in step
+            and re.search(r"##\[error\]Process completed with exit code 124\b", step)
+        ):
+            return {
+                **outcome,
+                "outcome": "PROVIDER FAILURE",
+                "outcome_class": "provider_failure",
+                "detail": "pinned OpenCode model exceeded its 180-second smoke deadline",
+            }
+    return outcome
+
+
 def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> int:
     worker = str(outcome.get("worker") or "")
     if not WORKER_RE.fullmatch(worker) or not run_id.isdecimal():
@@ -412,12 +447,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["runtime-outcome"])
     parser.add_argument("--file", required=True)
+    parser.add_argument("--log", help="Trusted completed factory job log, for exact smoke timeout attribution")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile"))
     args = parser.parse_args()
     if args.command == "runtime-outcome":
         with open(args.file, encoding="utf-8") as stream:
-            result = record_runtime_outcome(args.repo, args.run_id, json.load(stream))
+            outcome = json.load(stream)
+        if args.log:
+            with open(args.log, encoding="utf-8", errors="replace") as stream:
+                outcome = refine_trusted_smoke_timeout(outcome, stream.read())
+        result = record_runtime_outcome(args.repo, args.run_id, outcome)
         print(f"[factory-ledger] recorded {result} terminal worker event(s)")
     return 0
 
