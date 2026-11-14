@@ -16,9 +16,9 @@ from typing import Any
 from factory_state_cache import _dsn
 
 PREFIX = "factory-projection-v1:"
-RECONCILE_SECONDS = 1800
+RECONCILE_SECONDS = 3600
 # Per-target records expire after two hours even if reconciliation is interrupted.
-# The complete-inventory watermark expires after 30 minutes, sooner than rows.
+# The complete-inventory watermark expires after one hour, sooner than rows.
 TARGET_TTL_SECONDS = 7200
 
 

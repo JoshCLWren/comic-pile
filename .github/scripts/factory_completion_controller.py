@@ -539,7 +539,7 @@ def registry_comments() -> list[dict[str, Any]]:
     return cached_json(
         f"{REPO}:registry-comments",
         lambda previous: incremental_comments(previous, fetch_since),
-        ttl_seconds=120,
+        ttl_seconds=360,
     )
 
 

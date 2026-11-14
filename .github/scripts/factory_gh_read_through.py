@@ -63,23 +63,23 @@ def allowed_read(args: list[str], repo: str) -> int | None:
     route, _, query = tail.partition("?")
     params = parse_qs(query, keep_blank_values=True)
     if route == "pulls" and params.get("state") == ["all"]:
-        return 120
+        return 1200
     if route == "pulls" and params.get("state") == ["open"]:
-        return 45
+        return 450
     if route == "issues" and params.get("state") == ["open"]:
-        return 45
+        return 450
     if route == "issues/comments" and "since" in params:
-        return 60
+        return 600
     if route == "issues/1093/comments":
-        return 90
+        return 900
     # These endpoints inform ranking and stale-lease discovery, not write
     # authorization. Repeated per-candidate scans previously bypassed Neon.
     # Callers doing a mutation-boundary verification pass an explicit header,
     # which is deliberately excluded by allowed_read above.
     if re.fullmatch(r"issues/[1-9][0-9]*/dependencies/blocked_by", route) and params == {"per_page": ["100"]}:
-        return 600
+        return 3600
     if re.fullmatch(r"issues/[1-9][0-9]*/comments", route) and params == {"per_page": ["100"]}:
-        return 180
+        return 1800
     return None
 
 
