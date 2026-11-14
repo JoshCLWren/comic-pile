@@ -433,7 +433,9 @@ pub async fn link_plan_dependency_edge(
     conn.execute(
         "INSERT INTO reading_plan_dependencies (plan_id, dependency_id) VALUES ($1, $2)",
         &[&plan_id, &dependency_id],
-    ).await.map_err(db::query_error)?;
+    )
+    .await
+    .map_err(db::query_error)?;
 
     Ok((StatusCode::CREATED, Json(ReadingPlanDependencyLink {
         dependency_id,
@@ -476,7 +478,7 @@ pub async fn unlink_plan_dependency_edge(
 
     if result == 0 {
         return Err(ApiError::NotFound(
-            "Dependency not linked to this plan".to_string()
+            "Dependency not linked to this plan".to_string(),
         ));
     }
 
@@ -492,20 +494,23 @@ pub async fn adopt_reading_order(
     let conn = db::checkout(&state).await?;
 
     // Extract reading order ID from payload
-    let reading_order_id = payload.get("reading_order_id")
+    let reading_order_id = payload
+        .get("reading_order_id")
         .and_then(|v| v.as_i64())
-        .ok_or_else(|| ApiError::BadRequest("reading_order_id is required".to_string()))? as i32;
+        .ok_or_else(|| ApiError::BadRequest("reading_order_id is required".to_string()))?
+        as i32;
 
-    let plan_name = payload.get("plan_name")
+    let plan_name = payload
+        .get("plan_name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::BadRequest("plan_name is required".to_string()))?;
 
-    let lane_id = payload.get("lane_id")
+    let lane_id = payload
+        .get("lane_id")
         .and_then(|v| v.as_i64())
         .map(|v| v as i32);
 
-    let lane_name = payload.get("lane_name")
-        .and_then(|v| v.as_str());
+    let lane_name = payload.get("lane_name").and_then(|v| v.as_str());
 
     // Verify reading order ownership
     let order_exists: bool = conn
