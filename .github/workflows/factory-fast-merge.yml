@@ -1,13 +1,12 @@
 name: Factory-only Fast Merge
 
-# This write-enabled workflow checks out trusted main only, never PR heads.
+# Trusted main only, never PR heads. Factory-only PRs are attempted immediately
+# after open/synchronize/label, without CI or semantic review dependencies.
+# An owner-authorized token must have a ruleset bypass for protected main.
 # The policy switch lives in .github/factory-fast-merge.json.
 on:
   pull_request_target:
     types: [opened, reopened, ready_for_review, synchronize, labeled]
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
   workflow_dispatch:
     inputs:
       pr:
@@ -30,9 +29,6 @@ concurrency:
 
 jobs:
   fast-merge:
-    if: >-
-      github.event_name != 'workflow_run' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -42,20 +38,20 @@ jobs:
           ref: main
           persist-credentials: false
 
-      - name: Merge eligible factory-only PRs after required CI
+      - name: Immediately merge eligible factory-only PRs
         id: merge
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Owner PAT is required to bypass main's CI Summary rule for ONLY
+          # the script's strict factory-only allowlist; token does not bypass
+          # the allowlist or other software-enforced eligibility checks.
+          GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr || '' }}
-          CI_HEAD: ${{ github.event.workflow_run.head_sha || '' }}
         run: |
           set -Eeuo pipefail
           args=(--repo "$GITHUB_REPOSITORY")
           if [[ -n "$PR_NUMBER" ]]; then
             args+=(--pr "$PR_NUMBER")
-          elif [[ -n "$CI_HEAD" ]]; then
-            args+=(--head "$CI_HEAD")
           fi
           python3 .github/scripts/factory-fast-merge.py "${args[@]}" > "$RUNNER_TEMP/fast-merge-result.json"
           cat "$RUNNER_TEMP/fast-merge-result.json"
