@@ -23,7 +23,8 @@
         "transaction_control_statements": 0,
         "total_statements": 2,
         "basis": "one COUNT(*) over the published/public/readable filter plus one page SELECT with LIMIT/OFFSET; set-based, independent of library size, no per-row N+1"
-      }
+      },
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -36,7 +37,8 @@
         "transaction_control_statements": 2,
         "total_statements": 5,
         "basis": "INSERT path: BEGIN + source-identity SELECT + INSERT ... RETURNING + COMMIT (2 application statements); UPDATE path adds one UPDATE and one follow-up SELECT (3 application statements); identity lookup runs inside the transaction, RETURNING keeps the insert to one statement"
-      }
+      },
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -49,7 +51,8 @@
         "transaction_control_statements": 0,
         "total_statements": 1,
         "basis": "one SELECT over source_repository (+ source_pr_number/source_merge_sha) resolving minimal source projection; id/provenance keys only, no body fan-out"
-      }
+      },
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -62,7 +65,8 @@
         "transaction_control_statements": 0,
         "total_statements": 1,
         "basis": "single primary-key lookup restricted to published/public/readable releases"
-      }
+      },
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -75,7 +79,8 @@
         "transaction_control_statements": 2,
         "total_statements": 5,
         "basis": "BEGIN + SELECT ... WHERE status = 'published' guard + UPDATE status='retracted' + follow-up SELECT for the wire response + COMMIT; missing or already-retracted releases roll back with 404"
-      }
+      },
+      "exclude_from_inventory": true
     }
   ]
 }
