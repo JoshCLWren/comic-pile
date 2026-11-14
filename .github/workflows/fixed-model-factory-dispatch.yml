@@ -220,6 +220,13 @@ jobs:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
           neon-project-id: ${{ vars.NEON_PROJECT_ID }}
 
+      - name: Initialize Neon operational state
+        if: steps.api_budget.outputs.allow == 'true'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 .github/scripts/factory_state_operations.py bootstrap --repo "$GITHUB_REPOSITORY"
+
       - name: Advance selected issue or pull request
         if: inputs.target
         shell: bash
@@ -729,6 +736,8 @@ jobs:
               | jq -Rsc 'split("\n") | map(select(length > 0))' \
               | python3 .github/scripts/factory_quota_pause.py filter \
               | python3 .github/scripts/factory_source_budget.py filter \
+              | python3 .github/scripts/factory_state_operations.py filter \
+              | python3 .github/scripts/factory_state_operations.py rank \
               | jq -c --argjson cap "$offer_count" '.[:$cap]')"
             echo "Scheduled batch: offering $(jq -r 'length' <<<"$workers") workers (cap ${max_per_tick}, offset ${offset}/${total}, source-diverse seed)"
           else
@@ -762,6 +771,8 @@ jobs:
           # Scheduled batches were already budget-filtered before the offer
           # cap; this pass covers the smoke branch and races with refills.
           workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
+          workers="$(python3 .github/scripts/factory_state_operations.py filter <<< "$workers")"
+          workers="$(python3 .github/scripts/factory_state_operations.py rank <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
             echo 'Every resolved worker is over its source daily dispatch budget; nothing to dispatch'
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
