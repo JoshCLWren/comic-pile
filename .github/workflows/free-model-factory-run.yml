@@ -26,6 +26,8 @@ on:
         required: false
       REQUESTY_API_KEY:
         required: false
+      CLOUDFLARE_API_TOKEN:
+        required: false
       AI_GATEWAY_API_KEY:
         required: false
       OMNIROUTE_API_KEY:
@@ -82,6 +84,8 @@ jobs:
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}
       REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
       OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
       OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
@@ -167,7 +171,7 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
-            z-ai|ollama-cloud|mistral|orcarouter|requesty)
+            z-ai|ollama-cloud|mistral|orcarouter|requesty|cloudflare-workers-ai)
               if [[ "$model" == "${source}/"* ]]; then
                 runtime_model="$model"
               else
@@ -190,6 +194,11 @@ jobs:
               runtime_model="vercel-ai-gateway/${model}"
               branch_suffix='vercel-ai-gateway'
               if [[ -n "${AI_GATEWAY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AI_GATEWAY_API_KEY'; fi
+              ;;
+            cloudflare-workers-ai)
+              runtime_model="cloudflare-workers-ai/${model}"
+              branch_suffix="cloudflare-workers-ai"
+              if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then configured=true; reason="configured"; else configured=false; reason="missing-Cloudflare-Free-credentials"; fi
               ;;
             omniroute-free)
               # INCIDENT: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
@@ -320,7 +329,7 @@ jobs:
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
           case "$SOURCE" in
-            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)
+            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty|cloudflare-workers-ai)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
@@ -638,7 +647,8 @@ jobs:
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'orcarouter' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'requesty'
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'requesty' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'cloudflare-workers-ai'
           )
         shell: bash
         env:
@@ -688,6 +698,14 @@ jobs:
               provider_id='requesty'
               env_name='REQUESTY_API_KEY'
               provider_name='Requesty router'
+              ;;
+            cloudflare-workers-ai)
+              key="${CLOUDFLARE_API_TOKEN:-}"
+              [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "Cloudflare account ID unavailable" >&2; exit 1; }
+              base_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1"
+              provider_id="cloudflare-workers-ai"
+              env_name="CLOUDFLARE_API_TOKEN"
+              provider_name="Cloudflare Workers AI Free"
               ;;
             *)
               echo "Unsupported OpenAI-compatible factory source: ${SOURCE}" >&2
