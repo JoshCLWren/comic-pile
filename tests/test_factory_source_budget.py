@@ -79,6 +79,13 @@ def test_cloudflare_free_source_guards_and_daily_cap() -> None:
     assert len(messages) == 2
     assert all("cloudflare-workers-ai" in msg for msg in messages)
 
+    runner = (ROOT / ".github" / "workflows" / "free-model-factory-run.yml").read_text()
+    # Cloudflare needs its own credential branch. Matching an earlier grouped
+    # provider case silently misconfigures it as a different provider.
+    assert "            z-ai|ollama-cloud|mistral|orcarouter|requesty)" in runner
+    assert '            cloudflare-workers-ai)\\n              runtime_model="cloudflare-workers-ai/${model}"' in runner
+    assert "            cloudflare-workers-ai) ;&" in runner
+
 
 def test_router_pin_guards() -> None:
     """Only approved ids may occupy router lanes; Orca auto-router is rejected."""
