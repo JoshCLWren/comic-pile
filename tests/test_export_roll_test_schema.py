@@ -71,3 +71,22 @@ def test_normalize_discards_only_internal_attribute_version_assignments() -> Non
         "COMMENT ON COLUMN public.demo.label IS 'pg_attver=123';\n"
     )
     assert _normalize(meaningful) == meaningful
+
+
+def test_normalize_preserves_attribute_version_text_inside_quoted_sql() -> None:
+    """Returned SQL and multiline literals remain meaningful schema content."""
+    body = (
+        "CREATE FUNCTION public.example() RETURNS text LANGUAGE sql AS $body$\n"
+        "SELECT $query$\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+        "$query$;\n"
+        "$body$;\n"
+        "COMMENT ON TABLE public.demo IS 'example:\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+        "end';\n"
+    )
+    metadata = "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+    assert _normalize(body) == body
+    assert _normalize(metadata + body) == body
+    assert _normalize(body + metadata) == body
+    assert _normalize(body.replace("123", "456")) != _normalize(body)
