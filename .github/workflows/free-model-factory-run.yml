@@ -341,7 +341,7 @@ jobs:
           # Dynamic free slots rotate within a live catalog. Pinned slots must
           # honor the Neon eligibility decision before contacting a provider.
           if [[ "$SOURCE" != opencode-free || "$DEEPSEEK_MODE" != normal ]] &&
-             jq -e --arg source "$SOURCE" --arg model "$LANE_MODEL" 
+             jq -e --arg source "$SOURCE" --arg model "$LANE_MODEL" \
                '(.[$source] // []) | index($model) != null' "$exclusions_file" >/dev/null; then
             printf 'model_unavailable\tPinned model excluded by trusted Neon health\n' > "$discovery_outcome"
             exit 1
