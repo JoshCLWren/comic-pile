@@ -118,7 +118,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     model_failures = outcome.get("model_failures") or []
     if model_failures and (source != "opencode-free" or not isinstance(model_failures, list)
             or len(model_failures) > 5 or any(
-                not isinstance(m, str) or not re.fullmatch(r"[\w.:-]{1,180}", m)
+                not isinstance(m, str) or not re.fullmatch(r"[\w./:-]{1,180}", m)
                 for m in model_failures
             )):
         raise ValueError("invalid trusted intermediate model failures")
