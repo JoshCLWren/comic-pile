@@ -43,6 +43,29 @@ The gate requires **all** of the following:
 
 The allowlist covers selected factory scripts, workflows, factory tests, factory docs/skills and atomic roster changes. It does **not** include arbitrary `.github/**` changes. The fast-lane control files themselves are excluded to prevent self-authorized policy edits: `.github/factory-fast-merge.json`, `.github/workflows/factory-fast-merge.yml`, `.github/scripts/factory-fast-merge.py`, and `tests/test_factory_fast_merge.py`. Changes to those controls follow the normal protected path; subsequent ordinary factory-only PRs can demonstrate the newly installed lane.
 
+## Regression proof: real automatic merge before CI
+
+A unit test that mocks GitHub's merge API is necessary but not sufficient: the
+workflow credential must also have permission to merge a real eligible PR.
+For a live regression proof, open a harmless **factory-docs-only** PR against
+`main`, with `factory` and `factory:unowned` labels. The normal
+`pull_request_target` label event should immediately run **Factory-only Fast
+Merge**, with no dependency on the ordinary CI workflow or semantic review.
+
+Record three pieces of evidence independently:
+
+1. The proof PR's head SHA and its actual `merged_at` timestamp.
+2. The successful **Factory-only Fast Merge** run that lists the proof PR in
+   its `merged` JSON array, not just a green evaluation with `skipped`.
+3. The CI workflow state at merge time. If CI was pending or not started,
+   that proves the lane's no-CI-wait behavior. If CI was already green,
+   rerun the proof with an eligible PR rather than claiming the timing was proved.
+
+The required `CI Summary` check remains configured for ordinary PRs. The
+ruleset's bypass actor is intentionally broader than this documentation:
+the trusted fast-merge controller's path/ownership restrictions are what
+limit its automated use to factory-only PRs.
+
 ## After merge and troubleshooting
 
 A successful bot merge with `GITHUB_TOKEN` does not emit a normal push event. The trusted merge script therefore dispatches Deploy Production in its `finally` block after any successful merge, even if a later PR fails. The workflow also runs the post-merge issue-closure reconciliation sweep.
