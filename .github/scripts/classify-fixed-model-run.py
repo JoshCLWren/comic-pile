@@ -111,8 +111,10 @@ CONTROL_PLANE_RE = re.compile(
 WORK_FAILURE_RE = re.compile(
     r"(?:tests?|checks?|lint|coverage|mechanical (?:merge )?gate) (?:failed|failing|failure)|"
     r"actionable (?:review )?findings|semantic blockers remain|"
-    r'(?m)^\d{4}-\d{2}-\d{2}T\S+Z \{"head": "[a-f0-9]{40}", '
-    r'"producer": "\d+", "status": "implementation-evidence-required"\}
+    r'^\d{4}-\d{2}-\d{2}T\S+Z \{"head": "[a-f0-9]{40}", '
+    r'"producer": "\d+", "status": "implementation-evidence-required"\}',
+    re.I | re.M,
+)
 ENVIRONMENT_RE = re.compile(
     r"checkout failed|failed to (?:checkout|install)|no space left on device|"
     r"docker: error response|(?:git|runner|tool installation) (?:failed|failure)",
