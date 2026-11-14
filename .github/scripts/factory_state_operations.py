@@ -555,7 +555,7 @@ async def _claim_wakeup(conn: Any, repo: str, scope: str, interval_seconds: int)
 def claim_wakeup(repo: str, scope: str, interval_seconds: int=120) -> bool:
     return _run(_claim_wakeup,repo,scope,interval_seconds) if enabled() else False
 
-async def _export_model_exclusions(conn: Any, repo: str) -> dict[str, list[str]]:
+async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> dict[str, list[str]]:
     """Trusted read-only snapshot for credential-isolated factory workers."""
     rows = await conn.fetch(
         """SELECT source, model FROM public.factory_model_health
@@ -566,13 +566,38 @@ async def _export_model_exclusions(conn: Any, repo: str) -> dict[str, list[str]]
     excluded: dict[str, list[str]] = {}
     for row in rows:
         excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
+    # Registry comment identifiers are advisory and do not authorize writes.
+    # A model worker verifies the exact marker live before PATCH. Old/empty
+    # snapshots fall back to GitHub discovery rather than guessing IDs.
+    if worker:
+        if not worker.isdecimal() or worker not in _roster():
+            raise ValueError("invalid trusted worker for registry ID lookup")
+        raw = await conn.fetchval(
+            "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
+            f"{repo}:registry-comments",
+        )
+        if isinstance(raw, str):
+            raw = json.loads(raw)
+        if isinstance(raw, list):
+            from factory_work_policy import comment_is_trusted
+            markers = {
+                "__heartbeat_id": f"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-{worker} -->",
+                "__attempt_id": f"<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-{worker} -->",
+            }
+            for key, marker in markers.items():
+                matches = [item for item in raw
+                           if isinstance(item, dict) and comment_is_trusted(item)
+                           and str(item.get("body") or "").startswith(marker)
+                           and str(item.get("id") or "").isdecimal()]
+                if matches:
+                    excluded[key] = [str(max(int(item["id"]) for item in matches))]
     return excluded
 
 
-def export_model_exclusions(repo: str) -> dict[str, list[str]]:
+def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
     if not enabled():
         raise RuntimeError("Neon is required for model health snapshot")
-    return _run(_export_model_exclusions, repo)
+    return _run(_export_model_exclusions, repo, worker)
 
 
 def main() -> int:
@@ -581,6 +606,7 @@ def main() -> int:
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
+    parser.add_argument("--worker",default="")
     parser.add_argument("--cursor",default="")
     args=parser.parse_args()
     if not REPO_RE.fullmatch(args.repo):
@@ -603,7 +629,7 @@ def main() -> int:
             print(f"[factory-operations] imported {n} trusted model records")
         print("[factory-operations] schema ready")
     elif args.command=="export-model-exclusions":
-        print(json.dumps(export_model_exclusions(args.repo),sort_keys=True,separators=(",",":")))
+        print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
     elif args.command=="filter":
         workers=[str(w) for w in json.load(sys.stdin)]
         kept,denied=filter_workers(args.repo,workers)

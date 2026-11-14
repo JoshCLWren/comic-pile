@@ -24,6 +24,8 @@ jobs:
       contents: read
     outputs:
       exclusions: ${{ steps.export.outputs.exclusions }}
+      heartbeat_id: ${{ steps.export.outputs.heartbeat_id }}
+      attempt_id: ${{ steps.export.outputs.attempt_id }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,11 +38,16 @@ jobs:
       - name: Export bounded model decision snapshot
         id: export
         shell: bash
+        env:
+          INPUT_WORKER: ${{ inputs.worker }}
         run: |
           set -Eeuo pipefail
-          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY")"
+          [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || exit 1
+          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$INPUT_WORKER")"
           jq -e 'type == "object"' <<< "$snapshot" >/dev/null
           echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
+          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
+          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
 
   run:
     needs: model_health_snapshot
@@ -48,6 +55,8 @@ jobs:
     with:
       worker: ${{ inputs.worker }}
       model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
+      heartbeat_comment_id: ${{ needs.model_health_snapshot.outputs.heartbeat_id }}
+      attempt_comment_id: ${{ needs.model_health_snapshot.outputs.attempt_id }}
     secrets: inherit
 
   # The preceding job owns the entire worker lease and its release. A

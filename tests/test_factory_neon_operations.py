@@ -194,3 +194,34 @@ def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
     assert "cooldown_until>now()" in source
     assert "retired" in source
     assert "export-model-exclusions" in inspect.getsource(operations.main)
+
+
+def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
+    class SnapshotDB:
+        async def fetch(self, statement, *args):
+            assert args == (REPO,)
+            return [{"source": "nvidia", "model": "gone"}]
+
+        async def fetchval(self, statement, *args):
+            assert args == (REPO + ":registry-comments",)
+            marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-111 -->"
+            attempt = "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-111 -->"
+            return [
+                {"id": 123, "body": marker + "\nWorker: 111",
+                 "author_association": "CONTRIBUTOR",
+                 "performed_via_github_app": {"slug": "github-actions"}},
+                {"id": 124, "body": attempt + "\nWorker: 111",
+                 "author_association": "CONTRIBUTOR",
+                 "performed_via_github_app": {"slug": "github-actions"}},
+                {"id": 999, "body": marker + "\nForged",
+                 "author_association": "NONE",
+                 "performed_via_github_app": {"slug": "other-untrusted-app"}},
+            ]
+
+    with patch.object(operations, "_roster", return_value={
+        "111": ("opencode-free", "glm-5.3-flash-free"),
+    }):
+        snapshot = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
+    assert snapshot["nvidia"] == ["gone"]
+    assert snapshot["__heartbeat_id"] == ["123"]
+    assert snapshot["__attempt_id"] == ["124"]
