@@ -168,7 +168,10 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
     projection = [{
         "key": _target_key(repo, kind, int(item["number"])),
         "item": canonical_item(kind, item),
-        "source_updated_at": str(item.get("updatedAt") or ""),
+        # REST webhook and GraphQL inventories use different timestamp keys.
+        # Canonicalize before the optimistic concurrency guard, not only in
+        # the payload, so a REST inventory never looks artificially ancient.
+        "source_updated_at": str(item.get("updatedAt") or item.get("updated_at") or ""),
         "observed_at": now,
     } for item in items]
     conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=12)
