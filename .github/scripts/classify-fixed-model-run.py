@@ -194,7 +194,9 @@ def _runtime_evidence(log: str) -> str:
             try:
                 event = json.loads(payload)
             except ValueError:
-                pass
+                # A truncated OpenCode trace is untrusted, not a provider
+                # response. Real sessions can emit enormous partial tool JSON.
+                continue
             else:
                 if isinstance(event, dict) and isinstance(event.get("type"), str):
                     if event["type"] == "error":
@@ -458,6 +460,20 @@ class ClassifierTests(unittest.TestCase):
             + '2026-11-14T16:29:03.0000000Z {"type":"step_finish","part":{"id":"prt_429example"}}\n'
             + '2026-11-14T16:29:04.0000000Z {"type":"tool_use","part":{"output":"quota and capacity examples in docs"}}\n'
             + "[factory:46] repair attempt for PR #5055 produced no persisted change\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.persisted_work)
+
+    def test_truncated_tool_json_cannot_cool_a_provider(self) -> None:
+        """Incomplete tool JSON mentioning quota is not executed provider evidence."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\n"
+            + '2026-11-14T16:27:40.7993231Z {"type":"tool_use","part":'
+              '{"output":"quota, capacity, HTTP 429, and budget tests"'
+            + "\n[factory:46] repair attempt for PR #5055 produced no persisted change\n"
         )
         result = classify(log)
         self.assertEqual(result.outcome_class, "no_work")
