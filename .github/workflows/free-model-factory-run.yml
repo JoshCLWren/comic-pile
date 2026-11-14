@@ -171,7 +171,7 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
-            z-ai|ollama-cloud|mistral|orcarouter|requesty|cloudflare-workers-ai)
+            z-ai|ollama-cloud|mistral|orcarouter|requesty)
               if [[ "$model" == "${source}/"* ]]; then
                 runtime_model="$model"
               else
@@ -329,7 +329,8 @@ jobs:
           discovery_outcome="$RUNNER_TEMP/factory-discovery-outcome"
 
           case "$SOURCE" in
-            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty|cloudflare-workers-ai)
+            cloudflare-workers-ai) ;&
+            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
