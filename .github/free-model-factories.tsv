@@ -8,8 +8,6 @@
 45	opencode-free	nemotron-3.5-lightning-free	35	dispatcher	OpenCode Nemotron 3.5 Lightning Free
 46	kilo-auto	kilo-auto/free	40	dispatcher	Kilo Auto Free · Forge
 51	openrouter-free	nvidia/nemotron-3-ultra-550b-a55b:free	5	dispatcher	OpenRouter Nemotron 3 Ultra Free
-52	openrouter-free	thinkingmachines/inkling:free	10	dispatcher	OpenRouter Inkling Free
-53	openrouter-free	thinkingmachines/inkling-small:free	30	dispatcher	OpenRouter Inkling Small Free
 54	z-ai	glm-4.5-flash	20	dispatcher	Z.AI GLM 4.5 Flash
 60	openrouter-free	cohere/north-mini-code:free	30	dispatcher	OpenRouter Cohere North Mini Code Free
 61	openrouter-free	google/gemma-4-31b-it:free	55	dispatcher	OpenRouter Gemma 4 31B Free
@@ -34,3 +32,6 @@
 105	nvidia	stepfun-ai/step-5-preview	30	dispatcher	NVIDIA Step 5 Preview
 106	nvidia	deepseek-ai/deepseek-v4.1-flash	35	dispatcher	NVIDIA DeepSeek V4.1 Flash
 107	nvidia	google/diffusiongemma-26b-a4b-it	40	dispatcher	NVIDIA DiffusionGemma 26B
+108	openrouter-free	thinkingmachines/inkling-2-small:free	10	dispatcher	OpenRouter Inkling 2 Small Free
+109	openrouter-free	baidu/ernie-5.5-flash-preview:free	30	dispatcher	OpenRouter ERNIE 5.5 Flash Preview Free
+110	openrouter-free	inclusionai/ling-3.2-flash:free	55	dispatcher	OpenRouter Ling 3.2 Flash Free
