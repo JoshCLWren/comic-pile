@@ -62,6 +62,7 @@ def canonical_item(kind: str, item: dict[str, Any]) -> dict[str, Any]:
     })
     canonical: dict[str, Any] = {
         "number": item["number"],
+        "state": str(item.get("state") or "open").upper(),
         "title": item.get("title") or "",
         "body": item.get("body") or "",
         "labels": [{"name": name} for name in names],
@@ -80,6 +81,8 @@ def canonical_item(kind: str, item: dict[str, Any]) -> dict[str, Any]:
         head = item.get("head") or {}
         base = item.get("base") or {}
         canonical.update({
+            "author": {"login": ((item.get("author") or {}).get("login") or
+                                 (item.get("user") or {}).get("login") or "")},
             "headRefName": item.get("headRefName") or head.get("ref") or "",
             "headRefOid": item.get("headRefOid") or head.get("sha") or "",
             "isDraft": bool(item.get("isDraft", item.get("draft", False))),
