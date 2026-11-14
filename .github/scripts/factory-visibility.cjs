@@ -1131,8 +1131,11 @@ async function reconcileMissingPrLabels({ github, context, openPullRequests = nu
 }
 
 async function reconcile({ github, context }) {
-  // Definitions are ensured on actual enrollment, not on every event. A
-  // read-only review/comment notification must not page all repository labels.
+  // Explicit recovery/bootstrap maintains label definitions. Do not page the
+  // repository's label catalog on routine comment/review notifications.
+  if (context.eventName === 'workflow_dispatch' || context.eventName === 'schedule') {
+    await ensureLabels(github, context);
+  }
 
   const payloadBody = context.payload.pull_request?.body ?? context.payload.issue?.body ?? '';
   if (hasManualOnlyDirective(payloadBody)) return;
