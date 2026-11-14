@@ -249,6 +249,10 @@ fn app() -> Router {
             get(native_dispatch),
         )
         .route("/api/v2/roll/dice-command", post(native_dispatch))
+        .route(
+            "/api/v1/catalog/series-mappings/commit",
+            post(native_dispatch),
+        )
         .route("/api/v2/roll/offer", post(native_dispatch))
         .route("/api/v2/roll/reset", post(native_dispatch))
         .route("/api/v2/roll/die-state", get(native_dispatch))
