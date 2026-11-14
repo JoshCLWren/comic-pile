@@ -1186,6 +1186,14 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/api/v1/demo/roll$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
       "methods": [
         "GET",
