@@ -9,7 +9,6 @@ set-based with no per-row N+1.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -17,12 +16,11 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Thread, User
-from route_harness import assert_declared_budget, db_counters, run_rust_example
+from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-threads-n1-secret"
 EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_threads_list"
+    cargo_example_path("http_threads_list")
 )
 BINARY = str(EXAMPLE)
 
@@ -67,7 +65,7 @@ async def test_threads_statements_do_not_grow_with_library_size() -> None:
         env = {
             **os.environ,
             "RUST_ROLL_TEST_TOKEN": token,
-            "RUST_ROLL_TEST_URI": "/api/v2/threads",
+            "RUST_ROLL_TEST_URI": "/api/v2/threads?page_size=200",
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
@@ -104,6 +102,7 @@ async def test_threads_statements_do_not_grow_with_library_size() -> None:
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict) and large_body.get("active_count") == 200
+        assert len(large_body["threads"]) == 200
         x_after2, _, s_after2 = await db_counters(engine)
         large_delta = (s_after2 - s_before2) if s_before2 is not None and s_after2 is not None else None
 

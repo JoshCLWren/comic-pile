@@ -8,7 +8,6 @@ login flow is set-based with no per-attempt N+1.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -17,12 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.auth import hash_password
 from app.models import User
 
-from route_harness import assert_declared_budget, db_counters, run_rust_example
+from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-auth-login-n1-secret"
 EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_auth_login"
+    cargo_example_path("http_auth_login")
 )
 BINARY = str(EXAMPLE)
 

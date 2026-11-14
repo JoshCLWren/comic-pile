@@ -8,7 +8,6 @@ delta does not grow with library size.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -18,12 +17,11 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, db_counters, run_rust_example
+from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-http-n1-secret"
 EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_bootstrap"
+    cargo_example_path("http_bootstrap")
 )
 BINARY = str(EXAMPLE)
 

@@ -8,7 +8,6 @@ set-based with no per-row N+1.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -16,12 +15,11 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import User
-from route_harness import db_counters, run_rust_example
+from route_harness import cargo_example_path, db_counters, run_rust_example
 
 SECRET = "synthetic-native-preferences-n1-secret"
 EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_preferences"
+    cargo_example_path("http_preferences")
 )
 BINARY = str(EXAMPLE)
 

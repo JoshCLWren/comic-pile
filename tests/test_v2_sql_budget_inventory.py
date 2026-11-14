@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts import generate_route_burndown as generator
+
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "docs" / "api" / "v2-route-inventory.json"
 SOURCES = ROOT / "docs" / "api" / "sql-budget-sources.json"
@@ -78,7 +80,9 @@ _KNOWN_BUDGET_GAPS = frozenset()
 
 def _inventory_operations() -> list[dict[str, object]]:
     """Load and validate the inventory operations."""
-    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    fragments = generator._load_route_fragments(ROOT / generator.FRAGMENT_DIR)
+    vercel = generator._generate_vercel_document(generator.load_json(ROOT / generator.VERCEL_PATH), fragments)
+    document, _ = generator._render_inventory(generator.load_json(INVENTORY), generator._routes_from_document(vercel), fragments)
     operations = document["operations"]
     assert isinstance(operations, list)
     entries: list[dict[str, object]] = []

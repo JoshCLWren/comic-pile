@@ -9,7 +9,6 @@ statement is set-based with no per-row N+1.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -18,13 +17,12 @@ import pytest
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.models import Event, Thread, User
-from route_harness import assert_declared_budget, db_counters, run_rust_example
+from app.models import Event, ReadingSession, Thread, User
+from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-analytics-metrics-n1-secret"
 EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_analytics_metrics"
+    cargo_example_path("http_analytics_metrics")
 )
 BINARY = str(EXAMPLE)
 
@@ -48,11 +46,14 @@ async def test_analytics_metrics_statements_do_not_grow_with_data_size() -> None
             owner = User(username=username)
             db.add(owner)
             await db.flush()
+            reading_session = ReadingSession(user_id=owner.id)
+            db.add(reading_session)
+            await db.flush()
             for i in range(5):
                 t = Thread(user_id=owner.id, title=f"Series {i+1}", format="Comic", queue_position=i+1, issues_remaining=2, total_issues=3, status="active")
                 db.add(t)
                 await db.flush()
-                db.add(Event(user_id=owner.id, type="roll", thread_id=t.id, die=6, result=1, timestamp=datetime.now(UTC)))
+                db.add(Event(session_id=reading_session.id, user_id=owner.id, type="roll", thread_id=t.id, die=6, result=1, timestamp=datetime.now(UTC)))
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
@@ -68,6 +69,7 @@ async def test_analytics_metrics_statements_do_not_grow_with_data_size() -> None
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
         assert isinstance(small_body, dict) and small_body.get("total_threads") == 5
+        assert small_body.get("event_stats") == {"roll": 5}
         _, _, s_after = await db_counters(engine)
         small_delta = (s_after - s_before) if s_before is not None and s_after is not None else None
 
@@ -80,8 +82,8 @@ async def test_analytics_metrics_statements_do_not_grow_with_data_size() -> None
                     owner_id, f"Series {i+1}", i + 1,
                 )
                 await raw.execute(
-                    "INSERT INTO events (user_id,type,thread_id,die,result,timestamp) VALUES ($1,'roll',$2,6,1,NOW())",
-                    owner_id, tid,
+                    "INSERT INTO events (user_id,type,thread_id,die,result,timestamp,session_id) VALUES ($1,'roll',$2,6,1,NOW(),$3)",
+                    owner_id, tid, reading_session.id,
                 )
         finally:
             await raw.close()
@@ -91,6 +93,7 @@ async def test_analytics_metrics_statements_do_not_grow_with_data_size() -> None
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict) and large_body.get("total_threads") == 200
+        assert large_body.get("event_stats") == {"roll": 200}
         _, _, s_after2 = await db_counters(engine)
         large_delta = (s_after2 - s_before2) if s_before2 is not None and s_after2 is not None else None
 

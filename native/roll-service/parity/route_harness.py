@@ -37,7 +37,16 @@ SQL_BUDGET_SOURCES = Path(__file__).resolve().parents[3] / "docs/api/sql-budget-
 
 
 def assert_declared_budget(method: str, path: str, *measurements: int | None) -> None:
-    """Fail when a measured native route exceeds its declared source budget."""
+    """Fail when a measured native route exceeds its declared source budget.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+        *measurements: Counts that must be present and within the maximum.
+
+    Returns:
+        None; invalid measurements raise AssertionError.
+    """
     document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
     matching = [
         entry
@@ -75,6 +84,10 @@ class RouteMeasurement:
 async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) -> int | None:
     """Read one isolated service-role statement count from PostgreSQL stats."""
     try:
+        if not toplevel:
+            setting = await connection.execute(text("SHOW pg_stat_statements.track"))
+            if setting.scalar_one() != "all":
+                return None
         row = await connection.execute(
             text(
                 "SELECT COALESCE(SUM(s.calls), 0) FROM pg_stat_statements s "
@@ -123,7 +136,15 @@ async def db_counters(engine: AsyncEngine) -> tuple[int, int, int | None]:
 
 
 async def db_nested_statements(engine: AsyncEngine) -> int | None:
-    """Return nested trigger/function statements for the isolated service role."""
+    """Return nested trigger/function statements for the isolated service role.
+
+    Args:
+        engine: Route database engine (administrative URL is read from the environment).
+
+    Returns:
+        Nested count, or None when the administrative URL is unset or tracking
+        does not include nested statements.
+    """
     admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
     if admin_url is None:
         return None
@@ -218,3 +239,19 @@ async def measure_route(
     )
     print(format_measurement(measurement), flush=True)
     return measurement
+
+
+def cargo_example_path(name: str) -> Path:
+    """Resolve an example using Cargo's build-directory-relative target setting.
+
+    Args:
+        name: Cargo example executable name.
+
+    Returns:
+        Absolute path to the debug example executable.
+    """
+    build_directory = Path(__file__).resolve().parents[1]
+    target = Path(os.environ.get("CARGO_TARGET_DIR", "target"))
+    if not target.is_absolute():
+        target = build_directory / target
+    return target / "debug" / "examples" / name

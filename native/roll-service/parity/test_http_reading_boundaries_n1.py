@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from uuid import uuid4
 
 import asyncpg
@@ -18,13 +17,12 @@ import pytest
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-from app.models import Thread, User
-from route_harness import assert_declared_budget, db_counters, run_rust_example
+from app.models import Issue, Thread, User
+from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-reading-boundaries-n1-secret"
 EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_reading_boundaries"
+    cargo_example_path("http_reading_boundaries")
 )
 BINARY = str(EXAMPLE)
 
@@ -49,7 +47,10 @@ async def test_reading_boundaries_statements_do_not_grow_with_batch_size() -> No
             db.add(owner)
             await db.flush()
             for i in range(5):
-                db.add(Thread(user_id=owner.id, title=f"Series {i+1}", format="Comic", queue_position=i+1, issues_remaining=2, total_issues=3, status="active"))
+                thread = Thread(user_id=owner.id, title=f"Series {i+1}", format="Comic", queue_position=i+1, issues_remaining=2, total_issues=2, status="active")
+                db.add(thread)
+                await db.flush()
+                db.add_all([Issue(thread_id=thread.id, issue_number=str(position), position=position, status="unread") for position in (1, 2)])
             await db.commit()
             token = _token(username, jti=f"jti-{uuid4().hex}")
 
@@ -76,18 +77,23 @@ async def test_reading_boundaries_statements_do_not_grow_with_batch_size() -> No
         assert isinstance(small_body, dict)
         small_threads = small_body.get("threads")
         assert isinstance(small_threads, dict) and len(small_threads) == 5
+        for boundary in small_threads.values():
+            assert isinstance(boundary, dict)
+            next_issue = boundary.get("next")
+            assert isinstance(next_issue, dict) and next_issue.get("issue", {}).get("issue_number") == "1"
         _, _, s_after = await db_counters(engine)
         small_delta = (s_after - s_before) if s_before is not None and s_after is not None else None
 
         raw = await asyncpg.connect(url)
         try:
             for i in range(5, 200):
-                await raw.execute(
-                    "INSERT INTO threads (user_id,title,format,queue_position,issues_remaining,total_issues,status) VALUES ($1,$2,'Comic',$3,2,3,'active')",
+                tid = await raw.fetchval(
+                    "INSERT INTO threads (user_id,title,format,queue_position,issues_remaining,total_issues,status) VALUES ($1,$2,'Comic',$3,2,2,'active') RETURNING id",
                     owner_id,
                     f"Series {i+1}",
                     i + 1,
                 )
+                await raw.execute("INSERT INTO issues (thread_id,issue_number,position,status,created_at) VALUES ($1,'1',1,'unread',NOW()),($1,'2',2,'unread',NOW())", tid)
             rows = await raw.fetch("SELECT id FROM threads WHERE user_id=$1 ORDER BY id", owner_id)
             large_ids = [r["id"] for r in rows]
         finally:
@@ -102,6 +108,10 @@ async def test_reading_boundaries_statements_do_not_grow_with_batch_size() -> No
         assert isinstance(large_body, dict)
         large_threads = large_body.get("threads")
         assert isinstance(large_threads, dict) and len(large_threads) == 200
+        for boundary in large_threads.values():
+            assert isinstance(boundary, dict)
+            next_issue = boundary.get("next")
+            assert isinstance(next_issue, dict) and next_issue.get("issue", {}).get("issue_number") == "1"
         _, _, s_after2 = await db_counters(engine)
         large_delta = (s_after2 - s_before2) if s_before2 is not None and s_after2 is not None else None
 

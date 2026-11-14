@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -19,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.auth import hash_password
 from app.models import User
 from app.models.failed_login_attempt import FailedLoginAttempt
+
+from route_harness import cargo_example_path
 
 SECRET = "synthetic-auth-canonical-schema-secret"
 PASSWORD = "parity-auth-password-correct"
@@ -56,8 +57,7 @@ async def test_rejected_and_valid_login_use_actual_app_schema() -> None:
         )
         process = await asyncio.create_subprocess_exec(
             str(
-                Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-                / "debug/examples/http_auth_login"
+                cargo_example_path("http_auth_login")
             ),
             env=env,
             stdout=asyncio.subprocess.PIPE,
