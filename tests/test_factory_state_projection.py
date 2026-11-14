@@ -318,3 +318,17 @@ def test_rest_pr_and_inventory_share_head_and_mergeability() -> None:
     webhook = projection.normalize_event({"pull_request": same})
     assert webhook is not None and webhook[2] == projection.canonical_item("pr", graph)
     assert projection.canonical_item("pr", {**graph, "headRefOid": "b"*40}) != webhook[2]
+
+def test_canonical_projection_preserves_controller_state_and_author() -> None:
+    issue = projection.canonical_item("issue", {"number": 1, "state": "open"})
+    assert issue["state"] == "OPEN"
+    closed = projection.canonical_item("issue", {"number": 1, "state": "closed"})
+    assert closed["state"] == "CLOSED"
+    rest_pr = projection.canonical_item("pr", {
+        "number": 2, "state": "open", "user": {"login": "trusted-author"},
+    })
+    cli_pr = projection.canonical_item("pr", {
+        "number": 2, "state": "OPEN", "author": {"login": "trusted-author"},
+    })
+    assert rest_pr == cli_pr
+    assert rest_pr["author"] == {"login": "trusted-author"}
