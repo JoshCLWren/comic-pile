@@ -423,3 +423,14 @@ def test_trusted_label_refresh_uses_exact_target(
     assert calls[1][2] == {"action": "labels", "issue": {"number": 4843}}
     assert all(call[3] == "github-trusted-write" for call in calls)
     assert all("43617062837" in call[1] for call in calls)
+
+
+def test_full_snapshot_expires_legacy_closed_tombstones_without_false_events() -> None:
+    """Closed projection history should not keep an indefinite 2100 expiry."""
+    import inspect
+
+    source = inspect.getsource(projection._snapshot)
+    assert "AND payload->0->>'state'='closed'" in source
+    assert "AND expires_at > now() + interval '2 hours'" in source
+    assert "SET expires_at=now() + interval '2 hours'" in source
+    assert "changed = [*updated, *removed]" in source
