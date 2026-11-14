@@ -128,7 +128,9 @@ def test_provider_concurrency_limit_does_not_invent_unconfigured_caps():
 
 def test_daily_usage_reads_neon_assignments_not_github_history():
     db = FakeConnection(events=[
-        {"worker": "41"}, {"worker": "42"}, {"worker": "41"}
+        {"worker": "41", "source": None},
+        {"worker": "42", "source": "opencode-free"},
+        {"worker": "41", "source": "nvidia"}
     ])
     with patch.object(operations, "_roster", return_value={
         "41": ("nvidia", "nvidia/a"),
