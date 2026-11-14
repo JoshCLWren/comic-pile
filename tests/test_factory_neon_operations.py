@@ -5,14 +5,18 @@ No external connections. Production Neon evidence is verified separately.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".github" / "scripts"))
-import factory_state_operations as operations  # noqa: E402
+spec = importlib.util.spec_from_file_location("factory_state_operations", ROOT / ".github/scripts/factory_state_operations.py")
+assert spec is not None and spec.loader is not None
+operations = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(operations)
 
 REPO = "JoshCLWren/comic-pile"
 
@@ -59,7 +63,7 @@ def test_schema_contains_all_separate_operational_relations():
 
 
 def test_missing_model_is_suppressed_but_unrelated_provider_is_available():
-    future = datetime.now(timezone.utc) + timedelta(minutes=20)
+    future = datetime.now(UTC) + timedelta(minutes=20)
     db = FakeConnection(models=[{
         "source": "nvidia", "model": "nvidia/expired",
         "status": "unavailable", "cooldown_until": future,
@@ -74,7 +78,7 @@ def test_missing_model_is_suppressed_but_unrelated_provider_is_available():
 
 
 def test_expired_model_cooldown_is_eligible_for_a_new_probe():
-    past = datetime.now(timezone.utc) - timedelta(minutes=1)
+    past = datetime.now(UTC) - timedelta(minutes=1)
     db = FakeConnection(models=[{
         "source": "nvidia", "model": "nvidia/expired",
         "status": "unavailable", "cooldown_until": past,
@@ -88,11 +92,11 @@ def test_expired_model_cooldown_is_eligible_for_a_new_probe():
 
 
 def test_provider_cooldown_affects_its_account_not_every_source():
-    future = datetime.now(timezone.utc) + timedelta(minutes=20)
+    future = datetime.now(UTC) + timedelta(minutes=20)
     db = FakeConnection(budgets=[{
         "source": "nvidia", "cooldown_until": future,
         "concurrency_limit": None, "daily_limit": None,
-        "usage_day": datetime.now(timezone.utc).date(), "daily_used": 0,
+        "usage_day": datetime.now(UTC).date(), "daily_used": 0,
     }])
     with patch.object(operations, "_roster", return_value={
         "41": ("nvidia", "nvidia/a"),
@@ -109,7 +113,7 @@ def test_provider_concurrency_limit_does_not_invent_unconfigured_caps():
         budgets=[{
             "source": "nvidia", "cooldown_until": None,
             "concurrency_limit": 1, "daily_limit": None,
-            "usage_day": datetime.now(timezone.utc).date(), "daily_used": 0,
+            "usage_day": datetime.now(UTC).date(), "daily_used": 0,
         }],
         reservations=[{"source": "nvidia", "n": 1}],
     )
