@@ -381,6 +381,53 @@ def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
 
 
 
+def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
+    """Persist *all* exact free-model smoke failures, even after a later success.
+
+    Only timestamped output of the executed Actions smoke step qualifies.
+    The model runner cannot create privileged Neon records itself.
+    """
+    if (outcome.get("source") != "opencode-free"
+            or outcome.get("persisted_work") not in (True, False)):
+        return outcome
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+    failures: set[str] = set()
+    successful = ""
+    for step in re.split(r"##\[group\]Run ", clean):
+        # The smoke command is a bounded pre-work invocation. Do not inspect
+        # arbitrary later model-agent output for retirement evidence.
+        if "Smoke candidate: opencode/" not in step:
+            continue
+        matches = list(re.finditer(
+            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w./:-]+)\s*$",
+            step,
+        ))
+        for i, match in enumerate(matches):
+            model = match.group(1)
+            fragment = step[match.end(): matches[i+1].start() if i+1 < len(matches) else len(step)]
+            if re.search(
+                rf"\bModel (?:opencode/)?{re.escape(model)} has been deprecated\b",
+                fragment, re.IGNORECASE,
+            ) or re.search(
+                rf"\bModel unavailable: opencode/{re.escape(model)}\b",
+                fragment, re.IGNORECASE,
+            ):
+                failures.add(model)
+        success = re.findall(
+            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Dynamic free-model smoke succeeded: opencode/([\w./:-]+)\s*$",
+            step,
+        )
+        if success:
+            successful = success[-1]
+    if not failures and not successful:
+        return outcome
+    refined = dict(outcome)
+    if failures:
+        refined["model_failures"] = sorted(failures)[:5]
+    if successful and outcome.get("exact_model_proven") is True:
+        refined["model"] = successful
+    return refined
+
 def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
     """Attribute a 180-second pinned-model smoke timeout to the provider.
 
@@ -421,7 +468,7 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
             if not re.search(r"##\[error\]Process completed with exit code 1\b", step):
                 continue
             candidates = re.findall(
-                r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w.:-]+)\s*$",
+                r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w./:-]+)\s*$",
                 step,
             )
             if not candidates:
@@ -495,6 +542,7 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
         "selected_kind": outcome.get("selected_kind"),
         "selected_number": outcome.get("selected_number"),
         "persisted_work": bool(outcome.get("persisted_work")),
+        "model_failures": outcome.get("model_failures") or [],
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }])
     # Separate projection key is idempotent across both trusted outcome writers.
@@ -518,7 +566,9 @@ def main() -> int:
             outcome = json.load(stream)
         if args.log:
             with open(args.log, encoding="utf-8", errors="replace") as stream:
-                outcome = refine_trusted_smoke_timeout(outcome, stream.read())
+                job_log = stream.read()
+                outcome = refine_trusted_dynamic_models(outcome, job_log)
+                outcome = refine_trusted_smoke_timeout(outcome, job_log)
         result = record_runtime_outcome(args.repo, args.run_id, outcome)
         print(f"[factory-ledger] recorded {result} terminal worker event(s)")
     return 0

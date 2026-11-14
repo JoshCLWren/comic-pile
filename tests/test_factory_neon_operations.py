@@ -225,3 +225,12 @@ def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
     assert snapshot["nvidia"] == ["gone"]
     assert snapshot["__heartbeat_id"] == ["123"]
     assert snapshot["__attempt_id"] == ["124"]
+
+
+def test_intermediate_model_failures_use_terminal_runtime_idempotency():
+    import inspect
+    text = inspect.getsource(operations.project_runtime)
+    assert "for failed_model in set(model_failures)" in text
+    assert "factory_runtime_event_keys" in text
+    assert "factory_model_health.status!=\'retired\'" in text
+    assert "last_run_id <= EXCLUDED.last_run_id" in text

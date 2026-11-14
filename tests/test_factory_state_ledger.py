@@ -327,3 +327,24 @@ def test_trusted_nvidia_410_records_sticky_retirement():
     assert ledger.refine_trusted_smoke_timeout(
         {**outcome, "model": "unrelated-model"}, log,
     )["outcome_class"] == "model_unavailable"
+
+
+def test_successful_dynamic_rotation_persists_failed_models_and_real_final_model():
+    outcome = {
+        "worker": "111", "source": "opencode-free", "model": "glm-5.3-flash-free",
+        "exact_model_proven": True, "persisted_work": True, "outcome_class": "success",
+    }
+    log = (
+        "2026-11-14T15:26:50Z ##[group]Run set -Eeuo pipefail\n"
+        "2026-11-14T15:26:52Z Smoke candidate: opencode/crouton-alpha-free\n"
+        "2026-11-14T15:26:53Z \x1b[91mError: \x1b[0mModel crouton-alpha-free has been deprecated.\n"
+        "2026-11-14T15:26:55Z Smoke candidate: opencode/big-pickle\n"
+        "2026-11-14T15:26:56Z Dynamic free-model smoke succeeded: opencode/big-pickle\n"
+    )
+    refined = ledger.refine_trusted_dynamic_models(outcome, log)
+    assert refined["model"] == "big-pickle"
+    assert refined["model_failures"] == ["crouton-alpha-free"]
+    assert ledger.refine_trusted_dynamic_models(outcome,
+        log.replace("crouton-alpha-free has been deprecated", "other-free has been deprecated"),
+    ).get("model_failures") is None
+    assert ledger.refine_trusted_dynamic_models({**outcome, "source": "nvidia"}, log) == {**outcome, "source": "nvidia"}

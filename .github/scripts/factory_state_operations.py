@@ -113,6 +113,15 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     proven = outcome.get("exact_model_proven") is True
     persisted = outcome.get("persisted_work") is True
     observed = datetime.now(timezone.utc)
+    # A trusted job-log collector can attest multiple attempted free models.
+    # This evidence belongs to this same idempotent runtime transaction.
+    model_failures = outcome.get("model_failures") or []
+    if model_failures and (source != "opencode-free" or not isinstance(model_failures, list)
+            or len(model_failures) > 5 or any(
+                not isinstance(m, str) or not re.fullmatch(r"[\w./:-]{1,180}", m)
+                for m in model_failures
+            )):
+        raise ValueError("invalid trusted intermediate model failures")
     async with conn.transaction():
         inserted = await conn.fetchval(
             """INSERT INTO public.factory_runtime_event_keys(repo,run_id)
@@ -169,6 +178,23 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                      updated_at=now()
                    WHERE factory_provider_budget.last_run_id<=EXCLUDED.last_run_id""",
                 repo, source, until, until if classification=="provider_quota" else None, classification,run_id)
+        # Record each intermediate unavailable model even if the final smoke
+        # rotated successfully. The run_id uniqueness key above prevents
+        # duplicate or out-of-order application of this run.
+        for failed_model in set(model_failures):
+            await conn.execute(
+                """INSERT INTO public.factory_model_health
+                     (repo,source,model,status,last_outcome,cooldown_until,last_run_id)
+                   VALUES($1,$2,$3,'unavailable','model_unavailable',
+                          now()+interval '6 hours',$4)
+                   ON CONFLICT(repo,source,model) DO UPDATE SET
+                     status=EXCLUDED.status,last_outcome=EXCLUDED.last_outcome,
+                     cooldown_until=EXCLUDED.cooldown_until,
+                     last_run_id=EXCLUDED.last_run_id,updated_at=now()
+                   WHERE factory_model_health.status!='retired'
+                     AND factory_model_health.last_run_id <= EXCLUDED.last_run_id""",
+                repo, source, failed_model, run_id,
+            )
         # Provider success clears a transient breaker only if no later breaker
         # was recorded. Another concurrent worker may still have hit a limit.
         if attributed and proven and classification not in TRANSIENT:
