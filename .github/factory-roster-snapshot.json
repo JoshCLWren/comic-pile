@@ -332,10 +332,10 @@
     {
       "worker": "117",
       "source": "requesty",
-      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "model": "google/gemma-4-31b-it",
       "minute": "25",
       "scheduler": "dispatcher",
-      "display_name": "Requesty Nemotron 3 Super Free"
+      "display_name": "Requesty Gemma 4 31B Free"
     },
     {
       "worker": "118",
