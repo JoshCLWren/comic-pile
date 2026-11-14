@@ -140,6 +140,37 @@ PRODUCTIVE_SIGNALS = (
 )
 
 
+
+def _delivered_pr(log: str, worker: str, target: dict[str, str]) -> str:
+    """Find an actual wrapper PR delivery followed by the lease handoff."""
+    number = target["number"]
+    if not worker or not number:
+        return ""
+    prefix = rf"\[factory:{re.escape(worker)}\](?:\[[^\]\n]+\])*\s+"
+    if target["kind"] == "issue":
+        pattern = prefix + r"opened/updated PR #(?P<pr>\d+) for issue #(?P<issue>\d+)"
+        for match in re.finditer(pattern, log):
+            if match["issue"] != number:
+                continue
+            tail = log[match.end():]
+            released_issue = re.search(
+                prefix + rf"released issue #{number} to factory:unowned\b", tail
+            )
+            released_pr = re.search(
+                prefix + rf"released pr #{match['pr']} to factory:unowned\b", tail
+            )
+            if released_issue and released_pr and released_issue.start() < released_pr.start():
+                return match["pr"]
+    elif target["kind"] == "pr":
+        pattern = prefix + r"pushed repairs to PR #(?P<pr>\d+); handing it to the merge controller"
+        for match in re.finditer(pattern, log):
+            if match["pr"] != number:
+                continue
+            tail = log[match.end():]
+            if re.search(prefix + rf"released pr #{number} to factory:unowned\b", tail):
+                return number
+    return ""
+
 @dataclass(frozen=True)
 class Result:
     """Structured classification of a fixed-model factory run."""
@@ -154,6 +185,8 @@ class Result:
     selected_kind: str = ""
     selected_number: str = ""
     persisted_work: bool = False
+    delivery_outcome: str = "none"
+    delivery_pr: str = ""
     outcome: str = "NOT YET PROVEN"
     outcome_class: str = "unknown_failure"
     detail: str = "factory job did not expose enough runtime evidence"
@@ -243,6 +276,7 @@ def classify(log: str) -> Result:
     target_matches = list(TARGET_RE.finditer(log))
     target = target_matches[-1].groupdict() if target_matches else {"kind": "", "number": ""}
     persisted = any(signal in log for signal in PRODUCTIVE_SIGNALS)
+    delivered_pr = _delivered_pr(log, values['worker'], target) if persisted else ''
 
     common = {
         "worker": values["worker"],
@@ -255,6 +289,8 @@ def classify(log: str) -> Result:
         "selected_kind": target["kind"],
         "selected_number": target["number"],
         "persisted_work": persisted,
+        "delivery_outcome": "persisted" if delivered_pr else "none",
+        "delivery_pr": delivered_pr,
     }
 
     if not configured:
@@ -289,7 +325,7 @@ def classify(log: str) -> Result:
             **common,
             outcome="AGENT DEADLINE",
             outcome_class="agent_timeout",
-            detail="the trusted worker's local agent deadline expired without persisted work",
+            detail="the trusted worker's agent deadline expired; delivery classified separately",
         )
 
     if RATE_LIMIT_RE.search(log):
@@ -451,6 +487,56 @@ class ClassifierTests(unittest.TestCase):
         "Factory 32 locked: source=omniroute-opencode model=oc/big-pickle "
         "runtime=omniroute/oc/big-pickle minute=:15 scheduler=slot-15 configured=true\n"
     )
+
+
+    def test_timed_out_agent_delivers_code_when_wrapper_releases_both_leases(self) -> None:
+        """Worker 82's Nov 14 code survived a local agent timeout."""
+        log = (
+            "Factory 82 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:55 scheduler=dispatcher configured=true\n"
+            "FIXED_MODEL_OPENCODE_OK\n"
+            "[factory:82] checked out issue #4839 on factory/82-4839-z-ai\n"
+            "[factory:82] agent exit status 124 for issue #4839\n"
+            "[factory:82] opened/updated PR #5129 for issue #4839\n"
+            "[factory:82] released issue #4839 to factory:unowned at factory:building (pr-opened-handoff)\n"
+            "[factory:82] released pr #5129 to factory:unowned at factory:review (pr-opened-handoff)\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "agent_timeout")
+        self.assertTrue(result.persisted_work)
+        self.assertEqual(result.delivery_outcome, "persisted")
+        self.assertEqual(result.delivery_pr, "5129")
+        incomplete = classify(log.replace(
+            "released pr #5129 to factory:unowned", "failed to release pr #5129"
+        ))
+        self.assertEqual(incomplete.outcome_class, "agent_timeout")
+        self.assertEqual(incomplete.delivery_outcome, "none")
+
+    def test_timeout_without_push_does_not_count_as_delivery(self) -> None:
+        log = (
+            "Factory 105 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:105] checked out pr #5123 on branch\n"
+            "[factory:105] agent exit status 124 for pr #5123\n"
+            "[factory:105] released pr #5123 to factory:unowned at factory:changes-requested\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "agent_timeout")
+        self.assertFalse(result.persisted_work)
+        self.assertEqual(result.delivery_outcome, "none")
+
+    def test_repair_delivery_requires_handoff_after_push(self) -> None:
+        log = (
+            "Factory 98 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:98] checked out pr #5122 on branch\n"
+            "[factory:98] pushed repairs to PR #5122; handing it to the merge controller as factory:review\n"
+        )
+        self.assertEqual(classify(log).delivery_outcome, "none")
+        complete = log + (
+            "[factory:98] released pr #5122 to factory:unowned at factory:review (repairs-pushed-handoff)\n"
+        )
+        self.assertEqual(classify(complete).delivery_pr, "5122")
 
     def assert_canonical(self, result: Result) -> None:
         """Assert one emitted class belongs to the durable factory contract."""
