@@ -52,6 +52,7 @@ ollama_cloud_model_is_free: Callable[[str], bool] = _ROSTER.ollama_cloud_model_i
 mistral_model_is_pinned: Callable[[str], bool] = _ROSTER.mistral_model_is_pinned
 orcarouter_model_is_free: Callable[[str], bool] = _ROSTER.orcarouter_model_is_free
 requesty_model_is_approved: Callable[[str], bool] = _ROSTER.requesty_model_is_approved
+cloudflare_workers_ai_model_is_free: Callable[[str], bool] = _ROSTER.cloudflare_workers_ai_model_is_free
 load_roster_rows = _ROSTER.load_roster_rows
 
 
@@ -98,6 +99,10 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
         elif source == 'requesty':
             assert requesty_model_is_approved(model), (
                 f'worker {worker} requesty pin must be an approved Requesty id, got {model!r}'
+            )
+        elif source == 'cloudflare-workers-ai':
+            assert cloudflare_workers_ai_model_is_free(model), (
+                f'worker {worker} Cloudflare pin requires a Workers Free model, got {model!r}'
             )
 
 
@@ -220,19 +225,22 @@ def main() -> None:
     assert 'MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}' in runner
     assert 'ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}' in runner
     assert 'REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}' in runner
+    assert 'CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}' in runner
+    assert 'CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}' in runner
     assert 'AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}' in runner
     assert 'nvidia)' in runner
     assert 'opencode-free|openrouter-free)' in runner
     assert 'kilo-auto)' in runner
-    assert 'z-ai|ollama-cloud|mistral|orcarouter|requesty)' in runner
+    assert 'z-ai|ollama-cloud|mistral|orcarouter|requesty|cloudflare-workers-ai)' in runner
     assert 'vercel-ai-gateway)' in runner
-    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)' in runner
+    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty|cloudflare-workers-ai)' in runner
     assert 'Configure OpenAI-compatible factory provider' in runner
     assert 'https://api.z.ai/api/paas/v4' in runner
     assert 'https://ollama.com/v1' in runner
     assert 'https://api.mistral.ai/v1' in runner
     assert 'https://api.orcarouter.ai/v1' in runner
     assert 'https://router.requesty.ai/v1' in runner
+    assert 'https://api.cloudflare.com/client/v4/accounts/' in runner
     assert 'https://ai-gateway.vercel.sh/v1' in runner
     assert 'Require Pixel Canary to remain zero-price' in runner
     assert 'Prove Pixel Canary can use OpenCode tools' in runner
