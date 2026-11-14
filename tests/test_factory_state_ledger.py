@@ -301,10 +301,10 @@ def test_trusted_ansi_deprecated_smoke_attributes_actual_rotated_selector():
         "persisted_work": False,
     }
     log = (
-        "2026-11-14T15:26:50Z ##[group]Run set -Eeuo pipefail\\n"
-        "2026-11-14T15:26:52Z Smoke candidate: opencode/crouton-alpha-free\\n"
-        "2026-11-14T15:26:53Z \\x1b[91m\\x1b[1mError: \\x1b[0mModel crouton-alpha-free has been deprecated.\\n"
-        "2026-11-14T15:26:53Z ##[error]Process completed with exit code 1.\\n"
+        "2026-11-14T15:26:50Z ##[group]Run set -Eeuo pipefail\n"
+        "2026-11-14T15:26:52Z Smoke candidate: opencode/crouton-alpha-free\n"
+        "2026-11-14T15:26:53Z \x1b[91m\x1b[1mError: \x1b[0mModel crouton-alpha-free has been deprecated.\n"
+        "2026-11-14T15:26:53Z ##[error]Process completed with exit code 1.\n"
     )
     refined = ledger.refine_trusted_smoke_timeout(outcome, log)
     assert refined["outcome_class"] == "model_unavailable"
@@ -322,7 +322,7 @@ def test_trusted_nvidia_410_records_sticky_retirement():
         "source": "nvidia", "model": "retired-model", "outcome_class": "model_unavailable",
         "exact_model_proven": False, "persisted_work": False,
     }
-    log = "2026-11-14T15:10:23Z NVIDIA permanently retired model: retired-model\\n"
+    log = "2026-11-14T15:10:23Z NVIDIA permanently retired model: retired-model\n"
     assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "model_retired_410"
     assert ledger.refine_trusted_smoke_timeout(
         {**outcome, "model": "unrelated-model"}, log,
