@@ -57,7 +57,9 @@ async fn native_demo() -> Response {
 
 /// Serve simple startup metrics without requiring database or auth state.
 async fn native_metrics() -> Response {
-    let mut response = comicpile_roll_service::metrics::get_metrics().await.into_response();
+    let mut response = comicpile_roll_service::metrics::get_metrics()
+        .await
+        .into_response();
     response
         .headers_mut()
         .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));

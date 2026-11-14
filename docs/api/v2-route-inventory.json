@@ -1001,17 +1001,17 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 191,
-      "v1_shadowed_by_rust": 63,
-      "v1_live_python": 120,
-      "v1_orphaned": 7,
+      "v1_shadowed_by_rust": 62,
+      "v1_live_python": 121,
+      "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
-      "unversioned_live_python": 17,
+      "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
       "total_python_surface": 224,
-      "total_shadowed_by_rust": 76,
-      "total_live_python": 137,
-      "total_orphaned": 9
+      "total_shadowed_by_rust": 75,
+      "total_live_python": 139,
+      "total_orphaned": 10
     },
     "catch_all": {
       "src": "/api(?:/.*)?",
@@ -1145,8 +1145,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/catalog/series-mappings/commit",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2461,21 +2461,14 @@
         "verified_against": "vercel.json"
       },
       {
-        "owning_issue": 4854,
-        "runtime": "native-rust",
-        "status": "target",
-        "consumers": [],
         "method": "GET",
         "path": "/api/v1/metrics",
-        "db_free": true,
-        "sql_budget": {
-          "application_statements": 0,
-          "transaction_control_statements": 0,
-          "total_statements": 0,
-          "basis": "In-process startup metrics; native ingress serves response without PostgreSQL"
-        },
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "unreferenced/orphaned",
         "verified_against": "vercel.json"
       },
       {
@@ -3843,21 +3836,16 @@
         "verified_against": "vercel.json"
       },
       {
-        "owning_issue": 4854,
-        "runtime": "native-rust",
-        "status": "target",
-        "consumers": [],
         "method": "GET",
         "path": "/api/metrics",
-        "db_free": true,
-        "sql_budget": {
-          "application_statements": 0,
-          "transaction_control_statements": 0,
-          "total_statements": 0,
-          "basis": "In-process startup metrics; native ingress serves response without PostgreSQL"
-        },
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/creatorMetricDrilldownApi.ts"
+        ],
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {

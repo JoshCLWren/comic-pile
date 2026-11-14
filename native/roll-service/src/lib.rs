@@ -15,7 +15,6 @@ pub mod creators;
 pub mod db;
 pub mod demo;
 // legacy startup metrics
-pub mod metrics;
 pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
@@ -27,6 +26,7 @@ pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
 pub mod legacy_dependencies;
+pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
 pub mod preferences;
