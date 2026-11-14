@@ -12,21 +12,26 @@ parity gates #4311. A bootstrap request currently gets 404, never partial JSON.
 ## Build and test
 
 Install rustup, the platform C compiler, pkg-config and OpenSSL development
-headers. Commands run from `native/roll-service`; `rust-toolchain.toml` selects
-the stable toolchain including rustfmt/clippy, and Cargo.lock pins all
-dependencies. `rust-version = "1.88"` documents the minimum toolchain the pinned
-lockfile supports.
+headers. The repository is a single Cargo workspace: the root
+`rust-toolchain.toml` selects the stable toolchain including rustfmt/clippy,
+and the root `Cargo.lock` pins one dependency graph for both this service and
+the deployed Vercel ingress. `rust-version = "1.88"` documents the minimum
+compiler version.
+
+From the repository root:
 
 ```sh
-cargo fmt --all --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked --all-targets
-cargo build --release --locked
+cargo fmt --all -- --check
+cargo clippy --workspace --locked --all-targets -- -D warnings
+cargo test --workspace --locked --all-targets
+cargo build --release --locked -p comicpile-roll-service
 ```
 
 The `Native Rust Roll` GitHub Actions job runs these checks and publishes the
 Linux x86_64 release binary. It does not deploy previews or change ingress.
-The standalone binary is `target/release/comicpile-roll-service` and depends
+The workspace target directory is the repository root `target/`; the CI job
+sets `CARGO_TARGET_DIR` to `native/roll-service/target` so the parity runner
+and artifact upload keep their existing paths. The standalone binary depends
 on the build platform's OpenSSL/runtime libraries. It is not a Vercel function;
 provider selection and actual ingress verification belong to #4313.
 
