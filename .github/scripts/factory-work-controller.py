@@ -330,13 +330,22 @@ def replace_factory_labels(
     return True
 
 
-def issue_has_open_blocker(number: int) -> bool:
-    """Return whether an issue has an open dependency blocker."""
+def issue_has_open_blocker(number: int, *, live: bool = False) -> bool:
+    """Return whether an issue has an open dependency blocker.
+
+    Ranking reads can use a bounded Neon snapshot. Actual issue assignment
+    explicitly rechecks the authoritative GitHub dependency list immediately
+    before claiming a transactional lease, bypassing the discovery cache.
+    """
+    args = ['api']
+    if live:
+        args += ['--header', 'Cache-Control: no-cache']
+    args.append(f'repos/{REPO}/issues/{number}/dependencies/blocked_by?per_page=100')
     try:
-        blockers = cast(list[dict[str, Any]], gh_json(['api', f'repos/{REPO}/issues/{number}/dependencies/blocked_by?per_page=100']) or [])
+        blockers = cast(list[dict[str, Any]], gh_json(args) or [])
     except RuntimeError:
         return True
-    return any(item.get('state') == 'open' for item in blockers)
+    return any(str(item.get('state') or '').lower() == 'open' for item in blockers)
 
 
 def required_checks_failed(pr_number: int) -> bool:
@@ -490,6 +499,10 @@ def assign_candidate(
     for number in numbers:
         if not target_still_unowned(number):
             return False
+    if candidate.kind == 'issue' and issue_has_open_blocker(candidate.number, live=True):
+        # A fresh dependency was added after ranking; never convert an
+        # advisory Neon cache hit into a blocked GitHub lease mutation.
+        return False
 
     if worker_has_active_lease(worker):
         return False
