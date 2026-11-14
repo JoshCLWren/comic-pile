@@ -118,6 +118,14 @@ def _run_dynamic_smoke(
     output = tmp_path / "github-output"
     attempts = tmp_path / "smoke-attempts"
     gh_log = tmp_path / "smoke-gh-calls"
+    # Select a currently live OpenRouter slot; free promotions may retire.
+    roster = ROOT / ".github/free-model-factories.tsv"
+    active_openrouter_worker = next(
+        fields[0]
+        for raw in roster.read_text(encoding="utf-8").splitlines()
+        if raw and not raw.startswith("#")
+        if len(fields := raw.split("\t")) >= 2 and fields[1] == "openrouter-free"
+    )
     result = subprocess.run(
         ["bash", "-c", smoke],
         cwd=ROOT,
@@ -127,7 +135,7 @@ def _run_dynamic_smoke(
             "RUNNER_TEMP": str(tmp_path),
             "RUNTIME_MODEL": f"{source.removesuffix('-free')}/{initial_model}",
             "SOURCE": source,
-            "WORKER": "108" if source == "openrouter-free" else "41",
+            "WORKER": active_openrouter_worker if source == "openrouter-free" else "41",
             "DEEPSEEK_MODE": "normal",
             "GITHUB_RUN_ID": "12345",
             "GITHUB_RUN_NUMBER": "0",

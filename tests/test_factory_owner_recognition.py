@@ -94,7 +94,9 @@ def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_worke
         if raw and not raw.startswith("#")
         if len(fields := raw.split("\t")) >= 2
     }
-    assert {str(worker) for worker in range(100, 111)} <= roster_ids
+    assert {str(worker) for worker in range(100, 108)} <= roster_ids
+    # Fresh free-model workers may legitimately retire; do not freeze their IDs.
+    assert all(re.fullmatch(r"[1-9][0-9]*", worker) for worker in roster_ids)
     unknown_worker = str(max(map(int, roster_ids)) + 1)
     assert unknown_worker not in roster_ids
 

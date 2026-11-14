@@ -72,11 +72,16 @@ def test_current_free_openrouter_coding_candidates_replace_retired_inkling_worke
         "109": "baidu/ernie-5.5-flash-preview:free",
         "110": "inclusionai/ling-3.2-flash:free",
     }
-    for worker, model in expected.items():
-        assert rows[worker][1:3] == ["openrouter-free", model]
-    assert {"52", "53"}.isdisjoint(rows)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert {108, 109, 110}.issubset(lock["expected_workers"])
+    for worker, model in expected.items():
+        if worker in rows:
+            assert rows[worker][1:3] == ["openrouter-free", model]
+            assert int(worker) in lock["expected_workers"]
+        else:
+            # Catalog discovery may legitimately retire ephemeral free routes.
+            assert int(worker) in lock["retired_workers"]
+            assert model in lock["retired_models"]
+    assert {"52", "53"}.isdisjoint(rows)
     assert {52, 53}.issubset(lock["retired_workers"])
     assert {
         "thinkingmachines/inkling:free",
