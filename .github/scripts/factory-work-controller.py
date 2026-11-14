@@ -1244,6 +1244,15 @@ def runtime_quota_block_reason(worker: str) -> str | None:
     source = sources.get(worker)
     if source not in {'z-ai', 'kilo-auto', 'mistral', 'ollama-cloud'}:
         return None
+    # Share availability/cooldowns instead of reparsing thousands of comments
+    # for every worker. On DB outage, retain the old trusted evidence path.
+    try:
+        from factory_state_operations import enabled as neon_enabled, filter_workers
+        if neon_enabled():
+            allowed, blocked = filter_workers(REPO, [worker])
+            return None if allowed else "; ".join(blocked)
+    except Exception as exc:
+        print(f"[factory-controller] Neon health unavailable: {type(exc).__name__}", file=sys.stderr)
     from factory_completion_controller import (
         latest_worker_health, registry_comments,
     )
@@ -1376,6 +1385,20 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
             raise RuntimeError(f'Requested action is unavailable. Current action: {eligible_action or "none"}.')
         if not candidate_is_live_executable(selected):
             raise RuntimeError('The selected target is blocked or still waiting on checks.')
+    # Advisory retry cooldown is scoped to exact PR head AND stage.
+    # Manual targets can override retry scheduling, never live merge/CI gates.
+    if target is None:
+        try:
+            from factory_state_operations import cooling_prs
+            pr_heads = {int(pr["number"]): str(pr.get("headRefOid") or "") for pr in prs}
+            lookup = {c.number: (pr_heads.get(c.number, ""), c.stage or "factory:review")
+                      for c in candidates if c.kind == "pr"}
+            cooling = cooling_prs(REPO, lookup)
+            if cooling:
+                print(f"[factory-controller] exact-head retry cooling: {sorted(cooling)}", file=sys.stderr)
+                candidates = [c for c in candidates if c.number not in cooling]
+        except Exception as exc:
+            print(f"[factory-controller] Neon retry read deferred ({type(exc).__name__})", file=sys.stderr)
     candidates = order_candidates_for_worker(
         resolve_review_head_contributors(candidates, prs), worker
     )

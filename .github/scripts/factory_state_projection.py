@@ -231,6 +231,8 @@ def reconcile_snapshot(repo: str, kind: str, items: list[dict[str, object]], sta
         return
     try:
         updated, removed = asyncio.run(_snapshot(repo, kind, items, started))
+        from factory_state_operations import checkpoint
+        checkpoint(repo, f"targets:{kind}", started, updated + removed)
         print(f"[factory-projection] reconciled {kind}: {updated} updated, {removed} closed", file=sys.stderr)
     except Exception as exc:
         print(f"[factory-projection] reconciliation unavailable ({type(exc).__name__})", file=sys.stderr)

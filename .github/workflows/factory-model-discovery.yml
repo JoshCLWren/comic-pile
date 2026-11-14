@@ -144,6 +144,20 @@ jobs:
           path: ${{ runner.temp }}/factory-model-discovery/report.json
           if-no-files-found: warn
 
+      - name: Configure restricted Neon model catalog projection
+        if: steps.plan.outcome == 'success'
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Store trusted catalog absence evidence
+        if: steps.plan.outcome == 'success'
+        run: |
+          python3 .github/scripts/factory_state_operations.py sync-catalog \
+            --repo "$GITHUB_REPOSITORY" \
+            --file "$RUNNER_TEMP/factory-model-discovery/report.json"
+
       - name: Fail closed when dispatch asked not to apply
         if: ${{ steps.plan.outputs.retire == 'true' && (github.event_name == 'workflow_dispatch' && inputs.apply == false) }}
         run: |
@@ -168,8 +182,11 @@ jobs:
           fi
           git config user.name 'factory-model-discovery[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          branch='factory/model-retirement'
-          existing="$(gh pr list --head "$branch" --base main --json number --jq '.[0].number // empty')"
+          # Distinct heads avoid non-fast-forward collisions with orphaned
+          # model-retirement branches. Preserve any existing open review PR.
+          branch="factory/model-retirement-${GITHUB_RUN_ID}"
+          existing="$(gh pr list --base main --json number,headRefName \
+            --jq '[.[] | select(.headRefName | startswith("factory/model-retirement")) | .number] | first // empty')"
           if [[ -n "$existing" ]]; then
             echo "Existing roster PR #$existing is under review; do not overwrite its head"
             exit 0

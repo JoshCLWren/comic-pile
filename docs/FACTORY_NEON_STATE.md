@@ -158,3 +158,88 @@ reconciles drift every 30 minutes. Exact-head checks and merge verification
 remain live GitHub operations. Those actions must remain live at the
 authoritative mutation boundary. Other workflow-specific full scans should be
 measured separately instead of assuming this cache fixes the entire quota.
+
+
+## Operational state and decision projections
+
+The trusted factory now maintains decision state, not just JSON discovery
+snapshots. It is created non-destructively by the idempotent DDL inside
+.github/scripts/factory_state_operations.py, using the existing
+factory_state database and factory_state_rw role. No model/agent runner
+receives a connection.
+
+| Relation | Purpose |
+| --- | --- |
+| factory_model_health | Exact source/model availability, last verified run, cooldown, sticky 410 retirement |
+| factory_provider_budget | Account-scope throttle/quota cooldown, optional explicit concurrency cap and daily budget |
+| factory_provider_reservation | Capacity reservation tied to the existing worker/target claim UUID and its renewal/release |
+| factory_pr_stage_retry | Per-PR, exact-head, exact-stage retry not-before timestamps |
+| factory_check_projection | Advisory CI/review outcomes recorded by trusted workflow-run events |
+| factory_worker_metrics | Attempts, persisted useful work, completed and failed runs for source-preserving worker ranking |
+| factory_runtime_event_keys | Idempotence for the two trusted terminal-run collectors |
+| factory_reconciliation_cursor | Last target-reconciliation watermark and coalesced event-driven dispatch wakeups |
+
+The authoritative product gates remain on GitHub. The Neon check projection
+**does not grant an approval or green CI**, and merge scripts must still verify
+the live exact head, required checks, ownership and review as previously.
+
+### Selection and release
+
+The trusted dispatcher initializes this schema and backfills the last trusted
+model outcome for each source/model from the existing registry on its first
+run. Future terminal outcomes project provider/model health directly.
+factory-model-discovery.yml contributes catalog absence evidence without
+changing the checked-in roster. An expired absence can be probed again,
+while explicit retired 410 markers remain sticky.
+
+During a worker claim, the existing per-repository advisory lock now also
+reserves provider capacity in the **same SQL transaction** as the
+worker and issue/PR leases. Releases and verified lease renewals update
+the provider reservation under the same ownership token. Aborted
+assignments cannot leave a leaked provider-capacity reservation.
+
+Daily metered-source usage is computed from trusted
+worker_assigned events in Neon, with the old live GitHub run-list path
+available only on a DB read failure. Quota/throttle observations are scoped
+to the provider account, except independent OmniRoute model routes. No
+unpublished provider concurrency limit is guessed: null means unconfigured.
+Checked-in source dispatch caps are still enforced under the atomic lease.
+
+Workers returning a classified failure update the model/provider circuit
+breaker from trusted job logs, not untrusted comments. An unchanged PR head
+and stage can briefly cool down a failed repair; a new SHA is immediately
+eligible. Failed review providers have a bounded backoff. A coalesced
+Factory Check Projection Ingest workflow may wake the existing dispatcher
+on a relevant completed check, no more frequently than once per two minutes.
+This workflow never checks out or executes PR-head code.
+
+A model's successful execution is not the same as a completed product issue.
+Productivity rankings use persisted useful work evidence and retain
+source-diverse dispatch positions. They are advisory scheduling decisions,
+not permission to bypass policy or assigned-work eligibility.
+
+### Operational inspection
+
+The trusted dispatcher prints the one-time backfill count and health-based
+worker exclusions. The operational CLI can be used with the restricted
+factory DSN on a trusted runner:
+
+    python3 .github/scripts/factory_state_operations.py bootstrap
+    python3 .github/scripts/factory_state_operations.py stats
+
+Check the actual DB with these bounded queries:
+
+    SELECT source, model, status, cooldown_until, last_outcome
+    FROM public.factory_model_health ORDER BY updated_at DESC LIMIT 30;
+
+    SELECT source, cooldown_until, quota_reset_at, concurrency_limit,
+           usage_day, daily_used
+    FROM public.factory_provider_budget ORDER BY source;
+
+    SELECT scope, checkpoint, checked_at, changed_count
+    FROM public.factory_reconciliation_cursor ORDER BY checked_at DESC LIMIT 20;
+
+A DB outage must not turn missing data into healthy evidence. New claims still
+require the existing transactional Neon lease and GitHub ownership check.
+The read-only projections have bounded fallbacks, but neither missing cache
+nor a late webhook is grounds to merge.
