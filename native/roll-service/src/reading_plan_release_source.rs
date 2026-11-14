@@ -3,6 +3,7 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -64,7 +65,7 @@ pub async fn create_release_source(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(payload): Json<ReleaseSourceCreate>,
-) -> Result<Json<ReleaseSourceResponse>, ApiError> {
+) -> Result<(StatusCode, Json<ReleaseSourceResponse>), ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Verify plan ownership
@@ -150,7 +151,7 @@ pub async fn create_release_source(
         updated_at: row.get(12),
     };
     
-    Ok(Json(source))
+    Ok((StatusCode::CREATED, Json(source)))
 }
 
 /// `GET /api/v2/continuity-plans/{plan_id}/release-sources/`
@@ -306,7 +307,7 @@ pub async fn delete_release_source(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(source_id): Path<i32>,
-) -> Result<(), ApiError> {
+) -> Result<StatusCode, ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Verify source exists and user owns the associated plan
@@ -324,7 +325,7 @@ pub async fn delete_release_source(
         return Err(ApiError::NotFound("Release source not found".to_string()));
     }
     
-    Ok(())
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
