@@ -254,3 +254,24 @@ def test_monthly_smoke_produces_durable_quota_outcome(
     target = tmp_path / 'outcome'
     assert module.record_smoke_failure(message, runtime, target)
     assert target.read_text().startswith('provider_quota\t')
+
+
+@pytest.mark.parametrize("source", ["z-ai", "kilo-auto"])
+def test_free_provider_commit_sha_429_cannot_cause_quota_pause(source: str) -> None:
+    """Actual Z-AI history: commit 9cd7bc429 is not an HTTP 429 response."""
+    spec = importlib.util.spec_from_file_location(
+        f"classify_commit_hash_{source.replace('-', '_')}",
+        SCRIPTS / "classify-fixed-model-run.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    log = (
+        f"Factory 54 locked: source={source} model=free runtime={source}/free "
+        "minute=:50 scheduler=dispatcher configured=true\n"
+        "FIXED_MODEL_OPENCODE_OK\n"
+        "2026-11-14T16:45:56.5705392Z 9cd7bc429 improve workflow\n"
+        "[factory:54] repair attempt for PR #5060 produced no persisted change\n"
+    )
+    assert module.classify(log).outcome_class == "no_work"
