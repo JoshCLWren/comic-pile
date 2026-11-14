@@ -14,8 +14,7 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs
 
 
 class GitHubReadError(RuntimeError):
@@ -31,7 +30,7 @@ def allowed_read(args: list[str], repo: str) -> int | None:
         return None
     if not args or not repo or any(
         a in {"--method", "-X", "--input", "-f", "-F", "--field", "--raw-field", "-H", "--header"}
-        or a.startswith(("--method=", "--input=", "-f=", "-F=", "--field=", "--raw-field=", "-H"))
+        or a.startswith(("--method=", "--input=", "-f", "-F", "--field=", "--raw-field=", "-H"))
         for a in args
     ):
         return None
