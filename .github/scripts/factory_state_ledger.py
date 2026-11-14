@@ -416,22 +416,22 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
     # Recover the *executed* final smoke selector only from timestamped runner
     # output in the failing Actions smoke step, never echoed shell source.
     if outcome.get("source") == "opencode-free":
-        clean = re.sub(r"\x1b\\[[0-?]*[ -/]*[@-~]", "", job_log)
-        for step in re.split(r"##\\[group\\]Run ", clean):
-            if not re.search(r"##\\[error\\]Process completed with exit code 1\\b", step):
+        clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+        for step in re.split(r"##\[group\]Run ", clean):
+            if not re.search(r"##\[error\]Process completed with exit code 1\b", step):
                 continue
             candidates = re.findall(
-                r"(?m)^\\d{4}-\\d{2}-\\d{2}T\\S+Z Smoke candidate: opencode/([\\w.:-]+)\\s*$",
+                r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w.:-]+)\s*$",
                 step,
             )
             if not candidates:
                 continue
             attempted = candidates[-1]
             if re.search(
-                rf"\\bModel (?:opencode/)?{re.escape(attempted)} has been deprecated\\b",
+                rf"\bModel (?:opencode/)?{re.escape(attempted)} has been deprecated\b",
                 step, re.IGNORECASE,
             ) or re.search(
-                rf"\\bModel unavailable: opencode/{re.escape(attempted)}\\b",
+                rf"\bModel unavailable: opencode/{re.escape(attempted)}\b",
                 step, re.IGNORECASE,
             ):
                 return {
@@ -465,8 +465,8 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
             and outcome.get("model")):
         model = re.escape(str(outcome["model"]))
         if re.search(
-            rf"(?m)^\\d{{4}}-\\d{{2}}-\\d{{2}}T\\S+Z NVIDIA permanently retired model: {model}\\s*$",
-            re.sub(r"\x1b\\[[0-?]*[ -/]*[@-~]", "", job_log),
+            rf"(?m)^\d{{4}}-\d{{2}}-\d{{2}}T\S+Z NVIDIA permanently retired model: {model}\s*$",
+            re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log),
         ):
             return {
                 **outcome,
