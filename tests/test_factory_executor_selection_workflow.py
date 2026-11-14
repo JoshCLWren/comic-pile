@@ -158,16 +158,16 @@ def test_worker_refuses_omniroute_source_during_incident() -> None:
     assert "OmniRoute-only" not in worker
 
 
-def test_live_selector_receives_durable_registry_comments() -> None:
-    """The live free branch reads all registry pages before invoking the selector."""
-    selector = _dispatch_selector(WORKFLOW.read_text(encoding="utf-8"))
-    live = selector.split("# Models are selected at execution", 1)[1].split("openrouter-free)", 1)[
-        0
-    ]
-    assert "gh api --paginate --slurp" in live
-    assert "/issues/1093/comments?per_page=100" in live
-    assert '--comments "$comments_file"' in live
-    assert "Factory cooldown evidence could not be read" in live
+def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> None:
+    """Dynamic free models use a trusted Neon snapshot and a live-cost catalog."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    selector = _dispatch_selector(workflow)
+    live = selector.split("# Models are selected at execution", 1)[1].split("openrouter-free)", 1)[0]
+    assert "/issues/1093/comments?per_page=100" not in live
+    assert '--exclusions-file "$exclusions_file"' in live
+    assert 'printf \'[]\\n\' > "$comments_file"' in live
+    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}' in workflow
+    assert 'jq -e \'type == "object" and all(.[]; type == "array")\'' in selector
 
 
 def test_exact_smoke_failure_reaches_outcome_file(tmp_path: Path) -> None:
