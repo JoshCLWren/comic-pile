@@ -216,6 +216,7 @@ def test_assign_candidate_verifies_post_write_owner(
 ) -> None:
     """Verify assign candidate verifies post write owner."""
     candidate = controller.Candidate("issue", 603, 1, 3, "2026-08-16T12:00:00Z")
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda number, *, live=False: False)
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: False)
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
@@ -1082,3 +1083,32 @@ def test_monthly_quota_blocks_assignment_until_calendar_reset(
     assert '2026-12-01T00:00:00Z' in controller.runtime_quota_block_reason('99')
     monkeypatch.setattr(controller.time, 'time', lambda: reset)
     assert controller.runtime_quota_block_reason('99') is None
+
+
+
+def test_issue_assignment_rechecks_dependency_at_mutation_boundary(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An advisory cached issue cannot be claimed if a fresh blocker appeared."""
+    issue = controller.Candidate("issue", 4737, 0, 0, "2026-11-14T00:00:00Z")
+    lookups = []
+    lease_writes = []
+    monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
+    monkeypatch.setattr(controller, "issue_has_open_blocker",
+                        lambda number, *, live=False: lookups.append((number, live)) or True)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *args: lease_writes.append(args))
+    assert controller.assign_candidate(issue, "20") is False
+    assert lookups == [(4737, True)]
+    assert lease_writes == []
+
+
+def test_live_blocker_lookup_explicitly_bypasses_neon_cache(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+    monkeypatch.setattr(controller, "gh_json",
+                        lambda args: calls.append(args) or [{"state": "open"}])
+    assert controller.issue_has_open_blocker(4737) is True
+    assert controller.issue_has_open_blocker(4737, live=True) is True
+    assert calls[0][0] == "api" and len(calls[0]) == 2
+    assert calls[1][:3] == ["api", "--header", "Cache-Control: no-cache"]
