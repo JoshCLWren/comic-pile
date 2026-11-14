@@ -17,7 +17,11 @@
       "method": "GET",
       "path": "/api/v2/continuity-plans/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v2/continuity\\-plans/$"
+      "src": "^/api/v2/continuity\\-plans/$",
+      "consumers": [
+        "frontend/src/services/api-continuity-plans.ts",
+        "frontend/src/services/api-reading-plan-recovery.ts"
+      ]
     },
     {
       "bucket": "operations",
