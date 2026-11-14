@@ -390,7 +390,7 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
     alone or from the runner's subsequent cleanup.
     """
     if (
-        outcome.get("outcome_class") != "unknown_failure"
+        outcome.get("outcome_class") not in ({"unknown_failure", "model_unavailable"} if outcome.get("source") == "nvidia" else {"unknown_failure"})
         or outcome.get("exact_model_proven") is True
         or outcome.get("persisted_work") is True
         or not outcome.get("model") or not outcome.get("source")
