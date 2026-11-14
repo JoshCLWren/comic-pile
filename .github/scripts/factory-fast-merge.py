@@ -25,6 +25,9 @@ FACTORY_PATHS = tuple(
         r"^\.github/workflows/local-ollama-review\.ya?ml$",
         r"^\.github/actions/factory-syntax/[A-Za-z0-9_./-]+$",
         r"^\.github/free-model-factories\.tsv$",
+        r"^\.github/factory-expected-workers\.json$",
+        r"^\.github/factory-roster-snapshot\.json$",
+        r"^tests/test_free_model_factories\.py$",
         r"^scripts/(?:factory[-_]|test_factory_)[A-Za-z0-9_.-]+\.py$",
         r"^scripts/tests/(?:test_factory|test_opencode_review_policy|test_select_fcm_nvidia_model)[A-Za-z0-9_.-]*\.py$",
         r"^tests/(?:test_factory|test_fixed_model|test_local_ollama_review_contract|test_auto_ollama_dispatch)[A-Za-z0-9_.-]*\.py$",
@@ -105,6 +108,16 @@ def factory_candidate(
         or changed != len(files)
     ):
         return False, "Changed file listing is incomplete"
+    # A roster edit is one atomic, validated unit. The generator must never
+    # fast-merge a standalone lock/snapshot that describes different workers.
+    changed_paths = {file.get("filename") for file in files if isinstance(file, dict)}
+    roster_files = {
+        ".github/free-model-factories.tsv",
+        ".github/factory-expected-workers.json",
+        ".github/factory-roster-snapshot.json",
+    }
+    if changed_paths & roster_files and not roster_files <= changed_paths:
+        return False, "Factory roster manifest, lock and snapshot must change together"
     for file in files:
         if not isinstance(file, dict):
             return False, "Malformed changed-file entry"

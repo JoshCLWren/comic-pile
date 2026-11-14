@@ -76,6 +76,10 @@ def test_nonfactory_and_policy_changes_cannot_auto_merge(path: str) -> None:
         "tests/test_factory_work_controller_runtime.py",
         "tests/test_local_ollama_review_contract.py",
         "docs/FACTORY_FAST_MERGE.md",
+        ".github/free-model-factories.tsv",
+        ".github/factory-expected-workers.json",
+        ".github/factory-roster-snapshot.json",
+        "tests/test_free_model_factories.py",
     ],
 )
 def test_supported_factory_paths(path: str) -> None:
@@ -232,3 +236,43 @@ def test_production_dispatch_runs_from_merge_script(
     assert len(calls) == 1
     assert "factory_dispatch_production_deploy" in calls[0][4]
     assert "merged 2 PR(s)" in calls[0][-1]
+
+
+def test_complete_factory_roster_change_is_fast_merge_eligible() -> None:
+    """Atomic roster edits qualify without expanding the product-code allowlist."""
+    changed = [
+        {"filename": path, "status": "modified"}
+        for path in (
+            ".github/free-model-factories.tsv",
+            ".github/factory-expected-workers.json",
+            ".github/factory-roster-snapshot.json",
+            "tests/test_free_model_factories.py",
+        )
+    ]
+    pr = candidate()
+    pr["changed_files"] = len(changed)
+    assert gate.factory_candidate(pr, changed, REPO) == (True, "Factory-only PR eligible")
+
+
+@pytest.mark.parametrize(
+    "missing_path",
+    [
+        ".github/free-model-factories.tsv",
+        ".github/factory-expected-workers.json",
+        ".github/factory-roster-snapshot.json",
+    ],
+)
+def test_partial_factory_roster_cannot_fast_merge(missing_path: str) -> None:
+    """Never fast-merge a roster manifest detached from its generated state."""
+    changed = [
+        {"filename": path, "status": "modified"}
+        for path in (
+            ".github/free-model-factories.tsv",
+            ".github/factory-expected-workers.json",
+            ".github/factory-roster-snapshot.json",
+        )
+        if path != missing_path
+    ]
+    pr = candidate()
+    pr["changed_files"] = len(changed)
+    assert not gate.factory_candidate(pr, changed, REPO)[0]
