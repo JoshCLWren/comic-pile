@@ -148,6 +148,12 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
           labels,
           headRefName: (.headRefName // .head.ref),
           headRefOid: (.headRefOid // .head.sha),
+          # Preserve reconciliation fields already present in projected
+          # canonical PRs, or available from the live REST fallback. The
+          # omission previously turned real MERGEABLE/CLEAN into null/UNKNOWN
+          # every time the CLI adapter fed a full-inventory refresh.
+          mergeable: (if .mergeable == true then "MERGEABLE" elif .mergeable == false then "CONFLICTING" else .mergeable end),
+          mergeStateStatus: ((.mergeStateStatus // .mergeable_state // "UNKNOWN") | ascii_upcase),
           author: {login: (.author.login // .user.login)},
           isCrossRepository: (.isCrossRepository // (.head.repo.full_name != .base.repo.full_name)),
           createdAt: (.createdAt // .created_at),
