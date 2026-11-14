@@ -28,7 +28,7 @@ SCHEMA_REF_PREFIX: Final = "#/components/schemas/"
 # Bare ``/api`` domain paths retained in the client-facing schema. Everything
 # else under bare ``/api`` is a legacy compatibility alias or non-client
 # tooling that must not appear in the generated frontend client.
-CLIENT_EXEMPT_BARE_PATHS: Final[frozenset[str]] = frozenset({"/api/ping"})
+CLIENT_EXEMPT_BARE_PATHS: Final[frozenset[str]] = frozenset({"/api/ping", "/api/metrics"})
 
 
 def is_client_schema_path(path: str) -> bool:
@@ -38,8 +38,8 @@ def is_client_schema_path(path: str) -> bool:
         path: OpenAPI path key such as ``/api/v1/threads/``.
 
     Returns:
-        True for infrastructure paths outside ``/api``, the exempt bare ping
-        path, and every canonical ``/api/v1`` route; False for all other bare
+        True for infrastructure paths outside ``/api``, the exempt bare ping and metrics
+        paths, and every canonical ``/api/v1`` route; False for all other bare
         ``/api`` legacy aliases and tooling routes.
     """
     if not path.startswith("/api/"):

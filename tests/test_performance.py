@@ -44,4 +44,22 @@ async def test_response_time_header(client: AsyncClient) -> None:
     assert response2.headers.get("X-Server-Cold-Start") == "false"
 
 
+@pytest.mark.asyncio
+async def test_metrics_endpoint(client: AsyncClient) -> None:
+    """Verify the /api/metrics endpoint returns startup_time and startup_duration.
+
+    Args:
+        client: Fresh application test client.
+
+    Returns:
+        None.
+    """
+    response = await client.get("/api/metrics")
+    assert response.status_code == 200
+    data = response.json()
+    assert "startup_time" in data
+    assert "startup_duration" in data
+    assert isinstance(data["startup_time"], float)
+    assert isinstance(data["startup_duration"], float) or data["startup_duration"] is None
+
 

@@ -102,4 +102,5 @@ jobs:
             > "$RUNNER_TEMP/worker-outcome-attested.json"
           python3 .github/scripts/factory_state_ledger.py runtime-outcome \
             --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
-            --file "$RUNNER_TEMP/worker-outcome-attested.json"
+            --file "$RUNNER_TEMP/worker-outcome-attested.json" \
+            --log "$RUNNER_TEMP/factory-entry.log"

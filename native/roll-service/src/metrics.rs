@@ -73,6 +73,15 @@ pub async fn get_metrics() -> Json<StartupMetricsResponse> {
 )]
 pub fn get_metrics_documentation() {}
 
+/// OpenAPI documentation for the versioned metrics alias.
+#[utoipa::path(
+    get,
+    path = "/api/v1/metrics",
+    tag = "metrics",
+    responses((status = 200, description = "Simple application startup metrics", body = StartupMetricsResponse))
+)]
+pub fn get_v1_metrics_documentation() {}
+
 #[cfg(test)]
 mod tests {
     use super::get_metrics;

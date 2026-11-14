@@ -28,6 +28,7 @@ from app.main import create_app
 # convention. See the comment in app/main.py.
 _BARE_API_EXCEPTIONS = frozenset(
     {
+        "/api/metrics",
         "/api/test/sessions/expire",
         "/api/test/reading-orders",
         "/api/test/issue-identity",
@@ -187,16 +188,13 @@ def test_v1_bug_reports_alias_matches_legacy_route_methods() -> None:
     assert methods_by_path["/api/v1/bug-reports/"] == methods_by_path["/api/bug-reports/"]
 
 
-def test_metrics_routes_are_served_by_native_runtime_not_python() -> None:
-    """Metrics endpoints moved to native Rust and must not appear in Python routes."""
-    methods_by_path = _collect_routes(create_app(serve_frontend=False))
+def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
+    """Canonical /api/v1/metrics alias reuses the same handler contract."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
 
-    assert "/api/metrics" not in methods_by_path
-    assert "/api/v1/metrics" not in methods_by_path
-
-    schema = create_app(serve_frontend=False).openapi()
-    assert "/api/metrics" not in schema["paths"]
-    assert "/api/v1/metrics" not in schema["paths"]
+    assert "/api/v1/metrics" in methods_by_path
+    assert methods_by_path["/api/v1/metrics"] == methods_by_path["/api/metrics"]
 
 
 def test_pruned_debug_routes_are_absent() -> None:
@@ -348,7 +346,7 @@ def test_pruned_python_analytics_routes_are_absent() -> None:
     The Python ``/api/analytics/metrics`` and ``/api/v1/analytics/metrics``
     handlers were deleted because no browser caller remains — the frontend
     uses the native Rust ``GET /api/v2/analytics/metrics`` resource (#4348).
-    Eager ``/api/ping`` is a different,
+    Eager ``/api/metrics`` and ``/api/v1/metrics`` are a different,
     retained surface covered by :func:`test_v1_metrics_alias_matches_legacy_route_methods`.
     """
     methods_by_path = _collect_routes(create_app(serve_frontend=False))

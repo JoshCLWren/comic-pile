@@ -262,6 +262,11 @@ fn app() -> Router {
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
         .route("/api/v2/demo-roll", get(native_demo))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
+        .route("/api/v1/reading-orders/", get(native_dispatch))
+        .route(
+            "/api/v1/reading-orders/{reading_order_id}/items",
+            post(native_dispatch),
+        )
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))
@@ -434,7 +439,6 @@ fn app() -> Router {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     init_tracing();
-    comicpile_roll_service::metrics::record_startup_start();
     let router = app();
     comicpile_roll_service::metrics::mark_startup_complete();
     vercel_runtime::run(NativeVercelService { router }).await
@@ -456,6 +460,31 @@ mod tests {
     use vercel_runtime::{AppState as VercelState, LogContext};
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
+
+    #[tokio::test]
+    async fn metrics_aliases_are_unauthenticated_and_database_free() {
+        comicpile_roll_service::metrics::record_startup_start();
+        comicpile_roll_service::metrics::mark_startup_complete();
+        let mut first = None;
+        for path in ["/api/metrics", "/api/v1/metrics"] {
+            let response = app()
+                .call(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .expect("metrics response");
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+            let body: Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap())
+                    .unwrap();
+            assert_eq!(body.as_object().unwrap().len(), 2);
+            assert!(body["startup_time"].is_number());
+            assert!(body["startup_duration"].is_number());
+            if let Some(previous) = &first {
+                assert_eq!(&body, previous);
+            }
+            first = Some(body);
+        }
+    }
 
     #[tokio::test]
     async fn guest_demo_ingress_needs_no_auth_or_database_state() {

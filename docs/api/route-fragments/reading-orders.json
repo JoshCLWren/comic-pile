@@ -1,0 +1,32 @@
+{
+  "family": "reading-orders",
+  "owned_path_patterns": [
+    "^/api/v1/reading-orders(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-reading-orders.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-orders/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-orders/$",
+      "owning_issue": 4851
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-orders/{reading_order_id}/items",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "owning_issue": 4851
+    }
+  ]
+}

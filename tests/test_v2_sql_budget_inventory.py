@@ -114,26 +114,21 @@ def _all_inventory_operations() -> list[dict[str, object]]:
     return merged
 
 
-_NATIVE_OPS_OUTSIDE_RUNTIME_OPENAPI = frozenset(
-    {
-        ("get", "/api/metrics"),
-        ("get", "/api/v1/metrics"),
-    }
-)
-
-
 def _deployed_operations() -> set[tuple[str, str]]:
     """Read native operations from generated OpenAPI, without count snapshots."""
     document = json.loads(OPENAPI.read_text(encoding="utf-8"))
     paths = document.get("paths")
     assert isinstance(paths, dict) and paths, "native OpenAPI must declare paths"
-    deployed = {
+    return {
         (method.lower(), path)
         for path, operations in paths.items()
-        if path.startswith("/api/v2/") or path.startswith("/api/v1/releases/")
+        if (
+            path.startswith("/api/v2/")
+            or path.startswith("/api/v1/releases/")
+            or path in {"/api/metrics", "/api/v1/metrics"}
+        )
         for method in operations
     }
-    return deployed | _NATIVE_OPS_OUTSIDE_RUNTIME_OPENAPI
 
 
 def _key(operation: dict[str, object]) -> tuple[str, str]:
@@ -151,23 +146,19 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
     application = budget.get("application_statements")
     control = budget.get("transaction_control_statements")
     total = budget.get("total_statements")
+    maximum = budget.get("max_statements")
     overhead = budget.get("runtime_overhead_statements", 0)
     basis = budget.get("basis")
     grows = budget.get("grows_with_data")
-    maximum = budget.get("max_statements")
     assert isinstance(application, int) and application >= 0
     assert isinstance(control, int) and control >= 0
     assert isinstance(total, int)
     assert total == application + control
     assert isinstance(overhead, int) and overhead >= 0
-    if total == 0:
-        assert operation.get("db_free") is True
-        if grows is None:
-            grows = False
-        if maximum is None:
-            maximum = total + overhead
     assert maximum == total + overhead
     assert isinstance(grows, bool)
+    if total == 0:
+        assert operation.get("db_free") is True
     assert isinstance(basis, str) and basis.strip() != ""
     return budget
 

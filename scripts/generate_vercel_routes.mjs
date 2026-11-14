@@ -225,7 +225,6 @@ export function updateInventory(inventory, operations) {
   if (!full) throw new Error('Missing existing full_surface inventory');
   const prev = new Map([...full.v1_operations, ...full.unversioned_operations]
     .map(op => [op.method + ' ' + op.path, op]));
-  const pythonIds = new Set(operations.map(([method, path]) => method + ' ' + path));
   const v1 = [];
   const unversioned = [];
   for (const [method, path] of operations) {
@@ -239,17 +238,6 @@ export function updateInventory(inventory, operations) {
       owning_issue: old?.owning_issue ?? null,
       consumers: old?.consumers || []});
   }
-  for (const op of [...full.v1_operations, ...full.unversioned_operations]) {
-    const id = op.method + ' ' + op.path;
-    if (pythonIds.has(id)) continue;
-    if (!op.runtime || op.runtime === 'python-fastapi') continue;
-    const bucket = op.path.startsWith('/api/v1/') ? v1
-      : op.path.startsWith('/api/') && !op.path.startsWith('/api/v2/') ? unversioned : null;
-    if (bucket) bucket.push(op);
-  }
-  const byId = (a, b) => (a.path + ' ' + a.method).localeCompare(b.path + ' ' + b.method);
-  v1.sort(byId);
-  unversioned.sort(byId);
   return {...inventory, full_surface: {...full,
     catch_all: {src: FALLBACK, dest: RUST},
     v1_operations: v1, unversioned_operations: unversioned}};

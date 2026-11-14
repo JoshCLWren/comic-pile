@@ -131,10 +131,13 @@ async def test_health_routes_always_accessible(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ping_route_always_accessible(client: AsyncClient) -> None:
-    """Eager ping route is retained and always accessible (#4861)."""
+async def test_ping_and_metrics_routes_always_accessible(client: AsyncClient) -> None:
+    """Eager ping/metrics routes are retained and always accessible (#4861)."""
     ping = await client.get("/api/ping")
     assert ping.status_code == 200
+
+    metrics = await client.get("/api/metrics")
+    assert metrics.status_code == 200
 
 
 @pytest.mark.asyncio

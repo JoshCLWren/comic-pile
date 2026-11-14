@@ -22,7 +22,9 @@
         "application_statements": 0,
         "transaction_control_statements": 0,
         "total_statements": 0,
-        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL"
+        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
+        "max_statements": 0,
+        "grows_with_data": false
       }
     },
     {
@@ -36,7 +38,9 @@
         "application_statements": 0,
         "transaction_control_statements": 0,
         "total_statements": 0,
-        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL"
+        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL",
+        "max_statements": 0,
+        "grows_with_data": false
       }
     }
   ]
