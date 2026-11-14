@@ -74,6 +74,7 @@ REQUESTY_APPROVED_MODELS = frozenset(
         "nvidia/nemotron-3-ultra-550b-a55b",
         "nvidia/nemotron-3-super-120b-a12b",
         "poolside/laguna-m.1",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
         "poolside/laguna-xs.2",
         "google/gemma-4-31b-it",
     }
