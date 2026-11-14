@@ -96,6 +96,58 @@ def test_terminal_classification_is_idempotency_keyed_by_run(monkeypatch):
     assert records[0]["persisted_work"] is True
 
 
+
+def test_timed_out_agent_with_verified_delivery_is_completed(monkeypatch):
+    """Worker 82: a real code handoff is not erased by its agent timeout."""
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "43639844249", {
+        "worker": "82", "outcome_class": "agent_timeout",
+        "persisted_work": True, "delivery_outcome": "persisted",
+        "delivery_pr": "5129", "selected_kind": "issue", "selected_number": "4839",
+    })
+    assert records[0]["event_type"] == "worker_completed"
+    assert records[0]["outcome_class"] == "agent_timeout"
+    assert records[0]["delivery_outcome"] == "persisted"
+    assert records[0]["delivery_pr"] == "5129"
+
+
+def test_timed_out_agent_without_delivery_stays_failed(monkeypatch):
+    """Worker 105: lease cleanup alone is not a successful code delivery."""
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "43640000000", {
+        "worker": "105", "outcome_class": "agent_timeout",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_failed"
+    assert records[0]["delivery_outcome"] == "none"
+
+
+def test_full_session_budget_without_agent_fifty_minute_cap():
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
+    assert int(workflow["env"]["FACTORY_BUDGET_SECONDS"]) == 6000
+    assert workflow["jobs"]["factory"]["timeout-minutes"] == 120
+    for name in (
+        "free-model-factory-worker.sh",
+        "free-model-factory-worker-primitives.sh",
+        "omniroute-factory-worker.sh",
+        "nvidia-factory-worker.sh",
+    ):
+        assert "agent_timeout > 3000" not in (root / ".github/scripts" / name).read_text()
+    main = (root / ".github/scripts/free-model-factory-worker.sh").read_text()
+    assert "available - 240 - FAST_CHECK_RESERVE_SECONDS" in main
+
+
+def test_trusted_collector_verifies_code_handoff_before_persistence():
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    assert 'delivery_pr="$(jq -r' in entry
+    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert "pull-requests: read" in entry
+
+
 def test_only_trusted_collectors_and_observer_use_ledger():
     root = Path(__file__).resolve().parents[1]
     controller = (root / ".github/scripts/factory-work-controller.py").read_text()
