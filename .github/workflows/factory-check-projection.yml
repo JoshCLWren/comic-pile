@@ -33,7 +33,7 @@ jobs:
         uses: ./.github/actions/factory-state-cache
         with:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: \${{ vars.NEON_PROJECT_ID }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
 
       - name: Ingest check on exact PR head and wake if changed
         shell: bash
@@ -41,6 +41,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
+          if [[ -z "${FACTORY_STATE_DSN_FILE:-}" || ! -s "$FACTORY_STATE_DSN_FILE" ]]; then
+            echo "::error::Factory check ingestion requires a valid restricted Neon connection"
+            exit 1
+          fi
           report="$(python3 .github/scripts/factory_state_operations.py ingest-check \
             --repo "$GITHUB_REPOSITORY" --file "$GITHUB_EVENT_PATH")"
           echo "$report"

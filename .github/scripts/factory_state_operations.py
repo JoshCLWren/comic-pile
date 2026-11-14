@@ -356,15 +356,18 @@ async def _ingest_check(conn: Any, repo: str, event: dict[str,Any]) -> int:
         pr_num=pr.get("number") if isinstance(pr,dict) else None
         if not isinstance(pr_num,int) or pr_num<=0:
             continue
-        await conn.execute(
+        changed = await conn.fetchval(
             """INSERT INTO public.factory_check_projection
                  (repo,pr_number,head_sha,check_name,conclusion,run_id,observed_at)
                VALUES($1,$2,$3,$4,$5,$6,$7)
                ON CONFLICT(repo,pr_number,head_sha,check_name) DO UPDATE SET
                  conclusion=EXCLUDED.conclusion,run_id=EXCLUDED.run_id,observed_at=EXCLUDED.observed_at
-               WHERE factory_check_projection.run_id<=EXCLUDED.run_id""",
+               WHERE factory_check_projection.run_id<EXCLUDED.run_id
+                     OR (factory_check_projection.run_id=EXCLUDED.run_id
+                         AND factory_check_projection.conclusion IS DISTINCT FROM EXCLUDED.conclusion)
+               RETURNING 1""",
             repo,pr_num,sha,name,conclusion,number,observed)
-        if name in {"PR-Agent Advisory Review","Local Ollama Review"} and conclusion=="failure":
+        if changed and name in {"PR-Agent Advisory Review","Local Ollama Review"} and conclusion=="failure":
             await conn.execute(
                 """INSERT INTO public.factory_pr_stage_retry
                      (repo,pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id)
@@ -376,13 +379,14 @@ async def _ingest_check(conn: Any, repo: str, event: dict[str,Any]) -> int:
                      last_run_id=EXCLUDED.last_run_id,updated_at=now()
                    WHERE factory_pr_stage_retry.last_run_id<EXCLUDED.last_run_id""",
                 repo,pr_num,sha,number)
-        count+=1
+        if changed:
+            count+=1
     return count
 
 
 def ingest_check(repo: str, event: dict[str,Any]) -> int:
     if not enabled():
-        return 0
+        raise RuntimeError("check projection ingestion requires restricted Neon connection")
     return _run(_ingest_check,repo,event)
 
 
