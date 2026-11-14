@@ -128,6 +128,23 @@ def test_new_pass_and_non_cached_callers_read_full_history(
     assert len(set(calls)) == 1
 
 
+
+def test_recent_comment_history_since_uses_minute_floor_for_shared_cache_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nearby dispatches share the same URL without excluding needed comments."""
+    requests: list[str] = []
+    monkeypatch.delenv("FACTORY_ATTEMPT_HISTORY_CACHE", raising=False)
+    def github(args: list[str]) -> object:
+        requests.append(args[-1])
+        return [[_attempt(1, NOW - 10)]]
+    monkeypatch.setattr(CONTROLLER, "gh_json", github)
+    CONTROLLER.recent_factory_comments(NOW)
+    CONTROLLER.recent_factory_comments(NOW + 10)
+    assert requests[0] == requests[1]
+    assert "since=" in requests[0]
+
+
 def test_delta_failure_never_returns_stale_history_or_advances_watermark(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
