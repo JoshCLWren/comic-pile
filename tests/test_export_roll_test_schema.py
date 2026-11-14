@@ -50,3 +50,17 @@ def test_normalize_qualifies_trigram_ops_and_strips_dump_banners() -> None:
     assert " gin_trgm_ops)" not in normalized.replace("public.gin_trgm_ops)", "")
     assert normalized.endswith("\n")
     assert not normalized.endswith("\n\n")
+
+
+def test_normalize_removes_volatile_attribute_versions_only() -> None:
+    """Suppress transient pg_attver dump metadata, not real column DDL."""
+    raw = (
+        "ALTER TABLE ONLY public.users ALTER COLUMN id SET (pg_attver=26796776);\n"
+        "ALTER TABLE ONLY public.users ALTER COLUMN username SET (pg_attver=999);\n"
+        "ALTER TABLE ONLY public.users ALTER COLUMN username SET NOT NULL;\n"
+        "ALTER TABLE ONLY public.users ALTER COLUMN username SET DEFAULT 'reader';\n"
+    )
+    normalized = _normalize(raw)
+    assert "pg_attver" not in normalized
+    assert "SET NOT NULL" in normalized
+    assert "SET DEFAULT 'reader'" in normalized
