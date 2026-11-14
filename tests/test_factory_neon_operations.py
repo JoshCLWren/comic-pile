@@ -185,3 +185,12 @@ def test_runtime_410_is_sticky_in_neon_projection():
     source = inspect.getsource(operations.project_runtime)
     assert 'classification == "model_retired_410"' in source
     assert 'status, until = "retired", None' in source
+
+
+def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
+    import inspect
+    source = inspect.getsource(operations._export_model_exclusions)
+    assert "WHERE repo=$1" in source
+    assert "cooldown_until>now()" in source
+    assert "retired" in source
+    assert "export-model-exclusions" in inspect.getsource(operations.main)
