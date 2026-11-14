@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { runReview, permissionReply, DEFAULT_MODEL } from
+import { runReview, permissionReply, chooseReviewModel, eligibleReviewModel } from
   '../.agents/skills/crouton-factory-codex/scripts/local-factory-acp-review.mjs';
 
 function fixture(t, behavior = '') {
@@ -25,7 +25,7 @@ import { createInterface } from 'node:readline';
 import { writeFileSync } from 'node:fs';
 const behavior = ${JSON.stringify(behavior)};
 const reply = (id, result) => console.log(JSON.stringify({jsonrpc:'2.0',id,result}));
-const config = model => ({configOptions:[{id:'model',currentValue:model}]});
+const config = model => ({configOptions:[{id:'model',currentValue:model,options:[{value:'opencode/live-review-free'}]}]});
 const permission = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT).permission;
 if (permission.edit !== 'deny' || permission.bash !== 'deny') process.exit(9);
 createInterface({input:process.stdin}).on('line', line => {
@@ -44,7 +44,7 @@ createInterface({input:process.stdin}).on('line', line => {
   git('add', 'fake-acp.mjs');
   git('commit', '-qm', 'Add protocol peer');
   return { cwd, head: git('rev-parse', 'HEAD'), base: 'HEAD', output: join(cwd, '.git', 'proof'),
-    model: DEFAULT_MODEL, issue: '1', pr: '2', reviewer: 'independent-test',
+    model: 'opencode/live-review-free', issue: '1', pr: '2', reviewer: 'independent-test',
     context: 'Synthetic protocol evidence only; not an actual model review.',
     command: [process.execPath, fake], timeoutMs: 2000 };
 }
@@ -54,7 +54,7 @@ test('completed protocol preserves real session/model/response evidence', async 
   assert.equal(await runReview(options), 'FACTORY_GATE_READY');
   const status = JSON.parse(readFileSync(join(options.output, 'status.json')));
   assert.equal(status.session, 'actual-session');
-  assert.equal(status.model, DEFAULT_MODEL);
+  assert.equal(status.model, 'opencode/live-review-free');
   assert.equal(status.head, options.head);
   assert.equal(status.state, 'complete');
   assert.match(readFileSync(join(options.output, 'report.md'), 'utf8'), /FACTORY_GATE_READY$/);
@@ -76,4 +76,24 @@ test('rejects permission requests and unsupported client methods', () => {
   assert.equal(permissionReply({id:1,method:'fs/write_text_file'}).error.code, -32601);
   assert.equal(permissionReply({id:2,method:'session/request_permission',params:{options:[]}})
     .error.code, -32601);
+});
+
+const advertised = (currentValue, values) => ({configOptions:[{id:'model',currentValue,
+  options:values.map(value => ({value}))}]});
+test('live free selection survives retired defaults and ignores paid models', () => {
+  const session = advertised('paid/provider', ['paid/provider','opencode/new-free','openrouter/new:free']);
+  assert.equal(chooseReviewModel(session), 'opencode/new-free');
+  assert.equal(chooseReviewModel(advertised('openrouter/new:free', ['openrouter/new:free','opencode/new-free'])), 'openrouter/new:free');
+  assert.throws(() => chooseReviewModel(session, 'retired/model'), /not advertised/);
+  assert.equal(chooseReviewModel(session, 'paid/provider'), 'paid/provider');
+  assert.throws(() => chooseReviewModel(advertised('paid/provider', ['paid/provider'])), /no policy-eligible/);
+  assert.throws(() => chooseReviewModel({}), /no policy-eligible/);
+  assert.equal(eligibleReviewModel('untrusted/name-free'), false);
+});
+test('automatic protocol selection records actual live model without override', async t => {
+  const options = fixture(t); delete options.model;
+  assert.equal(await runReview(options), 'FACTORY_GATE_READY');
+  const choice = JSON.parse(readFileSync(join(options.output, 'model-choice.json')));
+  assert.equal(choice.model, 'opencode/live-review-free');
+  assert.equal(choice.explicit, false);
 });
