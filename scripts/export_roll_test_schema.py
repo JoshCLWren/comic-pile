@@ -48,6 +48,16 @@ DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
 # against an empty search_path the same way production objects live in public.
 _UNQUALIFIED_GIN_TRGM_OPS = re.compile(r"(?<![\w.])gin_trgm_ops\b")
 
+# PostgreSQL's internal pg_attver column option varies with catalog history.
+# It is not portable schema DDL (pg_attribute.attoptions reserves internal
+# pg_ options). Drop only a standalone assignment of this one option; retain
+# every user-facing option and mixed-option statement for drift detection.
+_SQL_IDENTIFIER = r'(?:"(?:[^"\n]|"")+"|[A-Za-z_][A-Za-z_0-9$]*)'
+_VOLATILE_ATTRIBUTE_VERSION = re.compile(
+    rf"ALTER TABLE ONLY {_SQL_IDENTIFIER}\.{_SQL_IDENTIFIER} "
+    rf"ALTER COLUMN {_SQL_IDENTIFIER} SET \(pg_attver=\d+\);"
+)
+
 
 def _qualify_extension_operator_classes(sql: str) -> str:
     """Qualify ``pg_trgm`` operator classes so empty ``search_path`` can replay.
@@ -67,8 +77,9 @@ def _qualify_extension_operator_classes(sql: str) -> str:
 
 
 def _normalize(raw: str) -> str:
-    """Strip psql-only meta-commands and version-dependent banners."""
+    """Strip psql-only commands, version banners, and internal catalog versions."""
     kept: list[str] = []
+    raw = _strip_internal_attribute_versions(raw)
     for line in raw.splitlines():
         stripped = line.strip()
         if stripped.startswith(DROPPED_PREFIXES):
@@ -167,6 +178,37 @@ def _split_statements(sql: str) -> list[str]:
     if any(part.strip() for part in pending):
         units.append("\n".join(pending))
     return units
+
+
+def _strip_internal_attribute_versions(raw: str) -> str:
+    """Remove standalone internal-version DDL while preserving quoted SQL bodies."""
+    # Use statement boundaries, not matching lines: a function or multiline
+    # literal can contain precisely the same text as a catalog assignment.
+    text = "\n".join(raw.splitlines())
+    pieces: list[str] = []
+    cursor = 0
+    search_at = 0
+    for unit in _split_statements(text):
+        start = text.index(unit, search_at)
+        end = start + len(unit)
+        search_at = end
+        meaningful = [
+            line for line in unit.splitlines()
+            if line.strip() and not line.lstrip().startswith("--")
+        ]
+        if len(meaningful) == 1 and _VOLATILE_ATTRIBUTE_VERSION.fullmatch(
+            meaningful[0].strip()
+        ):
+            pieces.append(text[cursor:start])
+            remainder = "\n".join(
+                line for line in unit.splitlines() if line != meaningful[0]
+            )
+            pieces.append(remainder)
+            if not remainder and text[end:end + 1] == "\n":
+                end += 1
+            cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
 
 
 _TYPE_COMMENT = re.compile(r"--\s*Type:\s*(.+?);\s*Schema:")
