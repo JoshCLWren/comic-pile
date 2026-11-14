@@ -140,6 +140,28 @@ def test_equal_timestamp_event_uses_live_reopen(monkeypatch: pytest.MonkeyPatch)
     assert record is not None and record[3] == "open"
 
 
+@pytest.mark.parametrize("rate_limited", [True, False])
+def test_failed_live_read_reports_quota_without_exposing_output(
+    monkeypatch: pytest.MonkeyPatch, rate_limited: bool,
+) -> None:
+    import subprocess
+
+    error = "API rate limit exceeded for installation" if rate_limited else "HTTP 403"
+
+    def failed(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 1, "private response", error + " private detail")
+
+    monkeypatch.setattr(projection.subprocess, "run", failed)
+    with pytest.raises(RuntimeError) as caught:
+        projection._authoritative_event("owner/repo", {"pull_request": {"number": 44}})
+    assert "private" not in str(caught.value)
+    expected = (
+        "GitHub API rate limit exceeded while verifying pull_request #44"
+        if rate_limited else "GitHub could not verify pull_request #44"
+    )
+    assert str(caught.value) == expected
+
+
 def test_missing_target_rejects_obsolete_open_event() -> None:
     import inspect
     statement = inspect.getsource(projection._ingest_event)

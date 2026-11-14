@@ -256,6 +256,11 @@ def _authoritative_event(repo: str, event: dict[str, Any]) -> dict[str, Any]:
         capture_output=True, text=True, check=False, timeout=20,
     )
     if response.returncode:
+        # Classify known failures without exposing raw API output in trusted CI logs.
+        if "rate limit exceeded" in response.stderr.lower():
+            raise RuntimeError(
+                f"GitHub API rate limit exceeded while verifying {kind} #{number}"
+            )
         raise RuntimeError(f"GitHub could not verify {kind} #{number}")
     try:
         current = json.loads(response.stdout)
