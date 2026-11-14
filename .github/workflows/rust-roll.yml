@@ -80,6 +80,36 @@ jobs:
           fi
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
+      # Temporary read-only artifact export for the incomplete #5027 native contract.
+      # Remove this block after importing the generated files into the PR.
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 5027 }}
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v7
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 5027 }}
+        with:
+          node-version: '24'
+      - name: Export Rust-derived continuity OpenAPI for exact artifact refresh
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 5027 }}
+        working-directory: .
+        run: |
+          set -euo pipefail
+          uv sync --frozen --all-extras
+          cargo run --locked --manifest-path native/roll-service/Cargo.toml --example v2_openapi > native/contracts/v2-runtime.openapi.json
+          corepack enable
+          uv run python scripts/generate_openapi_types.py
+      - uses: actions/upload-artifact@v4
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 5027 }}
+        with:
+          name: continuity-contract-5027
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            native/contracts/v2-runtime.openapi.json
+            frontend/src/generated/openapi.json
+            frontend/src/generated/openapi.ts
+            frontend/src/generated/nativeV2Client.ts
       - name: Formatting
         run: cargo fmt --all --check
       - name: Clippy
