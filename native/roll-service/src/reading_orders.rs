@@ -58,8 +58,7 @@ const LIST_SQL: &str = "SELECT o.id, o.name, o.description, COUNT(i.id)::bigint 
      GROUP BY o.id, o.name, o.description \
      ORDER BY o.name";
 
-const OWNED_ORDER_SQL: &str =
-    "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2";
+const OWNED_ORDER_SQL: &str = "SELECT id FROM reading_orders WHERE id = $1 AND user_id = $2";
 const OWNED_THREAD_SQL: &str = "SELECT id FROM threads WHERE id = $1 AND user_id = $2";
 const ORDER_ITEMS_SQL: &str =
     "SELECT id, thread_id, position FROM reading_order_items WHERE reading_order_id = $1 ORDER BY position";
@@ -214,7 +213,10 @@ async fn insert_item_inner(
         .await
         .map_err(db::query_error)?;
     if thread.is_none() {
-        return Err(ApiError::NotFound(format!("Thread {} not found", payload.thread_id)));
+        return Err(ApiError::NotFound(format!(
+            "Thread {} not found",
+            payload.thread_id
+        )));
     }
 
     let rows = tx
@@ -233,9 +235,7 @@ async fn insert_item_inner(
 
     apply_insert(&mut items, payload.thread_id, payload.position);
 
-    let already_present = items
-        .iter()
-        .any(|item| item.thread_id == payload.thread_id);
+    let already_present = items.iter().any(|item| item.thread_id == payload.thread_id);
     for (item, original_position) in items.iter().zip(original_positions.iter()) {
         if item.position != *original_position {
             tx.execute(
@@ -340,57 +340,196 @@ impl utoipa::Modify for ReadingOrdersSecurityAddon {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{config::Config, test_support::DB_LOCK};
+    use axum::extract::{Path, State};
+    use std::sync::Arc;
+
+    async fn test_state() -> Arc<AppState> {
+        let url = crate::test_support::database_url().await;
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some(url.clone()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-reading-orders-test".into()),
+            "RUST_ROLL_POOL_SIZE" => Some("2".into()),
+            _ => None,
+        })
+        .expect("reading-orders test config");
+        Arc::new(AppState::new(config).expect("reading-orders test state"))
+    }
+
+    #[tokio::test]
+    async fn insert_reading_order_item_writes_row_and_positions() {
+        let _guard = DB_LOCK.lock().await;
+        let state = test_state().await;
+        crate::test_support::reset(&state).await;
+
+        let connection = crate::db::checkout(&state).await.expect("seed connection");
+        connection
+            .execute(
+                "INSERT INTO users (id, username) VALUES ($1, $2)",
+                &[&7_i32, &"reader-7"],
+            )
+            .await
+            .expect("seed user");
+        connection
+            .execute(
+                "INSERT INTO threads (id, user_id, title, format, issues_remaining, status, queue_position, is_blocked) VALUES ($1, $2, $3, 'Comic', 1, 'active', 1, false)",
+                &[&11_i32, &7_i32, &"Thread 11"],
+            )
+            .await
+            .expect("seed thread");
+        connection
+            .execute(
+                "INSERT INTO reading_orders (id, user_id, name) VALUES ($1, $2, $3)",
+                &[&101_i32, &7_i32, &"Order 101"],
+            )
+            .await
+            .expect("seed reading order");
+        drop(connection);
+
+        let (status, Json(response)) = insert_reading_order_item(
+            State(state.clone()),
+            AuthenticatedUser::for_test(7),
+            Path(101),
+            Json(InsertReadingOrderItemRequest {
+                thread_id: 11,
+                position: 1,
+            }),
+        )
+        .await
+        .expect("insert reading order item");
+
+        assert_eq!(status, StatusCode::CREATED);
+        assert_eq!(response.reading_order_id, 101);
+        assert_eq!(response.thread_id, 11);
+        assert_eq!(response.position, 1);
+        assert_eq!(response.total_items, 1);
+
+        let connection = crate::db::checkout(&state)
+            .await
+            .expect("verify connection");
+        let row = connection
+            .query_one(
+                "SELECT thread_id, position FROM reading_order_items WHERE reading_order_id = $1",
+                &[&101_i32],
+            )
+            .await
+            .expect("inserted row");
+        let thread_id: i32 = row.get(0);
+        let position: i32 = row.get(1);
+        assert_eq!(thread_id, 11);
+        assert_eq!(position, 1);
+    }
 
     #[test]
     fn apply_insert_shifts_at_and_after_target_for_new_thread() {
         let mut items = vec![
-            ItemRow { id: 1, thread_id: 11, position: 1 },
-            ItemRow { id: 2, thread_id: 22, position: 2 },
-            ItemRow { id: 3, thread_id: 33, position: 3 },
+            ItemRow {
+                id: 1,
+                thread_id: 11,
+                position: 1,
+            },
+            ItemRow {
+                id: 2,
+                thread_id: 22,
+                position: 2,
+            },
+            ItemRow {
+                id: 3,
+                thread_id: 33,
+                position: 3,
+            },
         ];
         apply_insert(&mut items, 44, 2);
-        let positions: Vec<(i32, i32)> =
-            items.iter().map(|item| (item.thread_id, item.position)).collect();
+        let positions: Vec<(i32, i32)> = items
+            .iter()
+            .map(|item| (item.thread_id, item.position))
+            .collect();
         assert_eq!(positions, vec![(11, 1), (22, 3), (33, 4)]);
     }
 
     #[test]
     fn apply_insert_moves_existing_thread_forward() {
         let mut items = vec![
-            ItemRow { id: 1, thread_id: 11, position: 1 },
-            ItemRow { id: 2, thread_id: 22, position: 2 },
-            ItemRow { id: 3, thread_id: 33, position: 3 },
-            ItemRow { id: 4, thread_id: 44, position: 4 },
+            ItemRow {
+                id: 1,
+                thread_id: 11,
+                position: 1,
+            },
+            ItemRow {
+                id: 2,
+                thread_id: 22,
+                position: 2,
+            },
+            ItemRow {
+                id: 3,
+                thread_id: 33,
+                position: 3,
+            },
+            ItemRow {
+                id: 4,
+                thread_id: 44,
+                position: 4,
+            },
         ];
         apply_insert(&mut items, 11, 3);
-        let positions: Vec<(i32, i32)> =
-            items.iter().map(|item| (item.thread_id, item.position)).collect();
+        let positions: Vec<(i32, i32)> = items
+            .iter()
+            .map(|item| (item.thread_id, item.position))
+            .collect();
         assert_eq!(positions, vec![(11, 3), (22, 1), (33, 2), (44, 4)]);
     }
 
     #[test]
     fn apply_insert_moves_existing_thread_backward() {
         let mut items = vec![
-            ItemRow { id: 1, thread_id: 11, position: 1 },
-            ItemRow { id: 2, thread_id: 22, position: 2 },
-            ItemRow { id: 3, thread_id: 33, position: 3 },
-            ItemRow { id: 4, thread_id: 44, position: 4 },
+            ItemRow {
+                id: 1,
+                thread_id: 11,
+                position: 1,
+            },
+            ItemRow {
+                id: 2,
+                thread_id: 22,
+                position: 2,
+            },
+            ItemRow {
+                id: 3,
+                thread_id: 33,
+                position: 3,
+            },
+            ItemRow {
+                id: 4,
+                thread_id: 44,
+                position: 4,
+            },
         ];
         apply_insert(&mut items, 44, 2);
-        let positions: Vec<(i32, i32)> =
-            items.iter().map(|item| (item.thread_id, item.position)).collect();
+        let positions: Vec<(i32, i32)> = items
+            .iter()
+            .map(|item| (item.thread_id, item.position))
+            .collect();
         assert_eq!(positions, vec![(11, 1), (22, 3), (33, 4), (44, 2)]);
     }
 
     #[test]
     fn apply_insert_same_position_is_a_no_op_for_the_moved_thread() {
         let mut items = vec![
-            ItemRow { id: 1, thread_id: 11, position: 1 },
-            ItemRow { id: 2, thread_id: 22, position: 2 },
+            ItemRow {
+                id: 1,
+                thread_id: 11,
+                position: 1,
+            },
+            ItemRow {
+                id: 2,
+                thread_id: 22,
+                position: 2,
+            },
         ];
         apply_insert(&mut items, 11, 1);
-        let positions: Vec<(i32, i32)> =
-            items.iter().map(|item| (item.thread_id, item.position)).collect();
+        let positions: Vec<(i32, i32)> = items
+            .iter()
+            .map(|item| (item.thread_id, item.position))
+            .collect();
         assert_eq!(positions, vec![(11, 1), (22, 2)]);
     }
 }

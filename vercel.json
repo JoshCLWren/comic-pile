@@ -538,6 +538,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/reading-orders/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/reading\\-mode$",
       "methods": [
         "GET",
@@ -1186,14 +1200,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/demo/roll$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/issues/[^/]+/reader\\-context$",
       "methods": [
         "GET",
@@ -1831,22 +1837,6 @@
       "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-orders/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-orders/[^/]+/items$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
