@@ -1091,6 +1091,7 @@ def test_issue_assignment_rechecks_dependency_at_mutation_boundary(
 ) -> None:
     """An advisory cached issue cannot be claimed if a fresh blocker appeared."""
     issue = controller.Candidate("issue", 4737, 0, 0, "2026-11-14T00:00:00Z")
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     lookups = []
     lease_writes = []
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
