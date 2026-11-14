@@ -239,6 +239,17 @@ def test_monthly_quota_uses_next_utc_month(provider: str, observed: str, reset: 
     assert qp.quota_reset_epoch('z-ai', timestamp) == timestamp + 1800
 
 
+@pytest.mark.parametrize('observed,reset', [
+    ('2026-11-14T19:08:00Z', '2026-11-15T00:00:00Z'),
+    ('2026-12-31T23:59:59Z', '2027-01-01T00:00:00Z'),
+    ('2028-02-29T00:00:00Z', '2028-03-01T00:00:00Z'),
+])
+def test_openrouter_daily_quota_resets_at_utc_midnight(observed: str, reset: str) -> None:
+    observed_epoch = int(datetime.fromisoformat(observed.replace('Z', '+00:00')).timestamp())
+    expected_epoch = int(datetime.fromisoformat(reset.replace('Z', '+00:00')).timestamp())
+    assert qp.quota_reset_epoch('openrouter-free', observed_epoch) == expected_epoch
+
+
 @pytest.mark.parametrize('runtime,message', [
     ('mistral/codestral-latest', 'Error: API budget exhausted.'),
     ('ollama-cloud/nemotron-3-nano:30b', 'You have reached your monthly usage limit'),

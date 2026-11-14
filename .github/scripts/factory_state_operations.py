@@ -205,7 +205,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 repo, source, classification, run_id)
         kind = str(outcome.get("selected_kind") or "")
         number = str(outcome.get("selected_number") or "")
-        if kind == "pr" and number.isdigit() and classification in {"work_failure","unknown_failure","environment_failure"}:
+        if kind == "pr" and number.isdigit() and classification in {"work_failure","agent_timeout","unknown_failure","environment_failure"}:
             key = f"factory-projection-v1:{repo}:pr:{int(number)}"
             record = await conn.fetchval(
                 "SELECT payload->0->'item' FROM public.factory_state_kv WHERE cache_key=$1", key)
@@ -217,7 +217,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             stage = next((s for s in ("factory:changes-requested","factory:ci","factory:review")
                           if s in names), "factory:review")
             if HEAD_RE.fullmatch(head):
-                seconds = 180 if classification == "work_failure" else 300 if classification == "unknown_failure" else 600
+                seconds = 120 if classification == "agent_timeout" else 180 if classification == "work_failure" else 300 if classification == "unknown_failure" else 600
                 await conn.execute(
                     """INSERT INTO public.factory_pr_stage_retry
                          (repo,pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id)
