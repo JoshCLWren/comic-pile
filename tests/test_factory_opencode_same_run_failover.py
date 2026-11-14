@@ -127,7 +127,7 @@ def _run_dynamic_smoke(
             "RUNNER_TEMP": str(tmp_path),
             "RUNTIME_MODEL": f"{source.removesuffix('-free')}/{initial_model}",
             "SOURCE": source,
-            "WORKER": "52" if source == "openrouter-free" else "41",
+            "WORKER": "108" if source == "openrouter-free" else "41",
             "DEEPSEEK_MODE": "normal",
             "GITHUB_RUN_ID": "12345",
             "GITHUB_RUN_NUMBER": "0",
