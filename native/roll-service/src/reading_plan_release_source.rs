@@ -67,7 +67,7 @@ pub async fn create_release_source(
     Json(payload): Json<ReleaseSourceCreate>,
 ) -> Result<(StatusCode, Json<ReleaseSourceResponse>), ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership
     let plan_exists: bool = conn
         .query_opt(
@@ -155,7 +155,7 @@ pub async fn create_release_source(
         created_at: row.get(11),
         updated_at: row.get(12),
     };
-    
+
     Ok((StatusCode::CREATED, Json(source)))
 }
 
@@ -317,7 +317,7 @@ pub async fn delete_release_source(
     Path(source_id): Path<i32>,
 ) -> Result<StatusCode, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify source exists and user owns the associated plan
     let result = conn
         .execute(
@@ -332,7 +332,7 @@ pub async fn delete_release_source(
     if result == 0 {
         return Err(ApiError::NotFound("Release source not found".to_string()));
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
