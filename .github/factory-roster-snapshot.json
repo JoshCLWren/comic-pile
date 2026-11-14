@@ -340,10 +340,10 @@
     {
       "worker": "118",
       "source": "requesty",
-      "model": "poolside/laguna-m.1",
+      "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
       "minute": "30",
       "scheduler": "dispatcher",
-      "display_name": "Requesty Laguna M.1 Free"
+      "display_name": "Requesty Nemotron 3.5 Lightning Free"
     },
     {
       "worker": "119",
