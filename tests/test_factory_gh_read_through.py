@@ -25,13 +25,13 @@ REPO = "JoshCLWren/comic-pile"
 @pytest.mark.parametrize(
     ("args", "expected"),
     [
-        (["--paginate", "--slurp", f"repos/{REPO}/pulls?state=all&per_page=100"], 120),
-        ([f"repos/{REPO}/pulls?state=open&per_page=100"], 45),
-        ([f"repos/{REPO}/issues?state=open&per_page=100"], 45),
-        ([f"repos/{REPO}/issues/comments?since=2026-11-14T00:00:00Z"], 60),
-        ([f"repos/{REPO}/issues/1093/comments?per_page=100"], 90),
-        ([f"repos/{REPO}/issues/4737/dependencies/blocked_by?per_page=100"], 600),
-        ([f"repos/{REPO}/issues/4737/comments?per_page=100"], 180),
+        (["--paginate", "--slurp", f"repos/{REPO}/pulls?state=all&per_page=100"], 1200),
+        ([f"repos/{REPO}/pulls?state=open&per_page=100"], 450),
+        ([f"repos/{REPO}/issues?state=open&per_page=100"], 450),
+        ([f"repos/{REPO}/issues/comments?since=2026-11-14T00:00:00Z"], 600),
+        ([f"repos/{REPO}/issues/1093/comments?per_page=100"], 900),
+        ([f"repos/{REPO}/issues/4737/dependencies/blocked_by?per_page=100"], 3600),
+        ([f"repos/{REPO}/issues/4737/comments?per_page=100"], 1800),
         ([f"repos/{REPO}/issues/4737/dependencies/blocked_by?per_page=50"], None),
         (["--header", "Cache-Control: no-cache", f"repos/{REPO}/issues/4737/dependencies/blocked_by?per_page=100"], None),
         ([f"repos/{REPO}/pulls/5000"], None),
@@ -91,7 +91,7 @@ def test_safe_api_cache_hit_does_not_call_github(monkeypatch, capsys) -> None:
     args = [f"repos/{REPO}/pulls?state=all&per_page=100"]
     assert read_through.api(args) == 0
     assert json.loads(capsys.readouterr().out) == [{"number": 42}]
-    assert cached.call_args.kwargs["ttl_seconds"] == 120
+    assert cached.call_args.kwargs["ttl_seconds"] == 1200
     called.assert_not_called()
 
 
