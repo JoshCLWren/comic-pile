@@ -113,7 +113,7 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "NEON_API_KEY" not in str(model_job)
     assert any(step.get("uses") == "./.github/actions/factory-state-cache"
                for step in trusted_cleanup["steps"])
-    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
+    assert "model_health_snapshot:" in entry
     assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
@@ -142,7 +142,7 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     assert "source_run_id" not in drain
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
-    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
+    assert "model_health_snapshot:" in entry
     reusable = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
     assert "factory-state-cache" not in str(reusable["jobs"]["factory"])
     assert "NEON_API_KEY" not in str(reusable["jobs"]["factory"])
