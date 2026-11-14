@@ -393,7 +393,7 @@ async def _ingest_event(
                    ON CONFLICT(cache_key) DO UPDATE SET
                      payload=EXCLUDED.payload,updated_at=now(),
                        expires_at=EXCLUDED.expires_at
-                   WHERE (COALES(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
+                   WHERE (COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                          <= (COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                      AND (factory_state_kv.payload->0->'item'
                           IS DISTINCT FROM EXCLUDED.payload->0->'item'
