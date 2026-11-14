@@ -176,23 +176,38 @@ def _backing_unavailable_for_intent(log: str, selected_model: str) -> bool:
 
 
 def _runtime_evidence(log: str) -> str:
-    """Exclude GitHub's echoed shell source and unrelated diagnostic text.
+    """Keep executed runner diagnostics, not echoed commands or agent telemetry.
 
-    Actions prints each run-script command in cyan *before* it executes it.
-    Those lines contain both sides of conditionals, including quota errors
-    that never happened. Git checkout output and model tool reads can likewise
-    contain branch/file names with words such as 'quota' or '429'. Neither is
-    evidence of a provider failure.
+    Opaque IDs in OpenCode structured events can contain `413` or `429`,
+    while tool output can quote unrelated quota documentation. Neither proves
+    the model provider returned a rate limit. Only a structured error's
+    message (not its metadata) counts as error evidence.
     """
     evidence = []
     for line in log.splitlines():
-        if "\x1b[36;1m" in line:
+        if "\\x1b[36;1m" in line:
             continue
-        payload = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", line).lstrip()
-        if payload.startswith(("* [new branch]", "remotes/origin/", '{"type":"tool_use"')):
+        payload = re.sub(r"^\\d{4}-\\d{2}-\\d{2}T\\S+Z\\s+", "", line).lstrip()
+        if payload.startswith(("* [new branch]", "remotes/origin/")):
             continue
+        if payload.startswith("{"):
+            try:
+                event = json.loads(payload)
+            except ValueError:
+                pass
+            else:
+                if isinstance(event, dict) and isinstance(event.get("type"), str):
+                    if event["type"] == "error":
+                        detail = event.get("error") or event.get("message") or ""
+                        if isinstance(detail, dict):
+                            detail = detail.get("message") or ""
+                        if isinstance(detail, str) and detail.strip():
+                            evidence.append(detail)
+                    # The remainder is agent text, tool reads, timing and
+                    # session metadata, not provider response evidence.
+                    continue
         evidence.append(line)
-    return "\n".join(evidence)
+    return "\\n".join(evidence)
 
 def classify(log: str) -> Result:
     """Classify a fixed-model factory Actions log into a structured outcome.
@@ -432,6 +447,29 @@ class ClassifierTests(unittest.TestCase):
         result = classify(log)
         self.assertEqual(result.outcome_class, "success")
         self.assertTrue(result.persisted_work)
+
+    def test_kilo_session_ids_cannot_fake_provider_throttle(self) -> None:
+        """Real Kilo step IDs containing 413 must not cool a healthy provider."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\\n"
+            + '2026-11-14T16:29:02.8233288Z {"type":"step_start","part":{"id":"prt_1dae413e2001"}}\\n'
+            + '2026-11-14T16:29:03.0000000Z {"type":"step_finish","part":{"id":"prt_429example"}}\\n'
+            + '2026-11-14T16:29:04.0000000Z {"type":"tool_use","part":{"output":"quota and capacity examples in docs"}}\\n'
+            + "[factory:46] repair attempt for PR #5055 produced no persisted change\\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.persisted_work)
+
+    def test_structured_provider_error_still_triggers_throttle(self) -> None:
+        """A real structured error remains provider evidence after filtering."""
+        log = self.BASE + (
+            '2026-11-14T16:30:02.0000000Z '
+            '{"type":"error","error":{"message":"HTTP 429 Too Many Requests"}}\\n'
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_throttle")
 
     def test_real_quota_error_still_classifies_after_command_filtering(self) -> None:
         log = self.BASE + (
