@@ -29,7 +29,7 @@ from factory_quota_pause import describe as describe_quota_pause, is_paused as q
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
-from factory_state_projection import projected_json, reconcile_snapshot
+from factory_state_projection import projected_json, reconcile_snapshot, refresh_trusted_label_write
 from factory_state_ledger import acquire_lease, release_lease, renew_verified_workers, worker_claim
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -248,6 +248,22 @@ def last_github_update_epoch(item: dict[str, Any], *, now_epoch: int) -> int | N
     return epoch if 0 < epoch <= now_epoch else None
 
 
+def refresh_projection_after_label_change(number: int, target: dict[str, Any]) -> None:
+    """Refresh the specific authoritative target, never use Neon to authorize a label PUT."""
+    if not os.environ.get("FACTORY_STATE_DSN_FILE"):
+        return
+    try:
+        refresh_trusted_label_write(REPO, number, is_pr="pull_request" in target)
+    except Exception as exc:
+        # A completed GitHub release must still discharge its transactional
+        # Neon lease; the 30-minute full-snapshot expiry repairs missed writes.
+        print(
+            f"[factory-controller] target #{number} projection refresh deferred "
+            f"({type(exc).__name__}); GitHub labels remain authoritative",
+            file=sys.stderr,
+        )
+
+
 def replace_factory_labels(
     number: int,
     owner: str,
@@ -327,6 +343,7 @@ def replace_factory_labels(
         labels.append('ralph-status:pending')
     
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
+    refresh_projection_after_label_change(number, target)
     return True
 
 
@@ -1688,8 +1705,11 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         and label['name'] != 'factory:unowned'
                     }
                     if active_owners != {owner}:
-                        # The old labels were already removed, or a different
-                        # owner now has this target. Never touch that owner.
+                        # Model-side releases can precede trusted cleanup and
+                        # lack a webhook. Refresh only truly unowned targets.
+                        if not active_owners:
+                            refresh_projection_after_label_change(number, current)
+                        # Never overwrite ownership assigned to a newer worker.
                         already_released.append(number)
                         continue
                     if worker_claim(REPO, worker) != original_claim:
