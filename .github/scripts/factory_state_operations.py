@@ -132,7 +132,9 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                  updated_at=now()""",
             repo, worker, source, model, int(persisted), int(classification in {"success","no_work"}),
             int(classification not in {"success","no_work"}), run_id)
-        if classification in MODEL_COOLDOWNS:
+        if classification == "model_retired_410":
+            status, until = "retired", None
+        elif classification in MODEL_COOLDOWNS:
             status, until = "unavailable", observed + timedelta(seconds=MODEL_COOLDOWNS[classification])
         elif classification in TRANSIENT and source in MODEL_SCOPED_SOURCES:
             status, until = "cooling", _provider_cooldown(source, classification, observed)

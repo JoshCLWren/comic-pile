@@ -178,3 +178,10 @@ def test_exact_head_checks_are_advisory_not_merge_authorization():
     assert "neon-api-key: \\${{" not in workflow
     assert "pull_request_target:" not in workflow
     assert "gh pr merge" not in workflow
+
+
+def test_runtime_410_is_sticky_in_neon_projection():
+    import inspect
+    source = inspect.getsource(operations.project_runtime)
+    assert 'classification == "model_retired_410"' in source
+    assert 'status, until = "retired", None' in source
