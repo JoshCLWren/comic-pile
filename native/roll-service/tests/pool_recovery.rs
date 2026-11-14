@@ -55,6 +55,22 @@ fn state_with_timeout(
     connection_recovery: bool,
     request_timeout_ms: u64,
 ) -> Arc<AppState> {
+    state_with_recycling(
+        url,
+        pool_size,
+        connection_recovery,
+        request_timeout_ms,
+        deadpool_postgres::RecyclingMethod::Fast,
+    )
+}
+
+fn state_with_recycling(
+    url: &str,
+    pool_size: usize,
+    connection_recovery: bool,
+    request_timeout_ms: u64,
+    recycling_method: deadpool_postgres::RecyclingMethod,
+) -> Arc<AppState> {
     let config = Config::from_lookup(|key| match key {
         "RUST_ROLL_DATABASE_URL" => Some(url.into()),
         "RUST_ROLL_JWT_SECRET" => Some(test_support::TEST_JWT_SECRET.into()),
@@ -63,7 +79,8 @@ fn state_with_timeout(
         _ => None,
     })
     .expect("pool recovery test config");
-    let mut state = AppState::new(config).expect("pool recovery test state");
+    let mut state =
+        AppState::with_recycling(config, recycling_method).expect("pool recovery test state");
     state.connection_recovery = connection_recovery;
     Arc::new(state)
 }
@@ -81,16 +98,35 @@ struct Fixture {
 }
 
 async fn fixture(connection_recovery: bool) -> Fixture {
+    fixture_with_recycling(
+        connection_recovery,
+        deadpool_postgres::RecyclingMethod::Fast,
+    )
+    .await
+}
+
+async fn fixture_with_recycling(
+    connection_recovery: bool,
+    recycling_method: deadpool_postgres::RecyclingMethod,
+) -> Fixture {
     let url = test_support::database_url().await;
-    let direct = state(&url, 2, true);
+    let direct = state_with_recycling(
+        &url,
+        2,
+        true,
+        5000,
+        deadpool_postgres::RecyclingMethod::Fast,
+    );
     let _db = test_support::reset_for_test(&direct).await;
     let (token, csrf, user_id) = register(&direct, "pool-reader").await;
     seed_threads(&direct, user_id).await;
     let proxy = FaultProxy::start(authority(&url)).await;
-    let proxied = state(
+    let proxied = state_with_recycling(
         &redirect(&url, &proxy.address.to_string()),
         1,
         connection_recovery,
+        5000,
+        recycling_method,
     );
     Fixture {
         direct,
@@ -466,9 +502,12 @@ async fn authenticated_write_recovers_and_commits_exactly_once() {
 /// The same armed proxy proves the regression: with recovery disabled the first
 /// statement fails and the reader gets the existing transient database envelope,
 /// not a 500.
+///
+/// Uses `RecyclingMethod::Fast` so pool recycling does not consume the fault before the
+/// handler's first statement, which this negative control is meant to exercise (#4732).
 #[tokio::test]
 async fn recovery_disabled_surfaces_the_transient_unavailable_envelope() {
-    let fixture = fixture(false).await;
+    let fixture = fixture_with_recycling(false, deadpool_postgres::RecyclingMethod::Fast).await;
     let (status, body) = get_threads(&fixture).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
@@ -481,9 +520,12 @@ async fn recovery_disabled_surfaces_the_transient_unavailable_envelope() {
 
 /// Authentication state is a credential question; a dead socket is availability.
 /// The reader must be told to retry, not signed out.
+///
+/// Uses `RecyclingMethod::Fast` so pool recycling does not consume the fault before the
+/// handler's first statement, which this negative control is meant to exercise (#4732).
 #[tokio::test]
 async fn authentication_reports_unavailability_not_a_false_logout() {
-    let fixture = fixture(false).await;
+    let fixture = fixture_with_recycling(false, deadpool_postgres::RecyclingMethod::Fast).await;
     let (status, body) = get_me(&fixture).await;
     assert_eq!(status, StatusCode::OK, "{body}");
 
@@ -592,14 +634,32 @@ async fn a_hung_probe_is_bounded_and_discards_the_physical_connection() {
     drop(connection);
 }
 
-/// Measure the probe cost against the raw checkout it protects.
+/// Measure the probe cost against a Fast-recycling baseline that has no db::checkout probe.
 #[tokio::test]
 async fn checkout_probe_overhead_is_measured_and_bounded() {
     let url = test_support::database_url().await;
-    let direct = state(&url, 2, true);
+    let direct = state_with_recycling(
+        &url,
+        2,
+        true,
+        5000,
+        deadpool_postgres::RecyclingMethod::Fast,
+    );
     let _db = test_support::reset_for_test(&direct).await;
-    let recovered = state(&url, 2, true);
-    let raw = state(&url, 2, false);
+    let recovered = state_with_recycling(
+        &url,
+        2,
+        true,
+        5000,
+        deadpool_postgres::RecyclingMethod::Fast,
+    );
+    let raw = state_with_recycling(
+        &url,
+        2,
+        false,
+        5000,
+        deadpool_postgres::RecyclingMethod::Fast,
+    );
     // Warm both pools so the comparison measures the probe, not connection setup.
     drop(db::checkout(&recovered).await.expect("warm recovered"));
     drop(db::checkout(&raw).await.expect("warm raw"));
@@ -608,11 +668,11 @@ async fn checkout_probe_overhead_is_measured_and_bounded() {
     let recovered_median = median_checkout(&recovered, samples).await;
     let raw_median = median_checkout(&raw, samples).await;
     println!(
-        "checkout median: probe {recovered_median:?}, raw {raw_median:?} over {samples} samples"
+        "checkout median: probe {recovered_median:?}, raw-fast baseline {raw_median:?} over {samples} samples"
     );
     assert!(
         recovered_median < raw_median + MAX_PROBE_OVERHEAD,
-        "probe overhead must stay bounded: {recovered_median:?} vs raw {raw_median:?}"
+        "probe overhead must stay bounded: {recovered_median:?} vs raw-fast baseline {raw_median:?}"
     );
     assert!(
         recovered_median < Duration::from_millis(50),
