@@ -555,9 +555,29 @@ async def _claim_wakeup(conn: Any, repo: str, scope: str, interval_seconds: int)
 def claim_wakeup(repo: str, scope: str, interval_seconds: int=120) -> bool:
     return _run(_claim_wakeup,repo,scope,interval_seconds) if enabled() else False
 
+async def _export_model_exclusions(conn: Any, repo: str) -> dict[str, list[str]]:
+    """Trusted read-only snapshot for credential-isolated factory workers."""
+    rows = await conn.fetch(
+        """SELECT source, model FROM public.factory_model_health
+           WHERE repo=$1 AND (status='retired' OR
+               (status IN ('unavailable','cooling') AND cooldown_until>now()))
+           ORDER BY source, model""", repo,
+    )
+    excluded: dict[str, list[str]] = {}
+    for row in rows:
+        excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
+    return excluded
+
+
+def export_model_exclusions(repo: str) -> dict[str, list[str]]:
+    if not enabled():
+        raise RuntimeError("Neon is required for model health snapshot")
+    return _run(_export_model_exclusions, repo)
+
+
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
@@ -582,6 +602,8 @@ def main() -> int:
             checkpoint(args.repo,"registry-backfill-v1",datetime.now(timezone.utc).isoformat(),n)
             print(f"[factory-operations] imported {n} trusted model records")
         print("[factory-operations] schema ready")
+    elif args.command=="export-model-exclusions":
+        print(json.dumps(export_model_exclusions(args.repo),sort_keys=True,separators=(",",":")))
     elif args.command=="filter":
         workers=[str(w) for w in json.load(sys.stdin)]
         kept,denied=filter_workers(args.repo,workers)
