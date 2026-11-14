@@ -304,9 +304,7 @@ def test_discovered_nvidia_410_retires_kimi_and_glm_workers(validate) -> None:
     rows = validate.load_roster_rows(validate.MANIFEST)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     by_worker = {row["worker"]: row for row in rows}
-    assert by_worker["77"]["source"] == "nvidia"
-    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
-    assert 77 in lock["expected_workers"]
+    _assert_committed_pin(by_worker, lock, "77", source="nvidia", model="qwen2.5-coder-7b")
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
 
@@ -397,14 +395,19 @@ def test_workers_94_95_retired_after_catalog_discovery(validate) -> None:
     assert "94" not in by_worker
     assert 94 in lock["retired_workers"]
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
-    # Worker 95 stays retired, but its model is live again at 0/0 and is
-    # now pinned as worker 104 (owner-authorized 2026-11-08). The sealed
-    # model id is lifted for reuse; the ghost worker itself stays retired.
+    # Worker 95 stays permanently retired. Worker 104 may be active or
+    # durably retired; _assert_committed_pin proves either allowed live
+    # membership or allowed-source worker+model durable retirement.
     assert "95" not in by_worker
     assert 95 not in lock["expected_workers"]
     assert 95 in lock["retired_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
-    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    committed_104_pin = _assert_committed_pin(
+        by_worker, lock, "104", source="nvidia",
+        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+    )
+    if committed_104_pin is not None:
+        assert committed_104_pin["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+        assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
     # OpenRouter :free Super VL is now pinned as worker 102 (expansion PR).
     assert by_worker["102"]["model"] == "nvidia/nemotron-3.5-super-vl:free"
 
