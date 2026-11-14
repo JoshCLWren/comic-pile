@@ -27,7 +27,7 @@ def test_issue_event_normalization_preserves_queue_fields() -> None:
     kind, number, item, state = projection.normalize_event(event)
     assert (kind, number, state) == ("issue", 501, "open")
     assert item["number"] == 501
-    assert item["labels"] == [{"name": "factory:unowned"}, {"name": "bug"}]
+    assert item["labels"] == [{"name": "bug"}, {"name": "factory:unowned"}]
     assert item["updatedAt"] == "2026-11-13T00:00:00Z"
 
 
@@ -280,3 +280,41 @@ def test_ingest_cli_does_not_hide_neon_write_failures(
     ])
     with pytest.raises(RuntimeError, match="Neon transaction failed"):
         projection.main()
+
+def test_rest_webhook_and_graphql_inventory_have_identical_stable_issue_fields() -> None:
+    rest = {"number": 44, "title": "Same", "body": "Body", "state": "open",
+            "created_at": "2026-11-13T00:00:00Z", "updated_at": "2026-11-14T00:00:00Z",
+            "labels": [{"name": "factory", "id": 5, "url": "https://api.github.com/a"},
+                       {"name": "bug", "color": "red"}]}
+    graphql = {"number": 44, "title": "Same", "body": "Body",
+               "createdAt": rest["created_at"], "updatedAt": rest["updated_at"],
+               "labels": [{"name": "bug", "id": "LA_999", "description": "Unimportant"},
+                          {"name": "factory", "id": "LA_111"}]}
+    webhook = projection.normalize_event({"issue": rest})
+    assert webhook is not None
+    expected = projection.canonical_item("issue", graphql)
+    assert webhook[2] == expected
+    assert projection.canonical_item("issue", graphql) == expected
+    # Two consecutive unchanged authoritative listings produce identical JSONB items.
+    assert projection.canonical_item("issue", dict(graphql)) == expected
+    assert projection.canonical_item("issue", {**graphql, "title": "Changed"}) != expected
+    assert projection.canonical_item("issue", {**graphql, "labels": []}) != expected
+
+
+def test_rest_pr_and_inventory_share_head_and_mergeability() -> None:
+    same = {"number": 66, "title": "PR", "body": "", "state": "open",
+            "created_at": "2026-11-13T00:00:00Z", "updated_at": "2026-11-14T00:00:00Z",
+            "draft": False, "mergeable": True, "mergeable_state": "clean",
+            "head": {"ref": "fix", "sha": "a"*40,
+                     "repo": {"full_name": "owner/repo"}},
+            "base": {"repo": {"full_name": "owner/repo"}},
+            "labels": [{"name": "factory", "color": "purple"}]}
+    graph = {"number": 66, "title": "PR", "body": "",
+             "createdAt": same["created_at"], "updatedAt": same["updated_at"],
+             "headRefName": "fix", "headRefOid": "a"*40, "isDraft": False,
+             "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
+             "isCrossRepository": False,
+             "labels": [{"name": "factory", "id": "LA_123"}]}
+    webhook = projection.normalize_event({"pull_request": same})
+    assert webhook is not None and webhook[2] == projection.canonical_item("pr", graph)
+    assert projection.canonical_item("pr", {**graph, "headRefOid": "b"*40}) != webhook[2]
