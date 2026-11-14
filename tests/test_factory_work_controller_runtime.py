@@ -1114,3 +1114,30 @@ def test_live_blocker_lookup_explicitly_bypasses_neon_cache(
     assert controller.issue_has_open_blocker(4737, live=True) is True
     assert calls[0][0] == "api" and len(calls[0]) == 2
     assert calls[1][:3] == ["api", "--header", "Cache-Control: no-cache"]
+
+
+def test_batch_assignment_omits_redundant_reconciliation(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the trusted reconciled batch skips global sweeps; manual calls keep them."""
+    sweeps: list[str] = []
+    monkeypatch.setattr(controller, "quota_pause_for", lambda _worker: None)
+    monkeypatch.setattr(controller, "runtime_quota_block_reason", lambda _worker: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
+    monkeypatch.setattr(controller, "budget_block_reason", lambda _worker: None)
+    monkeypatch.setattr(controller, "omniroute_free_entry_capacity", lambda: {"remaining": 1})
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: sweeps.append("stale"))
+    monkeypatch.setattr(controller, "reconcile_contradictory_labels", lambda: sweeps.append("labels"))
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
+    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    monkeypatch.setattr(controller, "build_candidates", lambda *a, **kw: [])
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda *a: None)
+    monkeypatch.setattr(controller, "resolve_review_head_contributors", lambda c, p: c)
+    monkeypatch.setattr(controller, "order_candidates_for_worker", lambda c, w: c)
+    monkeypatch.delenv("FACTORY_JEV_RANKING_FILE", raising=False)
+
+    assert controller.assign("13", batch_reconciled=True) is None
+    assert sweeps == []
+    assert controller.assign("13") is None
+    assert sweeps == ["stale", "labels"]
