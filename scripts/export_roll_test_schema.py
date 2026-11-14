@@ -48,6 +48,16 @@ DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
 # against an empty search_path the same way production objects live in public.
 _UNQUALIFIED_GIN_TRGM_OPS = re.compile(r"(?<![\w.])gin_trgm_ops\b")
 
+# PostgreSQL's internal pg_attver column option varies with catalog history.
+# It is not portable schema DDL (pg_attribute.attoptions reserves internal
+# pg_ options). Drop only a standalone assignment of this one option; retain
+# every user-facing option and mixed-option statement for drift detection.
+_SQL_IDENTIFIER = r'(?:"(?:[^"\n]|"")+"|[A-Za-z_][A-Za-z_0-9$]*)'
+_VOLATILE_ATTRIBUTE_VERSION = re.compile(
+    rf"ALTER TABLE ONLY {_SQL_IDENTIFIER}\.{_SQL_IDENTIFIER} "
+    rf"ALTER COLUMN {_SQL_IDENTIFIER} SET \(pg_attver=\d+\);"
+)
+
 
 def _qualify_extension_operator_classes(sql: str) -> str:
     """Qualify ``pg_trgm`` operator classes so empty ``search_path`` can replay.
@@ -67,7 +77,7 @@ def _qualify_extension_operator_classes(sql: str) -> str:
 
 
 def _normalize(raw: str) -> str:
-    """Strip psql-only meta-commands and version-dependent banners."""
+    """Strip psql-only commands, version banners, and internal catalog versions."""
     kept: list[str] = []
     for line in raw.splitlines():
         stripped = line.strip()
@@ -78,6 +88,8 @@ def _normalize(raw: str) -> str:
         if stripped in DROPPED_SETTINGS:
             continue
         if stripped in DROPPED_STATEMENTS:
+            continue
+        if _VOLATILE_ATTRIBUTE_VERSION.fullmatch(stripped):
             continue
         kept.append(line)
     return _qualify_extension_operator_classes("\n".join(kept).rstrip("\n") + "\n")

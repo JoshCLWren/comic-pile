@@ -50,3 +50,24 @@ def test_normalize_qualifies_trigram_ops_and_strips_dump_banners() -> None:
     assert " gin_trgm_ops)" not in normalized.replace("public.gin_trgm_ops)", "")
     assert normalized.endswith("\n")
     assert not normalized.endswith("\n\n")
+
+
+def test_normalize_discards_only_internal_attribute_version_assignments() -> None:
+    """Catalog versions vary between dumps; actual column options remain visible."""
+    schema = "CREATE TABLE public.demo (label text);\n"
+    first = (
+        schema
+        + "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+        + 'ALTER TABLE ONLY "public"."demo" ALTER COLUMN "label" SET (pg_attver=456);\n'
+    )
+    second = first.replace("123", "789").replace("456", "987")
+    assert _normalize(first) == _normalize(second) == schema
+    assert _normalize(_normalize(first)) == schema
+
+    meaningful = (
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (n_distinct=123);\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123, n_distinct=2);\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET DEFAULT 'pg_attver=123';\n"
+        "COMMENT ON COLUMN public.demo.label IS 'pg_attver=123';\n"
+    )
+    assert _normalize(meaningful) == meaningful
