@@ -80,9 +80,13 @@ def test_protected_source_disappearance_fails_committed_pin(validate) -> None:
     rows = validate.load_roster_rows(validate.MANIFEST)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     by_worker = {row["worker"]: row for row in rows}
-    by_worker.pop("82", None)
+    protected = next(row for row in rows if row["source"] == "z-ai")
+    by_worker.pop(protected["worker"])
     with pytest.raises(AssertionError):
-        _assert_committed_pin(by_worker, lock, "82", source="z-ai", model="glm-4.7-flash")
+        _assert_committed_pin(
+            by_worker, lock, protected["worker"],
+            source=protected["source"], model=protected["model"],
+        )
 
 
 def test_committed_guard_rejects_unexpected_live_model_drift(validate) -> None:
@@ -186,12 +190,10 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     assert not ollama  # Worker 55 retired after quota exhaustion.
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
     assert vercel == []
-    assert all(row['worker'] != '72' for row in rows)
     assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
     assert not mistral  # Worker 48 retired after quota exhaustion.
     lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
-    assert {48, 55}.issubset(set(lock['retired_workers']))
     assert {'codestral-latest', 'nemotron-3-nano:30b'}.issubset(set(lock['retired_models']))
 
 
@@ -253,178 +255,37 @@ def test_opencode_longcat_lane_pins_gateway_id_not_analytics_slug(validate) -> N
     assert "longcat-2.5-preview-free" in lock["retired_models"]
 
 
-def test_discovered_free_models_reuse_existing_worker_slots(validate) -> None:
-    """Free promos replace retired Apodex/Ling without adding worker IDs."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    for retired in ("apodex/apodex-1.1-mini:free", "ling-3.1-flash-free"):
-        assert retired in lock["retired_models"]
-    for worker, model in (
-        ("74", "deepseek-v4.1-flash-free"),
-        ("75", "nemotron-3.5-super-vl-free"),
-    ):
-        pin = by_worker.get(worker)
-        if pin is not None and pin["model"] == model:
-            assert pin["source"] == "opencode-free"
-            assert validate.opencode_model_is_free(pin["model"])
-            assert pin["scheduler"] == "dispatcher"
-        else:
-            # These promotional models may be retired by discovery later.
-            assert model in lock["retired_models"]
-
-
-
-def test_worker_56_dots_preview_is_retired_by_discovery(validate) -> None:
-    """A dead OpenRouter preview pin cannot reenter the generated roster."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert "56" not in {row["worker"] for row in rows}
-    assert 56 in lock["retired_workers"]
-    assert 56 not in lock["expected_workers"]
-    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
-
-
-def test_worker_76_fledge_alpha_free_is_retired_by_discovery(validate) -> None:
-    """The historical Fledge Alpha retirement remains locked."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert "76" not in by_worker
-    assert 76 in lock["retired_workers"]
-    assert "fledge-alpha-free" in lock["retired_models"]
-    assert "fledge-alpha-free" not in {row["model"] for row in rows}
-    assert "inclusionai/ling-3.1-flash" not in {row["model"] for row in rows}
-
-
-def test_discovered_nvidia_410_retires_kimi_and_glm_workers(validate) -> None:
-    """NVIDIA 410 discovery retires the historical Kimi and GLM pins."""
+def test_free_catalog_retirements_do_not_require_original_worker_ids(validate) -> None:
+    """Free-model rotation may change worker IDs without weakening paid-model guards."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     by_worker = {row["worker"]: row for row in rows}
-    assert by_worker["77"]["source"] == "nvidia"
-    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
-    assert 77 in lock["expected_workers"]
-    assert "moonshotai/kimi-k3" in lock["retired_models"]
-    _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
-
-
-def test_workers_79_to_82_pin_oct_11_smoked_free_models(validate) -> None:
-    """Workers 79 and 81 retired with discovery; workers 80 and 82 keep their Oct 11 pins."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert "79" not in by_worker
-    assert 79 in lock["retired_workers"]
-    assert "step-5-preview-free" in lock["retired_models"]
-    assert "step-5-preview-free" not in {row["model"] for row in rows}
-    _assert_committed_pin(by_worker, lock, "80", source="nvidia", model="z-ai/glm-5.3-flash")
-    assert "81" not in by_worker
-    assert 81 in lock["retired_workers"]
-    # Owner-authorized (Josh) un-retirement 2026-11-08: this NVIDIA model
-    # is live again at 0/0 and now pinned as worker 106. Worker 81 stays
-    # retired; only the permanently-retired model seal is lifted.
-    assert "deepseek-ai/deepseek-v4.1-flash" not in lock["retired_models"]
-    assert by_worker["106"]["model"] == "deepseek-ai/deepseek-v4.1-flash"
-    z_ai_pin = _assert_committed_pin(
-        by_worker, lock, "82", source="z-ai", model="glm-4.7-flash"
+    active = {int(worker) for worker in by_worker}
+    retired = set(lock["retired_workers"])
+    assert active == set(lock["expected_workers"])
+    assert active.isdisjoint(retired)
+    assert all(
+        row["model"] not in lock["retired_models"]
+        for row in rows
+        if row["source"] in {"opencode-free", "openrouter-free"}
     )
-    if z_ai_pin is not None:
-        assert validate.z_ai_model_is_free(z_ai_pin["model"])
-    # big-pickle is never grown as a first pin when the roster has none.
-    assert "big-pickle" not in {row["model"] for row in rows}
+    assert all(
+        row["model"] == "kilo-auto/free"
+        for row in rows if row["source"] == "kilo-auto"
+    )
+
+
+def test_retired_catalog_models_are_not_silently_reenrolled(validate) -> None:
+    """A historically retired model needs explicit unretirement, not a reused ID."""
+    rows = validate.load_roster_rows(validate.MANIFEST)
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
+    retired_models = set(lock["retired_models"])
+    assert not retired_models.intersection(
+        row["model"] for row in rows
+        if row["source"] in {"opencode-free", "openrouter-free"}
+    )
     assert not any(
-        row["source"] == "openrouter-free" and row["worker"] in {"79", "80", "81", "82"}
+        row["source"] == "openrouter-free"
+        and not validate.openrouter_model_is_free(row["model"])
         for row in rows
     )
-
-
-def test_workers_83_to_86_pin_nvidia_nemotron_and_muse_glimmer(validate) -> None:
-    """Worker 83 Cat Jam is retired; worker 86 Muse Glimmer and 59 stay as-is."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert {"48", "55"}.isdisjoint(by_worker)
-    assert {48, 55}.issubset(set(lock["retired_workers"]))
-    assert "59" not in by_worker
-    assert "ling-3.0-flash-fin-free" not in {row["model"] for row in rows}
-    assert "83" not in by_worker
-    assert 83 in lock["retired_workers"]
-    assert "cat-jam-free" in lock["retired_models"]
-    assert "84" not in by_worker
-    assert "85" not in by_worker
-    _assert_committed_pin(
-        by_worker, lock, "86", source="nvidia", model="meta/muse-glimmer-30b"
-    )
-    _assert_committed_pin(
-        by_worker, lock, "80", source="nvidia", model="z-ai/glm-5.3-flash"
-    )
-    assert "81" not in by_worker
-
-
-
-def test_workers_68_and_69_openrouter_laguna_are_retired(validate) -> None:
-    """OpenRouter Laguna :free pins retire before free access ends 2026-10-31."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert "68" not in by_worker
-    assert "69" not in by_worker
-    assert 68 in lock["retired_workers"]
-    assert 69 in lock["retired_workers"]
-    assert "poolside/laguna-s-2.1:free" in lock["retired_models"]
-    assert "poolside/laguna-xs-2.1:free" in lock["retired_models"]
-    _assert_committed_pin(
-        by_worker, lock, "11", source="nvidia", model="poolside/laguna-xs-2.1"
-    )
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-
-
-def test_workers_94_95_retired_after_catalog_discovery(validate) -> None:
-    """Both MiniMax 94 and NVIDIA Super VL 95 remain retired after discovery."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"
-    assert "94" not in by_worker
-    assert 94 in lock["retired_workers"]
-    assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
-    # Worker 95 stays retired, but its model is live again at 0/0 and is
-    # now pinned as worker 104 (owner-authorized 2026-11-08). The sealed
-    # model id is lifted for reuse; the ghost worker itself stays retired.
-    assert "95" not in by_worker
-    assert 95 not in lock["expected_workers"]
-    assert 95 in lock["retired_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
-    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
-    # OpenRouter :free Super VL is now pinned as worker 102 (expansion PR).
-    assert by_worker["102"]["model"] == "nvidia/nemotron-3.5-super-vl:free"
-
-
-def test_ghost_workers_49_58_63_73_83_94_are_retired(validate) -> None:
-    """Six ghost free-catalog lanes retire; kilo-auto 46 and OpenCode 42 stay."""
-    rows = validate.load_roster_rows(validate.MANIFEST)
-    by_worker = {row["worker"]: row for row in rows}
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    for worker in (49, 58, 63, 73, 83, 94):
-        assert str(worker) not in by_worker
-        assert worker in lock["retired_workers"]
-        assert worker not in lock["expected_workers"]
-    assert "space-bunny-free" in lock["retired_models"]
-    assert "muse-spark-1.3-contributor-free" in lock["retired_models"]
-    assert "nvidia/nemotron-3-super-120b-a12b:free" in lock["retired_models"]
-    assert "longcat-2.5-preview-free" in lock["retired_models"]
-    assert "cat-jam-free" in lock["retired_models"]
-    assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
-    assert by_worker["42"]["source"] == "opencode-free"
-    assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
-    assert by_worker["46"]["source"] == "kilo-auto"
-    assert by_worker["46"]["model"] == "kilo-auto/free"

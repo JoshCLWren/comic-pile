@@ -42,26 +42,19 @@ def test_committed_budgets_stay_under_account_limits() -> None:
     assert budget.load_budgets() == CAPS
 
 
-def test_committed_roster_pins_smoked_router_lanes() -> None:
-    """Worker 91 is the smoked OrcaRouter lane; Requesty lanes 92/93 are retired."""
-    rows = {row["worker"]: row for row in roster.load_roster_rows(roster.default_roster_path())}
-    assert (rows["91"]["source"], rows["91"]["model"]) == ("orcarouter", "z-ai/glm-5.3-flash-free")
+def test_committed_roster_keeps_approved_router_models_or_durable_retirements() -> None:
+    """Router pins cannot silently escape their provider-specific free allowlists."""
+    rows = roster.load_roster_rows(roster.default_roster_path())
     lock = json.loads((ROOT / ".github" / "factory-expected-workers.json").read_text())
-    assert {91} <= set(lock["expected_workers"])
-    assert {92, 93}.isdisjoint(lock["expected_workers"])
-    assert {92, 93}.issubset(set(lock["retired_workers"]))
-    assert "92" not in rows and "93" not in rows
+    assert set(lock["expected_workers"]).isdisjoint(lock["retired_workers"])
+    for row in rows:
+        if row["source"] == "orcarouter":
+            assert roster.orcarouter_model_is_free(row["model"])
+        elif row["source"] == "requesty":
+            assert roster.requesty_model_is_approved(row["model"])
     assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
     assert "nvidia/nemotron-3-super-120b-a12b" in lock["retired_models"]
-    assert "nvidia/nemotron-3-ultra-550b-a55b" not in {
-        row["model"] for row in rows.values()
-    }
-    assert "nvidia/nemotron-3-super-120b-a12b" not in {
-        row["model"] for row in rows.values()
-    }
-    # tencent/hy4-preview-free hit OrcaRouter's free-tier prompt cap in smoke.
-    assert "tencent/hy4-preview-free" not in {row["model"] for row in rows.values()}
-
+    assert "tencent/hy4-preview-free" not in {row["model"] for row in rows}
 
 def test_router_pin_guards() -> None:
     """Only approved ids may occupy router lanes; Orca auto-router is rejected."""

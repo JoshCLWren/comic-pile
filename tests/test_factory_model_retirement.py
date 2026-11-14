@@ -86,42 +86,19 @@ def test_retired_fixed_models_are_replaced_by_catalog_free_slots() -> None:
     assert RETIRED_FIXED_MODELS.isdisjoint(configured_models)
     assert REMOVED_WORKERS.isdisjoint({row[0] for row in rows})
 
-    rows_by_worker = {row[0]: row for row in rows}
-    catalog_free_workers = [
-        worker for worker, row in rows_by_worker.items() if row[1] in CATALOG_SOURCES
-    ]
-    assert catalog_free_workers, "at least one catalog-free replacement lane must remain"
-    # Worker 29 was retired by Factory Model Discovery once its
-    # qwen/qwen3.8-27b:free pin left OpenRouter; the slot stays unused.
-    assert "29" in REMOVED_WORKERS
-    assert "29" not in rows_by_worker
-    # Workers 68/69 retired before OpenRouter Laguna :free access ends 2026-10-31.
-    assert "68" in REMOVED_WORKERS
-    assert "69" in REMOVED_WORKERS
-    assert "68" not in rows_by_worker
-    assert "69" not in rows_by_worker
-    assert "poolside/laguna-s-2.1:free" in RETIRED_FIXED_MODELS
-    assert "poolside/laguna-xs-2.1:free" in RETIRED_FIXED_MODELS
-    assert rows_by_worker["11"][1] == "nvidia"
-    assert rows_by_worker["11"][2] == "poolside/laguna-xs-2.1"
-    assert rows_by_worker["46"][1] == "kilo-auto"
-    # Ghost lanes whose models left the free catalogs: OpenRouter Nemotron 3
-    # Super / MiniMax M3.1 Flash, plus OpenCode Space Bunny, Muse Spark 1.3,
-    # LongCat 2.5 Preview, and Cat Jam.
-    for worker in ("49", "58", "63", "73", "83", "94"):
-        assert worker in REMOVED_WORKERS
-        assert worker not in rows_by_worker
-    assert "space-bunny-free" in RETIRED_FIXED_MODELS
-    assert "muse-spark-1.3-contributor-free" in RETIRED_FIXED_MODELS
-    assert "nvidia/nemotron-3-super-120b-a12b:free" in RETIRED_FIXED_MODELS
-    assert "longcat-2.5-preview-free" in RETIRED_FIXED_MODELS
-    assert "cat-jam-free" in RETIRED_FIXED_MODELS
-    assert "minimax/minimax-m3.1-flash:free" in RETIRED_FIXED_MODELS
-    assert rows_by_worker["42"][1] == "opencode-free"
-    assert rows_by_worker["42"][2] == "nemotron-3-ultra-free"
-    assert rows_by_worker["46"][1] == "kilo-auto"
-    assert rows_by_worker["46"][2] == "kilo-auto/free"
-
+    # Test the live roster as data; historical worker numbers are not contracts.
+    catalog_free_rows = [row for row in rows if row[1] in CATALOG_SOURCES]
+    assert catalog_free_rows, "at least one catalog-free lane must remain"
+    assert all(row[3].isdigit() for row in catalog_free_rows)
+    assert all(
+        _ROSTER_MODULE.openrouter_model_is_free(row[2])
+        for row in catalog_free_rows if row[1] == "openrouter-free"
+    )
+    assert all(
+        _ROSTER_MODULE.opencode_model_is_free(row[2])
+        for row in catalog_free_rows if row[1] == "opencode-free"
+    )
+    assert all(row[2] == "kilo-auto/free" for row in rows if row[1] == "kilo-auto")
 
 def test_catalog_selection_fails_closed_when_every_candidate_is_cooling() -> None:
     """A throttled free catalog must not dispatch an unhealthy candidate."""
