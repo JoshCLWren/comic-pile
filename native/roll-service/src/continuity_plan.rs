@@ -99,7 +99,7 @@ pub async fn create_continuity_plan(
     Json(payload): Json<ContinuityPlanWrite>,
 ) -> Result<(StatusCode, Json<ContinuityPlanResponse>), ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Check if any node references issues not owned by the user
     for node in &payload.nodes {
         if let Some(issue_id) = node.get("issue_id").and_then(|v| v.as_i64()) {
@@ -149,7 +149,7 @@ pub async fn create_continuity_plan(
         created_at: row.get(5),
         updated_at: row.get(6),
     };
-    
+
     Ok((StatusCode::CREATED, Json(plan)))
 }
 
@@ -269,7 +269,7 @@ pub async fn delete_continuity_plan(
     Path(plan_id): Path<i32>,
 ) -> Result<StatusCode, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership and delete
     let result = conn
         .execute(
@@ -282,7 +282,7 @@ pub async fn delete_continuity_plan(
     if result == 0 {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -385,7 +385,7 @@ pub async fn link_plan_dependency_edge(
     Json(payload): Json<ReadingPlanDependencyLinkRequest>,
 ) -> Result<(StatusCode, Json<ReadingPlanDependencyLink>), ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership
     let plan_exists: bool = conn
         .query_opt(
@@ -434,7 +434,7 @@ pub async fn link_plan_dependency_edge(
         "INSERT INTO reading_plan_dependencies (plan_id, dependency_id) VALUES ($1, $2)",
         &[&plan_id, &dependency_id],
     ).await.map_err(db::query_error)?;
-    
+
     Ok((StatusCode::CREATED, Json(ReadingPlanDependencyLink {
         dependency_id,
         source_issue_id: source_id,
@@ -450,7 +450,7 @@ pub async fn unlink_plan_dependency_edge(
     Path((plan_id, dependency_id)): Path<(i32, i32)>,
 ) -> Result<StatusCode, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership
     let plan_exists: bool = conn
         .query_opt(
@@ -473,13 +473,13 @@ pub async fn unlink_plan_dependency_edge(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     if result == 0 {
         return Err(ApiError::NotFound(
             "Dependency not linked to this plan".to_string()
         ));
     }
-    
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -490,23 +490,23 @@ pub async fn adopt_reading_order(
     Json(payload): Json<serde_json::Value>,
 ) -> Result<(StatusCode, Json<ContinuityPlanResponse>), ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Extract reading order ID from payload
     let reading_order_id = payload.get("reading_order_id")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| ApiError::BadRequest("reading_order_id is required".to_string()))? as i32;
-    
+
     let plan_name = payload.get("plan_name")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::BadRequest("plan_name is required".to_string()))?;
-    
+
     let lane_id = payload.get("lane_id")
         .and_then(|v| v.as_i64())
         .map(|v| v as i32);
-    
+
     let lane_name = payload.get("lane_name")
         .and_then(|v| v.as_str());
-    
+
     // Verify reading order ownership
     let order_exists: bool = conn
         .query_opt(
@@ -601,7 +601,7 @@ pub async fn adopt_reading_order(
         created_at: row.get(5),
         updated_at: row.get(6),
     };
-    
+
     Ok((StatusCode::CREATED, Json(plan)))
 }
 
