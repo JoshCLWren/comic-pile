@@ -83,7 +83,7 @@ def test_cloudflare_free_source_guards_and_daily_cap() -> None:
     # Cloudflare needs its own credential branch. Matching an earlier grouped
     # provider case silently misconfigures it as a different provider.
     assert "            z-ai|ollama-cloud|mistral|orcarouter|requesty)" in runner
-    assert '            cloudflare-workers-ai)\\n              runtime_model="cloudflare-workers-ai/${model}"' in runner
+    assert '            cloudflare-workers-ai)\n              runtime_model="cloudflare-workers-ai/${model}"' in runner
     assert "            cloudflare-workers-ai) ;&" in runner
 
 
