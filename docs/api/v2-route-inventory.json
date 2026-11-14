@@ -611,16 +611,16 @@
       "catch_all_dest": "/api/native_roll.rs",
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
-      "v1_total": 192,
-      "v1_shadowed_by_rust": 62,
+      "v1_total": 197,
+      "v1_shadowed_by_rust": 67,
       "v1_live_python": 121,
       "v1_orphaned": 9,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
-      "total_python_surface": 225,
-      "total_shadowed_by_rust": 75,
+      "total_python_surface": 230,
+      "total_shadowed_by_rust": 80,
       "total_live_python": 139,
       "total_orphaned": 11
     },
@@ -2373,6 +2373,71 @@
         ],
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/releases/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "PUT",
+        "path": "/api/v1/releases/",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/releases/source",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/releases/{release_id}",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
+        "consumers": [
+          "frontend/src/services/api-releases.ts"
+        ],
+        "method": "POST",
+        "path": "/api/v1/releases/{release_id}/retract",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {
