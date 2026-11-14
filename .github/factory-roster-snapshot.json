@@ -55,7 +55,7 @@
       "model": "kilo-auto/free",
       "minute": "40",
       "scheduler": "dispatcher",
-      "display_name": "Kilo Auto Free \u00b7 Forge"
+      "display_name": "Kilo Auto Free · Forge"
     },
     {
       "worker": "51",
@@ -328,6 +328,38 @@
       "minute": "20",
       "scheduler": "dispatcher",
       "display_name": "OpenCode LongCat 2.5 Free"
+    },
+    {
+      "worker": "117",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-super-120b-a12b",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron 3 Super Free"
+    },
+    {
+      "worker": "118",
+      "source": "requesty",
+      "model": "poolside/laguna-m.1",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Laguna M.1 Free"
+    },
+    {
+      "worker": "119",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/zai-org/glm-4.7-flash",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare GLM 4.7 Flash Free"
+    },
+    {
+      "worker": "120",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/google/gemma-4-26b-a4b-it",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare Gemma 4 26B Free"
     }
   ],
   "expected_workers": [
@@ -371,7 +403,11 @@
     113,
     114,
     115,
-    116
+    116,
+    117,
+    118,
+    119,
+    120
   ],
   "retired_workers": [
     9,
