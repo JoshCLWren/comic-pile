@@ -72,6 +72,14 @@ def allowed_read(args: list[str], repo: str) -> int | None:
         return 60
     if route == "issues/1093/comments":
         return 90
+    # These endpoints inform ranking and stale-lease discovery, not write
+    # authorization. Repeated per-candidate scans previously bypassed Neon.
+    # Callers doing a mutation-boundary verification pass an explicit header,
+    # which is deliberately excluded by allowed_read above.
+    if re.fullmatch(r"issues/[1-9][0-9]*/dependencies/blocked_by", route) and params == {"per_page": ["100"]}:
+        return 600
+    if re.fullmatch(r"issues/[1-9][0-9]*/comments", route) and params == {"per_page": ["100"]}:
+        return 180
     return None
 
 
