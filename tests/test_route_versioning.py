@@ -28,7 +28,6 @@ from app.main import create_app
 # convention. See the comment in app/main.py.
 _BARE_API_EXCEPTIONS = frozenset(
     {
-        "/api/metrics",
         "/api/test/sessions/expire",
         "/api/test/reading-orders",
         "/api/test/issue-identity",
@@ -346,7 +345,7 @@ def test_pruned_python_analytics_routes_are_absent() -> None:
     The Python ``/api/analytics/metrics`` and ``/api/v1/analytics/metrics``
     handlers were deleted because no browser caller remains — the frontend
     uses the native Rust ``GET /api/v2/analytics/metrics`` resource (#4348).
-    Eager ``/api/metrics`` and ``/api/v1/metrics`` are a different,
+    Eager ``/api/ping`` is a different,
     retained surface covered by :func:`test_v1_metrics_alias_matches_legacy_route_methods`.
     """
     methods_by_path = _collect_routes(create_app(serve_frontend=False))

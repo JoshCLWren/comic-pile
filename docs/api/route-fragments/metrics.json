@@ -1,0 +1,43 @@
+{
+  "family": "metrics",
+  "owned_path_patterns": [
+    "^/api/metrics$",
+    "^/api/v1/metrics$"
+  ],
+  "defaults": {
+    "owning_issue": 4854,
+    "runtime": "native-rust",
+    "status": "target",
+    "consumers": []
+  },
+  "operations": [
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/metrics",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/metrics$",
+      "db_free": true,
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL"
+      }
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/metrics",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/metrics$",
+      "db_free": true,
+      "sql_budget": {
+        "application_statements": 0,
+        "transaction_control_statements": 0,
+        "total_statements": 0,
+        "basis": "In-process startup metrics; native ingress serves response without PostgreSQL"
+      }
+    }
+  ]
+}

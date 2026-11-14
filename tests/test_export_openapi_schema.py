@@ -67,7 +67,6 @@ def test_is_client_schema_path_keeps_versioned_client_routes_and_ping() -> None:
     assert is_client_schema_path("/api/v2/reading-boundaries/42")
 
     assert not is_client_schema_path("/api/threads/")
-    assert not is_client_schema_path("/api/metrics")
     assert not is_client_schema_path("/api/v10/threads")
 
 

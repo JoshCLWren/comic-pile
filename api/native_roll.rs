@@ -55,6 +55,15 @@ async fn native_demo() -> Response {
     response
 }
 
+/// Serve simple startup metrics without requiring database or auth state.
+async fn native_metrics() -> Response {
+    let mut response = comicpile_roll_service::metrics::get_metrics().await.into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
+}
+
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
 
 #[cfg(test)]
@@ -205,6 +214,8 @@ async fn native_not_found() -> Response {
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
+        .route("/api/metrics", get(native_metrics))
+        .route("/api/v1/metrics", get(native_metrics))
         .route("/api/v1/identity-inbox", get(native_dispatch))
         .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
         .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))

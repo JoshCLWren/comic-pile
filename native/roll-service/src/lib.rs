@@ -13,6 +13,8 @@ pub mod continuity_rules;
 pub mod creators;
 pub mod db;
 pub mod demo;
+// legacy startup metrics
+pub mod metrics;
 pub mod dependencies;
 pub mod dice_api;
 pub mod dice_mutation;
@@ -481,6 +483,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
+        .route("/api/metrics", get(metrics::get_metrics))
+        .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
         .route(
             "/api/v2/roll/eligible-issue-ids",

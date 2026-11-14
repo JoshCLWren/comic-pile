@@ -1,6 +1,6 @@
 """Per-resource router mounts for deferred cold-start registration (#3479).
 
-The Vercel function registers only the lightweight ping/metrics/keepalive routes
+The Vercel function registers only the lightweight ping/keepalive routes
 at cold start and completes the rest of the API surface lazily. Importing every
 router on the first real request cost 1.5-1.7 s on the measured cold wake, so a
 ``/api/v1/undo`` tap pulled in catalog and delivery even though the
@@ -30,9 +30,9 @@ from fastapi import FastAPI
 RegisterMount = Callable[[FastAPI], None]
 
 #: Path segments that are registered eagerly and never need deferred loading:
-#: ping, metrics and keepalive are mounted by ``app.main`` before this registry
+#: ping and keepalive are mounted by ``app.main`` before this registry
 #: is consulted.
-EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "metrics", "keepalive"})
+EAGER_SEGMENTS: frozenset[str] = frozenset({"ping", "keepalive"})
 
 
 @dataclass(frozen=True)
