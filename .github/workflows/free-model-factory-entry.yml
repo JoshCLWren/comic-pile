@@ -17,10 +17,37 @@ permissions:
   checks: read
 
 jobs:
+  model_health_snapshot:
+    name: Read Neon model exclusions (trusted)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      exclusions: ${{ steps.export.outputs.exclusions }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+      - name: Export bounded model decision snapshot
+        id: export
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY")"
+          jq -e 'type == "object"' <<< "$snapshot" >/dev/null
+          echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
+
   run:
+    needs: model_health_snapshot
     uses: ./.github/workflows/free-model-factory-run.yml
     with:
       worker: ${{ inputs.worker }}
+      model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
     secrets: inherit
 
   # The preceding job owns the entire worker lease and its release. A
