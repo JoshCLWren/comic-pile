@@ -275,6 +275,20 @@ fn app() -> Router {
             put(native_dispatch),
         )
         .route("/api/v2/issues/{issue_id}", delete(native_dispatch))
+        .route("/api/v2/continuity-plans/", get(native_dispatch))
+        .route("/api/v2/continuity-plans/", post(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}", get(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}", put(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}", delete(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}/membership", get(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", post(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}", delete(native_dispatch))
+        .route("/api/v2/continuity-plans/from-reading-order", post(native_dispatch))
+        .route("/api/v2/continuity-plans/release-sources/", post(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}/release-sources/", get(native_dispatch))
+        .route("/api/v2/continuity-plans/{plan_id}/release-sources/reader", get(native_dispatch))
+        .route("/api/v2/continuity-plans/release-sources/{source_id}", patch(native_dispatch))
+        .route("/api/v2/continuity-plans/release-sources/{source_id}", delete(native_dispatch))
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
             get(native_dispatch),
