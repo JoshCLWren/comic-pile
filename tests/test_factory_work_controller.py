@@ -1373,6 +1373,8 @@ def test_real_assign_uses_jev_when_confident_and_canonical_when_absent(
     use_jev: bool,
 ) -> None:
     """Jev must affect assign() itself, not just an advisory report."""
+    # Legacy test worker 6 is intentionally simulated, not in today's roster.
+    monkeypatch.setattr(controller, "worker_sources", lambda: {"6": "nvidia"})
     numbers = [33001, 33002, 33003]
     issues = [
         {
@@ -1456,6 +1458,7 @@ def test_real_assign_falls_back_when_jev_file_is_invalid(
     tmp_path: Path,
 ) -> None:
     """Malformed model output must not stop the normal factory claim."""
+    monkeypatch.setattr(controller, "worker_sources", lambda: {"6": "nvidia"})
     bad = tmp_path / "bad-jev.json"
     bad.write_text("{not-json", encoding="utf-8")
     monkeypatch.setenv("FACTORY_JEV_RANKING_FILE", str(bad))
@@ -1519,6 +1522,8 @@ def _completion_assign_env(
     report: dict,
     tmp_path: Path,
 ) -> None:
+    # These Jev unit fixtures use legacy worker 6, not a live roster worker.
+    monkeypatch.setattr(controller, "worker_sources", lambda: {"6": "nvidia"})
     report_path = tmp_path / "jev.json"
     report_path.write_text(json.dumps(report), encoding="utf-8")
     monkeypatch.setenv("FACTORY_JEV_RANKING_FILE", str(report_path))

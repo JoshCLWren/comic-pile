@@ -35,9 +35,9 @@ eligibility = importlib.import_module("factory_eligibility")
 NON_EXECUTABLE_ISSUES = {679, 1093, 1109}
 MANUAL_ONLY_MARKER = '<!-- factory-execution:manual-only -->'
 
-OWNER_RE = re.compile('^factory:(?:unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$')
+OWNER_RE = re.compile(r'^factory:(?:unowned|local|[1-9][0-9]*)$')
 
-FIXED_OWNER_RE = re.compile('^factory:(?P<worker>[6-9]|[1-3][0-9]|[4-9][0-9])$')
+FIXED_OWNER_RE = re.compile(r'^factory:(?P<worker>[6-9]|[1-9][0-9]+)$')
 
 STAGE_LABELS = {'factory:building', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:ready', 'factory:blocked'}
 STAGE_PRECEDENCE = ('factory:blocked', 'factory:ready', 'factory:review', 'factory:changes-requested', 'factory:ci', 'factory:building')
@@ -103,6 +103,13 @@ FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
 # Incident #2309: engage completion-stage backpressure earlier so review/repair
 # drain wins before open PRs pile into conflicts.
 FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 3)
+# A trusted retirement handoff resets prior *issue* no-diff suppression only.
+# The exhausted PR head's retry history remains intact for the closure decision.
+NO_PROGRESS_RETIRE_RE = re.compile(
+    r'<!--\s*comic-pile-factory-no-progress-retired-v1:'
+    r'issue-(?P<issue>\d+):pr-\d+:sha-[0-9a-f]{40}:epoch-(?P<epoch>\d{10})\s*-->'
+)
+
 FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS = env_positive_int('FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS', 1800)
@@ -459,9 +466,10 @@ def matching_pr_no_diff_attempts(
 ) -> int:
     """Count no-diff retries that still apply to this exact PR generation.
 
-    Only markers that pin the current head SHA, workflow stage, and conflict
-    state consume the retry budget. A new push, newly actionable review stage,
-    or newly developed merge conflict starts a fresh budget immediately.
+    Only trusted markers pinned to the current head and conflict state count.
+    A repair that persisted no changes consumes the same budget across the
+    review/changes-requested handoff: a label flip is not new code. Other
+    failures remain stage-scoped. A new push or conflict starts a fresh budget.
     Unscoped legacy PR markers do not suppress a known current generation.
     """
     current_sha = head_sha.strip().lower()
@@ -473,7 +481,12 @@ def matching_pr_no_diff_attempts(
             continue
         if not attempt.sha or attempt.sha != current_sha:
             continue
-        if attempt.stage is None or attempt.stage != stage:
+        if attempt.stage is None:
+            continue
+        if attempt.stage != stage and not (
+            attempt.reason == 'repair-no-persisted-change-handoff'
+            and {attempt.stage, stage} <= {'factory:review', 'factory:changes-requested'}
+        ):
             continue
         if attempt.conflicted is None or attempt.conflicted != conflicted:
             continue
@@ -927,13 +940,32 @@ def parse_no_diff_attempts_from_comments(
 ) -> list[NoDiffAttempt]:
     """Return trusted no-diff attempts still inside the rolling retry window."""
     cutoff = now_epoch - reset_seconds
+    trusted_bodies = [
+        str(comment.get('body') or '')
+        for comment in comments
+        if comment_is_trusted(comment)
+    ]
+    # Reset markers may occur later than issue release events in the input.
+    # Derive their cutoffs first rather than depending on GitHub page order.
+    retired_issue_epochs: dict[int, int] = {}
+    for body in trusted_bodies:
+        for reset in NO_PROGRESS_RETIRE_RE.finditer(body):
+            epoch = int(reset.group('epoch'))
+            if cutoff < epoch <= now_epoch:
+                issue = int(reset.group('issue'))
+                retired_issue_epochs[issue] = max(
+                    epoch, retired_issue_epochs.get(issue, 0)
+                )
+
     attempts: list[NoDiffAttempt] = []
-    for comment in comments:
-        if not comment_is_trusted(comment):
-            continue
-        body = str(comment.get('body') or '')
+    for body in trusted_bodies:
         for match in NO_DIFF_ATTEMPT_RE.finditer(body):
             epoch = int(match.group('epoch'))
+            if (
+                match.group('kind') == 'issue'
+                and epoch <= retired_issue_epochs.get(int(match.group('number')), 0)
+            ):
+                continue
             transient = match.group('reason') in {
                 'transient-model-interruption', 'review-agent-failed',
                 'controller-assignment-read-failed', 'semantic-review-head-read-failed',

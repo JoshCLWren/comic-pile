@@ -7,7 +7,7 @@ Guidelines for AI agents working in this codebase.
 For Comic Pile local factory delivery in Codex, use
 [the Codex Crouton adapter](.agents/skills/crouton-factory-codex/SKILL.md).
 Carry authorized work through CI repair, actual independent review (including
-the owner-selected OpenCode ACP Crouton Alpha lane), gated merge, deployment and
+the live-model OpenCode ACP lane), gated merge, deployment and
 real acceptance. Start eligible local reviewers instead of waiting for scheduled
 pickup and record actual identity and exact-head evidence. Read only ACP
 checkpoints/model-selection metadata and final reports/verdicts, never full logs

@@ -1,7 +1,7 @@
-const OWNER_RE = /^factory:(?:unowned|local|[1-9][0-9]?)$/;
+const OWNER_RE = /^factory:(?:unowned|local|[1-9][0-9]*)$/;
 const STAGE_RE = /^factory:(?:building|review|changes-requested|ci|ready|blocked)$/;
-const WORKER_BRANCH_RE = /^factory\/([1-9][0-9]?)-/;
-const MARKER_RE = /<!-- (?:free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9][0-9]?) -->/g;
+const WORKER_BRANCH_RE = /^factory\/([1-9][0-9]*)-/;
+const MARKER_RE = /<!-- (?:free-model-factory-owner|nvidia-factory-owner|omniroute-factory-owner):([1-9][0-9]*) -->/g;
 
 async function normalize({ github, context, core }) {
   const pullRequest = context.payload.pull_request;
@@ -23,7 +23,7 @@ async function normalize({ github, context, core }) {
     per_page: 100,
   });
   const names = labels.map(label => label.name);
-  const numericOwners = names.filter(name => /^factory:[1-9][0-9]?$/.test(name));
+  const numericOwners = names.filter(name => /^factory:[1-9][0-9]*$/.test(name));
 
   // A current lease is authoritative. Branch names record provenance only and
   // must not steal a PR back after another factory adopts it.

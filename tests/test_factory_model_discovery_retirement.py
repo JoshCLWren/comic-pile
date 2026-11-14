@@ -1626,7 +1626,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
 
 
 def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_inkling() -> None:
-    """Workers 51-53 stay expected and pin Harvy-smoked OpenRouter free models."""
+    """Worker 51 remains pinned, while retired 52/53 retain original model history."""
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}

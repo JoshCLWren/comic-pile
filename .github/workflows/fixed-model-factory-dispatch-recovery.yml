@@ -30,6 +30,12 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      - name: Configure shared Neon factory discovery cache
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Recover stale fixed-model dispatcher
         shell: bash
         env:
@@ -37,8 +43,7 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+          python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps([registry_comments()]))' \
             > /tmp/factory-registry-comments.json
           python3 .github/scripts/factory_heartbeat_health.py \
             --comments /tmp/factory-registry-comments.json \

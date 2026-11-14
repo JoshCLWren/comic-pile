@@ -33,7 +33,7 @@ or merge authority merely from this skill. Preserve human-controlled parent acce
   directly when delegation is authorized, never invented collaboration methods
   inside `functions.exec`. Writers use separate private worktrees. Keep the
   foreground focused on decisions, claims, lane starts and concise verdicts.
-- A Codex subagent is a Codex lane; never mislabel it ACP or Crouton Alpha.
+- A Codex subagent is a Codex lane; never mislabel it ACP.
   Actual OpenCode work requires `opencode acp`, initialize, session creation,
   exact model selection, prompt submission and a captured actual response.
 - Keep slow workers and CI independent. Poll checkpoints and exact-head CI
@@ -47,9 +47,13 @@ or merge authority merely from this skill. Preserve human-controlled parent acce
 
 Do not wait for scheduled reviewers when an eligible actual local reviewer can
 run. Use [the bundled review path](references/review.md) for the launcher, sanitized
-context preparation and manual ownership/proof record. Owner-selected Alpha:
-`openrouter/stealth/crouton-alpha`. Never silently substitute; failed/unconfirmed
-selection is unavailable review, not approval.
+context preparation and manual ownership/proof record. Discover a live eligible
+model from ACP session metadata; do not pin a named model in skill instructions.
+The launcher automatically prefers the current eligible model, then an advertised
+free OpenCode model, then an advertised free OpenRouter model under factory policy.
+An explicit user-selected `--model` must be advertised and authorized; never
+silently replace it. Missing eligible models or unconfirmed selection is unavailable
+review, not approval.
 
 The installed skill includes `scripts/local-factory-acp-review.mjs`; use its
 absolute installed path from any Comic Pile checkout. This works before the
@@ -63,7 +67,7 @@ confirmed ACP session, head, timestamp and private evidence path. Never invent a
 numbered factory, trusted controller marker or native approval. Release ownership
 to `factory:unowned` when the session ends.
 
-Use two eligible independent lanes for Crouton: Alpha ACP plus separate Codex
+Use two eligible independent lanes for Crouton: live-model ACP plus separate Codex
 review. Neither reviewer may have authored that head. Give compact exact-head,
 scope, issue/review/CI evidence and read-only prompts; no tests or mutations in
 review lanes. Any repair changes the head and invalidates prior CI/review.

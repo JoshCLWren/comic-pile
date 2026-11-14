@@ -397,7 +397,7 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
             .map_err(query_error)?;
         for row in &rows {
             let tid: i32 = row.get(0);
-            let mc: Option<String> = row.try_get(2).ok();
+            let mc: Option<String> = row.try_get(2).map_err(query_error)?;
             if let Some(text) = mc {
                 if let Ok(v) = serde_json::from_str::<Value>(&text) {
                     if !v.is_null() {
@@ -410,7 +410,7 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
     // 3. confirmed ComicVine creator credits (projected)
     let rows = conn
         .query(
-            "SELECT i.id, e.metadata_json->'creator_credits'
+            "SELECT i.id, e.metadata_json->>'creator_credits'
          FROM issues i
          JOIN threads t ON t.id = i.thread_id
          JOIN issue_external_identity_mappings m ON m.issue_id = i.id
@@ -424,7 +424,7 @@ async fn load_full_inputs(state: &AppState, user_id: i32) -> Result<SummaryInput
     let mut issues_with_creator_metadata: HashSet<i32> = HashSet::new();
     for row in &rows {
         let iid: i32 = row.get(0);
-        let raw_text: Option<String> = row.try_get(1).ok();
+        let raw_text: Option<String> = row.try_get(1).map_err(query_error)?;
         let credits = raw_text
             .as_deref()
             .and_then(|t| serde_json::from_str::<Value>(t).ok())
@@ -667,7 +667,27 @@ pub async fn list_creators(
     let offset = q.offset.unwrap_or(0).max(0);
     let min_ratings = q.min_ratings.unwrap_or(0).max(0);
     let inputs = load_full_inputs(&state, user_id).await?;
-    let coverage = build_coverage(&inputs);
+    Ok(Json(creator_list_from_inputs(
+        &inputs,
+        search.as_deref(),
+        sort.as_str(),
+        limit,
+        offset,
+        min_ratings,
+    )))
+}
+
+/// Build the user-scoped creator collection from already-owned issues and credits.
+/// Keeping aggregation pure makes search, totals and paging independently testable.
+fn creator_list_from_inputs(
+    inputs: &SummaryInputs,
+    search: Option<&str>,
+    sort: &str,
+    limit: i64,
+    offset: i64,
+    min_ratings: i64,
+) -> CreatorListResponse {
+    let coverage = build_coverage(inputs);
     // aggregate per creator (all)
     let mut creator_issues: HashMap<i64, HashSet<i32>> = HashMap::new();
     let mut creator_headline_issues: HashMap<i64, HashSet<i32>> = HashMap::new();
@@ -721,7 +741,7 @@ pub async fn list_creators(
             None
         };
         let display_name = creator_names.get(cid).cloned().unwrap_or_default();
-        if let Some(ref s) = search {
+        if let Some(s) = search {
             if !display_name.to_lowercase().contains(&s.to_lowercase()) {
                 continue;
             }
@@ -739,7 +759,7 @@ pub async fn list_creators(
         });
     }
     // sort
-    match sort.as_str() {
+    match sort {
         "ratings_count" => {
             items.sort_by(|a, b| {
                 b.ratings_count
@@ -790,11 +810,224 @@ pub async fn list_creators(
     } else {
         items[start..end].to_vec()
     };
-    Ok(Json(CreatorListResponse {
+    CreatorListResponse {
         items: paged,
         total,
         limit,
         offset,
         coverage,
-    }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scoped_creator_fixture() -> SummaryInputs {
+        // The JSON text is the representation supplied by Postgres ->>, not a
+        // JSON/JSONB column that tokio-postgres cannot decode into String.
+        let projected = serde_json::json!([
+            {"id": 7, "name": "Brian K. Vaughan", "role": "writer"},
+            {"id": 12, "name": "Steve McNiven", "role": "penciler"}
+        ])
+        .to_string();
+        let credits = extract_creator_credit_list(
+            &serde_json::from_str::<Value>(&projected).expect("valid projected metadata"),
+        );
+        assert_eq!(credits.len(), 2);
+        let mut issue_creator_credits = HashMap::new();
+        issue_creator_credits.insert(101, credits);
+        issue_creator_credits.insert(
+            102,
+            extract_creator_credit_list(&serde_json::json!([
+                {"id": 7, "name": "Brian K. Vaughan", "role": "writer"}
+            ])),
+        );
+        issue_creator_credits.insert(
+            103,
+            extract_creator_credit_list(&serde_json::json!([
+                {"id": 13, "name": "Fiona Staples", "role": "artist"}
+            ])),
+        );
+        // Only the authenticated owner's three issues enter the aggregation.
+        SummaryInputs {
+            owned_issues: HashMap::from([
+                (101, "read".into()),
+                (102, "read".into()),
+                (103, "read".into()),
+            ]),
+            issue_creator_credits,
+            issues_with_creator_metadata: HashSet::from([101, 102, 103]),
+            effective_ratings: HashMap::from([(101, 4.5), (102, 5.0), (103, 3.0)]),
+        }
+    }
+
+    #[test]
+    fn creator_list_search_matches_a_visible_name_before_pagination() {
+        let inputs = scoped_creator_fixture();
+        let browse = creator_list_from_inputs(&inputs, None, "name", 20, 0, 0);
+        assert_eq!(browse.total, 3);
+        assert!(browse
+            .items
+            .iter()
+            .any(|item| item.display_name == "Brian K. Vaughan"));
+
+        let matching =
+            creator_list_from_inputs(&inputs, Some("  VAUGHAN  ".trim()), "name", 20, 0, 0);
+        assert_eq!(matching.total, 1);
+        assert_eq!(matching.items[0].canonical_creator_key, "creator:7");
+        assert_eq!(matching.items[0].display_name, "Brian K. Vaughan");
+        assert_eq!(matching.items[0].ratings_count, 2);
+        assert_eq!(matching.offset, 0);
+
+        let absent = creator_list_from_inputs(&inputs, Some("nobody"), "name", 20, 0, 0);
+        assert_eq!(absent.total, 0);
+        assert!(absent.items.is_empty());
+        let cleared = creator_list_from_inputs(&inputs, None, "name", 20, 0, 0);
+        assert_eq!(cleared.total, browse.total);
+    }
+
+    #[test]
+    fn creator_list_search_sort_minimum_and_offset_keep_consistent_totals() {
+        let inputs = scoped_creator_fixture();
+        let first = creator_list_from_inputs(&inputs, None, "ratings_count", 1, 0, 0);
+        assert_eq!(first.total, 3);
+        assert_eq!(first.items[0].display_name, "Brian K. Vaughan");
+        let second = creator_list_from_inputs(&inputs, None, "ratings_count", 1, 1, 0);
+        assert_eq!(second.total, 3);
+        assert_eq!(second.items.len(), 1);
+        assert_ne!(
+            first.items[0].canonical_creator_key,
+            second.items[0].canonical_creator_key
+        );
+
+        let minimum = creator_list_from_inputs(&inputs, Some("steve"), "average_rating", 20, 0, 2);
+        assert_eq!(minimum.total, 0);
+        let matching =
+            creator_list_from_inputs(&inputs, Some("vaughan"), "average_rating", 20, 0, 2);
+        assert_eq!(matching.total, 1);
+        assert_eq!(matching.items[0].ratings_count, 2);
+        assert_eq!(matching.items[0].average_rating, Some(4.75));
+    }
+
+    #[tokio::test]
+    async fn creator_search_decodes_confirmed_json_credits_from_the_real_database() {
+        // Use the canonical Alembic schema and DML-only test role. A fake
+        // in-memory credit fixture would miss the JSON-column decoding bug.
+        let state = crate::test_support::test_state(4)
+            .await
+            .expect("disposable creator test database");
+        let _guard = crate::test_support::reset_for_test(&state).await;
+        let mut user_ids = Vec::new();
+        {
+            let connection = crate::db::checkout(&state)
+                .await
+                .expect("seed creator database");
+            for (username, creator, person_id) in [
+                ("creator-search-owner", "Chris Claremont", 40468_i64),
+                ("creator-search-other", "Chris Other", 40469_i64),
+            ] {
+                let user_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO users (username, created_at)
+                         VALUES ($1, now()) RETURNING id",
+                        &[&username],
+                    )
+                    .await
+                    .expect("insert user")
+                    .get(0);
+                user_ids.push(user_id);
+                let thread_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO threads
+                         (user_id, title, format, status, issues_remaining, queue_position, created_at)
+                         VALUES ($1, 'Creator regression', 'comic', 'active', 0, 1, now())
+                         RETURNING id",
+                        &[&user_id],
+                    )
+                    .await
+                    .expect("insert thread")
+                    .get(0);
+                let issue_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO issues
+                         (thread_id, issue_number, status, position, created_at)
+                         VALUES ($1, '1', 'read', 1, now()) RETURNING id",
+                        &[&thread_id],
+                    )
+                    .await
+                    .expect("insert issue")
+                    .get(0);
+                let metadata = serde_json::json!({
+                    "creator_credits": [{
+                        "id": person_id,
+                        "name": creator,
+                        "role": "writer"
+                    }]
+                })
+                .to_string();
+                let external_id = format!("4000-{person_id}");
+                let identity_id: i32 = connection
+                    .query_one(
+                        "INSERT INTO external_identities
+                         (provider, entity_type, external_id, metadata_json, created_at, updated_at)
+                         VALUES ('comicvine', 'issue', $1, ($2::text)::json, now(), now())
+                         RETURNING id",
+                        &[&external_id, &metadata],
+                    )
+                    .await
+                    .expect("insert confirmed identity")
+                    .get(0);
+                connection
+                    .execute(
+                        "INSERT INTO issue_external_identity_mappings
+                         (issue_id, external_identity_id, status, created_at, updated_at, evidence_json)
+                         VALUES ($1, $2, 'confirmed', now(), now(), '{}'::json)",
+                        &[&issue_id, &identity_id],
+                    )
+                    .await
+                    .expect("confirm creator mapping");
+                connection
+                    .execute(
+                        "INSERT INTO events
+                         (type, timestamp, user_id, thread_id, issue_id, rating)
+                         VALUES ('rate', now(), $1, $2, $3, 4.5)",
+                        &[&user_id, &thread_id, &issue_id],
+                    )
+                    .await
+                    .expect("rate mapped issue");
+            }
+        }
+
+        let owner = user_ids[0];
+        let inputs = load_full_inputs(&state, owner)
+            .await
+            .expect("decode confirmed JSON credits from PostgreSQL");
+        assert_eq!(inputs.issue_creator_credits.len(), 1);
+        assert_eq!(inputs.effective_ratings.len(), 1);
+        let browse = creator_list_from_inputs(&inputs, None, "name", 20, 0, 0);
+        assert_eq!(browse.total, 1);
+        assert_eq!(browse.items[0].display_name, "Chris Claremont");
+
+        let matched = creator_list_from_inputs(&inputs, Some("CHRIS"), "name", 20, 0, 0);
+        assert_eq!(matched.total, 1);
+        assert_eq!(matched.items[0].display_name, browse.items[0].display_name);
+        assert_eq!(matched.items[0].ratings_count, 1);
+        assert_eq!(
+            creator_list_from_inputs(&inputs, Some("missing"), "name", 20, 0, 0).total,
+            0
+        );
+        assert_eq!(
+            creator_list_from_inputs(&inputs, Some("other"), "name", 20, 0, 0).total,
+            0,
+            "search must not leak another user's creators"
+        );
+
+        let other_inputs = load_full_inputs(&state, user_ids[1])
+            .await
+            .expect("second user's credits");
+        let other = creator_list_from_inputs(&other_inputs, Some("Chris"), "name", 20, 0, 0);
+        assert_eq!(other.total, 1);
+        assert_eq!(other.items[0].display_name, "Chris Other");
+    }
 }

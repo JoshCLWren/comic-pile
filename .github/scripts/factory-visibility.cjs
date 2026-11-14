@@ -967,25 +967,55 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
 }
 
 async function reconcileMissingPrLabels({ github, context }) {
-  // Derived labels must exist before a label-set replacement can apply them;
-  // GitHub silently ignores unknown label names instead of creating them.
-  await ensureLabels(github, context);
-  // Normalize both event branches to the same `{ data }` shape: PR events carry
-  // exactly the payload's pull request, scheduled sweeps list and paginate open PRs.
-  const candidates = context.eventName === 'pull_request_target'
-    ? { data: [context.payload.pull_request].filter(Boolean), headers: {}, status: 200 }
-    : await manualPaginationWithLogging(github, context, {
-        endpoint: `repos/${context.repo.owner}/${context.repo.repo}/pulls`,
-        method: 'GET',
-        event: context.eventName,
-      }, async (page, perPage, pageSpec) => {
-        return withRetryLogged(github, context, pageSpec, async () => {
-          const result = await github.rest.pulls.list({
-            ...context.repo, state: 'open', per_page: perPage, page,
-          });
-          return { data: result.data, headers: result.headers, status: result.status };
-        });
+  // PR events must still reconcile their exact live PR. On a recovery sweep,
+  // only missing factory enrollment requires work: the open-PR list already
+  // contains labels, so there is no reason to fetch every PR and its labels
+  // (or ensure the entire repository label catalogue) when all are enrolled.
+  let candidates;
+  if (context.eventName === 'pull_request_target') {
+    candidates = { data: [context.payload.pull_request].filter(Boolean) };
+  } else {
+    const endpoint = `repos/${context.repo.owner}/${context.repo.repo}/pulls`;
+    const fetchOpenPage = page => withRetryLogged(github, context, {
+      endpoint: `${endpoint}?state=open&per_page=100&page=${page}`,
+      method: 'GET',
+      event: context.eventName,
+    }, async () => {
+      const result = await github.rest.pulls.list({
+        ...context.repo, state: 'open', per_page: 100, page,
       });
+      return { data: result.data, headers: result.headers, status: result.status };
+    });
+
+    const first = await fetchOpenPage(1);
+    const open = [...first.data];
+    // A full first page does not prove there are no older unlabeled PRs.
+    // Continue paging only when necessary, without re-fetching page one.
+    let lastPage = first.data;
+    let page = 1;
+    while (lastPage.length === 100) {
+      page += 1;
+      const next = await fetchOpenPage(page);
+      lastPage = next.data;
+      open.push(...lastPage);
+    }
+    // A factory label alone is not complete enrollment: a valid PR must also
+    // have exactly one current owner and one stage. The scheduled recovery
+    // still repairs those partial or contradictory metadata states.
+    const incomplete = open.filter(pr => {
+      const labels = new Set(Array.isArray(pr.labels) ? pr.labels.map(label => label.name) : []);
+      const owners = [...labels].filter(isOwnerLabel);
+      const stages = STAGE_LABELS.filter(label => labels.has(label));
+      return !labels.has('factory') || owners.length !== 1 || stages.length !== 1;
+    });
+    if (incomplete.length === 0) {
+      console.log('Factory enrollment: all open PRs have complete ownership/stage metadata; skipping per-PR reads');
+      return;
+    }
+    candidates = { data: incomplete };
+  }
+
+  let definitionsEnsured = false;
   for (const pr of candidates.data) {
     if (pr.state !== 'open' || pr.draft
       || !pr.head.repo?.full_name
@@ -1058,6 +1088,12 @@ async function reconcileMissingPrLabels({ github, context }) {
         approved = match[2] === 'pass';
         break;
       }
+    }
+    // Existing correct metadata is a no-op. Only ensure label definitions
+    // immediately before a real enrollment/repair, once per invocation.
+    if (!definitionsEnsured) {
+      await ensureLabels(github, context);
+      definitionsEnsured = true;
     }
     await reconcileLabels(github, context, pr.number, {
       // Never interpret a contradictory local+unowned label pair as a lease

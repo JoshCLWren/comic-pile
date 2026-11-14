@@ -7,7 +7,29 @@ import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createInterface } from 'node:readline';
 
-export const DEFAULT_MODEL = 'openrouter/stealth/crouton-alpha';
+/** Eligibility follows the factory's free-provider naming policy, not a model pin. */
+export function eligibleReviewModel(model) {
+  return typeof model === 'string' && (
+    (model.startsWith('opencode/') && (model.endsWith('-free') ||
+      model === 'opencode/big-pickle' || /muse-spark.*(?:free|contributor)/.test(model))) ||
+    (model.startsWith('openrouter/') && (model.endsWith(':free') || model === 'openrouter/free')));
+}
+
+/** Select only live advertised models; explicit overrides never silently fall back. */
+export function chooseReviewModel(session, requested) {
+  const option = session.configOptions?.find(value => value.id === 'model');
+  const advertised = option?.options?.flatMap(group => group.options || [group])
+    .map(value => value.value).filter(value => typeof value === 'string') || [];
+  if (requested) {
+    if (!advertised.includes(requested)) throw new Error('Requested model is not advertised by ACP');
+    return requested;
+  }
+  const eligible = advertised.filter(eligibleReviewModel).sort((a, b) =>
+    Number(b.startsWith('opencode/')) - Number(a.startsWith('opencode/')) || a.localeCompare(b));
+  if (eligible.includes(option?.currentValue)) return option.currentValue;
+  if (!eligible.length) throw new Error('ACP advertises no policy-eligible free review model; supply an authorized --model');
+  return eligible[0];
+}
 const MARKERS = new Set(['FACTORY_GATE_READY', 'FACTORY_GATE_BLOCKED']);
 const MAX_FRAME = 8 * 1024 * 1024;
 
@@ -33,9 +55,10 @@ export function selectedModel(response, model) {
 }
 
 /** Injected command is for protocol tests; the CLI always starts actual opencode acp. */
-export async function runReview({ cwd, head, base = 'origin/main', output, model = DEFAULT_MODEL,
+export async function runReview({ cwd, head, base = 'origin/main', output, model,
   issue, pr, reviewer, context = '', timeoutMs = 20 * 60 * 1000,
   command = ['opencode', 'acp'] }) {
+  const explicitModel = Boolean(model);
   cwd = resolve(cwd);
   output = resolve(output);
   if (!/^[a-f0-9]{40}$/.test(head) || git(cwd, 'rev-parse', 'HEAD') !== head) {
@@ -131,6 +154,9 @@ ${diff}`;
     save('session.json', session);
     const option = session.configOptions?.find(value => value.id === 'model');
     if (!option) throw new Error('ACP did not advertise model configuration');
+    model = chooseReviewModel(session, model);
+    identity.model = model;
+    save('model-choice.json', { model, source: 'live-acp-session', explicit: explicitModel });
     const selection = selectedModel(session, model) ? session :
       await rpc('session/set_config_option', { sessionId: sid, configId: 'model', value: model });
     if (!selectedModel(selection, model)) throw new Error('Exact model selection unconfirmed');
@@ -171,7 +197,7 @@ export async function main() {
   try {
     const { values } = parseArgs({ options: {
       cwd: { type: 'string' }, head: { type: 'string' }, base: { type: 'string', default: 'origin/main' },
-      output: { type: 'string' }, model: { type: 'string', default: DEFAULT_MODEL },
+      output: { type: 'string' }, model: { type: 'string' },
       issue: { type: 'string' }, pr: { type: 'string' }, reviewer: { type: 'string' },
       context: { type: 'string' },
     } });

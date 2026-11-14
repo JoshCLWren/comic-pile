@@ -61,6 +61,41 @@ def target(pr: Mapping[str, Any], expected_head: str | None = None) -> dict[str,
     return {"head": head, "issue": issue, "non_closing": non_closing}
 
 
+def select_review_candidate(prs: list[Mapping[str, Any]]) -> int | None:
+    """Choose the oldest unclaimed PR whose linked issue can actually be reviewed.
+
+    Reject invalid issue links before dispatching an expensive GPU run. The
+    reviewer still re-fetches exact head, lease and issue before inference.
+    """
+    policy = _issue_policy()
+    candidates: list[int] = []
+    for pr in prs:
+        if not isinstance(pr, dict):
+            continue
+        number = pr.get("number")
+        if not isinstance(number, int) or isinstance(number, bool) or number <= 0 or pr.get("isDraft") is not False:
+            continue
+        labels = pr.get("labels")
+        if not isinstance(labels, list):
+            continue
+        names = {
+            str(item.get("name", "")) for item in labels if isinstance(item, dict)
+        }
+        if not {"factory:review", "factory:unowned"} <= names:
+            continue
+        if any(OWNER_RE.fullmatch(name) for name in names):
+            continue
+        branch = pr.get("headRefName")
+        body = pr.get("body")
+        if not isinstance(branch, str) or not isinstance(body, str):
+            continue
+        linked, _ = policy.linked_issue_mode(branch, body)
+        if linked is None or linked <= 0:
+            continue
+        candidates.append(number)
+    return min(candidates, default=None)
+
+
 def make_request(model: str, prompt: str, criteria_count: int) -> dict[str, Any]:
     """Give the full acceptance rubric room to finish and require JSON mode."""
     if criteria_count <= 0:
@@ -115,6 +150,116 @@ def parse_response(response: Mapping[str, Any]) -> dict[str, Any]:
     return parsed
 
 
+
+def review_patch_excerpt(patch: str, max_chars: int = 14_000) -> str:
+    """Retain whole changed lines from every file in a bounded review prompt.
+
+    A prefix truncation can hide the decisive tests at the end of a PR. Strip
+    unchanged context first, then distribute any further reduction fairly
+    across files. Never cut a changed line into an unverifiable fragment.
+    """
+    if max_chars < 256:
+        raise ReviewContractError("review patch budget is too small")
+    if len(patch) <= max_chars:
+        return patch
+
+    chunks = [part for part in re.split(r"(?=^diff --git )", patch, flags=re.M) if part]
+    if not chunks or not all(part.startswith("diff --git ") for part in chunks):
+        raise ReviewContractError("oversized diff has no trustworthy per-file headers")
+
+    header = (
+        "DIFF EXCERPT: unchanged context is omitted; some changed lines may "
+        "also be omitted if marked. An excerpt is not proof that tests or "
+        "behavior are absent.\n"
+    )
+    metadata = (
+        "diff --git ", "index ", "@@ ", "--- ", "+++ ", "old mode ",
+        "new mode ", "new file mode ", "deleted file mode ",
+        "rename from ", "rename to ",
+    )
+    sections: list[list[str]] = []
+    for chunk in chunks:
+        significant = [
+            line for line in chunk.splitlines(keepends=True)
+            if line.startswith(metadata) or line.startswith(("+", "-"))
+        ]
+        if not significant or not significant[0].startswith("diff --git "):
+            raise ReviewContractError("diff file header was lost during projection")
+        sections.append(significant)
+
+    budget = max_chars - len(header)
+    projected = "".join("".join(section) for section in sections)
+    if len(projected) <= budget:
+        return header + projected
+
+    omission = "[... other changed lines from this file omitted ...]\n"
+    required: list[set[int]] = []
+    for lines in sections:
+        keep = {0}
+        changes = [
+            i for i, line in enumerate(lines)
+            if line.startswith(("+", "-")) and not line.startswith(("+++ ", "--- "))
+        ]
+        for i, line in enumerate(lines):
+            if line.startswith((
+                "@@ ", "old mode ", "new mode ", "new file mode ",
+                "deleted file mode ", "rename from ", "rename to ",
+            )):
+                keep.add(i)
+        if changes:
+            keep.update((changes[0], changes[-1]))
+        elif not any(
+            line.startswith(("old mode ", "new mode ", "new file mode ",
+                             "deleted file mode ", "rename from ", "rename to "))
+            for line in lines
+        ):
+            raise ReviewContractError("diff file lacks a reviewable changed line")
+        required.append(keep)
+
+    # Reserve a single explicit omission marker per file. When this minimum
+    # will not fit, fail closed instead of silently producing fake evidence.
+    used = len(header) + len(omission) * len(sections)
+    used += sum(
+        len(lines[i])
+        for lines, keep in zip(sections, required, strict=True)
+        for i in keep
+    )
+    if used > max_chars:
+        raise ReviewContractError(
+            "diff is too large to preserve complete evidence for every changed file"
+        )
+
+    remaining = max_chars - used
+    optional = [
+        [i for i in range(len(lines)) if i not in keep]
+        for lines, keep in zip(sections, required, strict=True)
+    ]
+    # Round-robin keeps a large early source file from crowding out late tests.
+    while any(optional):
+        progressed = False
+        for lines, keep, pending in zip(sections, required, optional, strict=True):
+            if not pending:
+                continue
+            index = pending.pop(0)
+            size = len(lines[index])
+            if size <= remaining:
+                keep.add(index)
+                remaining -= size
+                progressed = True
+        if not progressed:
+            break
+
+    result = [header]
+    for lines, keep in zip(sections, required, strict=True):
+        result.extend(line for i, line in enumerate(lines) if i in keep)
+        if len(keep) != len(lines):
+            result.append(omission)
+    excerpt = "".join(result)
+    if len(excerpt) > max_chars:
+        raise ReviewContractError("diff excerpt exceeded review context budget")
+    return excerpt
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -123,16 +268,23 @@ def main() -> None:
     tgt.add_argument("--expected-head")
     response = sub.add_parser("response")
     response.add_argument("file")
+    selection = sub.add_parser("select")
+    selection.add_argument("file")
     args = parser.parse_args()
     try:
         with open(args.file, encoding="utf-8") as handle:
             data = json.load(handle)
-        if not isinstance(data, dict):
-            raise ReviewContractError("input must be a JSON object")
-        if args.command == "target":
-            result = target(data, expected_head=args.expected_head)
+        if args.command == "select":
+            if not isinstance(data, list):
+                raise ReviewContractError("review candidate input must be an array")
+            result = {"pr": select_review_candidate(data)}
         else:
-            result = parse_response(data)
+            if not isinstance(data, dict):
+                raise ReviewContractError("input must be a JSON object")
+            if args.command == "target":
+                result = target(data, expected_head=args.expected_head)
+            else:
+                result = parse_response(data)
     except (OSError, json.JSONDecodeError, ReviewContractError) as exc:
         parser.exit(2, f"local review contract: {exc}\n")
     print(json.dumps(result, separators=(",", ":")))

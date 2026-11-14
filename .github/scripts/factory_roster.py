@@ -40,7 +40,16 @@ OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
 PROTECTED_SOURCES = frozenset(
-    {"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway", "mistral", "orcarouter", "requesty"}
+    {
+        "kilo-auto",
+        "z-ai",
+        "ollama-cloud",
+        "vercel-ai-gateway",
+        "mistral",
+        "orcarouter",
+        "requesty",
+        "cloudflare-workers-ai",
+    }
 )
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash", "glm-4.7-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
@@ -65,11 +74,16 @@ REQUESTY_APPROVED_MODELS = frozenset(
         "nvidia/nemotron-3-ultra-550b-a55b",
         "nvidia/nemotron-3-super-120b-a12b",
         "poolside/laguna-m.1",
+        "nvidia/nemotron-3.5-lightning-30b-a3b",
         "poolside/laguna-xs.2",
         "google/gemma-4-31b-it",
     }
 )
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
+CLOUDFLARE_WORKERS_AI_FREE_MODELS = frozenset(
+    {"@cf/zai-org/glm-4.7-flash", "@cf/google/gemma-4-26b-a4b-it"}
+)
+# Only the documented Workers Free models, never Workers Paid-only frontier models.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha", "stealth/crouton-alpha"})
 LOCK_SCHEMA_VERSION = 1
 # Automation-owned frozen view of the committed roster + lock. Discovery
@@ -257,6 +271,11 @@ def requesty_model_is_approved(model: str) -> bool:
         True only for ids in :data:`REQUESTY_APPROVED_MODELS`.
     """
     return _bare_source_model(model, "requesty") in REQUESTY_APPROVED_MODELS
+
+
+def cloudflare_workers_ai_model_is_free(model: str) -> bool:
+    """Allow only explicitly vetted Cloudflare Workers Free models."""
+    return _bare_source_model(model, "cloudflare-workers-ai") in CLOUDFLARE_WORKERS_AI_FREE_MODELS
 
 
 def is_big_pickle(model: str) -> bool:

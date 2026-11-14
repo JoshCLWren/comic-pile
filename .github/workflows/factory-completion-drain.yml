@@ -1,14 +1,10 @@
 name: Factory Completion Drain
 
 on:
-  # Recalculate immediately whenever either the dispatcher or an individual
-  # worker finishes. Worker completion is a capacity-change event: a lease may
-  # have been released and the queue may have changed, so reallocate on demand.
-  workflow_run:
-    workflows: ["Fixed Model Factory Dispatcher", "Fixed Model Factory Entry"]
-    types: [completed]
-  # Recovery heartbeat only. Normal allocation should be driven by state-change
-  # events above rather than by this clock.
+  # Worker Entry explicitly uses workflow_dispatch after its worker job
+  # finishes. GITHUB_TOKEN-launched entries can suppress workflow_run events,
+  # so that event is not a reliable capacity signal or an additional trigger.
+  # Recovery heartbeat only: keep scheduling independent of worker completion.
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
@@ -20,9 +16,9 @@ permissions:
   pull-requests: write
   checks: read
 
-# This workflow directly claims factory work through the completion controller.
-# Serialize it with every other assignment writer so two controllers cannot
-# observe the same worker idle and lease unrelated targets to it concurrently.
+# This workflow only signals the trusted dispatcher. It never claims an issue
+# or PR itself. Retain the shared job serialization group so wakeups cannot race
+# with controller reconciliation and handoff scheduling.
 # Coalesce duplicate ingress events for this workflow only. The job-level
 # shared group below serializes every lease writer without canceling other lanes.
 concurrency:
@@ -42,7 +38,13 @@ jobs:
         with:
           ref: main
 
-      - name: Allocate completion capacity from current demand
+      - name: Configure shared Neon factory discovery cache
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Select healthy completion wakeups from current demand
         id: batch
         shell: bash
         env:
@@ -51,14 +53,17 @@ jobs:
           set -Eeuo pipefail
           result="$(python3 .github/scripts/factory_full_completion_controller.py)"
           echo "$result" | jq .
-          workers="$(jq -c '[.assignments[].worker]' <<< "$result")"
+          # The full-completion controller is signal-only: assignments is
+          # intentionally empty. Use its selected_workers, but give the
+          # existing serialized dispatcher exclusive authority to claim work.
+          workers="$(jq -ec '.selected_workers | select(type == "array") | map(tostring) | unique' <<< "$result")"
           echo "workers=$workers" >> "$GITHUB_OUTPUT"
           echo "completion_demand=$(jq -r '.completion_demand' <<< "$result")" >> "$GITHUB_OUTPUT"
           echo "production_demand=$(jq -r '.production_demand' <<< "$result")" >> "$GITHUB_OUTPUT"
           echo "completion_target=$(jq -r '.completion_target' <<< "$result")" >> "$GITHUB_OUTPUT"
-          echo "assigned=$(jq -r '.assignments | length' <<< "$result")" >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch assigned completion workers
+      - name: Wake serialized dispatcher for selected completion workers
+        id: wakeups
         if: steps.batch.outputs.workers != '[]'
         shell: bash
         env:
@@ -66,16 +71,23 @@ jobs:
           WORKERS: ${{ steps.batch.outputs.workers }}
         run: |
           set -Eeuo pipefail
-          controller='.github/scripts/factory-work-controller.py'
           dispatch_failures=0
+          signaled=0
 
-          dispatch_worker() {
+          wake_dispatcher() {
             local worker="$1"
             local attempt=1
+            [[ "$worker" =~ ^[1-9][0-9]*$ ]] || {
+              echo "Invalid completion worker ID: $worker" >&2
+              return 1
+            }
+            # Only the dispatcher calls factory-work-controller.py assign;
+            # this signal owns no lease to release or mutate.
             while (( attempt <= 3 )); do
-              echo "Starting completion Factory ${worker} (dispatch attempt ${attempt}/3)"
-              if gh workflow run free-model-factory-entry.yml \
+              echo "Waking dispatcher for healthy completion worker ${worker} (attempt ${attempt}/3)"
+              if gh workflow run fixed-model-factory-dispatch.yml \
                 --repo "$GITHUB_REPOSITORY" --ref main -f worker="$worker"; then
+                signaled=$((signaled + 1))
                 return 0
               fi
               if (( attempt < 3 )); then
@@ -84,18 +96,18 @@ jobs:
               attempt=$((attempt + 1))
             done
 
-            echo "Unable to dispatch completion Factory ${worker}; releasing its lease" >&2
-            python3 "$controller" release --worker "$worker" || true
+            echo "Unable to wake dispatcher for completion worker ${worker}" >&2
             return 1
           }
 
           while IFS= read -r worker; do
             [[ -n "$worker" ]] || continue
-            dispatch_worker "$worker" || dispatch_failures=$((dispatch_failures + 1))
+            wake_dispatcher "$worker" || dispatch_failures=$((dispatch_failures + 1))
           done < <(jq -r '.[]' <<< "$WORKERS")
 
+          echo "signaled=$signaled" >> "$GITHUB_OUTPUT"
           if (( dispatch_failures > 0 )); then
-            echo "${dispatch_failures} completion worker dispatch(es) failed; remaining capacity will be recalculated on the next event" >&2
+            echo "${dispatch_failures} completion dispatcher wakeup(s) failed; lease state was not changed" >&2
             exit 1
           fi
 
@@ -105,6 +117,6 @@ jobs:
           COMPLETION: ${{ steps.batch.outputs.completion_demand }}
           PRODUCTION: ${{ steps.batch.outputs.production_demand }}
           TARGET: ${{ steps.batch.outputs.completion_target }}
-          ASSIGNED: ${{ steps.batch.outputs.assigned }}
+          SIGNALS: ${{ steps.wakeups.outputs.signaled }}
         run: |
-          echo "Demand completion=${COMPLETION:-0} production=${PRODUCTION:-0}; target=${TARGET:-0}; dispatched=${ASSIGNED:-0}"
+          echo "Demand completion=${COMPLETION:-0} production=${PRODUCTION:-0}; target=${TARGET:-0}; dispatcher_wakeups=${SIGNALS:-0} (leases owned by dispatcher)"

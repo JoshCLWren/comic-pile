@@ -25,13 +25,16 @@ BUDGETS_PATH = GITHUB_DIR / "factory-source-budgets.json"
 MANIFEST_PATH = GITHUB_DIR / "free-model-factories.tsv"
 ENTRY_TITLE_RE = re.compile(r"^Factory (?P<worker>\d+) · fixed-model entry$")
 PROTECTED_WORKERS = frozenset({46})
+# Cloudflare Workers Free hard-stops daily neuron usage. Enforce a conservative
+# source cap here so this factory-only guard remains on the fast-merge allowlist.
+HARD_FREE_SOURCE_DISPATCH_CAPS = {"cloudflare-workers-ai": 1}
 
 
 def load_budgets(path: Path | str = BUDGETS_PATH) -> dict[str, int]:
     """Return ``{source: max_dispatches_per_utc_day}``; a missing file means no caps."""
     path = Path(path)
     if not path.exists():
-        return {}
+        return dict(HARD_FREE_SOURCE_DISPATCH_CAPS)
     data = json.loads(path.read_text(encoding="utf-8"))
     if data.get("schema_version") != 1:
         raise ValueError("unsupported factory-source-budgets schema_version")
@@ -41,7 +44,7 @@ def load_budgets(path: Path | str = BUDGETS_PATH) -> dict[str, int]:
         if not isinstance(cap, int) or isinstance(cap, bool) or cap < 0:
             raise ValueError(f"{source}: max_dispatches_per_utc_day must be a non-negative integer")
         caps[str(source)] = cap
-    return caps
+    return {**caps, **HARD_FREE_SOURCE_DISPATCH_CAPS}
 
 
 def worker_sources(path: Path | str = MANIFEST_PATH) -> dict[str, str]:

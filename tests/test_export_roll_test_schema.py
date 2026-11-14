@@ -52,15 +52,41 @@ def test_normalize_qualifies_trigram_ops_and_strips_dump_banners() -> None:
     assert not normalized.endswith("\n\n")
 
 
-def test_normalize_removes_volatile_attribute_versions_only() -> None:
-    """Suppress transient pg_attver dump metadata, not real column DDL."""
-    raw = (
-        "ALTER TABLE ONLY public.users ALTER COLUMN id SET (pg_attver=26796776);\n"
-        "ALTER TABLE ONLY public.users ALTER COLUMN username SET (pg_attver=999);\n"
-        "ALTER TABLE ONLY public.users ALTER COLUMN username SET NOT NULL;\n"
-        "ALTER TABLE ONLY public.users ALTER COLUMN username SET DEFAULT 'reader';\n"
+def test_normalize_discards_only_internal_attribute_version_assignments() -> None:
+    """Catalog versions vary between dumps; actual column options remain visible."""
+    schema = "CREATE TABLE public.demo (label text);\n"
+    first = (
+        schema
+        + "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+        + 'ALTER TABLE ONLY "public"."demo" ALTER COLUMN "label" SET (pg_attver=456);\n'
     )
-    normalized = _normalize(raw)
-    assert "pg_attver" not in normalized
-    assert "SET NOT NULL" in normalized
-    assert "SET DEFAULT 'reader'" in normalized
+    second = first.replace("123", "789").replace("456", "987")
+    assert _normalize(first) == _normalize(second) == schema
+    assert _normalize(_normalize(first)) == schema
+
+    meaningful = (
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (n_distinct=123);\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123, n_distinct=2);\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET DEFAULT 'pg_attver=123';\n"
+        "COMMENT ON COLUMN public.demo.label IS 'pg_attver=123';\n"
+    )
+    assert _normalize(meaningful) == meaningful
+
+
+def test_normalize_preserves_attribute_version_text_inside_quoted_sql() -> None:
+    """Returned SQL and multiline literals remain meaningful schema content."""
+    body = (
+        "CREATE FUNCTION public.example() RETURNS text LANGUAGE sql AS $body$\n"
+        "SELECT $query$\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+        "$query$;\n"
+        "$body$;\n"
+        "COMMENT ON TABLE public.demo IS 'example:\n"
+        "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+        "end';\n"
+    )
+    metadata = "ALTER TABLE ONLY public.demo ALTER COLUMN label SET (pg_attver=123);\n"
+    assert _normalize(body) == body
+    assert _normalize(metadata + body) == body
+    assert _normalize(body + metadata) == body
+    assert _normalize(body.replace("123", "456")) != _normalize(body)
