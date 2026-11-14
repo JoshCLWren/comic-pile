@@ -350,30 +350,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Commit Series Mapping
-         * @description Commit user-approved safe series mappings transactionally and idempotently.
-         *
-         *     Only rows the referenced preview classified ``safe_exact_match`` may be approved. The
-         *     preview token signature, user binding, and TTL are verified, current database state is
-         *     revalidated, and every identity write commits in one transaction. Metadata hydration is
-         *     handed off only after that commit.
-         *
-         *     Args:
-         *         request: Commit request with preview token, idempotency key, and approved row ids.
-         *         current_user: Authenticated user for authorization.
-         *         db: Database session.
-         *
-         *     Returns:
-         *         The confirmed, already-confirmed, needs-review, and hydration-queued issue ids plus
-         *         the established series evidence.
-         *
-         *     Raises:
-         *         HTTPException: 409 ``preview_stale``/``preview_expired``/``confirmed_mapping_conflict``/
-         *             ``idempotency_conflict`` or 422 ``invalid_approved_row``. No identity write has
-         *             been committed in any of those cases.
-         */
-        post: operations["commit_series_mapping_api_v1_catalog_series_mappings_commit_post"];
+        /** OpenAPI path documentation for the series-mapping commit endpoint. */
+        post: operations["commit_documentation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7441,6 +7419,25 @@ export interface components {
             related_issues?: components["schemas"]["ComicVineRelatedIssue"][];
             /** Total Related Count */
             total_related_count?: number | null;
+        };
+        CommitRequest: {
+            approved_row_ids?: string[];
+            idempotency_key: string;
+            preview_token: string;
+        };
+        CommitResponse: {
+            already_confirmed_issue_ids: number[];
+            confirmed_issue_ids: number[];
+            hydration_queued_issue_ids: number[];
+            idempotency_key: string;
+            needs_review_issue_ids: number[];
+            series_mapping: components["schemas"]["CommitSeriesMapping"];
+        };
+        CommitSeriesMapping: {
+            evidence_source: string;
+            external_id: string;
+            provider: string;
+            status: string;
         };
         /**
          * ConfirmIdentityRequest
@@ -15411,7 +15408,7 @@ export interface operations {
             };
         };
     };
-    commit_series_mapping_api_v1_catalog_series_mappings_commit_post: {
+    commit_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -15420,27 +15417,39 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SeriesMappingCommitRequest"];
+                "application/json": components["schemas"]["CommitRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Commit result */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SeriesMappingCommitResponse"];
+                    "application/json": components["schemas"]["CommitResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description invalid_approved_row */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
