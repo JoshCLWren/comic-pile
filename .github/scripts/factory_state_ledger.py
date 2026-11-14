@@ -412,6 +412,23 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
                 "outcome_class": "provider_failure",
                 "detail": "pinned OpenCode model exceeded its 180-second smoke deadline",
             }
+    # A worker can prove its model, run for the full execution budget, and
+    # still leave no persisted work. The controller already records explicit
+    # transient provider/runtime interruption at agent timeout; the generic
+    # outcome classifier missed this production worker 46 signature.
+    worker = re.escape(str(outcome.get("worker") or ""))
+    if worker and re.search(
+        rf"\[factory:{worker}\].*agent exit status 124\b", job_log
+    ) and re.search(
+        rf"\[factory:{worker}\].*transient provider/runtime interruption on the pinned model",
+        job_log,
+    ):
+        return {
+            **outcome,
+            "outcome": "PROVIDER FAILURE",
+            "outcome_class": "provider_failure",
+            "detail": "pinned model session reached its time budget after a transient provider/runtime interruption",
+        }
     return outcome
 
 
