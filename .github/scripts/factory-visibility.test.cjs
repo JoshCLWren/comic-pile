@@ -1,7 +1,50 @@
 const assert = require('node:assert/strict');
+const { mkdtempSync, writeFileSync, copyFileSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join } = require('node:path');
 const test = require('node:test');
 
 const reconcile = require('./factory-visibility.cjs');
+
+function loadVisibilityFixture({ expected = [], retired = [] } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'factory-visibility-'));
+  try {
+    const lockPath = join(dir, 'factory-expected-workers.json');
+    const rosterPath = join(dir, 'free-model-factories.tsv');
+    writeFileSync(lockPath, JSON.stringify({
+      schema_version: 1,
+      expected_workers: expected,
+      retired_workers: retired,
+    }));
+    writeFileSync(rosterPath, expected.map((id) => `${id}\tmodel\tworker`).join('\n') + (expected.length ? '\n' : ''));
+    writeFileSync(join(dir, 'factory-expected-workers.cjs'), `'use strict';
+const fs = require('node:fs');
+const lock = JSON.parse(fs.readFileSync(${JSON.stringify(lockPath)}, 'utf8'));
+const SCHEDULED_WORKER_IDS = [1, 2, 3, 4, 5];
+function loadExpectedWorkerIds() {
+  return {
+    expectedWorkers: new Set(lock.expected_workers.map(Number)),
+    retiredWorkers: new Set(lock.retired_workers.map(Number)),
+    rosterWorkers: new Set(lock.expected_workers.map(Number)),
+    scheduledWorkerIds: new Set(SCHEDULED_WORKER_IDS),
+  };
+}
+module.exports = {
+  SCHEDULED_WORKER_IDS,
+  defaultLockPath: () => ${JSON.stringify(lockPath)},
+  defaultRosterPath: () => ${JSON.stringify(rosterPath)},
+  loadExpectedWorkerIds,
+  isExpectedWorkerId: (id) => new Set(lock.expected_workers.map(Number)).has(Number(id)),
+  readRosterWorkerIds: () => new Set(lock.expected_workers.map(Number)),
+  readLock: () => ({ expected: new Set(lock.expected_workers.map(Number)), retired: new Set(lock.retired_workers.map(Number)), schemaVersion: 1 }),
+};
+`);
+    copyFileSync('.github/scripts/factory-visibility.cjs', join(dir, 'factory-visibility.cjs'));
+    return require(join(dir, 'factory-visibility.cjs'));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 const {
   ownerFor,
   reconcileLabels,
@@ -103,12 +146,17 @@ test('canonical local worker tokens map to the local owner', () => {
 });
 
 test('fixed-model worker tokens map from the roster, not a numeric ceiling', () => {
+  const { ownerFor } = loadVisibilityFixture({
+    expected: [11, 46, 51, 75, 101],
+    retired: [6, 32, 49, 56, 71, 72, 73, 74, 76, 77, 78, 93, 95],
+  })._test;
   assert.equal(ownerFor('opencode-free-model-factory-46'), 'factory:46');
   assert.equal(ownerFor('opencode-free-model-factory-51'), 'factory:51');
   assert.equal(ownerFor('opencode-free-model-factory-74'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-75'), 'factory:75');
   assert.equal(ownerFor('opencode-free-model-factory-95'), 'factory:unowned');
-  assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:77');
+  // Active above-old-ceiling worker comes from the hermetic roster fixture.
+  assert.equal(ownerFor('opencode-free-model-factory-101'), 'factory:101');
   assert.equal(ownerFor('opencode-free-model-factory-56'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-78'), 'factory:unowned');
   assert.equal(ownerFor('opencode-omniroute-factory-95'), 'factory:unowned');
@@ -121,15 +169,21 @@ test('fixed-model worker tokens map from the roster, not a numeric ceiling', () 
   assert.equal(ownerFor('opencode-free-model-factory-72'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-73'), 'factory:unowned');
   assert.equal(ownerFor('opencode-free-model-factory-76'), 'factory:unowned');
+  // Retired roster worker stays unowned even when named by a stale marker.
+  assert.equal(ownerFor('opencode-free-model-factory-77'), 'factory:unowned');
 });
 
 test('head-contributor markers resolve roster workers above the old ceiling', () => {
-  const { workerFrom } = reconcile._test;
-  const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-77:epoch-2 -->';
-  assert.equal(workerFrom(body), '77');
-  assert.equal(ownerFor(workerFrom(body)), 'factory:77');
+  const { workerFrom, ownerFor } = loadVisibilityFixture({
+    expected: [101],
+    retired: [77, 93, 72],
+  })._test;
+  const body = '<!-- comic-pile-factory-head-contributor-v1:pr-7:head-' + 'a'.repeat(40) + ':worker-101:epoch-2 -->';
+  assert.equal(workerFrom(body), '101');
+  assert.equal(ownerFor(workerFrom(body)), 'factory:101');
   assert.equal(ownerFor('worker-93'), 'factory:unowned');
   assert.equal(ownerFor('72'), 'factory:unowned');
+  assert.equal(ownerFor('77'), 'factory:unowned');
 });
 
 test('legacy model-specific label metadata is normalized', async () => {
