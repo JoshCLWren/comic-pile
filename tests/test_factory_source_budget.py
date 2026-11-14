@@ -97,6 +97,7 @@ def test_router_pin_guards() -> None:
     assert not roster.orcarouter_model_is_free("orcarouter/free")
     assert not roster.orcarouter_model_is_free("orca/orcaverify-text1.0-free")
     assert roster.requesty_model_is_approved("requesty/nvidia/nemotron-3-ultra-550b-a55b")
+    assert roster.requesty_model_is_approved("nvidia/nemotron-3.5-lightning-30b-a3b")
     assert not roster.requesty_model_is_approved("openai/gpt-5")
 
 
