@@ -93,7 +93,7 @@ def list_issues() -> list[dict[str, Any]]:
         reconcile_snapshot(REPO, "issue", issues, started)
         return issues
 
-    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)
+    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=450)
 
 
 def list_prs() -> list[dict[str, Any]]:
@@ -111,7 +111,7 @@ def list_prs() -> list[dict[str, Any]]:
         reconcile_snapshot(REPO, "pr", prs, started)
         return prs
 
-    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=45)
+    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=450)
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
