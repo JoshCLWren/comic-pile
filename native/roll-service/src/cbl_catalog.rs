@@ -6,10 +6,9 @@
 //! and pagination therefore produce identical results for every authenticated
 //! account, including a brand-new one with no comics.
 
-use crate::{db, ApiError};
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Path, Query, State},
-    http::StatusCode,
+    extract::{Query, State},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -17,7 +16,6 @@ use std::sync::Arc;
 use utoipa::ToSchema;
 
 const MAX_PAGE_SIZE: i32 = 100;
-const DEFAULT_PAGE_SIZE: i32 = 50;
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct CBLCatalogListItem {
@@ -69,14 +67,16 @@ pub struct CBLCatalogBrowseResponse {
     pub has_previous: bool,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize, ToSchema, Default)]
 pub struct CBLFolderListQuery {
-    pub folder: String = "",
+    #[serde(default)]
+    pub folder: String,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CBLCatalogBrowseQuery {
-    pub folder: String = "",
+    #[serde(default)]
+    pub folder: String,
     pub q: Option<String>,
     #[serde(default = "default_page")]
     pub page: i32,
@@ -110,7 +110,8 @@ fn validate_page_size(page_size: i32) -> Result<i32, ApiError> {
 /// folder with no active CBLs or subfolders returns a stable 404 envelope; a
 /// malformed path returns 400.
 pub async fn list_cbl_source_folders(
-    State(state): State<Arc<crate::AppState>>,
+    _user: AuthenticatedUser,
+    State(state): State<Arc<AppState>>,
     Query(params): Query<CBLFolderListQuery>,
 ) -> Result<Json<CBLFolderListingResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
@@ -142,7 +143,8 @@ pub async fn list_cbl_source_folders(
 /// catalog, regardless of `folder`, and `scope` is `"search"`. `total`
 /// is the truthful number of matches, so callers can page past 100 results.
 pub async fn browse_cbl_source_catalog(
-    State(state): State<Arc<crate::AppState>>,
+    _user: AuthenticatedUser,
+    State(state): State<Arc<AppState>>,
     Query(params): Query<CBLCatalogBrowseQuery>,
 ) -> Result<Json<CBLCatalogBrowseResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
@@ -159,7 +161,7 @@ pub async fn browse_cbl_source_catalog(
     let breadcrumbs = calculate_breadcrumbs(folder);
     let scope = if query.is_some() { "search" } else { "folder" };
 
-    let (folders, direct_count, total_count) = if query.is_some() {
+    let (folders, _direct_count, _total_count) = if query.is_some() {
         // For search, we don't need folder-specific counts
         (Vec::new(), 0, 0)
     } else {
@@ -172,7 +174,7 @@ pub async fn browse_cbl_source_catalog(
         list_cbl_sources_in_folder(&conn, folder, page, page_size).await?
     };
 
-    let total_pages = (total + page_size as i64 - 1) / page_size as i64;
+    let total_pages = ((total + page_size as i64 - 1) / page_size as i64) as i32;
     let has_next = page < total_pages;
     let has_previous = page > 1;
 
@@ -194,29 +196,26 @@ pub async fn browse_cbl_source_catalog(
 
 fn calculate_breadcrumbs(folder: &str) -> Vec<CBLBreadcrumb> {
     let mut breadcrumbs = Vec::new();
-    let mut current_path = "";
-    
+    let mut current_path = String::new();
+
     if !folder.is_empty() {
         for segment in folder.split('/') {
-            if !segment.is_empty() {
-                let breadcrumb_path = if current_path.is_empty() {
-                    format!("/{}", segment)
-                } else {
-                    format!("{}/{}", current_path, segment)
-                };
-                breadcrumbs.push(CBLBreadcrumb {
-                    name: segment.to_string(),
-                    path: breadcrumb_path,
-                });
-                current_path = if current_path.is_empty() {
-                    segment.to_string()
-                } else {
-                    format!("{}/{}", current_path, segment)
-                };
+            if segment.is_empty() {
+                continue;
             }
+            let breadcrumb_path = if current_path.is_empty() {
+                segment.to_string()
+            } else {
+                format!("{}/{}", current_path, segment)
+            };
+            breadcrumbs.push(CBLBreadcrumb {
+                name: segment.to_string(),
+                path: breadcrumb_path.clone(),
+            });
+            current_path = breadcrumb_path;
         }
     }
-    
+
     breadcrumbs
 }
 
@@ -250,6 +249,7 @@ async fn get_folders_and_counts(
         let direct: i64 = row.get(2);
         let total: i64 = row.get(3);
 
+        let is_current = path == folder;
         folders.push(CBLSourceFolder {
             name,
             path,
@@ -257,7 +257,7 @@ async fn get_folders_and_counts(
             total_list_count: total as i32,
         });
 
-        if path == folder {
+        if is_current {
             direct_count = direct as i32;
             total_count = total as i32;
         }
