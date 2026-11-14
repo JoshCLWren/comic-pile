@@ -328,6 +328,38 @@
       "minute": "20",
       "scheduler": "dispatcher",
       "display_name": "OpenCode LongCat 2.5 Free"
+    },
+    {
+      "worker": "117",
+      "source": "requesty",
+      "model": "google/gemma-4-31b-it",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Gemma 4 31B Free"
+    },
+    {
+      "worker": "118",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron 3.5 Lightning Free"
+    },
+    {
+      "worker": "119",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/zai-org/glm-4.7-flash",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare GLM 4.7 Flash Free"
+    },
+    {
+      "worker": "120",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/google/gemma-4-26b-a4b-it",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare Gemma 4 26B Free"
     }
   ],
   "expected_workers": [
@@ -371,7 +403,11 @@
     113,
     114,
     115,
-    116
+    116,
+    117,
+    118,
+    119,
+    120
   ],
   "retired_workers": [
     9,

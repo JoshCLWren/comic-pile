@@ -41,3 +41,7 @@
 114	opencode-free	beam-free	10	dispatcher	OpenCode Beam Free
 115	opencode-free	iceman-free	15	dispatcher	OpenCode Iceman Free
 116	opencode-free	longcat-2.5-free	20	dispatcher	OpenCode LongCat 2.5 Free
+117	requesty	google/gemma-4-31b-it	25	dispatcher	Requesty Gemma 4 31B Free
+118	requesty	nvidia/nemotron-3.5-lightning-30b-a3b	30	dispatcher	Requesty Nemotron 3.5 Lightning Free
+119	cloudflare-workers-ai	@cf/zai-org/glm-4.7-flash	35	dispatcher	Cloudflare GLM 4.7 Flash Free
+120	cloudflare-workers-ai	@cf/google/gemma-4-26b-a4b-it	40	dispatcher	Cloudflare Gemma 4 26B Free
