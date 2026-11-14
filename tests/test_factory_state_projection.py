@@ -99,14 +99,14 @@ def test_trusted_webhook_does_not_checkout_pr_branch_or_expose_write_token() -> 
     assert "github.event.pull_request.head" not in workflow
 
 
-def test_controller_uses_projection_with_30_minute_reconciliation() -> None:
+def test_controller_uses_projection_with_hourly_reconciliation() -> None:
     source = (ROOT / ".github/scripts/factory-work-controller.py").read_text()
     assert 'projected_json(REPO, "issue")' in source
     assert 'projected_json(REPO, "pr")' in source
     assert 'reconcile_snapshot(REPO, "issue", issues, started)' in source
-    assert 'return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)' in source
+    assert 'return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=450)' in source
     assert 'reconcile_snapshot(REPO, "pr", prs, started)' in source
-    assert projection.RECONCILE_SECONDS == 1800
+    assert projection.RECONCILE_SECONDS == 3600
 
 def test_delayed_open_event_uses_live_closed_state(monkeypatch: pytest.MonkeyPatch) -> None:
     import json
@@ -386,7 +386,7 @@ def test_finite_projection_ttls_and_expired_row_fallback() -> None:
     snap = inspect.getsource(projection._snapshot)
     ingest = inspect.getsource(projection._ingest_event)
     read = inspect.getsource(projection._read_projection)
-    assert projection.RECONCILE_SECONDS == 1800
+    assert projection.RECONCILE_SECONDS == 3600
     assert projection.TARGET_TTL_SECONDS == 7200
     assert "2100-01-01" not in snap
     assert "2100-01-01" not in ingest
