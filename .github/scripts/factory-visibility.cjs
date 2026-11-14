@@ -966,7 +966,7 @@ async function ownerFromLinkedIssue(github, context, pullRequest) {
   return 'factory:unowned';
 }
 
-async function reconcileMissingPrLabels({ github, context }) {
+async function reconcileMissingPrLabels({ github, context, openPullRequests = null }) {
   // PR events must still reconcile their exact live PR. On a recovery sweep,
   // only missing factory enrollment requires work: the open-PR list already
   // contains labels, so there is no reason to fetch every PR and its labels
@@ -987,17 +987,35 @@ async function reconcileMissingPrLabels({ github, context }) {
       return { data: result.data, headers: result.headers, status: result.status };
     });
 
-    const first = await fetchOpenPage(1);
-    const open = [...first.data];
-    // A full first page does not prove there are no older unlabeled PRs.
-    // Continue paging only when necessary, without re-fetching page one.
-    let lastPage = first.data;
-    let page = 1;
-    while (lastPage.length === 100) {
-      page += 1;
-      const next = await fetchOpenPage(page);
-      lastPage = next.data;
-      open.push(...lastPage);
+    // A fresh, webhook-fed Neon snapshot avoids the full open-PR discovery scan.
+    // A missing/stale DB snapshot falls back to GitHub. Incomplete records are
+    // still revalidated against the live PR and labels before any mutation.
+    let open;
+    if (Array.isArray(openPullRequests)) {
+      open = openPullRequests.map(item => ({
+        ...item,
+        state: 'open',
+        draft: Boolean(item.isDraft),
+        head: {
+          ref: item.headRefName,
+          sha: item.headRefOid,
+          repo: item.isCrossRepository ? null : { full_name: `${context.repo.owner}/${context.repo.repo}` },
+        },
+        user: { login: item.author?.login || '' },
+      }));
+      console.log(`Factory enrollment: using ${open.length} projected PRs from Neon`);
+    } else {
+      const first = await fetchOpenPage(1);
+      open = [...first.data];
+      // A full first page does not prove there are no older unlabeled PRs.
+      let lastPage = first.data;
+      let page = 1;
+      while (lastPage.length === 100) {
+        page += 1;
+        const next = await fetchOpenPage(page);
+        lastPage = next.data;
+        open.push(...lastPage);
+      }
     }
     // A factory label alone is not complete enrollment: a valid PR must also
     // have exactly one current owner and one stage. The scheduled recovery
@@ -1037,6 +1055,10 @@ async function reconcileMissingPrLabels({ github, context }) {
       console.warn(`PR #${pr.number}: live body unread; skipping enrollment`);
       continue;
     }
+    // Projection rows do not always carry the author, and can briefly lag a
+    // draft/cross-repository change. Only the live PR can authorize enrollment.
+    if (live.draft || !live.head?.repo?.full_name
+      || /^(dependabot|renovate)(\[bot\])?$/.test(live.user?.login || '')) continue;
     if (hasManualOnlyDirective(live.body)) continue;
     const current = await currentLabels(github, context, pr.number);
     if (labelsBlockEnrollment(current)) continue;
@@ -1109,7 +1131,8 @@ async function reconcileMissingPrLabels({ github, context }) {
 }
 
 async function reconcile({ github, context }) {
-  await ensureLabels(github, context);
+  // Definitions are ensured on actual enrollment, not on every event. A
+  // read-only review/comment notification must not page all repository labels.
 
   const payloadBody = context.payload.pull_request?.body ?? context.payload.issue?.body ?? '';
   if (hasManualOnlyDirective(payloadBody)) return;

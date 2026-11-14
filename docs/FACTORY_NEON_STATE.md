@@ -151,6 +151,40 @@ A healthy dispatcher, completion drain, or status page log should show
 If it prints `cache read unavailable`, the job is using GitHub's original
 read path and must be investigated rather than described as cached.
 
+## Neon-first GitHub read policy
+
+All **trusted factory control-plane workflows** must try Neon before GitHub
+for read-only discovery, when a fresh shared projection exists. The common
+`.github/scripts/factory-gh-rest-shim.sh` delegates the read policy to
+`.github/scripts/factory_gh_read_through.py`. The dispatcher, capacity
+refill, completion drain, and status dashboard use the same shim. The hourly
+issue/PR reconciler additionally reads the projected PR inventory before
+scanning live GitHub.
+
+- **Issue/PR discovery:** Use the webhook-fed Neon projection while its
+  reconciliation watermark is less than 30 minutes old. Missing or older
+  projections fall back to GitHub, never to an empty inventory.
+- **Shared safe GET lists:** The centralized cache covers explicit
+  non-authoritative REST discovery lists. Open issue/PR lists are fresh
+  for at most 45 seconds; recent repository comments for 60 seconds;
+  registry comments for 90 seconds; all-PR history lists for 120 seconds.
+  Expired or absent data is fetched once under the existing 75-second Neon
+  refresh lease and published for concurrent readers. A Neon outage
+  uses the live GitHub path.
+- **Never cache authorization:** Individual target reads at a claim/label
+  mutation boundary, GitHub Actions run liveness, review threads, review
+  verdicts, required CI checks, mergeability, exact-head merge authorization,
+  and every API write remain live GitHub operations. The DB may narrow
+  candidates, but cannot authorize a mutation or merge.
+- **Security:** Only trusted controller runners receive the restricted
+  factory_state connection. Coding workers and local Qwen never do.
+  API responses with custom headers, arbitrary repositories, GraphQL,
+  or mutation flags cannot enter the shared GET cache.
+- **Proof:** The read-through tests cover fresh hit, stale refresh,
+  cross-repo isolation, bypasses and HTTP errors. To validate real savings,
+  compare per-workflow REST request telemetry and quota samples before/after.
+  No claim of an achieved percentage reduction is made without that evidence.
+
 ## Remaining API work
 
 Issue/PR events now update individual Neon projections and a live listing
