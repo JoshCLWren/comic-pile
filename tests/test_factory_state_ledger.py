@@ -254,3 +254,40 @@ def test_entry_passes_completed_job_log_into_trusted_ledger():
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert '--log "$RUNNER_TEMP/factory-entry.log"' in entry
     assert entry.index("classify-fixed-model-run.py") < entry.index("factory_state_ledger.py runtime-outcome")
+
+
+
+def test_worker_46_explicit_agent_timeout_is_not_unknown_failure():
+    """Live run 43602063085 had a pinned-model 124 and transient interruption."""
+    outcome = {
+        "worker": "46", "source": "kilo-auto", "model": "kilo-auto/free",
+        "outcome_class": "unknown_failure", "exact_model_proven": False,
+        "persisted_work": False,
+    }
+    log = (
+        "2026-11-14T14:06:47Z [factory:46][source:kilo-auto]"
+        "[model:kilo-auto/free] agent exit status 124 for pr #5053\n"
+        "2026-11-14T14:06:47Z [factory:46][source:kilo-auto]"
+        "[model:kilo-auto/free] transient provider/runtime interruption "
+        "on the pinned model; refusing to switch models\n"
+    )
+    refined = ledger.refine_trusted_smoke_timeout(outcome, log)
+    assert refined["outcome_class"] == "provider_failure"
+    assert refined["source"] == "kilo-auto"
+    assert refined["persisted_work"] is False
+    assert ledger.refine_trusted_smoke_timeout(
+        {**outcome, "worker": "47"}, log
+    )["outcome_class"] == "unknown_failure"
+    assert ledger.refine_trusted_smoke_timeout(
+        {**outcome, "persisted_work": True}, log
+    )["outcome_class"] == "unknown_failure"
+
+
+def test_generic_agent_timeout_without_transient_marker_remains_unknown():
+    outcome = {
+        "worker": "46", "source": "kilo-auto", "model": "kilo-auto/free",
+        "outcome_class": "unknown_failure", "exact_model_proven": False,
+        "persisted_work": False,
+    }
+    log = "2026-11-14T14:06:47Z [factory:46] agent exit status 124 for pr #5053\n"
+    assert ledger.refine_trusted_smoke_timeout(outcome, log) == outcome
