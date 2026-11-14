@@ -530,7 +530,11 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
     if not WORKER_RE.fullmatch(worker) or not run_id.isdecimal():
         raise ValueError("invalid trusted runtime outcome identity")
     status = str(outcome.get("outcome_class") or "unknown_failure")
-    event_type = "worker_completed" if status in {"success", "no_work"} else "worker_failed"
+    # Execution can time out despite a verified code push and successful PR handoff.
+    delivered = (outcome.get("delivery_outcome") == "persisted"
+                 and outcome.get("persisted_work") is True
+                 and str(outcome.get("delivery_pr") or "").isdecimal())
+    event_type = "worker_completed" if status in {"success", "no_work"} or delivered else "worker_failed"
     inserted = record_events(repo, [{
         "event_type": event_type,
         "event_id": f"runtime:{run_id}",
@@ -540,6 +544,8 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
         "model": outcome.get("model"),
         "exact_model_proven": outcome.get("exact_model_proven") is True,
         "outcome_class": status,
+        "delivery_outcome": "persisted" if delivered else "none",
+        "delivery_pr": outcome.get("delivery_pr") if delivered else None,
         "selected_kind": outcome.get("selected_kind"),
         "selected_number": outcome.get("selected_number"),
         "persisted_work": bool(outcome.get("persisted_work")),
