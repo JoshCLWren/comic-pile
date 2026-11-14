@@ -6,9 +6,12 @@ from live call sites. Per-route tests pin each budget against its handler;
 this guard keeps the inventory side honest:
 
 * every budgeted entry is an operation present in the generated native
-  OpenAPI contract with consistent arithmetic;
-* the budgeted set is recorded exactly, so adding a budget requires a
-  deliberate test update alongside its per-route pin;
+  OpenAPI contract with consistent arithmetic (``full_surface`` v1/unversioned
+  entries that carry a ``sql_budget`` are validated the same way; they are not
+  set-pinned because the full-surface inventory is regenerated post-merge by
+  the route-fragment bot);
+* the ``operations`` bucket budgeted set is recorded exactly, so adding a
+  budget requires a deliberate test update alongside its per-route pin;
 * native operations without a budget are recorded exactly as gaps, so a
   new native operation cannot land without either a budget or an explicit
   entry here. Some gaps may be non-DB operations (e.g. CSRF) that need an
@@ -20,25 +23,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts import generate_route_burndown as generator
+
 ROOT = Path(__file__).resolve().parents[1]
 INVENTORY = ROOT / "docs" / "api" / "v2-route-inventory.json"
+SOURCES = ROOT / "docs" / "api" / "sql-budget-sources.json"
 OPENAPI = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
 
 _BUDGETED_OPERATIONS = frozenset(
-    {
-        ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
-        ("get", "/api/v2/demo-roll"),
-        ("get", "/api/v2/reading-graph"),
-        ("get", "/api/v2/threads"),
-        ("post", "/api/v2/auth/login"),
-        ("post", "/api/v2/reading-boundaries"),
-    }
-)
-
-# Native operations without a recorded sql_budget. Shrink this set as each
-# operation gains a budget (or records a non-DB exemption); never grow it
-# silently — a new native operation must arrive with its budget.
-_KNOWN_BUDGET_GAPS = frozenset(
     {
         ("delete", "/api/v2/dependencies/{dependency_id}"),
         ("delete", "/api/v2/issues/{issue_id}"),
@@ -46,18 +38,23 @@ _KNOWN_BUDGET_GAPS = frozenset(
         ("get", "/api/v2/analytics/metrics"),
         ("get", "/api/v2/auth/csrf"),
         ("get", "/api/v2/auth/me"),
+        ("get", "/api/v2/continuity-plans/{plan_id}/reader"),
         ("get", "/api/v2/continuity-plans/{plan_id}/recovery"),
+        ("get", "/api/v2/demo-roll"),
         ("get", "/api/v2/issues/{issue_id}/comicvine"),
         ("get", "/api/v2/queue-entries/{thread_id}"),
+        ("get", "/api/v2/reading-graph"),
         ("get", "/api/v2/reading-lists"),
         ("get", "/api/v2/reading-lists/{list_id}"),
         ("get", "/api/v2/reading-lists/{list_id}/reader"),
         ("get", "/api/v2/roll/bootstrap"),
         ("get", "/api/v2/roll/die-state"),
         ("get", "/api/v2/roll/eligible-issue-ids"),
+        ("get", "/api/v2/threads"),
         ("patch", "/api/v2/issues/{issue_id}"),
         ("patch", "/api/v2/queue-entries/{thread_id}"),
         ("post", "/api/v2/auth/forgot-password"),
+        ("post", "/api/v2/auth/login"),
         ("post", "/api/v2/auth/logout"),
         ("post", "/api/v2/auth/refresh"),
         ("post", "/api/v2/auth/register"),
@@ -66,6 +63,7 @@ _KNOWN_BUDGET_GAPS = frozenset(
         ("post", "/api/v2/dependencies/"),
         ("post", "/api/v2/issues/cards"),
         ("post", "/api/v2/queue-orders"),
+        ("post", "/api/v2/reading-boundaries"),
         ("post", "/api/v2/reading-graph/repairs"),
         ("post", "/api/v2/reading-lists"),
         ("post", "/api/v2/reading-sessions"),
@@ -78,10 +76,16 @@ _KNOWN_BUDGET_GAPS = frozenset(
     }
 )
 
+# Native operations without a recorded sql_budget. Shrink this set as each
+# operation gains a budget (or records a non-DB exemption); never grow it
+# silently — a new native operation must arrive with its budget.
+_KNOWN_BUDGET_GAPS = frozenset()
 
 def _inventory_operations() -> list[dict[str, object]]:
     """Load and validate the inventory operations."""
-    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    fragments = generator._load_route_fragments(ROOT / generator.FRAGMENT_DIR)
+    vercel = generator._generate_vercel_document(generator.load_json(ROOT / generator.VERCEL_PATH), fragments)
+    document, _ = generator._render_inventory(generator.load_json(INVENTORY), generator._routes_from_document(vercel), fragments)
     operations = document["operations"]
     assert isinstance(operations, list)
     entries: list[dict[str, object]] = []
@@ -89,6 +93,25 @@ def _inventory_operations() -> list[dict[str, object]]:
         assert isinstance(operation, dict)
         entries.append(operation)
     return entries
+
+
+def _all_inventory_operations() -> list[dict[str, object]]:
+    """Load the v2 operations plus the full-surface v1/unversioned buckets."""
+    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    buckets: list[object] = [document["operations"]]
+    full_surface = document.get("full_surface")
+    if isinstance(full_surface, dict):
+        for key in ("v1_operations", "unversioned_operations"):
+            entries = full_surface.get(key)
+            if isinstance(entries, list):
+                buckets.append(entries)
+    merged: list[dict[str, object]] = []
+    for bucket in buckets:
+        assert isinstance(bucket, list)
+        for entry in bucket:
+            assert isinstance(entry, dict)
+            merged.append(entry)
+    return merged
 
 
 def _deployed_operations() -> set[tuple[str, str]]:
@@ -99,7 +122,7 @@ def _deployed_operations() -> set[tuple[str, str]]:
     return {
         (method.lower(), path)
         for path, operations in paths.items()
-        if path.startswith("/api/v2/")
+        if path.startswith("/api/v2/") or path.startswith("/api/v1/releases/")
         for method in operations
     }
 
@@ -119,20 +142,60 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
     application = budget.get("application_statements")
     control = budget.get("transaction_control_statements")
     total = budget.get("total_statements")
+    maximum = budget.get("max_statements")
+    overhead = budget.get("runtime_overhead_statements", 0)
     basis = budget.get("basis")
+    grows = budget.get("grows_with_data")
     assert isinstance(application, int) and application >= 0
     assert isinstance(control, int) and control >= 0
     assert isinstance(total, int)
     assert total == application + control
+    assert isinstance(overhead, int) and overhead >= 0
+    assert maximum == total + overhead
+    assert isinstance(grows, bool)
     if total == 0:
         assert operation.get("db_free") is True
     assert isinstance(basis, str) and basis.strip() != ""
     return budget
 
 
+def test_budget_source_matches_generated_inventory() -> None:
+    """Editable SQL budget sources must survive route generation unchanged."""
+    source_document = json.loads(SOURCES.read_text(encoding="utf-8"))
+    source_operations = source_document.get("operations")
+    assert isinstance(source_operations, list)
+    sources = {
+        (entry["method"].lower(), entry["path"]): entry
+        for entry in source_operations
+    }
+    assert len(sources) == len(source_operations), "duplicate SQL budget source"
+    inventory = {
+        _key(operation): operation
+        for operation in _inventory_operations()
+    }
+    for key, source in sources.items():
+        assert key in inventory, f"stale SQL budget source {key}"
+        assert inventory[key].get("sql_budget") == source["sql_budget"]
+        budget = source["sql_budget"]
+        assert isinstance(budget, dict)
+        proof_reference = budget.get("proof_reference")
+        assert isinstance(proof_reference, str) and (ROOT / proof_reference).is_file(), key
+        status = budget.get("measurement_status")
+        if status in {"measured", "partial-branch"}:
+            test_reference = budget.get("measured_test_reference")
+            assert isinstance(test_reference, str) and (ROOT / test_reference).is_file(), key
+            route_prefix = key[1].split("{", 1)[0]
+            assert route_prefix in (ROOT / test_reference).read_text(encoding="utf-8"), key
+        elif status == "db-free":
+            assert source.get("db_free") is True, key
+        else:
+            assert status == "pending-fixture", key
+            assert "measured_test_reference" not in budget, key
+
+
 def test_every_budget_is_a_deployed_native_operation() -> None:
     """Budgeted entries are native-rust and present in the generated contract."""
-    operations = _inventory_operations()
+    operations = _all_inventory_operations()
     deployed = _deployed_operations()
     budgeted = [op for op in operations if "sql_budget" in op]
     assert budgeted, "at least one operation must carry a sql_budget"

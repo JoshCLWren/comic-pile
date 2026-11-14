@@ -1783,31 +1783,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/demo/roll": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Demo Roll
-         * @description Return the single deterministic seeded demo roll.
-         *
-         *     Returns:
-         *         A fresh copy of the seeded sample roll. No authentication, database
-         *         session, or persistence is involved, so a guest demo interaction can
-         *         never create library, queue, or reading-history rows.
-         */
-        get: operations["demo_roll_api_v1_demo_roll_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/dependencies/": {
         parameters: {
             query?: never;
@@ -3028,11 +3003,8 @@ export interface paths {
         };
         /** Documentation-only operation for the mounted releases list handler. */
         get: operations["releases_list"];
-        /**
-         * Publish Release
-         * @description Idempotently create or update one merged-PR-backed release.
-         */
-        put: operations["publish_release_api_v1_releases__put"];
+        /** Documentation-only operation for the mounted releases publish handler. */
+        put: operations["releases_publish"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3047,11 +3019,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Reconcile Release Source
-         * @description Resolve whether trusted automation already published a GitHub source.
-         */
-        get: operations["reconcile_release_source_api_v1_releases_source_get"];
+        /** Documentation-only operation for the mounted releases source handler. */
+        get: operations["releases_reconcile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3086,11 +3055,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Retract Release
-         * @description Retract a release so it leaves the public What's New list.
-         */
-        post: operations["retract_release_api_v1_releases__release_id__retract_post"];
+        /** Documentation-only operation for the mounted releases retract handler. */
+        post: operations["releases_retract"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10969,58 +10935,30 @@ export interface components {
              */
             issue_number: string;
         };
-        /**
-         * MinimalReleaseResponse
-         * @description Minimal release data for reconciliation endpoints.
-         */
+        /** @description Minimal release data for reconciliation endpoints (no body). */
         MinimalReleaseResponse: {
-            /** Category */
             category: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
+            /** Format: date-time */
             created_at: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Merged At */
-            merged_at: string | null;
-            /** Provenance Json */
-            provenance_json: {
-                [key: string]: unknown;
-            };
-            /**
-             * Released At
-             * Format: date-time
-             */
+            /** Format: date-time */
+            merged_at: string;
+            provenance_json: unknown;
+            /** Format: date-time */
             released_at: string;
-            /** Sort Order */
+            /** Format: int32 */
             sort_order: number;
-            /** Source Merge Sha */
-            source_merge_sha: string | null;
-            /** Source Pr Number */
-            source_pr_number: number | null;
-            /** Source Repository */
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
             source_repository: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "draft" | "published" | "retracted";
-            /** Summary */
+            status: string;
             summary: string;
-            /** Title */
             title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
+            /** Format: date-time */
             updated_at: string;
-            /**
-             * Visibility
-             * @enum {string}
-             */
-            visibility: "public" | "internal";
+            visibility: string;
         };
         NativeBoundaryEditorTarget: {
             /** Format: int32 */
@@ -11227,23 +11165,6 @@ export interface components {
         NativePasswordResetResponse: {
             message: string;
         };
-        /** @description One release ledger record returned by public-facing endpoints. */
-        NativePublicReleaseResponse: {
-            body?: string | null;
-            category: string;
-            /** Format: date-time */
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: date-time */
-            released_at: string;
-            /** Format: int32 */
-            sort_order: number;
-            summary: string;
-            title: string;
-            /** Format: date-time */
-            updated_at: string;
-        };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
             publisher?: string | null;
@@ -11309,15 +11230,10 @@ export interface components {
         NativeRefreshTokenRequest: {
             refresh_token: string;
         };
-        /** @description Paginated published releases for What's New. */
-        NativeReleaseListResponse: {
-            /** Format: int32 */
-            limit: number;
-            /** Format: int32 */
-            offset: number;
-            releases: components["schemas"]["NativePublicReleaseResponse"][];
-            /** Format: int64 */
-            total: number;
+        /** @description Result of reconciling a GitHub source identity with the ledger. */
+        NativeReleaseSourceResponse: {
+            exists: boolean;
+            release?: null | components["schemas"]["MinimalReleaseResponse"];
         };
         /** @description Request body for completing a password reset with a single-use token. */
         NativeResetPasswordRequest: {
@@ -11676,37 +11592,21 @@ export interface components {
          * @enum {string}
          */
         PotentialDuplicateMatchType: "same_comicvine_volume" | "similar_title";
-        /**
-         * PublicReleaseResponse
-         * @description One release ledger record returned by public-facing endpoints.
-         */
+        /** @description One release ledger record returned by public-facing endpoints. */
         PublicReleaseResponse: {
-            /** Body */
-            body: string | null;
-            /** Category */
+            body?: string | null;
             category: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
+            /** Format: date-time */
             created_at: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /**
-             * Released At
-             * Format: date-time
-             */
+            /** Format: date-time */
             released_at: string;
-            /** Sort Order */
+            /** Format: int32 */
             sort_order: number;
-            /** Summary */
             summary: string;
-            /** Title */
             title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
+            /** Format: date-time */
             updated_at: string;
         };
         /** @description Resource patch for one queue entry. */
@@ -13036,74 +12936,41 @@ export interface components {
             name?: string | null;
             series_name?: string | null;
         };
-        /**
-         * ReleaseListResponse
-         * @description Paginated published releases for What's New.
-         */
+        /** @description Paginated published releases for What's New. */
         ReleaseListResponse: {
-            /** Limit */
+            /** Format: int32 */
             limit: number;
-            /** Offset */
+            /** Format: int32 */
             offset: number;
-            /** Releases */
             releases: components["schemas"]["PublicReleaseResponse"][];
-            /** Total */
+            /** Format: int64 */
             total: number;
         };
-        /**
-         * ReleaseResponse
-         * @description One complete release ledger record returned to trusted automation.
-         */
+        /** @description One complete release ledger record returned to trusted automation. */
         ReleaseResponse: {
-            /** Body */
-            body: string | null;
-            /** Category */
+            body?: string | null;
             category: string;
-            /**
-             * Created At
-             * Format: date-time
-             */
+            /** Format: date-time */
             created_at: string;
-            /** Id */
+            /** Format: int32 */
             id: number;
-            /** Merged At */
-            merged_at: string | null;
-            /** Provenance Json */
-            provenance_json: {
-                [key: string]: unknown;
-            };
-            /**
-             * Released At
-             * Format: date-time
-             */
+            /** Format: date-time */
+            merged_at: string;
+            provenance_json: unknown;
+            /** Format: date-time */
             released_at: string;
-            /** Sort Order */
+            /** Format: int32 */
             sort_order: number;
-            /** Source Merge Sha */
-            source_merge_sha: string | null;
-            /** Source Pr Number */
-            source_pr_number: number | null;
-            /** Source Repository */
+            source_merge_sha?: string | null;
+            /** Format: int32 */
+            source_pr_number?: number | null;
             source_repository: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "draft" | "published" | "retracted";
-            /** Summary */
+            status: string;
             summary: string;
-            /** Title */
             title: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
+            /** Format: date-time */
             updated_at: string;
-            /**
-             * Visibility
-             * @enum {string}
-             */
-            visibility: "public" | "internal";
+            visibility: string;
         };
         /**
          * ReleaseSourceCreate
@@ -13118,6 +12985,40 @@ export interface components {
             thread_id: number;
         };
         /**
+         * ReleaseSourceResponse
+         * @description A release source with provider display metadata.
+         */
+        ReleaseSourceResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Enabled */
+            enabled: boolean;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** Id */
+            id: number;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Plan Id */
+            plan_id: number;
+            /** Provider */
+            provider: string;
+            /** Provider Title */
+            provider_title: string | null;
+            /** Provider Volume Id */
+            provider_volume_id: string;
+            /** Thread Id */
+            thread_id: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * ReleaseSourceUpdate
          * @description Update a release source (enable/disable).
          */
@@ -13125,53 +13026,25 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
-        /**
-         * ReleaseUpsertRequest
-         * @description Idempotent release publication payload from trusted automation.
-         */
+        /** @description Idempotent release publication payload from trusted automation. */
         ReleaseUpsertRequest: {
-            /** Body */
             body?: string | null;
-            /** Category */
             category: string;
-            /** Merged At */
-            merged_at?: string | null;
-            /** Provenance Json */
-            provenance_json?: {
-                [key: string]: unknown;
-            };
-            /**
-             * Released At
-             * Format: date-time
-             */
+            /** Format: date-time */
+            merged_at?: string;
+            provenance_json?: unknown;
+            /** Format: date-time */
             released_at: string;
-            /**
-             * Sort Order
-             * @default 0
-             */
-            sort_order: number;
-            /** Source Merge Sha */
+            /** Format: int32 */
+            sort_order?: number;
             source_merge_sha?: string | null;
-            /** Source Pr Number */
+            /** Format: int32 */
             source_pr_number?: number | null;
-            /** Source Repository */
             source_repository: string;
-            /**
-             * Status
-             * @default published
-             * @enum {string}
-             */
-            status: "draft" | "published" | "retracted";
-            /** Summary */
+            status?: string;
             summary: string;
-            /** Title */
             title: string;
-            /**
-             * Visibility
-             * @default public
-             * @enum {string}
-             */
-            visibility: "public" | "internal";
+            visibility?: string;
         };
         /**
          * ReplaceIdentityRequest
@@ -15032,49 +14905,6 @@ export interface components {
             /** Error Type */
             type: string;
         };
-        /**
-         * ReleaseSourceResponse
-         * @description A release source with provider display metadata.
-         */
-        app__schemas__reading_plan_release_source__ReleaseSourceResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Enabled */
-            enabled: boolean;
-            /** External Identity Id */
-            external_identity_id: number;
-            /** Id */
-            id: number;
-            /** Last Synced At */
-            last_synced_at: string | null;
-            /** Plan Id */
-            plan_id: number;
-            /** Provider */
-            provider: string;
-            /** Provider Title */
-            provider_title: string | null;
-            /** Provider Volume Id */
-            provider_volume_id: string;
-            /** Thread Id */
-            thread_id: number;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /**
-         * ReleaseSourceResponse
-         * @description Result of reconciling a GitHub source identity with the ledger.
-         */
-        app__schemas__release__ReleaseSourceResponse: {
-            /** Exists */
-            exists: boolean;
-            release?: components["schemas"]["MinimalReleaseResponse"] | null;
-        };
     };
     responses: never;
     parameters: never;
@@ -16213,7 +16043,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__schemas__reading_plan_release_source__ReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
                 };
             };
             /** @description Validation Error */
@@ -16277,7 +16107,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__schemas__reading_plan_release_source__ReleaseSourceResponse"];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"];
                 };
             };
             /** @description Validation Error */
@@ -16570,7 +16400,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__schemas__reading_plan_release_source__ReleaseSourceResponse"][];
+                    "application/json": components["schemas"]["ReleaseSourceResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -17434,26 +17264,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    demo_roll_api_v1_demo_roll_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RollResponse"];
                 };
             };
         };
@@ -19176,7 +18986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativeReleaseListResponse"];
+                    "application/json": components["schemas"]["ReleaseListResponse"];
                 };
             };
             /** @description Invalid pagination */
@@ -19188,11 +18998,12 @@ export interface operations {
             };
         };
     };
-    publish_release_api_v1_releases__put: {
+    releases_publish: {
         parameters: {
             query?: never;
-            header?: {
-                "x-release-writer-token"?: string | null;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
             };
             path?: never;
             cookie?: never;
@@ -19203,7 +19014,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19212,49 +19022,87 @@ export interface operations {
                     "application/json": components["schemas"]["ReleaseResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source identities conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Request payload failed validation */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
-    reconcile_release_source_api_v1_releases_source_get: {
+    releases_reconcile: {
         parameters: {
             query: {
                 source_repository: string;
-                source_pr_number?: number | null;
-                source_merge_sha?: string | null;
+                source_pr_number?: number;
+                source_merge_sha?: string;
             };
-            header?: {
-                "x-release-writer-token"?: string | null;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
             };
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__schemas__release__ReleaseSourceResponse"];
+                    "application/json": components["schemas"]["NativeReleaseSourceResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid release writer credential */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Source identities identify different records */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing source identity or invalid query */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
@@ -19274,7 +19122,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["NativePublicReleaseResponse"];
+                    "application/json": components["schemas"]["PublicReleaseResponse"];
                 };
             };
             /** @description Release not found */
@@ -19286,11 +19134,12 @@ export interface operations {
             };
         };
     };
-    retract_release_api_v1_releases__release_id__retract_post: {
+    releases_retract: {
         parameters: {
             query?: never;
-            header?: {
-                "x-release-writer-token"?: string | null;
+            header: {
+                /** @description Server-only release-writer credential */
+                "x-release-writer-token": string;
             };
             path: {
                 release_id: number;
@@ -19299,7 +19148,6 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19308,14 +19156,26 @@ export interface operations {
                     "application/json": components["schemas"]["ReleaseResponse"];
                 };
             };
-            /** @description Validation Error */
-            422: {
+            /** @description Invalid release writer credential */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Release not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
+            };
+            /** @description Release writer authorization is not configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -27,7 +27,6 @@ ROUTER_SUBMODULES = (
     "issue_dependency_batch",
     "reading_order_projection",
     "reading_plan_sync",
-    "releases",
     "roll_recovery_switch",
     "taste_signal",
 )

@@ -444,10 +444,15 @@ Return the single deterministic seeded sample roll from native Rust. The guest
 Demo page requests `/api/v2/demo-roll`; the response uses a fabricated fixture
 and does not access PostgreSQL.
 
-The former `/api/v1/demo/roll` Python operation remains temporarily for
-post-deployment verification and has no live frontend caller. It will be
-retired after the native operation is proven through a successful production
-Demo request.
+The former `/api/v1/demo/roll` Python operation and its mount are retired;
+requests to that path return 404. The first-party Demo caller already uses
+`GET /api/v2/demo-roll` (scope reconciliation in issue #4855). Before retirement,
+the production landing page's Try Demo link opened `/demo` in Chromium on
+2026-11-14 at 01:17:29 UTC, rendered the seeded response, and requested
+`GET /api/v2/demo-roll` successfully (HTTP 200). Matching Vercel request
+`6mh4c-1794619049408-74176ab7b30e` recorded
+`native_roll route=/api/v2/demo-roll runtime=rust status=200` on deployment
+`dpl_F9S8ongEkNfw6LjyEQjgNRV79FoH` (revision `4f621f283`).
 
 **Auth**: none required
 **Response**: `200 OK`

@@ -1,6 +1,6 @@
 """Regression coverage for roster-derived factory owner-label recognition.
 
-Roster workers now include 100-107. Lease and review code must recognize all
+Roster workers now include IDs above 100, with membership checked against the roster. Lease and review code must recognize all
 canonical positive numeric owners while assignment verifies actual membership.
 """
 
@@ -86,7 +86,7 @@ def test_three_digit_factory_owners_are_recognized_but_malformed_are_rejected() 
 
 
 def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_workers() -> None:
-    """Worker 104-107 are in the source of truth, not just admitted by a regex."""
+    """Known three-digit workers are in the roster, not merely matched by a regex."""
     roster_file = ROOT / ".github" / "free-model-factories.tsv"
     roster_ids = {
         fields[0]
@@ -94,8 +94,11 @@ def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_worke
         if raw and not raw.startswith("#")
         if len(fields := raw.split("\t")) >= 2
     }
-    assert {"100", "101", "102", "103", "104", "105", "106", "107"} <= roster_ids
-    assert "108" not in roster_ids
+    assert {str(worker) for worker in range(100, 108)} <= roster_ids
+    # Fresh free-model workers may legitimately retire; do not freeze their IDs.
+    assert all(re.fullmatch(r"[1-9][0-9]*", worker) for worker in roster_ids)
+    unknown_worker = str(max(map(int, roster_ids)) + 1)
+    assert unknown_worker not in roster_ids
 
     # The controller checks both canonical decimal spelling and roster membership.
     source = (SCRIPTS / "factory-work-controller.py").read_text(encoding="utf-8")

@@ -40,13 +40,15 @@ def controller() -> types.ModuleType:
 def test_three_digit_assignment_checks_canonical_id_and_live_roster(
     controller: types.ModuleType,
 ) -> None:
-    """Actual roster members 104-107 can dispatch; unknown IDs cannot."""
+    """Every live three-digit roster member can dispatch; unknown IDs cannot."""
     authorized = controller.is_authorized_fixed_worker
     roster = controller.worker_sources()
-    assert all(str(worker) in roster for worker in range(104, 108))
-    for worker in range(104, 108):
+    three_digit_workers = sorted(int(worker) for worker in roster if worker.isdigit() and int(worker) >= 100)
+    assert three_digit_workers
+    for worker in three_digit_workers:
         assert authorized(str(worker))
-    for invalid in ("108", "999", "0", "00", "0104", "+104", "104 ", "abc", ""):
+    unknown = str(max(map(int, roster)) + 1)
+    for invalid in (unknown, "999", "0", "00", "0104", "+104", "104 ", "abc", ""):
         assert not authorized(invalid)
 
 

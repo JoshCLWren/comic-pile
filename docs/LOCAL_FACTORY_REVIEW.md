@@ -22,7 +22,7 @@ The payload contains `pr`, `issue`, full `head`, every local author/repairer in
 acceptance, the original independent reviewer's structured `acceptance`
 object, and exactly two `lanes`. Every lane has a truthful `local-*` `identity`,
 `head`, `kind` (`alpha-acp` or `codex`), actual `model`, `verdict: "approve"`, and
-original `report`, and `state: "complete"`. The Alpha lane additionally has its actual `session`, and `model_confirmed: true` from the launcher metadata; its
+original `report`, and `state: "complete"`. The ACP lane additionally has its actual `session`, and `model_confirmed: true` from the launcher metadata; its
 original report must end in `FACTORY_GATE_READY`. Never relabel a coordinator's
 acceptance report as Alpha output. Do not submit secrets, raw transcripts, logs,
 or production data. Incomplete or stale reports require fresh actual evidence.
@@ -35,3 +35,7 @@ model and acceptance attestation formats. It then releases the PR to canonical
 delivery, unresolved feedback, dependency, main-health and production gates
 remain authoritative. This workflow does not merge directly and cannot waive
 post-deployment acceptance requirements.
+
+The historical `alpha-acp` lane kind is a wire identifier, not a model requirement.
+Use live-model selection from the maintained launcher; record the actual confirmed
+model rather than inferring it from the lane kind.

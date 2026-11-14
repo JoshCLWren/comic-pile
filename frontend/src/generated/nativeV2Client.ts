@@ -358,7 +358,7 @@ export interface ReleasesGetRequest {
   }
 }
 
-export type ReleasesGetResponse = components['schemas']['NativePublicReleaseResponse']
+export type ReleasesGetResponse = components['schemas']['PublicReleaseResponse']
 
 export interface ReleasesListRequest {
   query?: {
@@ -367,7 +367,40 @@ export interface ReleasesListRequest {
   }
 }
 
-export type ReleasesListResponse = components['schemas']['NativeReleaseListResponse']
+export type ReleasesListResponse = components['schemas']['ReleaseListResponse']
+
+export interface ReleasesPublishRequest {
+  header: {
+    "x-release-writer-token": string
+  }
+  body: components['schemas']['ReleaseUpsertRequest']
+}
+
+export type ReleasesPublishResponse = components['schemas']['ReleaseResponse']
+
+export interface ReleasesReconcileRequest {
+  query: {
+    source_repository: string
+    source_pr_number?: number
+    source_merge_sha?: string
+  }
+  header: {
+    "x-release-writer-token": string
+  }
+}
+
+export type ReleasesReconcileResponse = components['schemas']['NativeReleaseSourceResponse']
+
+export interface ReleasesRetractRequest {
+  path: {
+    release_id: number
+  }
+  header: {
+    "x-release-writer-token": string
+  }
+}
+
+export type ReleasesRetractResponse = components['schemas']['ReleaseResponse']
 
 export interface RelinkRequest {
   path: {
@@ -496,6 +529,9 @@ export interface NativeV2Client {
   reject(args: RejectRequest): Promise<RejectResponse>
   releasesGet(args: ReleasesGetRequest): Promise<ReleasesGetResponse>
   releasesList(args?: ReleasesListRequest): Promise<ReleasesListResponse>
+  releasesPublish(args: ReleasesPublishRequest): Promise<ReleasesPublishResponse>
+  releasesReconcile(args: ReleasesReconcileRequest): Promise<ReleasesReconcileResponse>
+  releasesRetract(args: ReleasesRetractRequest): Promise<ReleasesRetractResponse>
   relink(args: RelinkRequest): Promise<RelinkResponse>
   repair(args: RepairRequest): Promise<RepairResponse>
   reset(args: ResetRequest): Promise<ResetResponse>
@@ -779,6 +815,26 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<ReleasesListResponse>(
         "/v1/releases/",
         { params: compactQuery(args.query) },
+      )
+    },
+    releasesPublish(args: ReleasesPublishRequest) {
+      return client.put<ReleasesPublishResponse, ReleasesPublishRequest['body']>(
+        "/v1/releases/",
+        args.body,
+        { headers: args.header },
+      )
+    },
+    releasesReconcile(args: ReleasesReconcileRequest) {
+      return client.get<ReleasesReconcileResponse>(
+        "/v1/releases/source",
+        { params: compactQuery(args.query), headers: args.header },
+      )
+    },
+    releasesRetract(args: ReleasesRetractRequest) {
+      return client.post<ReleasesRetractResponse>(
+        `/v1/releases/${encodeURIComponent(String(args.path.release_id))}/retract`,
+        undefined,
+        { headers: args.header },
       )
     },
     relink(args: RelinkRequest) {

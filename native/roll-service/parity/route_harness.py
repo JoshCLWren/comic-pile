@@ -7,9 +7,9 @@ against the canonical Alembic schema) and reports, in one canonical line:
 - Rust process wall time and child CPU time,
 - Postgres transactions/blocks deltas from ``pg_stat_database`` (blocks are
   converted to bytes using the 8 KiB PostgreSQL block size),
-- Postgres statement executions from ``pg_stat_statements`` when the extension
-  is installed (``None`` otherwise; the static call-site pin in
-  ``tests/test_reading_boundary_sql_budget.py`` still covers the budget).
+- Top-level and nested statement executions from ``pg_stat_statements`` under
+  the isolated service role. Measured parity tests fail if the extension is
+  unavailable; static call-site pins alone do not satisfy the runtime budget.
 
 The canonical line is printed in test output (``pytest -s``) and is the record
 of measured per-route numbers alongside the production ``vercel-log``
@@ -21,16 +21,46 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import resource
 import time
 from dataclasses import dataclass
+from pathlib import Path
 
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
 
 #: PostgreSQL block size; converts ``pg_stat_database`` block deltas to bytes.
 BLOCK_BYTES = 8192
+SQL_BUDGET_SOURCES = Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json"
+
+
+def assert_declared_budget(method: str, path: str, *measurements: int | None) -> None:
+    """Fail when a measured native route exceeds its declared source budget.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+        *measurements: Counts that must be present and within the maximum.
+
+    Returns:
+        None; invalid measurements raise AssertionError.
+    """
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
+    matching = [
+        entry
+        for entry in document["operations"]
+        if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    maximum = matching[0]["sql_budget"]["max_statements"]
+    assert isinstance(maximum, int) and maximum >= 0
+    for measured in measurements:
+        assert measured is not None, "pg_stat_statements must measure every covered route"
+        assert measured <= maximum, (
+            f"{method} {path} issued {measured} statements; declared maximum is {maximum}"
+        )
 
 
 @dataclass(frozen=True)
@@ -47,35 +77,83 @@ class RouteMeasurement:
     db_blocks: int
     db_bytes: int
     db_statements: int | None
+    db_nested_statements: int | None
     body: dict[str, object]
+
+
+async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) -> int | None:
+    """Read one isolated service-role statement count from PostgreSQL stats."""
+    try:
+        if not toplevel:
+            setting = await connection.execute(text("SHOW pg_stat_statements.track"))
+            if setting.scalar_one() != "all":
+                return None
+        row = await connection.execute(
+            text(
+                "SELECT COALESCE(SUM(s.calls), 0) FROM pg_stat_statements s "
+                "JOIN pg_roles r ON r.oid = s.userid "
+                "WHERE r.rolname = 'roll_test_dml' AND s.toplevel = :toplevel "
+                "AND s.dbid = (SELECT oid FROM pg_database WHERE datname = current_database())"
+            ),
+            {"toplevel": toplevel},
+        )
+        return int(row.scalar_one())
+    except DBAPIError:
+        return None
 
 
 async def db_counters(engine: AsyncEngine) -> tuple[int, int, int | None]:
     """Return cumulative (xacts, blocks, statements) Postgres counters.
 
-    Statements come from ``pg_stat_statements`` and are ``None`` when the
-    extension is not installed; xacts/blocks come from ``pg_stat_database``.
-    Note the snapshot reads themselves are counted, and ``pg_stat_database``
-    stats can lag, so xacts/blocks deltas are order-of-magnitude evidence,
-    not exact statement counts.
+    Statements are filtered to the isolated ``roll_test_dml`` role and read
+    through the administrative connection, so snapshot queries and unrelated
+    test roles cannot inflate the route count. Transactions and blocks remain
+    database-wide context, not exact route accounting.
     """
-    async with engine.connect() as connection:
-        row = await connection.execute(
-            text(
-                "SELECT xact_commit + xact_rollback, blks_read + blks_hit "
-                "FROM pg_stat_database WHERE datname = current_database()"
-            )
+    admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if admin_url is None:
+        stats_engine = engine
+    else:
+        stats_engine = create_async_engine(
+            admin_url.replace("postgresql://", "postgresql+asyncpg://")
         )
-        xacts, blocks = (int(value) for value in row.one())
-        try:
-            statement_row = await connection.execute(
-                text("SELECT COALESCE(SUM(calls), 0) FROM pg_stat_statements")
+    try:
+        async with stats_engine.connect() as admin:
+            row = await admin.execute(
+                text(
+                    "SELECT xact_commit + xact_rollback, blks_read + blks_hit "
+                    "FROM pg_stat_database WHERE datname = current_database()"
+                )
             )
-            statements = int(statement_row.one()[0])
-        except DBAPIError:
-            # The pg_stat_statements extension is not installed.
-            statements = None
+            xacts, blocks = (int(value) for value in row.one())
+            if admin_url is None:
+                return xacts, blocks, None
+            statements = await _role_statement_count(admin, toplevel=True)
+    finally:
+        if stats_engine is not engine:
+            await stats_engine.dispose()
     return xacts, blocks, statements
+
+
+async def db_nested_statements(engine: AsyncEngine) -> int | None:
+    """Return nested trigger/function statements for the isolated service role.
+
+    Args:
+        engine: Route database engine (administrative URL is read from the environment).
+
+    Returns:
+        Nested count, or None when the administrative URL is unset or tracking
+        does not include nested statements.
+    """
+    admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if admin_url is None:
+        return None
+    admin_engine = create_async_engine(admin_url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        async with admin_engine.connect() as admin:
+            return await _role_statement_count(admin, toplevel=False)
+    finally:
+        await admin_engine.dispose()
 
 
 async def run_rust_example(
@@ -105,6 +183,11 @@ def format_measurement(measurement: RouteMeasurement) -> str:
     statements = (
         str(measurement.db_statements) if measurement.db_statements is not None else "n/a"
     )
+    nested = (
+        str(measurement.db_nested_statements)
+        if measurement.db_nested_statements is not None
+        else "n/a"
+    )
     return (
         "route-harness "
         f"route={measurement.route} fixture={measurement.fixture} "
@@ -112,7 +195,8 @@ def format_measurement(measurement: RouteMeasurement) -> str:
         f"wall_ms={measurement.wall_ms:.2f} "
         f"child_cpu_ms={measurement.child_cpu_ms:.2f} "
         f"db_xacts={measurement.db_xacts} db_blocks={measurement.db_blocks} "
-        f"db_bytes={measurement.db_bytes} db_statements={statements}"
+        f"db_bytes={measurement.db_bytes} db_statements={statements} "
+        f"db_nested_statements={nested}"
     )
 
 
@@ -125,8 +209,10 @@ async def measure_route(
 ) -> RouteMeasurement:
     """Measure one invocation: snapshot counters, run, snapshot, print, return."""
     xacts_before, blocks_before, statements_before = await db_counters(engine)
+    nested_before = await db_nested_statements(engine)
     result, raw, wall, cpu = await run_rust_example(binary, env)
     xacts_after, blocks_after, statements_after = await db_counters(engine)
+    nested_after = await db_nested_statements(engine)
     body = result.get("body")
     assert isinstance(body, dict)
     measurement = RouteMeasurement(
@@ -144,7 +230,28 @@ async def measure_route(
             if statements_after is not None and statements_before is not None
             else None
         ),
+        db_nested_statements=(
+            nested_after - nested_before
+            if nested_after is not None and nested_before is not None
+            else None
+        ),
         body=body,
     )
     print(format_measurement(measurement), flush=True)
     return measurement
+
+
+def cargo_example_path(name: str) -> Path:
+    """Resolve an example using Cargo's build-directory-relative target setting.
+
+    Args:
+        name: Cargo example executable name.
+
+    Returns:
+        Absolute path to the debug example executable.
+    """
+    build_directory = Path(__file__).resolve().parents[1]
+    target = Path(os.environ.get("CARGO_TARGET_DIR", "target"))
+    if not target.is_absolute():
+        target = build_directory / target
+    return target / "debug" / "examples" / name
