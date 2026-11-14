@@ -416,3 +416,13 @@ gh() { printf 'gh:%s\\n' "$*"; }
     assert idle.returncode == 0, idle.stderr
     assert "gh:workflow run" not in idle.stdout
     assert "sleep:" not in idle.stdout
+
+
+def test_dispatch_batch_reconciles_once_before_per_worker_claims() -> None:
+    """Repeated global sweeps must not burn REST calls on each empty worker."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    prepass = workflow.index('python3 "$controller" reconcile')
+    batch = workflow.index('if ! assignment="$(python3 "$controller" assign --worker "$worker" --batch-reconciled)"; then')
+    assert prepass < batch
+    assert "python3 \"$controller\" reconcile" in workflow
+    assert "dispatch_assigned_worker \"$worker\"" in workflow
