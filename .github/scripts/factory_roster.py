@@ -40,7 +40,16 @@ OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
 PROTECTED_SOURCES = frozenset(
-    {"kilo-auto", "z-ai", "ollama-cloud", "vercel-ai-gateway", "mistral", "orcarouter", "requesty", "cloudflare-workers-ai"}
+    {
+        "kilo-auto",
+        "z-ai",
+        "ollama-cloud",
+        "vercel-ai-gateway",
+        "mistral",
+        "orcarouter",
+        "requesty",
+        "cloudflare-workers-ai",
+    }
 )
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash", "glm-4.7-flash"})
 OLLAMA_CLOUD_FREE_MODELS = frozenset({"nemotron-3-nano:30b", "gpt-oss:20b"})
@@ -70,7 +79,9 @@ REQUESTY_APPROVED_MODELS = frozenset(
     }
 )
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
-CLOUDFLARE_WORKERS_AI_FREE_MODELS = frozenset({"@cf/zai-org/glm-4.7-flash", "@cf/google/gemma-4-26b-a4b-it"})
+CLOUDFLARE_WORKERS_AI_FREE_MODELS = frozenset(
+    {"@cf/zai-org/glm-4.7-flash", "@cf/google/gemma-4-26b-a4b-it"}
+)
 # Only the documented Workers Free models, never Workers Paid-only frontier models.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha", "stealth/crouton-alpha"})
 LOCK_SCHEMA_VERSION = 1
