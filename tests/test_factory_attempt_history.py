@@ -99,7 +99,13 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     monkeypatch.setattr(CONTROLLER.time, "time", lambda: NOW + 20)
     assert CONTROLLER.assign("53").number == 2264
     assert page_reads == [15, 2, 1]
-    assert since_values == [NOW - 86400, NOW - 1, NOW + 9]
+    # Neon GET-key coalescing rounds issue-comment since timestamps down to
+    # 60-second boundaries; the bounded retry window remains correct.
+    assert since_values == [
+        NOW - 86400 - (NOW - 86400) % 60,
+        NOW - 1 - (NOW - 1) % 60,
+        NOW + 9 - (NOW + 9) % 60,
+    ]
     assert not responses
     logs = capsys.readouterr().err
     assert "source=full pages_read=15" in logs
@@ -209,7 +215,7 @@ def test_unusable_snapshots_refresh_from_authoritative_full_history(
     monkeypatch.setattr(CONTROLLER, "gh_json", github)
     assert [row["id"] for row in CONTROLLER.recent_factory_comments(NOW)] == [2]
     since = parse_qs(urlsplit(urls[0]).query)["since"][0]
-    assert datetime.fromisoformat(since).timestamp() == NOW - 86400
+    assert datetime.fromisoformat(since).timestamp() == NOW - 86400 - (NOW - 86400) % 60
 
 
 @pytest.mark.parametrize("pages", [[], {}, [{"id": 1}], [[None]]])
