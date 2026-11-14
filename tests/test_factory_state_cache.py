@@ -60,6 +60,29 @@ def test_contended_refresh_observes_winners_snapshot_without_calling_github(monk
     assert cache.cached_json("issues", lambda _: pytest.fail("fresh winner must prevent duplicate calls")) == [{"number": 4}]
 
 
+
+
+def test_contended_refresh_serves_only_bounded_recent_shared_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"number": 43}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: False)
+    calls = []
+    monkeypatch.setattr(cache, "_recent_contended", lambda key, grace: calls.append((key, grace)) or [{"number": 43}])
+    monkeypatch.setattr(cache.time, "sleep", lambda _: pytest.fail("stale shared discovery should not wait"))
+    result = cache.cached_json("issues", lambda _: pytest.fail("contended refresh must not stampede GitHub"), ttl_seconds=45)
+    assert result == [{"number": 43}]
+    assert calls == [("issues", 45)]
+
+
+def test_contended_cache_does_not_trust_stale_record_without_refresh_owner(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    reads = iter([([{"number": 43}], False), ([{"number": 44}], True)])
+    monkeypatch.setattr(cache, "_read", lambda _: next(reads))
+    monkeypatch.setattr(cache, "_claim", lambda *_: False)
+    monkeypatch.setattr(cache, "_recent_contended", lambda *_: None)
+    monkeypatch.setattr(cache.time, "sleep", lambda _: None)
+    assert cache.cached_json("issues", lambda _: pytest.fail("winner's fresh data should be used")) == [{"number": 44}]
+
 def test_database_unavailable_uses_original_github_loader(monkeypatch, tmp_path):
     monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
     def unavailable(_):
