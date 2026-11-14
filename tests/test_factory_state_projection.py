@@ -88,6 +88,9 @@ def test_trusted_webhook_does_not_checkout_pr_branch_or_expose_write_token() -> 
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
     assert "permissions:\n  contents: read" in workflow
+    assert "  issues: read\n" in workflow
+    assert "  pull-requests: read\n" in workflow
+    assert ": write" not in workflow
     assert "github.event.repository.full_name == github.repository" in workflow
     assert "factory_state_projection.py ingest" in workflow
     assert "secrets.NEON_API_KEY" in workflow
@@ -135,6 +138,28 @@ def test_equal_timestamp_event_uses_live_reopen(monkeypatch: pytest.MonkeyPatch)
     original = {"issue": {"number": 44, "state": "closed", "updated_at": "2026-11-13T04:25:00Z"}}
     record = projection.normalize_event(projection._authoritative_event("owner/repo", original))
     assert record is not None and record[3] == "open"
+
+
+@pytest.mark.parametrize("rate_limited", [True, False])
+def test_failed_live_read_reports_quota_without_exposing_output(
+    monkeypatch: pytest.MonkeyPatch, rate_limited: bool,
+) -> None:
+    import subprocess
+
+    error = "API rate limit exceeded for installation" if rate_limited else "HTTP 403"
+
+    def failed(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 1, "private response", error + " private detail")
+
+    monkeypatch.setattr(projection.subprocess, "run", failed)
+    with pytest.raises(RuntimeError) as caught:
+        projection._authoritative_event("owner/repo", {"pull_request": {"number": 44}})
+    assert "private" not in str(caught.value)
+    expected = (
+        "GitHub API rate limit exceeded while verifying pull_request #44"
+        if rate_limited else "GitHub could not verify pull_request #44"
+    )
+    assert str(caught.value) == expected
 
 
 def test_missing_target_rejects_obsolete_open_event() -> None:
