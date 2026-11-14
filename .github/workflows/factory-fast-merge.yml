@@ -13,8 +13,6 @@ on:
         description: 'Optional PR number, otherwise scan open PRs'
         required: false
         type: string
-  schedule:
-    - cron: '*/5 * * * *'
 
 permissions:
   contents: write
@@ -42,9 +40,8 @@ jobs:
         id: merge
         shell: bash
         env:
-          # Owner PAT is required to bypass main's CI Summary rule for ONLY
-          # the script's strict factory-only allowlist; token does not bypass
-          # the allowlist or other software-enforced eligibility checks.
+          # Repo ruleset MUST authorize this credential for PR-only bypass.
+          # The script applies the strict factory-only allowlist and leases.
           GH_TOKEN: ${{ secrets.PR_REBASE_TOKEN || github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || inputs.pr || '' }}
         run: |
