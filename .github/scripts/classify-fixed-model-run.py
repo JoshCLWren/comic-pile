@@ -204,6 +204,13 @@ def classify(log: str) -> Result:
         Result describing worker, model, and terminal outcome.
 
     """
+    # Attribute exit 124 to the actual pinned OpenCode smoke only when the
+    # executed Actions step shows its 180s timeout command. Echoed script text
+    # alone is never a provider error; it is paired with the terminal exit.
+    smoke_timeout = (
+        'timeout --signal=TERM --kill-after=10s 180s' in log
+        and bool(re.search(r'Process completed with exit code 124', log, re.I))
+    )
     log = _runtime_evidence(log)
     lock = LOCK_RE.search(log)
     if not lock:
@@ -349,9 +356,12 @@ def classify(log: str) -> Result:
     if TIMEOUT_RE.search(log) and not exact_proven:
         return Result(
             **common,
-            outcome="NOT YET PROVEN",
-            outcome_class="unknown_failure",
-            detail="execution timed out before exact model proof",
+            outcome="PROVIDER FAILURE" if smoke_timeout else "NOT YET PROVEN",
+            outcome_class="provider_failure" if smoke_timeout else "unknown_failure",
+            detail=(
+                "the pinned OpenCode model exceeded its 180-second smoke deadline"
+                if smoke_timeout else "execution timed out before exact model proof"
+            ),
         )
 
     if exact_proven:
@@ -645,6 +655,27 @@ class ClassifierTests(unittest.TestCase):
             self.BASE + "FIXED_MODEL_OPENCODE_OK\nProcess completed with exit code 124\n"
         )
         self.assertEqual(result.outcome_class, "provider_failure")
+
+    def test_actions_pinned_smoke_deadline_is_provider_failure_before_proof(self) -> None:
+        """Real worker 20/21 exit 124 at the model smoke, not an unknown failure."""
+        locked = (
+            "Factory 20 locked: source=nvidia model=openai/gpt-oss-20b "
+            "runtime=nvidia/openai/gpt-oss-20b minute=:05 scheduler=dispatcher configured=true\n"
+        )
+        log = (
+            locked
+            + "2026-11-14T14:11:38.832Z \x1b[36;1mtimeout --signal=TERM --kill-after=10s 180s \\\x1b[0m\n"
+            + "2026-11-14T14:11:38.840Z   RUNTIME_MODEL: nvidia/openai/gpt-oss-20b\n"
+            + "2026-11-14T14:14:39.218Z ##[error]Process completed with exit code 124.\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "provider_failure")
+        self.assertIn("180-second smoke deadline", result.detail)
+        self.assertFalse(result.exact_model_proven)
+
+    def test_unattributed_setup_timeout_does_not_poison_provider(self) -> None:
+        result = classify(self.BASE + "Process completed with exit code 124.\n")
+        self.assertEqual(result.outcome_class, "unknown_failure")
 
     def test_cancellation_is_control_plane_failure(self) -> None:
         """Job cancellation is control-plane evidence, not provider health evidence."""
