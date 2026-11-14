@@ -150,12 +150,13 @@ def test_workflows_inject_database_only_into_trusted_jobs():
             for step in trusted_job["steps"]
         )
 
-    # The Entry owns two isolated runner jobs: its reusable model runner and a
-    # trusted post-run collector. Permit Neon only in the latter job.
+    # The trusted Entry snapshot job reads Neon; the reusable worker never does.
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
-    executor, collector = entry.split("\n  persist_outcome:", 1)
-    assert "factory-state-cache" not in executor
-    assert "FACTORY_STATE_DSN_FILE" not in executor
+    snapshot, collector = entry.split("\n  persist_outcome:", 1)
+    assert "model_health_snapshot:" in snapshot
+    assert "factory-state-cache" in snapshot
+    assert "model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}" in snapshot
+    assert "FACTORY_STATE_DSN_FILE" not in snapshot
     assert "factory-state-cache" in collector
     assert "needs: run" in collector
     assert "if: ${{ always() }}" in collector

@@ -362,3 +362,14 @@ def test_openrouter_free_disallows_unverified_discount_names() -> None:
         ]
     })
     assert selector.free_models(raw, provider="openrouter-free") == ["vendor/price-zero"]
+
+
+def test_neon_exclusions_take_precedence_over_live_free_catalog(tmp_path: Path) -> None:
+    raw = catalog(("big-pickle", 0, 0), ("ll-alpha-free", 0, 0))
+    exclusions = tmp_path / "exclusions.json"
+    exclusions.write_text(json.dumps({"opencode-free": ["big-pickle"]}))
+    selected = selector.select_model(raw, 41, 0, roster(tmp_path), exclusions_path=exclusions)
+    assert selected["model"] == "ll-alpha-free"
+    exclusions.write_text(json.dumps({"opencode-free": ["big-pickle", "ll-alpha-free"]}))
+    with pytest.raises(ValueError, match="unavailable or in cooldown"):
+        selector.select_model(raw, 41, 0, roster(tmp_path), exclusions_path=exclusions)
