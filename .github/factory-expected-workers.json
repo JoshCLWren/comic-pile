@@ -9,8 +9,6 @@
     45,
     46,
     51,
-    52,
-    53,
     54,
     60,
     61,
@@ -34,7 +32,16 @@
     104,
     105,
     106,
-    107
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116
   ],
   "retired_workers": [
     9,
@@ -54,6 +61,8 @@
     48,
     49,
     50,
+    52,
+    53,
     55,
     56,
     57,
@@ -128,6 +137,8 @@
     "step-5-preview-free",
     "stepfun-ai/step-3.7-flash",
     "thinkingmachines/inkling",
+    "thinkingmachines/inkling-small:free",
+    "thinkingmachines/inkling:free",
     "union-alpha",
     "z-ai/glm-5.3"
   ]

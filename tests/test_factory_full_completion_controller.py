@@ -74,19 +74,27 @@ def test_signal_dispatch_includes_demand_data():
     assert "capacity" in result
 
 
-def test_signal_dispatch_performs_reconciliation():
+def test_signal_dispatch_reuses_snapshot_without_any_github_reads_or_reconciliation():
     controller = full.load_controller()
     demand = full.FleetDemand(
-        completion=0, production=0, idle_workers=0
+        completion=2, production=1, idle_workers=2
     )
-    capacity = {"enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12}
+    capacity = {
+        "enabled": 0, "in_flight": 0, "cap": 12, "remaining": 12,
+        "owned_workers": ["11"],
+        "executable_candidates": [{"worker": "11"}, {"worker": "20"}],
+    }
     with stubbed_work_controller(controller) as work:
         result = full.signal_dispatch(controller, demand, capacity)
     assert "signal" in result
-    assert "assignments" in result
     assert result["assignments"] == []
-    work.reconcile_stale_leases.assert_called_once()
-    work.reconcile_contradictory_labels.assert_called_once()
+    assert result["selected_workers"] == ["20"]
+    # All owner/lease evidence came from current_demand's same snapshot.
+    # Only the next serialized dispatcher may reconcile and claim work.
+    work.list_issues.assert_not_called()
+    work.list_prs.assert_not_called()
+    work.reconcile_stale_leases.assert_not_called()
+    work.reconcile_contradictory_labels.assert_not_called()
 
 
 def test_signal_dispatch_omits_direct_assignment():
@@ -167,7 +175,7 @@ def _assert_current_demand_caps():
             return []
 
         def list_prs(self):
-            return []
+            return [{"number": 44, "headRefName": "factory/44-44", "labels": []}]
 
         def in_flight_omniroute_free_entries(self):
             return 2
@@ -177,7 +185,7 @@ def _assert_current_demand_caps():
             return True
 
         def pr_is_static_candidate(self, pr, issue_map):
-            return False
+            return True
 
         def linked_issue_from_branch(self, name):
             return None
@@ -218,9 +226,9 @@ def _assert_current_demand_caps():
 
     measured, capacity = full.current_demand(FakeCompletion(), now_epoch=1)
     assert measured.idle_workers == 1
-    assert measured.completion == 0
+    assert measured.completion == 1
     assert measured.production == 0
-    assert full.completion_worker_target(measured) == 0
+    assert full.completion_worker_target(measured) == 1
     assert capacity["executable_slot_capacity"] == 10
 
 
@@ -230,7 +238,7 @@ def _assert_current_demand_multi_provider():
             return []
 
         def list_prs(self):
-            return []
+            return [{"number": 44, "headRefName": "factory/44-44", "labels": []}]
 
         def in_flight_omniroute_free_entries(self):
             return 2
@@ -240,7 +248,7 @@ def _assert_current_demand_multi_provider():
             return True
 
         def pr_is_static_candidate(self, pr, issue_map):
-            return False
+            return True
 
         def linked_issue_from_branch(self, name):
             return None
@@ -281,7 +289,100 @@ def _assert_current_demand_multi_provider():
 
     measured, capacity = full.current_demand(FakeCompletion(), now_epoch=1)
     assert measured.idle_workers == 10
-    assert measured.completion == 0
+    assert measured.completion == 1
     assert measured.production == 0
-    assert full.completion_worker_target(measured) == 0
+    assert full.completion_worker_target(measured) == 1
     assert capacity["executable_slot_capacity"] == 10
+
+def _valid_telemetry_anchor():
+    return {
+        "id": full.TELEMETRY_COMMENT_ID,
+        "issue_url": "https://api.github.com/repos/JoshCLWren/comic-pile/issues/1093",
+        "body": full.TELEMETRY_MARKER + "\\nprior content",
+    }
+
+
+def test_no_work_dispatch_signal_makes_zero_telemetry_calls(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    controller = MagicMock()
+    full.persist_funnel_telemetry(controller, {"selected_workers": []})
+    controller.gh_json.assert_not_called()
+    controller.run_gh.assert_not_called()
+
+
+def test_scheduled_heartbeat_updates_only_verified_telemetry_comment(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    controller = MagicMock()
+    controller.REPO = "JoshCLWren/comic-pile"
+    controller.gh_json.return_value = _valid_telemetry_anchor()
+    full.persist_funnel_telemetry(controller, {"selected_workers": []})
+    endpoint = (
+        f"repos/JoshCLWren/comic-pile/issues/comments/{full.TELEMETRY_COMMENT_ID}"
+    )
+    controller.gh_json.assert_called_once_with(["api", endpoint])
+    controller.run_gh.assert_called_once()
+    args = controller.run_gh.call_args.args[0]
+    assert args[:4] == ["api", "--method", "PATCH", endpoint]
+    assert args[4] == "-f"
+    assert full.TELEMETRY_MARKER in args[5]
+    assert "Updated: " in args[5]
+
+
+def test_actionable_wakeup_updates_verified_comment_without_pagination(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
+    controller = MagicMock()
+    controller.REPO = "JoshCLWren/comic-pile"
+    controller.gh_json.return_value = _valid_telemetry_anchor()
+    full.persist_funnel_telemetry(controller, {"selected_workers": ["11"]})
+    assert controller.gh_json.call_count == 1
+    assert "--paginate" not in repr(controller.mock_calls)
+    assert controller.run_gh.call_count == 1
+
+
+def test_mismatched_or_deleted_telemetry_marker_never_overwrites(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    controller = MagicMock()
+    controller.REPO = "JoshCLWren/comic-pile"
+    for invalid in (
+        None,
+        {"id": full.TELEMETRY_COMMENT_ID, "body": "other reporter"},
+        {**_valid_telemetry_anchor(), "issue_url": "https://api.github.com/repos/elsewhere/repo/issues/1093"},
+        {**_valid_telemetry_anchor(), "id": 123},
+    ):
+        controller.gh_json.return_value = invalid
+        full.persist_funnel_telemetry(controller, {"selected_workers": []})
+    controller.run_gh.assert_not_called()
+
+
+def test_unavailable_telemetry_anchor_does_not_block_factory(monkeypatch):
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
+    controller = MagicMock()
+    controller.REPO = "JoshCLWren/comic-pile"
+    controller.gh_json.side_effect = RuntimeError("not found")
+    full.persist_funnel_telemetry(controller, {"selected_workers": []})
+    controller.run_gh.assert_not_called()
+
+
+def test_zero_completion_demand_never_reads_registry_or_inflight_capacity():
+    """An empty completion queue must not burn ~20 pages of registry quota."""
+    completion = MagicMock()
+    work = MagicMock()
+    work.list_issues.return_value = []
+    work.list_prs.return_value = []
+    completion.load_controller.return_value = work
+    completion.load_policy.return_value = MagicMock()
+    completion.registry_comments.side_effect = AssertionError("unnecessary health scan")
+    completion.load_manifest_candidates.side_effect = AssertionError("unnecessary manifest")
+    completion.owned_worker_ids.side_effect = AssertionError("unnecessary owners")
+    work.in_flight_omniroute_free_entries.side_effect = AssertionError("unnecessary inflight scan")
+
+    demand, capacity = full.current_demand(completion, now_epoch=1)
+    assert demand.completion == 0
+    assert demand.production == 0
+    assert demand.idle_workers == 0
+    assert capacity["capacity_scan_skipped"] is True
+    assert capacity["executable_candidates"] == []
+    assert full.signal_dispatch(completion, demand, capacity)["selected_workers"] == []
+    completion.registry_comments.assert_not_called()
+    completion.owned_worker_ids.assert_not_called()
+    work.in_flight_omniroute_free_entries.assert_not_called()

@@ -1399,6 +1399,13 @@ jobs:
           ref: main
           persist-credentials: false
       - uses: ./.github/actions/factory-syntax
+      # Only this trusted, separate cleanup job receives the Neon DSN.
+      # The model-running factory job above must never see it.
+      - name: Configure restricted Neon factory lease release
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
       - name: Release lease after pre-session abort
         shell: bash
         env:
@@ -1406,9 +1413,55 @@ jobs:
           FACTORY_WORKER: ${{ inputs.worker }}
         run: |
           set -Eeuo pipefail
-          [[ "$FACTORY_WORKER" =~ ^([1-9]|[1-9][0-9])$ ]] || {
+          [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
             echo 'Invalid worker ID; refusing lease recovery' >&2
+            exit 1
+          }
+          # Never clear GitHub ownership without the transactional Neon ledger.
+          [[ -s "${FACTORY_STATE_DSN_FILE:-}" ]] || {
+            echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
           python3 .github/scripts/factory-work-controller.py release \
             --worker "$FACTORY_WORKER" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
+
+  release_post_session_lease:
+    needs: factory
+    # Keep the worker lock until both execution and trusted release complete.
+    if: ${{ always() && needs.factory.outputs.worker_session_started == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      # Separate trusted runner; never use the model's checkout or credentials.
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/factory-syntax
+      - name: Configure restricted Neon post-session lease release
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+      - name: Release worker lease after session exits
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FACTORY_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
+            echo 'Invalid worker ID; refusing lease recovery' >&2
+            exit 1
+          }
+          [[ -s "${FACTORY_STATE_DSN_FILE:-}" ]] || {
+            echo 'Neon factory lease connection missing; refusing split release' >&2
+            exit 1
+          }
+          python3 .github/scripts/factory-work-controller.py release \
+            --worker "$FACTORY_WORKER" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
+

@@ -34,8 +34,11 @@ def _verifier_script() -> str:
 def _reconcile_shell() -> str:
     """Extract the real reconciliation shell script from the workflow run step."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    # The workflow also has a quota-guard run step. Select the actual issue
+    # reconciler step, not the first shell block in the YAML.
+    step = workflow.index("      - name: Reconcile linked issue from trusted canonical PR history")
     marker = "          set -Eeuo pipefail\n"
-    return textwrap.dedent(workflow[workflow.index(marker) :])
+    return textwrap.dedent(workflow[workflow.index(marker, step) :])
 
 
 def _stub(bin_dir: Path, name: str, body: str) -> None:

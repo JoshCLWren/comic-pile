@@ -212,6 +212,29 @@ def test_exact_smoke_failure_classification(tmp_path: Path, log: str, expected: 
         )
 
 
+@pytest.mark.parametrize(
+    "log,runtime,expected",
+    [
+        ("Error: Model crouton-alpha-free has been deprecated.", "opencode/crouton-alpha-free", True),
+        ("Error: Model opencode/crouton-alpha-free has been deprecated.", "opencode/crouton-alpha-free", True),
+        ("Model vendor/alpha:free has been deprecated", "openrouter/vendor/alpha:free", True),
+        ("Model some-other-free has been deprecated", "opencode/crouton-alpha-free", False),
+        ("Model crouton-alpha-free has been deprecated", "opencode/other-free", False),
+        ("HTTP 429, model crouton-alpha-free overloaded", "opencode/crouton-alpha-free", False),
+    ],
+)
+def test_deprecated_smoke_model_rotates_only_exact_selector(
+    tmp_path: Path, log: str, runtime: str, expected: bool,
+) -> None:
+    """A stale catalog model must rotate without poisoning unrelated models."""
+    outcome = tmp_path / "outcome"
+    assert selector.record_smoke_failure(log, runtime, outcome) is expected
+    if expected:
+        assert outcome.read_text() == f"model_unavailable\tModel deprecated: {runtime}\n"
+    else:
+        assert not outcome.exists()
+
+
 def test_cli_consults_registry_evidence(tmp_path: Path) -> None:
     """A real dispatch CLI call excludes the unavailable candidate from rotation."""
     import subprocess

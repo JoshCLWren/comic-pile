@@ -26,23 +26,27 @@ async function run({
   const writes = [];
   const reads = [];
   const gets = [];
+  const labelReads = [];
+  let repoLabelReads = 0;
   // REST response doubles: every read now consumes `result.data`, and label
   // reads are paginated issue REST endpoints rather than github.paginate.
   const issues = {
-    listLabelsForRepo: async () => ({ data: [], headers: {}, status: 200 }),
+    listLabelsForRepo: async () => {
+      repoLabelReads += 1;
+      return { data: [], headers: {}, status: 200 };
+    },
     createLabel: async () => ({ data: {}, headers: {}, status: 201 }),
-    listLabelsOnIssue: async () => ({
-      data: labels.map(name => ({ name })),
-      headers: {},
-      status: 200,
-    }),
+    listLabelsOnIssue: async ({ issue_number }) => {
+      labelReads.push(issue_number);
+      return { data: labels.map(name => ({ name })), headers: {}, status: 200 };
+    },
     listComments: async () => ({ data: comments, headers: {}, status: 200 }),
     async setLabels(input) { writes.push(input); return { data: {}, headers: {}, status: 200 }; },
   };
   const pulls = {
     async list(params) {
       reads.push(params);
-      return { data: prs, headers: {}, status: 200 };
+      return { data: prs.slice((params.page - 1) * 100, params.page * 100), headers: {}, status: 200 };
     },
     async get(params) {
       gets.push(params);
@@ -61,7 +65,7 @@ async function run({
     eventName: event, repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
     payload: { pull_request: prs[0], action },
   } });
-  return { writes, reads, gets };
+  return { writes, reads, gets, labelReads, repoLabelReads };
 }
 
 test('open event enrolls a manual PR and preserves unrelated labels atomically', async () => {
@@ -243,6 +247,74 @@ test('hasManualOnlyDirective stays in lockstep with Python is_manual_only', () =
       body,
     );
   }
+});
+
+test('clean scheduled sweep performs one PR list read and no other GitHub API work', async () => {
+  const factoryLabels = [{ name: 'factory' }, { name: 'factory:ready' }, { name: 'factory:unowned' }];
+  const { writes, reads, gets, labelReads, repoLabelReads } = await run({
+    prs: [{ ...pr(1), labels: factoryLabels }, { ...pr(2), labels: factoryLabels }],
+    labels: ['factory', 'factory:ready', 'factory:unowned'],
+  });
+  assert.equal(reads.length, 1, 'a short clean list needs only one REST request');
+  assert.deepEqual(gets, []);
+  assert.deepEqual(labelReads, []);
+  assert.equal(repoLabelReads, 0);
+  assert.deepEqual(writes, []);
+});
+
+test('scheduled sweep only inspects PRs actually missing the factory label', async () => {
+  const { writes, reads, gets, labelReads, repoLabelReads } = await run({
+    prs: [
+      { ...pr(1), labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }] },
+      { ...pr(2), labels: [{ name: 'bug' }] },
+    ],
+    labels: ['bug'],
+  });
+  assert.equal(reads.length, 1);
+  assert.deepEqual(gets.map(request => request.pull_number), [2]);
+  assert.deepEqual(labelReads, [2, 2]);
+  assert.equal(repoLabelReads, 1, 'label definitions are checked once when a repair is needed');
+  assert.deepEqual(writes.map(write => write.issue_number), [2]);
+});
+
+test('scheduled sweep repairs partially labeled PRs while skipping complete PRs', async () => {
+  const { writes, gets } = await run({
+    prs: [
+      { ...pr(1), labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }] },
+      { ...pr(2), labels: [{ name: 'factory' }, { name: 'factory:local' }] },
+    ],
+    labels: ['factory', 'factory:local'],
+  });
+  assert.deepEqual(gets.map(request => request.pull_number), [2]);
+  assert.deepEqual(writes.map(write => write.issue_number), [2]);
+  assert.ok(writes[0].labels.includes('factory:review'));
+});
+
+test('full first page keeps looking for older unlabeled PRs without re-fetching page one', async () => {
+  const labeled = Array.from({ length: 100 }, (_, index) => ({
+    ...pr(index + 1), labels: [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }],
+  }));
+  const { writes, reads, gets } = await run({
+    prs: [...labeled, { ...pr(101), labels: [{ name: 'bug' }] }],
+    labels: ['bug'],
+  });
+  assert.deepEqual(reads.map(request => request.page), [1, 2]);
+  assert.deepEqual(gets.map(request => request.pull_number), [101]);
+  assert.deepEqual(writes.map(write => write.issue_number), [101]);
+});
+
+test('PR synchronize still reconciles live merge-conflict metadata on an already-enrolled PR', async () => {
+  const { writes, reads, gets } = await run({
+    prs: [{ ...pr(), labels: [{ name: 'factory' }] }],
+    labels: ['factory', 'factory:review', 'factory:unowned'],
+    event: 'pull_request_target',
+    action: 'synchronize',
+    liveByNumber: { 1: { mergeable: false, mergeable_state: 'dirty' } },
+  });
+  assert.deepEqual(reads, []);
+  assert.deepEqual(gets.map(request => request.pull_number), [1]);
+  assert.equal(writes.length, 1);
+  assert.ok(writes[0].labels.includes('factory:merge-conflict'));
 });
 
 test('scheduled sweep paginates all open PRs', async () => {

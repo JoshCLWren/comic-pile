@@ -1,6 +1,6 @@
 # ComicPile Autonomous Factory Policy
 
-Version: 27
+Version: 28
 
 This is the canonical policy for every scheduled ChatGPT worker, the local OpenCode factory, fixed-model external factories, and interactive factory repair sessions.
 
@@ -581,6 +581,32 @@ A factory implementation attempt gets three substantive semantic repair cycles. 
 On a fourth distinct semantic repair verdict, cancel that implementation attempt instead of repairing it again: persist the fourth review findings, close the PR, return the linked issue to unowned executable implementation, and record a `comic-pile-factory-strike-reset-v1` marker on the issue. When producer provenance is known, that producer is ineligible to receive the first clean implementation retry. The exclusion is one-shot and is spent only after a different factory posts a real implementation claim for the retried issue.
 
 This is an attempt-level circuit breaker, not an issue-level failure. The issue remains valid work unless a separate terminal blocker applies.
+
+## No-progress PR retirement (owner-authorized)
+
+Three trusted \`repair-no-persisted-change-handoff\` records on the **same unchanged
+PR head**, across the review/changes-requested handoff, exhaust that implementation
+attempt. The serialized dispatcher must close the PR and immediately return its
+original open issue to executable unowned intake instead of waiting for a rolling
+24-hour no-diff reset and then repeating the same unsuccessful repairs.
+
+This is an explicit owner-authorized terminal disposition for an *attempt*, not
+an assertion that the issue is solved or that its commits are worthless. Before
+closing, write an issue handoff containing the exact PR, branch, SHA and
+instructions to inspect/reuse unique code and tests. Never delete the branch.
+Issue-level no-diff markers preceding that trusted handoff cease to suppress
+new implementations; PR-level evidence remains preserved. Retire only canonical,
+same-repository, non-draft Factory PRs with an unowned, open, non-held linked
+issue, matching trusted release evidence, and an unchanged head after a second
+live read. A live worker lease, new head, conflicting PR, missing evidence,
+manual-only hold or unavailable GitHub read prevents automatic closure.
+
+Transient provider/model interruptions, CI or review infrastructure errors,
+old PR age, and ordinary semantic findings do **not** trigger this rule. They
+retain the separate recovery and review policies below. The existing fourth
+distinct semantic-repair verdict still independently cancels a wrong
+implementation. Terminal retirement must not bypass product release safety or
+falsely mark the original issue done.
 
 ## Review infrastructure retry cooldown
 

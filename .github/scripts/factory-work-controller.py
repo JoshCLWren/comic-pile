@@ -28,6 +28,9 @@ from factory_review_policy import recorded_pr_contributors, trusted_comment_bodi
 from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
+from factory_state_cache import cached_json
+from factory_state_projection import projected_json, reconcile_snapshot
+from factory_state_ledger import acquire_lease, release_lease, renew_verified_workers, worker_claim
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
 ASSIGNMENT_WRITER_WORKFLOW_PATH = ".github/workflows/fixed-model-factory-dispatch.yml"
@@ -74,13 +77,41 @@ def gh_json(args: list[str], *, input_json: object | None = None) -> object | No
 
 
 def list_issues() -> list[dict[str, Any]]:
-    """List open issues visible to the assignment controller."""
-    return cast(list[dict[str, Any]], gh_json(['issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000', '--json', 'number,title,body,labels,createdAt,updatedAt']))
+    """Use shared Neon projections; discover only on a cache refresh."""
+    projected = projected_json(REPO, "issue")
+    if projected is not None:
+        return cast(list[dict[str, Any]], projected)
+
+    def fetch_issues(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        issues = cast(list[dict[str, Any]], gh_json([
+            'issue', 'list', '--repo', REPO, '--state', 'open', '--limit', '1000',
+            '--json', 'number,title,body,labels,createdAt,updatedAt',
+        ]))
+        # Only a genuinely live GitHub read may advance the reconciliation
+        # watermark. A cached read skips this callback entirely.
+        reconcile_snapshot(REPO, "issue", issues, started)
+        return issues
+
+    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)
 
 
 def list_prs() -> list[dict[str, Any]]:
-    """List open pull requests including current mergeability."""
-    return cast(list[dict[str, Any]], gh_json(['pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500', '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository']))
+    """Use Neon PR projections; keep exact-head review/merge gates live."""
+    projected = projected_json(REPO, "pr")
+    if projected is not None:
+        return cast(list[dict[str, Any]], projected)
+
+    def fetch_prs(_previous: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        prs = cast(list[dict[str, Any]], gh_json([
+            'pr', 'list', '--repo', REPO, '--state', 'open', '--limit', '500',
+            '--json', 'number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository',
+        ]))
+        reconcile_snapshot(REPO, "pr", prs, started)
+        return prs
+
+    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=45)
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
@@ -464,14 +495,31 @@ def assign_candidate(
     if worker_has_active_lease(worker):
         return False
 
+    # Acquire one atomic worker + issue/PR reservation before mutating GitHub.
+    # GitHub live checks remain required; a Neon conflict never grants a claim.
+    try:
+        claim_token = acquire_lease(REPO, worker, numbers, FIXED_LEASE_TTL_SECONDS)
+    except Exception as exc:
+        print(f'[factory-controller] Neon lease unavailable; refusing duplicate-risk assignment ({type(exc).__name__})', file=sys.stderr)
+        return False
+    if claim_token is None:
+        return False
+
     def release_verified_claims(claimed_numbers: list[int]) -> None:
         """Release only labels this worker can still prove it owns."""
-        for claimed_number in claimed_numbers:
+        try:
+            for claimed_number in claimed_numbers:
+                try:
+                    if target_owned_by(claimed_number, owner):
+                        replace_factory_labels(claimed_number, 'factory:unowned')
+                except Exception:
+                    pass
+        finally:
+            # A failed GitHub write must not strand the Neon claim.
             try:
-                if target_owned_by(claimed_number, owner):
-                    replace_factory_labels(claimed_number, 'factory:unowned')
-            except Exception:
-                pass
+                release_lease(REPO, worker, claim_token, 'claim-rollback')
+            except Exception as exc:
+                print(f'[factory-controller] Neon claim rollback failed ({type(exc).__name__})', file=sys.stderr)
     claimed: list[int] = []
     try:
         for number in numbers:
@@ -954,6 +1002,12 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
             + ', '.join(sorted(unresolved_runs)),
             file=sys.stderr,
         )
+    # The current Actions run roster is already verified. Renew only the
+    # existing reservations of workers still demonstrably executing.
+    try:
+        renew_verified_workers(REPO, [str(worker) for worker in active])
+    except Exception as exc:
+        print(f'[factory-controller] verified Neon renewal deferred ({type(exc).__name__})', file=sys.stderr)
     issue_items, pr_items = list_issues(), list_prs()
     targets = {
         int(item["number"]): item
@@ -961,6 +1015,8 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
     }
     pairs = paired_owned_targets(issue_items, pr_items)
     released: list[int] = []
+    prior_claims: dict[str, tuple[str, list[int]] | None] = {}
+    released_workers: set[str] = set()
     for number, owner in owned_targets(issue_items, pr_items):
         # Manual-only holds cannot be changed by replace_factory_labels.
         # Avoid paginating their comment histories on every dispatch pass.
@@ -1004,6 +1060,14 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
         ):
             continue
         ttl = FIXED_LEASE_TTL_SECONDS if fixed_owner else LOCAL_LEASE_TTL_SECONDS
+        if fixed_owner:
+            worker_id = fixed_owner.group('worker')
+            if worker_id not in prior_claims:
+                try:
+                    prior_claims[worker_id] = worker_claim(REPO, worker_id)
+                except Exception as exc:
+                    prior_claims[worker_id] = None
+                    print(f'[factory-controller] claim snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
         if not replace_factory_labels(
             number,
             'factory:unowned',
@@ -1014,10 +1078,27 @@ def reconcile_stale_leases(now_epoch: int | None = None) -> list[int]:
         ):
             continue
         released.append(number)
+        if fixed_owner:
+            released_workers.add(fixed_owner.group('worker'))
         print(
             f'[factory-controller] released stale {owner} lease on #{number}',
             file=sys.stderr,
         )
+    for worker_id in released_workers:
+        snapshot = prior_claims.get(worker_id)
+        if snapshot is None:
+            continue
+        token, claim_numbers = snapshot
+        try:
+            # Every target of the original token must have relinquished its
+            # label. A newer Neon claim never matches this captured token.
+            if all(
+                not target_owned_by(number, f'factory:{worker_id}')
+                for number in claim_numbers
+            ):
+                release_lease(REPO, worker_id, token, 'stale-lease-reconciled')
+        except Exception as exc:
+            print(f'[factory-controller] stale Neon release deferred ({type(exc).__name__})', file=sys.stderr)
     return released
 
 
@@ -1179,6 +1260,18 @@ def runtime_quota_block_reason(worker: str) -> str | None:
     return None
 
 
+def is_authorized_fixed_worker(worker: str) -> bool:
+    """Accept canonical worker IDs only when the roster actually contains them.
+
+    Owner-label parsers deliberately recognize any positive decimal ID to
+    preserve existing lease state, but assignment is restricted to the roster.
+    """
+    return (
+        re.fullmatch(r'(?:[6-9]|[1-9][0-9]+)', worker) is not None
+        and worker in worker_sources()
+    )
+
+
 def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
@@ -1193,7 +1286,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     Dispatch failures release any lease created by the dispatcher and
     do not strand ownership.
     """
-    if not re.fullmatch('(?:[6-9]|[1-3][0-9]|[4-9][0-9])', worker):
+    if not is_authorized_fixed_worker(worker):
         raise SystemExit(f'unsupported fixed-model worker: {worker}')
     quota_pause = quota_pause_for(worker)
     if quota_pause is not None:
@@ -1535,6 +1628,17 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
     ``factory:<worker>`` + ``factory:review`` until TTL expiry.
     """
     owner = f'factory:{worker}'
+    # Snapshot before any GitHub label mutation. Never fetch a possibly newer
+    # claim token after another dispatcher has reassigned this worker.
+    try:
+        original_claim = worker_claim(REPO, worker)
+    except Exception as exc:
+        print(f'[factory-controller] Neon release snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
+        # A trusted pre-session abort must not strip GitHub owner labels if it
+        # cannot read the matching Neon reservation. Keep both sides intact.
+        if reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-')):
+            raise
+        original_claim = None
     released: list[int] = []
     issues = list_issues()
     prs = list_prs()
@@ -1546,12 +1650,28 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         if owner_of(labels_of(item)) == owner:
             targets.append((int(item['number']), 'pr'))
     for number, kind in targets:
-        replace_factory_labels(number, 'factory:unowned')
+        if replace_factory_labels(number, 'factory:unowned') is False:
+            continue
         try:
             record_claim_released(number, worker, kind, reason)
         except Exception:
             pass
         released.append(number)
+    # Only clear the Neon reservation once every originally held GitHub target
+    # has actually released its owner label.
+    if original_claim is not None and len(released) == len(targets):
+        try:
+            token, claim_numbers = original_claim
+            # Re-verify all targets attached to this *original* token, not
+            # merely whichever labels were present in the first snapshot.
+            # This also repairs retry attempts when a previous run already
+            # cleared the GitHub labels but could not reach Neon afterward.
+            if all(not target_owned_by(number, owner) for number in claim_numbers):
+                release_lease(REPO, worker, token, reason)
+        except Exception as exc:
+            print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
+            if reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-')):
+                raise
     return released
 
 

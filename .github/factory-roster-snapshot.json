@@ -66,22 +66,6 @@
       "display_name": "OpenRouter Nemotron 3 Ultra Free"
     },
     {
-      "worker": "52",
-      "source": "openrouter-free",
-      "model": "thinkingmachines/inkling:free",
-      "minute": "10",
-      "scheduler": "dispatcher",
-      "display_name": "OpenRouter Inkling Free"
-    },
-    {
-      "worker": "53",
-      "source": "openrouter-free",
-      "model": "thinkingmachines/inkling-small:free",
-      "minute": "30",
-      "scheduler": "dispatcher",
-      "display_name": "OpenRouter Inkling Small Free"
-    },
-    {
       "worker": "54",
       "source": "z-ai",
       "model": "glm-4.5-flash",
@@ -272,6 +256,78 @@
       "minute": "40",
       "scheduler": "dispatcher",
       "display_name": "NVIDIA DiffusionGemma 26B"
+    },
+    {
+      "worker": "108",
+      "source": "openrouter-free",
+      "model": "thinkingmachines/inkling-2-small:free",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Inkling 2 Small Free"
+    },
+    {
+      "worker": "109",
+      "source": "openrouter-free",
+      "model": "baidu/ernie-5.5-flash-preview:free",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter ERNIE 5.5 Flash Preview Free"
+    },
+    {
+      "worker": "110",
+      "source": "openrouter-free",
+      "model": "inclusionai/ling-3.2-flash:free",
+      "minute": "55",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Ling 3.2 Flash Free"
+    },
+    {
+      "worker": "111",
+      "source": "opencode-free",
+      "model": "glm-5.3-flash-free",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode GLM 5.3 Flash Free"
+    },
+    {
+      "worker": "112",
+      "source": "opencode-free",
+      "model": "minimax-m3.1-flash-free",
+      "minute": "0",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode MiniMax M3.1 Flash Free"
+    },
+    {
+      "worker": "113",
+      "source": "opencode-free",
+      "model": "flint-40b-free",
+      "minute": "5",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Flint 40B Free"
+    },
+    {
+      "worker": "114",
+      "source": "opencode-free",
+      "model": "beam-free",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Beam Free"
+    },
+    {
+      "worker": "115",
+      "source": "opencode-free",
+      "model": "iceman-free",
+      "minute": "15",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Iceman Free"
+    },
+    {
+      "worker": "116",
+      "source": "opencode-free",
+      "model": "longcat-2.5-free",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode LongCat 2.5 Free"
     }
   ],
   "expected_workers": [
@@ -283,8 +339,6 @@
     45,
     46,
     51,
-    52,
-    53,
     54,
     60,
     61,
@@ -308,7 +362,16 @@
     104,
     105,
     106,
-    107
+    107,
+    108,
+    109,
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116
   ],
   "retired_workers": [
     9,
@@ -328,6 +391,8 @@
     48,
     49,
     50,
+    52,
+    53,
     55,
     56,
     57,
@@ -402,6 +467,8 @@
     "step-5-preview-free",
     "stepfun-ai/step-3.7-flash",
     "thinkingmachines/inkling",
+    "thinkingmachines/inkling-small:free",
+    "thinkingmachines/inkling:free",
     "union-alpha",
     "z-ai/glm-5.3"
   ]

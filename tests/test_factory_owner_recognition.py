@@ -1,10 +1,7 @@
-"""Regression coverage for shared factory owner-label recognition boundaries.
+"""Regression coverage for roster-derived factory owner-label recognition.
 
-Issue #1178 raised the shared NVIDIA and OmniRoute worker owner boundary from
-``factory:16`` through ``factory:17``. The fixed-model roster has since grown
-(see ``.github/free-model-factories.tsv``, workers 6-71), so every worker must
-now use the canonical ``factory_work_policy`` boundary covering
-``factory:1``-``factory:79``.
+Roster workers now include IDs above 100, with membership checked against the roster. Lease and review code must recognize all
+canonical positive numeric owners while assignment verifies actual membership.
 """
 
 from __future__ import annotations
@@ -15,7 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / ".github" / "scripts"
 
-EXPECTED_OWNER_RE = r"^factory:(unowned|local|[1-9]|[1-3][0-9]|[4-9][0-9])$"
+EXPECTED_OWNER_RE = r"^factory:(unowned|local|[1-9][0-9]*)$"
 
 OWNER_RE_SCRIPTS = (
     SCRIPTS / "omniroute-factory-worker.sh",
@@ -39,7 +36,7 @@ def _extract_owner_re(path: Path) -> str:
 
 
 def test_shared_owner_re_matches_canonical_boundary() -> None:
-    """Every shared worker must use the canonical 1-79 owner boundary."""
+    """Worker shell scripts must agree with the shared no-ceiling label pattern."""
     for path in OWNER_RE_SCRIPTS:
         owner_re = _extract_owner_re(path)
         assert owner_re == EXPECTED_OWNER_RE, (
@@ -59,21 +56,56 @@ def test_roster_workers_are_recognized_as_owned() -> None:
         "factory:60",
         "factory:71",
         "factory:79",
+        "factory:100",
+        "factory:101",
+        "factory:102",
+        "factory:103",
+        "factory:104",
+        "factory:105",
+        "factory:106",
+        "factory:107",
         "factory:unowned",
         "factory:local",
     ):
         assert pattern.fullmatch(label), f"{label} must be a recognized factory owner"
 
 
-def test_factory_100_and_above_remain_out_of_scope() -> None:
-    """The recognition boundary covers factory:80-99 (roster workers 80-82) but stops before factory:100."""
+def test_three_digit_factory_owners_are_recognized_but_malformed_are_rejected() -> None:
+    """Recognize valid IDs without granting unknown IDs assignment authority."""
     pattern = re.compile(EXPECTED_OWNER_RE)
-    for label in ("factory:80", "factory:82", "factory:99"):
-        assert pattern.fullmatch(label), f"{label} must be a recognized owner"
-    for label in ("factory:100", "factory:999", "factory:abc", "factory:"):
-        assert not pattern.fullmatch(label), (
-            f"{label} must remain outside the shared owner boundary"
-        )
+    for label in (
+        "factory:80", "factory:99", "factory:100", "factory:104",
+        "factory:107", "factory:999",
+    ):
+        assert pattern.fullmatch(label), f"{label} must be a recognizable owner"
+    for label in (
+        "factory:0", "factory:00", "factory:01", "factory:0104",
+        "factory:abc", "factory:",
+    ):
+        assert not pattern.fullmatch(label), f"{label} must not be a valid owner"
+
+
+def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_workers() -> None:
+    """Known three-digit workers are in the roster, not merely matched by a regex."""
+    roster_file = ROOT / ".github" / "free-model-factories.tsv"
+    roster_ids = {
+        fields[0]
+        for raw in roster_file.read_text(encoding="utf-8").splitlines()
+        if raw and not raw.startswith("#")
+        if len(fields := raw.split("\t")) >= 2
+    }
+    assert {str(worker) for worker in range(100, 108)} <= roster_ids
+    # Fresh free-model workers may legitimately retire; do not freeze their IDs.
+    assert all(re.fullmatch(r"[1-9][0-9]*", worker) for worker in roster_ids)
+    unknown_worker = str(max(map(int, roster_ids)) + 1)
+    assert unknown_worker not in roster_ids
+
+    # The controller checks both canonical decimal spelling and roster membership.
+    source = (SCRIPTS / "factory-work-controller.py").read_text(encoding="utf-8")
+    assert "worker in worker_sources()" in source
+    assert "unsupported fixed-model worker" in source
+    assert "is_authorized_fixed_worker(worker)" in source
+
 
 
 def test_nvidia_worker_keeps_provider_and_model_behavior() -> None:

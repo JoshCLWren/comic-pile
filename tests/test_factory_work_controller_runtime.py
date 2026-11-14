@@ -23,7 +23,34 @@ def controller() -> types.ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    # Existing runtime fixtures exercise historical worker IDs that are no
+    # longer on the live roster. Keep that test data explicit, never relax
+    # the production assignment check.
+    real_sources = module.worker_sources
+    module.__dict__["worker_sources"] = lambda: {
+        **real_sources(),
+        "13": "nvidia",
+        "17": "nvidia",
+        "59": "nvidia",
+    }
     return module
+
+
+
+def test_three_digit_assignment_checks_canonical_id_and_live_roster(
+    controller: types.ModuleType,
+) -> None:
+    """Every live three-digit roster member can dispatch; unknown IDs cannot."""
+    authorized = controller.is_authorized_fixed_worker
+    roster = controller.worker_sources()
+    three_digit_workers = sorted(int(worker) for worker in roster if worker.isdigit() and int(worker) >= 100)
+    assert three_digit_workers
+    for worker in three_digit_workers:
+        assert authorized(str(worker))
+    unknown = str(max(map(int, roster)) + 1)
+    for invalid in (unknown, "999", "0", "00", "0104", "+104", "104 ", "abc", ""):
+        assert not authorized(invalid)
+
 
 
 def test_stale_fixed_lease_releases_but_live_worker_is_not_stolen(
@@ -161,10 +188,11 @@ def test_assign_candidate_rolls_first_target_back_when_second_write_fails(
     assert (602, "factory:unowned", None) in calls
 
 
+@pytest.mark.parametrize("worker", ["13", "104", "105", "106", "107"])
 def test_pr_assignment_preserves_existing_workflow_stage(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str
 ) -> None:
-    """Verify pr assignment preserves existing workflow stage."""
+    """A real three-digit worker can claim a PR without losing its stage."""
     candidate = controller.Candidate("pr", 1603, 2, 3, "2026-08-16T12:00:00Z")
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: True)
@@ -179,8 +207,8 @@ def test_pr_assignment_preserves_existing_workflow_stage(
         lambda number, owner, stage=None: calls.append((number, owner, stage)),
     )
 
-    assert controller.assign_candidate(candidate, "13") is True
-    assert calls == [(1603, "factory:13", None)]
+    assert controller.assign_candidate(candidate, worker) is True
+    assert calls == [(1603, f"factory:{worker}", None)]
 
 
 def test_assign_candidate_verifies_post_write_owner(
@@ -841,6 +869,43 @@ def test_smoke_failure_releases_review_lease_immediately(
     assert controller.release_worker("42", reason="smoke-failure") == [2235]
     assert writes == [(2235, "factory:unowned", None)]
     assert markers == [(2235, "42", "pr", "smoke-failure")]
+
+
+
+def test_explicit_release_cannot_delete_a_newer_neon_claim(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Capture the old claim before labels change, then release that token only."""
+    state = {"labels_modified": False}
+    released_tokens: list[str] = []
+
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [{
+        "number": 2235,
+        "labels": [{"name": "factory"}, {"name": "factory:42"}],
+    }])
+
+    def snapshot(_repo: str, _worker: str) -> tuple[str, list[int]]:
+        assert not state["labels_modified"], "claim token must precede label release"
+        return "old-token", [2235]
+
+    def replace_labels(_number: int, _owner: str) -> bool:
+        state["labels_modified"] = True
+        return True
+
+    monkeypatch.setattr(controller, "worker_claim", snapshot)
+    monkeypatch.setattr(controller, "replace_factory_labels", replace_labels)
+    monkeypatch.setattr(controller, "record_claim_released", lambda *args: None)
+    monkeypatch.setattr(controller, "target_owned_by", lambda number, owner: False)
+    monkeypatch.setattr(
+        controller, "release_lease",
+        lambda _repo, _worker, token, _reason: released_tokens.append(token),
+    )
+
+    assert controller.release_worker("42", reason="finished") == [2235]
+    assert state["labels_modified"] is True
+    assert released_tokens == ["old-token"]
+
 
 
 def test_record_claim_released_uses_v3_marker(
