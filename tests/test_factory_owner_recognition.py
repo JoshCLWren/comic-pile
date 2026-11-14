@@ -6,6 +6,7 @@ canonical positive numeric owners while assignment verifies actual membership.
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -94,9 +95,17 @@ def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_worke
         if raw and not raw.startswith("#")
         if len(fields := raw.split("\t")) >= 2
     }
-    assert {str(worker) for worker in range(100, 108)} <= roster_ids
     # Fresh free-model workers may legitimately retire; do not freeze their IDs.
     assert all(re.fullmatch(r"[1-9][0-9]*", worker) for worker in roster_ids)
+    three_digit = {worker for worker in roster_ids if int(worker) >= 100}
+    assert three_digit, "roster must carry three-digit worker ids"
+    # Three-digit roster members must be authorized by the generated lock.
+    lock = json.loads(
+        (ROOT / ".github" / "factory-expected-workers.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert {int(worker) for worker in three_digit} <= set(lock["expected_workers"])
     unknown_worker = str(max(map(int, roster_ids)) + 1)
     assert unknown_worker not in roster_ids
 

@@ -1548,9 +1548,13 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert 76 in lock["retired_workers"]
     assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in remaining}
-    assert by_worker["77"]["source"] == "nvidia"
-    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
-    assert 77 in lock["expected_workers"]
+    # Worker 77 (nvidia qwen2.5-coder-7b) was retired by the #5100
+    # catalog sync after the pin disappeared from ``opencode models nvidia``.
+    assert "77" not in by_worker
+    assert 77 not in lock["expected_workers"]
+    assert 77 in lock["retired_workers"]
+    assert "qwen2.5-coder-7b" in lock["retired_models"]
+    assert "qwen2.5-coder-7b" not in {row["model"] for row in remaining}
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
     assert "79" not in by_worker
@@ -1811,7 +1815,9 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     ``longcat-2.5-preview-free`` (w73), and ``cat-jam-free`` (w83) are no
     longer served free. OpenCode Nemotron 3 Ultra (worker 42) and kilo-auto
     worker 46 stay. Requesty workers 92/93 retired; NVIDIA worker 95 later
-    retired when its Super VL model disappeared from the catalog.
+    retired when its Super VL model disappeared from the catalog, and the
+    owner-authorized worker 104 re-pin retired again in the #5100 catalog
+    sync for the same reason.
     The remaining roster still satisfies the balanced-schedule invariant.
     """
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
@@ -1845,14 +1851,17 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["46"]["scheduler"] == "dispatcher"
-    # Worker 95 stays retired, but its model is live again at 0/0 and is
-    # now pinned as worker 104 (owner-authorized 2026-11-08). The
-    # permanently-retired seal is lifted for the model, not the worker.
+    # Worker 95 stays retired; its Super VL model was briefly re-pinned as
+    # worker 104 (owner-authorized 2026-11-08), but the #5100 catalog sync
+    # retired worker 104 again after the model disappeared from
+    # ``opencode models nvidia``, re-sealing the model in the lock.
     assert "95" not in by_worker
     assert 95 not in lock["expected_workers"]
     assert 95 in lock["retired_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
-    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    assert "104" not in by_worker
+    assert 104 not in lock["expected_workers"]
+    assert 104 in lock["retired_workers"]
+    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" in lock["retired_models"]
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
@@ -1913,3 +1922,34 @@ def test_protected_openai_compat_pins_are_not_catalog_retired() -> None:
     assert "not enumerated" in by_model["glm-4.5-flash"].reason
     assert "not enumerated" in by_model["nemotron-3-nano:30b"].reason
     assert "not enumerated" in by_model["kilo-auto/free"].reason
+
+
+def test_committed_tsv_catalog_sync_retirements_are_locked() -> None:
+    """The #5100 catalog sync retired its catalog-absent pins consistently.
+
+    Workers 77, 96, 101, 104, 107 and 110 disappeared from the committed
+    roster in the same commit that sealed their models in
+    ``factory-expected-workers.json``. This guard keeps the TSV, the lock
+    and the retired-model seal in sync so the fast-merged retirement cannot
+    silently regress (#5113).
+    """
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+    models = {row["model"] for row in rows}
+
+    retired_cohort = {
+        "77": "qwen2.5-coder-7b",
+        "96": "stealth/crouton-alpha",
+        "101": "xingchen-agi/xing4.0-29b-a4b:free",
+        "104": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "107": "google/diffusiongemma-26b-a4b-it",
+        "110": "inclusionai/ling-3.2-flash:free",
+    }
+    for worker, model in retired_cohort.items():
+        assert worker not in by_worker, worker
+        assert int(worker) not in lock["expected_workers"], worker
+        assert int(worker) in lock["retired_workers"], worker
+        assert model in lock["retired_models"], model
+        assert model not in models, model
+    assert ROSTER.schedule_is_balanced(rows)
