@@ -46,10 +46,12 @@ QUOTA_RE = re.compile(
     re.I,
 )
 RATE_LIMIT_RE = re.compile(
-    r"(?:^|[^0-9.])429(?!\d)|too many requests|rate.?limit|\bquota\b|throttl|"
+    r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+429\b|"
+    r"\b429 too many requests\b|too many requests|rate.?limit|\bquota\b|throttl|"
     r"(?:at|out of|no|insufficient|exceeded)\s+capacity|"
     r"capacity\s+(?:exceeded|exhausted|unavailable)|"
-    r"(?:http(?: status)?|status(?: code)?)[ :]+413\b|(?:^|[^0-9.])413(?!\d)|"
+    r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+413\b|"
+    r"\b413 request (?:too )?large\b|"
     r"request too large|tokens per minute|\btpm\b",
     re.I,
 )
@@ -259,10 +261,7 @@ def classify(log: str) -> Result:
 
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
-    if QUOTA_RE.search(log) or (
-        values["source"] in {"z-ai", "kilo-auto"}
-        and re.search(r"(?<![0-9.])429(?!\d)|too many requests", log, re.I)
-    ):
+    if QUOTA_RE.search(log):
         return Result(
             **common,
             outcome="PROVIDER QUOTA",
@@ -453,6 +452,38 @@ class ClassifierTests(unittest.TestCase):
         result = classify(log)
         self.assertEqual(result.outcome_class, "success")
         self.assertTrue(result.persisted_work)
+
+    def test_git_commit_sha_429_does_not_pause_zai_or_kilo(self) -> None:
+        """Live Z-AI run 43617062837 logged a commit hash ending in 429."""
+        for source in ("z-ai", "kilo-auto"):
+            log = self.BASE.replace("source=omniroute-opencode", f"source={source}")
+            log += (
+                "FIXED_MODEL_OPENCODE_OK\n"
+                "2026-11-14T16:45:56.5705392Z 9cd7bc429 improve workflow\n"
+                "[factory:54] repair attempt for PR #5060 produced no persisted change\n"
+            )
+            with self.subTest(source=source):
+                self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_git_commit_sha_413_does_not_fake_http_throttle(self) -> None:
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "2026-11-14T16:45:56.5705392Z abcdef413 improve workflow\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_explicit_http_429_remains_provider_throttle_not_quota(self) -> None:
+        log = (
+            self.BASE.replace("source=omniroute-opencode", "source=z-ai")
+            + "FIXED_MODEL_OPENCODE_OK\nHTTP 429 Too Many Requests\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_throttle")
+
+    def test_explicit_account_daily_limit_remains_provider_quota(self) -> None:
+        log = self.BASE + "FIXED_MODEL_OPENCODE_OK\n"
+        log += "Rate limit exceeded: free-models-per-day-high-balance\n"
+        self.assertEqual(classify(log).outcome_class, "provider_quota")
 
     def test_kilo_session_ids_cannot_fake_provider_throttle(self) -> None:
         """Real Kilo step IDs containing 413 must not cool a healthy provider."""
