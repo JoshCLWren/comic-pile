@@ -1141,3 +1141,59 @@ def test_batch_assignment_omits_redundant_reconciliation(
     assert sweeps == []
     assert controller.assign("13") is None
     assert sweeps == ["stale", "labels"]
+
+
+def test_release_label_write_updates_exact_neon_projection(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Releasing a PR synchronizes its GitHub-authoritative owner to Neon."""
+    events: list[str] = []
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/dsn")
+    monkeypatch.setattr(
+        controller, "target_json",
+        lambda number: {
+            "number": number, "state": "open",
+            "pull_request": {"url": "github"},
+            "labels": [
+                {"name": "factory"}, {"name": "factory:54"},
+                {"name": "factory:changes-requested"},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        controller, "run_gh",
+        lambda *_args, **_kwargs: events.append("github-write") or "[]",
+    )
+    monkeypatch.setattr(
+        controller, "refresh_trusted_label_write",
+        lambda repo, number, *, is_pr: events.append(
+            f"neon:{repo}:{number}:{is_pr}"
+        ) or True,
+    )
+    assert controller.replace_factory_labels(5060, "factory:unowned") is True
+    assert events == ["github-write", "neon:JoshCLWren/comic-pile:5060:True"]
+
+
+def test_failed_projection_refresh_does_not_undo_github_release(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Projection failure must not strand a successful GitHub label release."""
+    events: list[str] = []
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/dsn")
+    monkeypatch.setattr(
+        controller, "target_json",
+        lambda number: {
+            "number": number, "state": "open",
+            "labels": [{"name": "factory"}, {"name": "factory:54"}],
+        },
+    )
+    monkeypatch.setattr(
+        controller, "run_gh",
+        lambda *_args, **_kwargs: events.append("github-write") or "[]",
+    )
+    def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("Neon unavailable")
+
+    monkeypatch.setattr(controller, "refresh_trusted_label_write", unavailable)
+    assert controller.replace_factory_labels(4843, "factory:unowned") is True
+    assert events == ["github-write"]

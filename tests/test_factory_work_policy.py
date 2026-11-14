@@ -1535,3 +1535,10 @@ def test_deploy_fix_repairs_have_protected_priority_without_capacity_bypass() ->
     assert policy.provenance_lane(label_names(issue)) == 0
     assert policy.issue_bypasses_wip_limit(issue)
     assert not policy.issue_bypasses_wip_limit(issue, review_backlog_saturated=True)
+
+
+def test_small_free_fleet_default_backpressure_is_relaxed() -> None:
+    """Three unfinished factory PRs cannot freeze all new Rust issue intake."""
+    assert policy.FACTORY_PR_WIP_LIMIT >= 8
+    assert policy.FACTORY_REVIEW_BACKLOG_LIMIT >= 6
+    assert policy.FACTORY_NO_DIFF_RETRY_LIMIT >= 4

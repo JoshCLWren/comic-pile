@@ -378,3 +378,49 @@ def test_rest_snapshot_timestamp_is_not_dropped_by_source_watermark(monkeypatch)
     payload = json.loads(observed[0][1][0])[0]
     assert payload["source_updated_at"] == entry["updated_at"]
     assert payload["item"]["updatedAt"] == entry["updated_at"]
+
+
+def test_finite_projection_ttls_and_expired_row_fallback() -> None:
+    """Open target rows and snapshot markers must have bounded freshness."""
+    import inspect
+    snap = inspect.getsource(projection._snapshot)
+    ingest = inspect.getsource(projection._ingest_event)
+    read = inspect.getsource(projection._read_projection)
+    assert projection.RECONCILE_SECONDS == 1800
+    assert projection.TARGET_TTL_SECONDS == 7200
+    assert "2100-01-01" not in snap
+    assert "2100-01-01" not in ingest
+    assert "expires_at=EXCLUDED.expires_at" in snap
+    assert "expires_at=EXCLUDED.expires_at" in ingest
+    assert "if any(row[\"live\"] is not True for row in rows)" in read
+    assert "source timestamps" in snap
+
+
+def test_trusted_label_refresh_uses_exact_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The controller's trusted write is not an unverified webhook replay."""
+    import asyncio
+    calls: list[tuple[str, str, dict[str, object], str]] = []
+
+    async def fake_ingest(
+        repo: str, event_id: str, event: dict[str, object], *,
+        source: str = "github-webhook",
+    ) -> bool:
+        calls.append((repo, event_id, event, source))
+        return True
+
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/dsn")
+    monkeypatch.setenv("GITHUB_RUN_ID", "43617062837")
+    monkeypatch.setattr(projection, "_ingest_event", fake_ingest)
+
+    assert projection.refresh_trusted_label_write(
+        "JoshCLWren/comic-pile", 5060, is_pr=True
+    )
+    assert projection.refresh_trusted_label_write(
+        "JoshCLWren/comic-pile", 4843, is_pr=False
+    )
+    assert calls[0][2] == {"action": "labels", "pull_request": {"number": 5060}}
+    assert calls[1][2] == {"action": "labels", "issue": {"number": 4843}}
+    assert all(call[3] == "github-trusted-write" for call in calls)
+    assert all("43617062837" in call[1] for call in calls)
