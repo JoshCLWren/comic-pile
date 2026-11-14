@@ -501,7 +501,8 @@
         "grows_with_data": false,
         "max_statements": 1,
         "proof_reference": "native/roll-service/src/roll_resources.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_roll_die_state_n1.py"
       }
     },
     {
