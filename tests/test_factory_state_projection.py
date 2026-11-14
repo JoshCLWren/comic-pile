@@ -400,7 +400,6 @@ def test_trusted_label_refresh_uses_exact_target(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The controller's trusted write is not an unverified webhook replay."""
-    import asyncio
     calls: list[tuple[str, str, dict[str, object], str]] = []
 
     async def fake_ingest(
