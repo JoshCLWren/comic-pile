@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INVENTORY = ROOT / "docs" / "api" / "v2-route-inventory.json"
+SOURCES = ROOT / "docs" / "api" / "sql-budget-sources.json"
 SERVICES = ROOT / "native" / "roll-service" / "src" / "auth" / "services.rs"
 
 QUERY_CALL = re.compile(r"\.(query|query_opt|query_one|execute)\(")
@@ -36,8 +36,8 @@ PINNED_MAX_IP_FAILURES = 10
 
 
 def _login_entry() -> dict[str, object]:
-    """Return the inventory entry for the login operation."""
-    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    """Return the editable budget source entry for the login operation."""
+    document = json.loads(SOURCES.read_text(encoding="utf-8"))
     operations = document["operations"]
     assert isinstance(operations, list)
     for operation in operations:
