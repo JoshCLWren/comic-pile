@@ -1058,7 +1058,7 @@ async function reconcileMissingPrLabels({ github, context, openPullRequests = nu
     // Projection rows do not always carry the author, and can briefly lag a
     // draft/cross-repository change. Only the live PR can authorize enrollment.
     if (live.draft || !live.head?.repo?.full_name
-      || /^(dependabot|renovate)(\\[bot\\])?$/.test(live.user?.login || '')) continue;
+      || /^(dependabot|renovate)(\[bot\])?$/.test(live.user?.login || '')) continue;
     if (hasManualOnlyDirective(live.body)) continue;
     const current = await currentLabels(github, context, pr.number);
     if (labelsBlockEnrollment(current)) continue;
