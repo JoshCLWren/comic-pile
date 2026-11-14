@@ -465,7 +465,6 @@ while (( $(remaining) > 480 )); do
   checkout_target "$TARGET_MODE" "$NUMBER" "$BRANCH"
   available="$(remaining)"
   agent_timeout=$((available - 240))
-  (( agent_timeout > 3000 )) && agent_timeout=3000
   (( agent_timeout < 300 )) && break
 
   agent_attempt=1
@@ -497,8 +496,7 @@ while (( $(remaining) > 480 )); do
     agent_attempt=$((agent_attempt + 1))
     available="$(remaining)"
     agent_timeout=$((available - 240))
-    (( agent_timeout > 3000 )) && agent_timeout=3000
-    (( agent_timeout >= 300 )) || break
+      (( agent_timeout >= 300 )) || break
   done
 
   if [[ "$TARGET_MODE" == 'issue' ]]; then

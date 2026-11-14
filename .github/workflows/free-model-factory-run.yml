@@ -69,7 +69,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FACTORY_BUDGET_SECONDS: '1200'
+  FACTORY_BUDGET_SECONDS: '6000'
   FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}
   FACTORY_HEARTBEAT_COMMENT_ID: ${{ inputs.heartbeat_comment_id }}
   FACTORY_ATTEMPT_COMMENT_ID: ${{ inputs.attempt_comment_id }}
@@ -79,7 +79,8 @@ env:
 jobs:
   factory:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Allow the agent a full budget plus setup and handoff time.
+    timeout-minutes: 120
     outputs:
       worker_session_started: ${{ steps.worker_session.outputs.started }}
     env:

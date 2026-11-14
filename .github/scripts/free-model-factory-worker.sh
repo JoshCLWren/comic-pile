@@ -532,7 +532,6 @@ while :; do
   agent_attempt=$((agent_attempt + 1))
   available="$(remaining)"
   agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
-  (( agent_timeout > 3000 )) && agent_timeout=3000
   (( agent_timeout >= 300 )) || break
 done
 
