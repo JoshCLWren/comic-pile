@@ -26893,39 +26893,6 @@
         ]
       }
     },
-    "/api/v1/metrics": {
-      "get": {
-        "description": "Return simple performance metrics.",
-        "operationId": "metrics_api_v1_metrics_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Metrics Api V1 Metrics Get",
-                  "type": "object"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "Metrics",
-        "tags": [
-          "metrics"
-        ]
-      }
-    },
     "/api/v1/reading-boundaries": {
       "post": {
         "description": "Explain several owned series in one canonical eligibility snapshot.\n\nArgs:\n    payload: Owned Thread identifiers to explain.\n    current_user: Authenticated reader making the request.\n    db: Database session for the request.\n\nReturns:\n    Explanations keyed by Thread identifier.\n\nRaises:\n    HTTPException: With status 404 when a Thread is absent or foreign.",

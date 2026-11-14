@@ -182,6 +182,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     ]
     assert len(shadowed_v1) == sum(
         item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("runtime") == "python-fastapi"
         for item in v1_ops
     )
     assert any(
@@ -284,6 +285,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     ]
     assert len(shadowed_unversioned) == sum(
         item.get("ingress_destination") == "/api/native_roll.rs"
+        and item.get("runtime") == "python-fastapi"
         for item in unversioned_ops
     )
     assert any(
@@ -495,6 +497,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "demo",
         "dependencies",
         "issues",
+        "metrics",
         "preferences",
         "reading-mode",
         "releases",
