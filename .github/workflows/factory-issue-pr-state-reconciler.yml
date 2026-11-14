@@ -61,6 +61,25 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
+      - name: Configure Neon-first factory projections
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Install Neon-first GitHub read shim
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          real_gh="$(command -v gh)"
+          shim_dir="$RUNNER_TEMP/factory-gh-rest"
+          mkdir -p "$shim_dir"
+          cp .github/scripts/factory-gh-rest-shim.sh "$shim_dir/gh"
+          chmod +x "$shim_dir/gh"
+          echo "FACTORY_REAL_GH=$real_gh" >> "$GITHUB_ENV"
+          echo "$shim_dir" >> "$GITHUB_PATH"
+
       - name: Guard recovery sweeps on the Actions installation REST budget
         id: api_budget
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -94,7 +113,25 @@ jobs:
                 || (context.eventName === 'pull_request_target' && context.payload.action === 'edited')) {
               await visibility({ github, context });
             } else {
-              await visibility.reconcileMissingPrLabels({ github, context });
+              // The scheduled inventory is advisory. Neon is consulted first;
+              // absent/expired projections fall back to the existing live scan.
+              let openPullRequests = null;
+              if (context.eventName === 'schedule' || context.eventName === 'workflow_dispatch') {
+                const { spawnSync } = require('node:child_process');
+                const read = spawnSync('python3', [
+                  '.github/scripts/factory_gh_read_through.py', 'projected',
+                  context.repo.owner + '/' + context.repo.repo, 'pr',
+                ], { encoding: 'utf8', timeout: 15000 });
+                if (read.status === 0) {
+                  try {
+                    const parsed = JSON.parse(read.stdout);
+                    if (Array.isArray(parsed)) openPullRequests = parsed;
+                  } catch (error) {
+                    core.warning('Neon PR projection unreadable; using GitHub discovery');
+                  }
+                }
+              }
+              await visibility.reconcileMissingPrLabels({ github, context, openPullRequests });
             }
 
       - name: Reconcile linked issue from trusted canonical PR history
