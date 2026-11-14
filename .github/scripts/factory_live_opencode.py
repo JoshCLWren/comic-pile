@@ -30,6 +30,7 @@ MODEL_DEPRECATED_RE = re.compile(
     r"\bModel\s+(?P<model>[A-Za-z0-9][\w./:-]*)\s+has\s+been\s+deprecated\b",
     re.IGNORECASE,
 )
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
@@ -103,6 +104,8 @@ def unavailable_models(
 
 def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
     """Persist recognizable OpenCode smoke errors for the registry reporter."""
+    # OpenCode colorizes errors; ANSI sequences can hide word boundaries.
+    log_content = ANSI_ESCAPE_RE.sub("", log_content)
     if runtime_model.startswith(("mistral/", "ollama-cloud/")) and re.search(
         r"budget[ _]exhausted|billing_api_budget_exhausted|monthly usage limit|"
         r"reached your [a-z ]*usage limit", log_content, re.I,
