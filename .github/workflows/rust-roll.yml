@@ -99,6 +99,25 @@ jobs:
           cargo run --locked --manifest-path native/roll-service/Cargo.toml --example v2_openapi > native/contracts/v2-runtime.openapi.json
           corepack enable
           uv run python scripts/generate_openapi_types.py
+      - name: Emit exact generator output for connector-based artifact refresh
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 5027 }}
+        working-directory: .
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for name in (
+              "native/contracts/v2-runtime.openapi.json",
+              "frontend/src/generated/openapi.json",
+              "frontend/src/generated/openapi.ts",
+              "frontend/src/generated/nativeV2Client.ts",
+          ):
+              data = Path(name).read_text(encoding="utf-8")
+              print("ARTIFACT_BEGIN " + name)
+              for start in range(0, len(data), 8000):
+                  print("ARTIFACT_CHUNK " + json.dumps(data[start:start + 8000], ensure_ascii=True))
+              print("ARTIFACT_END " + name)
+          PY
       - uses: actions/upload-artifact@v4
         if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 5027 }}
         with:
