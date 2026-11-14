@@ -77,11 +77,11 @@ pub async fn create_release_source(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !plan_exists {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
-    
+
     // Verify thread ownership
     let thread_exists: bool = conn
         .query_opt(
@@ -91,11 +91,11 @@ pub async fn create_release_source(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !thread_exists {
         return Err(ApiError::NotFound("Thread not found".to_string()));
     }
-    
+
     // Verify external identity exists
     let identity_exists: bool = conn
         .query_opt(
@@ -105,11 +105,13 @@ pub async fn create_release_source(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !identity_exists {
-        return Err(ApiError::NotFound("External identity not found".to_string()));
+        return Err(ApiError::NotFound(
+            "External identity not found".to_string(),
+        ));
     }
-    
+
     let result = conn
         .query(
             "INSERT INTO reading_plan_release_sources 
@@ -133,8 +135,11 @@ pub async fn create_release_source(
         )
         .await
         .map_err(db::query_error)?;
-    
-    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create release source".to_string()))?;
+
+    let row = result
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::Internal("Failed to create release source".to_string()))?;
     let source = ReleaseSourceResponse {
         id: row.get(0),
         plan_id: row.get(1),
@@ -161,7 +166,7 @@ pub async fn list_release_sources(
     Path(plan_id): Path<i32>,
 ) -> Result<Json<Vec<ReleaseSourceResponse>>, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership and fetch related release sources
     let rows = conn
         .query(
@@ -177,7 +182,7 @@ pub async fn list_release_sources(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let sources: Vec<ReleaseSourceResponse> = rows
         .into_iter()
         .map(|row| ReleaseSourceResponse {
@@ -197,7 +202,7 @@ pub async fn list_release_sources(
             updated_at: row.get(12),
         })
         .collect();
-    
+
     Ok(Json(sources))
 }
 
@@ -208,7 +213,7 @@ pub async fn list_release_sources_for_reader(
     Path(plan_id): Path<i32>,
 ) -> Result<Json<Vec<ReadingPlanReleaseSourceStatus>>, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership and fetch related release sources
     let rows = conn
         .query(
@@ -223,7 +228,7 @@ pub async fn list_release_sources_for_reader(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let sources: Vec<ReadingPlanReleaseSourceStatus> = rows
         .into_iter()
         .map(|row| ReadingPlanReleaseSourceStatus {
@@ -239,7 +244,7 @@ pub async fn list_release_sources_for_reader(
             last_synced_at: row.get(9),
         })
         .collect();
-    
+
     Ok(Json(sources))
 }
 
@@ -251,7 +256,7 @@ pub async fn update_release_source(
     Json(payload): Json<ReleaseSourceUpdate>,
 ) -> Result<Json<ReleaseSourceResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify source exists and user owns the associated plan
     let row = conn
         .query_opt(
@@ -268,7 +273,7 @@ pub async fn update_release_source(
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound("Release source not found".to_string()))?;
-    
+
     let result = conn
         .query(
             "UPDATE reading_plan_release_sources 
@@ -282,8 +287,11 @@ pub async fn update_release_source(
         )
         .await
         .map_err(db::query_error)?;
-    
-    let updated_row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to update release source".to_string()))?;
+
+    let updated_row = result
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::Internal("Failed to update release source".to_string()))?;
     let source = ReleaseSourceResponse {
         id: updated_row.get(0),
         thread_id: updated_row.get(1),
@@ -298,7 +306,7 @@ pub async fn update_release_source(
         created_at: updated_row.get(10),
         updated_at: updated_row.get(11),
     };
-    
+
     Ok(Json(source))
 }
 
@@ -320,7 +328,7 @@ pub async fn delete_release_source(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     if result == 0 {
         return Err(ApiError::NotFound("Release source not found".to_string()));
     }
