@@ -32,7 +32,7 @@ jobs:
       - name: Configure restricted Neon factory projection connection
         uses: ./.github/actions/factory-state-cache
         with:
-          neon-api-key: \${{ secrets.NEON_API_KEY }}
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
           neon-project-id: \${{ vars.NEON_PROJECT_ID }}
 
       - name: Ingest check on exact PR head and wake if changed
