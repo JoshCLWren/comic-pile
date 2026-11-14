@@ -30,7 +30,7 @@ case "$endpoint" in
     printf '%s\\n' '[[{"number":10,"title":"Issue","body":"body","state":"open","created_at":"2026-08-16T00:00:00Z","updated_at":"2026-08-16T01:00:00Z","labels":[{"name":"factory:13"},{"name":"bug"}]},{"number":11,"title":"PR row","body":"body","state":"open","pull_request":{},"created_at":"2026-08-16T00:00:00Z","updated_at":"2026-08-16T01:00:00Z","labels":[{"name":"factory:13"}]}]]'
     ;;
   *'/pulls?'*)
-    printf '%s\\n' '[[{"number":20,"title":"PR","body":"pbody","state":"open","draft":false,"created_at":"2026-08-16T00:00:00Z","updated_at":"2026-08-16T01:00:00Z","labels":[{"name":"factory:13"}],"head":{"ref":"factory/13-10-x","sha":"abc"}}]]'
+    printf '%s\\n' '[[{"number":20,"title":"PR","body":"pbody","state":"open","draft":false,"created_at":"2026-08-16T00:00:00Z","updated_at":"2026-08-16T01:00:00Z","labels":[{"name":"factory:13"}],"mergeable":true,"mergeable_state":"clean","user":{"login":"JoshCLWren"},"head":{"ref":"factory/13-10-x","sha":"abc"}}]]'
     ;;
   *'/pulls/20')
     printf '%s\\n' '{"number":20,"title":"PR","body":"pbody","state":"open","merged_at":null,"mergeable":true,"draft":false,"labels":[{"name":"factory:13"}],"head":{"ref":"factory/13-10-x","sha":"abc"}}'
@@ -185,6 +185,9 @@ def test_rest_shim_normalizes_pr_list_and_view(tmp_path: Path) -> None:
         "number,labels",
     )
     assert [item["number"] for item in json.loads(listed.stdout)] == [20]
+    assert json.loads(listed.stdout)[0]["mergeable"] == "MERGEABLE"
+    assert json.loads(listed.stdout)[0]["mergeStateStatus"] == "CLEAN"
+    assert json.loads(listed.stdout)[0]["author"] == {"login": "JoshCLWren"}
 
     viewed = _run(
         tmp_path,
