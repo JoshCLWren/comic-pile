@@ -43,6 +43,7 @@ from typing import Final
 
 INVENTORY_PATH: Final = Path("docs/api/v2-route-inventory.json")
 FRAGMENT_DIR: Final = Path("docs/api/route-fragments")
+SQL_BUDGET_SOURCES_PATH: Final = Path("docs/api/sql-budget-sources.json")
 REWRITE_FRAGMENT_PATH: Final = FRAGMENT_DIR / "vercel-rewrites.json"
 VERCEL_PATH: Final = Path("vercel.json")
 AGENTS_PATH: Final = Path("AGENTS.md")
@@ -1174,7 +1175,31 @@ def _render_inventory(
         BurndownGenerationError: When the inventory contradicts ingress.
     """
     source_inventory = _merge_route_fragments(inventory, fragments)
-    operations = _enrich_operations(_validated_operations(source_inventory), routes)
+    budget_sources = load_json(SQL_BUDGET_SOURCES_PATH)
+    budget_entries = budget_sources.get("operations")
+    if not isinstance(budget_entries, list):
+        raise BurndownGenerationError("SQL budget sources must contain operations")
+    source_operations = _validated_operations(source_inventory)
+    operation_map = {
+        (operation["method"], operation["path"]): operation
+        for operation in source_operations
+    }
+    seen_budgets: set[tuple[str, str]] = set()
+    for index, raw_entry in enumerate(budget_entries):
+        entry = _object(raw_entry, f"sql-budget-sources.operations[{index}]")
+        key = (
+            _string(entry.get("method"), "sql budget method"),
+            _string(entry.get("path"), "sql budget path"),
+        )
+        if key in seen_budgets or key not in operation_map:
+            raise BurndownGenerationError(f"duplicate or unknown SQL budget operation {key}")
+        seen_budgets.add(key)
+        budget = _object(entry.get("sql_budget"), f"sql budget {key}")
+        operation_map[key]["sql_budget"] = budget
+        if "db_free" in entry:
+            operation_map[key]["db_free"] = _optional_bool(entry["db_free"], "db_free")
+    source_inventory["operations"] = source_operations
+    operations = _enrich_operations(source_operations, routes)
     summary = _burndown_summary(operations)
     schema_version = source_inventory.get("schema_version", 1)
     description = source_inventory.get("description", "")

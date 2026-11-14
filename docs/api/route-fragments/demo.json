@@ -1,8 +1,7 @@
 {
   "family": "demo",
   "owned_path_patterns": [
-    "^/api/v2/demo-roll$",
-    "^/api/v1/demo/roll$"
+    "^/api/v2/demo-roll$"
   ],
   "defaults": {
     "owning_issue": 4855
@@ -26,16 +25,6 @@
         "total_statements": 0,
         "basis": "Static guest fixture; native ingress bypasses application state and PostgreSQL"
       }
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/demo/roll",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/demo/roll$",
-      "runtime": "python-fastapi",
-      "status": "transitional",
-      "consumers": []
     }
   ]
 }

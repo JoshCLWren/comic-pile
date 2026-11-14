@@ -88,6 +88,9 @@ def test_trusted_webhook_does_not_checkout_pr_branch_or_expose_write_token() -> 
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
     assert "permissions:\n  contents: read" in workflow
+    assert "  issues: read\n" in workflow
+    assert "  pull-requests: read\n" in workflow
+    assert ": write" not in workflow
     assert "github.event.repository.full_name == github.repository" in workflow
     assert "factory_state_projection.py ingest" in workflow
     assert "secrets.NEON_API_KEY" in workflow
@@ -135,6 +138,28 @@ def test_equal_timestamp_event_uses_live_reopen(monkeypatch: pytest.MonkeyPatch)
     original = {"issue": {"number": 44, "state": "closed", "updated_at": "2026-11-13T04:25:00Z"}}
     record = projection.normalize_event(projection._authoritative_event("owner/repo", original))
     assert record is not None and record[3] == "open"
+
+
+@pytest.mark.parametrize("rate_limited", [True, False])
+def test_failed_live_read_reports_quota_without_exposing_output(
+    monkeypatch: pytest.MonkeyPatch, rate_limited: bool,
+) -> None:
+    import subprocess
+
+    error = "API rate limit exceeded for installation" if rate_limited else "HTTP 403"
+
+    def failed(args: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 1, "private response", error + " private detail")
+
+    monkeypatch.setattr(projection.subprocess, "run", failed)
+    with pytest.raises(RuntimeError) as caught:
+        projection._authoritative_event("owner/repo", {"pull_request": {"number": 44}})
+    assert "private" not in str(caught.value)
+    expected = (
+        "GitHub API rate limit exceeded while verifying pull_request #44"
+        if rate_limited else "GitHub could not verify pull_request #44"
+    )
+    assert str(caught.value) == expected
 
 
 def test_missing_target_rejects_obsolete_open_event() -> None:
@@ -214,3 +239,44 @@ def test_snapshot_uses_native_datetimes_for_asyncpg_timestamptz(monkeypatch: pyt
     assert isinstance(calls[1][1][2], datetime)
     assert calls[1][1][4] == "2026-11-13T13:07:00Z"
     assert "to_jsonb($5::text)" in calls[1][0]
+
+
+def test_ingest_cli_defers_unverified_github_target_without_writing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed live read keeps Neon untouched and leaves a visible warning."""
+    event = tmp_path / "event.json"
+    event.write_text('{"pull_request":{"number":4976}}', encoding="utf-8")
+    called: list[str] = []
+
+    def unavailable(*_args: object) -> bool:
+        raise projection.GitHubTargetVerificationError("GitHub could not verify pull_request #4976")
+
+    monkeypatch.setattr(projection, "ingest_event", unavailable)
+    monkeypatch.setattr(projection, "bootstrap_missing", lambda *_args: called.append("bootstrap"))
+    monkeypatch.setattr(sys, "argv", [
+        "factory_state_projection.py", "ingest", "--file", str(event),
+        "--event-id", "run-1", "--repo", "JoshCLWren/comic-pile",
+    ])
+    assert projection.main() == 0
+    assert called == []
+    assert "ingest deferred" in capsys.readouterr().err
+
+
+def test_ingest_cli_does_not_hide_neon_write_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Database errors remain fatal; only GitHub verification may defer."""
+    event = tmp_path / "event.json"
+    event.write_text('{"pull_request":{"number":4976}}', encoding="utf-8")
+
+    def broken_db(*_args: object) -> bool:
+        raise RuntimeError("Neon transaction failed")
+
+    monkeypatch.setattr(projection, "ingest_event", broken_db)
+    monkeypatch.setattr(sys, "argv", [
+        "factory_state_projection.py", "ingest", "--file", str(event),
+        "--event-id", "run-1", "--repo", "JoshCLWren/comic-pile",
+    ])
+    with pytest.raises(RuntimeError, match="Neon transaction failed"):
+        projection.main()

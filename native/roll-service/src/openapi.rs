@@ -79,13 +79,16 @@ use utoipa::OpenApi;
         crate::continuity_rules::get_documentation,
         crate::continuity_rules::update_documentation,
         crate::continuity_rules::delete_documentation,
-        // Writer-authorized releases operations (source/publish/retract) are
-        // server-only automation, not browser-called, and require a header
-        // credential the browser SDK does not model. They stay documented by
-        // the retained Python schemas; only the public reads join this
-        // browser-facing native contract.
+        // All five same-path releases operations are documented in this
+        // browser-facing native contract: the two public reads plus the
+        // writer-authorized source/publish/retract operations, which carry
+        // an x-release-writer-token header and keep the wire contract the
+        // Python handler previously served.
         crate::releases::list_documentation,
         crate::releases::get_documentation,
+        crate::releases::reconcile_documentation,
+        crate::releases::publish_documentation,
+        crate::releases::retract_documentation,
         crate::comicvine_resolution::series_import_status_documentation,
     ),
     components(schemas(

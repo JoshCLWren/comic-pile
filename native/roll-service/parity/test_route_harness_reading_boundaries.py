@@ -18,6 +18,7 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -28,20 +29,23 @@ from app.models import Issue, Thread, User
 
 from route_harness import (
     RouteMeasurement,
+    assert_declared_budget,
     measure_route,
     run_rust_example,
 )
 
 SECRET = "synthetic-route-harness-secret"
-BINARY = "native/roll-service/target/debug/examples/http_reading_boundaries"
+BINARY = str(
+    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
+    / "debug/examples/http_reading_boundaries"
+)
 ROUTE = "POST /api/v2/reading-boundaries"
 LARGE_BATCH = 200
 
-# Measured Postgres counters include the harness's own snapshot reads and
-# can lag, so xacts/blocks deltas are asserted as far-below-N+1 bounds.
+# Statement counts are isolated to the route role; database-wide xacts and
+# blocks remain contextual telemetry.
 # The budget itself is 9 application statements in one read transaction.
-MAX_MEASURED_XACTS = 8
-MAX_MEASURED_STATEMENTS = 30
+MAX_MEASURED_STATEMENTS = 11
 
 
 async def _seed_threads(
@@ -95,16 +99,16 @@ def _assert_budget_shape(small: RouteMeasurement, large: RouteMeasurement) -> No
     # HTTP bytes scale with the batch (200/3 entries) but remain linear.
     assert large.http_bytes > small.http_bytes
     assert large.http_bytes > small.http_bytes * 8
-    # A single read transaction per request: xacts must not follow the batch.
-    assert small.db_xacts <= MAX_MEASURED_XACTS
-    assert large.db_xacts <= MAX_MEASURED_XACTS
-    assert large.db_xacts <= small.db_xacts + 5
-    # Statement executions (when pg_stat_statements exists) must stay near
-    # the 9-application-statement budget, independent of library size.
-    if small.db_statements is not None and large.db_statements is not None:
-        assert small.db_statements <= MAX_MEASURED_STATEMENTS
-        assert large.db_statements <= MAX_MEASURED_STATEMENTS
-        assert large.db_statements <= small.db_statements + 5
+    # Database-wide transaction counters include unrelated connections. The
+    # isolated role's measured statements must remain bounded instead.
+    assert small.db_statements is not None
+    assert large.db_statements is not None
+    assert_declared_budget(
+        "POST", "/api/v2/reading-boundaries", small.db_statements, large.db_statements
+    )
+    assert small.db_statements <= MAX_MEASURED_STATEMENTS
+    assert large.db_statements <= MAX_MEASURED_STATEMENTS
+    assert large.db_statements <= small.db_statements + 5
 
 
 @pytest.mark.asyncio

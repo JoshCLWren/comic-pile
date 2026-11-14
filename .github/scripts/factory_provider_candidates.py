@@ -334,6 +334,9 @@ ADAPTERS: dict[str, ProviderAdapter] = {
     # factory-source-budgets.json caps daily dispatches.
     "orcarouter": RuntimeOnlyAdapter("orcarouter"),
     "requesty": RuntimeOnlyAdapter("requesty"),
+    # The Workers Free plan hard-stops at its daily neuron allowance.
+    # Only allow pre-approved free models and runtime smoke evidence.
+    "cloudflare-workers-ai": RuntimeOnlyAdapter("cloudflare-workers-ai"),
 }
 
 

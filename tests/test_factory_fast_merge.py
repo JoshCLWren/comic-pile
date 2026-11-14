@@ -76,6 +76,10 @@ def test_nonfactory_and_policy_changes_cannot_auto_merge(path: str) -> None:
         "tests/test_factory_work_controller_runtime.py",
         "tests/test_local_ollama_review_contract.py",
         "docs/FACTORY_FAST_MERGE.md",
+        ".github/free-model-factories.tsv",
+        ".github/factory-expected-workers.json",
+        ".github/factory-roster-snapshot.json",
+        "tests/test_free_model_factories.py",
     ],
 )
 def test_supported_factory_paths(path: str) -> None:
@@ -143,49 +147,54 @@ def test_unsupported_or_incomplete_file_listing_is_blocked() -> None:
     assert not gate.factory_candidate(pr, files(), REPO)[0]
 
 
-def test_ci_summary_must_be_exact_head_actions_success() -> None:
-    """Required status is not replaced by unrelated or stale checks."""
-    check = {
-        "id": 12,
-        "name": "CI Summary",
-        "head_sha": HEAD,
-        "status": "completed",
-        "conclusion": "success",
-        "app": {"slug": "github-actions"},
-    }
-    ci = {
-        "name": "CI",
-        "head_sha": HEAD,
-        "status": "completed",
-        "conclusion": "success",
-        "event": "pull_request",
-    }
-    assert gate.ci_passed(HEAD, [check], [ci])
-    assert not gate.ci_passed(HEAD, [{**check, "conclusion": "failure"}], [ci])
-    assert not gate.ci_passed(HEAD, [{**check, "head_sha": "b" * 40}], [ci])
-    assert not gate.ci_passed(HEAD, [{**check, "app": {"slug": "other"}}], [ci])
-    assert not gate.ci_passed(HEAD, [check], [{**ci, "conclusion": "failure"}])
-    assert not gate.ci_passed(HEAD, [check], [{**ci, "head_sha": "b" * 40}])
+def test_immediate_merge_never_reads_ci_or_review(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The trusted fast lane submits one exact-SHA merge immediately."""
+    calls: list[tuple[str, str, dict | None]] = []
+
+    def fake_api(
+        endpoint: str, *, method: str = "GET", fields: dict | None = None,
+    ) -> dict:
+        calls.append((endpoint, method, fields))
+        if method == "GET":
+            assert endpoint == f"repos/{REPO}/pulls/123"
+            return candidate()
+        assert method == "PUT"
+        return {"merged": True, "sha": "b" * 40}
+
+    monkeypatch.setattr(gate, "gh_api", fake_api)
+    monkeypatch.setattr(gate, "pages", lambda *_args: files())
+    did_merge, commit = gate.handle(REPO, 123)
+    assert did_merge
+    assert commit == "b" * 40
+    assert len(calls) == 2
+    assert calls[1][0] == f"repos/{REPO}/pulls/123/merge"
+    merge_fields = calls[1][2]
+    assert merge_fields is not None
+    assert merge_fields["sha"] == HEAD
+    assert merge_fields["merge_method"] == "squash"
+    assert all("check-runs" not in call[0] and "/actions/" not in call[0]
+               for call in calls)
 
 
-def test_latest_ci_summary_controls_decision() -> None:
-    """A stale passed attempt cannot mask a newer failure."""
-    base = {
-        "name": "CI Summary",
-        "head_sha": HEAD,
-        "status": "completed",
-        "app": {"slug": "github-actions"},
-    }
-    old = {**base, "id": 10, "conclusion": "success"}
-    new = {**base, "id": 11, "conclusion": "failure"}
-    run = {
-        "name": "CI",
-        "head_sha": HEAD,
-        "status": "completed",
-        "conclusion": "success",
-        "event": "pull_request",
-    }
-    assert not gate.ci_passed(HEAD, [old, new], [run])
+def test_branch_protection_refusal_is_a_truthful_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A blocked API merge is not disguised as success or circumvented."""
+    def fake_api(
+        endpoint: str, *, method: str = "GET", fields: dict | None = None,
+    ) -> dict:
+        if method == "GET":
+            return candidate()
+        raise RuntimeError("required status check CI Summary is expected")
+
+    monkeypatch.setattr(gate, "gh_api", fake_api)
+    monkeypatch.setattr(gate, "pages", lambda *_args: files())
+    did_merge, reason = gate.handle(REPO, 123)
+    assert not did_merge
+    assert "CI Summary" in reason
+    assert "rejected immediate merge" in reason
 
 
 def test_switch_defaults_off_and_explicit_true_enables(tmp_path: Path) -> None:
@@ -200,13 +209,14 @@ def test_switch_defaults_off_and_explicit_true_enables(tmp_path: Path) -> None:
     assert gate.enabled(path)
 
 
-def test_workflow_uses_main_and_ci_trigger_without_running_pr_code() -> None:
+def test_workflow_uses_main_and_immediate_trigger_without_running_pr_code() -> None:
     """Privileged automation checks out trusted main and pins merge SHA."""
     workflow = (ROOT / ".github/workflows/factory-fast-merge.yml").read_text()
     script = SCRIPT.read_text()
     assert "pull_request_target:" in workflow
-    assert "workflow_run:" in workflow
-    assert "workflows: [CI]" in workflow
+    assert "workflow_run:" not in workflow
+    assert "workflows: [CI]" not in workflow
+    assert "secrets.PR_REBASE_TOKEN" in workflow
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
     assert "factory-fast-merge.py" in workflow
@@ -232,3 +242,43 @@ def test_production_dispatch_runs_from_merge_script(
     assert len(calls) == 1
     assert "factory_dispatch_production_deploy" in calls[0][4]
     assert "merged 2 PR(s)" in calls[0][-1]
+
+
+def test_complete_factory_roster_change_is_fast_merge_eligible() -> None:
+    """Atomic roster edits qualify without expanding the product-code allowlist."""
+    changed = [
+        {"filename": path, "status": "modified"}
+        for path in (
+            ".github/free-model-factories.tsv",
+            ".github/factory-expected-workers.json",
+            ".github/factory-roster-snapshot.json",
+            "tests/test_free_model_factories.py",
+        )
+    ]
+    pr = candidate()
+    pr["changed_files"] = len(changed)
+    assert gate.factory_candidate(pr, changed, REPO) == (True, "Factory-only PR eligible")
+
+
+@pytest.mark.parametrize(
+    "missing_path",
+    [
+        ".github/free-model-factories.tsv",
+        ".github/factory-expected-workers.json",
+        ".github/factory-roster-snapshot.json",
+    ],
+)
+def test_partial_factory_roster_cannot_fast_merge(missing_path: str) -> None:
+    """Never fast-merge a roster manifest detached from its generated state."""
+    changed = [
+        {"filename": path, "status": "modified"}
+        for path in (
+            ".github/free-model-factories.tsv",
+            ".github/factory-expected-workers.json",
+            ".github/factory-roster-snapshot.json",
+        )
+        if path != missing_path
+    ]
+    pr = candidate()
+    pr["changed_files"] = len(changed)
+    assert not gate.factory_candidate(pr, changed, REPO)[0]

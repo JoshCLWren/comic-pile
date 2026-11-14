@@ -22,7 +22,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-INVENTORY = ROOT / "docs" / "api" / "v2-route-inventory.json"
+SOURCES = ROOT / "docs" / "api" / "sql-budget-sources.json"
 SERVICES = ROOT / "native" / "roll-service" / "src" / "auth" / "services.rs"
 
 QUERY_CALL = re.compile(r"\.(query|query_opt|query_one|execute)\(")
@@ -36,8 +36,8 @@ PINNED_MAX_IP_FAILURES = 10
 
 
 def _login_entry() -> dict[str, object]:
-    """Return the inventory entry for the login operation."""
-    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    """Return the editable budget source entry for the login operation."""
+    document = json.loads(SOURCES.read_text(encoding="utf-8"))
     operations = document["operations"]
     assert isinstance(operations, list)
     for operation in operations:
@@ -100,11 +100,14 @@ def test_login_sql_budget_matches_handler_call_sites() -> None:
     assert budget.get("application_statements") == expected
     assert budget.get("transaction_control_statements") == 2
     assert budget.get("total_statements") == expected + 2
+    assert budget.get("runtime_overhead_statements") == 2
+    assert budget.get("max_statements") == expected + 4
     assert budget.get("basis") == (
         "optimistic gate 2 (counts + user fetch) + serialized decision 4 "
         "(2 advisory locks + recount + conditional insert/delete) (+2 tx control); "
         "set-based, index-backed, independent of attempt history; "
-        "bcrypt in Rust, no plaintext secret in SQL"
+        "bcrypt in Rust, no plaintext secret in SQL; measured cold-pool path "
+        "adds two SELECT 1 checkout probes"
     )
 
 

@@ -18,8 +18,7 @@ production data and raw logs. Missing evidence is unavailable, not a presumed pa
 review_head="$(git rev-parse HEAD)"
 node "${CODEX_HOME:-$HOME/.codex}/skills/crouton-factory-codex/scripts/local-factory-acp-review.mjs" \
   --cwd "$PWD" --head "$review_head" --base origin/main \
-  --pr 123 --issue 122 --reviewer 'local-alpha-review-session' \
-  --model openrouter/stealth/crouton-alpha \
+  --pr 123 --issue 122 --reviewer 'local-acp-review-session' \
   --context /path/to/sanitized-review-context.txt \
   --output /path/to/new-private-review-evidence-directory
 ```
@@ -30,7 +29,7 @@ while continuing other authorized work. The launcher has a 20-minute bound;
 preserve evidence and investigate live session state before retrying a timeout.
 
 The command starts actual `opencode acp`, initializes the protocol, creates a
-session in the checkout, confirms the requested model, submits a read-only prompt
+session in the checkout, selects and confirms a live eligible model, submits a read-only prompt
 with the pinned diff and captures the actual response. Process-local OpenCode
 permission overrides allow read/glob/grep and disable shell, edit, delegation and
 other tools. Permission requests and unsupported client methods are rejected.
@@ -59,7 +58,7 @@ identity, independent reviewer/model, confirmed ACP session, exact head, timesta
 and evidence directory. Verify independence from every head contributor. Never
 invent a numbered worker, trusted controller marker or native approval.
 
-Crouton uses two independent eligible lanes: Alpha ACP and Codex. Re-read remote
+Crouton uses two independent eligible lanes: live-model ACP and Codex. Re-read remote
 head before recording real results. Preserve reviewer identities and exact-head
 evidence, resolve actionable findings, and retain controller/native review gates
 where canonical policy requires them. A local report is not a fabricated trusted
@@ -86,3 +85,18 @@ Repository `AGENTS.md` routes Comic Pile local factory requests to this adapter.
 Installation grants no mutation authority. Official guidance explains
 [skill discovery](https://learn.chatgpt.com/docs/build-skills) and
 [AGENTS.md discovery](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+
+## Live model selection
+
+Omit `--model` for automatic selection from the live session's advertised model
+options. Eligible defaults follow the factory's OpenCode free-name and OpenRouter
+free-tier policy; unknown providers and paid models are excluded. The current
+eligible model wins, otherwise OpenCode is preferred before OpenRouter with stable
+ordering. No static model list or discontinued default is required.
+
+An explicitly authorized `--model provider/id` overrides automatic selection only
+when that exact model is advertised. Unavailable overrides fail without substitution.
+No eligible models or failed confirmation stops the lane; never expand provider
+permissions or spend to obtain a verdict. One session is attempted, without a model
+retry loop. `model-choice.json`, `selection.json` and final `status.json` record the
+actual selection. Runtime provider failure remains unavailable review.
