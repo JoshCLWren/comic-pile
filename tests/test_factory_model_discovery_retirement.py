@@ -1548,9 +1548,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert 76 in lock["retired_workers"]
     assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in remaining}
-    assert by_worker["77"]["source"] == "nvidia"
-    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
-    assert 77 in lock["expected_workers"]
+    _assert_committed_pin(by_worker, lock, "77", source="nvidia", model="qwen2.5-coder-7b")
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
     assert "79" not in by_worker
@@ -1845,14 +1843,19 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["46"]["scheduler"] == "dispatcher"
-    # Worker 95 stays retired, but its model is live again at 0/0 and is
-    # now pinned as worker 104 (owner-authorized 2026-11-08). The
-    # permanently-retired seal is lifted for the model, not the worker.
+    # Worker 95 stays permanently retired. Worker 104 may be active or
+    # durably retired; _assert_committed_pin proves either allowed live
+    # membership or allowed-source worker+model durable retirement.
     assert "95" not in by_worker
     assert 95 not in lock["expected_workers"]
     assert 95 in lock["retired_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
-    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    committed_104_pin = _assert_committed_pin(
+        by_worker, lock, "104", source="nvidia",
+        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+    )
+    if committed_104_pin is not None:
+        assert committed_104_pin["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+        assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 

@@ -88,17 +88,51 @@ def test_three_digit_factory_owners_are_recognized_but_malformed_are_rejected() 
 def test_three_digit_roster_ids_are_authorized_without_widening_to_unknown_workers() -> None:
     """Known three-digit workers are in the roster, not merely matched by a regex."""
     roster_file = ROOT / ".github" / "free-model-factories.tsv"
-    roster_ids = {
-        fields[0]
-        for raw in roster_file.read_text(encoding="utf-8").splitlines()
-        if raw and not raw.startswith("#")
-        if len(fields := raw.split("\t")) >= 2
-    }
-    assert {str(worker) for worker in range(100, 108)} <= roster_ids
-    # Fresh free-model workers may legitimately retire; do not freeze their IDs.
-    assert all(re.fullmatch(r"[1-9][0-9]*", worker) for worker in roster_ids)
+    roster_ids: set[str] = set()
+    roster_sources: dict[str, str] = {}
+    for raw in roster_file.read_text(encoding="utf-8").splitlines():
+        if not raw or raw.startswith("#"):
+            continue
+        fields = raw.split("\t")
+        if len(fields) < 2:
+            continue
+        roster_ids.add(fields[0])
+        roster_sources[fields[0]] = fields[1]
+
+    # Derive the actual current three-digit active workers from the roster
+    # instead of freezing a retired numeric range (101/104/107 are retired).
+    three_digit_workers = sorted(
+        int(worker) for worker in roster_ids
+        if worker.isdigit() and int(worker) >= 100
+    )
+    assert three_digit_workers
+
+    # Load the controller with the established importlib test pattern and bind
+    # its worker_sources() to the parsed roster mapping so authorization is
+    # exercised against real current IDs rather than a tautological subset.
+    import importlib.util
+    import sys
+
+    controller_path = ROOT / ".github" / "scripts" / "factory-work-controller.py"
+    spec = importlib.util.spec_from_file_location(
+        "factory_work_controller_owner_recognition", controller_path
+    )
+    assert spec is not None and spec.loader is not None
+    controller = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = controller
+    spec.loader.exec_module(controller)
+    controller.__dict__["worker_sources"] = lambda: roster_sources
+
+    for worker in three_digit_workers:
+        assert controller.is_authorized_fixed_worker(str(worker)), worker
     unknown_worker = str(max(map(int, roster_ids)) + 1)
     assert unknown_worker not in roster_ids
+    assert not controller.is_authorized_fixed_worker(unknown_worker)
+    for malformed in ("0", "00", "01", "0104", "+104", "104 ", "abc", ""):
+        assert not controller.is_authorized_fixed_worker(malformed)
+
+    # Fresh free-model workers may legitimately retire; do not freeze their IDs.
+    assert all(re.fullmatch(r"[1-9][0-9]*", worker) for worker in roster_ids)
 
     # The controller checks both canonical decimal spelling and roster membership.
     source = (SCRIPTS / "factory-work-controller.py").read_text(encoding="utf-8")
