@@ -256,6 +256,17 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                          <= $2::timestamptz""",
                 [entry["key"] for entry in projection], started_at,
             )
+            # Normalize legacy closed tombstones that predate the bounded
+            # TTL. No reconciliation event is emitted: the target's state and
+            # payload are unchanged, and closed targets cannot be scheduled.
+            await conn.execute(
+                """UPDATE public.factory_state_kv
+                   SET expires_at=now() + interval '2 hours'
+                   WHERE cache_key LIKE $1 AND cache_key != $2
+                     AND payload->0->>'state'='closed'
+                     AND expires_at > now() + interval '2 hours'""",
+                prefix + "%", _marker(repo, kind),
+            )
             changed = [*updated, *removed]
             for row in changed:
                 number = int(row["cache_key"].split(":")[-1])
