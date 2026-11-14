@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from factory_state_cache import _dsn
+from factory_work_policy import FIXED_LEASE_TTL_SECONDS
 
 WORKER_RE = re.compile(r"^[0-9]+$")
 HEARTBEAT_RE = re.compile(r"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-(\d+) -->")
@@ -84,7 +85,7 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
         await conn.close()
 
 
-def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = 900) -> str | None:
+def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = FIXED_LEASE_TTL_SECONDS) -> str | None:
     """Return claim UUID on success, None on conflict, '' without Neon.
 
     In trusted Actions with a configured DSN, connection failures are fatal:
@@ -214,23 +215,23 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                         token = payload[0]["claim_id"]
                         await conn.execute(
                             """UPDATE public.factory_provider_reservation
-                               SET expires_at=now()+interval '15 minutes'
-                               WHERE claim_id=$1::uuid""", token,
+                               SET expires_at=greatest(expires_at,now()+$2::int * interval '1 second')
+                               WHERE claim_id=$1::uuid""", token, FIXED_LEASE_TTL_SECONDS,
                         )
                         await conn.execute(
                             """UPDATE public.factory_state_kv SET
-                                 expires_at=now() + interval '15 minutes',
+                                 expires_at=greatest(expires_at,now()+$3::int * interval '1 second'),
                                  updated_at=now()
                                WHERE cache_key=$1 AND payload->0->>'claim_id'=$2""",
-                            worker_key, token,
+                            worker_key, token, FIXED_LEASE_TTL_SECONDS,
                         )
                         await conn.execute(
                             """UPDATE public.factory_state_kv SET
-                                 expires_at=now() + interval '15 minutes',
+                                 expires_at=greatest(expires_at,now()+$3::int * interval '1 second'),
                                  updated_at=now()
                                WHERE cache_key LIKE $1
                                  AND payload->0->>'claim_id'=$2""",
-                            f"{LEASE_PREFIX}{repo}:target:%", token,
+                            f"{LEASE_PREFIX}{repo}:target:%", token, FIXED_LEASE_TTL_SECONDS,
                         )
         return inserted
     finally:
@@ -263,16 +264,16 @@ async def _renew_verified(repo: str, workers: list[str]) -> int:
                 token = payload[0]["claim_id"]
                 await conn.execute(
                     """UPDATE public.factory_provider_reservation
-                       SET expires_at=now()+interval '15 minutes'
-                       WHERE claim_id=$1::uuid""", token)
+                       SET expires_at=greatest(expires_at,now()+$2::int * interval '1 second')
+                       WHERE claim_id=$1::uuid""", token, FIXED_LEASE_TTL_SECONDS)
                 await conn.execute(
                     """UPDATE public.factory_state_kv
-                       SET expires_at=now() + interval '15 minutes',
+                       SET expires_at=greatest(expires_at,now()+$4::int * interval '1 second'),
                            updated_at=now()
                        WHERE expires_at>now()
                          AND payload->0->>'claim_id'=$1
                          AND (cache_key=$2 OR cache_key LIKE $3)""",
-                    token, worker_key, f"{LEASE_PREFIX}{repo}:target:%",
+                    token, worker_key, f"{LEASE_PREFIX}{repo}:target:%", FIXED_LEASE_TTL_SECONDS,
                 )
                 renewed += 1
         return renewed
