@@ -961,7 +961,10 @@ def test_no_change_repair_budget_survives_review_repair_stage_churn():
     """A label-only handoff never replenishes an unchanged head's repair budget."""
     now = 2_000_000_000
     head = "a" * 40
-    stages = ["factory:review", "factory:changes-requested", "factory:review"]
+    stages = [
+        "factory:review" if offset % 2 == 0 else "factory:changes-requested"
+        for offset in range(policy.FACTORY_NO_DIFF_RETRY_LIMIT)
+    ]
     comments = [
         {
             "author_association": "OWNER",
@@ -1492,7 +1495,11 @@ def test_genuine_head_changes_do_not_consume_review_failure_budget() -> None:
 def test_review_cooldown_reports_counts_by_reason(capsys: pytest.CaptureFixture[str]) -> None:
     """Mixed failures retain reason evidence while suppressing only their PR head."""
     now = 2_000_000_000
-    reasons = ["missing-semantic-verdict", "review-agent-failed", "authoritative-diff-read-failed"]
+    reasons = [
+        "missing-semantic-verdict", "review-agent-failed",
+        "authoritative-diff-read-failed", "controller-assignment-read-failed",
+    ]
+    assert len(reasons) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
     comments = [
         {
             "author_association": "OWNER",
@@ -1510,7 +1517,7 @@ def test_review_cooldown_reports_counts_by_reason(capsys: pytest.CaptureFixture[
     )
     assert not policy.build_candidates([], [target], no_diff_attempt_records=attempts)
     diagnostic = capsys.readouterr().err
-    assert "recent_failures=3" in diagnostic
+    assert f"recent_failures={policy.FACTORY_NO_DIFF_RETRY_LIMIT}" in diagnostic
     for reason in reasons:
         assert f"'{reason}': 1" in diagnostic
     issue_comments = [
