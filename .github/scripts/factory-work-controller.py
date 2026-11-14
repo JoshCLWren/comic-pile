@@ -1297,6 +1297,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
     requested_action: str = 'advance',
+    batch_reconciled: bool = False,
 ) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker.
 
@@ -1332,7 +1333,10 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
             file=sys.stderr,
         )
         return None
-    if target is None:
+    # Trusted dispatcher batches run these two full-repository reconciliations
+    # once before iterating workers. Standalone/manual assignment still checks
+    # them here. Every actual claim remains live-verified in assign_candidate.
+    if target is None and not batch_reconciled:
         reconcile_stale_leases()
         reconcile_contradictory_labels()
     issues = list_issues()
@@ -2171,6 +2175,8 @@ def main() -> int:
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
     assign_parser.add_argument('--kinds', nargs='*', default=None)
+    assign_parser.add_argument('--batch-reconciled', action='store_true',
+        help='Global reconciliation already succeeded once in the trusted dispatch batch')
     target_parser = subparsers.add_parser('dispatch-target')
     target_parser.add_argument('--kind', required=True, choices=('issue', 'pr'))
     target_parser.add_argument('--number', required=True, type=int)
@@ -2202,7 +2208,11 @@ def main() -> int:
         print(json.dumps(check_stale_prs(dry_run=args.dry_run)))
         return 0
     if args.command == 'assign':
-        candidate = assign(args.worker, kinds=tuple(args.kinds) if args.kinds else None)
+        candidate = assign(
+            args.worker,
+            kinds=tuple(args.kinds) if args.kinds else None,
+            batch_reconciled=args.batch_reconciled,
+        )
         if candidate is None:
             print(json.dumps({'kind': 'none'}))
             return 0

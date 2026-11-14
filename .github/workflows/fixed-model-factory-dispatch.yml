@@ -566,7 +566,7 @@ jobs:
             local worker="$1"
             local assignment kind attempt=1
 
-            if ! assignment="$(python3 "$controller" assign --worker "$worker")"; then
+            if ! assignment="$(python3 "$controller" assign --worker "$worker" --batch-reconciled)"; then
               echo "Factory ${worker}: controller assignment failed" >&2
               return 1
             fi
