@@ -456,13 +456,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/catalog/series\\-mappings/commit$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
       "methods": [
         "GET"
@@ -541,20 +534,6 @@
       "src": "^/api/v1/issues/[0-9]+/dependencies$",
       "methods": [
         "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading-orders/$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading-orders/[0-9]+/items$",
-      "methods": [
-        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -941,6 +920,14 @@
       "src": "^/api/threads/stale$",
       "methods": [
         "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/catalog/series\\-mappings/commit$",
+      "methods": [
+        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1836,6 +1823,22 @@
       "src": "^/api/v1/reading\\-order\\-groups/threads/[^/]+/groups$",
       "methods": [
         "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-orders/$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-orders/[^/]+/items$",
+      "methods": [
+        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

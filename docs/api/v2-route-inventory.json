@@ -1001,16 +1001,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 191,
-      "v1_shadowed_by_rust": 65,
-      "v1_live_python": 118,
+      "v1_shadowed_by_rust": 62,
+      "v1_live_python": 121,
       "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
       "total_python_surface": 224,
-      "total_shadowed_by_rust": 78,
-      "total_live_python": 136,
+      "total_shadowed_by_rust": 75,
+      "total_live_python": 139,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -1145,8 +1145,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/catalog/series-mappings/commit",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -2702,29 +2702,29 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/reading-orders/",
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4851,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-reading-orders.ts"
         ],
-        "method": "GET",
-        "path": "/api/v1/reading-orders/",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
+        "method": "POST",
+        "path": "/api/v1/reading-orders/{reading_order_id}/items",
         "runtime": "python-fastapi",
         "status": "transitional",
-        "owning_issue": 4851,
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-reading-orders.ts"
         ],
-        "method": "POST",
-        "path": "/api/v1/reading-orders/{reading_order_id}/items",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "shadowed by Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
