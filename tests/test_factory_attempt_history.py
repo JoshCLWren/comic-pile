@@ -18,6 +18,11 @@ NOW = 2_000_000_000
 HEAD = "a" * 40
 
 
+def _minute_floor(epoch: int) -> int:
+    """Mirror the dispatcher's shared-cache key rounding for a ``since`` boundary."""
+    return epoch - epoch % 60
+
+
 def _load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
@@ -99,7 +104,14 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     monkeypatch.setattr(CONTROLLER.time, "time", lambda: NOW + 20)
     assert CONTROLLER.assign("53").number == 2264
     assert page_reads == [15, 2, 1]
-    assert since_values == [NOW - 86400, NOW - 1, NOW + 9]
+    # The controller rounds each cached since boundary down to the minute so
+    # near-simultaneous dispatchers share one GitHub request key. The superset
+    # is safe because retry-window filtering still uses the original now_epoch.
+    assert since_values == [
+        _minute_floor(NOW - 86400),
+        _minute_floor(NOW - 1),
+        _minute_floor(NOW + 9),
+    ]
     assert not responses
     logs = capsys.readouterr().err
     assert "source=full pages_read=15" in logs
@@ -209,7 +221,7 @@ def test_unusable_snapshots_refresh_from_authoritative_full_history(
     monkeypatch.setattr(CONTROLLER, "gh_json", github)
     assert [row["id"] for row in CONTROLLER.recent_factory_comments(NOW)] == [2]
     since = parse_qs(urlsplit(urls[0]).query)["since"][0]
-    assert datetime.fromisoformat(since).timestamp() == NOW - 86400
+    assert datetime.fromisoformat(since).timestamp() == _minute_floor(NOW - 86400)
 
 
 @pytest.mark.parametrize("pages", [[], {}, [{"id": 1}], [[None]]])
