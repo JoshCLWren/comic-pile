@@ -412,6 +412,35 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
                 "outcome_class": "provider_failure",
                 "detail": "pinned OpenCode model exceeded its 180-second smoke deadline",
             }
+    # A dynamic runner can rotate away from its originally selected model.
+    # Recover the *executed* final smoke selector only from timestamped runner
+    # output in the failing Actions smoke step, never echoed shell source.
+    if outcome.get("source") == "opencode-free":
+        clean = re.sub(r"\x1b\\[[0-?]*[ -/]*[@-~]", "", job_log)
+        for step in re.split(r"##\\[group\\]Run ", clean):
+            if not re.search(r"##\\[error\\]Process completed with exit code 1\\b", step):
+                continue
+            candidates = re.findall(
+                r"(?m)^\\d{4}-\\d{2}-\\d{2}T\\S+Z Smoke candidate: opencode/([\\w.:-]+)\\s*$",
+                step,
+            )
+            if not candidates:
+                continue
+            attempted = candidates[-1]
+            if re.search(
+                rf"\\bModel (?:opencode/)?{re.escape(attempted)} has been deprecated\\b",
+                step, re.IGNORECASE,
+            ) or re.search(
+                rf"\\bModel unavailable: opencode/{re.escape(attempted)}\\b",
+                step, re.IGNORECASE,
+            ):
+                return {
+                    **outcome,
+                    "model": attempted,
+                    "outcome": "MODEL MISSING",
+                    "outcome_class": "model_unavailable",
+                    "detail": "actual final OpenCode smoke selector is unavailable or deprecated",
+                }
     # A worker can prove its model, run for the full execution budget, and
     # still leave no persisted work. The controller already records explicit
     # transient provider/runtime interruption at agent timeout; the generic
@@ -429,6 +458,22 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
             "outcome_class": "provider_failure",
             "detail": "pinned model session reached its time budget after a transient provider/runtime interruption",
         }
+    # A trusted NVIDIA 410 has an irreversible provider meaning. Preserve its
+    # retirement in Neon, rather than retrying a known-gone model after 6h.
+    if (outcome.get("source") == "nvidia"
+            and outcome.get("outcome_class") in {"unknown_failure", "model_unavailable"}
+            and outcome.get("model")):
+        model = re.escape(str(outcome["model"]))
+        if re.search(
+            rf"(?m)^\\d{{4}}-\\d{{2}}-\\d{{2}}T\\S+Z NVIDIA permanently retired model: {model}\\s*$",
+            re.sub(r"\x1b\\[[0-?]*[ -/]*[@-~]", "", job_log),
+        ):
+            return {
+                **outcome,
+                "outcome": "MODEL RETIRED",
+                "outcome_class": "model_retired_410",
+                "detail": "trusted NVIDIA probe returned HTTP 410 for the exact pinned model",
+            }
     return outcome
 
 
