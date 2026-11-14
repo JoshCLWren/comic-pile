@@ -279,14 +279,13 @@ def replace_factory_labels(
             return False
         if str(target.get("state") or "OPEN").upper() != "OPEN":
             return False
-        checked_at = int(time.time()) if observed_at_epoch is None else observed_at_epoch
-        updated = last_github_update_epoch(target, now_epoch=checked_at)
-        if (
-            inactive_before_epoch is None
-            or updated is None
-            or updated > inactive_before_epoch
-        ):
-            return False
+        # Explicit exit cleanup checks ownership but does not require staleness.
+        # Stale reclamation remains subject to the inactivity watermark.
+        if inactive_before_epoch is not None:
+            checked_at = int(time.time()) if observed_at_epoch is None else observed_at_epoch
+            updated = last_github_update_epoch(target, now_epoch=checked_at)
+            if updated is None or updated > inactive_before_epoch:
+                return False
         if related_owner_target is not None:
             # An issue and its canonical PR are one active local repair.
             # Progress on either side must protect the paired owner lease.
@@ -1637,39 +1636,113 @@ def record_claim_released(number: int, worker: str, kind: str, reason: str) -> N
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
-def release_worker(worker: str, reason: str = 'controller-release') -> list[int]:
-    """Release all targets still owned by one fixed-model worker immediately.
+def release_worker(worker: str, reason: str = 'controller-release', *, details=None) -> list[int]:
+    """Release an exiting worker's exact Neon claim, never a later assignment.
 
-    Used by dispatcher start-failures and by Entry pre-session abort (smoke,
-    executor selection, missing credentials). Preserves the truthful workflow
-    stage so a ``factory:review`` PR stays reviewable without waiting for the
-    900s stale-lease TTL. Posts ``comic-pile-factory-claim-released-v3``.
-
-    Factory 10 run 33990134163 and Factory 42 run 33991283563 are the
-    regression fixture: both smoked ``auto/coding:free`` after claiming PR
-    #2235 and died before ``free-model-factory-worker.sh``, leaving
-    ``factory:<worker>`` + ``factory:review`` until TTL expiry.
+    Trusted pre/post-session cleanup uses the original transactional claim as
+    the target inventory; a potentially stale issue/PR projection is not an
+    ownership authority. GitHub is re-read at the label mutation boundary and
+    the claim UUID is checked before every write and on transactional release.
     """
     owner = f'factory:{worker}'
-    # Snapshot before any GitHub label mutation. Never fetch a possibly newer
-    # claim token after another dispatcher has reassigned this worker.
+    trusted_exit = reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-'))
     try:
         original_claim = worker_claim(REPO, worker)
     except Exception as exc:
         print(f'[factory-controller] Neon release snapshot unavailable ({type(exc).__name__})', file=sys.stderr)
-        # A trusted pre-session abort must not strip GitHub owner labels if it
-        # cannot read the matching Neon reservation. Keep both sides intact.
-        if reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-')):
+        if trusted_exit:
             raise
         original_claim = None
+
     released: list[int] = []
-    issues = list_issues()
-    prs = list_prs()
+    if trusted_exit:
+        already_released: list[int] = []
+        deferred: list[int] = []
+        failed: list[str] = []
+        claim_released = False
+        if original_claim is not None:
+            token, claim_numbers = original_claim
+            for number in sorted(set(claim_numbers)):
+                try:
+                    current = target_json(number)  # authoritative GitHub, not Neon discovery
+                    active_owners = {
+                        label['name'] for label in current.get('labels', [])
+                        if OWNER_RE.fullmatch(label.get('name', ''))
+                        and label['name'] != 'factory:unowned'
+                    }
+                    if active_owners != {owner}:
+                        # The old labels were already removed, or a different
+                        # owner now has this target. Never touch that owner.
+                        already_released.append(number)
+                        continue
+                    if worker_claim(REPO, worker) != original_claim:
+                        deferred.append(number)  # newer claim or disconnected ledger
+                        continue
+                    # This call itself re-reads live labels with expected_owner,
+                    # just before the single atomic GitHub label-set mutation.
+                    if not replace_factory_labels(
+                        number, 'factory:unowned', expected_owner=owner
+                    ):
+                        deferred.append(number)
+                        continue
+                    released.append(number)
+                    kind = 'pr' if 'pull_request' in current else 'issue'
+                    try:
+                        record_claim_released(number, worker, kind, reason)
+                    except Exception as exc:
+                        # The ownership write is done. Retryable marker failure
+                        # must not strand the transactional lease.
+                        print(f'[factory-controller] release marker #{number} unavailable ({type(exc).__name__})', file=sys.stderr)
+                except Exception as exc:
+                    failed.append(f'{number}:{type(exc).__name__}')
+            if not deferred and not failed:
+                try:
+                    # Only discharge the exact original UUID when ALL its
+                    # linked GitHub labels are verified no longer owned.
+                    if all(not target_owned_by(number, owner) for number in claim_numbers):
+                        claim_released = release_lease(REPO, worker, token, reason)
+                        if not claim_released:
+                            later = worker_claim(REPO, worker)
+                            if later is None:
+                                # Idempotent retry: a parallel release won.
+                                claim_released = True
+                            elif later != original_claim:
+                                deferred.extend(claim_numbers)
+                            else:
+                                failed.append('neon_release_rejected')
+                    else:
+                        deferred.extend(claim_numbers)
+                except Exception as exc:
+                    failed.append(f'neon_release:{type(exc).__name__}')
+        # No token on a trusted retry is a safe no-op. Do not scan unrelated
+        # labels and accidentally strip a reassigned worker.
+        status = (
+            'failed' if failed else
+            'deferred' if deferred else
+            'released' if claim_released else
+            'already_released'
+        )
+        summary = {
+            'status': status,
+            'claim_id': original_claim[0] if original_claim else None,
+            'claim_released': claim_released,
+            'released': released,
+            'already_released': already_released,
+            'deferred': sorted(set(deferred)),
+            'failed': failed,
+        }
+        if details is not None:
+            details.update(summary)
+        print(f'[factory-controller] cleanup {json.dumps(summary, sort_keys=True)}', file=sys.stderr)
+        return released
+
+    # Legacy/operator release path. Trusted worker exits never rely on this
+    # potentially stale discovery snapshot.
     targets: list[tuple[int, str]] = []
-    for item in issues:
+    for item in list_issues():
         if owner_of(labels_of(item)) == owner:
             targets.append((int(item['number']), 'issue'))
-    for item in prs:
+    for item in list_prs():
         if owner_of(labels_of(item)) == owner:
             targets.append((int(item['number']), 'pr'))
     for number, kind in targets:
@@ -1680,23 +1753,11 @@ def release_worker(worker: str, reason: str = 'controller-release') -> list[int]
         except Exception:
             pass
         released.append(number)
-    # Only clear the Neon reservation once every originally held GitHub target
-    # has actually released its owner label.
     if original_claim is not None and len(released) == len(targets):
-        try:
-            token, claim_numbers = original_claim
-            # Re-verify all targets attached to this *original* token, not
-            # merely whichever labels were present in the first snapshot.
-            # This also repairs retry attempts when a previous run already
-            # cleared the GitHub labels but could not reach Neon afterward.
-            if all(not target_owned_by(number, owner) for number in claim_numbers):
-                release_lease(REPO, worker, token, reason)
-        except Exception as exc:
-            print(f'[factory-controller] Neon release deferred ({type(exc).__name__})', file=sys.stderr)
-            if reason.startswith(('pre-session-abort-run-', 'post-session-exit-run-')):
-                raise
+        token, claim_numbers = original_claim
+        if all(not target_owned_by(number, owner) for number in claim_numbers):
+            release_lease(REPO, worker, token, reason)
     return released
-
 
 def selectivity_conflict_recovery(worker: str) -> dict[str, Any]:
     """Perform selective lease recovery for dual-lease incidents.
@@ -2154,8 +2215,11 @@ def main() -> int:
     if args.command == 'signal-roster':
         print(json.dumps(signal_roster_mode(), sort_keys=True))
         return 0
-    print(json.dumps({'released': release_worker(args.worker, reason=args.reason)}))
-    return 0
+    outcome = {}
+    released = release_worker(args.worker, reason=args.reason, details=outcome)
+    print(json.dumps(outcome if outcome else {'released': released}))
+    # A live, actionable claim must never make a cleanup job green.
+    return 1 if outcome.get('status') in ('failed', 'deferred') else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())
