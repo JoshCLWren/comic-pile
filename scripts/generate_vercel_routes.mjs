@@ -241,7 +241,8 @@ export function updateInventory(inventory, operations) {
   }
   for (const op of [...full.v1_operations, ...full.unversioned_operations]) {
     const id = op.method + ' ' + op.path;
-    if (pythonIds.has(id) || op.runtime === 'python-fastapi') continue;
+    if (pythonIds.has(id)) continue;
+    if (!op.runtime || op.runtime === 'python-fastapi') continue;
     const bucket = op.path.startsWith('/api/v1/') ? v1
       : op.path.startsWith('/api/') && !op.path.startsWith('/api/v2/') ? unversioned : null;
     if (bucket) bucket.push(op);
