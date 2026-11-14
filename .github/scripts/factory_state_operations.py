@@ -294,15 +294,16 @@ async def _daily_usage(conn: Any, repo: str, sources: list[str]) -> dict[str,int
     # and carry verified worker IDs. This avoids an Actions-wide daily scan.
     since=datetime.now(timezone.utc).replace(hour=0,minute=0,second=0,microsecond=0)
     rows=await conn.fetch(
-        """SELECT detail->>'worker' AS worker
+        """SELECT detail->>'worker' AS worker, detail->>'source' AS source
            FROM public.factory_state_events
            WHERE event_type='worker_assigned' AND created_at >= $1""",since)
     roster=_roster()
     counts=dict.fromkeys(sources, 0)
     for row in rows:
         pair=roster.get(str(row["worker"] or ""))
-        if pair and pair[0] in counts:
-            counts[pair[0]]+=1
+        source=row["source"] if row["source"] else (pair[0] if pair else None)
+        if source in counts:
+            counts[source]+=1
     return counts
 
 

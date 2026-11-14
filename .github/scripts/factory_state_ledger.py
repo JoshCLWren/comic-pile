@@ -51,7 +51,7 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
             )
             if busy:
                 return None
-            from factory_state_operations import reserve_capacity
+            from factory_state_operations import _roster, reserve_capacity
             if not await reserve_capacity(conn, repo, worker, token, ttl):
                 return None
             payload = json.dumps([{
@@ -73,9 +73,11 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
                    (source, event_type, subject_type, subject_number, detail)
                    VALUES ('github-actions', 'worker_assigned', 'worker', $1,
                      jsonb_build_object('claim_id', $2::text, 'worker', $3::text,
-                                        'targets', $4::jsonb, 'run_id', $5::text))""",
+                                        'targets', $4::jsonb, 'run_id', $5::text,
+                                        'source', $6::text))""",
                 int(worker), token, worker, json.dumps(sorted(set(numbers))),
                 os.environ.get("GITHUB_RUN_ID", ""),
+                _roster()[worker][0],
             )
         return token
     finally:
@@ -399,8 +401,9 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }])
     # Separate projection key is idempotent across both trusted outcome writers.
-    from factory_state_operations import record_runtime
-    record_runtime(repo, int(run_id), outcome)
+    from factory_state_operations import enabled as health_enabled, record_runtime
+    if health_enabled():
+        record_runtime(repo, int(run_id), outcome)
     return inserted
 
 
