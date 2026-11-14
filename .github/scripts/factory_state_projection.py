@@ -17,6 +17,9 @@ from factory_state_cache import _dsn
 
 PREFIX = "factory-projection-v1:"
 RECONCILE_SECONDS = 1800
+# Per-target records expire after two hours even if reconciliation is interrupted.
+# The complete-inventory watermark expires after 30 minutes, sooner than rows.
+TARGET_TTL_SECONDS = 7200
 
 
 class GitHubTargetVerificationError(RuntimeError):
@@ -121,18 +124,23 @@ async def _read_projection(repo: str, kind: str) -> list[dict[str, Any]] | None:
     try:
         marker = await conn.fetchval(
             """SELECT fetched_at > now() - $2::int * interval '1 second'
+                      AND expires_at > now()
                FROM public.factory_state_kv WHERE cache_key=$1""",
             _marker(repo, kind), RECONCILE_SECONDS,
         )
         if marker is not True:
             return None
         rows = await conn.fetch(
-            """SELECT payload->0->'item' AS item
+            """SELECT payload->0->'item' AS item, expires_at > now() AS live
                FROM public.factory_state_kv
                WHERE cache_key LIKE $1 AND payload->0->>'state'='open'
                ORDER BY (payload->0->'item'->>'number')::bigint""",
             _prefix(repo, kind) + "%",
         )
+        # Never silently drop an expired open target from a partial inventory.
+        # Fall back to the complete live GitHub discovery when any row expires.
+        if any(row["live"] is not True for row in rows):
+            return None
         return [_object(row["item"]) for row in rows]
     finally:
         await conn.close()
@@ -190,10 +198,11 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                    SELECT cache_key,
                      jsonb_build_array(jsonb_build_object('item',item,'state','open',
                        'source_updated_at',source_updated_at,'observed_at',observed_at)),
-                     now(), '2100-01-01'::timestamptz, now()
+                     now(), now() + interval '2 hours', now()
                    FROM incoming
                    ON CONFLICT (cache_key) DO UPDATE SET
-                     payload=EXCLUDED.payload,updated_at=now(),fetched_at=now()
+                     payload=EXCLUDED.payload,updated_at=now(),fetched_at=now(),
+                     expires_at=EXCLUDED.expires_at
                    WHERE (COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                          <= (COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                      AND (factory_state_kv.payload->0->'item'
@@ -212,7 +221,7 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                      payload=jsonb_set(
                        jsonb_set(payload,'{0,state}','"closed"'::jsonb),
                        '{0,source_updated_at}',to_jsonb($5::text)),
-                     updated_at=now()
+                     updated_at=now(),expires_at=now() + interval '2 hours'
                    WHERE cache_key LIKE $1
                      AND cache_key != $2
                      AND payload->0->>'state'='open'
@@ -226,11 +235,26 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
                 """INSERT INTO public.factory_state_kv
                    (cache_key,payload,fetched_at,expires_at,updated_at)
                    VALUES ($1,jsonb_build_array(jsonb_build_object('started_at',$2::text)),
-                           now(),'2100-01-01'::timestamptz,now())
+                           now(),now() + $3::int * interval '1 second',now())
                    ON CONFLICT(cache_key) DO UPDATE SET
                      payload=EXCLUDED.payload,
-                     fetched_at=now(),updated_at=now()""",
-                _marker(repo,kind), started,
+                     fetched_at=now(),updated_at=now(),
+                     expires_at=EXCLUDED.expires_at""",
+                _marker(repo,kind), started, RECONCILE_SECONDS,
+            )
+            # Refresh unchanged, still-open targets near their hard expiry
+            # without emitting a false target_reconciled event or altering
+            # source timestamps. Existing legacy 2100 rows get bounded once.
+            await conn.execute(
+                """UPDATE public.factory_state_kv
+                   SET expires_at=now() + interval '2 hours'
+                   WHERE cache_key=ANY($1::text[])
+                     AND payload->0->>'state'='open'
+                     AND (expires_at < now() + interval '1 hour'
+                          OR expires_at > now() + interval '2 hours')
+                     AND (payload->0->>'observed_at')::timestamptz
+                         <= $2::timestamptz""",
+                [entry["key"] for entry in projection], started_at,
             )
             changed = [*updated, *removed]
             for row in changed:
@@ -306,7 +330,10 @@ def _authoritative_event(repo: str, event: dict[str, Any]) -> dict[str, Any]:
     return {kind: current}
 
 
-async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool:
+async def _ingest_event(
+    repo: str, event_id: str, event: dict[str, Any], *,
+    source: str = "github-webhook",
+) -> bool:
     """Serialize a one-target GitHub read and its Neon projection write."""
     import asyncpg
 
@@ -339,7 +366,7 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
             row = await conn.fetchrow(
                 """INSERT INTO public.factory_state_kv
                      (cache_key,payload,fetched_at,expires_at,updated_at)
-                   SELECT $1,$2::jsonb,now(),'2100-01-01'::timestamptz,now()
+                   SELECT $1,$2::jsonb,now(),now() + interval '2 hours',now()
                    WHERE NOT EXISTS (
                      SELECT 1 FROM public.factory_state_kv
                       WHERE cache_key=$3
@@ -353,8 +380,9 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
                         AND $2::jsonb->0->>'state'='open'
                    )
                    ON CONFLICT(cache_key) DO UPDATE SET
-                     payload=EXCLUDED.payload,updated_at=now()
-                   WHERE (COALESCE(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
+                     payload=EXCLUDED.payload,updated_at=now(),
+                       expires_at=EXCLUDED.expires_at
+                   WHERE (COALES(NULLIF(factory_state_kv.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                          <= (COALESCE(NULLIF(EXCLUDED.payload->0->>'source_updated_at','')::timestamptz, 'epoch'::timestamptz))
                      AND (factory_state_kv.payload->0->'item'
                           IS DISTINCT FROM EXCLUDED.payload->0->'item'
@@ -368,10 +396,10 @@ async def _ingest_event(repo: str, event_id: str, event: dict[str, Any]) -> bool
             await conn.execute(
                 """INSERT INTO public.factory_state_events
                    (source,event_type,subject_type,subject_number,detail)
-                   VALUES ('github-webhook','target_changed',$1,$2,
+                   VALUES ($6::text,'target_changed',$1,$2,
                       jsonb_build_object('event_id',$3::text,'action',$4::text,
                                          'state',$5::text))""",
-                kind, number, event_id, str(event.get("action") or ""), state,
+                kind, number, event_id, str(event.get("action") or ""), state, source,
             )
             return True
     finally:
@@ -474,6 +502,24 @@ def ingest_event(repo: str, event_id: str, event: dict[str, object]) -> bool:
     if not enabled():
         raise RuntimeError("event ingestion requires trusted Neon credentials")
     return asyncio.run(_ingest_event(repo, event_id, event))
+
+
+def refresh_trusted_label_write(repo: str, number: int, *, is_pr: bool) -> bool:
+    """Reconcile one exact GitHub target after a trusted controller label write.
+
+    GITHUB_TOKEN label mutations do not guarantee a webhook workflow. Refresh
+    with the same live GitHub read and transactional lock as webhook ingest.
+    """
+    if not enabled():
+        raise RuntimeError("trusted label refresh requires Neon credentials")
+    if type(number) is not int or number < 1:
+        raise ValueError("invalid target number")
+    kind = "pull_request" if is_pr else "issue"
+    event = {"action": "labels", kind: {"number": number}}
+    return asyncio.run(_ingest_event(
+        repo, f"trusted-label:{os.environ.get('GITHUB_RUN_ID', 'manual')}:{number}",
+        event, source="github-trusted-write",
+    ))
 
 
 def main() -> int:
