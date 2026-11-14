@@ -239,3 +239,44 @@ def test_snapshot_uses_native_datetimes_for_asyncpg_timestamptz(monkeypatch: pyt
     assert isinstance(calls[1][1][2], datetime)
     assert calls[1][1][4] == "2026-11-13T13:07:00Z"
     assert "to_jsonb($5::text)" in calls[1][0]
+
+
+def test_ingest_cli_defers_unverified_github_target_without_writing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A failed live read keeps Neon untouched and leaves a visible warning."""
+    event = tmp_path / "event.json"
+    event.write_text('{"pull_request":{"number":4976}}', encoding="utf-8")
+    called: list[str] = []
+
+    def unavailable(*_args: object) -> bool:
+        raise projection.GitHubTargetVerificationError("GitHub could not verify pull_request #4976")
+
+    monkeypatch.setattr(projection, "ingest_event", unavailable)
+    monkeypatch.setattr(projection, "bootstrap_missing", lambda *_args: called.append("bootstrap"))
+    monkeypatch.setattr(sys, "argv", [
+        "factory_state_projection.py", "ingest", "--file", str(event),
+        "--event-id", "run-1", "--repo", "JoshCLWren/comic-pile",
+    ])
+    assert projection.main() == 0
+    assert called == []
+    assert "ingest deferred" in capsys.readouterr().err
+
+
+def test_ingest_cli_does_not_hide_neon_write_failures(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    """Database errors remain fatal; only GitHub verification may defer."""
+    event = tmp_path / "event.json"
+    event.write_text('{"pull_request":{"number":4976}}', encoding="utf-8")
+
+    def broken_db(*_args: object) -> bool:
+        raise RuntimeError("Neon transaction failed")
+
+    monkeypatch.setattr(projection, "ingest_event", broken_db)
+    monkeypatch.setattr(sys, "argv", [
+        "factory_state_projection.py", "ingest", "--file", str(event),
+        "--event-id", "run-1", "--repo", "JoshCLWren/comic-pile",
+    ])
+    with pytest.raises(RuntimeError, match="Neon transaction failed"):
+        projection.main()
