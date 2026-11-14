@@ -639,6 +639,8 @@ def test_assign_candidate_refuses_second_active_lease(
 ) -> None:
     """assign_candidate must refuse when the worker already holds an active lease."""
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda w: w == "99")
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "test-lease")
     monkeypatch.setattr(controller, "target_still_unowned", lambda n: True)
     monkeypatch.setattr(controller, "replace_factory_labels", lambda *a, **k: None)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
@@ -1662,6 +1664,8 @@ def test_assign_candidate_forwards_jev_source_to_the_issue_lease(
     monkeypatch.setattr(controller, "target_still_unowned", lambda _n: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda _n, _o: True)
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda _n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "test-lease")
     monkeypatch.setattr(
         controller, "replace_factory_labels", lambda *_a, **_k: None
     )
