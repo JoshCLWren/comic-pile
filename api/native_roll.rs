@@ -77,6 +77,7 @@ fn init_tracing() {
     // Production panic hooks otherwise print sensitive payloads before catch_unwind.
     #[cfg(not(test))]
     comicpile_roll_service::install_sanitized_panic_hook();
+    comicpile_roll_service::metrics::record_startup_start();
     let directive = std::env::var("RUST_ROLL_LOG").unwrap_or_else(|_| "info".into());
     let filter = tracing_subscriber::EnvFilter::try_new(directive)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -431,7 +432,10 @@ fn app() -> Router {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     init_tracing();
-    vercel_runtime::run(NativeVercelService { router: app() }).await
+    comicpile_roll_service::metrics::record_startup_start();
+    let router = app();
+    comicpile_roll_service::metrics::mark_startup_complete();
+    vercel_runtime::run(NativeVercelService { router }).await
 }
 
 #[cfg(test)]

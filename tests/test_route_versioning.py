@@ -187,13 +187,16 @@ def test_v1_bug_reports_alias_matches_legacy_route_methods() -> None:
     assert methods_by_path["/api/v1/bug-reports/"] == methods_by_path["/api/bug-reports/"]
 
 
-def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
-    """Canonical /api/v1/metrics alias reuses the same handler contract."""
-    app = create_app(serve_frontend=False)
-    methods_by_path = _collect_routes(app)
+def test_metrics_routes_are_served_by_native_runtime_not_python() -> None:
+    """Metrics endpoints moved to native Rust and must not appear in Python routes."""
+    methods_by_path = _collect_routes(create_app(serve_frontend=False))
 
-    assert "/api/v1/metrics" in methods_by_path
-    assert methods_by_path["/api/v1/metrics"] == methods_by_path["/api/metrics"]
+    assert "/api/metrics" not in methods_by_path
+    assert "/api/v1/metrics" not in methods_by_path
+
+    schema = create_app(serve_frontend=False).openapi()
+    assert "/api/metrics" not in schema["paths"]
+    assert "/api/v1/metrics" not in schema["paths"]
 
 
 def test_pruned_debug_routes_are_absent() -> None:

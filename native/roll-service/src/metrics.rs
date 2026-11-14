@@ -8,12 +8,9 @@ use serde::Serialize;
 use std::sync::OnceLock;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-static STARTUP: OnceLock<StartupMetrics> = OnceLock::new();
-
-struct StartupMetrics {
-    startup_time: f64,
-    startup_instant: Instant,
-}
+static START_INSTANT: OnceLock<Instant> = OnceLock::new();
+static STARTUP_TIME_SECS: OnceLock<f64> = OnceLock::new();
+static STARTUP_DURATION_SECS: OnceLock<f64> = OnceLock::new();
 
 #[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct StartupMetricsResponse {
@@ -21,29 +18,48 @@ pub struct StartupMetricsResponse {
     pub startup_duration: Option<f64>,
 }
 
-fn startup() -> &'static StartupMetrics {
-    STARTUP.get_or_init(|| {
-        let now = SystemTime::now();
-        let startup_time = now
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs_f64())
-            .unwrap_or(0.0);
-        StartupMetrics {
-            startup_time,
-            startup_instant: Instant::now(),
-        }
-    })
+fn now_epoch_secs() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
+/// Capture the startup start instant during native initialization.
+pub fn record_startup_start() {
+    let _ = START_INSTANT.get_or_init(Instant::now);
+    let _ = STARTUP_TIME_SECS.get_or_init(now_epoch_secs);
+}
+
+/// Mark startup as complete and store the finished startup duration.
+///
+/// Repeated calls keep the first completed measurement.
+pub fn mark_startup_complete() {
+    record_startup_start();
+    let duration = START_INSTANT
+        .get()
+        .map(Instant::elapsed)
+        .unwrap_or_default()
+        .as_secs_f64();
+    let _ = STARTUP_DURATION_SECS.set(duration);
 }
 
 /// Return startup metrics for the current native process.
 ///
-/// `startup_duration` is measured from first metrics initialization in this
-/// process to the time of the request, preserving the legacy keys and types.
+/// Returns the stored startup timestamp and stored completed startup duration.
+/// If startup completion was not explicitly marked, the duration is finalized on
+/// first metrics access and then reused for subsequent requests.
 pub async fn get_metrics() -> Json<StartupMetricsResponse> {
-    let started = startup();
-    let startup_duration = started.startup_instant.elapsed().as_secs_f64();
+    record_startup_start();
+    let startup_duration = *STARTUP_DURATION_SECS.get_or_init(|| {
+        START_INSTANT
+            .get()
+            .map(Instant::elapsed)
+            .unwrap_or_default()
+            .as_secs_f64()
+    });
     Json(StartupMetricsResponse {
-        startup_time: Some(started.startup_time),
+        startup_time: STARTUP_TIME_SECS.get().copied(),
         startup_duration: Some(startup_duration),
     })
 }
@@ -68,5 +84,12 @@ mod tests {
         assert!(payload.get("startup_duration").is_some());
         assert!(payload["startup_time"].is_number() || payload["startup_time"].is_null());
         assert!(payload["startup_duration"].is_number() || payload["startup_duration"].is_null());
+    }
+
+    #[tokio::test]
+    async fn startup_duration_is_stable_across_requests() {
+        let first = get_metrics().await.0.startup_duration;
+        let second = get_metrics().await.0.startup_duration;
+        assert_eq!(first, second);
     }
 }
