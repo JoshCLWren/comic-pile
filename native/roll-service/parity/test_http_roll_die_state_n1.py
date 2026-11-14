@@ -132,7 +132,7 @@ async def test_roll_die_state_statements_do_not_grow_with_library_size() -> None
         print(f"small_delta={small_delta} large_delta={large_delta}", flush=True)
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
         assert_declared_budget("GET", "/api/v2/roll/die-state", small_delta, large_delta)
-        assert large_delta <= small_delta + 2, (
+        assert large_delta <= small_delta, (
             f"statement count grew with library size: {small_delta} -> {large_delta}"
         )
     finally:
