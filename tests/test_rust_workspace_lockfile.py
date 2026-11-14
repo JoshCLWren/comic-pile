@@ -7,7 +7,10 @@ toolchain override, or a workflow that bypasses the workspace lock returns.
 
 from __future__ import annotations
 
+import importlib
 import tomllib
+
+import pytest
 from pathlib import Path
 
 
@@ -90,3 +93,47 @@ def test_rust_ci_and_prepush_lock_the_shared_workspace() -> None:
     assert "cargo +stable clippy --workspace --locked --all-targets" in prepush
     assert "cargo build --release --locked -p comicpile-roll-service" in e2e
     assert "cargo build --locked -p comicpile-roll-service" in audit
+
+
+def test_parity_tests_do_not_hardcode_nested_target_path() -> None:
+    """Parity Python tests resolve example binaries through cargo_example_path."""
+    parity_dir = REPOSITORY_ROOT / "native/roll-service/parity"
+    stale_path = "native/roll-service/target"
+    offenders = [
+        path.relative_to(REPOSITORY_ROOT).as_posix()
+        for path in parity_dir.glob("*.py")
+        if stale_path in path.read_text(encoding="utf-8")
+    ]
+    assert not offenders, f"hardcoded stale target paths: {offenders}"
+
+
+@pytest.mark.parametrize("target", ["target", "custom-target", "/tmp/absolute-target"])
+def test_cargo_example_target_resolution(
+    monkeypatch: pytest.MonkeyPatch, target: str
+) -> None:
+    """Relative overrides resolve from the workspace root; absolutes are preserved."""
+    parity_dir = REPOSITORY_ROOT / "native" / "roll-service" / "parity"
+    monkeypatch.syspath_prepend(str(parity_dir))
+    route_harness = importlib.import_module("route_harness")
+
+    monkeypatch.setenv("CARGO_TARGET_DIR", target)
+    target_path = Path(target)
+    if target_path.is_absolute():
+        expected = target_path / "debug/examples/http_auth_login"
+    else:
+        expected = REPOSITORY_ROOT / target_path / "debug/examples/http_auth_login"
+    assert route_harness.cargo_example_path("http_auth_login") == expected
+
+
+def test_cargo_example_target_resolution_unset_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unset CARGO_TARGET_DIR defaults to the workspace-root target directory."""
+    parity_dir = REPOSITORY_ROOT / "native" / "roll-service" / "parity"
+    monkeypatch.syspath_prepend(str(parity_dir))
+    route_harness = importlib.import_module("route_harness")
+
+    monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
+    assert route_harness.cargo_example_path("http_auth_login") == (
+        REPOSITORY_ROOT / "target" / "debug/examples/http_auth_login"
+    )
