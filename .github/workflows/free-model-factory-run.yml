@@ -11,6 +11,14 @@ on:
         description: Trusted Neon model health exclusions without credentials
         required: true
         type: string
+      heartbeat_comment_id:
+        description: Advisory registry comment ID from trusted Neon snapshot
+        required: false
+        type: string
+      attempt_comment_id:
+        description: Advisory latest-attempt comment ID from trusted Neon snapshot
+        required: false
+        type: string
     secrets:
       OPENCODE_API_KEY:
         required: false
@@ -63,6 +71,8 @@ concurrency:
 env:
   FACTORY_BUDGET_SECONDS: '1200'
   FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}
+  FACTORY_HEARTBEAT_COMMENT_ID: ${{ inputs.heartbeat_comment_id }}
+  FACTORY_ATTEMPT_COMMENT_ID: ${{ inputs.attempt_comment_id }}
   KILO_VERSION: '7.4.22'
   KILO_LINUX_X64_BASELINE_SHA256: 'bf817ad53bc95b16abe92e7a2389cc9f509c62c3510c23ecc58e151a4455cb41'
 
