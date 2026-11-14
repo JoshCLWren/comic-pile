@@ -77,7 +77,7 @@ pub async fn list_continuity_plans(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let plans: Vec<ContinuityPlanListItem> = rows
         .into_iter()
         .map(|row| ContinuityPlanListItem {
@@ -88,7 +88,7 @@ pub async fn list_continuity_plans(
             updated_at: row.get(4),
         })
         .collect();
-    
+
     Ok(Json(plans))
 }
 
@@ -112,13 +112,14 @@ pub async fn create_continuity_plan(
                 .map_err(db::query_error)?
                 .is_some();
             if !exists {
-                return Err(ApiError::BadRequest(
-                    format!("Issue {} not found or not owned by user", issue_id)
-                ));
+                return Err(ApiError::BadRequest(format!(
+                    "Issue {} not found or not owned by user",
+                    issue_id
+                )));
             }
         }
     }
-    
+
     let result = conn
         .query(
             "INSERT INTO continuity_plans (user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
@@ -134,8 +135,11 @@ pub async fn create_continuity_plan(
         )
         .await
         .map_err(db::query_error)?;
-    
-    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
+
+    let row = result
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
     let plan = ContinuityPlanResponse {
         id: row.get(0),
         name: row.get(1),
@@ -166,7 +170,7 @@ pub async fn get_continuity_plan(
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound("Continuity plan not found".to_string()))?;
-    
+
     let plan = ContinuityPlanResponse {
         id: row.get(0),
         name: row.get(1),
@@ -176,7 +180,7 @@ pub async fn get_continuity_plan(
         created_at: row.get(5),
         updated_at: row.get(6),
     };
-    
+
     Ok(Json(plan))
 }
 
@@ -188,7 +192,7 @@ pub async fn update_continuity_plan(
     Json(payload): Json<ContinuityPlanWrite>,
 ) -> Result<Json<ContinuityPlanResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership
     let exists: bool = conn
         .query_opt(
@@ -198,11 +202,11 @@ pub async fn update_continuity_plan(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !exists {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
-    
+
     // Check if any node references issues not owned by the user
     for node in &payload.nodes {
         if let Some(issue_id) = node.get("issue_id").and_then(|v| v.as_i64()) {
@@ -215,13 +219,14 @@ pub async fn update_continuity_plan(
                 .map_err(db::query_error)?
                 .is_some();
             if !issue_exists {
-                return Err(ApiError::BadRequest(
-                    format!("Issue {} not found or not owned by user", issue_id)
-                ));
+                return Err(ApiError::BadRequest(format!(
+                    "Issue {} not found or not owned by user",
+                    issue_id
+                )));
             }
         }
     }
-    
+
     let result = conn
         .query(
             "UPDATE continuity_plans 
@@ -239,8 +244,11 @@ pub async fn update_continuity_plan(
         )
         .await
         .map_err(db::query_error)?;
-    
-    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
+
+    let row = result
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
     let plan = ContinuityPlanResponse {
         id: row.get(0),
         name: row.get(1),
@@ -250,7 +258,7 @@ pub async fn update_continuity_plan(
         created_at: row.get(5),
         updated_at: row.get(6),
     };
-    
+
     Ok(Json(plan))
 }
 
@@ -270,7 +278,7 @@ pub async fn delete_continuity_plan(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     if result == 0 {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
@@ -285,7 +293,7 @@ pub async fn get_continuity_plan_membership(
     Path(plan_id): Path<i32>,
 ) -> Result<Json<ReadingPlanMembershipResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
-    
+
     // Verify plan ownership
     let plan_exists: bool = conn
         .query_opt(
@@ -295,11 +303,11 @@ pub async fn get_continuity_plan_membership(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !plan_exists {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
-    
+
     // Get plan issues
     let issue_rows = conn
         .query(
@@ -314,7 +322,7 @@ pub async fn get_continuity_plan_membership(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let issues: Vec<serde_json::Value> = issue_rows
         .into_iter()
         .map(|row| {
@@ -329,7 +337,7 @@ pub async fn get_continuity_plan_membership(
             })
         })
         .collect();
-    
+
     // Get plan dependencies
     let dependency_rows = conn
         .query(
@@ -341,7 +349,7 @@ pub async fn get_continuity_plan_membership(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let dependencies: Vec<serde_json::Value> = dependency_rows
         .into_iter()
         .map(|row| {
@@ -353,12 +361,13 @@ pub async fn get_continuity_plan_membership(
             })
         })
         .collect();
-    
+
     let total_issues = issues.len();
-    let read_issues = issues.iter().filter(|issue| {
-        issue.get("status").and_then(|s| s.as_str()) == Some("read")
-    }).count();
-    
+    let read_issues = issues
+        .iter()
+        .filter(|issue| issue.get("status").and_then(|s| s.as_str()) == Some("read"))
+        .count();
+
     Ok(Json(ReadingPlanMembershipResponse {
         plan_id,
         total_issues,
@@ -386,11 +395,11 @@ pub async fn link_plan_dependency_edge(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !plan_exists {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
-    
+
     // Verify dependency exists and get source/target info
     let dep_row = conn
         .query_opt(
@@ -400,10 +409,10 @@ pub async fn link_plan_dependency_edge(
         .await
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound("Dependency not found".to_string()))?;
-    
+
     let source_id: i32 = dep_row.get(0);
     let target_id: i32 = dep_row.get(1);
-    
+
     // Check if dependency is already linked to this plan
     let exists: bool = conn
         .query_opt(
@@ -413,13 +422,13 @@ pub async fn link_plan_dependency_edge(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if exists {
         return Err(ApiError::Conflict(
-            "Dependency already linked to this plan".to_string()
+            "Dependency already linked to this plan".to_string(),
         ));
     }
-    
+
     // Link the dependency
     conn.execute(
         "INSERT INTO reading_plan_dependencies (plan_id, dependency_id) VALUES ($1, $2)",
@@ -451,11 +460,11 @@ pub async fn unlink_plan_dependency_edge(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !plan_exists {
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
-    
+
     // Remove the dependency link
     let result = conn
         .execute(
@@ -507,11 +516,11 @@ pub async fn adopt_reading_order(
         .await
         .map_err(db::query_error)?
         .is_some();
-    
+
     if !order_exists {
         return Err(ApiError::NotFound("Reading order not found".to_string()));
     }
-    
+
     // Get reading order entries
     let order_entries = conn
         .query(
@@ -520,9 +529,9 @@ pub async fn adopt_reading_order(
         )
         .await
         .map_err(db::query_error)?;
-    
+
     let issue_ids: Vec<i32> = order_entries.into_iter().map(|row| row.get(0)).collect();
-    
+
     // Verify all issues are owned by the user
     for issue_id in &issue_ids {
         let owned: bool = conn
@@ -533,14 +542,15 @@ pub async fn adopt_reading_order(
             .await
             .map_err(db::query_error)?
             .is_some();
-        
+
         if !owned {
-            return Err(ApiError::BadRequest(
-                format!("Issue {} not found or not owned by user", issue_id)
-            ));
+            return Err(ApiError::BadRequest(format!(
+                "Issue {} not found or not owned by user",
+                issue_id
+            )));
         }
     }
-    
+
     // Create nodes from reading order
     let mut nodes = Vec::new();
     for (position, &issue_id) in issue_ids.iter().enumerate() {
@@ -550,7 +560,7 @@ pub async fn adopt_reading_order(
             "occurrence_id": format!("reading_order:{}", reading_order_id),
         }));
     }
-    
+
     // Create lanes if provided
     let lanes = if let Some(lane_name) = lane_name {
         vec![serde_json::json!({
@@ -560,7 +570,7 @@ pub async fn adopt_reading_order(
     } else {
         Vec::new()
     };
-    
+
     // Create the continuity plan
     let result = conn
         .query(
@@ -577,8 +587,11 @@ pub async fn adopt_reading_order(
         )
         .await
         .map_err(db::query_error)?;
-    
-    let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
+
+    let row = result
+        .into_iter()
+        .next()
+        .ok_or_else(|| ApiError::Internal("Failed to create continuity plan".to_string()))?;
     let plan = ContinuityPlanResponse {
         id: row.get(0),
         name: row.get(1),
