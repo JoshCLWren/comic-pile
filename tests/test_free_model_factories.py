@@ -57,3 +57,33 @@ def test_second_kilo_lane_shares_free_route_and_offsets_schedule() -> None:
     workflow = Path('.github/workflows/free-model-factory-run.yml').read_text()
     smoke = workflow.split('- name: Smoke Kilo Auto Free through Kilo CLI')[1].split('\n      - name:')[0]
     assert smoke.index("grep -q '^provider_quota'") < smoke.index("if grep -q 'KILO_AUTO_FREE_OK'")
+
+
+def test_current_free_openrouter_coding_candidates_replace_retired_inkling_workers() -> None:
+    """New worker identities use explicit zero-price pins and retire stale catalog IDs."""
+    rows = {
+        fields[0]: fields
+        for line in Path(".github/free-model-factories.tsv").read_text().splitlines()
+        if line and not line.startswith("#")
+        for fields in [line.split("\t")]
+    }
+    expected = {
+        "108": "thinkingmachines/inkling-2-small:free",
+        "109": "baidu/ernie-5.5-flash-preview:free",
+        "110": "inclusionai/ling-3.2-flash:free",
+    }
+    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
+    for worker, model in expected.items():
+        if worker in rows:
+            assert rows[worker][1:3] == ["openrouter-free", model]
+            assert int(worker) in lock["expected_workers"]
+        else:
+            # Catalog discovery may legitimately retire ephemeral free routes.
+            assert int(worker) in lock["retired_workers"]
+            assert model in lock["retired_models"]
+    assert {"52", "53"}.isdisjoint(rows)
+    assert {52, 53}.issubset(lock["retired_workers"])
+    assert {
+        "thinkingmachines/inkling:free",
+        "thinkingmachines/inkling-small:free",
+    }.issubset(lock["retired_models"])

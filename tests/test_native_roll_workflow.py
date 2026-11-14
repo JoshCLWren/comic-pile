@@ -28,6 +28,7 @@ import yaml
         "native/roll-service/parity/test_core_inputs.py",
         "native/roll-service/src/reading_inputs.rs",
         "scripts/export_roll_test_schema.py",
+        "docs/api/sql-budget-sources.json",
         "tests/fixtures/roll-v2/auth-matrix.json",
     ],
 )
@@ -43,3 +44,13 @@ def test_oracle_changes_trigger_native_parity(event: str, changed_path: str) -> 
         "pytest native/roll-service/parity/" in step.get("run", "")
         for step in steps
     )
+
+
+def test_statement_extension_does_not_change_canonical_schema_fixture() -> None:
+    """Provision the parity-only extension after the canonical schema check."""
+    workflow = Path(__file__).resolve().parents[1] / ".github/workflows/rust-roll.yml"
+    config = yaml.load(workflow.read_text(), Loader=yaml.BaseLoader)
+    names = [step.get("name") for step in config["jobs"]["rust-roll"]["steps"]]
+    assert names.index("Verify native Roll test schema fixture") < names.index(
+        "Create SQL measurement extension for parity"
+    ) < names.index("Python versus Rust scalar parity")

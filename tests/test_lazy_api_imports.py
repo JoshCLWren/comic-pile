@@ -35,7 +35,6 @@ DEFERRED_ROUTER_MODULES = (
     "app.api.session",
     "app.api.continuity_plan",
     "app.api.continuity_rule",
-    "app.api.releases",
     "app.api.roll_recovery_switch",
 )
 
@@ -44,7 +43,6 @@ DEFERRED_ROUTER_MODULES = (
 #: ``FastAPI.include_router`` snapshots routes when it is called, so composition
 #: has to happen before the router is copied into the application.
 DEPENDENCY_SUBROUTER_PATH = "/api/v1/reading-order-groups/"
-RELEASES_SUBROUTER_PATH = "/api/v1/releases/"
 API_FALLBACK_PATH = "/api/{path:path}"
 
 
@@ -199,7 +197,6 @@ async def test_cold_ping_defers_core_routers_and_next_request_loads_only_its_mou
 
     assert "/api/ping" in cold_paths
     assert DEPENDENCY_SUBROUTER_PATH not in cold_paths
-    assert RELEASES_SUBROUTER_PATH not in cold_paths
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -217,7 +214,6 @@ async def test_cold_ping_defers_core_routers_and_next_request_loads_only_its_mou
 
     completed_paths = _route_paths(app)
     assert DEPENDENCY_SUBROUTER_PATH in completed_paths
-    assert RELEASES_SUBROUTER_PATH in completed_paths
     assert completed_paths.index(DEPENDENCY_SUBROUTER_PATH) < completed_paths.index(
         API_FALLBACK_PATH
     )

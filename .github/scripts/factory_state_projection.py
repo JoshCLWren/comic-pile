@@ -19,6 +19,10 @@ PREFIX = "factory-projection-v1:"
 RECONCILE_SECONDS = 1800
 
 
+class GitHubTargetVerificationError(RuntimeError):
+    """A trusted webhook target could not be verified against live GitHub."""
+
+
 def enabled() -> bool:
     """Return whether a restricted trusted-factory Neon connection is configured.
 
@@ -256,13 +260,18 @@ def _authoritative_event(repo: str, event: dict[str, Any]) -> dict[str, Any]:
         capture_output=True, text=True, check=False, timeout=20,
     )
     if response.returncode:
-        raise RuntimeError(f"GitHub could not verify {kind} #{number}")
+        # Classify known failures without exposing raw API output in trusted CI logs.
+        if "rate limit exceeded" in response.stderr.lower():
+            raise GitHubTargetVerificationError(
+                f"GitHub API rate limit exceeded while verifying {kind} #{number}"
+            )
+        raise GitHubTargetVerificationError(f"GitHub could not verify {kind} #{number}")
     try:
         current = json.loads(response.stdout)
     except (TypeError, ValueError) as exc:
-        raise RuntimeError(f"Invalid GitHub response for {kind} #{number}") from exc
+        raise GitHubTargetVerificationError(f"Invalid GitHub response for {kind} #{number}") from exc
     if not isinstance(current, dict) or current.get("number") != number:
-        raise RuntimeError(f"Unexpected GitHub target identity for {kind} #{number}")
+        raise GitHubTargetVerificationError(f"Unexpected GitHub target identity for {kind} #{number}")
     return {kind: current}
 
 
@@ -451,7 +460,18 @@ def main() -> int:
     args = parser.parse_args()
     with open(args.file, encoding="utf-8") as stream:
         event = json.load(stream)
-    changed = ingest_event(args.repo, args.event_id, event)
+    try:
+        changed = ingest_event(args.repo, args.event_id, event)
+    except GitHubTargetVerificationError as exc:
+        # Fail closed for the projection: never persist an unverified webhook
+        # payload. GitHub read outages are deferred to the periodic authoritative
+        # reconciliation; they are not failures of the PR's product checks.
+        print(
+            f"::warning::Factory target ingest deferred ({exc}); "
+            "no unverified projection written. Periodic GitHub reconciliation will repair drift.",
+            file=sys.stderr,
+        )
+        return 0
     bootstrap_missing(args.repo)
     print(f"[factory-projection] target event applied={changed}")
     return 0

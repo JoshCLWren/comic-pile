@@ -306,6 +306,23 @@ while inspecting PR content, and a missing parser fails closed with an actionabl
 
 ## Gated autonomous merges
 
+### Owner-enabled factory-only immediate merge exception
+
+The [Factory-only Fast Merge](FACTORY_FAST_MERGE.md) lane is an explicit
+owner-authorized exception to the ordinary gated review and CI-wait process.
+For trusted, unowned, non-draft PRs changing **only** the controller's
+factory infrastructure allowlist, immediately attempt a SHA-pinned squash
+merge through the dedicated workflow on PR/label events. **Do not wait for
+CI, semantic review, `factory:ready`, or repeatedly poll check runs.**
+The exceptional lane does not remove trusted-author, path, ownership,
+hold, mergeability, SHA-pinning, or repository branch-permission controls.
+A GitHub branch-rule refusal is a failed immediate merge attempt requiring
+a narrowly scoped permission/bypass configuration fix, not authorization
+to forge checks or remove product PR protections. Changes to the fast-lane
+controller, workflow, config and tests are excluded from its own allowlist.
+
+### Ordinary gated autonomous merges
+
 Workers may merge a PR without asking again only after all of these gates are satisfied for the exact current head SHA:
 
 - the PR is open, non-draft, and mergeable with no conflict;
