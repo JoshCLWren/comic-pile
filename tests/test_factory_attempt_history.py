@@ -50,7 +50,11 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
               for row in range(100)] for page in range(15)]
     pages[0][:2] = [_attempt(1, NOW - 10), _attempt(2, NOW - 9)]
     forged = {**_attempt(2001, NOW + 5), "performed_via_github_app": {"slug": "worker-app"}}
-    responses = [pages, [[forged], [_attempt(1501, NOW + 5)]], [[{"id": 1501, "body": "withdrawn"}]]]
+    responses = [
+        pages,
+        [[forged], [_attempt(1501, NOW + 5), _attempt(1502, NOW + 5)]],
+        [[{"id": 1501, "body": "withdrawn"}]],
+    ]
     since_values: list[int] = []
     page_reads: list[int] = []
 
