@@ -170,8 +170,10 @@ def test_immediate_merge_never_reads_ci_or_review(
     assert commit == "b" * 40
     assert len(calls) == 2
     assert calls[1][0] == f"repos/{REPO}/pulls/123/merge"
-    assert calls[1][2]["sha"] == HEAD
-    assert calls[1][2]["merge_method"] == "squash"
+    merge_fields = calls[1][2]
+    assert merge_fields is not None
+    assert merge_fields["sha"] == HEAD
+    assert merge_fields["merge_method"] == "squash"
     assert all("check-runs" not in call[0] and "/actions/" not in call[0]
                for call in calls)
 
