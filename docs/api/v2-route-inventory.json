@@ -1001,16 +1001,16 @@
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
       "v1_total": 191,
-      "v1_shadowed_by_rust": 64,
-      "v1_live_python": 119,
+      "v1_shadowed_by_rust": 65,
+      "v1_live_python": 118,
       "v1_orphaned": 8,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 18,
       "unversioned_orphaned": 2,
       "total_python_surface": 224,
-      "total_shadowed_by_rust": 77,
-      "total_live_python": 137,
+      "total_shadowed_by_rust": 78,
+      "total_live_python": 136,
       "total_orphaned": 10
     },
     "catch_all": {
@@ -1145,8 +1145,8 @@
         ],
         "method": "POST",
         "path": "/api/v1/catalog/series-mappings/commit",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {

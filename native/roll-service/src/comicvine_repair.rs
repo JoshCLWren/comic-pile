@@ -160,6 +160,44 @@ fn compact_refs(value: &Value) -> Value {
     )
 }
 
+/// Normalize a roster row for catalog commit without claiming a deep refresh.
+pub(crate) fn normalize_roster_issue_metadata(result: &Value) -> Value {
+    let volume = result
+        .get("volume")
+        .and_then(Value::as_object)
+        .map(|source| {
+            let mut compact = Map::new();
+            for field in ["id", "name", "api_detail_url", "site_detail_url"] {
+                if let Some(value) = source.get(field) {
+                    compact.insert(field.to_owned(), value.clone());
+                }
+            }
+            Value::Object(compact)
+        });
+    let primary_image = result
+        .get("image")
+        .and_then(Value::as_object)
+        .and_then(|image| {
+            ["original_url", "super_url", "medium_url", "small_url"]
+                .iter()
+                .filter_map(|key| image.get(*key).and_then(Value::as_str))
+                .find(|value| !value.is_empty())
+        });
+    json!({
+        "name": result.get("name"),
+        "issue_number": result.get("issue_number"),
+        "cover_date": result.get("cover_date"),
+        "store_date": result.get("store_date"),
+        "volume": volume,
+        "primary_image": primary_image,
+        "creator_credits": compact_refs(&result["person_credits"]),
+        "characters": compact_refs(&result["character_credits"]),
+        "teams": compact_refs(&result["team_credits"]),
+        "story_arcs": compact_refs(&result["story_arc_credits"]),
+        "raw_provider_payload": result,
+    })
+}
+
 fn normalized_metadata(
     result: &Value,
     expected_id: u32,
@@ -232,7 +270,12 @@ fn provider_timestamp(value: &Value) -> Option<String> {
     )
 }
 
-async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
+async fn provider_response(
+    resource: &str,
+    extra_query: &str,
+    api_key: &str,
+) -> Result<Value, ProviderFailure> {
+    // Callers construct only trusted resource names and numeric query values.
     // Fail closed on unexpected credential syntax rather than sending an unescaped secret.
     if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
         return Err(ProviderFailure::Unavailable);
@@ -274,8 +317,7 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         let _connection_guard = ConnectionGuard(tokio::spawn(async move {
             let _ = connection.await;
         }));
-        let path =
-            format!("/api/issue/4000-{id}/?api_key={api_key}&format=json&field_list={FIELDS}");
+        let path = format!("/api/{resource}/?api_key={api_key}&format=json{extra_query}");
         let request = http::Request::builder()
             .method("GET")
             .uri(path)
@@ -347,10 +389,7 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
         if payload["status_code"].as_i64() != Some(1) {
             return Err(ProviderFailure::Unavailable);
         }
-        payload
-            .get("results")
-            .cloned()
-            .ok_or(ProviderFailure::InvalidPayload)
+        Ok(payload)
     };
     tokio::time::timeout(PROVIDER_TIMEOUT, connect)
         .await
@@ -361,6 +400,116 @@ async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure
             );
             ProviderFailure::Timeout
         })?
+}
+
+async fn provider_issue(id: u32, api_key: &str) -> Result<Value, ProviderFailure> {
+    provider_response(
+        &format!("issue/4000-{id}"),
+        &format!("&field_list={FIELDS}"),
+        api_key,
+    )
+    .await?
+    .get("results")
+    .cloned()
+    .ok_or(ProviderFailure::InvalidPayload)
+}
+
+/// Read the same ComicVine volume and complete, validated issue roster used
+/// by the Python preview builder. Never turn an outage or partial roster into
+/// an empty successful plan: doing so can approve a wrong comic identity.
+pub(crate) async fn catalog_volume_roster(
+    external_id: &str,
+) -> Result<(Value, Vec<Value>), ApiError> {
+    let unavailable = || ApiError::ServiceUnavailable("provider_unavailable".to_owned());
+    let volume_id = external_id
+        .parse::<u32>()
+        .ok()
+        .filter(|v| *v > 0)
+        .ok_or_else(unavailable)?;
+    let api_key = std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .ok_or_else(unavailable)?;
+    let volume = provider_response(&format!("volume/4050-{volume_id}"), "", &api_key)
+        .await
+        .map_err(|_| unavailable())?;
+    let volume_info = volume
+        .get("results")
+        .filter(|v| v.is_object())
+        .ok_or_else(unavailable)?;
+    let series_info = json!({
+        "id": volume_info.get("id").map(ToString::to_string).map(|v| v.trim_matches('"').to_string()),
+        "name": volume_info.get("name"),
+        "publisher": volume_info.get("publisher").and_then(|p| p.get("name")),
+        "start_year": volume_info.get("start_year"),
+        "count_of_issues": volume_info.get("count_of_issues"),
+        "site_detail_url": volume_info.get("site_detail_url"),
+        "image": volume_info.get("image"),
+    });
+
+    let mut roster = Vec::new();
+    let mut offset = 0_usize;
+    let mut expected_total: Option<usize> = None;
+    loop {
+        let query = format!("&filter=volume:{volume_id}&limit=100&offset={offset}");
+        let page = provider_response("issues", &query, &api_key)
+            .await
+            .map_err(|_| unavailable())?;
+        let results = page
+            .get("results")
+            .and_then(Value::as_array)
+            .ok_or_else(unavailable)?;
+        if expected_total.is_none() {
+            expected_total = page
+                .get("number_of_total_results")
+                .and_then(Value::as_u64)
+                .and_then(|n| usize::try_from(n).ok());
+        }
+        for row in results {
+            if row
+                .get("volume")
+                .and_then(|v| v.get("id"))
+                .and_then(Value::as_u64)
+                .is_some_and(|id| id != u64::from(volume_id))
+            {
+                return Err(unavailable());
+            }
+            let Some(issue_number) = row.get("issue_number").filter(|v| !v.is_null()) else {
+                continue;
+            };
+            let Some(pid) = row.get("id").and_then(Value::as_i64).filter(|id| *id > 0) else {
+                continue;
+            };
+            let number = issue_number
+                .as_str()
+                .map(str::to_owned)
+                .unwrap_or_else(|| issue_number.to_string());
+            roster.push(json!({
+                "issue_id": pid,
+                "issue_number": number,
+                "title": row.get("name"),
+                "thread_id": null,
+                "thread_title": null,
+                "current_mapping_status": "unresolved",
+                "provider": "comicvine",
+                "external_id": pid.to_string(),
+                "classification": "unresolved",
+                "_roster_only": true,
+                "_provider_metadata": row,
+            }));
+        }
+        offset += results.len();
+        if results.len() < 100 || expected_total.is_some_and(|n| offset >= n) {
+            break;
+        }
+        // Reject a truncated or pathological roster rather than silently
+        // authorizing false unique matches. The full provider roster is
+        // required to prove issue-number cardinality.
+        if offset >= 10_000 {
+            return Err(unavailable());
+        }
+    }
+    Ok((series_info, roster))
 }
 
 async fn claim(state: &AppState) -> Result<Option<Job>, ApiError> {
@@ -605,6 +754,97 @@ async fn process(state: &AppState, job: &Job, key: Option<&str>) -> Result<&'sta
             settle(state, job, status, delay, Some(code)).await?;
             Ok(status)
         }
+    }
+}
+
+/// Hydrate user-confirmed catalog identities *inline after commit*, using a
+/// single request-wide budget. A provider failure never undoes the completed
+/// identity transaction. No detached tasks are left running after the response.
+pub(crate) async fn hydrate_catalog_commit(
+    state: &AppState,
+    user_id: i32,
+    committed_issue_ids: &[i32],
+    budget: Duration,
+) {
+    if committed_issue_ids.is_empty() || budget.is_zero() {
+        return;
+    }
+    let Ok(api_key) = std::env::var("COMICVINE_API_KEY") else {
+        return;
+    };
+    if api_key.is_empty() {
+        return;
+    }
+
+    // The timeout encloses both database queries and provider requests; it
+    // cannot become N * provider_timeout for a large sibling confirmation.
+    let run = async {
+        let conn = match db::checkout(state).await {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        let rows = match conn
+            .query(
+                "SELECT DISTINCT e.id, e.external_id
+                 FROM issue_external_identity_mappings m
+                 JOIN external_identities e ON e.id = m.external_identity_id
+                 JOIN issues i ON i.id = m.issue_id
+                 JOIN threads t ON t.id = i.thread_id
+                 WHERE m.issue_id = ANY($1::integer[])
+                   AND t.user_id = $2
+                   AND m.status = 'confirmed'
+                   AND m.evidence_source = 'user_series_confirmation'
+                   AND e.provider = 'comicvine'
+                   AND e.entity_type = 'issue'
+                 ORDER BY e.id",
+                &[&committed_issue_ids, &user_id],
+            )
+            .await
+        {
+            Ok(rows) => rows,
+            Err(_) => return,
+        };
+        for row in rows {
+            let id: i32 = row.get(0);
+            let external_id: String = row.get(1);
+            let Some(comicvine_id) = issue_id(&external_id) else {
+                continue;
+            };
+            let Ok(provider_data) = provider_issue(comicvine_id, &api_key).await else {
+                continue;
+            };
+            let Ok((patch, _, external_url, provider_updated_at)) =
+                normalized_metadata(&provider_data, comicvine_id)
+            else {
+                continue;
+            };
+            let Ok(json_patch) = serde_json::to_string(&patch) else {
+                continue;
+            };
+            // The identity transaction has committed; a failed metadata
+            // refresh is best-effort and must not cause a client retry.
+            if let Err(err) = conn
+                .execute(
+                    "UPDATE external_identities
+                 SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb)
+                                      || ($2::text)::jsonb)::json,
+                     external_url = COALESCE($3, external_url),
+                     provider_updated_at = COALESCE(($4::text)::timestamptz, provider_updated_at),
+                     updated_at = now()
+                 WHERE id = $1 AND provider = 'comicvine' AND entity_type = 'issue'",
+                    &[&id, &json_patch, &external_url, &provider_updated_at],
+                )
+                .await
+            {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&err),
+                    "catalog commit metadata hydration failed"
+                );
+            }
+        }
+    };
+    if tokio::time::timeout(budget, run).await.is_err() {
+        tracing::info!("catalog commit inline hydration budget exhausted");
     }
 }
 

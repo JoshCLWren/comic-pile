@@ -9,6 +9,51 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/api/v1/catalog/series-mappings/commit": {
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "OpenAPI path documentation for the series-mapping commit endpoint.",
+        "operationId": "commit_documentation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Commit result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "409": {
+            "description": "preview_stale, preview_expired, confirmed_mapping_conflict, or idempotency_conflict"
+          },
+          "422": {
+            "description": "invalid_approved_row"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/comicvine/series/{comicvine_volume_id}/import-status": {
       "get": {
         "tags": [
@@ -3809,6 +3854,97 @@
           "tracked_issue_count": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "CommitRequest": {
+        "type": "object",
+        "required": [
+          "preview_token",
+          "idempotency_key"
+        ],
+        "properties": {
+          "approved_row_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "preview_token": {
+            "type": "string"
+          }
+        }
+      },
+      "CommitResponse": {
+        "type": "object",
+        "required": [
+          "idempotency_key",
+          "confirmed_issue_ids",
+          "already_confirmed_issue_ids",
+          "needs_review_issue_ids",
+          "hydration_queued_issue_ids",
+          "series_mapping"
+        ],
+        "properties": {
+          "already_confirmed_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "confirmed_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "hydration_queued_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "needs_review_issue_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "series_mapping": {
+            "$ref": "#/components/schemas/CommitSeriesMapping"
+          }
+        }
+      },
+      "CommitSeriesMapping": {
+        "type": "object",
+        "required": [
+          "provider",
+          "external_id",
+          "status",
+          "evidence_source"
+        ],
+        "properties": {
+          "evidence_source": {
+            "type": "string"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
           }
         }
       },

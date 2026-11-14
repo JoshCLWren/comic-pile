@@ -5,6 +5,7 @@ pub mod analytics;
 pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
+pub mod catalog_commit;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
@@ -81,6 +82,7 @@ use std::{
 pub struct AppState {
     pub pool: Pool,
     pub jwt_secret: JwtSecret,
+    pub preview_token_secret: String,
     pub request_timeout: Duration,
     pub access_token_expire_minutes: i64,
     pub refresh_token_expire_days: i64,
@@ -93,7 +95,22 @@ pub struct AppState {
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
+    ///
+    /// Production uses [`RecyclingMethod::Fast`] and relies on [`db::checkout`]'s bounded
+    /// read-only probe for validation so reused connections are checked exactly once (#4732).
     pub fn new(config: Config) -> Result<Self, ConfigError> {
+        Self::with_recycling(config, RecyclingMethod::Fast)
+    }
+
+    /// Test and operator override for the pool recycling method.
+    ///
+    /// Production callers should use [`Self::new`]. Negative-control fixtures may select
+    /// `RecyclingMethod::Fast` with `connection_recovery` disabled so a fault fires on the
+    /// handler's first statement rather than during pool recycling.
+    pub fn with_recycling(
+        config: Config,
+        recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
@@ -104,13 +121,7 @@ impl AppState {
         let manager = Manager::from_config(
             config.database,
             MakeTlsConnector::new(tls),
-            ManagerConfig {
-                // `db::checkout` validates the socket with a bounded read-only
-                // probe before any handler statement (#4732). Keeping Fast
-                // avoids probing twice on every checkout; the centralized probe
-                // also classifies and bounds recovery instead of swallowing it.
-                recycling_method: RecyclingMethod::Fast,
-            },
+            ManagerConfig { recycling_method },
         );
         let pool = Pool::builder(manager)
             .max_size(config.pool_size)
@@ -131,6 +142,7 @@ impl AppState {
         Ok(Self {
             pool,
             jwt_secret: config.jwt_secret,
+            preview_token_secret: config.preview_token_secret,
             request_timeout: config.request_timeout,
             access_token_expire_minutes: config.access_token_expire_minutes,
             refresh_token_expire_days: config.refresh_token_expire_days,
@@ -461,6 +473,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/auth/reset-password",
             post(auth::handlers::reset_password),
+        )
+        .route(
+            "/api/v1/catalog/series-mappings/commit",
+            post(catalog_commit::commit_series_mapping_handler),
         )
         .route("/api/auth/register", post(auth::handlers::register))
         .route("/api/auth/login", post(auth::handlers::login))
