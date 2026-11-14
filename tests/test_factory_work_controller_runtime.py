@@ -1090,6 +1090,7 @@ def test_issue_assignment_rechecks_dependency_at_mutation_boundary(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An advisory cached issue cannot be claimed if a fresh blocker appeared."""
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     issue = controller.Candidate("issue", 4737, 0, 0, "2026-11-14T00:00:00Z")
     lookups = []
     lease_writes = []
