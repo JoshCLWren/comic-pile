@@ -244,6 +244,11 @@ fn app() -> Router {
         .route("/api/v2/roll/eligible-issue-ids", get(native_dispatch))
         .route("/api/v2/demo-roll", get(native_demo))
         .route("/api/v2/reading-boundaries", post(native_dispatch))
+        .route("/api/v1/reading-orders/", get(native_dispatch))
+        .route(
+            "/api/v1/reading-orders/{reading_order_id}/items",
+            post(native_dispatch),
+        )
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))

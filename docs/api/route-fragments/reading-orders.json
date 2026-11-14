@@ -1,0 +1,48 @@
+{
+  "family": "reading-orders",
+  "owned_path_patterns": [
+    "^/api/v1/reading-orders(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-reading-orders.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-orders/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-orders/$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4851,
+      "sql_budget": {
+        "application_statements": 1,
+        "transaction_control_statements": 0,
+        "total_statements": 1,
+        "basis": "one set-based aggregate over reading_orders left-joined to reading_order_items grouped by order, owner-scoped and ordered by name; no per-row N+1"
+      }
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-orders/{reading_order_id}/items",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4851,
+      "sql_budget": {
+        "application_statements": 5,
+        "transaction_control_statements": 2,
+        "total_statements": 7,
+        "basis": "BEGIN + owned order lookup + owned thread lookup + ordered items SELECT + per-changed-row position UPDATEs + optional INSERT + COUNT + COMMIT; bounded by order size with set-based reads and no per-row fan-out beyond shifted rows"
+      }
+    }
+  ]
+}

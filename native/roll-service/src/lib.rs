@@ -36,6 +36,7 @@ pub mod reading_graph;
 pub mod reading_inputs;
 pub mod reading_list;
 pub mod reading_mode;
+pub mod reading_orders;
 pub mod reading_plan_reader;
 pub mod reading_plan_recovery;
 pub mod reading_session;
@@ -512,6 +513,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v2/reading-boundaries",
             post(reading_boundary::reading_boundary_batch_v2),
+        )
+        .route(
+            "/api/v1/reading-orders/",
+            get(reading_orders::list_reading_orders),
+        )
+        .route(
+            "/api/v1/reading-orders/{reading_order_id}/items",
+            post(reading_orders::insert_reading_order_item),
         )
         .route(
             "/api/v2/queue-entries/{thread_id}",
