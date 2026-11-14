@@ -88,6 +88,9 @@ def test_trusted_webhook_does_not_checkout_pr_branch_or_expose_write_token() -> 
     assert "ref: main" in workflow
     assert "persist-credentials: false" in workflow
     assert "permissions:\n  contents: read" in workflow
+    assert "  issues: read\n" in workflow
+    assert "  pull-requests: read\n" in workflow
+    assert ": write" not in workflow
     assert "github.event.repository.full_name == github.repository" in workflow
     assert "factory_state_projection.py ingest" in workflow
     assert "secrets.NEON_API_KEY" in workflow
