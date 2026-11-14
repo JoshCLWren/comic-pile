@@ -291,3 +291,39 @@ def test_generic_agent_timeout_without_transient_marker_remains_unknown():
     }
     log = "2026-11-14T14:06:47Z [factory:46] agent exit status 124 for pr #5053\n"
     assert ledger.refine_trusted_smoke_timeout(outcome, log) == outcome
+
+
+def test_trusted_ansi_deprecated_smoke_attributes_actual_rotated_selector():
+    """Worker 111 selected GLM, then tried deprecated Crouton at run 43610131794."""
+    outcome = {
+        "worker": "111", "source": "opencode-free", "model": "glm-5.3-flash-free",
+        "outcome_class": "unknown_failure", "exact_model_proven": False,
+        "persisted_work": False,
+    }
+    log = (
+        "2026-11-14T15:26:50Z ##[group]Run set -Eeuo pipefail\\n"
+        "2026-11-14T15:26:52Z Smoke candidate: opencode/crouton-alpha-free\\n"
+        "2026-11-14T15:26:53Z \\x1b[91m\\x1b[1mError: \\x1b[0mModel crouton-alpha-free has been deprecated.\\n"
+        "2026-11-14T15:26:53Z ##[error]Process completed with exit code 1.\\n"
+    )
+    refined = ledger.refine_trusted_smoke_timeout(outcome, log)
+    assert refined["outcome_class"] == "model_unavailable"
+    assert refined["model"] == "crouton-alpha-free"
+    assert ledger.refine_trusted_smoke_timeout({**outcome, "persisted_work": True}, log) == {
+        **outcome, "persisted_work": True,
+    }
+    assert ledger.refine_trusted_smoke_timeout(outcome, log.replace(
+        "crouton-alpha-free has been deprecated", "unrelated-free has been deprecated",
+    )) == outcome
+
+
+def test_trusted_nvidia_410_records_sticky_retirement():
+    outcome = {
+        "source": "nvidia", "model": "retired-model", "outcome_class": "model_unavailable",
+        "exact_model_proven": False, "persisted_work": False,
+    }
+    log = "2026-11-14T15:10:23Z NVIDIA permanently retired model: retired-model\\n"
+    assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "model_retired_410"
+    assert ledger.refine_trusted_smoke_timeout(
+        {**outcome, "model": "unrelated-model"}, log,
+    )["outcome_class"] == "model_unavailable"
