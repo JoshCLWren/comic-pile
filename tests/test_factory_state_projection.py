@@ -434,3 +434,13 @@ def test_full_snapshot_expires_legacy_closed_tombstones_without_false_events() -
     assert "AND expires_at > now() + interval '2 hours'" in source
     assert "SET expires_at=now() + interval '2 hours'" in source
     assert "changed = [*updated, *removed]" in source
+
+
+def test_live_target_upsert_uses_valid_postgres_coalesce() -> None:
+    """Trusted cleanup must not trip a SQL undefined-function error."""
+    import inspect
+    import re
+
+    source = inspect.getsource(projection._ingest_event)
+    assert re.search(r"\bCOALESCE\s*\(", source, re.IGNORECASE)
+    assert not re.search(r"\bCOALES\s*\(", source, re.IGNORECASE)
