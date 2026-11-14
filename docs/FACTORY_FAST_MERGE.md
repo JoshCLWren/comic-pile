@@ -8,7 +8,7 @@ This exception applies to factory infrastructure only. It does not waive the pat
 
 ## Implementation and authorization
 
-- [`.github/workflows/factory-fast-merge.yml`](../.github/workflows/factory-fast-merge.yml): runs from trusted `main` on PR open/reopen, synchronize, ready-for-review, or label updates, manual dispatch, and a five-minute recovery scan. **No CI completion dependency.**
+- [`.github/workflows/factory-fast-merge.yml`](../.github/workflows/factory-fast-merge.yml): runs from trusted `main` on PR open/reopen, synchronize, ready-for-review, or label updates, and manual dispatch. **There is no scheduled polling loop.** **No CI completion dependency.**
 - [`.github/scripts/factory-fast-merge.py`](../.github/scripts/factory-fast-merge.py): reads each candidate's current metadata/files and immediately calls GitHub's merge API with `sha=<current head>` and `merge_method=squash`. **No check-run, CI-run, or review lookup.**
 - [`.github/factory-fast-merge.json`](../.github/factory-fast-merge.json): owner on/off switch, currently `{"enabled": true}`. Missing/malformed/false disables.
 - [`tests/test_factory_fast_merge.py`](../tests/test_factory_fast_merge.py): eligibility, protected paths, exact-head merge call, absence of CI gating, and error reporting.
