@@ -638,6 +638,8 @@ def test_assign_candidate_refuses_second_active_lease(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """assign_candidate must refuse when the worker already holds an active lease."""
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda _n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "synthetic-lease")
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda w: w == "99")
     monkeypatch.setattr(controller, "issue_has_open_blocker", lambda n, *, live=False: False)
     monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "test-lease")
@@ -1657,6 +1659,8 @@ def test_assign_candidate_forwards_jev_source_to_the_issue_lease(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The controller must pass issue-selection provenance into the lease write."""
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda _n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "synthetic-lease")
     candidate = controller.Candidate(
         "issue", 35301, 3, 2, "2026-10-30T12:00:00Z"
     )

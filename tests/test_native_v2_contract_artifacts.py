@@ -33,6 +33,8 @@ V2_PREFIX: Final = "/api/v2/"
 # paths while moving the implementation behind the same native Rust ingress.
 _RUNTIME_LEGACY_PATHS: Final = frozenset(
     {
+        "/api/metrics",
+        "/api/v1/metrics",
         "/api/v1/identity-inbox",
         "/api/v1/identity-inbox/search/issues",
         "/api/v1/identity-inbox/{mapping_id}",

@@ -55,6 +55,17 @@ async fn native_demo() -> Response {
     response
 }
 
+/// Serve simple startup metrics without requiring database or auth state.
+async fn native_metrics() -> Response {
+    let mut response = comicpile_roll_service::metrics::get_metrics()
+        .await
+        .into_response();
+    response
+        .headers_mut()
+        .insert("x-comicpile-api-runtime", HeaderValue::from_static("rust"));
+    response
+}
+
 static ROLL_STATE: OnceLock<Result<Arc<AppState>, &'static str>> = OnceLock::new();
 
 #[cfg(test)]
@@ -68,6 +79,7 @@ fn init_tracing() {
     // Production panic hooks otherwise print sensitive payloads before catch_unwind.
     #[cfg(not(test))]
     comicpile_roll_service::install_sanitized_panic_hook();
+    comicpile_roll_service::metrics::record_startup_start();
     let directive = std::env::var("RUST_ROLL_LOG").unwrap_or_else(|_| "info".into());
     let filter = tracing_subscriber::EnvFilter::try_new(directive)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
@@ -205,6 +217,8 @@ async fn native_not_found() -> Response {
 fn app() -> Router {
     Router::new()
         .route("/api/v2/health", get(native_health))
+        .route("/api/metrics", get(native_metrics))
+        .route("/api/v1/metrics", get(native_metrics))
         .route("/api/v1/identity-inbox", get(native_dispatch))
         .route("/api/v1/identity-inbox/search/issues", get(native_dispatch))
         .route("/api/v1/identity-inbox/{mapping_id}", get(native_dispatch))
@@ -425,7 +439,9 @@ fn app() -> Router {
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     init_tracing();
-    vercel_runtime::run(NativeVercelService { router: app() }).await
+    let router = app();
+    comicpile_roll_service::metrics::mark_startup_complete();
+    vercel_runtime::run(NativeVercelService { router }).await
 }
 
 #[cfg(test)]
@@ -444,6 +460,31 @@ mod tests {
     use vercel_runtime::{AppState as VercelState, LogContext};
 
     const JWT_SECRET: &str = "synthetic-ingress-queue-secret";
+
+    #[tokio::test]
+    async fn metrics_aliases_are_unauthenticated_and_database_free() {
+        comicpile_roll_service::metrics::record_startup_start();
+        comicpile_roll_service::metrics::mark_startup_complete();
+        let mut first = None;
+        for path in ["/api/metrics", "/api/v1/metrics"] {
+            let response = app()
+                .call(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .expect("metrics response");
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()["x-comicpile-api-runtime"], "rust");
+            let body: Value =
+                serde_json::from_slice(&to_bytes(response.into_body(), 4096).await.unwrap())
+                    .unwrap();
+            assert_eq!(body.as_object().unwrap().len(), 2);
+            assert!(body["startup_time"].is_number());
+            assert!(body["startup_duration"].is_number());
+            if let Some(previous) = &first {
+                assert_eq!(&body, previous);
+            }
+            first = Some(body);
+        }
+    }
 
     #[tokio::test]
     async fn guest_demo_ingress_needs_no_auth_or_database_state() {

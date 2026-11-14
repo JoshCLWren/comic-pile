@@ -122,7 +122,11 @@ def _deployed_operations() -> set[tuple[str, str]]:
     return {
         (method.lower(), path)
         for path, operations in paths.items()
-        if path.startswith("/api/v2/") or path.startswith("/api/v1/releases/")
+        if (
+            path.startswith("/api/v2/")
+            or path.startswith("/api/v1/releases/")
+            or path in {"/api/metrics", "/api/v1/metrics"}
+        )
         for method in operations
     }
 

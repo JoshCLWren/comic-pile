@@ -70,8 +70,8 @@ REQUIRED_V1_FAMILIES = frozenset(
 
 
 # The generated client surface (issue #1741) must reference no bare domain
-# paths at all; versioned v1/v2 resources and /api/ping are allowed.
-CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/ping"})
+# paths except versioned resources, ping and native same-path startup metrics (#4854).
+CLIENT_EXEMPT_BARE_PATHS = frozenset({"/api/ping", "/api/metrics"})
 CLIENT_VERSIONED_PREFIXES = ("/api/v1/", "/api/v2/")
 
 
@@ -218,12 +218,12 @@ def test_legacy_api_aliases_are_explicit_allowlist() -> None:
 
 
 def test_generated_client_has_zero_bare_domain_path_references() -> None:
-    """The generated client must use versioned paths plus the ping exemption.
+    """The generated client must use versioned paths plus explicit infrastructure exemptions.
 
     Issue #1741 acceptance: ``frontend/src/generated/openapi.ts`` has zero
     bare domain-path references. The schema that feeds that generated client
     keeps infrastructure paths, canonical v1/v2 routes, and the exempt
-    ``/api/ping`` heartbeat path.
+    ``/api/ping`` heartbeat and same-path native ``/api/metrics`` paths.
     """
     schema = _load_schema()
     paths = list(schema.get("paths", {}))
