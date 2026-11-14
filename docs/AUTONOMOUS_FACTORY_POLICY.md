@@ -306,6 +306,21 @@ while inspecting PR content, and a missing parser fails closed with an actionabl
 
 ## Gated autonomous merges
 
+**Separate factory-only fast-merge lane:** The owner-enabled
+[Factory-only Fast Merge](FACTORY_FAST_MERGE.md) workflow is the exception for
+allowlisted factory infrastructure PRs. For a trusted, unowned, non-draft
+factory-only PR, route directly to that workflow instead of the ordinary
+semantic-review / `factory:ready` drain. This lane deliberately skips
+semantic review, including a stale `factory:changes-requested` stage, but
+**still requires successful authentic exact-head CI and normal branch
+protection** before a SHA-pinned squash merge. Use its event triggers or one
+targeted manual dispatch, not repeated CI polling. Any PR touching product
+paths or the fast-merge control files must follow the normal gates below.
+The detailed allowlist, controls, invocation, skip reasons and deployment
+handoff are documented in that runbook.
+
+The following gates govern **ordinary** autonomous merges:
+
 Workers may merge a PR without asking again only after all of these gates are satisfied for the exact current head SHA:
 
 - the PR is open, non-draft, and mergeable with no conflict;
