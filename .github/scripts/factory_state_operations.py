@@ -112,6 +112,9 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     classification = str(outcome.get("outcome_class") or "unknown_failure")
     proven = outcome.get("exact_model_proven") is True
     persisted = outcome.get("persisted_work") is True
+    delivered = (persisted and outcome.get("delivery_outcome") == "persisted"
+                 and str(outcome.get("delivery_pr") or "").isdecimal())
+    completed = classification in {"success", "no_work"} or delivered
     observed = datetime.now(timezone.utc)
     # A trusted job-log collector can attest multiple attempted free models.
     # This evidence belongs to this same idempotent runtime transaction.
@@ -139,8 +142,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                  failures=factory_worker_metrics.failures+EXCLUDED.failures,
                  last_run_id=greatest(factory_worker_metrics.last_run_id,EXCLUDED.last_run_id),
                  updated_at=now()""",
-            repo, worker, source, model, int(persisted), int(classification in {"success","no_work"}),
-            int(classification not in {"success","no_work"}), run_id)
+            repo, worker, source, model, int(persisted), int(completed),
+            int(not completed), run_id)
         if classification == "model_retired_410":
             status, until = "retired", None
         elif classification in MODEL_COOLDOWNS:
@@ -205,7 +208,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 repo, source, classification, run_id)
         kind = str(outcome.get("selected_kind") or "")
         number = str(outcome.get("selected_number") or "")
-        if kind == "pr" and number.isdigit() and classification in {"work_failure","agent_timeout","unknown_failure","environment_failure"}:
+        if kind == "pr" and number.isdigit() and not delivered and classification in {"work_failure","agent_timeout","unknown_failure","environment_failure"}:
             key = f"factory-projection-v1:{repo}:pr:{int(number)}"
             record = await conn.fetchval(
                 "SELECT payload->0->'item' FROM public.factory_state_kv WHERE cache_key=$1", key)
