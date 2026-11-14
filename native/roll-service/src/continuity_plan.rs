@@ -332,7 +332,7 @@ pub async fn get_continuity_plan_membership(
     // Get plan dependencies
     let dependency_rows = conn
         .query(
-            "SELECT d.id, d.source_issue_id, d.target_issue_id, d.explanation
+            "SELECT d.id, d.source_issue_id, d.target_issue_id, pd.explanation
              FROM reading_plan_dependencies pd
              JOIN dependencies d ON d.id=pd.dependency_id
              WHERE pd.plan_id=$1",

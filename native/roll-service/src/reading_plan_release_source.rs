@@ -11,6 +11,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct ReleaseSourceResponse {
     pub id: i32,
+    pub plan_id: i32,
     pub thread_id: i32,
     pub external_identity_id: i32,
     pub provider_volume_id: String,
@@ -27,6 +28,7 @@ pub struct ReleaseSourceResponse {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ReleaseSourceCreate {
+    pub plan_id: i32,
     pub thread_id: i32,
     pub external_identity_id: i32,
     pub provider_volume_id: String,
@@ -65,6 +67,20 @@ pub async fn create_release_source(
 ) -> Result<Json<ReleaseSourceResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
     
+    // Verify plan ownership
+    let plan_exists: bool = conn
+        .query_opt(
+            "SELECT 1 FROM continuity_plans WHERE id=$1 AND user_id=$2",
+            &[&payload.plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    
+    if !plan_exists {
+        return Err(ApiError::NotFound("Continuity plan not found".to_string()));
+    }
+    
     // Verify thread ownership
     let thread_exists: bool = conn
         .query_opt(
@@ -96,13 +112,14 @@ pub async fn create_release_source(
     let result = conn
         .query(
             "INSERT INTO reading_plan_release_sources 
-             (thread_id, external_identity_id, provider_volume_id, provider_title, 
+             (plan_id, thread_id, external_identity_id, provider_volume_id, provider_title, 
               provider_publisher, provider_start_year, provider_issue_count, enabled, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
-             RETURNING id, thread_id, external_identity_id, provider_volume_id, provider_title,
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+             RETURNING id, plan_id, thread_id, external_identity_id, provider_volume_id, provider_title,
                        provider_publisher, provider_start_year, provider_issue_count, enabled,
                        last_synced_at::text, created_at::text, updated_at::text",
             &[
+                &payload.plan_id,
                 &payload.thread_id,
                 &payload.external_identity_id,
                 &payload.provider_volume_id,
@@ -119,17 +136,18 @@ pub async fn create_release_source(
     let row = result.into_iter().next().ok_or_else(|| ApiError::Internal("Failed to create release source".to_string()))?;
     let source = ReleaseSourceResponse {
         id: row.get(0),
-        thread_id: row.get(1),
-        external_identity_id: row.get(2),
-        provider_volume_id: row.get(3),
-        provider_title: row.get(4),
-        provider_publisher: row.get(5),
-        provider_start_year: row.get(6),
-        provider_issue_count: row.get(7),
-        enabled: row.get(8),
-        last_synced_at: row.get(9),
-        created_at: row.get(10),
-        updated_at: row.get(11),
+        plan_id: row.get(1),
+        thread_id: row.get(2),
+        external_identity_id: row.get(3),
+        provider_volume_id: row.get(4),
+        provider_title: row.get(5),
+        provider_publisher: row.get(6),
+        provider_start_year: row.get(7),
+        provider_issue_count: row.get(8),
+        enabled: row.get(9),
+        last_synced_at: row.get(10),
+        created_at: row.get(11),
+        updated_at: row.get(12),
     };
     
     Ok(Json(source))
@@ -143,32 +161,18 @@ pub async fn list_release_sources(
 ) -> Result<Json<Vec<ReleaseSourceResponse>>, ApiError> {
     let conn = db::checkout(&state).await?;
     
-    // Verify plan ownership
-    let plan_exists: bool = conn
-        .query_opt(
-            "SELECT 1 FROM continuity_plans WHERE id=$1 AND user_id=$2",
-            &[&plan_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-    
-    if !plan_exists {
-        return Err(ApiError::NotFound("Continuity plan not found".to_string()));
-    }
-    
+    // Verify plan ownership and fetch related release sources
     let rows = conn
         .query(
-            "SELECT r.id, r.thread_id, r.external_identity_id, r.provider_volume_id,
-                    r.provider_title, r.provider_publisher, r.provider_start_year,
-                    r.provider_issue_count, r.enabled, r.last_synced_at::text,
-                    r.created_at::text, r.updated_at::text
-             FROM reading_plan_release_sources r
-             JOIN issues i ON i.thread_id=r.thread_id
-             JOIN reading_plan_issues pi ON pi.issue_id=i.id
-             WHERE pi.plan_id=$1
-             ORDER BY r.created_at, r.id",
-            &[&plan_id],
+            "SELECT r.id, r.plan_id, r.thread_id, r.external_identity_id, r.provider_volume_id,
+                     r.provider_title, r.provider_publisher, r.provider_start_year,
+                     r.provider_issue_count, r.enabled, r.last_synced_at::text,
+                     r.created_at::text, r.updated_at::text
+              FROM reading_plan_release_sources r
+              JOIN continuity_plans p ON p.id=r.plan_id
+              WHERE r.plan_id=$1 AND p.user_id=$2
+              ORDER BY r.created_at, r.id",
+            &[&plan_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?;
@@ -177,17 +181,19 @@ pub async fn list_release_sources(
         .into_iter()
         .map(|row| ReleaseSourceResponse {
             id: row.get(0),
-            thread_id: row.get(1),
-            external_identity_id: row.get(2),
-            provider_volume_id: row.get(3),
-            provider_title: row.get(4),
-            provider_publisher: row.get(5),
-            provider_start_year: row.get(6),
-            provider_issue_count: row.get(7),
-            enabled: row.get(8),
-            last_synced_at: row.get(9),
-            created_at: row.get(10),
-            updated_at: row.get(11),
+            plan_id: row.get(1),
+            thread_id: row.get(2),
+            external_identity_id: row.get(3),
+            provider: "comicvine".to_string(),
+            provider_volume_id: row.get(4),
+            provider_title: row.get(5),
+            provider_publisher: row.get(6),
+            provider_start_year: row.get(7),
+            provider_issue_count: row.get(8),
+            enabled: row.get(9),
+            last_synced_at: row.get(10),
+            created_at: row.get(11),
+            updated_at: row.get(12),
         })
         .collect();
     
@@ -202,31 +208,17 @@ pub async fn list_release_sources_for_reader(
 ) -> Result<Json<Vec<ReadingPlanReleaseSourceStatus>>, ApiError> {
     let conn = db::checkout(&state).await?;
     
-    // Verify plan ownership
-    let plan_exists: bool = conn
-        .query_opt(
-            "SELECT 1 FROM continuity_plans WHERE id=$1 AND user_id=$2",
-            &[&plan_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-    
-    if !plan_exists {
-        return Err(ApiError::NotFound("Continuity plan not found".to_string()));
-    }
-    
+    // Verify plan ownership and fetch related release sources
     let rows = conn
         .query(
             "SELECT r.id, r.thread_id, r.external_identity_id, r.provider_volume_id,
-                    r.provider_title, r.provider_publisher, r.provider_start_year,
-                    r.provider_issue_count, r.enabled, r.last_synced_at::text
-             FROM reading_plan_release_sources r
-             JOIN issues i ON i.thread_id=r.thread_id
-             JOIN reading_plan_issues pi ON pi.issue_id=i.id
-             WHERE pi.plan_id=$1
-             ORDER BY r.created_at, r.id",
-            &[&plan_id],
+                     r.provider_title, r.provider_publisher, r.provider_start_year,
+                     r.provider_issue_count, r.enabled, r.last_synced_at::text
+              FROM reading_plan_release_sources r
+              JOIN continuity_plans p ON p.id=r.plan_id
+              WHERE r.plan_id=$1 AND p.user_id=$2
+              ORDER BY r.created_at, r.id",
+            &[&plan_id, &user.id()],
         )
         .await
         .map_err(db::query_error)?;
@@ -321,8 +313,8 @@ pub async fn delete_release_source(
     let result = conn
         .execute(
             "DELETE FROM reading_plan_release_sources r
-             USING reading_plan_issues pi, continuity_plans p
-             WHERE r.id=$1 AND pi.issue_id=r.thread_id AND pi.plan_id=p.id AND p.user_id=$2",
+             USING continuity_plans p
+             WHERE r.id=$1 AND r.plan_id=p.id AND p.user_id=$2",
             &[&source_id, &user.id()],
         )
         .await
