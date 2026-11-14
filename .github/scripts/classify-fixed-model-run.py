@@ -456,7 +456,7 @@ class ClassifierTests(unittest.TestCase):
     def test_git_commit_sha_429_does_not_pause_zai_or_kilo(self) -> None:
         """Live Z-AI run 43617062837 logged a commit hash ending in 429."""
         for source in ("z-ai", "kilo-auto"):
-            log = self.BASE.replace("source=nvidia", f"source={source}")
+            log = self.BASE.replace("source=omniroute-opencode", f"source={source}")
             log += (
                 "FIXED_MODEL_OPENCODE_OK\n"
                 "2026-11-14T16:45:56.5705392Z 9cd7bc429 improve workflow\n"
@@ -475,7 +475,7 @@ class ClassifierTests(unittest.TestCase):
 
     def test_explicit_http_429_remains_provider_throttle_not_quota(self) -> None:
         log = (
-            self.BASE.replace("source=nvidia", "source=z-ai")
+            self.BASE.replace("source=omniroute-opencode", "source=z-ai")
             + "FIXED_MODEL_OPENCODE_OK\nHTTP 429 Too Many Requests\n"
         )
         self.assertEqual(classify(log).outcome_class, "provider_throttle")
