@@ -11116,109 +11116,68 @@
         "type": "object"
       },
       "MinimalReleaseResponse": {
-        "description": "Minimal release data for reconciliation endpoints.",
+        "description": "Minimal release data for reconciliation endpoints (no body).",
         "properties": {
           "category": {
-            "title": "Category",
             "type": "string"
           },
           "created_at": {
             "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "merged_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged At"
+            "format": "date-time",
+            "type": "string"
           },
-          "provenance_json": {
-            "additionalProperties": true,
-            "title": "Provenance Json",
-            "type": "object"
-          },
+          "provenance_json": {},
           "released_at": {
             "format": "date-time",
-            "title": "Released At",
             "type": "string"
           },
           "sort_order": {
-            "title": "Sort Order",
+            "format": "int32",
             "type": "integer"
           },
           "source_merge_sha": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Merge Sha"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_pr_number": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Pr Number"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "source_repository": {
-            "title": "Source Repository",
             "type": "string"
           },
           "status": {
-            "enum": [
-              "draft",
-              "published",
-              "retracted"
-            ],
-            "title": "Status",
             "type": "string"
           },
           "summary": {
-            "title": "Summary",
             "type": "string"
           },
           "title": {
-            "title": "Title",
             "type": "string"
           },
           "updated_at": {
             "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           },
           "visibility": {
-            "enum": [
-              "public",
-              "internal"
-            ],
-            "title": "Visibility",
             "type": "string"
           }
         },
         "required": [
           "id",
           "source_repository",
-          "source_pr_number",
-          "source_merge_sha",
           "merged_at",
           "released_at",
           "category",
@@ -11231,7 +11190,6 @@
           "created_at",
           "updated_at"
         ],
-        "title": "MinimalReleaseResponse",
         "type": "object"
       },
       "NativeBoundaryEditorTarget": {
@@ -11963,57 +11921,6 @@
         ],
         "type": "object"
       },
-      "NativePublicReleaseResponse": {
-        "description": "One release ledger record returned by public-facing endpoints.",
-        "properties": {
-          "body": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "category": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "id": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "released_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "sort_order": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "released_at",
-          "category",
-          "title",
-          "summary",
-          "sort_order",
-          "created_at",
-          "updated_at"
-        ],
-        "type": "object"
-      },
       "NativeQueueSeriesMetadata": {
         "description": "Confirmed provider series metadata for one queue row.",
         "properties": {
@@ -12293,33 +12200,25 @@
         ],
         "type": "object"
       },
-      "NativeReleaseListResponse": {
-        "description": "Paginated published releases for What's New.",
+      "NativeReleaseSourceResponse": {
+        "description": "Result of reconciling a GitHub source identity with the ledger.",
         "properties": {
-          "limit": {
-            "format": "int32",
-            "type": "integer"
+          "exists": {
+            "type": "boolean"
           },
-          "offset": {
-            "format": "int32",
-            "type": "integer"
-          },
-          "releases": {
-            "items": {
-              "$ref": "#/components/schemas/NativePublicReleaseResponse"
-            },
-            "type": "array"
-          },
-          "total": {
-            "format": "int64",
-            "type": "integer"
+          "release": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MinimalReleaseResponse"
+              }
+            ]
           }
         },
         "required": [
-          "releases",
-          "total",
-          "limit",
-          "offset"
+          "exists"
         ],
         "type": "object"
       },
@@ -13257,49 +13156,38 @@
         "description": "One release ledger record returned by public-facing endpoints.",
         "properties": {
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "category": {
-            "title": "Category",
             "type": "string"
           },
           "created_at": {
             "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "released_at": {
             "format": "date-time",
-            "title": "Released At",
             "type": "string"
           },
           "sort_order": {
-            "title": "Sort Order",
+            "format": "int32",
             "type": "integer"
           },
           "summary": {
-            "title": "Summary",
             "type": "string"
           },
           "title": {
-            "title": "Title",
             "type": "string"
           },
           "updated_at": {
             "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           }
         },
@@ -13309,12 +13197,10 @@
           "category",
           "title",
           "summary",
-          "body",
           "sort_order",
           "created_at",
           "updated_at"
         ],
-        "title": "PublicReleaseResponse",
         "type": "object"
       },
       "QueueEntryPatch": {
@@ -16838,22 +16724,21 @@
         "description": "Paginated published releases for What's New.",
         "properties": {
           "limit": {
-            "title": "Limit",
+            "format": "int32",
             "type": "integer"
           },
           "offset": {
-            "title": "Offset",
+            "format": "int32",
             "type": "integer"
           },
           "releases": {
             "items": {
               "$ref": "#/components/schemas/PublicReleaseResponse"
             },
-            "title": "Releases",
             "type": "array"
           },
           "total": {
-            "title": "Total",
+            "format": "int64",
             "type": "integer"
           }
         },
@@ -16863,130 +16748,82 @@
           "limit",
           "offset"
         ],
-        "title": "ReleaseListResponse",
         "type": "object"
       },
       "ReleaseResponse": {
         "description": "One complete release ledger record returned to trusted automation.",
         "properties": {
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "category": {
-            "title": "Category",
             "type": "string"
           },
           "created_at": {
             "format": "date-time",
-            "title": "Created At",
             "type": "string"
           },
           "id": {
-            "title": "Id",
+            "format": "int32",
             "type": "integer"
           },
           "merged_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged At"
+            "format": "date-time",
+            "type": "string"
           },
-          "provenance_json": {
-            "additionalProperties": true,
-            "title": "Provenance Json",
-            "type": "object"
-          },
+          "provenance_json": {},
           "released_at": {
             "format": "date-time",
-            "title": "Released At",
             "type": "string"
           },
           "sort_order": {
-            "title": "Sort Order",
+            "format": "int32",
             "type": "integer"
           },
           "source_merge_sha": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Merge Sha"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_pr_number": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Pr Number"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "source_repository": {
-            "title": "Source Repository",
             "type": "string"
           },
           "status": {
-            "enum": [
-              "draft",
-              "published",
-              "retracted"
-            ],
-            "title": "Status",
             "type": "string"
           },
           "summary": {
-            "title": "Summary",
             "type": "string"
           },
           "title": {
-            "title": "Title",
             "type": "string"
           },
           "updated_at": {
             "format": "date-time",
-            "title": "Updated At",
             "type": "string"
           },
           "visibility": {
-            "enum": [
-              "public",
-              "internal"
-            ],
-            "title": "Visibility",
             "type": "string"
           }
         },
         "required": [
           "id",
           "source_repository",
-          "source_pr_number",
-          "source_merge_sha",
           "merged_at",
           "released_at",
           "category",
           "title",
           "summary",
-          "body",
           "visibility",
           "status",
           "sort_order",
@@ -16994,7 +16831,6 @@
           "created_at",
           "updated_at"
         ],
-        "title": "ReleaseResponse",
         "type": "object"
       },
       "ReleaseSourceCreate": {
@@ -17024,6 +16860,87 @@
         "title": "ReleaseSourceCreate",
         "type": "object"
       },
+      "ReleaseSourceResponse": {
+        "description": "A release source with provider display metadata.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "title": "External Identity Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "plan_id": {
+            "title": "Plan Id",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Title"
+          },
+          "provider_volume_id": {
+            "title": "Provider Volume Id",
+            "type": "string"
+          },
+          "thread_id": {
+            "title": "Thread Id",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider",
+          "provider_volume_id",
+          "provider_title",
+          "enabled",
+          "last_synced_at",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ReleaseSourceResponse",
+        "type": "object"
+      },
       "ReleaseSourceUpdate": {
         "description": "Update a release source (enable/disable).",
         "properties": {
@@ -17042,108 +16959,53 @@
         "description": "Idempotent release publication payload from trusted automation.",
         "properties": {
           "body": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Body"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "category": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Category",
             "type": "string"
           },
           "merged_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Merged At"
+            "format": "date-time",
+            "type": "string"
           },
-          "provenance_json": {
-            "additionalProperties": true,
-            "title": "Provenance Json",
-            "type": "object"
-          },
+          "provenance_json": {},
           "released_at": {
             "format": "date-time",
-            "title": "Released At",
             "type": "string"
           },
           "sort_order": {
-            "default": 0,
-            "title": "Sort Order",
+            "format": "int32",
             "type": "integer"
           },
           "source_merge_sha": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "minLength": 7,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Merge Sha"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "source_pr_number": {
-            "anyOf": [
-              {
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Pr Number"
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "source_repository": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Source Repository",
             "type": "string"
           },
           "status": {
-            "default": "published",
-            "enum": [
-              "draft",
-              "published",
-              "retracted"
-            ],
-            "title": "Status",
             "type": "string"
           },
           "summary": {
-            "minLength": 1,
-            "title": "Summary",
             "type": "string"
           },
           "title": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Title",
             "type": "string"
           },
           "visibility": {
-            "default": "public",
-            "enum": [
-              "public",
-              "internal"
-            ],
-            "title": "Visibility",
             "type": "string"
           }
         },
@@ -17154,7 +17016,6 @@
           "title",
           "summary"
         ],
-        "title": "ReleaseUpsertRequest",
         "type": "object"
       },
       "ReplaceIdentityRequest": {
@@ -21317,111 +21178,6 @@
         ],
         "title": "ValidationError",
         "type": "object"
-      },
-      "app__schemas__reading_plan_release_source__ReleaseSourceResponse": {
-        "description": "A release source with provider display metadata.",
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "external_identity_id": {
-            "title": "External Identity Id",
-            "type": "integer"
-          },
-          "id": {
-            "title": "Id",
-            "type": "integer"
-          },
-          "last_synced_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Synced At"
-          },
-          "plan_id": {
-            "title": "Plan Id",
-            "type": "integer"
-          },
-          "provider": {
-            "title": "Provider",
-            "type": "string"
-          },
-          "provider_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider Title"
-          },
-          "provider_volume_id": {
-            "title": "Provider Volume Id",
-            "type": "string"
-          },
-          "thread_id": {
-            "title": "Thread Id",
-            "type": "integer"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "plan_id",
-          "thread_id",
-          "external_identity_id",
-          "provider",
-          "provider_volume_id",
-          "provider_title",
-          "enabled",
-          "last_synced_at",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "ReleaseSourceResponse",
-        "type": "object"
-      },
-      "app__schemas__release__ReleaseSourceResponse": {
-        "description": "Result of reconciling a GitHub source identity with the ledger.",
-        "properties": {
-          "exists": {
-            "title": "Exists",
-            "type": "boolean"
-          },
-          "release": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MinimalReleaseResponse"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "exists"
-        ],
-        "title": "ReleaseSourceResponse",
-        "type": "object"
       }
     },
     "securitySchemes": {
@@ -23119,7 +22875,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/app__schemas__reading_plan_release_source__ReleaseSourceResponse"
+                  "$ref": "#/components/schemas/ReleaseSourceResponse"
                 }
               }
             },
@@ -23220,7 +22976,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/app__schemas__reading_plan_release_source__ReleaseSourceResponse"
+                  "$ref": "#/components/schemas/ReleaseSourceResponse"
                 }
               }
             },
@@ -23709,7 +23465,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/app__schemas__reading_plan_release_source__ReleaseSourceResponse"
+                    "$ref": "#/components/schemas/ReleaseSourceResponse"
                   },
                   "title": "Response List Release Sources Api V1 Continuity Plans  Plan Id  Release Sources  Get",
                   "type": "array"
@@ -28121,7 +27877,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativeReleaseListResponse"
+                  "$ref": "#/components/schemas/ReleaseListResponse"
                 }
               }
             },
@@ -28137,23 +27893,15 @@
         ]
       },
       "put": {
-        "description": "Idempotently create or update one merged-PR-backed release.",
-        "operationId": "publish_release_api_v1_releases__put",
+        "operationId": "releases_publish",
         "parameters": [
           {
+            "description": "Server-only release-writer credential",
             "in": "header",
             "name": "x-release-writer-token",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Release-Writer-Token"
+              "type": "string"
             }
           }
         ],
@@ -28176,40 +27924,36 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
+          },
+          "401": {
+            "description": "Invalid release writer credential"
+          },
+          "409": {
+            "description": "Source identities conflict"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Request payload failed validation"
+          },
+          "503": {
+            "description": "Release writer authorization is not configured"
           }
         },
-        "summary": "Publish Release",
+        "summary": "Documentation-only operation for the mounted releases publish handler.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "releases"
         ]
       }
     },
     "/api/v1/releases/source": {
       "get": {
-        "description": "Resolve whether trusted automation already published a GitHub source.",
-        "operationId": "reconcile_release_source_api_v1_releases_source_get",
+        "operationId": "releases_reconcile",
         "parameters": [
           {
             "in": "query",
             "name": "source_repository",
             "required": true,
             "schema": {
-              "maxLength": 255,
-              "minLength": 1,
-              "title": "Source Repository",
               "type": "string"
             }
           },
@@ -28218,16 +27962,8 @@
             "name": "source_pr_number",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Source Pr Number"
+              "format": "int32",
+              "type": "integer"
             }
           },
           {
@@ -28235,33 +27971,16 @@
             "name": "source_merge_sha",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "maxLength": 64,
-                  "minLength": 7,
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Source Merge Sha"
+              "type": "string"
             }
           },
           {
+            "description": "Server-only release-writer credential",
             "in": "header",
             "name": "x-release-writer-token",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Release-Writer-Token"
+              "type": "string"
             }
           }
         ],
@@ -28270,27 +27989,27 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/app__schemas__release__ReleaseSourceResponse"
+                  "$ref": "#/components/schemas/NativeReleaseSourceResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
+          },
+          "401": {
+            "description": "Invalid release writer credential"
+          },
+          "409": {
+            "description": "Source identities identify different records"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Missing source identity or invalid query"
+          },
+          "503": {
+            "description": "Release writer authorization is not configured"
           }
         },
-        "summary": "Reconcile Release Source",
+        "summary": "Documentation-only operation for the mounted releases source handler.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "releases"
         ]
       }
@@ -28314,7 +28033,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/NativePublicReleaseResponse"
+                  "$ref": "#/components/schemas/PublicReleaseResponse"
                 }
               }
             },
@@ -28332,32 +28051,24 @@
     },
     "/api/v1/releases/{release_id}/retract": {
       "post": {
-        "description": "Retract a release so it leaves the public What's New list.",
-        "operationId": "retract_release_api_v1_releases__release_id__retract_post",
+        "operationId": "releases_retract",
         "parameters": [
           {
             "in": "path",
             "name": "release_id",
             "required": true,
             "schema": {
-              "title": "Release Id",
+              "format": "int32",
               "type": "integer"
             }
           },
           {
+            "description": "Server-only release-writer credential",
             "in": "header",
             "name": "x-release-writer-token",
-            "required": false,
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Release-Writer-Token"
+              "type": "string"
             }
           }
         ],
@@ -28370,23 +28081,20 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": ""
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+          "401": {
+            "description": "Invalid release writer credential"
+          },
+          "404": {
+            "description": "Release not found"
+          },
+          "503": {
+            "description": "Release writer authorization is not configured"
           }
         },
-        "summary": "Retract Release",
+        "summary": "Documentation-only operation for the mounted releases retract handler.",
         "tags": [
-          "dependencies",
-          "dependencies",
           "releases"
         ]
       }

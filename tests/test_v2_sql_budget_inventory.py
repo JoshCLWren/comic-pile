@@ -6,9 +6,12 @@ from live call sites. Per-route tests pin each budget against its handler;
 this guard keeps the inventory side honest:
 
 * every budgeted entry is an operation present in the generated native
-  OpenAPI contract with consistent arithmetic;
-* the budgeted set is recorded exactly, so adding a budget requires a
-  deliberate test update alongside its per-route pin;
+  OpenAPI contract with consistent arithmetic (``full_surface`` v1/unversioned
+  entries that carry a ``sql_budget`` are validated the same way; they are not
+  set-pinned because the full-surface inventory is regenerated post-merge by
+  the route-fragment bot);
+* the ``operations`` bucket budgeted set is recorded exactly, so adding a
+  budget requires a deliberate test update alongside its per-route pin;
 * native operations without a budget are recorded exactly as gaps, so a
   new native operation cannot land without either a budget or an explicit
   entry here. Some gaps may be non-DB operations (e.g. CSRF) that need an
@@ -92,6 +95,25 @@ def _inventory_operations() -> list[dict[str, object]]:
     return entries
 
 
+def _all_inventory_operations() -> list[dict[str, object]]:
+    """Load the v2 operations plus the full-surface v1/unversioned buckets."""
+    document = json.loads(INVENTORY.read_text(encoding="utf-8"))
+    buckets: list[object] = [document["operations"]]
+    full_surface = document.get("full_surface")
+    if isinstance(full_surface, dict):
+        for key in ("v1_operations", "unversioned_operations"):
+            entries = full_surface.get(key)
+            if isinstance(entries, list):
+                buckets.append(entries)
+    merged: list[dict[str, object]] = []
+    for bucket in buckets:
+        assert isinstance(bucket, list)
+        for entry in bucket:
+            assert isinstance(entry, dict)
+            merged.append(entry)
+    return merged
+
+
 def _deployed_operations() -> set[tuple[str, str]]:
     """Read native operations from generated OpenAPI, without count snapshots."""
     document = json.loads(OPENAPI.read_text(encoding="utf-8"))
@@ -100,7 +122,7 @@ def _deployed_operations() -> set[tuple[str, str]]:
     return {
         (method.lower(), path)
         for path, operations in paths.items()
-        if path.startswith("/api/v2/")
+        if path.startswith("/api/v2/") or path.startswith("/api/v1/releases/")
         for method in operations
     }
 
@@ -173,7 +195,7 @@ def test_budget_source_matches_generated_inventory() -> None:
 
 def test_every_budget_is_a_deployed_native_operation() -> None:
     """Budgeted entries are native-rust and present in the generated contract."""
-    operations = _inventory_operations()
+    operations = _all_inventory_operations()
     deployed = _deployed_operations()
     budgeted = [op for op in operations if "sql_budget" in op]
     assert budgeted, "at least one operation must carry a sql_budget"

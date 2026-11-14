@@ -365,7 +365,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
                 "issue-identity",
                 "issues",
                 "reading-order-groups",
-                "releases",
                 # roll_recovery_switch composes under /roll in mount_subrouters().
                 "roll",
                 "threads",
