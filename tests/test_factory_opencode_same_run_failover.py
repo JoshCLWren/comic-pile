@@ -115,6 +115,7 @@ def _run_dynamic_smoke(
     (tmp_path / "factory-model-preflight-comments.json").write_text(
         "[]", encoding="utf-8"
     )
+    (tmp_path / "factory-neon-model-exclusions.json").write_text("{}", encoding="utf-8")
     output = tmp_path / "github-output"
     attempts = tmp_path / "smoke-attempts"
     gh_log = tmp_path / "smoke-gh-calls"
