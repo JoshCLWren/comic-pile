@@ -22,6 +22,7 @@ async function run({
   action = 'opened',
   liveByNumber,
   getError,
+  snapshot = null,
 } = {}) {
   const writes = [];
   const reads = [];
@@ -61,12 +62,36 @@ async function run({
     },
   };
   const github = { rest: { issues, pulls } };
-  await reconcileMissingPrLabels({ github, context: {
+  await reconcileMissingPrLabels({ github, openPullRequests: snapshot, context: {
     eventName: event, repo: { owner: 'JoshCLWren', repo: 'comic-pile' },
     payload: { pull_request: prs[0], action },
   } });
   return { writes, reads, gets, labelReads, repoLabelReads };
 }
+
+
+test('fresh Neon PR inventory skips all GitHub enumeration when enrollment is complete', async () => {
+  const labels = [{ name: 'factory' }, { name: 'factory:review' }, { name: 'factory:unowned' }];
+  const { reads, gets, writes, repoLabelReads } = await run({
+    snapshot: [{ number: 1, labels, headRefOid: sha, headRefName: 'factory/42-1', isDraft: false }],
+    prs: [{ ...pr(1), labels }],
+  });
+  assert.deepEqual(reads, []);
+  assert.deepEqual(gets, []);
+  assert.deepEqual(writes, []);
+  assert.equal(repoLabelReads, 0);
+});
+
+test('incomplete Neon PR inventory checks live GitHub before modifying labels', async () => {
+  const { reads, gets, writes } = await run({
+    snapshot: [{ number: 1, labels: [], headRefOid: sha, headRefName: 'factory/42-1', isDraft: false }],
+    prs: [pr(1)],
+    labels: [],
+  });
+  assert.deepEqual(reads, [], 'Neon supplies the candidate inventory');
+  assert.equal(gets.length, 1, 'live PR must still authorize mutation');
+  assert.equal(writes.length, 1);
+});
 
 test('open event enrolls a manual PR and preserves unrelated labels atomically', async () => {
   const { writes } = await run({ labels: ['bug'], event: 'pull_request_target', action: 'opened' });
