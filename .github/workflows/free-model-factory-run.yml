@@ -885,7 +885,7 @@ jobs:
           headers="$RUNNER_TEMP/nvidia-probe-headers.txt"
           retirement_marker='<!-- factory-model-retired-410:v1 -->'
           # Neon already holds sticky retired pins; no GitHub registry scan.
-          if jq -e --arg model "$MODEL" 
+          if jq -e --arg model "$MODEL" \
               '(.nvidia // []) | index($model) != null' \
               "$RUNNER_TEMP/factory-neon-model-exclusions.json" >/dev/null; then
             echo "Skipping Neon-excluded NVIDIA model: ${MODEL}" >&2
