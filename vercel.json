@@ -428,6 +428,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/metrics$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/sessions/[0-9]+$",
       "methods": [
         "GET"
@@ -450,6 +457,13 @@
     },
     {
       "src": "^/api/v1/bug\\-reports/$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/catalog/series\\-mappings/commit$",
       "methods": [
         "POST"
       ],
@@ -532,6 +546,13 @@
     },
     {
       "src": "^/api/v1/issues/[0-9]+/dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/metrics$",
       "methods": [
         "GET"
       ],
@@ -920,14 +941,6 @@
       "src": "^/api/threads/stale$",
       "methods": [
         "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/catalog/series\\-mappings/commit$",
-      "methods": [
-        "POST",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
@@ -1468,14 +1481,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/metrics$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/ping$",
       "methods": [
         "GET",
@@ -1722,14 +1727,6 @@
     },
     {
       "src": "^/api/v1/issue\\-identity/reading\\-lists/[^/]+/cbl\\-candidates$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/metrics$",
       "methods": [
         "GET",
         "OPTIONS"
