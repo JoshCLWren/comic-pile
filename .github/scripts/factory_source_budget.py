@@ -111,8 +111,16 @@ def exhausted_sources(
     sources = worker_sources() if sources is None else sources
     if not any(source in caps for source in sources.values()):
         return {}
-    titles = todays_entry_titles() if titles is None else titles
-    counts = count_dispatches(titles, sources, caps)
+    counts = None
+    if titles is None:
+        try:
+            from factory_state_operations import daily_usage
+            counts = daily_usage(os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"),list(caps))
+        except Exception:
+            counts = None
+    if counts is None:
+        titles = todays_entry_titles() if titles is None else titles
+        counts = count_dispatches(titles, sources, caps)
     return {source: (used, caps[source]) for source, used in counts.items() if used >= caps[source]}
 
 
@@ -155,17 +163,25 @@ def filter_workers(
     if not caps:
         return list(workers), []
     sources = worker_sources() if sources is None else sources
+    counts = None
     if titles is None and any(sources.get(str(w)) in caps for w in workers):
         try:
-            titles = todays_entry_titles()
-        except (OSError, subprocess.SubprocessError) as exc:
-            kept = [w for w in workers if sources.get(str(w)) not in caps]
-            dropped = [w for w in workers if sources.get(str(w)) in caps]
-            return kept, [
-                f"Factory {w} skipped: metered source budget could not be verified ({exc.__class__.__name__})"
-                for w in dropped
-            ]
-    counts = count_dispatches(titles or [], sources, caps)
+            from factory_state_operations import daily_usage
+            counts = daily_usage(os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"),list(caps))
+        except Exception:
+            counts = None
+        if counts is None:
+            try:
+                titles = todays_entry_titles()
+            except (OSError, subprocess.SubprocessError) as exc:
+                kept = [w for w in workers if sources.get(str(w)) not in caps]
+                dropped = [w for w in workers if sources.get(str(w)) in caps]
+                return kept, [
+                    f"Factory {w} skipped: metered source budget could not be verified ({exc.__class__.__name__})"
+                    for w in dropped
+                ]
+    if counts is None:
+        counts = count_dispatches(titles or [], sources, caps)
     kept: list[str] = []
     messages: list[str] = []
     for worker in workers:
@@ -192,7 +208,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "status":
         caps = load_budgets()
-        counts = count_dispatches(todays_entry_titles(), worker_sources(), caps)
+        try:
+            from factory_state_operations import daily_usage
+            counts = daily_usage(os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"),list(caps))
+        except Exception:
+            counts = None
+        if counts is None:
+            counts = count_dispatches(todays_entry_titles(), worker_sources(), caps)
         print(json.dumps({s: {"used": counts[s], "cap": caps[s]} for s in caps}))
         return 0
     workers = [str(item) for item in json.load(sys.stdin)]

@@ -50,6 +50,52 @@ def _object(value: Any) -> Any:
     return json.loads(value) if isinstance(value, str) else value
 
 
+def canonical_item(kind: str, item: dict[str, Any]) -> dict[str, Any]:
+    """Keep only stable discovery fields across REST webhooks and GH CLI.
+
+    GitHub's REST and GraphQL label objects have different metadata and order;
+    neither label color nor API identity is factory scheduling state.
+    """
+    names = sorted({
+        label["name"] for label in (item.get("labels") or [])
+        if isinstance(label, dict) and isinstance(label.get("name"), str)
+    })
+    canonical: dict[str, Any] = {
+        "number": item["number"],
+        "state": str(item.get("state") or "open").upper(),
+        "title": item.get("title") or "",
+        "body": item.get("body") or "",
+        "labels": [{"name": name} for name in names],
+        "createdAt": item.get("createdAt") or item.get("created_at") or "",
+        "updatedAt": item.get("updatedAt") or item.get("updated_at") or "",
+    }
+    if kind == "pr":
+        mergeable = item.get("mergeable")
+        # REST reports bool/null; gh pr list reports an enum/null.
+        if mergeable is True:
+            mergeable = "MERGEABLE"
+        elif mergeable is False:
+            mergeable = "CONFLICTING"
+        elif isinstance(mergeable, str):
+            mergeable = mergeable.upper()
+        head = item.get("head") or {}
+        base = item.get("base") or {}
+        canonical.update({
+            "author": {"login": ((item.get("author") or {}).get("login") or
+                                 (item.get("user") or {}).get("login") or "")},
+            "headRefName": item.get("headRefName") or head.get("ref") or "",
+            "headRefOid": item.get("headRefOid") or head.get("sha") or "",
+            "isDraft": bool(item.get("isDraft", item.get("draft", False))),
+            "mergeable": mergeable,
+            "mergeStateStatus": str(item.get("mergeStateStatus") or item.get("mergeable_state") or "UNKNOWN").upper(),
+            "isCrossRepository": bool(
+                item["isCrossRepository"] if "isCrossRepository" in item else
+                (head.get("repo") or {}).get("full_name") != (base.get("repo") or {}).get("full_name")
+            ),
+        })
+    return canonical
+
+
 def normalize_event(event: dict[str, object]) -> tuple[str, int, dict[str, object], str] | None:
     """Normalize GitHub events into the factory queue's discovery fields.
 
@@ -64,28 +110,8 @@ def normalize_event(event: dict[str, object]) -> tuple[str, int, dict[str, objec
     if not isinstance(raw, dict) or not isinstance(raw.get("number"), int):
         return None
     kind = "pr" if is_pr else "issue"
-    labels = [{"name": label.get("name")} for label in raw.get("labels", [])
-              if isinstance(label, dict) and isinstance(label.get("name"), str)]
-    base = {
-        "number": raw["number"],
-        "title": raw.get("title") or "",
-        "body": raw.get("body") or "",
-        "labels": labels,
-        "createdAt": raw.get("created_at") or "",
-        "updatedAt": raw.get("updated_at") or "",
-    }
-    if is_pr:
-        head = raw.get("head") or {}
-        base.update({
-            "headRefName": head.get("ref") or "",
-            "headRefOid": head.get("sha") or "",
-            "isDraft": bool(raw.get("draft")),
-            "mergeable": raw.get("mergeable"),
-            "mergeStateStatus": str(raw.get("mergeable_state") or "UNKNOWN").upper(),
-            "isCrossRepository": ((head.get("repo") or {}).get("full_name") !=
-                                  (raw.get("base") or {}).get("repo", {}).get("full_name")),
-        })
-    return kind, int(raw["number"]), base, str(raw.get("state") or "open").lower()
+    item = canonical_item(kind, raw)
+    return kind, int(raw["number"]), item, str(raw.get("state") or "open").lower()
 
 
 async def _read_projection(repo: str, kind: str) -> list[dict[str, Any]] | None:
@@ -141,8 +167,11 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     projection = [{
         "key": _target_key(repo, kind, int(item["number"])),
-        "item": item,
-        "source_updated_at": str(item.get("updatedAt") or ""),
+        "item": canonical_item(kind, item),
+        # REST webhook and GraphQL inventories use different timestamp keys.
+        # Canonicalize before the optimistic concurrency guard, not only in
+        # the payload, so a REST inventory never looks artificially ancient.
+        "source_updated_at": str(item.get("updatedAt") or item.get("updated_at") or ""),
         "observed_at": now,
     } for item in items]
     conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=12)
@@ -231,6 +260,8 @@ def reconcile_snapshot(repo: str, kind: str, items: list[dict[str, object]], sta
         return
     try:
         updated, removed = asyncio.run(_snapshot(repo, kind, items, started))
+        from factory_state_operations import checkpoint
+        checkpoint(repo, f"targets:{kind}", started, updated + removed)
         print(f"[factory-projection] reconciled {kind}: {updated} updated, {removed} closed", file=sys.stderr)
     except Exception as exc:
         print(f"[factory-projection] reconciliation unavailable ({type(exc).__name__})", file=sys.stderr)

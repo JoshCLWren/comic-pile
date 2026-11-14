@@ -51,6 +51,9 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
             )
             if busy:
                 return None
+            from factory_state_operations import _roster, reserve_capacity
+            if not await reserve_capacity(conn, repo, worker, token, ttl):
+                return None
             payload = json.dumps([{
                 "claim_id": token, "worker": worker, "targets": sorted(set(numbers)),
             }])
@@ -70,9 +73,11 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
                    (source, event_type, subject_type, subject_number, detail)
                    VALUES ('github-actions', 'worker_assigned', 'worker', $1,
                      jsonb_build_object('claim_id', $2::text, 'worker', $3::text,
-                                        'targets', $4::jsonb, 'run_id', $5::text))""",
+                                        'targets', $4::jsonb, 'run_id', $5::text,
+                                        'source', $6::text))""",
                 int(worker), token, worker, json.dumps(sorted(set(numbers))),
                 os.environ.get("GITHUB_RUN_ID", ""),
+                _roster()[worker][0],
             )
         return token
     finally:
@@ -122,6 +127,8 @@ async def _release(repo: str, worker: str, token: str, reason: str) -> bool:
                      AND payload->0->>'claim_id'=$2""",
                 keys, token,
             )
+            from factory_state_operations import release_capacity
+            await release_capacity(conn, token)
             await conn.execute(
                 """INSERT INTO public.factory_state_events
                    (source, event_type, subject_type, subject_number, detail)
@@ -206,6 +213,11 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                             payload = json.loads(payload)
                         token = payload[0]["claim_id"]
                         await conn.execute(
+                            """UPDATE public.factory_provider_reservation
+                               SET expires_at=now()+interval '15 minutes'
+                               WHERE claim_id=$1::uuid""", token,
+                        )
+                        await conn.execute(
                             """UPDATE public.factory_state_kv SET
                                  expires_at=now() + interval '15 minutes',
                                  updated_at=now()
@@ -249,6 +261,10 @@ async def _renew_verified(repo: str, workers: list[str]) -> int:
                     continue
                 payload = json.loads(raw) if isinstance(raw, str) else raw
                 token = payload[0]["claim_id"]
+                await conn.execute(
+                    """UPDATE public.factory_provider_reservation
+                       SET expires_at=now()+interval '15 minutes'
+                       WHERE claim_id=$1::uuid""", token)
                 await conn.execute(
                     """UPDATE public.factory_state_kv
                        SET expires_at=now() + interval '15 minutes',
@@ -364,23 +380,83 @@ def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
     return record_events(repo, events)
 
 
+
+def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
+    """Attribute a 180-second pinned-model smoke timeout to the provider.
+
+    Unlike a generic exit 124, this requires the actual Actions smoke step to
+    end with exit 124. The already-classified trusted outcome must be unknown,
+    pre-proof, and nonproductive. No model fault is inferred from shell source
+    alone or from the runner's subsequent cleanup.
+    """
+    if (
+        outcome.get("outcome_class") != "unknown_failure"
+        or outcome.get("exact_model_proven") is True
+        or outcome.get("persisted_work") is True
+        or not outcome.get("model") or not outcome.get("source")
+    ):
+        return outcome
+
+    # GitHub separates executed steps with a group header. Require the smoke
+    # command and terminal timeout inside the same step, not just anywhere
+    # in the complete worker log.
+    steps = re.split(r"##\[group\]Run ", job_log)
+    for step in steps:
+        if (
+            "timeout --signal=TERM --kill-after=10s 180s" in step
+            and re.search(r"##\[error\]Process completed with exit code 124\b", step)
+        ):
+            return {
+                **outcome,
+                "outcome": "PROVIDER FAILURE",
+                "outcome_class": "provider_failure",
+                "detail": "pinned OpenCode model exceeded its 180-second smoke deadline",
+            }
+    # A worker can prove its model, run for the full execution budget, and
+    # still leave no persisted work. The controller already records explicit
+    # transient provider/runtime interruption at agent timeout; the generic
+    # outcome classifier missed this production worker 46 signature.
+    worker = re.escape(str(outcome.get("worker") or ""))
+    if worker and re.search(
+        rf"\[factory:{worker}\].*agent exit status 124\b", job_log
+    ) and re.search(
+        rf"\[factory:{worker}\].*transient provider/runtime interruption on the pinned model",
+        job_log,
+    ):
+        return {
+            **outcome,
+            "outcome": "PROVIDER FAILURE",
+            "outcome_class": "provider_failure",
+            "detail": "pinned model session reached its time budget after a transient provider/runtime interruption",
+        }
+    return outcome
+
+
 def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> int:
     worker = str(outcome.get("worker") or "")
     if not WORKER_RE.fullmatch(worker) or not run_id.isdecimal():
         raise ValueError("invalid trusted runtime outcome identity")
     status = str(outcome.get("outcome_class") or "unknown_failure")
     event_type = "worker_completed" if status in {"success", "no_work"} else "worker_failed"
-    return record_events(repo, [{
+    inserted = record_events(repo, [{
         "event_type": event_type,
         "event_id": f"runtime:{run_id}",
         "worker": worker,
         "run_id": run_id,
+        "source": outcome.get("source"),
+        "model": outcome.get("model"),
+        "exact_model_proven": outcome.get("exact_model_proven") is True,
         "outcome_class": status,
         "selected_kind": outcome.get("selected_kind"),
         "selected_number": outcome.get("selected_number"),
         "persisted_work": bool(outcome.get("persisted_work")),
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }])
+    # Separate projection key is idempotent across both trusted outcome writers.
+    from factory_state_operations import enabled as health_enabled, record_runtime
+    if health_enabled():
+        record_runtime(repo, int(run_id), outcome)
+    return inserted
 
 
 def main() -> int:
@@ -388,12 +464,17 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["runtime-outcome"])
     parser.add_argument("--file", required=True)
+    parser.add_argument("--log", help="Trusted completed factory job log, for exact smoke timeout attribution")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile"))
     args = parser.parse_args()
     if args.command == "runtime-outcome":
         with open(args.file, encoding="utf-8") as stream:
-            result = record_runtime_outcome(args.repo, args.run_id, json.load(stream))
+            outcome = json.load(stream)
+        if args.log:
+            with open(args.log, encoding="utf-8", errors="replace") as stream:
+                outcome = refine_trusted_smoke_timeout(outcome, stream.read())
+        result = record_runtime_outcome(args.repo, args.run_id, outcome)
         print(f"[factory-ledger] recorded {result} terminal worker event(s)")
     return 0
 

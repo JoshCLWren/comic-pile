@@ -81,6 +81,42 @@ fn limiter() -> &'static RateLimiter {
     LIMITER.get_or_init(RateLimiter::default)
 }
 
+/// Decide whether in-process auth throttling is active.
+///
+/// Mirrors Python's `app/middleware/rate_limit.py::_should_enable_rate_limiting`
+/// contract exactly: throttling is exempt only when the process is explicitly a
+/// test environment (`TEST_ENVIRONMENT == "true"`) and the test run did not opt
+/// back in with `ENABLE_RATE_LIMITING_IN_TESTS == "true"`. Production never sets
+/// `TEST_ENVIRONMENT`, so this always returns `true` there and production
+/// behavior is unchanged.
+fn rate_limiting_enabled_for(
+    test_environment: Option<&str>,
+    enable_rate_limiting_in_tests: Option<&str>,
+) -> bool {
+    if test_environment != Some("true") {
+        return true;
+    }
+    enable_rate_limiting_in_tests == Some("true")
+}
+
+fn rate_limiting_enabled() -> bool {
+    let test_environment = std::env::var("TEST_ENVIRONMENT").ok();
+    let enable_rate_limiting_in_tests = std::env::var("ENABLE_RATE_LIMITING_IN_TESTS").ok();
+    rate_limiting_enabled_for(
+        test_environment.as_deref(),
+        enable_rate_limiting_in_tests.as_deref(),
+    )
+}
+
+/// Apply the per-key request throttle unless the current process is a test
+/// environment that did not explicitly opt in to rate limiting.
+fn enforce_rate_limit(key: &str, limit: usize, window: Duration) -> Result<(), AuthError> {
+    if !rate_limiting_enabled() {
+        return Ok(());
+    }
+    limiter().check(key, limit, window)
+}
+
 fn client_ip(headers: &HeaderMap) -> String {
     get_client_ip(headers, None)
 }
@@ -182,7 +218,7 @@ pub async fn register(
         AuthError::Validation
     })?;
     let ip = client_ip(&headers);
-    limiter().check(&format!("register:{ip}"), 5, Duration::from_secs(60))?;
+    enforce_rate_limit(&format!("register:{ip}"), 5, Duration::from_secs(60))?;
     let refresh_max_age = refresh_cookie_max_age_seconds(&state);
     let tokens = AuthService::new(state).register(&request).await?;
     let response_headers = authentication_headers(&headers, &tokens.refresh_token, refresh_max_age);
@@ -203,7 +239,7 @@ pub async fn login(
         AuthError::Validation
     })?;
     let ip = client_ip(&headers);
-    limiter().check(&format!("login:{ip}"), 5, Duration::from_secs(60))?;
+    enforce_rate_limit(&format!("login:{ip}"), 5, Duration::from_secs(60))?;
     let refresh_max_age = refresh_cookie_max_age_seconds(&state);
     let tokens = AuthService::new(state).login(&request, &ip).await?;
     let response_headers = authentication_headers(&headers, &tokens.refresh_token, refresh_max_age);
@@ -226,7 +262,7 @@ pub async fn refresh(
     let refresh_token = body_token
         .or_else(|| cookie_value(&headers, REFRESH_COOKIE).map(str::to_owned))
         .ok_or(AuthError::MissingRefreshToken)?;
-    limiter().check(
+    enforce_rate_limit(
         &format!("refresh:{}", token_digest(&refresh_token)),
         20,
         Duration::from_secs(60),
@@ -300,7 +336,7 @@ pub async fn forgot_password(
         AuthError::Validation
     })?;
     let ip = client_ip(&headers);
-    limiter().check(&format!("forgot:{ip}"), 3, Duration::from_secs(60))?;
+    enforce_rate_limit(&format!("forgot:{ip}"), 3, Duration::from_secs(60))?;
     if let Some(delivery) = PasswordResetService::new(state)
         .begin_reset(&request.email)
         .await?
@@ -330,7 +366,7 @@ pub async fn reset_password(
         AuthError::Validation
     })?;
     let ip = client_ip(&headers);
-    limiter().check(
+    enforce_rate_limit(
         &format!("reset:{ip}"),
         RESET_PASSWORD_LIMIT_PER_MINUTE,
         Duration::from_secs(60),
@@ -359,6 +395,35 @@ mod tests {
     use crate::auth::utils::{bcrypt_hash_calls, token_digest, verify_password};
     use crate::config::Config;
     use axum::body::Bytes;
+
+    #[test]
+    fn throttling_is_enabled_without_a_test_environment() {
+        assert!(
+            rate_limiting_enabled_for(None, None),
+            "production (no TEST_ENVIRONMENT) must always throttle"
+        );
+        assert!(
+            rate_limiting_enabled_for(None, Some("true")),
+            "opting in only matters inside a test environment"
+        );
+    }
+
+    #[test]
+    fn throttling_is_disabled_in_a_test_environment_by_default() {
+        assert!(!rate_limiting_enabled_for(Some("true"), None));
+        assert!(!rate_limiting_enabled_for(Some("true"), Some("false")));
+    }
+
+    #[test]
+    fn throttling_respects_explicit_opt_in_in_tests() {
+        assert!(rate_limiting_enabled_for(Some("true"), Some("true")));
+    }
+
+    #[test]
+    fn throttling_is_enabled_when_the_test_environment_flag_is_false() {
+        assert!(rate_limiting_enabled_for(Some("false"), None));
+        assert!(rate_limiting_enabled_for(Some("false"), Some("true")));
+    }
 
     #[test]
     fn rate_limiter_caps_distinct_attacker_controlled_keys() {

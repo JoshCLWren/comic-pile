@@ -11,6 +11,31 @@ original=("$@")
 command_group="${1:-}"
 command_name="${2:-}"
 
+# Shared Neon-first discovery for trusted control-plane callers. GitHub stays
+# live for exact-head review, CI, labels and claim/merge authorization.
+FACTORY_READ_HELPER="${GITHUB_WORKSPACE:-.}/.github/scripts/factory_gh_read_through.py"
+
+factory_api() {
+  if [[ -n "${FACTORY_STATE_DSN_FILE:-}" && -f "$FACTORY_READ_HELPER" ]]; then
+    python3 "$FACTORY_READ_HELPER" api -- "$@"
+  else
+    "$REAL_GH" api "$@"
+  fi
+}
+
+factory_projection() {
+  local repo="$1" kind="$2"
+  [[ -n "${FACTORY_STATE_DSN_FILE:-}" && "$repo" == "${GITHUB_REPOSITORY:-}" && -f "$FACTORY_READ_HELPER" ]] || return 1
+  python3 "$FACTORY_READ_HELPER" projected "$repo" "$kind" 2>/dev/null
+}
+
+if [[ "$command_group" == api ]]; then
+  shift
+  factory_api "$@"
+  exit $?
+fi
+
+
 emit_with_optional_jq() {
   local payload="$1" jq_expr="${2:-}"
   if [[ -n "$jq_expr" ]]; then
@@ -63,7 +88,15 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
     label_list="$(IFS=,; printf '%s' "${labels[*]}")"
     endpoint+="&labels=$(jq -rn --arg labels "$label_list" '$labels | @uri')"
   fi
-  pages="$("$REAL_GH" api --paginate --slurp "$endpoint")"
+  snapshot=''
+  if [[ "$state" == open ]] && ! [[ " ${original[*]} " == *"author"* ]]; then
+    snapshot="$(factory_projection "$repo" issue)" || snapshot=''
+  fi
+  if [[ -n "$snapshot" ]]; then
+    pages="$(jq -c '[.]' <<< "$snapshot")"
+  else
+    pages="$(factory_api --paginate --slurp "$endpoint")"
+  fi
   labels_json="$(printf '%s\n' "${labels[@]:-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
   payload="$(jq -c --argjson labels "$labels_json" --argjson limit "$limit" '
     [
@@ -76,8 +109,8 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
           title,
           body,
           labels,
-          createdAt: .created_at,
-          updatedAt: .updated_at,
+          createdAt: (.createdAt // .created_at),
+          updatedAt: (.updatedAt // .updated_at),
           state: (if .state == "open" then "OPEN" else "CLOSED" end)
         }
     ][: $limit]
@@ -93,7 +126,15 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
   if ! parse_list_args repo state limit jq_expr labels "$@"; then
     exec "$REAL_GH" "${original[@]}"
   fi
-  pages="$("$REAL_GH" api --paginate --slurp "repos/${repo}/pulls?state=${state}&per_page=100")"
+  snapshot=''
+  if [[ "$state" == open ]] && ! [[ " ${original[*]} " == *"author"* ]]; then
+    snapshot="$(factory_projection "$repo" pr)" || snapshot=''
+  fi
+  if [[ -n "$snapshot" ]]; then
+    pages="$(jq -c '[.]' <<< "$snapshot")"
+  else
+    pages="$(factory_api --paginate --slurp "repos/${repo}/pulls?state=${state}&per_page=100")"
+  fi
   labels_json="$(printf '%s\n' "${labels[@]:-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
   payload="$(jq -c --argjson labels "$labels_json" --argjson limit "$limit" '
     [
@@ -105,13 +146,19 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
           title,
           body,
           labels,
-          headRefName: .head.ref,
-          headRefOid: .head.sha,
-          author: {login: .user.login},
-          isCrossRepository: (.head.repo.full_name != .base.repo.full_name),
-          createdAt: .created_at,
-          updatedAt: .updated_at,
-          isDraft: (.draft // false),
+          headRefName: (.headRefName // .head.ref),
+          headRefOid: (.headRefOid // .head.sha),
+          # Preserve reconciliation fields already present in projected
+          # canonical PRs, or available from the live REST fallback. The
+          # omission previously turned real MERGEABLE/CLEAN into null/UNKNOWN
+          # every time the CLI adapter fed a full-inventory refresh.
+          mergeable: (if .mergeable == true then "MERGEABLE" elif .mergeable == false then "CONFLICTING" else .mergeable end),
+          mergeStateStatus: ((.mergeStateStatus // .mergeable_state // "UNKNOWN") | ascii_upcase),
+          author: {login: (.author.login // .user.login)},
+          isCrossRepository: (.isCrossRepository // (.head.repo.full_name != .base.repo.full_name)),
+          createdAt: (.createdAt // .created_at),
+          updatedAt: (.updatedAt // .updated_at),
+          isDraft: (.isDraft // .draft // false),
           state: (if .state == "open" then "OPEN" else "CLOSED" end)
         }
     ][: $limit]

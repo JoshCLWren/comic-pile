@@ -497,11 +497,13 @@
         "application_statements": 1,
         "transaction_control_statements": 0,
         "total_statements": 1,
-        "basis": "auth folded into one owner-scoped statement: current die, approved ladder source and last roll; set-based, independent of library size, no per-row N+1",
+        "basis": "auth folded into one owner-scoped statement: current die, approved ladder source and last roll; set-based, independent of library size, no per-row N+1; measured path may include one cold-pool checkout probe",
         "grows_with_data": false,
-        "max_statements": 1,
+        "max_statements": 2,
         "proof_reference": "native/roll-service/src/roll_resources.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_roll_die_state_n1.py",
+        "runtime_overhead_statements": 1
       }
     },
     {

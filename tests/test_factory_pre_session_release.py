@@ -192,6 +192,9 @@ def _load_controller_release(helpers: dict[str, object]):
         "owner_of": lambda labels: None,
         "labels_of": lambda item: [],
         "target_owned_by": lambda number, owner: False,
+        "target_json": lambda number: {"labels": []},
+        "OWNER_RE": __import__("re").compile(r"^factory:(?:unowned|[0-9]+)$"),
+        "json": json,
         "release_lease": lambda *args: False,
         **helpers,
     }
@@ -240,3 +243,86 @@ def test_trusted_cleanup_retry_clears_original_claim_when_labels_already_release
     assert releases == [
         ("owner/repo", "45", "old-claim-token", "pre-session-abort-run-43450421076")
     ]
+
+
+
+def test_trusted_exit_releases_every_original_target_without_projection_scan() -> None:
+    """Linked issue and PR are sourced from the UUID claim, not stale discovery."""
+    labels = {4737: "factory:20", 5055: "factory:20"}
+    released = []
+    events = []
+    token = ("claim-20", [4737, 5055])
+
+    def target(number: int) -> dict:
+        return {
+            "labels": [{"name": labels[number]}],
+            **({"pull_request": {}} if number == 5055 else {}),
+        }
+
+    def update(number: int, owner: str, *, expected_owner: str) -> bool:
+        assert owner == "factory:unowned" and expected_owner == "factory:20"
+        labels[number] = "factory:unowned"
+        return True
+
+    release = _load_controller_release({
+        "worker_claim": lambda *args: token,
+        "target_json": target,
+        "replace_factory_labels": update,
+        "target_owned_by": lambda number, owner: labels[number] == owner,
+        "record_claim_released": lambda number, worker, kind, reason: events.append((number, kind)),
+        "release_lease": lambda *args: released.append(args) or True,
+        "list_issues": lambda: (_ for _ in ()).throw(AssertionError("unexpected inventory scan")),
+        "list_prs": lambda: (_ for _ in ()).throw(AssertionError("unexpected inventory scan")),
+    })
+    summary = {}
+    assert release("20", "pre-session-abort-run-43603288148", details=summary) == [4737, 5055]
+    assert summary["status"] == "released" and summary["claim_released"]
+    assert released == [("owner/repo", "20", "claim-20", "pre-session-abort-run-43603288148")]
+    assert events == [(4737, "issue"), (5055, "pr")]
+
+
+def test_trusted_exit_no_claim_is_an_idempotent_noop() -> None:
+    release = _load_controller_release({
+        "worker_claim": lambda *args: None,
+        "target_json": lambda *_: (_ for _ in ()).throw(AssertionError("unowned retry must not read")),
+    })
+    result = {}
+    assert release("20", "post-session-exit-run-123", details=result) == []
+    assert result["status"] == "already_released"
+    assert result["claim_id"] is None
+
+
+def test_trusted_exit_does_not_clear_reassigned_claim() -> None:
+    """A new UUID between snapshot and mutation must leave both ledgers alone."""
+    seen = 0
+    writes = []
+    leases = []
+
+    def claim(*_args: object):
+        nonlocal seen
+        seen += 1
+        return ("old", [5055]) if seen == 1 else ("new", [5055])
+
+    release = _load_controller_release({
+        "worker_claim": claim,
+        "target_json": lambda *_: {"labels": [{"name": "factory:21"}], "pull_request": {}},
+        "replace_factory_labels": lambda *a, **k: writes.append((a, k)),
+        "release_lease": lambda *a: leases.append(a),
+    })
+    summary = {}
+    assert release("21", "pre-session-abort-run-43604078425", details=summary) == []
+    assert summary["status"] == "deferred"
+    assert summary["deferred"] == [5055]
+    assert not writes and not leases
+
+
+def test_trusted_exit_reports_live_github_errors_instead_of_silent_success() -> None:
+    release = _load_controller_release({
+        "worker_claim": lambda *args: ("claim", [5055]),
+        "target_json": lambda *_: (_ for _ in ()).throw(RuntimeError("github unavailable")),
+        "release_lease": lambda *_: (_ for _ in ()).throw(AssertionError("must not release")),
+    })
+    summary = {}
+    assert release("21", "post-session-exit-run-43604078425", details=summary) == []
+    assert summary["status"] == "failed"
+    assert summary["failed"] == ["5055:RuntimeError"]

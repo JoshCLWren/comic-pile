@@ -1,0 +1,54 @@
+name: Factory Check Projection Ingest
+
+# Advisory check/review history only. Never authorizes a merge or substitutes
+# for live GitHub exact-head checks. Trusted main, never PR code.
+on:
+  workflow_run:
+    workflows:
+      - CI
+      - Route Fragment Guard
+      - PR-Agent Advisory Review
+      - Local Ollama Review
+      - Fixed Model PR Repair Guard
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+jobs:
+  ingest:
+    if: >-
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Configure restricted Neon factory projection connection
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Ingest check on exact PR head and wake if changed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${FACTORY_STATE_DSN_FILE:-}" || ! -s "$FACTORY_STATE_DSN_FILE" ]]; then
+            echo "::error::Factory check ingestion requires a valid restricted Neon connection"
+            exit 1
+          fi
+          report="$(python3 .github/scripts/factory_state_operations.py ingest-check \
+            --repo "$GITHUB_REPOSITORY" --file "$GITHUB_EVENT_PATH")"
+          echo "$report"
+          if [[ "$(jq -r '.wake' <<< "$report")" == 'true' ]]; then
+            gh workflow run fixed-model-factory-dispatch.yml \
+              --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+          fi
