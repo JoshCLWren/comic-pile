@@ -1,6 +1,7 @@
 """Contract tests for the read-only Rotisserie adopter boundary."""
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import sys
@@ -101,9 +102,9 @@ def test_rejects_an_unscoped_repository_capture() -> None:
 def test_retry_suppression_is_visible() -> None:
     adapter = load_adapter()
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    from factory_work_policy import FACTORY_NO_DIFF_RETRY_LIMIT
+    factory_work_policy = importlib.import_module("factory_work_policy")
 
-    view["no_diff_attempts_by_issue"] = {"3002": FACTORY_NO_DIFF_RETRY_LIMIT}
+    view["no_diff_attempts_by_issue"] = {"3002": factory_work_policy.FACTORY_NO_DIFF_RETRY_LIMIT}
 
     legacy = adapter.legacy_decisions(view)
     observations = {
