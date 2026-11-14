@@ -185,13 +185,13 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             await conn.execute(
                 """INSERT INTO public.factory_model_health
                      (repo,source,model,status,last_outcome,cooldown_until,last_run_id)
-                   VALUES($1,$2,$3,\'unavailable\',\'model_unavailable\',
-                          now()+interval \'6 hours\',$4)
+                   VALUES($1,$2,$3,'unavailable','model_unavailable',
+                          now()+interval '6 hours',$4)
                    ON CONFLICT(repo,source,model) DO UPDATE SET
                      status=EXCLUDED.status,last_outcome=EXCLUDED.last_outcome,
                      cooldown_until=EXCLUDED.cooldown_until,
                      last_run_id=EXCLUDED.last_run_id,updated_at=now()
-                   WHERE factory_model_health.status!=\'retired\'
+                   WHERE factory_model_health.status!='retired'
                      AND factory_model_health.last_run_id <= EXCLUDED.last_run_id""",
                 repo, source, failed_model, run_id,
             )
