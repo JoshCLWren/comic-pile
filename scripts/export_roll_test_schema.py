@@ -43,8 +43,12 @@ DROPPED_SETTINGS = ("SET transaction_timeout = 0;",)
 # The fixture is a whole-database dump so extension creation (pg_trgm, created
 # by migration c40080000001) travels with the tables that index with it.
 DROPPED_STATEMENTS = ("CREATE SCHEMA public;",)
-# Ignore volatile, bootstrap-dependent pg_dump attribute version stamps.
-_INTERNAL_ATTRIBUTE_VERSION = re.compile(r"^ALTER TABLE ONLY .+ ALTER COLUMN .+ SET \(pg_attver=\d+\);$")
+# Some pg_dump/server builds include volatile internal attribute version stamps.
+# They change between database initializations and are not application DDL.
+# Keep the generated fixture stable while preserving all real column changes.
+_INTERNAL_ATTRIBUTE_VERSION = re.compile(
+    r"^ALTER TABLE ONLY .+ ALTER COLUMN .+ SET \(pg_attver=\d+\);$"
+)
 # pg_dump always emits `SET search_path = ''`. Some client versions then leave
 # the pg_trgm GIN operator class unqualified. Qualify it so the fixture replays
 # against an empty search_path the same way production objects live in public.
