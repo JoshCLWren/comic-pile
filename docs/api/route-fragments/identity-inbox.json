@@ -1,7 +1,7 @@
 {
   "family": "identity-inbox",
   "owned_path_patterns": [
-    "^/api/v1/identity-inbox(?:/.*)?$"
+    "^/api/v1/identity\\-inbox(?:/.*)?$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
@@ -17,7 +17,7 @@
       "method": "GET",
       "path": "/api/v1/identity-inbox",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox$",
+      "src": "^/api/v1/identity\\-inbox$",
       "owning_issue": 4833
     },
     {
@@ -25,7 +25,7 @@
       "method": "GET",
       "path": "/api/v1/identity-inbox/search/issues",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox/search/issues$",
+      "src": "^/api/v1/identity\\-inbox/search/issues$",
       "owning_issue": 4833
     },
     {
@@ -33,7 +33,7 @@
       "method": "GET",
       "path": "/api/v1/identity-inbox/{mapping_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox/[^/]+$",
+      "src": "^/api/v1/identity\\-inbox/[^/]+$",
       "owning_issue": 4833
     },
     {
@@ -41,7 +41,7 @@
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox/[^/]+/confirm$",
+      "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$",
       "owning_issue": 4833
     },
     {
@@ -49,7 +49,7 @@
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/defer",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox/[^/]+/defer$",
+      "src": "^/api/v1/identity\\-inbox/[^/]+/defer$",
       "owning_issue": 4833
     },
     {
@@ -57,7 +57,7 @@
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/reject",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox/[^/]+/reject$",
+      "src": "^/api/v1/identity\\-inbox/[^/]+/reject$",
       "owning_issue": 4833
     },
     {
@@ -65,7 +65,7 @@
       "method": "POST",
       "path": "/api/v1/identity-inbox/{mapping_id}/skip",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/identity-inbox/[^/]+/skip$",
+      "src": "^/api/v1/identity\\-inbox/[^/]+/skip$",
       "owning_issue": 4833
     }
   ]
