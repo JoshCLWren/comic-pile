@@ -99,10 +99,14 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     roster = _roster()
     if worker not in roster or not repo or not REPO_RE.fullmatch(repo):
         raise ValueError("untrusted worker or repository")
-    source, configured_model = roster[worker]
-    if str(outcome.get("source") or "") != source:
+    source, _ = roster[worker]
+    reported_source = str(outcome.get("source") or "")
+    if reported_source and reported_source != source:
         raise ValueError("runtime source disagrees with the trusted roster")
-    model = str(outcome.get("model") or configured_model)
+    # Pre-session failures cannot attest a provider/model. Track the worker
+    # event without attributing faults to an arbitrary configured model.
+    attributed = bool(reported_source and outcome.get("model"))
+    model = str(outcome.get("model") or "unclassified")
     if not model or len(model) > 180:
         raise ValueError("invalid model")
     classification = str(outcome.get("outcome_class") or "unknown_failure")
@@ -136,7 +140,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             status, until = "healthy", None
         else:
             status, until = "unknown", None
-        if classification in MODEL_COOLDOWNS or (classification in TRANSIENT and source in MODEL_SCOPED_SOURCES) or proven:
+        if attributed and (classification in MODEL_COOLDOWNS or (classification in TRANSIENT and source in MODEL_SCOPED_SOURCES) or proven):
             await conn.execute(
                 """INSERT INTO public.factory_model_health
                      (repo,source,model,status,last_outcome,cooldown_until,last_verified_at,last_run_id)
@@ -149,7 +153,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
-        if classification in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
+        if attributed and classification in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
             until = _provider_cooldown(source, classification, observed)
             await conn.execute(
                 """INSERT INTO public.factory_provider_budget
@@ -165,7 +169,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 repo, source, until, until if classification=="provider_quota" else None, classification,run_id)
         # Provider success clears a transient breaker only if no later breaker
         # was recorded. Another concurrent worker may still have hit a limit.
-        if proven and classification not in TRANSIENT:
+        if attributed and proven and classification not in TRANSIENT:
             await conn.execute(
                 """UPDATE public.factory_provider_budget SET cooldown_until=NULL,
                    last_outcome=$3,last_run_id=$4,updated_at=now()
@@ -294,7 +298,7 @@ async def _daily_usage(conn: Any, repo: str, sources: list[str]) -> dict[str,int
            FROM public.factory_state_events
            WHERE event_type='worker_assigned' AND created_at >= $1""",since)
     roster=_roster()
-    counts={source:0 for source in sources}
+    counts=dict.fromkeys(sources, 0)
     for row in rows:
         pair=roster.get(str(row["worker"] or ""))
         if pair and pair[0] in counts:
@@ -512,13 +516,13 @@ async def _rank_workers(conn:Any,repo:str,workers:list[str])->list[str]:
     for index,w in enumerate(workers):
         source=roster.get(w,("unknown",""))[0]
         groups.setdefault(source,[]).append((index,w))
-    for source,entries in groups.items():
+    for entries in groups.values():
         # Keep the source-diverse cadence/slot positions. Order ONLY within
         # each source, with unsampled workers remaining neutral.
         sorted_workers=sorted((w for _,w in entries),key=lambda w:(
             -((scores[w][0]/scores[w][1]) if w in scores and scores[w][1]>=3 else 0.20),
             w))
-        for (position,_),replacement in zip(entries,sorted_workers):
+        for (position,_),replacement in zip(entries,sorted_workers,strict=True):
             workers[position]=replacement
     return workers
 
