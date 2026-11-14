@@ -92,7 +92,22 @@ pub struct AppState {
 }
 impl AppState {
     /// Construct a lazy bounded pool; health/startup never checks out a database connection.
+    ///
+    /// Production uses [`RecyclingMethod::Fast`] and relies on [`db::checkout`]'s bounded
+    /// read-only probe for validation so reused connections are checked exactly once (#4732).
     pub fn new(config: Config) -> Result<Self, ConfigError> {
+        Self::with_recycling(config, RecyclingMethod::Fast)
+    }
+
+    /// Test and operator override for the pool recycling method.
+    ///
+    /// Production callers should use [`Self::new`]. Negative-control fixtures may select
+    /// `RecyclingMethod::Fast` with `connection_recovery` disabled so a fault fires on the
+    /// handler's first statement rather than during pool recycling.
+    pub fn with_recycling(
+        config: Config,
+        recycling_method: RecyclingMethod,
+    ) -> Result<Self, ConfigError> {
         let tls = native_tls::TlsConnector::new().map_err(|e| {
             tracing::debug!(
                 error_kind = crate::error_kind(&e),
@@ -103,13 +118,7 @@ impl AppState {
         let manager = Manager::from_config(
             config.database,
             MakeTlsConnector::new(tls),
-            ManagerConfig {
-                // `db::checkout` validates the socket with a bounded read-only
-                // probe before any handler statement (#4732). Verified ensures every
-                // checkout validates the connection, providing consistent recovery
-                // across all endpoints instead of Fast's minimal probe.
-                recycling_method: RecyclingMethod::Verified,
-            },
+            ManagerConfig { recycling_method },
         );
         let pool = Pool::builder(manager)
             .max_size(config.pool_size)
