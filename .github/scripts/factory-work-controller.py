@@ -93,7 +93,7 @@ def list_issues() -> list[dict[str, Any]]:
         reconcile_snapshot(REPO, "issue", issues, started)
         return issues
 
-    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)
+    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=450)
 
 
 def list_prs() -> list[dict[str, Any]]:
@@ -111,7 +111,7 @@ def list_prs() -> list[dict[str, Any]]:
         reconcile_snapshot(REPO, "pr", prs, started)
         return prs
 
-    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=45)
+    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=450)
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
@@ -724,7 +724,10 @@ def latest_lease_activity_epoch(number: int) -> int | None:
 def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
     """Read retry history, sharing only a refreshed snapshot within a dispatch pass."""
     def fetch_pages(since_epoch: int) -> tuple[list[dict[str, object]], int]:
-        since = datetime.fromtimestamp(since_epoch, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
+        # Round *down* to share the same Neon GET key across near-simultaneous
+        # dispatchers. The extra comments are a safe superset; retry-window
+        # filtering still uses the original now_epoch.
+        since = datetime.fromtimestamp(since_epoch - since_epoch % 60, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
         pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
         if (
             not isinstance(pages, list) or not pages
@@ -861,13 +864,23 @@ def active_fixed_workers() -> ActiveWorkerResult:
     numeric_unresolved = {value for value in unresolved_run_ids if value.isdigit()}
     if numeric_unresolved:
         try:
-            pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
-        except RuntimeError:
+            if os.environ.get('FACTORY_STATE_DSN_FILE'):
+                # Reuse the incremental, shared Neon registry rather than
+                # independently re-paginating ~2,000 heartbeat comments.
+                from factory_completion_controller import registry_comments
+                comments = registry_comments()
+            else:
+                pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
+                if not isinstance(pages, list):
+                    return ActiveWorkerResult(workers, unresolved_run_ids)
+                comments = flatten_pages(pages)
+        except Exception as exc:
+            print(f'[factory-controller] registry read unavailable ({type(exc).__name__}); preserving unresolved run fence', file=sys.stderr)
             return ActiveWorkerResult(workers, unresolved_run_ids)
-        if not isinstance(pages, list):
+        if not isinstance(comments, list):
             return ActiveWorkerResult(workers, unresolved_run_ids)
-        for comment in flatten_pages(pages):
-            if not comment_is_trusted(comment):
+        for comment in comments:
+            if not isinstance(comment, dict) or not comment_is_trusted(comment):
                 continue
             body = str(comment.get('body') or '')
             run_match = re.search(r'(?m)^Run:\s*(\d+)\s*$', body)

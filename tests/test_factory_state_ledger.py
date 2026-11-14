@@ -272,7 +272,7 @@ def test_worker_46_explicit_agent_timeout_is_not_unknown_failure():
         "on the pinned model; refusing to switch models\n"
     )
     refined = ledger.refine_trusted_smoke_timeout(outcome, log)
-    assert refined["outcome_class"] == "provider_failure"
+    assert refined["outcome_class"] == "agent_timeout"
     assert refined["source"] == "kilo-auto"
     assert refined["persisted_work"] is False
     assert ledger.refine_trusted_smoke_timeout(
@@ -283,14 +283,29 @@ def test_worker_46_explicit_agent_timeout_is_not_unknown_failure():
     )["outcome_class"] == "unknown_failure"
 
 
-def test_generic_agent_timeout_without_transient_marker_remains_unknown():
+def test_local_agent_timeout_does_not_require_provider_interruption_claim():
     outcome = {
         "worker": "46", "source": "kilo-auto", "model": "kilo-auto/free",
         "outcome_class": "unknown_failure", "exact_model_proven": False,
         "persisted_work": False,
     }
     log = "2026-11-14T14:06:47Z [factory:46] agent exit status 124 for pr #5053\n"
-    assert ledger.refine_trusted_smoke_timeout(outcome, log) == outcome
+    assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "agent_timeout"
+
+
+def test_trusted_deadline_overrides_incidental_provider_throttle_and_controller_text():
+    outcome = {
+        "worker": "82", "source": "z-ai", "model": "glm-4.7-flash",
+        "outcome_class": "provider_throttle", "exact_model_proven": True,
+        "persisted_work": False,
+    }
+    log = (
+        "2026-11-14T18:47:11Z [factory:82][source:z-ai][model:glm-4.7-flash] "
+        "agent exit status 124 for issue #4841\n"
+    )
+    assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "agent_timeout"
+    quota = {**outcome, "outcome_class": "provider_quota"}
+    assert ledger.refine_trusted_smoke_timeout(quota, log) == quota
 
 
 def test_trusted_ansi_deprecated_smoke_attributes_actual_rotated_selector():

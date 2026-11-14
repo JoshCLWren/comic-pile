@@ -436,6 +436,24 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
     pre-proof, and nonproductive. No model fault is inferred from shell source
     alone or from the runner's subsequent cleanup.
     """
+    worker = re.escape(str(outcome.get("worker") or ""))
+    # A wrapper-enforced execution deadline must not cool down the provider.
+    # Other evidence can be present merely because the agent inspected files.
+    if (worker and outcome.get("persisted_work") is not True
+            and outcome.get("outcome_class") not in {
+                "provider_quota", "model_unavailable", "model_retired_410",
+                "model_policy_violation",
+            } and re.search(
+                rf"(?m)^\d{{4}}-\d{{2}}-\d{{2}}T\S+Z \[factory:{worker}\].*"
+                r"agent exit status 124 for (?:issue|pr) #\d+\b",
+                job_log,
+            )):
+        return {
+            **outcome,
+            "outcome": "AGENT DEADLINE",
+            "outcome_class": "agent_timeout",
+            "detail": "trusted worker hit its local execution deadline; no provider failure inferred",
+        }
     if (
         outcome.get("outcome_class") not in ({"unknown_failure", "model_unavailable"} if outcome.get("source") == "nvidia" else {"unknown_failure"})
         or outcome.get("exact_model_proven") is True
@@ -488,23 +506,6 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
                     "outcome_class": "model_unavailable",
                     "detail": "actual final OpenCode smoke selector is unavailable or deprecated",
                 }
-    # A worker can prove its model, run for the full execution budget, and
-    # still leave no persisted work. The controller already records explicit
-    # transient provider/runtime interruption at agent timeout; the generic
-    # outcome classifier missed this production worker 46 signature.
-    worker = re.escape(str(outcome.get("worker") or ""))
-    if worker and re.search(
-        rf"\[factory:{worker}\].*agent exit status 124\b", job_log
-    ) and re.search(
-        rf"\[factory:{worker}\].*transient provider/runtime interruption on the pinned model",
-        job_log,
-    ):
-        return {
-            **outcome,
-            "outcome": "PROVIDER FAILURE",
-            "outcome_class": "provider_failure",
-            "detail": "pinned model session reached its time budget after a transient provider/runtime interruption",
-        }
     # A trusted NVIDIA 410 has an irreversible provider meaning. Preserve its
     # retirement in Neon, rather than retrying a known-gone model after 6h.
     if (outcome.get("source") == "nvidia"

@@ -16,6 +16,7 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "success",
         "no_work",
         "work_failure",
+        "agent_timeout",
         "provider_failure",
         "provider_throttle",
         "provider_quota",
@@ -71,6 +72,10 @@ BACKING_UNAVAILABLE_RE = re.compile(
 TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed with exit code 124", re.I)
 SESSION_TIMEOUT_RE = re.compile(
     r"exit status 124|process completed with exit code 124",
+    re.I,
+)
+AGENT_TIMEOUT_RE = re.compile(
+    r"\[factory:\d+\](?:\[[^\]\n]+\])*\s+agent exit status 124 for (?:issue|pr) #\d+\b",
     re.I,
 )
 NVIDIA_PROBE_FAILED_RE = re.compile(r"pinned nvidia model probe failed", re.I)
@@ -275,6 +280,16 @@ def classify(log: str) -> Result:
             outcome="PROVIDER QUOTA",
             outcome_class="provider_quota",
             detail="runtime evidence shows the provider account quota or budget is exhausted",
+        )
+
+    # A trusted local deadline is not a provider rate limit, even when
+    # review prose or source code mentions quotas.
+    if AGENT_TIMEOUT_RE.search(log):
+        return Result(
+            **common,
+            outcome="AGENT DEADLINE",
+            outcome_class="agent_timeout",
+            detail="the trusted worker's local agent deadline expired without persisted work",
         )
 
     if RATE_LIMIT_RE.search(log):
@@ -762,6 +777,25 @@ class ClassifierTests(unittest.TestCase):
         """Explicit provider/model policy evidence uses the model-scoped class."""
         result = classify(self.BASE + "provider rejected request: content policy violation\n")
         self.assertEqual(result.outcome_class, "model_policy_violation")
+
+    def test_wrapper_deadline_does_not_poison_provider_health(self) -> None:
+        """A local 124 beats incidental rate-limit text in agent logs."""
+        result = classify(
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "Review docs discuss rate limit and quota decisions\n"
+            + "[factory:32][source:omniroute-opencode][model:oc/big-pickle] "
+              "agent exit status 124 for issue #4822\n"
+        )
+        self.assertEqual(result.outcome_class, "agent_timeout")
+
+    def test_explicit_daily_account_quota_still_wins_over_local_deadline(self) -> None:
+        result = classify(
+            self.BASE
+            + "Rate limit exceeded: free-models-per-day-high-balance.\n"
+            + "[factory:32] agent exit status 124 for issue #4822\n"
+        )
+        self.assertEqual(result.outcome_class, "provider_quota")
 
     def test_timeout_after_proof_is_provider_failure(self) -> None:
         """A provider timeout after proof is a canonical provider failure."""

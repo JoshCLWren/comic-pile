@@ -14,7 +14,7 @@ import json
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 PAUSES_PATH = Path(__file__).resolve().parents[1] / "factory-quota-pauses.json"
@@ -33,11 +33,15 @@ class QuotaPause:
 
 
 def quota_reset_epoch(provider: str, observed_epoch: int) -> int:
-    """Use the next UTC month for monthly providers, thirty minutes otherwise.
+    """Use the UTC-day reset for OpenRouter, month for monthly providers.
 
-    Calendar reset is the configured fallback, not a claim about a provider's
-    account-specific billing date. Repeated quota evidence renews the pause.
+    Other providers retain the short conservative fallback, since a generic
+    quota outcome does not prove a calendar-wide account limit.
     """
+    if provider == "openrouter-free":
+        observed = datetime.fromtimestamp(observed_epoch, timezone.utc)
+        next_day = observed.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        return int(next_day.timestamp())
     if provider not in {"mistral", "ollama-cloud"}:
         return observed_epoch + 30 * 60
     observed = datetime.fromtimestamp(observed_epoch, timezone.utc)
