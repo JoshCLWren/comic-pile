@@ -185,9 +185,9 @@ def _runtime_evidence(log: str) -> str:
     """
     evidence = []
     for line in log.splitlines():
-        if "\\x1b[36;1m" in line:
+        if "\x1b[36;1m" in line:
             continue
-        payload = re.sub(r"^\\d{4}-\\d{2}-\\d{2}T\\S+Z\\s+", "", line).lstrip()
+        payload = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", line).lstrip()
         if payload.startswith(("* [new branch]", "remotes/origin/")):
             continue
         if payload.startswith("{"):
@@ -207,7 +207,7 @@ def _runtime_evidence(log: str) -> str:
                     # session metadata, not provider response evidence.
                     continue
         evidence.append(line)
-    return "\\n".join(evidence)
+    return "\n".join(evidence)
 
 def classify(log: str) -> Result:
     """Classify a fixed-model factory Actions log into a structured outcome.
@@ -452,12 +452,12 @@ class ClassifierTests(unittest.TestCase):
         """Real Kilo step IDs containing 413 must not cool a healthy provider."""
         log = (
             self.BASE
-            + "FIXED_MODEL_OPENCODE_OK\\n"
-            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\\n"
-            + '2026-11-14T16:29:02.8233288Z {"type":"step_start","part":{"id":"prt_1dae413e2001"}}\\n'
-            + '2026-11-14T16:29:03.0000000Z {"type":"step_finish","part":{"id":"prt_429example"}}\\n'
-            + '2026-11-14T16:29:04.0000000Z {"type":"tool_use","part":{"output":"quota and capacity examples in docs"}}\\n'
-            + "[factory:46] repair attempt for PR #5055 produced no persisted change\\n"
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\n"
+            + '2026-11-14T16:29:02.8233288Z {"type":"step_start","part":{"id":"prt_1dae413e2001"}}\n'
+            + '2026-11-14T16:29:03.0000000Z {"type":"step_finish","part":{"id":"prt_429example"}}\n'
+            + '2026-11-14T16:29:04.0000000Z {"type":"tool_use","part":{"output":"quota and capacity examples in docs"}}\n'
+            + "[factory:46] repair attempt for PR #5055 produced no persisted change\n"
         )
         result = classify(log)
         self.assertEqual(result.outcome_class, "no_work")
@@ -467,7 +467,7 @@ class ClassifierTests(unittest.TestCase):
         """A real structured error remains provider evidence after filtering."""
         log = self.BASE + (
             '2026-11-14T16:30:02.0000000Z '
-            '{"type":"error","error":{"message":"HTTP 429 Too Many Requests"}}\\n'
+            '{"type":"error","error":{"message":"HTTP 429 Too Many Requests"}}\n'
         )
         self.assertEqual(classify(log).outcome_class, "provider_throttle")
 
