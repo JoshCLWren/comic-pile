@@ -332,8 +332,8 @@ def test_actionable_pr_stage_is_live_executable(
 @pytest.mark.parametrize(
     ("attempts", "expect_assigned"),
     [
-        (2, True),
-        (3, False),
+        (-1, True),
+        (0, False),
     ],
 )
 def test_assign_respects_pr_no_diff_retry_budget(
@@ -344,6 +344,7 @@ def test_assign_respects_pr_no_diff_retry_budget(
     expect_assigned: bool,
 ) -> None:
     """PR retry exhaustion suppresses assignment without rewriting truthful stages."""
+    attempts += controller.FACTORY_NO_DIFF_RETRY_LIMIT
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     pr = {

@@ -384,7 +384,7 @@ def test_urgent_defects_bypass_wip_but_not_review_backlog_saturation(
             "factory:review" if index < 2 else "factory:building",
             created=f"2026-08-20T12:00:{index:02d}Z",
         )
-        for index in range(5)
+        for index in range(controller.FACTORY_PR_WIP_LIMIT)
     ]
     wip_candidates = controller.build_candidates([ordinary, urgent], wip)
 
