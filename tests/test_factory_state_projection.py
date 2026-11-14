@@ -332,3 +332,49 @@ def test_canonical_projection_preserves_controller_state_and_author() -> None:
     })
     assert rest_pr == cli_pr
     assert rest_pr["author"] == {"login": "trusted-author"}
+
+
+
+def test_rest_snapshot_timestamp_is_not_dropped_by_source_watermark(monkeypatch):
+    """A REST updated_at must survive the same DB CAS guard as GraphQL updatedAt."""
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    observed = []
+
+    class Tx:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, *args):
+            return None
+
+    class Conn:
+        def transaction(self):
+            return Tx()
+
+        async def execute(self, *args):
+            return "OK"
+
+        async def fetch(self, query, *args):
+            observed.append((query, args))
+            return []
+
+        async def close(self):
+            pass
+
+    async def connect(**kwargs):
+        return Conn()
+
+    monkeypatch.setitem(sys.modules, "asyncpg", SimpleNamespace(connect=connect))
+    monkeypatch.setattr(projection, "_dsn", lambda: "test-postgres-dsn")
+    entry = {"number": 4737, "state": "open", "title": "Live item", "labels": [],
+             "created_at": "2026-11-13T07:10:00Z",
+             "updated_at": "2026-11-14T14:38:05Z"}
+    assert asyncio.run(projection._snapshot(
+        "owner/repo", "issue", [entry], "2026-11-14T15:00:00Z"
+    )) == (0, 0)
+    payload = json.loads(observed[0][1][0])[0]
+    assert payload["source_updated_at"] == entry["updated_at"]
+    assert payload["item"]["updatedAt"] == entry["updated_at"]
