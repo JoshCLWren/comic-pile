@@ -46,10 +46,12 @@ QUOTA_RE = re.compile(
     re.I,
 )
 RATE_LIMIT_RE = re.compile(
-    r"(?:^|[^0-9.])429(?!\d)|too many requests|rate.?limit|\bquota\b|throttl|"
+    r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+429\b|"
+    r"\b429 too many requests\b|too many requests|rate.?limit|\bquota\b|throttl|"
     r"(?:at|out of|no|insufficient|exceeded)\s+capacity|"
     r"capacity\s+(?:exceeded|exhausted|unavailable)|"
-    r"(?:http(?: status)?|status(?: code)?)[ :]+413\b|(?:^|[^0-9.])413(?!\d)|"
+    r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+413\b|"
+    r"\b413 request (?:too )?large\b|"
     r"request too large|tokens per minute|\btpm\b",
     re.I,
 )
@@ -81,7 +83,9 @@ PROCESS_FAILURE_RE = re.compile(
     re.I,
 )
 PROVIDER_RE = re.compile(
-    r"provider error|service unavailable|bad gateway|gateway timeout|502|503|504|"
+    r"provider error|service unavailable|bad gateway|gateway timeout|"
+    r"(?:http(?: status)?|status(?: code)?)[\s:=]+(?:502|503|504)\b|"
+    r"\b(?:502 bad gateway|503 service unavailable|504 gateway timeout)\b|"
     r"econnreset|connection reset|model probe failed|failed the opencode compatibility probe",
     re.I,
 )
@@ -108,8 +112,10 @@ CONTROL_PLANE_RE = re.compile(
 )
 WORK_FAILURE_RE = re.compile(
     r"(?:tests?|checks?|lint|coverage|mechanical (?:merge )?gate) (?:failed|failing|failure)|"
-    r"actionable (?:review )?findings|semantic blockers remain",
-    re.I,
+    r"actionable (?:review )?findings|semantic blockers remain|"
+    r'^\d{4}-\d{2}-\d{2}T\S+Z \{"head": "[a-f0-9]{40}", '
+    r'"producer": "\d+", "status": "implementation-evidence-required"\}',
+    re.I | re.M,
 )
 ENVIRONMENT_RE = re.compile(
     r"checkout failed|failed to (?:checkout|install)|no space left on device|"
@@ -176,21 +182,38 @@ def _backing_unavailable_for_intent(log: str, selected_model: str) -> bool:
 
 
 def _runtime_evidence(log: str) -> str:
-    """Exclude GitHub's echoed shell source and unrelated diagnostic text.
+    """Keep executed runner diagnostics, not echoed commands or agent telemetry.
 
-    Actions prints each run-script command in cyan *before* it executes it.
-    Those lines contain both sides of conditionals, including quota errors
-    that never happened. Git checkout output and model tool reads can likewise
-    contain branch/file names with words such as 'quota' or '429'. Neither is
-    evidence of a provider failure.
+    Opaque IDs in OpenCode structured events can contain `413` or `429`,
+    while tool output can quote unrelated quota documentation. Neither proves
+    the model provider returned a rate limit. Only a structured error's
+    message (not its metadata) counts as error evidence.
     """
     evidence = []
     for line in log.splitlines():
         if "\x1b[36;1m" in line:
             continue
         payload = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", line).lstrip()
-        if payload.startswith(("* [new branch]", "remotes/origin/", '{"type":"tool_use"')):
+        if payload.startswith(("* [new branch]", "remotes/origin/")):
             continue
+        if payload.startswith("{"):
+            try:
+                event = json.loads(payload)
+            except ValueError:
+                # A truncated OpenCode trace is untrusted, not a provider
+                # response. Real sessions can emit enormous partial tool JSON.
+                continue
+            else:
+                if isinstance(event, dict) and isinstance(event.get("type"), str):
+                    if event["type"] == "error":
+                        detail = event.get("error") or event.get("message") or ""
+                        if isinstance(detail, dict):
+                            detail = detail.get("message") or ""
+                        if isinstance(detail, str) and detail.strip():
+                            evidence.append(detail)
+                    # The remainder is agent text, tool reads, timing and
+                    # session metadata, not provider response evidence.
+                    continue
         evidence.append(line)
     return "\n".join(evidence)
 
@@ -240,7 +263,12 @@ def classify(log: str) -> Result:
     # that OmniRoute emits after a 413 cascade for native intents.
     if QUOTA_RE.search(log) or (
         values["source"] in {"z-ai", "kilo-auto"}
-        and re.search(r"(?<![0-9.])429(?!\d)|too many requests", log, re.I)
+        and re.search(
+            r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+429\b|"
+            r"\b429 too many requests\b|too many requests",
+            log,
+            re.I,
+        )
     ):
         return Result(
             **common,
@@ -433,12 +461,108 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(result.outcome_class, "success")
         self.assertTrue(result.persisted_work)
 
+    def test_git_commit_sha_429_does_not_pause_zai_or_kilo(self) -> None:
+        """Live Z-AI run 43617062837 logged a commit hash ending in 429."""
+        for source in ("z-ai", "kilo-auto"):
+            log = self.BASE.replace("source=omniroute-opencode", f"source={source}")
+            log += (
+                "FIXED_MODEL_OPENCODE_OK\n"
+                "2026-11-14T16:45:56.5705392Z 9cd7bc429 improve workflow\n"
+                "[factory:54] repair attempt for PR #5060 produced no persisted change\n"
+            )
+            with self.subTest(source=source):
+                self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_git_commit_sha_413_does_not_fake_http_throttle(self) -> None:
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "2026-11-14T16:45:56.5705392Z abcdef413 improve workflow\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_explicit_http_429_retains_free_provider_quota_policy(self) -> None:
+        log = (
+            self.BASE.replace("source=omniroute-opencode", "source=z-ai")
+            + "FIXED_MODEL_OPENCODE_OK\nHTTP 429 Too Many Requests\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_quota")
+
+    def test_explicit_account_daily_limit_remains_provider_quota(self) -> None:
+        log = self.BASE + "FIXED_MODEL_OPENCODE_OK\n"
+        log += "Rate limit exceeded: free-models-per-day-high-balance\n"
+        self.assertEqual(classify(log).outcome_class, "provider_quota")
+
+    def test_kilo_session_ids_cannot_fake_provider_throttle(self) -> None:
+        """Real Kilo step IDs containing 413 must not cool a healthy provider."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\n"
+            + '2026-11-14T16:29:02.8233288Z {"type":"step_start","part":{"id":"prt_1dae413e2001"}}\n'
+            + '2026-11-14T16:29:03.0000000Z {"type":"step_finish","part":{"id":"prt_429example"}}\n'
+            + '2026-11-14T16:29:04.0000000Z {"type":"tool_use","part":{"output":"quota and capacity examples in docs"}}\n'
+            + "[factory:46] repair attempt for PR #5055 produced no persisted change\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.persisted_work)
+
+    def test_truncated_tool_json_cannot_cool_a_provider(self) -> None:
+        """Incomplete tool JSON mentioning quota is not executed provider evidence."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\n"
+            + '2026-11-14T16:27:40.7993231Z {"type":"tool_use","part":'
+              '{"output":"quota, capacity, HTTP 429, and budget tests"'
+            + "\n[factory:46] repair attempt for PR #5055 produced no persisted change\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.persisted_work)
+
+    def test_structured_provider_error_still_triggers_throttle(self) -> None:
+        """A real structured error remains provider evidence after filtering."""
+        log = self.BASE + (
+            '2026-11-14T16:30:02.0000000Z '
+            '{"type":"error","error":{"message":"HTTP 429 Too Many Requests"}}\n'
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_throttle")
+
     def test_real_quota_error_still_classifies_after_command_filtering(self) -> None:
         log = self.BASE + (
             "2026-11-13T15:14:37.049Z \x1b[36;1m echo 'quota exhausted'\x1b[0m\n"
             "2026-11-13T15:14:39.001Z Error: API budget exhausted.\n"
         )
         self.assertEqual(classify(log).outcome_class, "provider_quota")
+
+    def test_unrelated_numeric_ids_do_not_fake_provider_http_503(self) -> None:
+        """An unrelated Actions comment/session ID is not a provider outage."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "2026-11-14T16:43:18.8168504Z   FACTORY_HEARTBEAT_COMMENT_ID: 5030123456\n"
+            + "2026-11-14T16:43:18.8168504Z   FACTORY_ATTEMPT_COMMENT_ID: 5029876543\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_real_http_503_remains_provider_failure(self) -> None:
+        """Explicit HTTP error codes remain authoritative provider evidence."""
+        log = self.BASE + "FIXED_MODEL_OPENCODE_OK\nHTTP 503\n"
+        self.assertEqual(classify(log).outcome_class, "provider_failure")
+
+    def test_controller_implementation_evidence_rejection_is_work_failure(self) -> None:
+        """A trusted controller rejection is not a provider failure."""
+        head = "0" * 40
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + f'2026-11-14T16:45:27.0752116Z {{"head": "{head}", '
+              '"producer": "98", "status": "implementation-evidence-required"}\n'
+            + "2026-11-14T16:45:27.1710943Z assignment complete\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "work_failure")
 
     def test_productive(self) -> None:
         """Productive runs with proof token and persisted work are healthy."""

@@ -101,7 +101,9 @@ def test_rejects_an_unscoped_repository_capture() -> None:
 def test_retry_suppression_is_visible() -> None:
     adapter = load_adapter()
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    view["no_diff_attempts_by_issue"] = {"3002": 3}
+    from factory_work_policy import FACTORY_NO_DIFF_RETRY_LIMIT
+
+    view["no_diff_attempts_by_issue"] = {"3002": FACTORY_NO_DIFF_RETRY_LIMIT}
 
     legacy = adapter.legacy_decisions(view)
     observations = {
@@ -158,7 +160,7 @@ def test_projection_pressure_uses_factory_wip_policy() -> None:
     view = json.loads(FIXTURE.read_text(encoding="utf-8"))
 
     assert adapter.factory_pr_wip_count(view["pull_requests"]) == 0
-    assert adapter.FACTORY_PR_WIP_LIMIT == 5
+    assert adapter.FACTORY_PR_WIP_LIMIT >= 8
 
 
 def test_graph_priorities_preserve_comicpile_provenance_order() -> None:

@@ -99,10 +99,10 @@ def env_positive_int(name: str, default: int) -> int:
 
 LOCAL_LEASE_TTL_SECONDS = env_positive_int('FACTORY_LOCAL_LEASE_TTL_SECONDS', 3600)
 FIXED_LEASE_TTL_SECONDS = env_positive_int('FACTORY_FIXED_LEASE_TTL_SECONDS', 900)
-FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 5)
+FACTORY_PR_WIP_LIMIT = env_positive_int('FACTORY_PR_WIP_LIMIT', 8)
 # Incident #2309: engage completion-stage backpressure earlier so review/repair
 # drain wins before open PRs pile into conflicts.
-FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 3)
+FACTORY_REVIEW_BACKLOG_LIMIT = env_positive_int('FACTORY_REVIEW_BACKLOG_LIMIT', 6)
 # A trusted retirement handoff resets prior *issue* no-diff suppression only.
 # The exhausted PR head's retry history remains intact for the closure decision.
 NO_PROGRESS_RETIRE_RE = re.compile(
@@ -110,7 +110,7 @@ NO_PROGRESS_RETIRE_RE = re.compile(
     r'issue-(?P<issue>\d+):pr-\d+:sha-[0-9a-f]{40}:epoch-(?P<epoch>\d{10})\s*-->'
 )
 
-FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 3)
+FACTORY_NO_DIFF_RETRY_LIMIT = env_positive_int('FACTORY_NO_DIFF_RETRY_LIMIT', 4)
 FACTORY_NO_DIFF_RETRY_RESET_SECONDS = env_positive_int('FACTORY_NO_DIFF_RETRY_RESET_SECONDS', 86400)
 FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS = env_positive_int('FACTORY_REVIEW_FAILURE_COOLDOWN_SECONDS', 1800)
 

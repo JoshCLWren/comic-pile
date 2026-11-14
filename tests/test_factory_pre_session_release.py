@@ -196,6 +196,7 @@ def _load_controller_release(helpers: dict[str, object]):
         "OWNER_RE": __import__("re").compile(r"^factory:(?:unowned|[0-9]+)$"),
         "json": json,
         "release_lease": lambda *args: False,
+        "refresh_projection_after_label_change": lambda *_args: None,
         **helpers,
     }
     exec(compile(module, "<factory-controller-release>", "exec"), namespace)
@@ -235,11 +236,15 @@ def test_post_session_cleanup_fails_closed_on_neon_read_outage() -> None:
 
 def test_trusted_cleanup_retry_clears_original_claim_when_labels_already_released() -> None:
     releases: list[tuple[object, ...]] = []
+    refreshed: list[int] = []
     release = _load_controller_release({
         "worker_claim": lambda repo, worker: ("old-claim-token", [4833, 5015]),
         "release_lease": lambda *args: releases.append(args) or True,
+        "refresh_projection_after_label_change":
+            lambda number, target: refreshed.append(number),
     })
     assert release("45", "pre-session-abort-run-43450421076") == []
+    assert refreshed == [4833, 5015]
     assert releases == [
         ("owner/repo", "45", "old-claim-token", "pre-session-abort-run-43450421076")
     ]

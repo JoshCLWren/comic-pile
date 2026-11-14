@@ -11,8 +11,10 @@
     "demo",
     "dependencies",
     "issues",
+    "metrics",
     "preferences",
     "reading-mode",
+    "reading-orders",
     "releases",
     "sessions",
     "tags",
@@ -38,6 +40,13 @@
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/metrics$",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -155,6 +164,27 @@
       "src": "^/api/v1/issues/[0-9]+/dependencies$",
       "methods": [
         "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/metrics$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-orders/$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "methods": [
+        "POST"
       ],
       "dest": "/api/native_roll.rs"
     },

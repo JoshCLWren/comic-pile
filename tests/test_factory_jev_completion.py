@@ -300,10 +300,10 @@ def test_abstained_report_never_reorders() -> None:
 
 
 def test_wip_saturation_still_allows_a_completion_decision() -> None:
-    """Five leased PRs must not prevent ranking unowned completion work."""
+    """Saturated worker WIP must not prevent ranking unowned completion work."""
     leased = [
         pr(36000 + index, "factory:review", labels=["factory:12"])
-        for index in range(5)
+        for index in range(jev.FACTORY_PR_WIP_LIMIT)
     ]
     prs = [*leased, pr(36010, "factory:review"), pr(36011, "factory:ci", checks=FAILING)]
     ids = [action.action_id for action in jev.completion_actions([], prs)]
