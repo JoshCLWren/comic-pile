@@ -55,7 +55,7 @@
       "model": "kilo-auto/free",
       "minute": "40",
       "scheduler": "dispatcher",
-      "display_name": "Kilo Auto Free \u00b7 Forge"
+      "display_name": "Kilo Auto Free · Forge"
     },
     {
       "worker": "51",
@@ -280,6 +280,54 @@
       "minute": "55",
       "scheduler": "dispatcher",
       "display_name": "OpenRouter Ling 3.2 Flash Free"
+    },
+    {
+      "worker": "111",
+      "source": "opencode-free",
+      "model": "glm-5.3-flash-free",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode GLM 5.3 Flash Free"
+    },
+    {
+      "worker": "112",
+      "source": "opencode-free",
+      "model": "minimax-m3.1-flash-free",
+      "minute": "0",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode MiniMax M3.1 Flash Free"
+    },
+    {
+      "worker": "113",
+      "source": "opencode-free",
+      "model": "flint-40b-free",
+      "minute": "5",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Flint 40B Free"
+    },
+    {
+      "worker": "114",
+      "source": "opencode-free",
+      "model": "beam-free",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Beam Free"
+    },
+    {
+      "worker": "115",
+      "source": "opencode-free",
+      "model": "iceman-free",
+      "minute": "15",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Iceman Free"
+    },
+    {
+      "worker": "116",
+      "source": "opencode-free",
+      "model": "big-pickle",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "OpenCode Big Pickle Free"
     }
   ],
   "expected_workers": [
@@ -317,7 +365,13 @@
     107,
     108,
     109,
-    110
+    110,
+    111,
+    112,
+    113,
+    114,
+    115,
+    116
   ],
   "retired_workers": [
     9,
