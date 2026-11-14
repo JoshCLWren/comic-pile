@@ -1,11 +1,14 @@
 """Guard trusted CI-to-Neon ingestion against a falsely green no-op."""
-from pathlib import Path
+import importlib
 import sys
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".github/scripts"))
-import factory_state_operations as operations
+operations: Any = importlib.import_module("factory_state_operations")
 
 def test_check_ingest_requires_a_restricted_connection(monkeypatch):
     monkeypatch.delenv("FACTORY_STATE_DSN_FILE", raising=False)
