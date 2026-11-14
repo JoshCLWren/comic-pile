@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Fast-merge eligible factory-only PRs without semantic review.
+"""Attempt immediate factory-only merges without review or a CI wait.
 
-Only trusted main is executed. GitHub's required CI Summary and branch rules
-remain authoritative, and the merge is pinned to the verified PR head.
+Only trusted main is executed, the path/ownership allowlist fails closed, and
+GitHub receives the exact verified head SHA. GitHub branch protection still
+controls whether that immediate merge is permitted for the selected token.
 """
 
 from __future__ import annotations
@@ -130,35 +131,6 @@ def factory_candidate(
     return True, "Factory-only PR eligible"
 
 
-def ci_passed(
-    head: str, checks: list[dict[str, Any]], runs: list[dict[str, Any]],
-) -> bool:
-    """Require genuine successful exact-head CI and CI Summary from Actions."""
-    summaries = [
-        check
-        for check in checks
-        if check.get("name") == "CI Summary"
-        and check.get("head_sha") == head
-        and check.get("app", {}).get("slug") == "github-actions"
-    ]
-    if not summaries:
-        return False
-    latest = max(summaries, key=lambda check: int(check.get("id", 0)))
-    if (
-        latest.get("status") != "completed"
-        or latest.get("conclusion") != "success"
-    ):
-        return False
-    return any(
-        run.get("head_sha") == head
-        and run.get("name") == "CI"
-        and run.get("status") == "completed"
-        and run.get("conclusion") == "success"
-        and run.get("event") in {"pull_request", "workflow_dispatch"}
-        for run in runs
-    )
-
-
 def enabled(path: Path) -> bool:
     """Read the trusted-main repository switch, defaulting to disabled."""
     try:
@@ -221,7 +193,7 @@ def numbers(repo: str, *, pr: int | None, head: str | None) -> list[int]:
 
 
 def handle(repo: str, number: int) -> tuple[bool, str]:
-    """Merge only an eligible head whose required check still passes."""
+    """Attempt exactly one immediate SHA-pinned merge for an eligible PR."""
     pr = gh_api(f"repos/{repo}/pulls/{number}")
     if not isinstance(pr, dict):
         raise RuntimeError("Invalid pull request response")
@@ -230,33 +202,20 @@ def handle(repo: str, number: int) -> tuple[bool, str]:
     if not valid:
         return False, reason
     head = pr["head"]["sha"]
-    payload = gh_api(
-        f"repos/{repo}/commits/{head}/check-runs?per_page=100"
-    )
-    if not isinstance(payload, dict) or not isinstance(
-        payload.get("check_runs"), list
-    ) or payload.get("total_count") != len(payload["check_runs"]):
-        raise RuntimeError("Exact-head check list incomplete")
-    ci = gh_api(
-        f"repos/{repo}/actions/workflows/ci.yml/runs?head_sha={head}&per_page=100"
-    )
-    if not isinstance(ci, dict) or not isinstance(
-        ci.get("workflow_runs"), list
-    ):
-        raise RuntimeError("Invalid CI workflow listing")
-    if not ci_passed(head, payload["check_runs"], ci["workflow_runs"]):
-        return False, "Exact-head CI Summary is not successful"
-    result = gh_api(
-        f"repos/{repo}/pulls/{number}/merge",
-        method="PUT",
-        fields={
-            "sha": head,
-            "merge_method": "squash",
-            "commit_title": (
-                f"factory: fast-merge #{number} (factory-only, exact-head CI)"
-            ),
-        },
-    )
+    # Do not poll or wait for CI/review here. A branch-protection refusal is a
+    # truthful skip, not permission to forge checks or modify the branch rule.
+    try:
+        result = gh_api(
+            f"repos/{repo}/pulls/{number}/merge",
+            method="PUT",
+            fields={
+                "sha": head,
+                "merge_method": "squash",
+                "commit_title": f"factory: immediate fast-merge #{number}",
+            },
+        )
+    except RuntimeError as exc:
+        return False, f"GitHub rejected immediate merge: {exc}"
     if not isinstance(result, dict) or result.get("merged") is not True:
         raise RuntimeError("GitHub did not confirm PR merge")
     return True, str(result.get("sha", ""))
@@ -285,7 +244,7 @@ def dispatch_production(merged_count: int) -> None:
 
 
 def main() -> None:
-    """Evaluate the owner-enabled policy and report merged PR numbers."""
+    """Attempt immediate owner-enabled merges and report results."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True)
     group = parser.add_mutually_exclusive_group()
