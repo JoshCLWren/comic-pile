@@ -399,7 +399,7 @@ def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict
         if "Smoke candidate: opencode/" not in step:
             continue
         matches = list(re.finditer(
-            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w.:-]+)\s*$",
+            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w./:-]+)\s*$",
             step,
         ))
         for i, match in enumerate(matches):
@@ -414,7 +414,7 @@ def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict
             ):
                 failures.add(model)
         success = re.findall(
-            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Dynamic free-model smoke succeeded: opencode/([\w.:-]+)\s*$",
+            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Dynamic free-model smoke succeeded: opencode/([\w./:-]+)\s*$",
             step,
         )
         if success:
@@ -468,7 +468,7 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
             if not re.search(r"##\[error\]Process completed with exit code 1\b", step):
                 continue
             candidates = re.findall(
-                r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w.:-]+)\s*$",
+                r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w./:-]+)\s*$",
                 step,
             )
             if not candidates:
