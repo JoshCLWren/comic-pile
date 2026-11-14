@@ -57,7 +57,7 @@ def issue(*, owner: str = "factory:unowned") -> dict:
 
 def releases(
     *, sha: str = HEAD, reason: str = "repair-no-persisted-change-handoff",
-    count: int = 3, kind: str = "pr",
+    count: int = policy.FACTORY_NO_DIFF_RETRY_LIMIT, kind: str = "pr",
 ) -> list[dict]:
     return [
         {
@@ -79,10 +79,13 @@ def trusted_markers(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(retire, "comment_is_trusted", lambda _: True)
 
 
-def test_exact_head_three_no_progress_attempts_qualify() -> None:
+def test_exact_head_retry_limit_no_progress_attempts_qualify() -> None:
     assert retire.candidate_reason(
         pr(), issue(), releases(), now_epoch=NOW
-    ) == f"3 verified no-progress repairs at unchanged head {HEAD}"
+    ) == (
+        f"{policy.FACTORY_NO_DIFF_RETRY_LIMIT} verified no-progress repairs "
+        f"at unchanged head {HEAD}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -136,7 +139,7 @@ def test_issue_reset_only_clears_prior_issue_debt() -> None:
     records = policy.parse_no_diff_attempts_from_comments(
         [*old_issue, *old_pr, reset, *newer_issue], now_epoch=NOW
     )
-    assert sum(a.kind == "pr" for a in records) == 3
+    assert sum(a.kind == "pr" for a in records) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
     assert sum(a.kind == "issue" for a in records) == 1
 
 
@@ -148,7 +151,7 @@ def test_untrusted_reset_cannot_clear_issue_retries(
     records = policy.parse_no_diff_attempts_from_comments(
         [*releases(kind="issue"), comment], now_epoch=NOW
     )
-    assert sum(a.kind == "issue" for a in records) == 3
+    assert sum(a.kind == "issue" for a in records) == policy.FACTORY_NO_DIFF_RETRY_LIMIT
 
 
 def test_retirement_writes_handoff_before_close_and_preserves_branch(
