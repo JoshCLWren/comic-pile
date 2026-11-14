@@ -3,6 +3,7 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -96,7 +97,7 @@ pub async fn create_continuity_plan(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(payload): Json<ContinuityPlanWrite>,
-) -> Result<Json<ContinuityPlanResponse>, ApiError> {
+) -> Result<(StatusCode, Json<ContinuityPlanResponse>), ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Check if any node references issues not owned by the user
@@ -145,7 +146,7 @@ pub async fn create_continuity_plan(
         updated_at: row.get(6),
     };
     
-    Ok(Json(plan))
+    Ok((StatusCode::CREATED, Json(plan)))
 }
 
 /// `GET /api/v2/continuity-plans/{plan_id}`
@@ -258,7 +259,7 @@ pub async fn delete_continuity_plan(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path(plan_id): Path<i32>,
-) -> Result<(), ApiError> {
+) -> Result<StatusCode, ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Verify plan ownership and delete
@@ -274,7 +275,7 @@ pub async fn delete_continuity_plan(
         return Err(ApiError::NotFound("Continuity plan not found".to_string()));
     }
     
-    Ok(())
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `GET /api/v2/continuity-plans/{plan_id}/membership`
@@ -373,7 +374,7 @@ pub async fn link_plan_dependency_edge(
     user: AuthenticatedUser,
     Path((plan_id, dependency_id)): Path<(i32, i32)>,
     Json(payload): Json<ReadingPlanDependencyLinkRequest>,
-) -> Result<Json<ReadingPlanDependencyLink>, ApiError> {
+) -> Result<(StatusCode, Json<ReadingPlanDependencyLink>), ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Verify plan ownership
@@ -425,12 +426,12 @@ pub async fn link_plan_dependency_edge(
         &[&plan_id, &dependency_id],
     ).await.map_err(db::query_error)?;
     
-    Ok(Json(ReadingPlanDependencyLink {
+    Ok((StatusCode::CREATED, Json(ReadingPlanDependencyLink {
         dependency_id,
         source_issue_id: source_id,
         target_issue_id: target_id,
         explanation: payload.explanation.unwrap_or_default(),
-    }))
+    })))
 }
 
 /// `DELETE /api/v2/continuity-plans/{plan_id}/dependencies/{dependency_id}`
@@ -438,7 +439,7 @@ pub async fn unlink_plan_dependency_edge(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Path((plan_id, dependency_id)): Path<(i32, i32)>,
-) -> Result<(), ApiError> {
+) -> Result<StatusCode, ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Verify plan ownership
@@ -470,7 +471,7 @@ pub async fn unlink_plan_dependency_edge(
         ));
     }
     
-    Ok(())
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// `POST /api/v2/continuity-plans/from-reading-order`
@@ -478,7 +479,7 @@ pub async fn adopt_reading_order(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(payload): Json<serde_json::Value>,
-) -> Result<Json<ContinuityPlanResponse>, ApiError> {
+) -> Result<(StatusCode, Json<ContinuityPlanResponse>), ApiError> {
     let conn = db::checkout(&state).await?;
     
     // Extract reading order ID from payload
@@ -588,7 +589,7 @@ pub async fn adopt_reading_order(
         updated_at: row.get(6),
     };
     
-    Ok(Json(plan))
+    Ok((StatusCode::CREATED, Json(plan)))
 }
 
 #[utoipa::path(
