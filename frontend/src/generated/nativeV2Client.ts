@@ -31,6 +31,12 @@ export interface BootstrapRequest {
 
 export type BootstrapResponse = components['schemas']['BootstrapResponseV2']
 
+export interface CommitRequest {
+  body: components['schemas']['CommitRequest']
+}
+
+export type CommitResponse = components['schemas']['CommitResponse']
+
 export interface ConfirmRequest {
   path: {
     mapping_id: number
@@ -470,6 +476,7 @@ export type UpdateReadingListResponse = components['schemas']['ReadingList']
 
 export interface NativeV2Client {
   bootstrap(args?: BootstrapRequest): Promise<BootstrapResponse>
+  commit(args: CommitRequest): Promise<CommitResponse>
   confirm(args: ConfirmRequest): Promise<ConfirmResponse>
   continuityRulesCreate(args: ContinuityRulesCreateRequest): Promise<ContinuityRulesCreateResponse>
   continuityRulesDelete(args: ContinuityRulesDeleteRequest): Promise<ContinuityRulesDeleteResponse>
@@ -543,6 +550,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<BootstrapResponse>(
         "/v2/roll/bootstrap",
         { params: compactQuery(args.query) },
+      )
+    },
+    commit(args: CommitRequest) {
+      return client.post<CommitResponse, CommitRequest['body']>(
+        "/v1/catalog/series-mappings/commit",
+        args.body,
       )
     },
     confirm(args: ConfirmRequest) {
