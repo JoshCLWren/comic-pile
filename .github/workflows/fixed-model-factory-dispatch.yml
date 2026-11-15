@@ -434,6 +434,12 @@ jobs:
       # pass ranks an existing completion action instead. The controller uses
       # the decision only within existing interchangeable classes and otherwise
       # falls back.
+      - name: Configure restricted Neon factory health snapshot
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Rank factory work selection with Jev (active selection)
         if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         continue-on-error: true
