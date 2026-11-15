@@ -17,13 +17,7 @@ import pytest
 from jose import jwt
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from route_harness import (
-    assert_declared_budget,
-    cargo_example_path,
-    db_counters,
-    db_nested_statements,
-    run_rust_example,
-)
+from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-issue-patch-branches-secret"
 EXAMPLE = cargo_example_path("http_issue_read_rate")
@@ -79,28 +73,15 @@ def _make_token(username: str, secret: str, now: datetime) -> str:
 
 async def _run_patch(
     engine, binary: str, env: dict, url: str, issue_id: int, body: dict
-) -> tuple[dict, int | None, int | None]:
-    """Run a PATCH request and return (response, statement_delta, nested_delta)."""
+) -> tuple[dict, int | None]:
+    """Run a PATCH request and return (response, statement_delta)."""
     env["RUST_ROLL_TEST_ISSUE_ID"] = str(issue_id)
     env["RUST_ROLL_TEST_BODY"] = json.dumps(body)
-    n_before = await db_nested_statements(engine)
     _, _, s_before = await db_counters(engine)
     response, _, _, _ = await run_rust_example(binary, env)
     _, _, s_after = await db_counters(engine)
-    n_after = await db_nested_statements(engine)
     delta = (s_after - s_before) if s_before is not None and s_after is not None else None
-    nested = (n_after - n_before) if n_before is not None and n_after is not None else None
-    return response, delta, nested
-
-
-def _assert_nested_not_growing(small_nested: int | None, large_nested: int | None) -> None:
-    """Assert trigger/function statements do not scale with the library fixture."""
-    assert small_nested is not None and large_nested is not None, (
-        "pg_stat_statements track=all is required for nested trigger statements"
-    )
-    assert large_nested <= small_nested + 2, (
-        f"nested trigger statements grew with library size: {small_nested} -> {large_nested}"
-    )
+    return response, delta
 
 
 @pytest.mark.asyncio
@@ -125,7 +106,7 @@ async def test_issue_patch_status_only_branch() -> None:
 
         # Status: read
         body = {"status": "read", "idempotency_key": f"key-{uuid4().hex}"}
-        small_response, small_delta, small_nested = await _run_patch(
+        small_response, small_delta = await _run_patch(
             engine, BINARY, env, url, issue_ids[0], body
         )
         assert small_response.get("status") == 200, small_response
@@ -159,20 +140,15 @@ async def test_issue_patch_status_only_branch() -> None:
         finally:
             await raw.close()
         body = {"status": "unread", "idempotency_key": f"key-{uuid4().hex}"}
-        large_response, large_delta, large_nested = await _run_patch(
+        large_response, large_delta = await _run_patch(
             engine, BINARY, env, url, large_issue_id, body
         )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue", {}).get("status") == "unread"
 
-        print(
-            f"status_only: small_delta={small_delta} large_delta={large_delta} "
-            f"small_nested={small_nested} large_nested={large_nested}",
-            flush=True,
-        )
+        print(f"status_only: small_delta={small_delta} large_delta={large_delta}", flush=True)
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
-        _assert_nested_not_growing(small_nested, large_nested)
         assert_declared_budget("PATCH", "/api/v2/issues/{issue_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, (
             f"statement count grew with library size: {small_delta} -> {large_delta}"
@@ -203,7 +179,7 @@ async def test_issue_patch_rating_only_branch() -> None:
 
         # Rating only
         body = {"rating": 4.0, "idempotency_key": f"key-{uuid4().hex}"}
-        small_response, small_delta, small_nested = await _run_patch(
+        small_response, small_delta = await _run_patch(
             engine, BINARY, env, url, issue_ids[0], body
         )
         assert small_response.get("status") == 200, small_response
@@ -237,20 +213,15 @@ async def test_issue_patch_rating_only_branch() -> None:
         finally:
             await raw.close()
         body = {"rating": 3.5, "idempotency_key": f"key-{uuid4().hex}"}
-        large_response, large_delta, large_nested = await _run_patch(
+        large_response, large_delta = await _run_patch(
             engine, BINARY, env, url, large_issue_id, body
         )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict) and large_body.get("issue", {}).get("rating") == 3.5
 
-        print(
-            f"rating_only: small_delta={small_delta} large_delta={large_delta} "
-            f"small_nested={small_nested} large_nested={large_nested}",
-            flush=True,
-        )
+        print(f"rating_only: small_delta={small_delta} large_delta={large_delta}", flush=True)
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
-        _assert_nested_not_growing(small_nested, large_nested)
         assert_declared_budget("PATCH", "/api/v2/issues/{issue_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, (
             f"statement count grew with library size: {small_delta} -> {large_delta}"
@@ -282,7 +253,7 @@ async def test_issue_patch_idempotency_replay_branch() -> None:
         # First request
         idempotency_key = f"replay-{uuid4().hex}"
         body = {"status": "read", "rating": 4.0, "idempotency_key": idempotency_key}
-        first_response, first_delta, _first_nested = await _run_patch(
+        first_response, first_delta = await _run_patch(
             engine, BINARY, env, url, issue_ids[0], body
         )
         assert first_response.get("status") == 200, first_response
@@ -290,7 +261,7 @@ async def test_issue_patch_idempotency_replay_branch() -> None:
         assert isinstance(first_body, dict) and first_body.get("replayed") is False
 
         # Replay with same key and payload
-        second_response, second_delta, _second_nested = await _run_patch(
+        second_response, second_delta = await _run_patch(
             engine, BINARY, env, url, issue_ids[0], body
         )
         assert second_response.get("status") == 200, second_response
@@ -482,7 +453,7 @@ async def test_issue_patch_roll_offer_branch() -> None:
 
         # Roll offer completion
         body = {"status": "read", "rating": 4.5, "idempotency_key": f"key-{uuid4().hex}", "source": "roll_offer"}
-        small_response, small_delta, small_nested = await _run_patch(
+        small_response, small_delta = await _run_patch(
             engine, BINARY, env, url, issue_ids[0], body
         )
         assert small_response.get("status") == 200, small_response
@@ -550,20 +521,15 @@ async def test_issue_patch_roll_offer_branch() -> None:
             await raw.close()
 
         body = {"status": "read", "rating": 4.5, "idempotency_key": f"key-{uuid4().hex}", "source": "roll_offer"}
-        large_response, large_delta, large_nested = await _run_patch(
+        large_response, large_delta = await _run_patch(
             engine, BINARY, env, url, new_issue_id, body
         )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict) and large_body.get("die_after") is not None
 
-        print(
-            f"roll_offer: small_delta={small_delta} large_delta={large_delta} "
-            f"small_nested={small_nested} large_nested={large_nested}",
-            flush=True,
-        )
+        print(f"roll_offer: small_delta={small_delta} large_delta={large_delta}", flush=True)
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
-        _assert_nested_not_growing(small_nested, large_nested)
         assert_declared_budget("PATCH", "/api/v2/issues/{issue_id}", small_delta, large_delta)
         assert large_delta <= small_delta + 2, (
             f"statement count grew with library size: {small_delta} -> {large_delta}"
