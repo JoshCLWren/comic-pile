@@ -263,7 +263,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
     assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/taste/discoveries"
-        and item.get("burndown_status") == "live transitional Python with callers"
+        and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
     assert any(

@@ -718,6 +718,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/taste/discoveries$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
       "methods": [
         "POST"
@@ -1294,14 +1301,6 @@
     },
     {
       "src": "^/api/v1/sessions/current/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/taste/discoveries$",
       "methods": [
         "GET",
         "OPTIONS"
