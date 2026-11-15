@@ -136,3 +136,51 @@ def test_github_403_is_not_cached_as_empty_success(monkeypatch, capsys) -> None:
     )
     assert read_through.api([f"repos/{REPO}/pulls?state=all"]) == 22
     assert "HTTP 403" in capsys.readouterr().err
+
+
+def test_large_github_response_is_compressed_before_neon_storage() -> None:
+    original = json.dumps([{"number": i, "body": "repeated readable information " * 50} for i in range(100)])
+    packed = read_through.pack_stdout(original)
+    assert "stdout_zlib_b64" in packed
+    assert "stdout" not in packed
+    assert len(json.dumps(packed)) < len(original) // 4
+    assert read_through.unpack_stdout(packed) == original
+
+
+def test_small_or_legacy_response_keeps_original_wire_contract() -> None:
+    original = '[{"number":42}]\\n'
+    assert read_through.pack_stdout(original) == {"stdout": original}
+    assert read_through.unpack_stdout({"stdout": original}) == original
+
+
+def test_cache_hit_decodes_compressed_stdout_without_github(monkeypatch, capsys) -> None:
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/connection-file")
+    original = json.dumps([{"number": i, "body": "sample " * 400} for i in range(30)])
+    packed = read_through.pack_stdout(original)
+    monkeypatch.setitem(
+        sys.modules, "factory_state_cache",
+        types.SimpleNamespace(cached_json=lambda _key, _fetch, *, ttl_seconds: [packed]),
+    )
+    live = Mock(side_effect=AssertionError("cache hit must not call GitHub"))
+    monkeypatch.setattr(subprocess, "run", live)
+    monkeypatch.setattr(subprocess, "call", live)
+    assert read_through.api([f"repos/{REPO}/pulls?state=all"]) == 0
+    assert capsys.readouterr().out == original
+    live.assert_not_called()
+
+
+def test_corrupted_compressed_payload_falls_back_to_live_read(monkeypatch) -> None:
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPO)
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/connection-file")
+    monkeypatch.setitem(
+        sys.modules, "factory_state_cache",
+        types.SimpleNamespace(
+            cached_json=lambda _key, _fetch, *, ttl_seconds: [{"stdout_zlib_b64": "bad!"}],
+        ),
+    )
+    live = Mock(return_value=0)
+    monkeypatch.setattr(subprocess, "call", live)
+    args = [f"repos/{REPO}/pulls?state=all"]
+    assert read_through.api(args) == 0
+    live.assert_called_once()
