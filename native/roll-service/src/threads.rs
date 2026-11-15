@@ -1081,7 +1081,7 @@ SELECT json_build_object(
 )::text
 "#;
 
-fn iso_timestamp(column: &str) -> String {
+pub(crate) fn iso_timestamp(column: &str) -> String {
     format!(
         "CASE WHEN {column} IS NULL THEN NULL \
          WHEN date_trunc('second', {column}) = {column} \

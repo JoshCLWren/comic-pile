@@ -6,8 +6,11 @@
 //!
 //! * `GET /api/v1/issues/{issue_id}`
 //! * `GET /api/v1/issues/{issue_id}/dependencies`
+//! * `GET /api/v1/threads/{thread_id}/issues` — the production Fluid CPU hot
+//!   path from issue #4832 (browser bursts across many thread IDs), plus
+//! * `GET /api/v1/threads/{thread_id}/issue-dependencies`
 //!
-//! The third browser-called read in the family,
+//! The remaining browser-called reads in the family,
 //! `GET /api/v1/issues/{issue_id}/comicvine`, reuses the existing
 //! [`crate::comicvine_issue::issue_intelligence`] handler, which already
 //! serves `GET /api/v2/issues/{issue_id}/comicvine`. Python handlers remain;
