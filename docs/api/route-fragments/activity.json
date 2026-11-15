@@ -1,0 +1,39 @@
+{
+  "family": "activity",
+  "owned_path_patterns": [
+    "^/api/activity$",
+    "^/api/v1/activity$",
+    "^/api/v2/activity$"
+  ],
+  "defaults": {
+    "owning_issue": 4822,
+    "runtime": "native-rust",
+    "status": "target",
+    "consumers": [
+      "frontend/src/pages/HistoryPage.tsx"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "unversioned_operations",
+      "method": "GET",
+      "path": "/api/activity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/activity$"
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/activity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/activity$"
+    },
+    {
+      "bucket": "operations",
+      "method": "GET",
+      "path": "/api/v2/activity",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v2/activity$"
+    }
+  ]
+}

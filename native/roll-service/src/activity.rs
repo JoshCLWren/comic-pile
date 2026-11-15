@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
-struct ActivityQuery {
+pub struct ActivityQuery {
     limit: Option<i64>,
     page_token: Option<String>,
     cursor: Option<String>,
@@ -75,14 +75,6 @@ fn encode_cursor(timestamp: &str, id: i32) -> String {
 
 fn is_rate_like(event_type: &str) -> bool {
     event_type == "rate"
-}
-
-fn context_str(context: &Option<Value>, key: &str) -> Option<String> {
-    context
-        .as_ref()
-        .and_then(|value| value.get(key))
-        .and_then(|value| value.as_str())
-        .map(str::to_string)
 }
 
 fn context_i64(context: &Option<Value>, key: &str) -> Option<i64> {
