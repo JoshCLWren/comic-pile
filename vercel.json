@@ -273,6 +273,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/threads/[^/]+/issues$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v2/queue-entries/[0-9]+$",
       "methods": [
         "GET"
@@ -1352,7 +1359,6 @@
     {
       "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
-        "GET",
         "POST",
         "OPTIONS"
       ],
