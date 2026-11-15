@@ -298,9 +298,8 @@ pub async fn list_taste_discoveries(
     user: AuthenticatedUser,
     query: Result<Query<TasteDiscoveryQuery>, QueryRejection>,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    let Query(query) = query.map_err(|_| {
-        ApiError::Unprocessable("limit must be between 1 and 3".to_string())
-    })?;
+    let Query(query) =
+        query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
         return Err(ApiError::Unprocessable(
@@ -898,9 +897,6 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(
-            payload,
-            json!({"detail": "limit must be between 1 and 3"})
-        );
+        assert_eq!(payload, json!({"detail": "limit must be between 1 and 3"}));
     }
 }
