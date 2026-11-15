@@ -31,6 +31,8 @@ class FakeConnection:
         self.metrics = metrics
 
     async def fetch(self, statement, *args):
+        if "FROM public.factory_state_kv" in statement:
+            return []
         if "FROM public.factory_model_health" in statement:
             return self.models
         if "FROM public.factory_provider_budget" in statement:
