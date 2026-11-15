@@ -156,3 +156,34 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
             --file "$RUNNER_TEMP/worker-outcome-attested.json" \
             --log "$RUNNER_TEMP/factory-entry.log"
+          # The trusted classifier, not the wrapper job's shell exit, owns
+          # the Entry run's final meaning. Persist first, then fail visibly
+          # when the coding attempt really failed. Idle is not delivery.
+          classification="$(jq -r '.outcome_class // "unknown_failure"' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          delivered="$(jq -r '.delivery_outcome // "none"' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          if [[ "$delivered" == persisted ]]; then
+            verdict="code_delivered"
+            message="Verified PR #$pr was handed off; agent outcome: $classification"
+          elif [[ "$classification" == no_work ]]; then
+            verdict="idle"
+            message="No code delivered; worker had no useful work to persist"
+          elif [[ "$classification" == success ]]; then
+            verdict="work_completed"
+            message="Work completed without a verified PR handoff (for example review)"
+          else
+            verdict="failed"
+            message="No code delivered; worker failed: $classification"
+          fi
+          {
+            echo "### Factory outcome: $verdict"
+            echo
+            echo "$message"
+            echo
+            echo "Neon terminal classification: `$classification`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "[factory-outcome] $verdict: $message"
+          if [[ "$verdict" == failed ]]; then
+            echo "::error::$message"
+            exit 1
+          fi
