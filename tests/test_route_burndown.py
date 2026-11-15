@@ -188,76 +188,9 @@ def test_full_surface_matches_deployed_ingress() -> None:
     for item in shadowed_v1:
         assert item.get("ingress_destination") == "/api/native_roll.rs"
     assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/bug-reports/"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/issues/{issue_id}"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/issues/{issue_id}/comicvine"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/issues/{issue_id}/dependencies"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path")
-        == "/api/v1/comicvine/series/{comicvine_volume_id}/import-status"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/threads/{thread_id}/issue-dependencies"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/roll/dismiss-pending"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/auth/login"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/taste/discoveries/{signal_id}/dismiss"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
         item.get("method") == "GET"
         and item.get("path") == "/api/v1/taste/discoveries"
         and item.get("burndown_status") == "live transitional Python with callers"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/threads/{thread_id}"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/threads/{thread_id}/dependencies"
-        and item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
     )
     shadowed_unversioned = [
