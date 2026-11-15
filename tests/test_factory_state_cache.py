@@ -285,7 +285,7 @@ def test_regular_status_job_prunes_only_in_trusted_controller():
 
 
 def test_compacted_registry_retains_essential_evidence_without_old_history():
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
     def comment(id, updated, body, association="OWNER"):
         return {
@@ -307,7 +307,7 @@ def test_compacted_registry_retains_essential_evidence_without_old_history():
     compacted = cache.compact_registry_comments(
         records,
         trusted=lambda row: row.get("author_association") == "OWNER",
-        now=datetime(2026, 11, 15, 12, tzinfo=timezone.utc),
+        now=datetime(2026, 11, 15, 12, tzinfo=UTC),
     )
     assert {row["id"] for row in compacted} == {3, 4, 5, 6, 8, 9}
     assert [row["id"] for row in compacted] == [3, 4, 5, 9, 6, 8]
@@ -320,9 +320,9 @@ def test_compacted_registry_retains_essential_evidence_without_old_history():
 
 
 def test_compacted_registry_has_bounded_growth_and_honors_edited_old_comment():
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
-    now = datetime(2026, 11, 15, 12, tzinfo=timezone.utc)
+    now = datetime(2026, 11, 15, 12, tzinfo=UTC)
     historic = [
         {"id": i, "created_at": f"2026-10-{(i % 28) + 1:02d}T00:00:00Z",
          "updated_at": f"2026-10-{(i % 28) + 1:02d}T00:00:00Z",
@@ -344,13 +344,13 @@ def test_compacted_registry_has_bounded_growth_and_honors_edited_old_comment():
 
 
 def test_expired_generic_cache_reads_only_prior_digest(monkeypatch):
-    from datetime import datetime, timezone
+    from datetime import UTC, datetime
 
     observed = []
     def fake_run(sql, key, *, one):
         observed.append((sql, key, one))
         return {"payload": [{"stdout_sha256": "same-hash"}],
-                "expires_at": datetime(2026, 1, 1, tzinfo=timezone.utc)}
+                "expires_at": datetime(2026, 1, 1, tzinfo=UTC)}
 
     monkeypatch.setattr(cache, "_run", fake_run)
     payload, fresh = cache._read("factory-github-get-v1:JoshCLWren/comic-pile:sha")
