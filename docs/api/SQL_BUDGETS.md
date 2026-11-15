@@ -7,7 +7,10 @@ edited in a PR. A budget records the maximum combined application and
 transaction-control statements and whether that maximum grows with input data.
 The `basis` text explains the reviewed handler call path.
 `runtime_overhead_statements` records measured pool checkout probes separately
-from handler statements; `max_statements` includes that overhead.
+from handler statements; `max_statements` includes that overhead. When a route
+executes statements inside a trigger or function, `max_nested_statements` bounds
+those nested executions separately and they do not inflate the top-level
+`total_statements` or `max_statements` values.
 
 `tests/test_v2_sql_budget_inventory.py` checks source-to-generated parity,
 budget arithmetic, explicit DB-free exemptions, and the inventory gap set.

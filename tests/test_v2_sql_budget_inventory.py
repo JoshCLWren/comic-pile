@@ -148,6 +148,7 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
     total = budget.get("total_statements")
     maximum = budget.get("max_statements")
     overhead = budget.get("runtime_overhead_statements", 0)
+    nested_maximum = budget.get("max_nested_statements")
     basis = budget.get("basis")
     grows = budget.get("grows_with_data")
     assert isinstance(application, int) and application >= 0
@@ -156,6 +157,8 @@ def _budget(operation: dict[str, object]) -> dict[str, object]:
     assert total == application + control
     assert isinstance(overhead, int) and overhead >= 0
     assert maximum == total + overhead
+    if nested_maximum is not None:
+        assert isinstance(nested_maximum, int) and nested_maximum >= 0
     assert isinstance(grows, bool)
     if total == 0:
         assert operation.get("db_free") is True
