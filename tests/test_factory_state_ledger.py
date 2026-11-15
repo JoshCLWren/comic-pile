@@ -96,6 +96,17 @@ def test_terminal_classification_is_idempotency_keyed_by_run(monkeypatch):
     assert records[0]["persisted_work"] is True
 
 
+def test_idle_is_not_a_successful_delivery_or_failed_worker(monkeypatch):
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "12347", {
+        "worker": "42", "outcome_class": "no_work",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_idle"
+    assert records[0]["delivery_outcome"] == "none"
+
+
 
 def test_timed_out_agent_with_verified_delivery_is_completed(monkeypatch):
     """Worker 82: a real code handoff is not erased by its agent timeout."""
@@ -146,6 +157,13 @@ def test_trusted_collector_verifies_code_handoff_before_persistence():
     assert 'delivery_pr="$(jq -r' in entry
     assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
     assert "pull-requests: read" in entry
+    assert 'ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}' in entry
+    assert 'Verified delivery: %s' in entry
+    assert 'existing_run > GITHUB_RUN_ID' in entry
+    observer = (root / ".github/workflows/fixed-model-runtime-observer.yml").read_text()
+    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in observer
+    assert "pull-requests: read" in observer
+    assert "Verified delivery: %s" in observer
 
 
 def test_only_trusted_collectors_and_observer_use_ledger():

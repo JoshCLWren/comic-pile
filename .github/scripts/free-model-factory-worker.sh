@@ -130,6 +130,9 @@ record_agent_failure_outcome() {
   elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
+    if [[ "$SOURCE" == nvidia ]]; then
+      printf 'NVIDIA permanently retired model: %s\n' "$MODEL"
+    fi
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
@@ -493,7 +496,6 @@ available="$(remaining)"
 # lint/type, targeted tests) on top of the existing handoff reserve.
 FAST_CHECK_RESERVE_SECONDS="${FACTORY_FAST_CHECK_RESERVE_SECONDS:-240}"
 agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
-(( agent_timeout > 3000 )) && agent_timeout=3000
 if (( agent_timeout < 300 )); then
   log 'insufficient remaining budget for assigned work'
   record_terminal_outcome environment_failure 'insufficient remaining runner budget for assigned work'
@@ -525,7 +527,11 @@ while :; do
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 540 )) || break
 
-  sleep_for="$TRANSIENT_BACKOFF_SECONDS"
+  # Exponential retry delay, bounded by both the session and a ten-minute
+  # maximum. Never retry after dirty worktree changes or exhausted budget.
+  backoff_factor=$((1 << (agent_attempt - 1)))
+  sleep_for=$(( TRANSIENT_BACKOFF_SECONDS * backoff_factor ))
+  (( sleep_for > 600 )) && sleep_for=600
   max_sleep=$(( $(remaining) - 540 ))
   (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
   (( sleep_for > 0 )) && sleep "$sleep_for"

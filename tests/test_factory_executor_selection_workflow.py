@@ -49,13 +49,6 @@ def test_omniroute_catalog_discovery_requires_explicit_enable() -> None:
     assert "vars.FACTORY_OMNIROUTE_ENABLED == 'on'" in configure
 
 
-def _nvidia_probe_step(workflow: str) -> str:
-    """Return the NVIDIA pre-smoke probe step body."""
-    return workflow.split("- name: Probe pinned NVIDIA model before OpenCode smoke", maxsplit=1)[
-        1
-    ].split("- name: Smoke exact pinned model through OpenCode", maxsplit=1)[0]
-
-
 def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
     """Z.AI and Ollama Cloud lanes write OmniRoute-shaped openai-compat config."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
@@ -68,46 +61,21 @@ def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
     assert "https://router.requesty.ai/v1" in workflow
     assert "https://ai-gateway.vercel.sh/v1" in workflow
     assert "Require Pixel Canary to remain zero-price" in workflow
-    assert "Prove Pixel Canary can use OpenCode tools" in workflow
     assert "Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}" in workflow
     assert "OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}" in workflow
     assert "MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}" in workflow
     assert 'package: "@opencode/ai/providers/openai-compatible"' in workflow
 
 
-def test_runtime_provider_probes_remain_authoritative() -> None:
-    """Pinned NVIDIA and catalog free slots keep real probe/smoke authority."""
+def test_model_requests_are_reserved_for_the_real_work_session() -> None:
+    """No redundant model inference is spent on probes or tool-canary prompts."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "Probe pinned NVIDIA model before OpenCode smoke" in workflow
-    assert "Smoke exact pinned model through OpenCode" in workflow
-    assert "Smoke Kilo Auto Free through Kilo CLI" in workflow
-    assert "integrate.api.nvidia.com" in workflow
-
-
-def test_nvidia_probe_retries_http_000_and_curl_transport_timeouts() -> None:
-    """Empty curl responses must retry like 429, then soft-exit instead of hard-fail."""
-    probe = _nvidia_probe_step(WORKFLOW.read_text(encoding="utf-8"))
-
-    assert "--max-time 45" in probe
-    assert "--max-time 120" not in probe
-    assert "chat/completions || true" not in probe
-    assert "|| curl_exit=$?" in probe
-    assert "curl_exit" in probe
-    assert 'code="${code:-000}"' in probe
-    assert '"$code" == "000"' in probe
-    assert '"$curl_exit" =~ ^(6|7|28|35|52|56)$' in probe
-    assert "allowing worker to proceed with built-in retry handling" in probe
-    assert "factory-model-retired-410:v1" in probe
-    assert "model_retired_410" in probe
-    assert "provider_failure\\tNVIDIA probe HTTP" in probe
-    assert "model_unavailable\\tNVIDIA probe HTTP 404" in probe
-    assert "max_attempts=3" in probe
-    # Transport exhaustion must not sticky-retire or write 410.
-    assert probe.index('"$code" == "000"') < probe.index("allowing worker to proceed")
-    assert probe.index("allowing worker to proceed") < probe.index(
-        "provider_failure\\tNVIDIA probe HTTP"
-    )
+    prework = workflow.split("- name: Run continuous fixed-model factory session", 1)[0]
+    assert "Wait for exact model in OpenCode catalog" in prework
+    assert "Require Pixel Canary to remain zero-price" in prework
+    assert "opencode run" not in prework
+    assert "KILO_AUTO_FREE_OK" not in prework
+    assert "/chat/completions" not in prework
 
 
 def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
@@ -126,11 +94,11 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"FACTORY_SOURCE: {selected_source}" in workflow
     assert f"MODEL: {selected_model}" in workflow
     assert (
-        "FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}"
+        "FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}"
         in workflow
     )
     assert (
-        "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
+        "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
         in workflow
     )
     assert f"RUNTIME_MODEL: {selected_runtime}" in workflow
@@ -168,50 +136,6 @@ def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> N
     assert 'printf \'[]\\n\' > "$comments_file"' in live
     assert 'FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}' in workflow
     assert 'jq -e \'type == "object" and all(.[]; type == "array")\'' in selector
-
-
-def test_exact_smoke_failure_reaches_outcome_file(tmp_path: Path) -> None:
-    """Execute the real smoke shell with an unavailable model and inspect its record."""
-    import os
-    import subprocess
-
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    step = workflow.split("- name: Smoke exact pinned model through OpenCode", 1)[1].split(
-        "- name: Prove pinned DeepSeek",
-        1,
-    )[0]
-    script = step.split("run: |\n", 1)[1]
-    script = "\n".join(line[10:] for line in script.splitlines())
-    script = script.replace(
-        ".github/scripts/factory_live_opencode.py",
-        str(ROOT / ".github/scripts/factory_live_opencode.py"),
-    )
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    for name, body in {
-        "git": "#!/bin/sh\nexit 0\n",
-        "opencode": '#!/bin/sh\necho "Error: Model unavailable: opencode/ll-alpha-free"\nexit 1\n',
-    }.items():
-        executable = bin_dir / name
-        executable.write_text(body)
-        executable.chmod(0o755)
-    result = subprocess.run(
-        ["bash", "-c", script],
-        env={
-            **os.environ,
-            "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "RUNNER_TEMP": str(tmp_path),
-            "RUNTIME_MODEL": "opencode/ll-alpha-free",
-            "DEEPSEEK_MODE": "normal",
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 1, result.stderr
-    assert (tmp_path / "factory-discovery-outcome").read_text() == (
-        "model_unavailable\tModel unavailable: opencode/ll-alpha-free\n"
-    )
 
 
 def test_unavailability_snapshot_cannot_be_overwritten_as_worker_record(tmp_path: Path) -> None:
