@@ -496,6 +496,7 @@ jobs:
           DEPLOY_SHA: ${{ github.sha }}
           DISPATCH_WORKER: ${{ inputs.worker }}
           DISPATCH_MODE: ${{ inputs.mode }}
+          OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
@@ -803,6 +804,24 @@ jobs:
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
             echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+
+          # Jev may promote one already-eligible worker. This cannot bypass
+          # quota, cooldown, source budgets, or the trusted capacity cap.
+          # Provider failure or abstention retains the existing roster order.
+          if [[ -n "${OPENROUTER_JEV_API_KEY:-}" ]] && (( $(jq 'length' <<< "$workers") > 1 )); then
+            worker_file="$RUNNER_TEMP/jev-eligible-workers.json"
+            health_file="$RUNNER_TEMP/jev-worker-health.json"
+            printf '%s\n' "$workers" > "$worker_file"
+            if python3 .github/scripts/factory_state_operations.py stats \
+                --repo "$GITHUB_REPOSITORY" > "$health_file"; then
+              selected="$(python3 .github/scripts/factory_jev_shadow.py \
+                --workers "$worker_file" --factory-health "$health_file")" || selected=""
+              if [[ -n "$selected" ]] && jq -e --argjson old "$workers" \
+                  'length == ($old | length) and (sort == ($old | sort))' <<< "$selected" >/dev/null; then
+                workers="$selected"
+              fi
+            fi
           fi
 
           echo "Dispatching workers through centralized assignment: $workers"
