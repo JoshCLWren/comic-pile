@@ -8,7 +8,6 @@ use axum::{extract::State, Json};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use utoipa::ToSchema;
 
 const STATUS_SQL: &str = "SELECT rps.id, rps.plan_id, rps.thread_id, \
      rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at \
@@ -39,8 +38,7 @@ pub struct SyncStatusResponse {
 /// Request schema for the sync operation.
 #[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
 pub struct SyncRequest {
-    #[serde(with = "chrono::serde::ts_seconds")]
-    pub as_of: DateTime<Utc>,
+    pub as_of: String,
     pub refresh: bool,
 }
 
