@@ -518,7 +518,8 @@ def registry_comments() -> list[dict[str, Any]]:
     scripts = str(Path(__file__).resolve().parent)
     if scripts not in sys.path:
         sys.path.insert(0, scripts)
-    from factory_state_cache import cached_json, incremental_comments
+    from factory_state_cache import cached_json, compact_registry_comments, incremental_comments
+    from factory_work_policy import comment_is_trusted
 
     def fetch_since(since: str | None) -> list[dict[str, Any]]:
         endpoint = f"repos/{REPO}/issues/1093/comments?per_page=100"
@@ -538,8 +539,11 @@ def registry_comments() -> list[dict[str, Any]]:
 
     return cached_json(
         f"{REPO}:registry-comments",
-        lambda previous: incremental_comments(previous, fetch_since),
-        ttl_seconds=360,
+        lambda previous: compact_registry_comments(
+            incremental_comments(previous, fetch_since),
+            trusted=comment_is_trusted,
+        ),
+        ttl_seconds=900,
     )
 
 

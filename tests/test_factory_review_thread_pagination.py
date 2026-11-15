@@ -74,7 +74,7 @@ def install_fake_gh(tmp_path: Path, responses: dict[str, str | None]) -> dict[st
 printf '%s\\n' "$*" >> {tmp_path}/gh-calls.log
 case "$*" in
   *"node(id:"*) kind=node ;;
-  *"nodes{{isResolved}}"*) kind=count ;;
+  *"nodes{{isResolved"*) kind=count ;;
   *graphql*) kind=threads ;;
   *pulls/*/reviews*) kind=reviews ;;
   "pr view"*) printf '' ; exit 0 ;;
@@ -286,3 +286,21 @@ def test_collect_flags_truncated_thread_pages(tmp_path: Path) -> None:
         text = collect(case_dir, {"threads": threads, "node": comments_doc([], DONE)})
         assert "INCOMPLETE REVIEW DATA" in text, name
         assert "Do not end with FACTORY_GATE_READY" in text, name
+
+
+def test_retired_coderabbit_thread_does_not_block_any_wrapper(tmp_path: Path) -> None:
+    nodes = [
+        {"isResolved": False, "comments": {"nodes": [{"author": {"login": "coderabbitai[bot]"}}]}},
+        {"isResolved": False, "comments": {"nodes": [{"author": {"login": "human-reviewer"}}]}},
+    ]
+    response = threads_doc(nodes, DONE)
+    result = count(tmp_path, response)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "1"
+    only_rabbit = threads_doc(nodes[:1], DONE)
+    for wrapper in WRAPPERS:
+        case_dir = tmp_path / wrapper
+        case_dir.mkdir()
+        assert run_blockers(case_dir, wrapper, only_rabbit) == 0, wrapper
+
+

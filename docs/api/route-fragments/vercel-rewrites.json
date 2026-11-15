@@ -10,7 +10,6 @@
     "custom-cbl",
     "demo",
     "dependencies",
-    "issue-identity-cbl-catalog",
     "issues",
     "metrics",
     "preferences",
@@ -142,20 +141,6 @@
     },
     {
       "src": "^/api/v1/dependencies/blocked$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
       "methods": [
         "GET"
       ],
@@ -371,6 +356,13 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
         "GET"
       ],
@@ -983,7 +975,6 @@
     {
       "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
-        "GET",
         "POST",
         "OPTIONS"
       ],
@@ -1121,14 +1112,6 @@
       "src": "^/api/v1/threads:getBlockingInfo$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/[^/]+$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

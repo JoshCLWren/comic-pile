@@ -1306,6 +1306,13 @@ def interpret_review_threads(
         comment_nodes = comments.get("nodes")
         if not isinstance(comment_nodes, list) or not comment_nodes:
             return gate_result("retry", "unresolved review thread lacked commit metadata")
+        # This reviewer was removed from the factory, so its historical
+        # comments must not hold PRs. Unknown/human reviewer metadata still
+        # follows the normal fail-closed exact-head gate.
+        origin = comment_nodes[0].get("author") if isinstance(comment_nodes[0], dict) else None
+        login = origin.get("login") if isinstance(origin, dict) else None
+        if login in {"coderabbitai", "coderabbitai[bot]"}:
+            continue
         saw_commit = False
         for comment in comment_nodes:
             if not isinstance(comment, dict):
@@ -1331,6 +1338,9 @@ def review_thread_query_required(comments: object | None, *, head: str) -> GateR
     """
     rows = flatten_pages(comments)
     for comment in rows:
+        author = (comment.get("user") or {}).get("login")
+        if author in {"coderabbitai", "coderabbitai[bot]"}:
+            continue
         commit_id = comment.get("commit_id")
         if not commit_id or str(commit_id) == head:
             return None
@@ -1346,6 +1356,9 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
         detail = redact_review_text(str(exc))[-500:]
         return gate_result("retry", f"review submissions could not be inspected: {detail}")
     for review in flatten_pages(pages):
+        author = (review.get("user") or {}).get("login")
+        if author in {"coderabbitai", "coderabbitai[bot]"}:
+            continue
         if review.get("state") == "CHANGES_REQUESTED" and review.get("commit_id") == head:
             return gate_result("deny", "current head has CHANGES_REQUESTED")
 
@@ -1385,7 +1398,7 @@ def current_head_review_gate(pr_number: int, head: str) -> GateResult:
                         "query=query($owner:String!,$name:String!,$number:Int!){"
                         "repository(owner:$owner,name:$name){pullRequest(number:$number){"
                         "reviewThreads(first:100){nodes{isResolved comments(first:100){"
-                        "nodes{commit{oid}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}}}"
+                        "nodes{commit{oid} author{login}} pageInfo{hasNextPage}}} pageInfo{hasNextPage}}}}}"
                     ),
                 ]
             ),
