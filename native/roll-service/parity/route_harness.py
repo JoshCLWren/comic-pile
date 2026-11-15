@@ -174,7 +174,7 @@ async def run_rust_example(
     wall = time.perf_counter() - started
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
-    assert proc.returncode == 0, err.decode()
+    assert proc.returncode == 0, (err.decode(), out.decode()[:2000], {k: v for k, v in env.items() if k.startswith("RUST_ROLL_TEST") or k == "ENVIRONMENT"})
     return json.loads(out), out, wall, cpu
 
 
