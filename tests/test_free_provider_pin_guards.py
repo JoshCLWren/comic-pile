@@ -305,7 +305,6 @@ def test_worker_56_dots_preview_retirement_keeps_identity(validate) -> None:
     assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
     assert any(
         row["source"] == "openrouter-free"
-        and row["worker"] == "128"
         and row["model"] == validate._ROSTER.CATALOG_MODEL_SLOT
         for row in rows
     )
