@@ -410,8 +410,7 @@ pub async fn list_thread_issues(
     let has_more = rows.len() as i64 > i64::from(page_size);
     let issues: Vec<IssueDetailResponse> = rows
         .into_iter()
-        .take(page_size as usize)
-        .map(|row| IssueDetailResponse {
+        .take(page_size as usize)        .map(|row| IssueDetailResponse {
             id: row.get(0),
             thread_id: row.get(1),
             issue_number: row.get(2),
@@ -431,7 +430,7 @@ pub async fn list_thread_issues(
     Ok(Json(ThreadIssueListResponse {
         issues,
         total_count,
-        page_size,
+        page_size: i64::from(page_size),
         next_page_token,
     }))
 }
