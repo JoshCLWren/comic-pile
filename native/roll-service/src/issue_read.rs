@@ -368,7 +368,9 @@ pub async fn list_thread_issues(
         .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
     let next_page_token = if issues.len() > page_size as usize {
         issues.truncate(page_size as usize);
-        issues.last().map(|last| format!("{},{}", last.position, last.id))
+        issues
+            .last()
+            .map(|last| format!("{},{}", last.position, last.id))
     } else {
         None
     };
