@@ -296,8 +296,10 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Query(query): Query<TasteDiscoveryQuery>,
+    query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
+    let Query(query) =
+        query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
         return Err(ApiError::Unprocessable(
@@ -858,5 +860,76 @@ mod tests {
                 "{method} {uri} must require auth through the service router"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn malformed_limit_returns_json_422_through_service_router() {
+        use crate::{config::Config, router, AppState};
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode},
+        };
+        use chrono::{Duration, Utc};
+        use http_body_util::BodyExt;
+        use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+        use serde::Serialize;
+        use tower::ServiceExt;
+
+        #[derive(Serialize)]
+        struct Claims {
+            sub: i32,
+            jti: String,
+            iat: i64,
+            exp: i64,
+        }
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        let now = Utc::now();
+        let token = encode(
+            &Header::new(Algorithm::HS256),
+            &Claims {
+                sub: 1,
+                jti: "test-jti".into(),
+                iat: now.timestamp(),
+                exp: (now + Duration::minutes(5)).timestamp(),
+            },
+            &EncodingKey::from_secret(b"synthetic-secret"),
+        )
+        .unwrap();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/taste/discoveries?limit=abc")
+                    .header("authorization", format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "malformed limit must return 422 through the service router"
+        );
+        let body = response
+            .into_body()
+            .collect()
+            .await
+            .unwrap()
+            .to_bytes();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            payload,
+            json!({"detail": "limit must be between 1 and 3"}),
+            "malformed limit must preserve the JSON validation response"
+        );
     }
 }
