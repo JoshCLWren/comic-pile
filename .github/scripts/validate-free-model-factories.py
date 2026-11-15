@@ -250,7 +250,7 @@ def main() -> None:
     assert 'https://api.orcarouter.ai/v1' in runner
     assert 'https://router.requesty.ai/v1' in runner
     assert 'https://ai-gateway.vercel.sh/v1' in runner
-    assert 'Require Pixel Canary to remain zero-price' in runner
+    assert 'Require Vercel model to remain zero-price' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
