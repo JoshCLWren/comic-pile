@@ -32,7 +32,7 @@
 #![forbid(unsafe_code)]
 
 use crate::{
-    auth::{self, VerifiedAccessClaims},
+    auth::{self, AuthenticatedUser, VerifiedAccessClaims},
     db, ApiError, AppState,
 };
 use axum::{
