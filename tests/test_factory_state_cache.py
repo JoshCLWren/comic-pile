@@ -274,7 +274,7 @@ def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
 def test_regular_status_job_prunes_only_in_trusted_controller():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
-    assert "cron: '*/5 * * * *'" in workflow
+    assert "cron: '*/15 * * * *'" in workflow
     assert "Prune expired generic GitHub discovery snapshots" in workflow
     assert "factory_state_cache.py prune-expired" in workflow
     assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-expired")
