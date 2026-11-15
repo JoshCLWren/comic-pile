@@ -76,13 +76,25 @@ def test_hourly_sweep_skips_history_when_no_stale_stages() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     schedule = workflow.index("factory_issues=\"$(gh issue list")
     no_work_exit = workflow.index('if [[ -z "$factory_issues" ]]', schedule)
-    full_history = workflow.index('SWEEP_PULLS="$(gh api --paginate --slurp', schedule)
+    full_history = workflow.index('SWEEP_PULLS="$(gh api --paginate', schedule)
 
     assert "31 * * * *" in workflow
     assert "--json number,labels" in workflow[schedule:full_history]
     assert 'factory:(building|review|changes-requested|ci|ready)' in workflow[schedule:full_history]
     assert schedule < no_work_exit < full_history
     assert "exit 0" in workflow[no_work_exit:full_history]
+
+
+def test_pr_history_uses_supported_pagination_and_compacts_before_caching() -> None:
+    """gh rejects --slurp combined with --jq; project per page, then reassemble."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    script = workflow[workflow.index("Reconcile linked issue from trusted canonical PR history"):]
+    assert "--paginate --slurp \\n                --jq" not in script
+    assert "--paginate --slurp \\n            --jq" not in script
+    projection = "--jq '[.[] | {number, head: {ref: .head.ref}, state, merged_at}]'"
+    assert script.count(projection) == 2
+    assert script.count(" | jq -cs '.'") == 2
+    assert "jq -r '.[][] | [.number, .head.ref, .state, .merged_at] | @tsv'" in script
 
 
 def test_automated_issue_sweep_defers_when_installation_quota_is_low() -> None:
