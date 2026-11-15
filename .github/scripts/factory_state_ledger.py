@@ -535,7 +535,8 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
     delivered = (outcome.get("delivery_outcome") == "persisted"
                  and outcome.get("persisted_work") is True
                  and str(outcome.get("delivery_pr") or "").isdecimal())
-    event_type = "worker_completed" if status in {"success", "no_work"} or delivered else "worker_failed"
+    event_type = ("worker_completed" if status == "success" or delivered
+                  else "worker_idle" if status == "no_work" else "worker_failed")
     inserted = record_events(repo, [{
         "event_type": event_type,
         "event_id": f"runtime:{run_id}",
