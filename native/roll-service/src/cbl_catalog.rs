@@ -131,7 +131,7 @@ fn default_page_size() -> i32 {
 
 /// Native catalog failures, each mapped to the Python response it replaces.
 #[derive(Debug)]
-enum CatalogError {
+pub enum CatalogError {
     /// 400 `invalid_folder` for a malformed source-relative path.
     InvalidFolder(String),
     /// 404 `folder_not_found` for a folder with no active lists or subfolders.
