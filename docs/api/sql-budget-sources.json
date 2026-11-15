@@ -140,11 +140,13 @@
         "application_statements": 8,
         "transaction_control_statements": 2,
         "total_statements": 10,
-        "basis": "auth 1 + plan/sources/release reads 4 + authoritative list read 2 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1",
+        "basis": "auth 1 + plan/sources/release reads 4 + authoritative list read 2 + one-statement Option E snapshot 1 (+2 tx control); set-based, independent of library size, no per-row N+1. Five bounded pool-checkout probes (one per db::checkout) are measured separately and included in max_statements.",
         "grows_with_data": false,
-        "max_statements": 10,
+        "max_statements": 15,
         "proof_reference": "native/roll-service/src/reading_plan_reader.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_continuity_plan_reader_n1.py",
+        "runtime_overhead_statements": 5
       }
     },
     {
@@ -154,25 +156,29 @@
         "application_statements": 5,
         "transaction_control_statements": 0,
         "total_statements": 5,
-        "basis": "auth extractor 1 + plan lookup 1 + linked sources 1 + saved issues 1 + candidate lists 1; set-based",
+        "basis": "auth extractor 1 + plan lookup 1 + linked sources 1 + saved issues 1 + candidate lists 1; set-based. Two bounded pool-checkout probes (auth + handler) are measured separately and included in max_statements.",
         "grows_with_data": false,
-        "max_statements": 5,
+        "max_statements": 7,
         "proof_reference": "native/roll-service/src/reading_plan_recovery.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_continuity_plan_recovery_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
       "method": "POST",
       "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "sql_budget": {
-        "application_statements": 6,
+        "application_statements": 7,
         "transaction_control_statements": 2,
-        "total_statements": 8,
-        "basis": "auth extractor 1 + advisory lock 1 + plan lookup 1 + list lookup 1 + source rows 1 + conditional update/insert 1 (+2 tx control); set-based",
+        "total_statements": 9,
+        "basis": "auth extractor 1 + advisory lock 1 + plan lookup 1 + list lookup 1 + source rows 1 + update 1 + insert 1 (+2 tx control); the orphan relink path runs both the UPDATE (0 rows) and the INSERT. Set-based. Two bounded pool-checkout probes (auth + handler) are measured separately and included in max_statements.",
         "grows_with_data": false,
-        "max_statements": 8,
+        "max_statements": 11,
         "proof_reference": "native/roll-service/src/reading_plan_recovery.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_continuity_plan_recovery_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
