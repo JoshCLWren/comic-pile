@@ -304,6 +304,7 @@ async def test_issue_patch_error_branches() -> None:
         # 404: non-existent issue
         body = {"status": "read", "idempotency_key": f"key-{uuid4().hex}"}
         env["RUST_ROLL_TEST_ISSUE_ID"] = "999999"
+        env["RUST_ROLL_TEST_BODY"] = json.dumps(body)
         _, _, s_before = await db_counters(engine)
         resp_404, _, _, _ = await run_rust_example(BINARY, env)
         _, _, s_after = await db_counters(engine)
@@ -412,9 +413,9 @@ async def test_issue_patch_roll_offer_branch() -> None:
                 "UPDATE threads SET next_unread_issue_id=$1 WHERE id=$2", issue_ids[0], thread_id
             )
             # Create session with pending issue
-            await raw.execute(
+            session_id = await raw.fetchval(
                 "INSERT INTO sessions (user_id,start_die,pending_thread_id,pending_issue_id,started_at) "
-                "VALUES ($1,6,$2,$3,NOW())",
+                "VALUES ($1,6,$2,$3,NOW()) RETURNING id",
                 owner_id,
                 thread_id,
                 issue_ids[0],
@@ -422,8 +423,9 @@ async def test_issue_patch_roll_offer_branch() -> None:
             # Create roll event
             await raw.execute(
                 "INSERT INTO events (user_id,type,session_id,selected_thread_id,die,result,issue_id,issue_number,context) "
-                "VALUES ($1,'roll',1,$2,6,1,$3,'1','{}')",
+                "VALUES ($1,'roll',$2,$3,6,1,$4,'1','{}')",
                 owner_id,
+                session_id,
                 thread_id,
                 issue_ids[0],
             )
@@ -490,17 +492,18 @@ async def test_issue_patch_roll_offer_branch() -> None:
                 "SELECT id FROM issues WHERE thread_id=$1 ORDER BY position OFFSET 10 LIMIT 1",
                 thread_id,
             )
-            await raw.execute(
+            new_session_id = await raw.fetchval(
                 "INSERT INTO sessions (user_id,start_die,pending_thread_id,pending_issue_id,started_at) "
-                "VALUES ($1,6,$2,$3,NOW())",
+                "VALUES ($1,6,$2,$3,NOW()) RETURNING id",
                 owner_id,
                 thread_id,
                 new_issue_id,
             )
             await raw.execute(
                 "INSERT INTO events (user_id,type,session_id,selected_thread_id,die,result,issue_id,issue_number,context) "
-                "VALUES ($1,'roll',2,$2,6,1,$3,'11','{}')",
+                "VALUES ($1,'roll',$2,$3,6,1,$4,'11','{}')",
                 owner_id,
+                new_session_id,
                 thread_id,
                 new_issue_id,
             )
