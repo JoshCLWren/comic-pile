@@ -1,0 +1,9 @@
+# CodeRabbit is retired from ComicPile.
+# Do not automatically review PRs or publish status/check noise.
+# Fully revoking access additionally requires uninstalling the GitHub App.
+reviews:
+  review_status: false
+  commit_status: false
+  auto_review:
+    enabled: false
+    auto_incremental_review: false
