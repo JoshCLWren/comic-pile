@@ -75,28 +75,19 @@ def test_factory_workflow_records_precise_preflight_outcome() -> None:
     assert "exit 1" in workflow
 
 
-def test_free_model_retry_bounded_and_handed_to_worker() -> None:
-    """Both free catalog lanes iterate distinct eligible models, with no silent pins."""
+def test_catalog_preflight_hands_selected_model_directly_to_real_work() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     preflight = workflow.split("      - name: Wait for exact model in OpenCode catalog", 1)[1].split(
-        "      - name: Probe pinned NVIDIA model", 1
-    )[0]
-    smoke = workflow.split("      - name: Smoke exact pinned model through OpenCode", 1)[1].split(
-        "      - name: Prove pinned DeepSeek", 1
+        "      - name: Run continuous fixed-model factory session", 1
     )[0]
     assert "id: model_preflight" in preflight
-    assert "$SOURCE\" == opencode-free || \"$SOURCE\" == openrouter-free" in preflight
     assert "max_candidates=5" in preflight
-    assert 'for (( attempt=1; attempt<=max_candidates; attempt++ ))' in preflight
     assert 'attempted+=("$model")' in preflight
     assert '--provider "$SOURCE" --catalog "$catalog"' in preflight
     assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in preflight
-    assert "model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model" in smoke
-    assert 'for (( smoke_attempt=1; smoke_attempt<=max_candidates; smoke_attempt++ ))' in smoke
-    assert '[[ "$kind" == provider_quota ]]' in smoke
-    assert 'exit 1\n          fi\n          before="$(git status --porcelain)"' in smoke
-    assert "steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model" in workflow
-    assert "steps.smoke.outputs.model || steps.model_preflight.outputs.model" in workflow
+    assert "opencode run" not in preflight
+    assert "Smoke exact pinned model through OpenCode" not in workflow
+    assert 'FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}' in workflow
 
 
 def test_model_rotation_is_explicitly_provider_bound() -> None:
