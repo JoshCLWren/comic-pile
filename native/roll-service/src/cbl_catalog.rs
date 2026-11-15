@@ -360,8 +360,8 @@ async fn read_folder(
          FROM cbl_source_lists l
          WHERE l.active IS TRUE
            AND ($1::text IS NULL OR l.source_path LIKE $1 ESCAPE '\\')
-           AND strpos(substr(l.source_path, $3::int + 1), '/') = 0",
-            &[&folder_like, &child_segment, &prefix_len],
+           AND strpos(substr(l.source_path, $2::int + 1), '/') = 0",
+            &[&folder_like, &prefix_len],
         )
         .await?;
     let direct_list_count: i32 = direct_row.get(0);
