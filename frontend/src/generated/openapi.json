@@ -377,7 +377,7 @@
           "expected_issue_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -395,7 +395,7 @@
           "expected_issue_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -515,7 +515,7 @@
           },
           "count": {
             "description": "Number of observed hits.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Count",
             "type": "integer"
           },
@@ -1953,12 +1953,12 @@
             "type": "array"
           },
           "page": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page",
             "type": "integer"
           },
           "page_size": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Page Size",
             "type": "integer"
           },
@@ -1982,12 +1982,12 @@
             "type": "string"
           },
           "total": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "type": "integer"
           },
           "total_pages": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Pages",
             "type": "integer"
           }
@@ -2096,7 +2096,7 @@
           },
           "position": {
             "description": "Source position in original CBL order",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Position",
             "type": "integer"
           },
@@ -2175,7 +2175,7 @@
           },
           "lists_total": {
             "description": "Number of distinct source lists containing the identity",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Lists Total",
             "type": "integer"
           },
@@ -2189,19 +2189,19 @@
           },
           "occurrences_limit": {
             "description": "Maximum source occurrences per page",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Occurrences Limit",
             "type": "integer"
           },
           "occurrences_offset": {
             "description": "Zero-based offset of the returned page",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Occurrences Offset",
             "type": "integer"
           },
           "occurrences_total": {
             "description": "Total matching source occurrences in the shared catalog",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Occurrences Total",
             "type": "integer"
           }
@@ -2301,7 +2301,7 @@
           },
           "direct_list_count": {
             "description": "Active CBLs stored directly in the requested folder.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Direct List Count",
             "type": "integer"
           },
@@ -2318,7 +2318,7 @@
           },
           "total_list_count": {
             "description": "Active CBLs anywhere below the requested folder.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total List Count",
             "type": "integer"
           }
@@ -2365,7 +2365,7 @@
           },
           "candidates_total": {
             "description": "Number of source lists containing at least one input comic",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Candidates Total",
             "type": "integer"
           },
@@ -2379,19 +2379,19 @@
           },
           "input_confirmed_total": {
             "description": "Distinct confirmed Comic Vine issue IDs compared",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Input Confirmed Total",
             "type": "integer"
           },
           "input_conflict_count": {
             "description": "List entries with conflicting confirmed Comic Vine issue IDs",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Input Conflict Count",
             "type": "integer"
           },
           "input_entry_count": {
             "description": "Every current list entry",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Input Entry Count",
             "type": "integer"
           },
@@ -2405,7 +2405,7 @@
           },
           "input_missing_count": {
             "description": "List entries without a confirmed Comic Vine issue ID",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Input Missing Count",
             "type": "integer"
           },
@@ -2477,7 +2477,7 @@
           },
           "position": {
             "description": "Current order position in the Reading List",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Position",
             "type": "integer"
           },
@@ -2514,32 +2514,32 @@
           },
           "distinct_source_issues": {
             "description": "Distinct confirmed Comic Vine issues in the source list",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Distinct Source Issues",
             "type": "integer"
           },
           "duplicate_match_count": {
             "description": "Matched positions beyond the first occurrence of each distinct input comic",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Duplicate Match Count",
             "type": "integer"
           },
           "entries_total": {
             "description": "Every occurrence in the source list",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Entries Total",
             "type": "integer"
           },
           "input_coverage_percentage": {
             "description": "Percentage of distinct input comics covered",
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Input Coverage Percentage",
             "type": "integer"
           },
           "input_total": {
             "description": "Distinct input comics compared",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Input Total",
             "type": "integer"
           },
@@ -2555,7 +2555,7 @@
           },
           "matched_input_count": {
             "description": "Distinct input comics found in this source list",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Matched Input Count",
             "type": "integer"
           },
@@ -2569,7 +2569,7 @@
           },
           "matched_occurrence_count": {
             "description": "Source positions that hold a matching input comic",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Matched Occurrence Count",
             "type": "integer"
           },
@@ -2583,13 +2583,13 @@
           },
           "order_disagreement_count": {
             "description": "Matched pairs whose relative order differs from the input order",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Order Disagreement Count",
             "type": "integer"
           },
           "order_pair_count": {
             "description": "Comparable matched comic pairs",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Order Pair Count",
             "type": "integer"
           },
@@ -2610,21 +2610,21 @@
           },
           "score": {
             "description": "Relevance score balancing coverage, precision, and order",
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Score",
             "type": "integer"
           },
           "source_coverage_percentage": {
             "description": "Percentage of this source's distinct comics that matched",
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Source Coverage Percentage",
             "type": "integer"
           },
           "source_only_issue_count": {
             "description": "Distinct source comics whose exact ID is not in the input list",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Source Only Issue Count",
             "type": "integer"
           },
@@ -2701,7 +2701,7 @@
           },
           "candidates_total": {
             "description": "Number of source lists containing at least one input comic",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Candidates Total",
             "type": "integer"
           },
@@ -2715,7 +2715,7 @@
           },
           "input_total": {
             "description": "Distinct input comics compared",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Input Total",
             "type": "integer"
           }
@@ -2761,7 +2761,7 @@
           },
           "position": {
             "description": "Source position in original CBL order",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Position",
             "type": "integer"
           },
@@ -2842,7 +2842,7 @@
         "properties": {
           "direct_list_count": {
             "description": "Active CBLs stored directly in this folder.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Direct List Count",
             "type": "integer"
           },
@@ -2858,7 +2858,7 @@
           },
           "total_list_count": {
             "description": "Active CBLs anywhere below this folder.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total List Count",
             "type": "integer"
           }
@@ -2902,19 +2902,19 @@
           },
           "entries_limit": {
             "description": "Maximum source occurrences per page",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Entries Limit",
             "type": "integer"
           },
           "entries_offset": {
             "description": "Zero-based offset of the returned page",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Entries Offset",
             "type": "integer"
           },
           "entries_total": {
             "description": "Total source occurrences in the list",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Entries Total",
             "type": "integer"
           },
@@ -3078,7 +3078,7 @@
           "comicvine_volume_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -3091,7 +3091,7 @@
           "exclude_thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -3156,7 +3156,7 @@
           "issue_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -3181,7 +3181,7 @@
           "thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -3414,26 +3414,26 @@
         "properties": {
           "confirmed_issue_count": {
             "description": "Issues with confirmed ComicVine mappings",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Confirmed Issue Count",
             "type": "integer"
           },
           "metadata_missing_count": {
             "default": 0,
             "description": "Confirmed mappings without usable issue and series metadata",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Metadata Missing Count",
             "type": "integer"
           },
           "needs_mapping_count": {
             "description": "Issues with no confirmed mapping (unresolved/candidate)",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Needs Mapping Count",
             "type": "integer"
           },
           "needs_review_count": {
             "description": "Issues with conflicting/ambiguous mappings",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Needs Review Count",
             "type": "integer"
           },
@@ -3442,7 +3442,7 @@
           },
           "tracked_issue_count": {
             "description": "Total issues in this thread's scope",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Tracked Issue Count",
             "type": "integer"
           }
@@ -3986,7 +3986,7 @@
             "type": "string"
           },
           "order": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Order",
             "type": "integer"
           }
@@ -4063,7 +4063,7 @@
           "checkpoint_target_ref_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -4074,7 +4074,7 @@
           },
           "checkpoint_target_ref_ids": {
             "items": {
-              "exclusiveMinimum": 0,
+              "exclusiveMinimum": 0.0,
               "type": "integer"
             },
             "maxItems": 1000,
@@ -4127,7 +4127,7 @@
             "type": "string"
           },
           "position": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Position",
             "type": "integer"
           },
@@ -4162,7 +4162,7 @@
             "title": "Reader Role"
           },
           "ref_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Ref Id",
             "type": "integer"
           },
@@ -4735,14 +4735,14 @@
           "rated_issues_total": {
             "default": 0,
             "description": "Total owned issues with an effective rating across all compared creators.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues Total",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
             "default": 0,
             "description": "Rated owned issues with confirmed usable creator metadata.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues With Creator Metadata",
             "type": "integer"
           },
@@ -4761,28 +4761,28 @@
           "read_unrated_issues_total": {
             "default": 0,
             "description": "Total owned read-but-unrated issues.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Issues Total",
             "type": "integer"
           },
           "read_unrated_issues_with_creator_metadata": {
             "default": 0,
             "description": "Read-but-unrated owned issues with confirmed usable creator metadata.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Issues With Creator Metadata",
             "type": "integer"
           },
           "unread_issues_total": {
             "default": 0,
             "description": "Total owned unread issues.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Issues Total",
             "type": "integer"
           },
           "unread_issues_with_creator_metadata": {
             "default": 0,
             "description": "Unread owned issues with confirmed usable creator metadata.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Issues With Creator Metadata",
             "type": "integer"
           },
@@ -4869,7 +4869,7 @@
           "max_issue_refs_per_group": {
             "default": 5,
             "description": "Maximum issue references returned per drilldown group. Exposed so the UI can explain a truncated list instead of silently hiding it.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Issue Refs Per Group",
             "type": "integer"
           },
@@ -4888,7 +4888,7 @@
           "min_rated_issues_per_series": {
             "default": 5,
             "description": "Minimum rated issues a series needs before strongest_series ranks it. Exposed so the UI can explain an empty list instead of silently hiding it.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Min Rated Issues Per Series",
             "type": "integer"
           },
@@ -4911,14 +4911,14 @@
           "ratings_count": {
             "default": 0,
             "description": "Number of distinct rated issues contributing to the headline average.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Ratings Count",
             "type": "integer"
           },
           "read_unrated_count": {
             "default": 0,
             "description": "Number of read owned issues attributed to this creator with no stored effective rating.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Count",
             "type": "integer"
           },
@@ -4969,7 +4969,7 @@
           "unread_upcoming_count": {
             "default": 0,
             "description": "Number of unread owned issues attributed to this creator (``Issue.status == 'unread'``). This is unread attributed work already in the user's library, not queue position, roll eligibility, or upcoming scheduling.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Upcoming Count",
             "type": "integer"
           }
@@ -5029,13 +5029,13 @@
           },
           "issue_count": {
             "description": "Number of issues the creator held this role on.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Issue Count",
             "type": "integer"
           },
           "rated_issue_count": {
             "description": "Number of rated issues backing the average_rating for this role.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
@@ -5063,13 +5063,13 @@
           },
           "issue_count": {
             "description": "Number of issues by this creator in this series.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Issue Count",
             "type": "integer"
           },
           "rated_issue_count": {
             "description": "Number of rated issues backing average_rating. Series below the minimum rated sample are excluded from strongest_series entirely.",
-            "minimum": 5,
+            "minimum": 5.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
@@ -5191,7 +5191,7 @@
           "series_groups_total": {
             "default": 0,
             "description": "Total series/run groups with attributed rated work for this creator.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Series Groups Total",
             "type": "integer"
           },
@@ -5220,13 +5220,13 @@
         "properties": {
           "rated_issues_total": {
             "description": "Rated issues in the library.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues Total",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
             "description": "Rated issues carrying at least one usable confirmed credit.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues With Creator Metadata",
             "type": "integer"
           },
@@ -5327,7 +5327,7 @@
           },
           "rated_issue_count": {
             "description": "Headline-eligible rated issues contributing to the metrics.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
@@ -5358,7 +5358,7 @@
           "read_unrated_issue_count": {
             "default": 0,
             "description": "Attributed read-but-unrated owned issues.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Issue Count",
             "type": "integer"
           },
@@ -5385,7 +5385,7 @@
           "top_rating_count": {
             "default": 0,
             "description": "Count of ratings at the top of the scale.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Top Rating Count",
             "type": "integer"
           },
@@ -5428,14 +5428,14 @@
           "trend_sample_count": {
             "default": 0,
             "description": "Rated issues carrying a timestamp that supported a trend, else 0.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Trend Sample Count",
             "type": "integer"
           },
           "unread_issue_count": {
             "default": 0,
             "description": "Attributed unread owned issues for this creator.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Issue Count",
             "type": "integer"
           }
@@ -5510,13 +5510,13 @@
           },
           "max_entries_per_view": {
             "description": "Bounding constant applied per view.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Entries Per View",
             "type": "integer"
           },
           "minimum_reliable_sample": {
             "description": "The canonical personal-reliability rated-sample floor.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Minimum Reliable Sample",
             "type": "integer"
           },
@@ -5554,13 +5554,13 @@
           },
           "max_entries": {
             "description": "Bounding constant applied to entries.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Entries",
             "type": "integer"
           },
           "min_sample": {
             "description": "Minimum rated sample the view requires (0 = no floor).",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Min Sample",
             "type": "integer"
           },
@@ -5575,7 +5575,7 @@
           },
           "total": {
             "description": "Qualifying creators before bounded truncation.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "type": "integer"
           },
@@ -5603,7 +5603,7 @@
           "excluded_incomplete_series_count": {
             "default": 0,
             "description": "Series with attributed rated work excluded because their creator metadata is incomplete; a partial series is never presented as exhaustive evidence.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Excluded Incomplete Series Count",
             "type": "integer"
           },
@@ -5617,7 +5617,7 @@
           },
           "individual_issue_limit": {
             "description": "Maximum number of individual issue extremes listed per direction.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Individual Issue Limit",
             "type": "integer"
           },
@@ -5637,7 +5637,7 @@
           },
           "min_series_sample": {
             "description": "Rated issues a series needs before it can be ranked as best/worst.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Min Series Sample",
             "type": "integer"
           },
@@ -5998,7 +5998,7 @@
           },
           "total_count": {
             "description": "Total number of issues in the calculation.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Count",
             "type": "integer"
           }
@@ -6124,7 +6124,7 @@
         "properties": {
           "count": {
             "description": "Number of issues whose effective rating falls in this bucket.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Count",
             "type": "integer"
           },
@@ -6174,7 +6174,7 @@
           },
           "sample_count": {
             "description": "Number of distinct rated issues contributing (at most one per issue).",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Sample Count",
             "type": "integer"
           }
@@ -6195,14 +6195,14 @@
         "properties": {
           "bucket_count": {
             "description": "Number of issues in this rating bucket.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Bucket Count",
             "type": "integer"
           },
           "bucket_percentage": {
             "description": "Percentage of total rated issues.",
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Bucket Percentage",
             "type": "number"
           },
@@ -6261,7 +6261,7 @@
           },
           "total_count": {
             "description": "Total number of issues in the calculation.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Count",
             "type": "integer"
           }
@@ -6348,19 +6348,19 @@
           },
           "role_issue_count": {
             "description": "Total issues with this role.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Role Issue Count",
             "type": "integer"
           },
           "role_rated_issue_count": {
             "description": "Rated issues with this role.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Role Rated Issue Count",
             "type": "integer"
           },
           "total_count": {
             "description": "Total number of issues in the calculation.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Count",
             "type": "integer"
           }
@@ -6394,13 +6394,13 @@
           },
           "issue_count": {
             "description": "Number of distinct issues the creator held this role on (includes rated, unrated, and upcoming).",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Issue Count",
             "type": "integer"
           },
           "rated_issue_count": {
             "description": "Number of those issues that have an effective rating and contributed to average_rating.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
@@ -6488,13 +6488,13 @@
           },
           "series_issue_count": {
             "description": "Total issues in this series.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Series Issue Count",
             "type": "integer"
           },
           "series_rated_issue_count": {
             "description": "Rated issues in this series.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Series Rated Issue Count",
             "type": "integer"
           },
@@ -6505,7 +6505,7 @@
           },
           "total_count": {
             "description": "Total number of issues in the calculation.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Count",
             "type": "integer"
           }
@@ -6576,13 +6576,13 @@
           },
           "rated_issue_count": {
             "description": "Attributed issues in this thread with an effective rating. Equals the number of rows the drill-down can return for this group.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
           "read_unrated_issue_count": {
             "description": "Attributed issues in this thread that were read but never rated.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Issue Count",
             "type": "integer"
           },
@@ -6616,7 +6616,7 @@
           },
           "unread_issue_count": {
             "description": "Attributed unread issues of this creator still in this thread. Includes an unread issue that is also already rated, matching the existing upcoming semantics.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Issue Count",
             "type": "integer"
           }
@@ -6660,7 +6660,7 @@
           },
           "rated_issue_count": {
             "description": "Rated attributed issues backing this series insight.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
@@ -6745,7 +6745,7 @@
           },
           "limit": {
             "description": "Echoed page size.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Limit",
             "type": "integer"
           },
@@ -6780,7 +6780,7 @@
           },
           "offset": {
             "description": "Echoed page offset.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Offset",
             "type": "integer"
           },
@@ -6793,7 +6793,7 @@
           },
           "rated_issue_count": {
             "description": "Total attributed rated issues backing this group.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issue Count",
             "type": "integer"
           },
@@ -6822,7 +6822,7 @@
           },
           "total": {
             "description": "Total supporting rated issues in the group.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "type": "integer"
           }
@@ -6868,14 +6868,14 @@
           "rated_issues_total": {
             "default": 0,
             "description": "Total owned issues with an effective rating.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues Total",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
             "default": 0,
             "description": "Rated owned issues with confirmed usable creator metadata.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues With Creator Metadata",
             "type": "integer"
           },
@@ -6894,28 +6894,28 @@
           "read_unrated_issues_total": {
             "default": 0,
             "description": "Total owned read-but-unrated issues.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Issues Total",
             "type": "integer"
           },
           "read_unrated_issues_with_creator_metadata": {
             "default": 0,
             "description": "Read-but-unrated owned issues with confirmed usable creator metadata.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Issues With Creator Metadata",
             "type": "integer"
           },
           "unread_issues_total": {
             "default": 0,
             "description": "Total owned unread issues.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Issues Total",
             "type": "integer"
           },
           "unread_issues_with_creator_metadata": {
             "default": 0,
             "description": "Unread owned issues with confirmed usable creator metadata.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Issues With Creator Metadata",
             "type": "integer"
           },
@@ -6965,21 +6965,21 @@
           "ratings_count": {
             "default": 0,
             "description": "Number of distinct rated issues contributing to the headline average.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Ratings Count",
             "type": "integer"
           },
           "read_unrated_count": {
             "default": 0,
             "description": "Number of read-but-unrated owned issues attributed to this creator.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Read Unrated Count",
             "type": "integer"
           },
           "upcoming_count": {
             "default": 0,
             "description": "Number of unread owned issues already in the user's ComicPile attributed to this creator.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Upcoming Count",
             "type": "integer"
           }
@@ -7006,14 +7006,14 @@
           },
           "max_ranked_pairs": {
             "description": "Bounding constant applied to the returned pair list.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Ranked Pairs",
             "type": "integer"
           },
           "min_shared_team_sample": {
             "default": 3,
             "description": "Minimum shared sample required before a pair may rank.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Min Shared Team Sample",
             "type": "integer"
           },
@@ -7028,7 +7028,7 @@
           "pairs_total": {
             "default": 0,
             "description": "Pairs meeting the minimum shared sample before ranking truncation.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Pairs Total",
             "type": "integer"
           }
@@ -7044,13 +7044,13 @@
         "properties": {
           "rated_issues_total": {
             "description": "Rated issues in the library.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues Total",
             "type": "integer"
           },
           "rated_issues_with_creator_metadata": {
             "description": "Rated issues carrying at least one usable confirmed credit.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rated Issues With Creator Metadata",
             "type": "integer"
           },
@@ -7083,7 +7083,7 @@
             "title": "Effective Rating"
           },
           "issue_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Issue Id",
             "type": "integer"
           },
@@ -7099,7 +7099,7 @@
           },
           "thread_id": {
             "description": "Owning local thread/series id.",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Thread Id",
             "type": "integer"
           },
@@ -7136,7 +7136,7 @@
           },
           "baseline_rated_count": {
             "description": "Creator's personal headline-eligible rated sample size.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Baseline Rated Count",
             "type": "integer"
           },
@@ -7196,7 +7196,7 @@
           "max_shared_issue_refs": {
             "default": 5,
             "description": "Bounding constant applied to the returned issue sample.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Shared Issue Refs",
             "type": "integer"
           },
@@ -7237,7 +7237,7 @@
           },
           "shared_rated_issue_count": {
             "description": "Shared rated issues carrying eligible interior credits for both members.",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Shared Rated Issue Count",
             "type": "integer"
           },
@@ -7269,12 +7269,12 @@
         "properties": {
           "shared_issue_count": {
             "description": "Pair issues from this thread.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Shared Issue Count",
             "type": "integer"
           },
           "thread_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Thread Id",
             "type": "integer"
           },
@@ -7681,7 +7681,7 @@
               {
                 "additionalProperties": {
                   "items": {
-                    "exclusiveMinimum": 0,
+                    "exclusiveMinimum": 0.0,
                     "type": "integer"
                   },
                   "type": "array"
@@ -7995,17 +7995,17 @@
         "description": "Add a bounded inclusive issue-position range from one owned thread.",
         "properties": {
           "end_position": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "End Position",
             "type": "integer"
           },
           "start_position": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Start Position",
             "type": "integer"
           },
           "thread_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Thread Id",
             "type": "integer"
           }
@@ -8064,7 +8064,7 @@
           "issue_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -8076,7 +8076,7 @@
           "sequence_order": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -8089,7 +8089,7 @@
           "thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -8177,12 +8177,12 @@
         "description": "One crossover membership assigned a reading-sequence position.",
         "properties": {
           "issue_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Issue Id",
             "type": "integer"
           },
           "sequence_order": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Sequence Order",
             "type": "integer"
           }
@@ -8661,7 +8661,7 @@
         "properties": {
           "cbl_position": {
             "description": "Position to override",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Cbl Position",
             "type": "integer"
           },
@@ -9231,7 +9231,7 @@
           "anchor_after_thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9243,7 +9243,7 @@
           "anchor_before_thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9254,7 +9254,7 @@
           },
           "comicvine_issue_id": {
             "description": "ComicVine issue ID to preserve",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Comicvine Issue Id",
             "type": "integer"
           },
@@ -9273,7 +9273,7 @@
           "reading_order_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9416,14 +9416,14 @@
           "already_read_count": {
             "default": 0,
             "description": "Number of issues already read from the start of the series",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Already Read Count",
             "type": "integer"
           },
           "anchor_after_thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9435,7 +9435,7 @@
           "anchor_before_thread_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9446,14 +9446,14 @@
           },
           "comicvine_volume_id": {
             "description": "ComicVine volume ID to import",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Comicvine Volume Id",
             "type": "integer"
           },
           "reading_order_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -9791,7 +9791,7 @@
           "insert_after_issue_id": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -10194,7 +10194,7 @@
           "after_issue_id": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -10567,13 +10567,13 @@
         "properties": {
           "last_issue_read": {
             "description": "The issue number user just finished reading (e.g., 15)",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Last Issue Read",
             "type": "integer"
           },
           "total_issues": {
             "description": "Total number of issues in the series (e.g., 25)",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Total Issues",
             "type": "integer"
           }
@@ -12019,7 +12019,7 @@
           },
           "issues_remaining": {
             "description": "Unread issues on the existing series",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Issues Remaining",
             "type": "integer"
           },
@@ -12422,7 +12422,7 @@
         "properties": {
           "active_count": {
             "default": 0,
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Active Count",
             "type": "integer"
           },
@@ -12455,7 +12455,7 @@
         "description": "Schema for reactivating a completed thread.",
         "properties": {
           "issues_to_add": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Issues To Add",
             "type": "integer"
           },
@@ -13691,7 +13691,7 @@
         "properties": {
           "included_positions": {
             "items": {
-              "exclusiveMinimum": 0,
+              "exclusiveMinimum": 0.0,
               "type": "integer"
             },
             "maxItems": 10000,
@@ -13709,7 +13709,7 @@
           "target_list_id": {
             "anyOf": [
               {
-                "exclusiveMinimum": 0,
+                "exclusiveMinimum": 0.0,
                 "type": "integer"
               },
               {
@@ -13891,7 +13891,7 @@
             "type": "string"
           },
           "rollable_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Rollable Count",
             "type": "integer"
           },
@@ -13911,12 +13911,12 @@
             "type": "string"
           },
           "unread_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unread Count",
             "type": "integer"
           },
           "waiting_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Waiting Count",
             "type": "integer"
           },
@@ -14617,7 +14617,7 @@
             "title": "Plan Name"
           },
           "reading_order_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Reading Order Id",
             "type": "integer"
           }
@@ -14731,7 +14731,7 @@
         "description": "One row in a projected reading order preview.",
         "properties": {
           "position": {
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Position",
             "type": "integer"
           },
@@ -14822,7 +14822,7 @@
             "type": "string"
           },
           "total_positions": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Positions",
             "type": "integer"
           }
@@ -14844,7 +14844,7 @@
         "description": "Request contract for both preview and confirm endpoints.",
         "properties": {
           "reading_order_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Reading Order Id",
             "type": "integer"
           }
@@ -14859,12 +14859,12 @@
         "description": "Response contract for the confirm endpoint.",
         "properties": {
           "added_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Added Count",
             "type": "integer"
           },
           "kept_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Kept Count",
             "type": "integer"
           },
@@ -14877,12 +14877,12 @@
             "type": "integer"
           },
           "total_positions": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total Positions",
             "type": "integer"
           },
           "updated_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Updated Count",
             "type": "integer"
           }
@@ -15723,17 +15723,17 @@
         "description": "Create a release source subscription.",
         "properties": {
           "external_identity_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "External Identity Id",
             "type": "integer"
           },
           "plan_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Plan Id",
             "type": "integer"
           },
           "thread_id": {
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Thread Id",
             "type": "integer"
           }
@@ -16455,7 +16455,7 @@
         "properties": {
           "count": {
             "description": "Requests observed since process start.",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Count",
             "type": "integer"
           },
@@ -16547,37 +16547,37 @@
         "properties": {
           "already_confirmed": {
             "description": "Number of already confirmed mappings",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Already Confirmed",
             "type": "integer"
           },
           "excluded_special": {
             "description": "Number of excluded special/annual issues",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Excluded Special",
             "type": "integer"
           },
           "needs_review_ambiguous": {
             "description": "Number of issues needing review due to ambiguity",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Needs Review Ambiguous",
             "type": "integer"
           },
           "needs_review_conflict": {
             "description": "Number of issues needing review due to conflicts",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Needs Review Conflict",
             "type": "integer"
           },
           "safe_exact_match": {
             "description": "Number of safe exact matches",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Safe Exact Match",
             "type": "integer"
           },
           "unresolved": {
             "description": "Number of unresolved issues",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Unresolved",
             "type": "integer"
           }
@@ -16686,7 +16686,7 @@
         "properties": {
           "origin_issue_id": {
             "description": "The anchor issue ID for the mapping preview",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Origin Issue Id",
             "type": "integer"
           },
@@ -17097,8 +17097,8 @@
           "confidence": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -17458,8 +17458,8 @@
           "confidence": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -18818,12 +18818,12 @@
             "type": "string"
           },
           "distinct_thread_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Distinct Thread Count",
             "type": "integer"
           },
           "evidence_count": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Evidence Count",
             "type": "integer"
           },
@@ -19034,7 +19034,7 @@
             "type": "boolean"
           },
           "issues_remaining": {
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Issues Remaining",
             "type": "integer"
           },
@@ -19082,7 +19082,7 @@
           "total_issues": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -19734,7 +19734,7 @@
           "issues_remaining": {
             "anyOf": [
               {
-                "minimum": 0,
+                "minimum": 0.0,
                 "type": "integer"
               },
               {

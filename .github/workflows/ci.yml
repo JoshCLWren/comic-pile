@@ -95,7 +95,7 @@ jobs:
           .venv/bin/python scripts/generate_route_burndown.py
           node scripts/generate_vercel_routes.mjs --check
           .venv/bin/python scripts/generate_route_burndown.py --check
-          node --test scripts/generate_vercel_routes.test.mjs
+          node --test scripts/generate_vercel_routes.test.mjs scripts/generate_ui_audit_ingress.test.mjs
 
   factory-pr-auth:
     name: Factory PR authentication
