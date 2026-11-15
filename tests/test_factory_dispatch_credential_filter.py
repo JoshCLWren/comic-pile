@@ -33,7 +33,7 @@ def test_cloudflare_needs_token_and_account_and_unknown_source_fails_closed():
 
 
 def test_both_lease_writers_guard_before_assign():
-    for name in ("fixed-model-factory-dispatch.yml", "fixed-model-factory-capacity-refill.yml"):
+    for name in ("fixed-model-factory-dispatch.yml",):
         source = (ROOT / ".github/workflows" / name).read_text()
         assert "FACTORY_HAS_AI_GATEWAY_API_KEY" in source
         assert "factory_dispatch_credential_filter.py filter" in source

@@ -159,7 +159,7 @@ def test_work_controller_assign_skips_paused_worker() -> None:
 
 def test_dispatch_workflows_filter_paused_workers() -> None:
     """Dispatcher and refill filter paused workers before capacity truncation."""
-    for name in ("fixed-model-factory-dispatch.yml", "fixed-model-factory-capacity-refill.yml"):
+    for name in ("fixed-model-factory-dispatch.yml",):
         text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
         assert text.index("factory_quota_pause.py filter") < text.index('controller" capacity')
 

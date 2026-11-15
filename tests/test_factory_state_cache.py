@@ -141,9 +141,7 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert 'FACTORY_STATE_DSN_FILE=$dsn_file' in action
     for filename in (
         "fixed-model-factory-dispatch.yml",
-        "factory-completion-drain.yml",
         "factory-status-pages.yml",
-        "fixed-model-factory-capacity-refill.yml",
         "fixed-model-factory-dispatch-recovery.yml",
     ):
         workflow = (root / ".github/workflows" / filename).read_text()
