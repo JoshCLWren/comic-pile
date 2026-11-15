@@ -547,10 +547,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(reading_plan_sync::get_sync_status),
         )
         .route(
-            "/api/v1/reading-plan-sync/sync",
-            post(reading_plan_sync::sync_released_issues_endpoint),
-        )
-        .route(
             "/api/v2/queue-entries/{thread_id}",
             get(queue::get_queue_entry),
         )
