@@ -433,6 +433,14 @@ fn app() -> Router {
         )
         .route("/api/bug-reports/", post(native_dispatch))
         .route("/api/v1/bug-reports/", post(native_dispatch))
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(native_dispatch),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(native_dispatch),
+        )
         .fallback(native_not_found)
 }
 

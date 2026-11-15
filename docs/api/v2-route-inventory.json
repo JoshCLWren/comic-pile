@@ -1002,17 +1002,17 @@
       "catch_all_dest": "/api/native_roll.rs",
       "orphan_method": "GET",
       "orphan_path": "/api/v2/reading-boundaries/{thread_id}",
-      "v1_total": 191,
-      "v1_shadowed_by_rust": 65,
-      "v1_live_python": 118,
+      "v1_total": 193,
+      "v1_shadowed_by_rust": 67,
+      "v1_live_python": 116,
       "v1_orphaned": 7,
       "unversioned_total": 33,
       "unversioned_shadowed_by_rust": 13,
       "unversioned_live_python": 17,
       "unversioned_orphaned": 2,
-      "total_python_surface": 224,
-      "total_shadowed_by_rust": 78,
-      "total_live_python": 135,
+      "total_python_surface": 226,
+      "total_shadowed_by_rust": 80,
+      "total_live_python": 133,
       "total_orphaned": 9
     },
     "catch_all": {
@@ -2215,8 +2215,21 @@
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4843,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/browse",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {
@@ -2257,8 +2270,21 @@
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
+        "verified_against": "vercel.json"
+      },
+      {
+        "runtime": "native-rust",
+        "status": "target",
+        "owning_issue": 4843,
+        "consumers": [
+          "frontend/src/services/api-custom-cbl.ts"
+        ],
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/folders",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "native Rust",
         "verified_against": "vercel.json"
       },
       {

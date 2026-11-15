@@ -93,7 +93,7 @@ fn default_page_size() -> i32 {
 }
 
 fn validate_page_size(page_size: i32) -> Result<i32, ApiError> {
-    if page_size < 1 || page_size > MAX_PAGE_SIZE {
+    if !(1..=MAX_PAGE_SIZE).contains(&page_size) {
         return Err(ApiError::BadRequest(format!(
             "page_size must be between 1 and {}",
             MAX_PAGE_SIZE
@@ -149,7 +149,11 @@ pub async fn browse_cbl_source_catalog(
 ) -> Result<Json<CBLCatalogBrowseResponse>, ApiError> {
     let conn = db::checkout(&state).await?;
     let folder = params.folder.trim();
-    let query = params.q.as_ref().map(|q| q.trim()).filter(|q| !q.is_empty());
+    let query = params
+        .q
+        .as_ref()
+        .map(|q| q.trim())
+        .filter(|q| !q.is_empty());
     let page = params.page.max(1);
     let page_size = validate_page_size(params.page_size)?;
 
@@ -188,7 +192,7 @@ pub async fn browse_cbl_source_catalog(
         page,
         page_size,
         total,
-        total_pages: total_pages as i32,
+        total_pages,
         has_next,
         has_previous,
     }))
