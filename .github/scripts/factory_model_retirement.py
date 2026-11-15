@@ -590,7 +590,14 @@ def plan_retirement(
             lock=lock,
             reusable_slots=reusable_slots,
         )
-        if add_unused_free and not dynamic_opencode_free
+        # Once OpenCode workers are catalog-backed, never materialize
+        # discovered models as new hardcoded TSV worker pins, even when a
+        # caller forgets the --dynamic-opencode-free CLI policy switch.
+        if (add_unused_free and not dynamic_opencode_free
+            and not any(
+                row["source"] == "opencode-free"
+                and row["model"] == CATALOG_MODEL_SLOT for row in rows
+            ))
         else ()
     )
     return RetirementPlan(
