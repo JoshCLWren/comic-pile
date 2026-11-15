@@ -23,8 +23,7 @@
       "method": "GET",
       "path": "/api/v1/creators",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/creators$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/creators$"
     },
     {
       "bucket": "v1_operations",
