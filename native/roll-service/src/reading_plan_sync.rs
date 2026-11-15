@@ -131,9 +131,14 @@ pub async fn get_sync_status(
 pub async fn sync_released_issues(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(_payload): Json<SyncRequest>,
+    Json(payload): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
+    
+    // Parse the as_of date string
+    let as_of = DateTime::parse_from_rfc3339(&payload.as_of)
+        .map_err(|_| ApiError::BadRequest("Invalid date format. Expected RFC 3339.".to_string()))?
+        .with_timezone(&Utc);
     
     // Get all sources and enabled sources for the user
     let all_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
