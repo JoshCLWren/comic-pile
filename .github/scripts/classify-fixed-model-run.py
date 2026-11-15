@@ -21,6 +21,7 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "provider_throttle",
         "provider_quota",
         "model_unavailable",
+        "model_retired_410",
         "model_policy_violation",
         "environment_failure",
         "control_plane_failure",
@@ -584,6 +585,7 @@ class ClassifierTests(unittest.TestCase):
         )
         result = classify(log)
         self.assertEqual(result.outcome_class, "model_retired_410")
+        self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
         self.assertFalse(result.exact_model_proven)
         self.assertEqual(result.delivery_outcome, "none")
     def test_timeout_without_push_does_not_count_as_delivery(self) -> None:
