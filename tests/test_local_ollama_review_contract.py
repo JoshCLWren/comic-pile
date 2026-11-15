@@ -124,7 +124,15 @@ def test_script_uses_controller_and_never_claims_truncated_or_stale_review() -> 
     assert 'jq \'.max_tokens = 8192\'' in script
     assert 'gh_retry gh workflow run factory-ready-merge-drain.yml' in script
     assert 'gh pr merge' not in script
-    assert 'timeout-minutes: 45' in workflow
+    assert 'timeout-minutes: 180' in workflow
+    assert '--connect-timeout 60 --max-time 7200' in script
+    assert "--write-out 'http=%{http_code} connect_s=%{time_connect}" in script
+    assert 'first_byte_s=%{time_starttransfer} total_s=%{time_total}' in script
+    assert '[local-review-timing]' in script
+    assert 'curl_exit=$?' in script
+    assert 'GITHUB_STEP_SUMMARY' in script
+    assert 'http=524' in script
+    assert '--output /tmp/resp.json' in script
 
 
 def test_review_shell_has_valid_bash_syntax() -> None:
