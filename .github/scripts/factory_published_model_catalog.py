@@ -42,6 +42,17 @@ def _free(source: str, item: Mapping[str, Any]) -> bool:
     model = item.get("id")
     if not isinstance(model, str) or not model or any(ch.isspace() for ch in model):
         return False
+    # The agent must be able to invoke tools. Catalog presence and $0
+    # pricing alone also describe embeddings and no-tools chat models.
+    supported = item.get("supported_parameters")
+    if not isinstance(supported, list) or "tools" not in supported:
+        return False
+    if source == "vercel-ai-gateway" and item.get("type") != "language":
+        return False
+    if source == "openrouter-free":
+        endpoints = item.get("endpoints")
+        if not isinstance(endpoints, list) or "/api/v1/chat/completions" not in endpoints:
+            return False
     pricing = item.get("pricing")
     if not isinstance(pricing, Mapping):
         return False
