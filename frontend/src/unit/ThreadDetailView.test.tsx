@@ -189,6 +189,7 @@ it('loads the next issue cover before expansion and shares its card batch with I
       } },
     } },
   } as never)
+  // SAFETY: this fixture supplies the thread fields rendered by the detail view.
   mockedThreadsApiGet.mockResolvedValue({
     id: 1, title: 'Saga', format: 'Comics', issues_remaining: 2,
     queue_position: 1, status: 'active', total_issues: 4,
