@@ -22,17 +22,18 @@ REPO = "JoshCLWren/comic-pile"
 
 
 class FakeConnection:
-    def __init__(self, *, models=(), budgets=(), reservations=(), events=(), retries=(), metrics=()):
+    def __init__(self, *, models=(), budgets=(), reservations=(), events=(), retries=(), metrics=(), backoffs=()):
         self.models = models
         self.budgets = budgets
         self.reservations = reservations
         self.events = events
         self.retries = retries
         self.metrics = metrics
+        self.backoffs = backoffs
 
     async def fetch(self, statement, *args):
         if "FROM public.factory_state_kv" in statement:
-            return []
+            return self.backoffs
         if "FROM public.factory_model_health" in statement:
             return self.models
         if "FROM public.factory_provider_budget" in statement:
@@ -255,3 +256,48 @@ def test_intermediate_model_failures_use_terminal_runtime_idempotency():
     assert "factory_runtime_event_keys" in text
     assert "factory_model_health.status!=\'retired\'" in text
     assert "last_run_id <= EXCLUDED.last_run_id" in text
+
+
+def test_fibonacci_retry_progresses_and_caps():
+    fib = operations.fibonacci_worker_delay
+    assert [fib(i) for i in range(1, 8)] == [300, 300, 600, 900, 1500, 2400, 3900]
+    assert fib(20) == 86400
+    assert operations.WORKER_SUSPEND_AFTER == 14
+
+
+def test_retry_time_and_retained_streak_are_independent_of_ttl():
+    now = datetime.now(UTC)
+    retry = now + timedelta(minutes=5)
+    record = {
+        "payload": [{"source": "vercel-ai-gateway", "model": "reflection/beam-free",
+                     "streak": 7, "next_retry_at": retry.isoformat(),
+                     "suspended": False}],
+        "expires_at": now + timedelta(days=90),
+    }
+    assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "reflection/beam-free", now)
+    assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "reflection/beam-free",
+                                            retry + timedelta(seconds=1)) is None
+    assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "new-pin", now) is None
+
+
+def test_suspended_worker_is_excluded_but_other_models_stay_eligible():
+    db = FakeConnection(backoffs=[{
+        "cache_key": f"factory-worker-backoff-v1:{REPO}:worker:139",
+        "payload": [{"source": "vercel-ai-gateway", "model": "reflection/beam-free",
+                     "streak": 14, "suspended": True, "next_retry_at": None}],
+        "expires_at": datetime.now(UTC) + timedelta(days=90),
+    }])
+    with patch.object(operations, "_roster", return_value={
+        "139": ("vercel-ai-gateway", "reflection/beam-free"),
+        "41": ("kilo-auto", "kilo-auto/free"),
+    }):
+        kept, denied = run(operations._eligibility(db, REPO, ["139", "41"]))
+    assert kept == ["41"] and any("suspended" in reason for reason in denied)
+
+
+def test_missing_credentials_are_not_inference_failures():
+    # The upstream pre-lease gate rejects missing credentials entirely.
+    # A runner in flight during cutover still reports this separately.
+    assert "unconfigured" not in operations.WORKER_RETRY_CLASSES
+    assert "unknown_failure" in operations.WORKER_RETRY_CLASSES
+    assert "agent_timeout" in operations.WORKER_RETRY_CLASSES
