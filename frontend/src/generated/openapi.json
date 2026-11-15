@@ -11020,43 +11020,6 @@
         ],
         "type": "object"
       },
-      "NativeReadingBoundaryExplanationV2": {
-        "properties": {
-          "blockers": {
-            "items": {
-              "$ref": "#/components/schemas/NativeReadingBoundaryBlocker"
-            },
-            "type": "array"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "type": "null"
-              },
-              {
-                "$ref": "#/components/schemas/NativeReadingBoundaryNext"
-              }
-            ]
-          },
-          "state": {
-            "$ref": "#/components/schemas/BoundaryState"
-          },
-          "summary": {
-            "type": "string"
-          },
-          "thread_id": {
-            "format": "int32",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "thread_id",
-          "state",
-          "summary",
-          "blockers"
-        ],
-        "type": "object"
-      },
       "NativeReadingBoundaryNext": {
         "properties": {
           "editor": {
@@ -13035,7 +12998,7 @@
         "properties": {
           "threads": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/NativeReadingBoundaryExplanationV2"
+              "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
             },
             "propertyNames": {
               "format": "int32",
@@ -13155,50 +13118,40 @@
         "type": "object"
       },
       "ReadingBoundaryExplanationV2": {
-        "description": "Canonical reading boundary without retired dependency associations.",
         "properties": {
           "blockers": {
             "items": {
-              "$ref": "#/components/schemas/ReadingBoundaryBlocker"
+              "$ref": "#/components/schemas/NativeReadingBoundaryBlocker"
             },
-            "title": "Blockers",
             "type": "array"
           },
           "next": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ReadingBoundaryNext"
-              },
+            "oneOf": [
               {
                 "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NativeReadingBoundaryNext"
               }
             ]
           },
           "state": {
-            "enum": [
-              "blocked",
-              "available",
-              "complete",
-              "unavailable"
-            ],
-            "title": "State",
-            "type": "string"
+            "$ref": "#/components/schemas/BoundaryState"
           },
           "summary": {
-            "title": "Summary",
             "type": "string"
           },
           "thread_id": {
-            "title": "Thread Id",
+            "format": "int32",
             "type": "integer"
           }
         },
         "required": [
           "thread_id",
           "state",
-          "summary"
+          "summary",
+          "blockers"
         ],
-        "title": "ReadingBoundaryExplanationV2",
         "type": "object"
       },
       "ReadingBoundaryHistorical": {
@@ -30886,55 +30839,6 @@
         "summary": "Documentation-only operation for the mounted v2 reading-boundaries batch.",
         "tags": [
           "reading-boundaries"
-        ]
-      }
-    },
-    "/api/v2/reading-boundaries/{thread_id}": {
-      "get": {
-        "description": "Explain live canonical constraints without querying historical rows.",
-        "operationId": "get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "thread_id",
-            "required": true,
-            "schema": {
-              "title": "Thread Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ReadingBoundaryExplanationV2"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Get Reading Boundary V2",
-        "tags": [
-          "reading-boundaries-v2",
-          "reading-boundaries-v2"
         ]
       }
     },

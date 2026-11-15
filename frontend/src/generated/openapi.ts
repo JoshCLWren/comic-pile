@@ -4561,26 +4561,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v2/reading-boundaries/{thread_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Reading Boundary V2
-         * @description Explain live canonical constraints without querying historical rows.
-         */
-        get: operations["get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v2/reading-graph": {
         parameters: {
             query?: never;
@@ -10071,14 +10051,6 @@ export interface components {
             reason: string;
             waiting_on: components["schemas"]["NativeBoundaryIssue"][];
         };
-        NativeReadingBoundaryExplanationV2: {
-            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
-            state: components["schemas"]["BoundaryState"];
-            summary: string;
-            /** Format: int32 */
-            thread_id: number;
-        };
         NativeReadingBoundaryNext: {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
             issue: components["schemas"]["NativeBoundaryIssue"];
@@ -10815,7 +10787,7 @@ export interface components {
         };
         ReadingBoundaryBatchResponseV2: {
             threads: {
-                [key: string]: components["schemas"]["NativeReadingBoundaryExplanationV2"];
+                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
             };
         };
         /**
@@ -10859,22 +10831,12 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        /**
-         * ReadingBoundaryExplanationV2
-         * @description Canonical reading boundary without retired dependency associations.
-         */
         ReadingBoundaryExplanationV2: {
-            /** Blockers */
-            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
-            next?: components["schemas"]["ReadingBoundaryNext"] | null;
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "blocked" | "available" | "complete" | "unavailable";
-            /** Summary */
+            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
+            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
+            state: components["schemas"]["BoundaryState"];
             summary: string;
-            /** Thread Id */
+            /** Format: int32 */
             thread_id: number;
         };
         /**
@@ -20872,37 +20834,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                thread_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ReadingBoundaryExplanationV2"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
             };
         };
     };
