@@ -4,8 +4,8 @@
     "^/api/v1/reading-plan-sync(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
-    "status": "transitional",
+    "runtime": "native-rust",
+    "status": "native Rust",
     "owning_issue": null,
     "consumers": [
       "frontend/src/services/api-continuity-plans.ts"
@@ -18,6 +18,30 @@
       "path": "/api/v1/reading-plan-sync/status",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/reading-plan-sync/status$",
+      "owning_issue": 4851
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-orders/",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-orders/$",
+      "owning_issue": 4851
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-orders/{reading_order_id}/items",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-orders/[^/]+/items$",
+      "owning_issue": 4851
+    },
+    {
+      "bucket": "v1_operations",
+      "method": "POST",
+      "path": "/api/v1/reading-plan-sync/sync",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-plan-sync/sync$",
       "owning_issue": 4851
     }
   ]
