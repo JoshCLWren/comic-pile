@@ -295,8 +295,8 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
 /// `GET /api/v1/taste/discoveries` — ranked prompt-eligible discoveries.
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
     query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
+    user: AuthenticatedUser,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
     let Query(query) =
         query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
@@ -670,8 +670,8 @@ mod tests {
         let (state, user, _guard) = database_fixture().await;
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
-            AuthenticatedUser::for_test(7001),
             Ok(Query(TasteDiscoveryQuery { limit: None })),
+            AuthenticatedUser::for_test(7001),
         )
         .await
         .expect("list owned taste discoveries");
@@ -697,8 +697,8 @@ mod tests {
 
         let Json(second) = list_taste_discoveries(
             State(state.clone()),
-            user,
             Ok(Query(TasteDiscoveryQuery { limit: None })),
+            user,
         )
         .await
         .expect("second list is suppressed by the cooldown");
@@ -710,8 +710,8 @@ mod tests {
         let (state, _user, _guard) = database_fixture().await;
         let Json(limited) = list_taste_discoveries(
             State(state.clone()),
-            AuthenticatedUser::for_test(7001),
             Ok(Query(TasteDiscoveryQuery { limit: Some(1) })),
+            AuthenticatedUser::for_test(7001),
         )
         .await
         .expect("bounded listing");
@@ -719,8 +719,8 @@ mod tests {
 
         let Json(foreign) = list_taste_discoveries(
             State(state.clone()),
-            AuthenticatedUser::for_test(7002),
             Ok(Query(TasteDiscoveryQuery { limit: None })),
+            AuthenticatedUser::for_test(7002),
         )
         .await
         .expect("foreign owner listing");
@@ -737,8 +737,8 @@ mod tests {
         for limit in [0, 4] {
             let error = list_taste_discoveries(
                 State(state.clone()),
-                AuthenticatedUser::for_test(7001),
                 Ok(Query(TasteDiscoveryQuery { limit: Some(limit) })),
+                AuthenticatedUser::for_test(7001),
             )
             .await
             .expect_err("out-of-range limit must 422");
