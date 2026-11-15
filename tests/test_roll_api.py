@@ -397,3 +397,49 @@ async def test_retired_roll_mutation_absent_from_openapi(
     assert response.status_code == 200
     paths = response.json()["paths"]
     assert method not in paths.get(path, {})
+
+
+async def test_roll_with_single_thread(
+    auth_client: AsyncClient, async_db: AsyncSession,
+) -> None:
+    """Roll succeeds when there is exactly one active thread in the pool.
+
+    Verifies that the roll endpoint works correctly when the eligible pool
+    contains exactly one thread, and the selection returns that thread's
+    details correctly.
+    """
+    from datetime import UTC, datetime
+
+    from app.models import ReadingSession, Thread
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
+    now = datetime.now(UTC)
+
+    # Create exactly one active thread
+    thread = Thread(
+        title="Last Thread",
+        format="Comic",
+        issues_remaining=3,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        created_at=now,
+    )
+    async_db.add(thread)
+    await async_db.commit()
+
+    session = ReadingSession(
+        user_id=user.id,
+        start_die=8,
+        started_at=now,
+        manual_die=8,
+    )
+    async_db.add(session)
+    await async_db.commit()
+
+    data = await roll_pending_thread(async_db)
+    assert data.thread_id == thread.id
+    assert data.title == "Last Thread"
+    assert data.die_size == 8
+    assert 1 <= data.result <= 8
