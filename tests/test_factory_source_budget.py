@@ -36,7 +36,16 @@ SOURCES = {
     "119": "cloudflare-workers-ai",
     "120": "cloudflare-workers-ai",
 }
-CAPS = {"orcarouter": 1, "requesty": 4, "cloudflare-workers-ai": 1}
+CAPS = {
+    "orcarouter": 1,
+    "requesty": 4,
+    "cloudflare-workers-ai": 1,
+    "gemini-free": 2,
+    "groq-free": 2,
+    "aion-free": 1,
+    "cohere-eval": 1,
+    "typhoon-free": 1,
+}
 
 
 def test_committed_budgets_stay_under_account_limits() -> None:
