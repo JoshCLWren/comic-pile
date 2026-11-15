@@ -409,11 +409,11 @@ def test_jev_worker_selection_promotes_only_eligible_worker() -> None:
     def choose(payload, _key):
         assert set(payload["state"]["workers"]) == set(workers)
         assert payload["state"]["workers"]["92"]["productive"] == 5
-        return {"model": jev.MODEL, "answers": {"next_action": {
+        return {"model": shadow.MODEL, "answers": {"next_action": {
             "type": "choice", "choice": "92", "confidence": 0.9,
             "probabilities": {"91": 0.1, "92": 0.8, "93": 0.1},
         }}}
-    ordered, report = jev.choose_worker_order(workers, health, "test-key", client=choose)
+    ordered, report = shadow.choose_worker_order(workers, health, "test-key", client=choose)
     assert ordered == ["92", "91", "93"]
     assert report["status"] == "chosen"
 
@@ -421,10 +421,10 @@ def test_jev_worker_selection_promotes_only_eligible_worker() -> None:
 def test_jev_worker_selection_abstains_without_reordering() -> None:
     workers = ["91", "92"]
     def choose(_payload, _key):
-        return {"model": jev.MODEL, "answers": {"next_action": {
+        return {"model": shadow.MODEL, "answers": {"next_action": {
             "type": "choice", "choice": "92", "confidence": 0.9,
             "probabilities": {"91": 0.49, "92": 0.51},
         }}}
-    ordered, report = jev.choose_worker_order(workers, {"workers": []}, "key", client=choose)
+    ordered, report = shadow.choose_worker_order(workers, {"workers": []}, "key", client=choose)
     assert ordered == workers
     assert report["status"] == "abstained"
