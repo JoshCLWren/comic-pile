@@ -362,19 +362,19 @@ def compact_registry_comments(
             continue
 
         body = str(comment.get("body") or "")
-        observed_match = re.search(r"(?m)^Updated:\\s*(\\S+)\\s*$", body)
+        observed_match = re.search(r"(?m)^Updated:\s*(\S+)\s*$", body)
         observed = (timestamp(observed_match.group(1)) if observed_match else None) or metadata_time
         if observed is None:
             continue
-        worker = re.search(r"(?m)^Worker:\\s*opencode-free-model-factory-(\\d+)\\s*$", body)
+        worker = re.search(r"(?m)^Worker:\s*opencode-free-model-factory-(\d+)\s*$", body)
         if worker:
             kind = ("heartbeat" if "<!-- factory-heartbeat:v1" in body
                     else "attempt" if "<!-- factory-attempt-outcome:v1" in body
                     else "legacy")
             keep_latest(("worker", worker.group(1), kind), observed, comment)
 
-        source = re.search(r"(?m)^Source:\\s*(\\S+)\\s*$", body)
-        model = re.search(r"(?m)^Model:\\s*(\\S+)\\s*$", body)
+        source = re.search(r"(?m)^Source:\s*(\S+)\s*$", body)
+        model = re.search(r"(?m)^Model:\s*(\S+)\s*$", body)
         if source and model and (
             "Attempt outcome:" in body or "<!-- factory-model-retired-410:v1 -->" in body
         ):
