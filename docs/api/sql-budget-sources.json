@@ -500,9 +500,10 @@
         "application_statements": 1,
         "transaction_control_statements": 0,
         "total_statements": 1,
-        "basis": "auth folded into one owner-scoped statement: current die, approved ladder source and last roll; set-based, independent of library size, no per-row N+1; measured path may include one cold-pool checkout probe",
+        "basis": "measured authenticated die state: auth and current die are folded into one owner-scoped application statement, with one checkout probe and no nested statements; set-based, independent of library size, no per-row N+1",
         "grows_with_data": false,
         "max_statements": 2,
+        "max_nested_statements": 0,
         "proof_reference": "native/roll-service/src/roll_resources.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_roll_die_state_n1.py",
@@ -529,14 +530,17 @@
       "method": "POST",
       "path": "/api/v2/roll/offer",
       "sql_budget": {
-        "application_statements": 15,
-        "transaction_control_statements": 2,
-        "total_statements": 17,
-        "grows_with_data": true,
-        "basis": "approximate worst-case offer transaction; refine via parity harness",
-        "max_statements": 17,
+        "application_statements": 13,
+        "transaction_control_statements": 7,
+        "total_statements": 20,
+        "grows_with_data": false,
+        "basis": "measured authenticated offer: 13 top-level application statements, three transaction starts with one commit, two rollbacks and one SET LOCAL (7 controls), and four checkout probes; the event-owner trigger adds 2 nested statements; fixed across 5 and 200 eligible candidates",
+        "max_statements": 24,
+        "max_nested_statements": 2,
         "proof_reference": "native/roll-service/src/roll_offer.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_roll_commands_n1.py",
+        "runtime_overhead_statements": 4
       }
     },
     {
