@@ -75,7 +75,7 @@ def test_current_free_openrouter_coding_candidates_replace_retired_inkling_worke
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     for worker, model in expected.items():
         if worker in rows:
-            assert rows[worker][1:3] == ["openrouter-free", model]
+            assert rows[worker][1:3] == ["openrouter-free", "@catalog"]
             assert int(worker) in lock["expected_workers"]
         else:
             # Catalog discovery may legitimately retire ephemeral free routes.
