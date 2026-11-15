@@ -181,12 +181,16 @@ jobs:
 
           case "$source" in
             nvidia)
-              # TSV models may already include the vendor prefix (nvidia/...).
+              # OpenCode provider ID plus the complete upstream model ID:
+              # nvidia/nvidia/nemotron-3.5-bolt-e4b is intentional.
               if [[ "$model" == nvidia/* ]]; then
-                runtime_model="$model"
-              else
-                runtime_model="nvidia/${model}"
+                # TSV stores the published upstream ID, not a prebuilt selector.
+                [[ "$model" != nvidia/nvidia/* ]] || {
+                  echo "::error::NVIDIA model ID has duplicate vendor prefix: $model" >&2
+                  exit 1
+                }
               fi
+              runtime_model="nvidia/${model}"
               branch_suffix='nvidia'
               if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
               ;;
@@ -204,10 +208,20 @@ jobs:
               ;;
             gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
             z-ai|ollama-cloud|mistral|orcarouter|requesty)
-              if [[ "$model" == "${source}/"* ]]; then
+              # Factory source selects budget/leases; this maps to actual
+              # OpenCode provider IDs, never artificial -free/-eval IDs.
+              provider_id="$source"
+              case "$source" in
+                gemini-free) provider_id='google' ;;
+                groq-free) provider_id='groq' ;;
+                aion-free) provider_id='aion' ;;
+                cohere-eval) provider_id='cohere' ;;
+                typhoon-free) provider_id='typhoon' ;;
+              esac
+              if [[ "$model" == "${provider_id}/"* ]]; then
                 runtime_model="$model"
               else
-                runtime_model="${source}/${model}"
+                runtime_model="${provider_id}/${model}"
               fi
               branch_suffix="$source"
               if [[ "$source" == "z-ai" ]]; then
@@ -233,7 +247,7 @@ jobs:
               fi
               ;;
             vercel-ai-gateway)
-              runtime_model="vercel-ai-gateway/${model}"
+              runtime_model="vercel/${model}"
               branch_suffix='vercel-ai-gateway'
               if [[ -n "${AI_GATEWAY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AI_GATEWAY_API_KEY'; fi
               ;;
@@ -711,6 +725,10 @@ jobs:
         if: >-
           steps.lane.outputs.configured == 'true' &&
           (
+            (
+              (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia' &&
+              (steps.lane.outputs.worker == '130' || steps.lane.outputs.worker == '131')
+            ) ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'z-ai' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway' ||
@@ -731,6 +749,13 @@ jobs:
         run: |
           set -Eeuo pipefail
           case "$SOURCE" in
+            nvidia)
+              key="${NVIDIA_API_KEY:-}"
+              base_url='https://integrate.api.nvidia.com/v1'
+              provider_id='nvidia'
+              env_name='NVIDIA_API_KEY'
+              provider_name='NVIDIA published API models'
+              ;;
             z-ai)
               key="${Z_AI_API_KEY:-}"
               base_url='https://api.z.ai/api/paas/v4'
@@ -748,7 +773,7 @@ jobs:
             vercel-ai-gateway)
               key="${AI_GATEWAY_API_KEY:-}"
               base_url='https://ai-gateway.vercel.sh/v1'
-              provider_id='vercel-ai-gateway'
+              provider_id='vercel'
               env_name='AI_GATEWAY_API_KEY'
               provider_name='Vercel AI Gateway free capacity'
               ;;
@@ -776,35 +801,35 @@ jobs:
             gemini-free)
               key="${GEMINI_API_KEY:-}"
               base_url='https://generativelanguage.googleapis.com/v1beta/openai'
-              provider_id='gemini-free'
+              provider_id='google'
               env_name='GEMINI_API_KEY'
               provider_name='Google Gemini API Free'
               ;;
             groq-free)
               key="${GROQ_API_KEY:-}"
               base_url='https://api.groq.com/openai/v1'
-              provider_id='groq-free'
+              provider_id='groq'
               env_name='GROQ_API_KEY'
               provider_name='GroqCloud Free'
               ;;
             aion-free)
               key="${AION_API_KEY:-}"
               base_url='https://api.aionlabs.ai/v1'
-              provider_id='aion-free'
+              provider_id='aion'
               env_name='AION_API_KEY'
               provider_name='Aion Labs Daily Free Credit'
               ;;
             cohere-eval)
               key="${COHERE_API_KEY:-}"
               base_url='https://api.cohere.ai/compatibility/v1'
-              provider_id='cohere-eval'
+              provider_id='cohere'
               env_name='COHERE_API_KEY'
               provider_name='Cohere Evaluation Key'
               ;;
             typhoon-free)
               key="${TYPHOON_API_KEY:-}"
               base_url='https://api.opentyphoon.ai/v1'
-              provider_id='typhoon-free'
+              provider_id='typhoon'
               env_name='TYPHOON_API_KEY'
               provider_name='Typhoon Free API'
               ;;
@@ -842,9 +867,9 @@ jobs:
                   package: "@opencode/ai/providers/openai-compatible",
                   env: [$envname],
                   settings: {baseURL: $base_url},
-                  headers: (if $provider == "gemini-free"
+                  headers: (if $provider == "google"
                     then {"x-goog-api-client": "comic-pile-factory-oai/1.0"} else {} end),
-                  models: {($model): {name: $model}}
+                  models: {($model): {name: $model, modelID: $model}}
                 }
               }
             }' > "$temp_config"
