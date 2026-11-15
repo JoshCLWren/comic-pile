@@ -12,8 +12,8 @@ use tower::ServiceExt;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var("RUST_ROLL_TEST_TOKEN")?;
     let method = std::env::var("RUST_ROLL_TEST_METHOD").unwrap_or_else(|_| "GET".to_string());
-    let uri = std::env::var("RUST_ROLL_TEST_URI")
-        .unwrap_or_else(|_| "/api/v2/reading-graph".to_string());
+    let uri =
+        std::env::var("RUST_ROLL_TEST_URI").unwrap_or_else(|_| "/api/v2/reading-graph".to_string());
     let body = std::env::var("RUST_ROLL_TEST_BODY").unwrap_or_default();
     let config = Config::from_env()?;
     let app = router(Arc::new(AppState::new(config)?));

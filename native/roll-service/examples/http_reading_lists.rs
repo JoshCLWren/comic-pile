@@ -12,8 +12,8 @@ use tower::ServiceExt;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token = std::env::var("RUST_ROLL_TEST_TOKEN")?;
     let method = std::env::var("RUST_ROLL_TEST_METHOD").unwrap_or_else(|_| "GET".to_string());
-    let uri = std::env::var("RUST_ROLL_TEST_URI")
-        .unwrap_or_else(|_| "/api/v2/reading-lists".to_string());
+    let uri =
+        std::env::var("RUST_ROLL_TEST_URI").unwrap_or_else(|_| "/api/v2/reading-lists".to_string());
     let body = std::env::var("RUST_ROLL_TEST_BODY").unwrap_or_default();
     let config = Config::from_env()?;
     let app = router(Arc::new(AppState::new(config)?));
@@ -34,8 +34,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let response = app.oneshot(builder.body(Body::from(body))?).await?;
     let status = response.status().as_u16();
     let bytes = to_bytes(response.into_body(), 4 * 1024 * 1024).await?;
-    let data: serde_json::Value = serde_json::from_slice(&bytes)
-        .unwrap_or_else(|_| serde_json::Value::Null);
+    let data: serde_json::Value =
+        serde_json::from_slice(&bytes).unwrap_or_else(|_| serde_json::Value::Null);
     println!("{}", serde_json::json!({"status": status, "body": data}));
     Ok(())
 }
