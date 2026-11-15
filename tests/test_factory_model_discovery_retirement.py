@@ -258,14 +258,17 @@ def _nvidia_410_zombie_rows() -> list[dict[str, str]]:
     return rows
 
 
-def test_retirement_marker_matches_probe_and_health_selector() -> None:
-    """Planner, probe, and health selector share the same 410 marker string."""
+def test_retirement_marker_matches_real_work_and_health_selector() -> None:
+    """The real NVIDIA worker and discovery preserve the same sticky marker."""
     health = (SCRIPTS / "factory_candidate_health.py").read_text(encoding="utf-8")
     runner = (
         ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
     ).read_text(encoding="utf-8")
     assert f'RETIREMENT_MARKER = "{RETIRE.RETIREMENT_MARKER}"' in health
     assert f"retirement_marker='{RETIRE.RETIREMENT_MARKER}'" in runner
+    worker = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "NVIDIA permanently retired model: %s" in worker
+    assert 'if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]' in runner
 
 
 def test_nvidia_410_comments_extract_bare_model_ids() -> None:

@@ -3664,10 +3664,10 @@ def test_review_restores_per_worker_provider_instead_of_a_shared_composite() -> 
 
 
 def test_review_uses_existing_model_preflight_and_provider_rotation() -> None:
-    """Review keeps the same catalog and smoke failover used for building PRs."""
+    """Review uses the same catalog selection and real work invocation as coding."""
     workflow = (WORKFLOWS / "free-model-factory-run.yml").read_text()
-    assert '[[ "${SOURCE:-}" == opencode-free || "${SOURCE:-}" == openrouter-free ]]' in workflow
+    assert '[[ "$SOURCE" == opencode-free || "$SOURCE" == openrouter-free ]]' in workflow
     assert '[[ "${RUNTIME_MODEL:-}" != \'openrouter/free\' ]]' not in workflow
     assert 'attempted+=("$model")' in workflow
     assert 'echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"' in workflow
-    assert "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model" in workflow
+    assert "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model" in workflow

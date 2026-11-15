@@ -21,6 +21,7 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "provider_throttle",
         "provider_quota",
         "model_unavailable",
+        "model_retired_410",
         "model_policy_violation",
         "environment_failure",
         "control_plane_failure",
@@ -73,6 +74,14 @@ TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed w
 SESSION_TIMEOUT_RE = re.compile(
     r"exit status 124|process completed with exit code 124",
     re.I,
+)
+# Trust the actual work-session exit as the model proof. No separate prompt.
+WORK_SESSION_OK_RE = re.compile(
+    r"\[factory:(?P<worker>\d+)\](?:\[[^\]\n]+\])*\s+"
+    r"agent exit status 0 for (?P<kind>issue|pr) #(?P<number>\d+)\b", re.I,
+)
+NO_ASSIGNMENT_RE = re.compile(
+    r"\[factory:\d+\].*no control-plane assignment is leased to this worker", re.I,
 )
 AGENT_TIMEOUT_RE = re.compile(
     r"\[factory:\d+\](?:\[[^\]\n]+\])*\s+agent exit status 124 for (?:issue|pr) #\d+\b",
@@ -272,9 +281,17 @@ def classify(log: str) -> Result:
 
     values = lock.groupdict()
     configured = values["configured"].lower() == "true"
-    exact_proven = "FIXED_MODEL_OPENCODE_OK" in log
     target_matches = list(TARGET_RE.finditer(log))
     target = target_matches[-1].groupdict() if target_matches else {"kind": "", "number": ""}
+    work_session = WORK_SESSION_OK_RE.search(log)
+    exact_proven = (
+        "FIXED_MODEL_OPENCODE_OK" in log  # historical jobs
+        or bool(
+            work_session and work_session["worker"] == values["worker"]
+            and work_session["kind"] == target["kind"]
+            and work_session["number"] == target["number"]
+        )
+    )
     persisted = any(signal in log for signal in PRODUCTIVE_SIGNALS)
     delivered_pr = _delivered_pr(log, values['worker'], target) if persisted else ''
 
@@ -300,6 +317,24 @@ def classify(log: str) -> Result:
             detail="lane was not configured, so the pinned model was never invoked",
         )
 
+    if NO_ASSIGNMENT_RE.search(log):
+        return Result(
+            **common,
+            outcome="HEALTHY / IDLE",
+            outcome_class="no_work",
+            detail="no assignment was leased; model inference was skipped",
+        )
+
+    # An actual assigned NVIDIA invocation returned HTTP 410. No extra probe.
+    if values["source"] == "nvidia" and re.search(
+        r"(?m)^(?:\d{4}-\d{2}-\d{2}T\S+Z\s+)?NVIDIA permanently retired model: "
+        + re.escape(values["model"]) + r"\s*$",
+        log,
+    ):
+        return Result(
+            **common, outcome="MODEL RETIRED", outcome_class="model_retired_410",
+            detail="trusted assigned NVIDIA worker received permanent HTTP 410",
+        )
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
     if QUOTA_RE.search(log) or (
@@ -512,6 +547,47 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(incomplete.outcome_class, "agent_timeout")
         self.assertEqual(incomplete.delivery_outcome, "none")
 
+    def test_work_session_without_smoke_proves_model_and_delivery(self) -> None:
+        log = (
+            "Factory 82 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:55 scheduler=dispatcher configured=true\n"
+            "[factory:82] checked out issue #4839 on branch\n"
+            "[factory:82] agent exit status 0 for issue #4839\n"
+            "[factory:82] opened/updated PR #5129 for issue #4839\n"
+            "[factory:82] released issue #4839 to factory:unowned\n"
+            "[factory:82] released pr #5129 to factory:unowned\n"
+        )
+        result = classify(log)
+        self.assertTrue(result.exact_model_proven)
+        self.assertEqual(result.outcome_class, "success")
+        self.assertEqual(result.delivery_outcome, "persisted")
+
+    def test_no_assignment_is_idle_and_never_proves_model(self) -> None:
+        log = (
+            "Factory 46 locked: source=kilo-auto model=kilo-auto/free "
+            "runtime=kilo/kilo-auto/free minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:46] no control-plane assignment is leased to this worker; "
+            "exiting without repo-wide selection\n"
+        )
+        result = classify(log)
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.outcome_class, "no_work")
+
+    def test_real_nvidia_410_retires_without_probe(self) -> None:
+        log = (
+            "Factory 11 locked: source=nvidia model=stepfun-ai/step-3.7-flash "
+            "runtime=nvidia/stepfun-ai/step-3.7-flash minute=:15 "
+            "scheduler=dispatcher configured=true\n"
+            "[factory:11] checked out issue #4839 on factory/11-4839-nvidia\n"
+            "[factory:11] agent exit status 1 for issue #4839\n"
+            "HTTP 410 Gone\n"
+            "NVIDIA permanently retired model: stepfun-ai/step-3.7-flash\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "model_retired_410")
+        self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.delivery_outcome, "none")
     def test_timeout_without_push_does_not_count_as_delivery(self) -> None:
         log = (
             "Factory 105 locked: source=z-ai model=glm-4.7-flash "
