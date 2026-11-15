@@ -97,7 +97,7 @@ def test_burndown_summary_matches_deployed_ingress() -> None:
 
 
 def test_reading_boundaries_split_uses_deployed_ingress() -> None:
-    """POST boundaries is Native Rust; GET detail is Python transitional."""
+    """POST boundaries is Native Rust; v2 operations are now fully native."""
     inventory = load_json(INVENTORY_PATH)
     raw_operations = inventory.get("operations")
     assert isinstance(raw_operations, list)
@@ -106,11 +106,6 @@ def test_reading_boundaries_split_uses_deployed_ingress() -> None:
     assert post.get("runtime") == "native-rust"
     assert post.get("ingress_destination") == "/api/native_roll.rs"
     assert post.get("burndown_status") == "native Rust"
-    get_detail = _operation(operations, "GET", "/api/v2/reading-boundaries/{thread_id}")
-    assert get_detail.get("runtime") == "python-fastapi"
-    assert get_detail.get("ingress_destination") == "/api/index.py"
-    assert get_detail.get("burndown_status") == "unreferenced/orphaned"
-    assert get_detail.get("owning_issue") == 4335
 
 
 def test_classify_distinguishes_all_burndown_statuses() -> None:
@@ -160,15 +155,8 @@ def test_full_surface_matches_deployed_ingress() -> None:
     )
     assert summary.get("catch_all_src") == "/api(?:/.*)?"
     assert summary.get("catch_all_dest") == "/api/native_roll.rs"
-    assert summary.get("orphan_method") == "GET"
-    assert (
-        summary.get("orphan_path")
-        == "/api/v2/reading-boundaries/{thread_id}"
-    )
     catch_all = full_surface.get("catch_all")
     assert isinstance(catch_all, dict)
-    orphan = full_surface.get("orphan")
-    assert isinstance(orphan, dict)
     raw_v1 = full_surface.get("v1_operations")
     raw_unversioned = full_surface.get("unversioned_operations")
     assert isinstance(raw_v1, list)
