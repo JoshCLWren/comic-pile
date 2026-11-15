@@ -424,10 +424,12 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
         assert before is not None
         connection = await asyncpg.connect(url)
         try:
-            await connection.execute("SELECT 42::integer AS deliberate_extra_query")
+            await connection.execute(
+                "SELECT 42::integer + 1000 AS deliberate_extra_query"
+            )
             for _ in range(3):
                 await connection.execute(
-                    "SELECT 43::integer AS deliberate_n_plus_one_query"
+                    "SELECT 43::integer + 2000 AS deliberate_n_plus_one_query"
                 )
         finally:
             await connection.close()
