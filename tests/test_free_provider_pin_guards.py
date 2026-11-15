@@ -458,3 +458,24 @@ def test_ghost_workers_49_58_63_73_83_94_are_retired(validate) -> None:
     assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
+
+
+def test_new_fleet_uses_published_opencode_provider_selectors() -> None:
+    """Factory budget sources are not synthetic OpenCode providers."""
+    runner = Path(".github/workflows/free-model-factory-run.yml").read_text()
+    for source, provider in {
+        "gemini-free": "google",
+        "groq-free": "groq",
+        "aion-free": "aion",
+        "cohere-eval": "cohere",
+        "typhoon-free": "typhoon",
+    }.items():
+        assert f"{source}) provider_id='{provider}' ;;" in runner
+        assert f"provider_id='{provider}'" in runner
+    assert 'runtime_model="vercel/${model}"' in runner
+    assert 'runtime_model="nvidia/${model}"' in runner
+    assert "base_url='https://integrate.api.nvidia.com/v1'" in runner
+    assert "(steps.lane.outputs.worker == '130' || steps.lane.outputs.worker == '131')" in runner
+    assert 'models: {($model): {name: $model, modelID: $model}}' in runner
+    assert 'headers: (if $provider == "google"' in runner
+    assert 'runtime_model="vercel-ai-gateway/${model}"' not in runner
