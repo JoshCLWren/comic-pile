@@ -66,7 +66,8 @@
       "src": "^/api/v1/dependencies/$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -76,7 +77,8 @@
       "src": "^/api/v1/dependencies/blocked$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -86,7 +88,8 @@
       "src": "^/api/v1/dependencies/[0-9]+$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -96,7 +99,8 @@
       "src": "^/api/v1/dependencies/[0-9]+$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -106,7 +110,8 @@
       "src": "^/api/v1/dependencies/[0-9]+$",
       "consumers": [
         "frontend/src/services/api-dependencies.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -118,7 +123,8 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-reader-context.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -133,7 +139,8 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -148,7 +155,8 @@
         "frontend/src/services/api-migration.ts",
         "frontend/src/services/api-reading-orders.ts",
         "frontend/src/services/api-threads.ts"
-      ]
+      ],
+      "exclude_from_inventory": true
     }
   ]
 }

@@ -400,3 +400,31 @@ def test_no_work_reports_queue_without_spending_a_decision() -> None:
     assert report["backpressure"]["waiting_issue_peers"] == 0
     assert report["backpressure"]["leasable_issue_peers"] == 0
     assert "pr_wip" in report["backpressure"]
+
+def test_jev_worker_selection_promotes_only_eligible_worker() -> None:
+    workers = ["91", "92", "93"]
+    health = {"workers": [
+        {"worker": "92", "attempts": 8, "productive": 5, "completed": 5, "failures": 2},
+    ], "cooling": []}
+    def choose(payload, _key):
+        assert set(payload["state"]["workers"]) == set(workers)
+        assert payload["state"]["workers"]["92"]["productive"] == 5
+        return {"model": shadow.MODEL, "answers": {"next_action": {
+            "type": "choice", "choice": "92", "confidence": 0.9,
+            "probabilities": {"91": 0.1, "92": 0.8, "93": 0.1},
+        }}}
+    ordered, report = shadow.choose_worker_order(workers, health, "test-key", client=choose)
+    assert ordered == ["92", "91", "93"]
+    assert report["status"] == "chosen"
+
+
+def test_jev_worker_selection_abstains_without_reordering() -> None:
+    workers = ["91", "92"]
+    def choose(_payload, _key):
+        return {"model": shadow.MODEL, "answers": {"next_action": {
+            "type": "choice", "choice": "92", "confidence": 0.9,
+            "probabilities": {"91": 0.49, "92": 0.51},
+        }}}
+    ordered, report = shadow.choose_worker_order(workers, {"workers": []}, "key", client=choose)
+    assert ordered == workers
+    assert report["status"] == "abstained"

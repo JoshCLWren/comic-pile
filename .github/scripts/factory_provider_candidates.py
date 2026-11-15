@@ -337,6 +337,13 @@ ADAPTERS: dict[str, ProviderAdapter] = {
     # The Workers Free plan hard-stops at its daily neuron allowance.
     # Only allow pre-approved free models and runtime smoke evidence.
     "cloudflare-workers-ai": RuntimeOnlyAdapter("cloudflare-workers-ai"),
+    # Credentials and free-tier access are account-scoped. Never infer
+    # authorization or a free balance merely from a published model catalog.
+    "gemini-free": RuntimeOnlyAdapter("gemini-free"),
+    "groq-free": RuntimeOnlyAdapter("groq-free"),
+    "aion-free": RuntimeOnlyAdapter("aion-free"),
+    "cohere-eval": RuntimeOnlyAdapter("cohere-eval"),
+    "typhoon-free": RuntimeOnlyAdapter("typhoon-free"),
 }
 
 

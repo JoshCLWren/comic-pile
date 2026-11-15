@@ -2,6 +2,10 @@
 
 Guidelines for AI agents working in this codebase.
 
+## Rust-cutover backlog freeze (owner direction, 2026-11-15)
+
+Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See `docs/AUTONOMOUS_FACTORY_POLICY.md` for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
+
 ## Engineering objective completion
 
 For Comic Pile local factory delivery in Codex, use
@@ -54,17 +58,16 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 > after changing `vercel.json`, route fragments, or the inventory.
 > API version is not implementation language.
 
-- Live v2 operations: 42 (41 native-rust + 1 python orphan).
+- Live v2 operations: 41 (41 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 224 operations (v1 191 + unversioned 33) plus 1 v2 orphan = 225 Python-handler operations; v1 active 118 live Python / 65 migrated (shadowed by Rust); unversioned active 17 live Python / 13 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
-- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); orphan `GET /api/v2/reading-boundaries/{thread_id}` has an explicit Python exception.
-- Full-surface inventory (v2 + v1 + unversioned + catch-all + orphan) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
-- Python orphan: `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi` via `/api/index.py` (owner #4335, no callers).
+- Full Python-handler surface: 146 operations (v1 126 + unversioned 20); v1 active 118 live Python / 0 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
+- Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
 
 Deployed runtime by cutover owner (`METHOD path -> runtime`):
 
-- #4335 (10): `GET /api/v2/queue-entries/{thread_id} -> native-rust`; `PATCH /api/v2/queue-entries/{thread_id} -> native-rust`; `POST /api/v2/queue-orders -> native-rust`; `POST /api/v2/reading-boundaries -> native-rust`; `GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`; `POST /api/v2/reading-sessions -> native-rust`; `GET /api/v2/roll/bootstrap -> native-rust`; `POST /api/v2/roll/dice-command -> native-rust`; `POST /api/v2/roll/offer -> native-rust`; `POST /api/v2/roll/reset -> native-rust`
+- #4335 (9): `GET /api/v2/queue-entries/{thread_id} -> native-rust`; `PATCH /api/v2/queue-entries/{thread_id} -> native-rust`; `POST /api/v2/queue-orders -> native-rust`; `POST /api/v2/reading-boundaries -> native-rust`; `POST /api/v2/reading-sessions -> native-rust`; `GET /api/v2/roll/bootstrap -> native-rust`; `POST /api/v2/roll/dice-command -> native-rust`; `POST /api/v2/roll/offer -> native-rust`; `POST /api/v2/roll/reset -> native-rust`
 - #4342 (1): `GET /api/v2/threads -> native-rust`
 - #4348 (1): `GET /api/v2/analytics/metrics -> native-rust`
 - #4443 (2): `POST /api/v2/issues/cards -> native-rust`; `PATCH /api/v2/issues/{issue_id} -> native-rust`
@@ -157,7 +160,7 @@ If you edit files and run tests but stop before pushing, you have **not complete
 
 Run only targeted tests locally: select the test files or cases covering the changed behavior,
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
-Leave full backend/frontend suites and aggregate coverage gates to CI. Do not run bare `pytest`,
+Leave full backend/frontend suites to CI. Python coverage thresholds are retired during the Rust cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
 `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
 requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.
@@ -401,7 +404,7 @@ make verify-e2e
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Maintain 94% coverage threshold.
+API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
 
 **Key Fixtures (from `tests/conftest.py`)**:
 ```python

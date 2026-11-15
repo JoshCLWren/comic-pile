@@ -85,6 +85,38 @@ Worker health and stale-run reconciliation still use some GitHub API reads.
 Per-item issue/PR projections and event-triggered selective reconciliation are
 follow-up work; **do not claim this change alone eliminates broad discovery**.
 
+## Recovery checkpoints for model-generated source code
+
+Neon is the coordination ledger, **not a storage location for model edits**.
+During each trusted, non-fork coding or PR-repair session, the wrapper now
+starts a checkpoint writer from the checked-out `main` snapshot. Every
+45 seconds it stages tracked and non-ignored new files in a **separate Git
+index**, creates an unreviewed commit with Git plumbing, and pushes it to
+`refs/heads/factory/work-checkpoints/<GitHub Actions run ID>`. A final
+best-effort checkpoint runs when the agent exits or the wrapper receives a
+termination signal. On a force-canceled runner, the last periodic push is
+the durable recovery point. An interrupted run may still lose up to one
+interval of edits, and a failed remote push cannot guarantee recovery.
+
+These refs are **not** PR heads and cannot bypass pre-push tests, exact-head
+review, or the merge controller. The trusted wrapper keeps the normal
+issue/PR handoff behavior unchanged, and removes its checkpoint ref only
+after the real changes were successfully pushed and handed off. Failed or
+incomplete attempts retain their recovery refs for a later worker or human.
+The wrapper logs the run ID and saved commit SHA so work can be found in Git.
+No worker has access to Neon credentials. Recovery commits are unreviewed
+and must be validated before use.
+
+For example, recover a failed run's diff without changing the PR branch:
+
+```bash
+git fetch origin refs/heads/factory/work-checkpoints/RUN_ID
+git diff FETCH_HEAD^ FETCH_HEAD
+```
+
+Do not directly merge recovery branches. Restore only applicable code through
+the canonical assigned issue/PR and the existing fast checks.
+
 ## Event-fed target projections
 
 A trusted `Factory Target Projection Ingest` workflow receives GitHub
@@ -186,6 +218,34 @@ scanning live GitHub.
   cross-repo isolation, bypasses and HTTP errors. To validate real savings,
   compare per-workflow REST request telemetry and quota samples before/after.
   No claim of an achieved percentage reduction is made without that evidence.
+
+## Compact cache transport and automatic expiration
+
+The generic `factory-github-get-v1` cache stores responses over 4 KiB using
+zlib plus base64 **only when the encoded result is smaller**. The trusted
+read-through shim transparently decodes them before writing the original
+GitHub CLI output. Older raw snapshots remain readable during rollout. This
+reduces database-to-runner traffic; it does not change GitHub response shapes
+or eliminate the original live GitHub request on a miss.
+
+The existing trusted Factory Status Pages workflow runs a bounded
+`prune-expired` operation against the same restricted database when it
+executes (normally every five minutes and after updates to that workflow).
+It is independent of the timeout-prone historical PR recovery sweep. It only
+removes `factory-github-get-v1:%` rows expired by more than 30 minutes,
+skips active refresh locks, and processes at most 1,000 rows in five batches.
+It never prunes projections, provider health, worker reservations, registry
+comments or event history. PostgreSQL autovacuum reclaims dead tuples
+eventually; the job does not require or invoke VACUUM FULL.
+
+When a refreshed snapshot is unchanged at the parsed JSON
+record level, its TTL is extended without retransmitting the entire snapshot
+as a new UPDATE parameter or rewriting its external TOAST value. The hourly
+canonical PR-history query projects only number, branch ref, state, and
+merge timestamp before passing it to Neon. GitHub CLI does not support
+`--slurp` and `--jq` together, so the history query applies `--jq` per
+page with `--paginate` and reconstructs the nested page array locally.
+Live exact-target verification remains mandatory for sensitive decisions.
 
 ## Remaining API work
 

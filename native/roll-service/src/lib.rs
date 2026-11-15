@@ -49,6 +49,7 @@ pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
 pub mod session_history;
