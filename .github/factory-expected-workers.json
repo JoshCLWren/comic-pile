@@ -178,5 +178,6 @@
     "union-alpha",
     "xingchen-agi/xing4.0-29b-a4b:free",
     "z-ai/glm-5.3"
-  ]
+  ],
+  "model_binding": "catalog-backed"
 }
