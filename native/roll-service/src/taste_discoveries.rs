@@ -672,7 +672,7 @@ mod tests {
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7001),
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("list owned taste discoveries");
@@ -699,7 +699,7 @@ mod tests {
         let Json(second) = list_taste_discoveries(
             State(state.clone()),
             user,
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("second list is suppressed by the cooldown");
@@ -712,7 +712,7 @@ mod tests {
         let Json(limited) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7001),
-            Query(TasteDiscoveryQuery { limit: Some(1) }),
+            Ok(Query(TasteDiscoveryQuery { limit: Some(1) })),
         )
         .await
         .expect("bounded listing");
@@ -721,7 +721,7 @@ mod tests {
         let Json(foreign) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7002),
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("foreign owner listing");
@@ -870,13 +870,13 @@ mod tests {
             body::{to_bytes, Body},
             http::{header, Request, StatusCode},
         };
-        use jsonwebtoken::{encode, EncodingKey, Header};
+        use jsonwebtoken::{encode, EncodingKey, Header as JwtHeader};
         use tower::ServiceExt;
 
         let (state, _user, _guard) = database_fixture().await;
         let claims = Claims::access("taste-dismiss-test", "taste-router-jti", 0, 60);
         let token = encode(
-            &Header::default(),
+            &JwtHeader::default(),
             &claims,
             &EncodingKey::from_secret(test_support::TEST_JWT_SECRET.as_bytes()),
         )
