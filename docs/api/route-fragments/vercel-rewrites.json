@@ -15,6 +15,7 @@
     "preferences",
     "reading-mode",
     "reading-orders",
+    "reading-plan-sync",
     "releases",
     "sessions",
     "tags",
@@ -22,6 +23,13 @@
     "threads"
   ],
   "routes": [
+    {
+      "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
     {
       "src": "/api/v2/dependencies/",
       "methods": [
@@ -182,7 +190,21 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "src": "^/api/v1/reading-orders/[^/]+/items$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-plan-sync/status$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-plan-sync/sync$",
       "methods": [
         "POST"
       ],
@@ -1104,6 +1126,22 @@
     },
     {
       "src": "^/api/v1/threads:getBlockingInfo$",
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-plan\\-sync/status$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "^/api/v1/reading\\-plan\\-sync/sync$",
       "methods": [
         "POST",
         "OPTIONS"
