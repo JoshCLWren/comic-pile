@@ -6,7 +6,7 @@
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 const STATUS_SQL: &str = "SELECT rps.id, rps.plan_id, rps.thread_id, \
