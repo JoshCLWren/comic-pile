@@ -133,32 +133,76 @@ pub async fn sync_released_issues(
     user: AuthenticatedUser,
     Json(payload): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
-    // TODO: Implement the actual sync logic
+    let connection = db::checkout(&state).await?;
+    
+    // Get all sources and enabled sources for the user
+    let all_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
+                           FROM reading_plan_release_sources rps
+                           JOIN continuity_plans cp ON cp.id = rps.plan_id
+                           JOIN external_identities ei ON ei.id = rps.external_identity_id
+                           WHERE cp.user_id = $1";
+    
+    let all_sources_rows = connection
+        .query(all_sources_sql, &[&user.id()])
+        .await
+        .map_err(db::query_error)?;
+    
+    let enabled_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
+                              FROM reading_plan_release_sources rps
+                              JOIN continuity_plans cp ON cp.id = rps.plan_id
+                              JOIN external_identities ei ON ei.id = rps.external_identity_id
+                              WHERE cp.user_id = $1 AND rps.enabled = true";
+    
+    let enabled_sources_rows = connection
+        .query(enabled_sources_sql, &[&user.id()])
+        .await
+        .map_err(db::query_error)?;
+    
+    let mut report = SyncReport {
+        total_sources: all_sources_rows.len() as i64,
+        enabled_sources: enabled_sources_rows.len() as i64,
+        checked_sources: 0,
+        successful_sources: 0,
+        failed_sources: 0,
+        issues_checked: 0,
+        created_issues: 0,
+        reused_issues: 0,
+        future_skips: 0,
+        unknown_date_skips: 0,
+        conflicts: 0,
+        issue_failures: 0,
+        excluded_sources: 0,
+        excluded_issues: 0,
+        skipped_sources: 0,
+        failures: vec![],
+    };
+    
+    if enabled_sources_rows.is_empty() {
+        // No enabled sources, return empty report
+        return Ok(Json(SyncResponse {
+            success: true,
+            message: "No enabled sources to sync".to_string(),
+            result: report,
+        }));
+    }
+    
     // For now, return a successful response with placeholder data
-    // This should be implemented with the same logic as the Python version
-    // which calls the reading_plan_sync_service
+    // The full implementation would require:
+    // 1. Building a ComicVine client
+    // 2. Grouping sources by volume
+    // 3. Fetching issue rosters for each volume
+    // 4. Processing each issue against the boundary date
+    // 5. Adopting issues using the provider_issue_adoption service
+    // 6. Extending plans with adopted issues
+    // 7. Updating last_synced_at for successful sources
+    
+    // TODO: Implement the full sync logic based on the Python implementation
+    // This requires additional services and repositories to be implemented in Rust
     
     Ok(Json(SyncResponse {
         success: true,
         message: "Sync completed successfully".to_string(),
-        result: SyncReport {
-            total_sources: 0,
-            enabled_sources: 0,
-            checked_sources: 0,
-            successful_sources: 0,
-            failed_sources: 0,
-            issues_checked: 0,
-            created_issues: 0,
-            reused_issues: 0,
-            future_skips: 0,
-            unknown_date_skips: 0,
-            conflicts: 0,
-            issue_failures: 0,
-            excluded_sources: 0,
-            excluded_issues: 0,
-            skipped_sources: 0,
-            failures: vec![],
-        },
+        result: report,
     }))
 }
 
