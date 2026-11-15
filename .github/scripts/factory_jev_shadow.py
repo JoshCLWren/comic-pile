@@ -855,7 +855,7 @@ def choose_worker_order(
     payload = {
         "model": MODEL,
         "state": {"workers": evidence},
-        "questions": {"next_worker": {
+        "questions": {"next_action": {
             "type": "choice",
             "instructions": (
                 "Choose the next eligible coding worker most likely to deliver useful code "
