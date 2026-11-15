@@ -671,7 +671,7 @@ mod tests {
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7001),
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("list owned taste discoveries");
@@ -698,7 +698,7 @@ mod tests {
         let Json(second) = list_taste_discoveries(
             State(state.clone()),
             user,
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("second list is suppressed by the cooldown");
@@ -711,7 +711,7 @@ mod tests {
         let Json(limited) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7001),
-            Query(TasteDiscoveryQuery { limit: Some(1) }),
+            Ok(Query(TasteDiscoveryQuery { limit: Some(1) })),
         )
         .await
         .expect("bounded listing");
@@ -720,7 +720,7 @@ mod tests {
         let Json(foreign) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7002),
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("foreign owner listing");
@@ -738,7 +738,7 @@ mod tests {
             let error = list_taste_discoveries(
                 State(state.clone()),
                 AuthenticatedUser::for_test(7001),
-                Query(TasteDiscoveryQuery { limit: Some(limit) }),
+                Ok(Query(TasteDiscoveryQuery { limit: Some(limit) })),
             )
             .await
             .expect_err("out-of-range limit must 422");
