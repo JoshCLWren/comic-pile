@@ -453,8 +453,17 @@ jobs:
             --json number,title,body,labels,createdAt,updatedAt > "$issues"
           gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
             --json number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository,statusCheckRollup > "$prs"
+          health="$RUNNER_TEMP/jev-factory-health.json"
+          if [[ -n "${FACTORY_STATE_DSN_FILE:-}" ]]; then
+            python3 .github/scripts/factory_state_operations.py stats \
+              --repo "$GITHUB_REPOSITORY" > "$health" || rm -f "$health"
+          fi
+          health_args=()
+          if [[ -s "$health" ]]; then
+            health_args=(--factory-health "$health")
+          fi
           python3 .github/scripts/factory_jev_shadow.py \
-            --issues "$issues" --prs "$prs" \
+            --issues "$issues" --prs "$prs" "${health_args[@]}" \
             --output "$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_STEP_SUMMARY"
           # Make the report available only to later steps of this same trusted
           # dispatcher job. A failed/abstaining report is safe to pass through:
