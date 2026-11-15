@@ -137,3 +137,39 @@ def test_cargo_example_target_resolution_unset_default(
     assert route_harness.cargo_example_path("http_auth_login") == (
         REPOSITORY_ROOT / "target" / "debug/examples/http_auth_login"
     )
+
+
+@pytest.mark.parametrize(
+    ("module_name", "example"),
+    [
+        ("test_constraint_validation", "constraint_validation"),
+        ("test_http_issue_read_rate", "http_issue_read_rate"),
+    ],
+)
+@pytest.mark.parametrize("target", [None, "custom-target", "/tmp/absolute-target"])
+def test_parity_runner_uses_workspace_target(
+    monkeypatch: pytest.MonkeyPatch,
+    module_name: str,
+    example: str,
+    target: str | None,
+) -> None:
+    """Actual parity entrypoints follow workspace defaults and target overrides."""
+    parity_dir = REPOSITORY_ROOT / "native/roll-service/parity"
+    monkeypatch.syspath_prepend(str(parity_dir))
+    monkeypatch.delenv("RUST_ROLL_ISSUE_READ_RATE_EXAMPLE", raising=False)
+    if target is None:
+        monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
+    else:
+        monkeypatch.setenv("CARGO_TARGET_DIR", target)
+    module = importlib.import_module(module_name)
+    try:
+        importlib.reload(module)
+        target_path = Path(target or "target")
+        if not target_path.is_absolute():
+            target_path = REPOSITORY_ROOT / target_path
+        assert module.RUNNER == target_path / "debug/examples" / example
+    finally:
+        # Do not leave environment-derived runner globals in the import cache.
+        import sys
+
+        sys.modules.pop(module_name, None)
