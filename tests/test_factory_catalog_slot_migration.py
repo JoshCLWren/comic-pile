@@ -88,3 +88,33 @@ def test_workflow_resolves_model_before_actual_inference() -> None:
     assert "runtime_model=vercel/$model" in workflow
     assert "runtime_model=openrouter/$model" in workflow
     assert "steps.model_preflight.outputs.model" in workflow
+
+
+def test_historical_worker_streak_spans_catalog_model_rotations() -> None:
+    def event(run_id: int, model: str, kind: str = "worker_failed") -> dict:
+        return {
+            "event_type": kind,
+            "detail": {
+                "run_id": str(run_id), "source": "openrouter-free",
+                "model": model, "outcome_class": "provider_failure",
+                "configured": True,
+            },
+        }
+
+    events = [
+        event(43, "model-b:free"),
+        event(42, "model-a:free"),
+        event(41, "model-c:free"),
+    ]
+    assert STATE.historical_failure_streak(
+        events, 44, "openrouter-free", "model-b:free",
+        model_only=False, model_independent=True,
+    ) == 3
+    assert STATE.historical_failure_streak(
+        events, 44, "openrouter-free", "model-b:free",
+        model_only=False, model_independent=False,
+    ) == 1
+    assert STATE.historical_failure_streak(
+        events, 44, "openrouter-free", "model-b:free",
+        model_only=True,
+    ) == 1
