@@ -45,3 +45,13 @@ async def test_connection_wrapper_preserves_driver_arguments_and_adds_only_opt_i
     assert await metrics.connect(dsn='private-sentinel', timeout=8, command_timeout=15) is connection
     assert loggers == [metrics.record_query]
     assert calls == [{'dsn': 'private-sentinel', 'timeout': 8, 'command_timeout': 15}] * 2
+
+
+def test_explicit_measurement_cannot_be_evicted_by_unrelated_ingress():
+    import yaml
+
+    workflow = yaml.safe_load((SCRIPT.parents[1] / 'workflows/fixed-model-factory-dispatch.yml').read_text())
+    group = workflow['concurrency']['group']
+    assert '(inputs.target || inputs.measure)' in group
+    assert "format('factory-manual-{0}', github.run_id)" in group
+    assert workflow['jobs']['dispatch']['concurrency']['group'] == 'fixed-model-factory-dispatch'
