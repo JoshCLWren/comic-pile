@@ -6,6 +6,7 @@ pub mod auth;
 pub mod bootstrap;
 pub mod bug_reports;
 pub mod catalog_commit;
+pub mod cbl_catalog;
 pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
@@ -649,6 +650,14 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/identity-inbox/{mapping_id}/skip",
             post(identity_inbox::skip),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(cbl_catalog::list_cbl_source_folders),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(cbl_catalog::browse_cbl_source_catalog),
         )
         .route(
             "/api/v2/issues/{issue_id}/comicvine",
