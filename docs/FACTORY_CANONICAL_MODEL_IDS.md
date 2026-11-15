@@ -34,3 +34,27 @@ Sources:
 
 Account-level callability still requires a credential and real bounded
 inference; catalog resolution alone does not prove free quota or tool support.
+
+
+## Model-independent worker slots
+
+OpenCode Free, OpenRouter Free, and Vercel zero-price workers now carry the
+schema token `@catalog` rather than a manually entered model ID in
+`.github/free-model-factories.tsv`. The snapshot records the same slot
+identity, but not a hardcoded model.
+
+The *runtime* resolves an actual upstream API model ID from a current
+published catalog. OpenCode Free uses the OpenCode CLI, OpenRouter requires
+a `:free` model with both prices exactly zero, and Vercel requires both
+input and output prices exactly zero. A trusted Neon exclusion snapshot
+removes cooling, unavailable and retired models before selection. With no
+verified $0 candidate, execution fails closed without inference.
+
+Worker IDs, source budgets, source credentials and lease history remain stable.
+Worker-level Fibonacci backoff still applies to the slot even though the
+selected model can change. Provider/model backoff and telemetry always use the
+*selected* model rather than the schema token.
+
+Other free-tier providers do not all publish model-level $0 price information.
+Their vetted legacy pins are not yet migrated; a generic `/models` list is
+**not** sufficient proof of free billing.
