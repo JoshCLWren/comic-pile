@@ -220,6 +220,10 @@ async def test_reader_statements_do_not_grow_with_library_size() -> None:
         large_lanes = large_body.get("lanes")
         assert isinstance(large_lanes, list) and len(large_lanes) == 1
         assert len(large_lanes[0]["issues"]) == LARGE_ISSUES
+        assert large_body["progress"] == {
+            "total_issues": LARGE_ISSUES,
+            "read_issues": LARGE_ISSUES - 1,
+        }
         _, _, large_top_after = await db_counters(engine)
         large_nested_after = await db_nested_statements(engine)
         large_top = (

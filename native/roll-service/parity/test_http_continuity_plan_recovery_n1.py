@@ -273,7 +273,8 @@ async def test_recovery_preview_statements_do_not_grow_with_data() -> None:
         assert large_body.get("status") == "linked"
         large_candidates = large_body.get("candidates")
         assert isinstance(large_candidates, list)
-        assert len(large_candidates) >= LARGE_LISTS
+        # The plan's linked list plus the bulk candidate lists are all returned.
+        assert len(large_candidates) == LARGE_LISTS + 1
         _, _, large_after = await db_counters(engine)
         large_nested_after = await db_nested_statements(engine)
         large_delta = large_after - large_before if large_after is not None else None
