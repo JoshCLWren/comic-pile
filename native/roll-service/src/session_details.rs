@@ -119,6 +119,26 @@ fn not_found() -> ApiError {
     ApiError::with_status(StatusCode::NOT_FOUND, "Session not found".to_string())
 }
 
+/// Lenient JSON parse for a JSON column value.
+///
+/// Malformed JSON is logged with the column context and falls back to
+/// [`Value::Null`] — matching the Python oracle's tolerance for absent
+/// context payloads — but the corruption stays visible in the logs instead
+/// of being silently swallowed.
+fn lenient_json(text: Option<&str>, column: &'static str) -> Value {
+    match text {
+        Some(text) => serde_json::from_str(text).unwrap_or_else(|error| {
+            tracing::warn!(
+                error_kind = crate::error_kind(&error),
+                column,
+                "malformed JSON column treated as absent; see logs"
+            );
+            Value::Null
+        }),
+        None => Value::Null,
+    }
+}
+
 fn internal() -> ApiError {
     ApiError::with_status(
         StatusCode::INTERNAL_SERVER_ERROR,
@@ -377,10 +397,7 @@ pub async fn get_session_details(
             issues_read: row.try_get(10).map_err(projection_error)?,
             queue_move: row.try_get(11).map_err(projection_error)?,
             die_after: row.try_get(12).map_err(projection_error)?,
-            context: context_text
-                .as_deref()
-                .and_then(|text| serde_json::from_str(text).ok())
-                .unwrap_or(Value::Null),
+            context: lenient_json(context_text.as_deref(), "events.context"),
         });
     }
 
@@ -395,18 +412,32 @@ pub async fn get_session_details(
         }
     }
     let recorded_snoozed: Option<Vec<i32>> = match snoozed_thread_ids_text.as_deref() {
-        Some(text) if !text.is_empty() && text != "null" => serde_json::from_str::<Value>(text)
-            .ok()
-            .and_then(|value| match value {
-                Value::Array(values) => Some(
+        Some(text) if !text.is_empty() && text != "null" => {
+            match serde_json::from_str::<Value>(text) {
+                Ok(Value::Array(values)) => Some(
                     values
                         .iter()
                         .filter_map(Value::as_i64)
                         .map(|value| value as i32)
                         .collect(),
                 ),
-                _ => None,
-            }),
+                Ok(_) => {
+                    tracing::warn!(
+                        column = "sessions.snoozed_thread_ids",
+                        "non-array snoozed_thread_ids column; falling back to event projection"
+                    );
+                    None
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        error_kind = crate::error_kind(&error),
+                        column = "sessions.snoozed_thread_ids",
+                        "malformed snoozed_thread_ids column; falling back to event projection"
+                    );
+                    None
+                }
+            }
+        }
         _ => None,
     };
     let still_snoozed_ids: Vec<i32> = match &recorded_snoozed {
@@ -500,10 +531,7 @@ pub async fn get_session_details(
             Some(row) => {
                 let die_after: i32 = row.try_get(0).map_err(projection_error)?;
                 let context_text: Option<String> = row.try_get(1).map_err(projection_error)?;
-                let context: Value = context_text
-                    .as_deref()
-                    .and_then(|text| serde_json::from_str(text).ok())
-                    .unwrap_or(Value::Null);
+                let context: Value = lenient_json(context_text.as_deref(), "current_die.context");
                 automatic_die_after(die_after, &context)
             }
             None => manual_die.filter(|value| *value != 0).unwrap_or(start_die),
@@ -575,10 +603,7 @@ async fn snapshot_recovered_snoozes(
         return Ok(Vec::new());
     };
     let state_text: Option<String> = row.try_get(0).map_err(projection_error)?;
-    let state: Value = state_text
-        .as_deref()
-        .and_then(|text| serde_json::from_str(text).ok())
-        .unwrap_or(Value::Null);
+    let state: Value = lenient_json(state_text.as_deref(), "snapshots.session_state");
     let ids = match state.get("snoozed_thread_ids") {
         Some(Value::Array(values)) => values
             .iter()
@@ -602,8 +627,16 @@ async fn snapshot_thread_titles(
     let mut titles: HashMap<i32, String> = HashMap::new();
     for row in &rows {
         let states_text: String = row.try_get(0).map_err(projection_error)?;
-        let Ok(states) = serde_json::from_str::<Value>(&states_text) else {
-            continue;
+        let states: Value = match serde_json::from_str(&states_text) {
+            Ok(states) => states,
+            Err(error) => {
+                tracing::warn!(
+                    error_kind = crate::error_kind(&error),
+                    column = "snapshots.thread_states",
+                    "malformed thread_states JSON in snapshot; skipping snapshot row"
+                );
+                continue;
+            }
         };
         let Value::Object(map) = states else {
             continue;
@@ -943,3 +976,87 @@ pub struct SessionDetailsQuery {
 )]
 #[allow(dead_code)]
 pub fn get_session_details_documentation() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{db, test_support};
+
+    async fn database_fixture() -> (
+        Arc<AppState>,
+        AuthenticatedUser,
+        tokio::sync::MutexGuard<'static, ()>,
+    ) {
+        let state = test_support::test_state(2)
+            .await
+            .expect("RUST_ROLL_TEST_DATABASE_URL is required");
+        let guard = test_support::reset_for_test(&state).await;
+        let connection = db::checkout(&state).await.expect("fixture connection");
+        connection
+            .batch_execute(
+                "INSERT INTO users (id, username) VALUES (9101, 'details-owner'), (9102, 'details-other');
+                 INSERT INTO threads (id, user_id, title, format, issues_remaining, total_issues, reading_progress, queue_position, status, is_blocked)
+                   VALUES (9201, 9101, 'Owned Comic', 'comics', 3, NULL, NULL, 1, 'completed', false),
+                          (9202, 9102, 'Foreign Comic', 'Comic', 2, NULL, NULL, 1, 'active', false);
+                 INSERT INTO sessions (id, user_id, started_at, ended_at, start_die, manual_die, reading_mode_suggested)
+                   VALUES (9301, 9101, '2026-01-01T00:00:00Z', NULL, 6, NULL, false),
+                          (9302, 9102, '2026-01-01T00:00:00Z', NULL, 6, NULL, false);
+                 INSERT INTO events (session_id, type, timestamp, selected_thread_id, thread_id, die, die_after, result, rating, issues_read, queue_move)
+                   VALUES (9301, 'roll', '2026-01-01T00:00:00Z', 9201, NULL, 6, NULL, 3, NULL, NULL, NULL),
+                          (9301, 'rate', '2026-01-01T00:01:00Z', NULL, 9201, 6, 4, NULL, 4.5, 1, 'keep');",
+            )
+            .await
+            .expect("seed session details fixture");
+        drop(connection);
+        (state, AuthenticatedUser::for_test(9101), guard)
+    }
+
+    #[tokio::test]
+    async fn get_session_details_returns_owned_projection() {
+        let (state, user, _guard) = database_fixture().await;
+        let Json(response) = get_session_details(Path(9301), user, State(state.clone()))
+            .await
+            .expect("owned session details");
+        assert_eq!(response.session_id, 9301);
+        assert_eq!(response.start_die, 6);
+        assert_eq!(response.current_die, 4);
+        assert_eq!(response.ladder_path, "6 → 4");
+        assert_eq!(
+            response.narrative_summary.read,
+            vec!["Owned Comic (4.5/5.0)"]
+        );
+        assert_eq!(response.narrative_summary.completed, vec!["Owned Comic"]);
+        assert_eq!(response.narrative_summary.skipped.len(), 0);
+        assert_eq!(response.events.len(), 2);
+        assert_eq!(
+            response.events[0].event_type, "rate",
+            "events must be newest first"
+        );
+        assert_eq!(response.events[1].event_type, "roll");
+        assert!(
+            response.started_at.ends_with('Z'),
+            "started_at must be a UTC Z-suffix timestamp, got {}",
+            response.started_at
+        );
+        assert!(response
+            .events
+            .iter()
+            .all(|event| event.timestamp.ends_with('Z')));
+    }
+
+    #[tokio::test]
+    async fn get_session_details_rejects_missing_and_foreign_sessions() {
+        let (state, user, _guard) = database_fixture().await;
+        let missing = get_session_details(Path(9999), user, State(state.clone()))
+            .await
+            .expect_err("missing session must 404");
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        assert_eq!(missing.detail(), "Session not found");
+
+        let foreign = get_session_details(Path(9302), user, State(state.clone()))
+            .await
+            .expect_err("foreign session must 404");
+        assert_eq!(foreign.status(), StatusCode::NOT_FOUND);
+        assert_eq!(foreign.detail(), "Session not found");
+    }
+}
