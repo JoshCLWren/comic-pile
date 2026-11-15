@@ -27,6 +27,7 @@ use utoipa::OpenApi;
     crate::session_history::list_session_snapshots_documentation,
     crate::issue_read::get_issue_documentation,
     crate::issue_read::get_issue_dependencies_documentation,
+    crate::issue_read::list_thread_issues_documentation,
     crate::threads::get_thread_detail_documentation,
     crate::threads::get_bare_thread_detail_documentation,
     crate::taste_discoveries::dismiss_documentation,
