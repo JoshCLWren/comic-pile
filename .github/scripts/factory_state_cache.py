@@ -113,6 +113,59 @@ def _publish(key: str, owner: str, data: list[dict[str, Any]], ttl_seconds: int)
     )
 
 
+
+def _refresh_without_rewrite(key: str, owner: str, ttl_seconds: int, records: int) -> None:
+    """Extend freshness without retransmitting or rewriting an unchanged TOAST value."""
+    _run(
+        """
+        WITH refreshed AS (
+            UPDATE public.factory_state_kv
+               SET fetched_at=now(), expires_at=now() + $3::int * interval '1 second',
+                   refresh_owner=NULL, refresh_until=NULL, updated_at=now()
+             WHERE cache_key=$1 AND refresh_owner=$2
+             RETURNING cache_key
+        )
+        INSERT INTO public.factory_state_events (source, event_type, detail)
+        SELECT 'github-actions', 'cache_refresh',
+               jsonb_build_object('key', cache_key, 'records', $4::int, 'unchanged', true)
+          FROM refreshed
+        """,
+        key, owner, ttl_seconds, records,
+    )
+
+
+def _prune_expired_github_cache(batch_size: int = 200) -> int:
+    """Delete only long-expired, non-authoritative GitHub GET snapshots.
+
+    Never prune projections, comment registries, worker/provider state or leases.
+    An in-progress refresh also remains protected. Batches avoid long locks.
+    """
+    if not 1 <= batch_size <= 1000:
+        raise ValueError("invalid cache cleanup batch size")
+    row = _run(
+        """
+        WITH stale AS (
+            SELECT cache_key FROM public.factory_state_kv
+             WHERE cache_key LIKE 'factory-github-get-v1:%'
+               AND expires_at < now() - interval '30 minutes'
+               AND (refresh_until IS NULL OR refresh_until < now())
+             ORDER BY expires_at
+             LIMIT $1
+        ), removed AS (
+            DELETE FROM public.factory_state_kv AS cache
+             USING stale
+             WHERE cache.cache_key = stale.cache_key
+               AND cache.expires_at < now() - interval '30 minutes'
+               AND (cache.refresh_until IS NULL OR cache.refresh_until < now())
+             RETURNING cache.cache_key
+        )
+        SELECT count(*) AS deleted FROM removed
+        """,
+        batch_size, one=True,
+    )
+    return int(row["deleted"])
+
+
 def _release(key: str, owner: str) -> None:
     _run(
         """
@@ -208,8 +261,12 @@ def cached_json(
             pass
         raise
 
+    unchanged = previous is not None and result == previous
     try:
-        _publish(key, owner, result, ttl_seconds)
+        if unchanged:
+            _refresh_without_rewrite(key, owner, ttl_seconds, len(result))
+        else:
+            _publish(key, owner, result, ttl_seconds)
     except Exception as error:
         print(f"[factory-state] cache publication unavailable ({type(error).__name__})", file=sys.stderr)
         try:
@@ -217,7 +274,8 @@ def cached_json(
         except Exception:
             pass
     else:
-        print(f"[factory-state] refreshed {key}: {len(result)} records", file=sys.stderr)
+        label = "extended unchanged" if unchanged else "refreshed"
+        print(f"[factory-state] {label} {key}: {len(result)} records", file=sys.stderr)
     return result
 
 
@@ -256,3 +314,23 @@ def incremental_comments(
             raise ValueError("GitHub returned a malformed issue comment")
         by_id[comment["id"]] = comment
     return sorted(by_id.values(), key=lambda comment: (comment.get("created_at") or "", comment["id"]))
+
+
+def main(argv: list[str]) -> int:
+    if argv != ["prune-expired"]:
+        print("usage: factory_state_cache.py prune-expired", file=sys.stderr)
+        return 2
+    if not os.environ.get("FACTORY_STATE_DSN_FILE"):
+        raise RuntimeError("cache cleanup requires trusted Neon credentials")
+    deleted = 0
+    for _ in range(5):
+        count = _prune_expired_github_cache()
+        deleted += count
+        if count < 200:
+            break
+    print(f"[factory-state] pruned {deleted} expired GitHub GET cache rows")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
