@@ -294,15 +294,15 @@ def test_compacted_registry_retains_essential_evidence_without_old_history():
         }
 
     records = [
-        comment(1, "2026-10-01T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\\nWorker: opencode-free-model-factory-7\\nAttempt outcome: provider_failure\\nUpdated: 2026-10-01T00:00:00Z"),
-        comment(2, "2026-10-02T00:00:00Z", "Source: kilo-auto\\nModel: free/test\\nAttempt outcome: model_unavailable\\nUpdated: 2026-10-02T00:00:00Z"),
-        comment(3, "2026-10-03T00:00:00Z", "<!-- factory-model-retired-410:v1 -->\\nSource: kilo-auto\\nModel: free/test\\nUpdated: 2026-10-03T00:00:00Z"),
-        comment(4, "2026-10-04T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\\nWorker: opencode-free-model-factory-7\\nAttempt outcome: success\\nUpdated: 2026-10-04T00:00:00Z"),
-        comment(5, "2026-10-05T00:00:00Z", "Source: kilo-auto\\nModel: free/test\\nAttempt outcome: success\\nUpdated: 2026-10-05T00:00:00Z"),
-        comment(6, "2026-11-14T23:00:00Z", "Run: 555\\nWorker: opencode-free-model-factory-8"),
+        comment(1, "2026-10-01T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\nWorker: opencode-free-model-factory-7\nAttempt outcome: provider_failure\nUpdated: 2026-10-01T00:00:00Z"),
+        comment(2, "2026-10-02T00:00:00Z", "Source: kilo-auto\nModel: free/test\nAttempt outcome: model_unavailable\nUpdated: 2026-10-02T00:00:00Z"),
+        comment(3, "2026-10-03T00:00:00Z", "<!-- factory-model-retired-410:v1 -->\nSource: kilo-auto\nModel: free/test\nUpdated: 2026-10-03T00:00:00Z"),
+        comment(4, "2026-10-04T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\nWorker: opencode-free-model-factory-7\nAttempt outcome: success\nUpdated: 2026-10-04T00:00:00Z"),
+        comment(5, "2026-10-05T00:00:00Z", "Source: kilo-auto\nModel: free/test\nAttempt outcome: success\nUpdated: 2026-10-05T00:00:00Z"),
+        comment(6, "2026-11-14T23:00:00Z", "Run: 555\nWorker: opencode-free-model-factory-8"),
         comment(7, "2026-10-06T00:00:00Z", "untrusted ancient filler", "NONE"),
         comment(8, "2026-11-15T00:00:00Z", "untrusted fresh observation", "NONE"),
-        comment(9, "2026-10-07T00:00:00Z", "<!-- factory-completion-funnel:v1 -->\\nUpdated: 2026-10-07T00:00:00Z"),
+        comment(9, "2026-10-07T00:00:00Z", "<!-- factory-completion-funnel:v1 -->\nUpdated: 2026-10-07T00:00:00Z"),
     ]
     compacted = cache.compact_registry_comments(
         records,
