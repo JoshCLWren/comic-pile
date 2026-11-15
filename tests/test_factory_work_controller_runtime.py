@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import subprocess
 import sys
 import types
@@ -571,7 +572,7 @@ def test_required_ci_outcome_waits_for_all_terminal_checks(
     """Only terminal exact-head CI results can unlock a model assignment."""
     monkeypatch.setattr(
         controller, "run_gh",
-        lambda *args, **kwargs: __import__("json").dumps(
+        lambda *args, **kwargs: json.dumps(
             [{"state": state} for state in states]
         ),
     )
