@@ -96,6 +96,17 @@ def test_terminal_classification_is_idempotency_keyed_by_run(monkeypatch):
     assert records[0]["persisted_work"] is True
 
 
+def test_idle_is_not_a_successful_delivery_or_failed_worker(monkeypatch):
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "12347", {
+        "worker": "42", "outcome_class": "no_work",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_idle"
+    assert records[0]["delivery_outcome"] == "none"
+
+
 
 def test_timed_out_agent_with_verified_delivery_is_completed(monkeypatch):
     """Worker 82: a real code handoff is not erased by its agent timeout."""
