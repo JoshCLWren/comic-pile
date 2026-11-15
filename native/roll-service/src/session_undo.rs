@@ -100,7 +100,9 @@ pub async fn list_undo_snapshots(
         );
         ApiError::Internal("Internal Server Error".to_string())
     })?;
-    Ok(Json(json!({"session_id": session_id, "snapshots": snapshots})))
+    Ok(Json(
+        json!({"session_id": session_id, "snapshots": snapshots}),
+    ))
 }
 
 /// OpenAPI declaration for both legacy and versioned same-path aliases.

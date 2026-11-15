@@ -50,7 +50,9 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{auth::AuthenticatedUser, db, reading_session::automatic_die_after, ApiError, AppState};
+use crate::{
+    auth::AuthenticatedUser, db, reading_session::automatic_die_after, ApiError, AppState,
+};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -104,15 +106,14 @@ pub struct SessionDetailsResponse {
     pub events: Vec<SessionEventDetail>,
 }
 
-const TIMESTAMP_SQL: &str =
-    "to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')";
 const SESSION_SQL: &str = "SELECT to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), to_char(ended_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), start_die, manual_die, snoozed_thread_ids::text, timezone FROM sessions WHERE id = $1 AND user_id = $2";
 const EVENTS_SQL: &str = "SELECT id, type, to_char(timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), thread_id, selected_thread_id, issue_number, die, result, selection_method, rating, issues_read, queue_move, die_after, context::text FROM events WHERE session_id = $1 ORDER BY timestamp DESC, id DESC";
-const THREADS_SQL: &str = "SELECT id, title, user_id, status FROM threads WHERE id = ANY($1::int[])";
+const THREADS_SQL: &str =
+    "SELECT id, title, user_id, status FROM threads WHERE id = ANY($1::int[])";
 const SNAPSHOT_TITLES_SQL: &str = "SELECT thread_states::text FROM snapshots WHERE session_id = $1 ORDER BY created_at DESC, id DESC";
 const FIRST_START_SNAPSHOT_SQL: &str = "SELECT session_state::text FROM snapshots WHERE session_id = $1 AND description = 'Session start' ORDER BY created_at ASC LIMIT 1";
 const LADDER_SQL: &str = "SELECT die_after FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo') AND die_after IS NOT NULL ORDER BY timestamp ASC, id ASC";
-const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE session_id = $1 AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
+const CURRENT_DIE_SQL: &str = "SELECT die_after, context::text FROM events WHERE (user_id = $2 OR session_id = $1) AND type IN ('rate','snooze','undo','reset_dice','manual_die') AND die_after IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1";
 
 fn not_found() -> ApiError {
     ApiError::with_status(StatusCode::NOT_FOUND, "Session not found".to_string())
@@ -144,6 +145,10 @@ fn event_word(event_type: &str) -> String {
         "shuffle" => return "Shuffled".to_string(),
         "roll" => return "Rolled".to_string(),
         "rate" => return "Rated".to_string(),
+        // Python's timeline branch hardcodes `Snoozed` for `snooze`
+        // (`EVENT_TYPE_DESCRIPTIONS` has no `snooze` key because that branch
+        // never calls `_event_word`), while `unsnooze` is dict-mapped.
+        "snooze" => return "Snoozed".to_string(),
         "unsnooze" => return "Unsnoozed".to_string(),
         "dismiss" => return "Dismissed".to_string(),
         _ => {}
@@ -347,32 +352,31 @@ pub async fn get_session_details(
         internal()
     })?;
 
-    let event_rows = connection.query(EVENTS_SQL, &[&session_id]).await.map_err(query_error)?;
+    let event_rows = connection
+        .query(EVENTS_SQL, &[&session_id])
+        .await
+        .map_err(query_error)?;
     let mut events: Vec<EventRow> = Vec::with_capacity(event_rows.len());
     for row in &event_rows {
-        let context_text: Option<String> = row.try_get(12).map_err(|e| {
-            tracing::debug!(
-                error_kind = crate::error_kind(&e),
-                "preserved underlying error before mapping"
-            );
-            internal()
-        })?;
+        // Column order of EVENTS_SQL: id(0), type(1), timestamp(2),
+        // thread_id(3), selected_thread_id(4), issue_number(5), die(6),
+        // result(7), selection_method(8), rating(9), issues_read(10),
+        // queue_move(11), die_after(12), context(13).
+        let context_text: Option<String> = row.try_get(13).map_err(projection_error)?;
         events.push(EventRow {
-            id: row.try_get(0).map_err(projection_error()?)?,
-            event_type: row.try_get(1).map_err(projection_error()?)?,
-            timestamp: row.try_get(2).map_err(projection_error()?)?,
-            thread_id: row.try_get(3).map_err(projection_error()?)?,
-            selected_thread_id: row.try_get(4).map_err(projection_error()?)?,
-            issue_number: row.try_get(5).map_err(projection_error()?)?,
-            die: row.try_get(6).map_err(projection_error()?)?,
-            result: row.try_get(7).map_err(projection_error()?)?,
-            selection_method: row.try_get(8).map_err(projection_error()?)?,
-            rating: row.try_get(9).map_err(projection_error()?)?,
-            issues_read: row.try_get(10).map_err(projection_error()?)?,
-            queue_move: row.try_get(11).map_err(projection_error()?)?,
-            die_after: row.try_get::<_, Option<i32>>(11).ok().flatten().or_else(|| {
-                row.try_get::<_, i32>(11).ok()
-            }),
+            id: row.try_get(0).map_err(projection_error)?,
+            event_type: row.try_get(1).map_err(projection_error)?,
+            timestamp: row.try_get(2).map_err(projection_error)?,
+            thread_id: row.try_get(3).map_err(projection_error)?,
+            selected_thread_id: row.try_get(4).map_err(projection_error)?,
+            issue_number: row.try_get(5).map_err(projection_error)?,
+            die: row.try_get(6).map_err(projection_error)?,
+            result: row.try_get(7).map_err(projection_error)?,
+            selection_method: row.try_get(8).map_err(projection_error)?,
+            rating: row.try_get(9).map_err(projection_error)?,
+            issues_read: row.try_get(10).map_err(projection_error)?,
+            queue_move: row.try_get(11).map_err(projection_error)?,
+            die_after: row.try_get(12).map_err(projection_error)?,
             context: context_text
                 .as_deref()
                 .and_then(|text| serde_json::from_str(text).ok())
@@ -391,8 +395,9 @@ pub async fn get_session_details(
         }
     }
     let recorded_snoozed: Option<Vec<i32>> = match snoozed_thread_ids_text.as_deref() {
-        Some(text) if !text.is_empty() && text != "null" => {
-            serde_json::from_str::<Value>(text).ok().and_then(|value| match value {
+        Some(text) if !text.is_empty() && text != "null" => serde_json::from_str::<Value>(text)
+            .ok()
+            .and_then(|value| match value {
                 Value::Array(values) => Some(
                     values
                         .iter()
@@ -401,8 +406,7 @@ pub async fn get_session_details(
                         .collect(),
                 ),
                 _ => None,
-            })
-        }
+            }),
         _ => None,
     };
     let still_snoozed_ids: Vec<i32> = match &recorded_snoozed {
@@ -411,12 +415,10 @@ pub async fn get_session_details(
             ids.sort_unstable();
             ids
         }
-        None => project_still_snoozed_thread_ids(&events, &snapshot_recovered_snoozes(
-            connection,
-            &state,
-            session_id,
-        )
-        .await?),
+        None => project_still_snoozed_thread_ids(
+            &events,
+            &snapshot_recovered_snoozes(&connection, session_id).await?,
+        ),
     };
     for thread_id in &still_snoozed_ids {
         thread_ids.insert(*thread_id);
@@ -430,10 +432,10 @@ pub async fn get_session_details(
             .await
             .map_err(query_error)?;
         for row in &thread_rows {
-            let id: i32 = row.try_get(0).map_err(projection_error()?)?;
-            let title: String = row.try_get(1).map_err(projection_error()?)?;
-            let thread_user_id: i32 = row.try_get(2).map_err(projection_error()?)?;
-            let status: String = row.try_get(3).map_err(projection_error()?)?;
+            let id: i32 = row.try_get(0).map_err(projection_error)?;
+            let title: String = row.try_get(1).map_err(projection_error)?;
+            let thread_user_id: i32 = row.try_get(2).map_err(projection_error)?;
+            let status: String = row.try_get(3).map_err(projection_error)?;
             threads.insert(
                 id,
                 ThreadRow {
@@ -453,27 +455,27 @@ pub async fn get_session_details(
         .filter(|thread_id| !threads.contains_key(thread_id))
         .collect();
     if !missing_timeline_ids.is_empty() {
-        snapshot_titles = snapshot_thread_titles(connection, &state, session_id).await?;
+        snapshot_titles = snapshot_thread_titles(&connection, session_id).await?;
     }
 
-    let narrative_summary = build_narrative_summary(
-        &events,
-        &threads,
-        user.id(),
-        &still_snoozed_ids,
-        recorded_snoozed.is_some(),
-    );
+    let narrative_summary =
+        build_narrative_summary(&events, &threads, user.id(), &still_snoozed_ids);
 
     let ladder_values: Vec<i32> = {
-        let rows = connection.query(LADDER_SQL, &[&session_id]).await.map_err(query_error)?;
+        let rows = connection
+            .query(LADDER_SQL, &[&session_id])
+            .await
+            .map_err(query_error)?;
         rows.iter()
-            .map(|row| row.try_get::<_, i32>(0).map_err(|e| {
-                tracing::debug!(
-                    error_kind = crate::error_kind(&e),
-                    "preserved underlying error before mapping"
-                );
-                internal()
-            }))
+            .map(|row| {
+                row.try_get::<_, i32>(0).map_err(|e| {
+                    tracing::debug!(
+                        error_kind = crate::error_kind(&e),
+                        "preserved underlying error before mapping"
+                    );
+                    internal()
+                })
+            })
             .collect::<Result<_, _>>()?
     };
     let mut ladder_parts: Vec<String> = vec![start_die.to_string()];
@@ -486,14 +488,18 @@ pub async fn get_session_details(
     let ladder = ladder_parts.join(" → ");
 
     let current_die = {
+        // Python `get_current_die` scopes die history to
+        // `or_(Event.user_id == session.user_id, Event.session_id == session.id)`:
+        // Rust commands write sessionless `manual_die`/`snooze` events, so a
+        // session-only lookup would miss the reader's latest die.
         let die_row = connection
-            .query_opt(CURRENT_DIE_SQL, &[&session_id])
+            .query_opt(CURRENT_DIE_SQL, &[&session_id, &user.id()])
             .await
             .map_err(query_error)?;
         match die_row {
             Some(row) => {
-                let die_after: i32 = row.try_get(0).map_err(projection_error()?)?;
-                let context_text: Option<String> = row.try_get(1).map_err(projection_error()?)?;
+                let die_after: i32 = row.try_get(0).map_err(projection_error)?;
+                let context_text: Option<String> = row.try_get(1).map_err(projection_error)?;
                 let context: Value = context_text
                     .as_deref()
                     .and_then(|text| serde_json::from_str(text).ok())
@@ -520,17 +526,25 @@ pub async fn get_session_details(
 }
 
 /// Row-projection failures share one mapped outcome.
-fn projection_error() -> Result<(), ApiError> {
-    Err(internal())
+///
+/// Takes the underlying driver error so every `try_get` can be mapped through
+/// `map_err(projection_error)` while still recording the cause first.
+fn projection_error(error: tokio_postgres::Error) -> ApiError {
+    tracing::debug!(
+        error_kind = crate::error_kind(&error),
+        "preserved underlying error before mapping"
+    );
+    internal()
 }
 
 /// Python `project_still_snoozed_thread_ids`.
-fn project_still_snoozed_thread_ids(
-    events: &[EventRow],
-    start_thread_ids: &[i32],
-) -> Vec<i32> {
+///
+/// The input arrives in timeline display order (newest first); Python replays
+/// `(timestamp, id)` ascending, so iterate reversed to keep snooze/unsnooze
+/// pairing order identical.
+fn project_still_snoozed_thread_ids(events: &[EventRow], start_thread_ids: &[i32]) -> Vec<i32> {
     let mut still_snoozed: BTreeSet<i32> = start_thread_ids.iter().copied().collect();
-    for event in events {
+    for event in events.iter().rev() {
         if event.event_type != "snooze" && event.event_type != "unsnooze" {
             continue;
         }
@@ -549,18 +563,18 @@ fn project_still_snoozed_thread_ids(
 /// Python `_recorded_start_snoozes`: the session-start snapshot's snooze set.
 async fn snapshot_recovered_snoozes(
     connection: &deadpool_postgres::Object,
-    state: &AppState,
     session_id: i32,
 ) -> Result<Vec<i32>, ApiError> {
-    let row = db::query_one_optional(
-        state,
-        connection,
-        FIRST_START_SNAPSHOT_SQL,
-        &[&session_id],
-    )
-    .await?
-    .ok_or_else(internal)?;
-    let state_text: Option<String> = row.try_get(0).map_err(projection_error()?)?;
+    let row = connection
+        .query_opt(FIRST_START_SNAPSHOT_SQL, &[&session_id])
+        .await
+        .map_err(query_error)?;
+    // Python `_recorded_start_snoozes(None)` returns the empty set when the
+    // session has no `Session start` snapshot; that is not an error.
+    let Some(row) = row else {
+        return Ok(Vec::new());
+    };
+    let state_text: Option<String> = row.try_get(0).map_err(projection_error)?;
     let state: Value = state_text
         .as_deref()
         .and_then(|text| serde_json::from_str(text).ok())
@@ -579,7 +593,6 @@ async fn snapshot_recovered_snoozes(
 /// Python `reading_session_repository.snapshot_thread_titles`.
 async fn snapshot_thread_titles(
     connection: &deadpool_postgres::Object,
-    state: &AppState,
     session_id: i32,
 ) -> Result<HashMap<i32, String>, ApiError> {
     let rows = connection
@@ -588,7 +601,7 @@ async fn snapshot_thread_titles(
         .map_err(query_error)?;
     let mut titles: HashMap<i32, String> = HashMap::new();
     for row in &rows {
-        let states_text: String = row.try_get(0).map_err(projection_error()?)?;
+        let states_text: String = row.try_get(0).map_err(projection_error)?;
         let Ok(states) = serde_json::from_str::<Value>(&states_text) else {
             continue;
         };
@@ -616,18 +629,21 @@ async fn snapshot_thread_titles(
 }
 
 /// Python `summary_service.build_narrative_summary`.
+///
+/// The input arrives in timeline display order (newest first); Python reads
+/// the event stream `(timestamp, id)` ascending for both the undo netting and
+/// the chronological `read` list, so iterate reversed.
 fn build_narrative_summary(
     events: &[EventRow],
     threads: &HashMap<i32, ThreadRow>,
     session_user_id: i32,
     still_snoozed_ids: &[i32],
-    recorded_snoozed_present: bool,
 ) -> SessionNarrativeSummary {
     // Net undo events against rate events: each undo reverts the most recent
     // not-yet-undone rate before it.
     let mut undone_rate_ids: BTreeSet<i32> = BTreeSet::new();
     let mut open_rate_ids: Vec<i32> = Vec::new();
-    for event in events {
+    for event in events.iter().rev() {
         if event.event_type == "rate" {
             open_rate_ids.push(event.id);
         } else if event.event_type == "undo" {
@@ -638,13 +654,16 @@ fn build_narrative_summary(
     }
 
     // The persisted snooze column is the authoritative boundary state whenever
-    // it exists; otherwise the projection above already rebuilt it.
-    let mut snoozed_ids: Vec<i32> = still_snoozed_ids.to_vec();
-    if recorded_snoozed_present {
-        snoozed_ids.retain(|thread_id| {
+    // it exists; otherwise the projection above already rebuilt it. Scope the
+    // set to the reader who owns the session: a malformed event naming another
+    // reader's series must not leak that title.
+    let snoozed_ids: Vec<i32> = still_snoozed_ids
+        .iter()
+        .copied()
+        .filter(|thread_id| {
             !threads.contains_key(thread_id) || threads[thread_id].user_id == session_user_id
-        });
-    }
+        })
+        .collect();
 
     let mut snoozed_titles: BTreeSet<String> = BTreeSet::new();
     for thread_id in &snoozed_ids {
@@ -662,12 +681,14 @@ fn build_narrative_summary(
     let mut skipped_titles: BTreeSet<String> = BTreeSet::new();
     let mut completed_titles: BTreeSet<String> = BTreeSet::new();
 
-    for event in events {
+    for event in events.iter().rev() {
         let thread_id = event.summary_thread_id();
         let thread = thread_id.and_then(|thread_id| threads.get(&thread_id));
-        let title = match thread {
-            Some(thread) => thread.title.clone(),
-            None => format!("Thread #{}", thread_id.unwrap_or_default()),
+        let title = match (thread, thread_id) {
+            (Some(thread), _) => thread.title.clone(),
+            (None, Some(thread_id)) => format!("Thread #{thread_id}"),
+            // Python f-string over a `None` thread id renders `Thread #None`.
+            (None, None) => "Thread #None".to_string(),
         };
         let issue_suffix = match &event.issue_number {
             Some(issue_number) if !issue_number.is_empty() => format!(" #{issue_number}"),
@@ -736,12 +757,6 @@ fn build_session_event_details(
             die_after: None,
         };
 
-        let display_title = match (&detail.thread_title, thread_deleted) {
-            (Some(title), true) => deleted_title(Some(title)),
-            (Some(title), false) => title.clone(),
-            (None, _) => String::new(),
-        };
-
         match event.event_type.as_str() {
             "roll" => {
                 detail.die = event.die;
@@ -749,8 +764,16 @@ fn build_session_event_details(
                 detail.selection_method = event.selection_method.clone();
                 detail.description = Some(if thread_deleted {
                     format!("Selected {}", deleted_title(detail.thread_title.as_deref()))
-                } else if !detail.thread_title.as_deref().unwrap_or_default().is_empty() {
-                    format!("Selected {}", detail.thread_title.as_deref().unwrap_or_default())
+                } else if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
+                    format!(
+                        "Selected {}",
+                        detail.thread_title.as_deref().unwrap_or_default()
+                    )
                 } else {
                     "Selected a thread".to_string()
                 });
@@ -762,7 +785,12 @@ fn build_session_event_details(
                 detail.queue_move = event.queue_move.clone();
                 detail.die_after = event.die_after;
                 let mut parts: Vec<String> = vec!["Rated".to_string()];
-                if !detail.thread_title.as_deref().unwrap_or_default().is_empty() {
+                if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
                     let title = if thread_deleted {
                         deleted_title(detail.thread_title.as_deref())
                     } else {
@@ -789,20 +817,47 @@ fn build_session_event_details(
                 let word = event_word(&event.event_type);
                 let target = if thread_deleted {
                     deleted_title(detail.thread_title.as_deref())
-                } else if !detail.thread_title.as_deref().unwrap_or_default().is_empty() {
+                } else if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
                     detail.thread_title.clone().unwrap_or_default()
                 } else {
                     "thread".to_string()
                 };
                 detail.description = Some(format!("{word} {target}"));
             }
-            "dismiss" | "skip" | "rolled_but_skipped" => {
+            "dismiss" => {
+                // Python's dismiss branch sets neither `die` nor `die_after`.
+                let word = event_word(&event.event_type);
+                let target = if thread_deleted {
+                    deleted_title(detail.thread_title.as_deref())
+                } else if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
+                    detail.thread_title.clone().unwrap_or_default()
+                } else {
+                    "thread".to_string()
+                };
+                detail.description = Some(format!("{word} {target}"));
+            }
+            "skip" | "rolled_but_skipped" => {
                 detail.die = event.die;
                 detail.die_after = event.die_after;
                 let word = event_word(&event.event_type);
                 let target = if thread_deleted {
                     deleted_title(detail.thread_title.as_deref())
-                } else if !detail.thread_title.as_deref().unwrap_or_default().is_empty() {
+                } else if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
                     detail.thread_title.clone().unwrap_or_default()
                 } else {
                     "thread".to_string()
@@ -815,7 +870,12 @@ fn build_session_event_details(
                 let word = event_word(&event.event_type);
                 let target = if thread_deleted {
                     deleted_title(detail.thread_title.as_deref())
-                } else if !detail.thread_title.as_deref().unwrap_or_default().is_empty() {
+                } else if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
                     detail.thread_title.clone().unwrap_or_default()
                 } else {
                     "thread".to_string()
@@ -830,8 +890,16 @@ fn build_session_event_details(
                 let word = event_word(&event.event_type);
                 let mut parts: Vec<String> = vec![if thread_deleted {
                     format!("{word} {}", deleted_title(detail.thread_title.as_deref()))
-                } else if !detail.thread_title.as_deref().unwrap_or_default().is_empty() {
-                    format!("{word} {}", detail.thread_title.as_deref().unwrap_or_default())
+                } else if !detail
+                    .thread_title
+                    .as_deref()
+                    .unwrap_or_default()
+                    .is_empty()
+                {
+                    format!(
+                        "{word} {}",
+                        detail.thread_title.as_deref().unwrap_or_default()
+                    )
                 } else {
                     format!("{word} thread")
                 }];
@@ -848,8 +916,6 @@ fn build_session_event_details(
             _ => {}
         }
 
-        // Keep the unused display projection referenced for the deleted branch.
-        let _ = display_title;
         formatted.push(detail);
     }
     formatted
