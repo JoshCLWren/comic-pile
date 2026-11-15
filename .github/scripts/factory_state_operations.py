@@ -139,8 +139,12 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
     state = payload[0] if isinstance(payload, list) and payload else {}
     if not isinstance(state, dict):
         return None
-    # Changing the pin unblocks its lane without deleting history.
-    if state.get("source") and (state["source"], state.get("model")) != (source, model):
+    # A catalog-backed slot can execute a different published model each
+    # session. Do not erase its worker-level Fibonacci backoff simply because
+    # the TSV no longer contains a permanently pinned model ID.
+    if state.get("source") and state["source"] != source:
+        return None
+    if model != "@catalog" and state.get("model") != model:
         return None
     if state.get("suspended") is True:
         return "suspended after repeated failures (new pin or TTL will reenable)"
