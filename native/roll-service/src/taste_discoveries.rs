@@ -881,10 +881,13 @@ mod tests {
 
         #[derive(Serialize)]
         struct Claims {
-            sub: i32,
-            jti: String,
+            sub: &'static str,
+            jti: &'static str,
             iat: i64,
             exp: i64,
+            #[serde(rename = "type")]
+            token_type: &'static str,
+            pc: i64,
         }
 
         let config = Config::from_lookup(|name| match name {
@@ -898,10 +901,12 @@ mod tests {
         let token = encode(
             &Header::new(Algorithm::HS256),
             &Claims {
-                sub: 1,
-                jti: "test-jti".into(),
+                sub: "reader-one",
+                jti: "test-jti",
                 iat: now.timestamp(),
                 exp: (now + Duration::minutes(5)).timestamp(),
+                token_type: "access",
+                pc: 0,
             },
             &EncodingKey::from_secret(b"synthetic-secret"),
         )
