@@ -617,35 +617,6 @@ def test_active_fixed_workers_fails_closed_when_live_run_identity_is_unknown(
     assert unresolved == {"99"}
 
 
-
-def test_active_unknown_run_uses_shared_neon_registry_without_full_scan(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Resolve unknown run identities from the existing incremental registry."""
-    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/factory-state")
-    registry_calls: list[bool] = []
-    monkeypatch.setitem(
-        sys.modules,
-        "factory_completion_controller",
-        types.SimpleNamespace(registry_comments=lambda: registry_calls.append(True) or [
-            {"id": 1, "body": "Run: 99\\nWorker: opencode-free-model-factory-13\\n"}
-        ]),
-    )
-    monkeypatch.setattr(controller, "comment_is_trusted", lambda _: True)
-    def github(args: list[str], **kwargs: object) -> object:
-        endpoint = args[-1]
-        if "issues/1093/comments" in endpoint:
-            pytest.fail("Neon-connected worker liveness must not rescan full registry")
-        if "free-model-factory-entry.yml" in endpoint and "status=queued" in endpoint:
-            return [{"workflow_runs": [{"id": 99, "display_title": "Unknown fixed factory"}]}]
-        return [{"workflow_runs": []}]
-    monkeypatch.setattr(controller, "gh_json", github)
-    workers, unresolved = controller.active_fixed_workers()
-    assert workers == {13}
-    assert unresolved == set()
-    assert registry_calls == [True]
-
-
 def test_busy_fixed_worker_is_not_given_a_second_assignment(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:

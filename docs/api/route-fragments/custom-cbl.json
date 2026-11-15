@@ -149,26 +149,6 @@
       "path": "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",
       "dest": "/api/index.py",
       "src": "^/api/v1/custom\\-cbls/[^/]+/reading\\-plans/[^/]+:apply$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/issue-identity/cbl-sources/folders",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/issue-identity/cbl-sources/browse",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843
     }
   ]
 }

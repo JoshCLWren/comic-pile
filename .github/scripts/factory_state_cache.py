@@ -124,19 +124,6 @@ def _release(key: str, owner: str) -> None:
     )
 
 
-def _recent_contended(key: str, max_stale_seconds: int) -> list[dict[str, Any]] | None:
-    """Share a bounded expired discovery result only while its refresh is owned."""
-    row = _run(
-        """
-        SELECT payload FROM public.factory_state_kv
-        WHERE cache_key=$1 AND refresh_until > now()
-          AND expires_at > now() - $2::int * interval '1 second'
-        """,
-        key, max_stale_seconds, one=True,
-    )
-    return _payload(row["payload"]) if row is not None else None
-
-
 def cached_json(
     key: str,
     fetch: Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
@@ -170,24 +157,9 @@ def cached_json(
         return fetch(previous or [])
 
     if not claimed:
-        # Another trusted runner holds the refresh lease. Safe discovery
-        # callers may share a briefly stale record while it is actively
-        # refreshed; no ownership, checks, or merge authorization uses this.
-        # Never serve an expired cold/invalid cache or an abandoned lease.
-        if previous is not None:
-            try:
-                shared = _recent_contended(key, min(ttl_seconds, 120))
-            except Exception:
-                shared = None
-            if shared is not None:
-                print(f"[factory-state] shared in-flight refresh for {key}", file=sys.stderr)
-                return shared
-
-        # A cold cache has no safe stale result. Give the single refresh
-        # owner time to publish rather than launching competing GitHub scans
-        # after only three seconds. On a genuine outage, retain live fallback.
-        for _ in range(15):
-            time.sleep(1)
+        # Re-read after a concurrent writer wins instead of stampeding GitHub.
+        for _ in range(6):
+            time.sleep(0.5)
             try:
                 data, fresh = _read(key)
             except Exception:
