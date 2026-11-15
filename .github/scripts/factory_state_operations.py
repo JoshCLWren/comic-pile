@@ -190,6 +190,11 @@ def historical_failure_streak(
         if previous_run == 0 or previous_run >= run_id:
             continue
         if detail.get("source") != source or detail.get("model") != model:
+            # The worker was repinned. Its older model should not carry a
+            # failure streak into this pin, even if it used the same model
+            # before the intervening assignment.
+            if not model_only:
+                break
             continue
         if row["event_type"] == "worker_completed":
             break
