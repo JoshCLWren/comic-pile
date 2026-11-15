@@ -100,7 +100,8 @@ def _assert_committed_pin(
         assert model in lock["retired_models"], (worker, model)
         return None
     assert row["source"] == source, (worker, row["source"])
-    assert row["model"] == model, (worker, row["model"])
+    expected_model = ROSTER.CATALOG_MODEL_SLOT if source in ROSTER.CATALOG_MODEL_SOURCES else model
+    assert row["model"] == expected_model, (worker, row["model"])
     if minute is not None:
         assert row["minute"] == minute, (worker, row["minute"])
     return row
@@ -1410,7 +1411,7 @@ def test_committed_tsv_retires_ling_promos_and_preserves_muse_spark() -> None:
     assert "59" not in by_worker
     assert "ling-3.0-flash-fin-free" in lock["retired_models"]
     assert "ling-3.0-flash-fin-free" not in models
-    assert by_worker["75"]["model"] == "nemotron-3.5-super-vl-free"
+    assert by_worker["75"]["model"] == ROSTER.CATALOG_MODEL_SLOT
     assert "ling-3.1-flash-free" in lock["retired_models"]
     assert "ling-3.1-flash-free" not in models
     assert 58 in lock["retired_workers"]
@@ -1600,7 +1601,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert "cat-jam-free" in lock["retired_models"]
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
     assert by_worker["42"]["source"] == "opencode-free"
-    assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
+    assert by_worker["42"]["model"] == ROSTER.CATALOG_MODEL_SLOT
     _assert_committed_pin(by_worker, lock, "82", source="z-ai", model="glm-4.7-flash")
     assert "59" not in by_worker
     assert 59 not in lock["expected_workers"]
@@ -1646,7 +1647,7 @@ def test_committed_tsv_converts_surplus_pickle_to_openrouter_nemotron_ultra_and_
         )
         if live is not None:
             assert live["model"] not in lock["retired_models"]
-            assert ROSTER.openrouter_model_is_free(live["model"])
+            assert live["model"] == ROSTER.CATALOG_MODEL_SLOT
     assert "84" not in by_worker
     assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
     assert "thinkingmachines/inkling" in lock["retired_models"]
@@ -1701,7 +1702,7 @@ def test_committed_tsv_retires_openrouter_dots_preview_worker_56() -> None:
     )
     if dots_pin is not None:
         assert dots_pin["model"] not in lock["retired_models"]
-        assert ROSTER.openrouter_model_is_free(dots_pin["model"])
+        assert dots_pin["model"] == ROSTER.CATALOG_MODEL_SLOT
     assert ROSTER.schedule_is_balanced(rows)
 
 
@@ -1719,12 +1720,12 @@ def test_stealth_union_alpha_lock_stays_consistent_with_roster() -> None:
 
     if live is not None:
         assert live["source"] == "openrouter-free"
-        assert live["model"] == "stealth/union-alpha"
+        assert live["model"] == ROSTER.CATALOG_MODEL_SLOT
         assert 23 in lock["expected_workers"]
         assert 23 not in lock["retired_workers"]
         assert "stealth/union-alpha" not in lock["retired_models"]
         assert not live["model"].endswith(":free")
-        assert ROSTER.openrouter_model_is_free(live["model"])
+        assert live["model"] == ROSTER.CATALOG_MODEL_SLOT
     else:
         assert 23 not in lock["expected_workers"]
         assert 23 in lock["retired_workers"]
@@ -1794,7 +1795,7 @@ def test_committed_tsv_retires_openrouter_laguna_workers_68_and_69() -> None:
         by_worker, lock, "60", source="openrouter-free", model="cohere/north-mini-code:free"
     )
     if north is not None:
-        assert ROSTER.openrouter_model_is_free(north["model"])
+        assert north["model"] == ROSTER.CATALOG_MODEL_SLOT
     assert "63" not in by_worker
     assert 63 not in lock["expected_workers"]
     assert 63 in lock["retired_workers"]
@@ -1841,7 +1842,7 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert "nvidia/nemotron-3-ultra-550b-a55b" not in models
     assert "nvidia/nemotron-3-super-120b-a12b" not in models
     assert by_worker["42"]["source"] == "opencode-free"
-    assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
+    assert by_worker["42"]["model"] == ROSTER.CATALOG_MODEL_SLOT
     assert by_worker["42"]["scheduler"] == "dispatcher"
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
@@ -1889,8 +1890,8 @@ def test_committed_tsv_upgrades_worker_41_to_opencode_mimo_v26_flash() -> None:
     )
     if mimo_pin is not None:
         assert mimo_pin["model"] not in lock["retired_models"]
-        assert mimo_pin["model"].endswith("-free")
-        assert ROSTER.opencode_model_is_free(mimo_pin["model"])
+        assert mimo_pin["model"] == ROSTER.CATALOG_MODEL_SLOT
+        assert mimo_pin["model"] == ROSTER.CATALOG_MODEL_SLOT
         assert mimo_pin["scheduler"] == "dispatcher"
     assert "mimo-v2.6-flash-free" not in lock["retired_models"]
     assert "xiaomi/mimo-v2.6-flash" not in {row["model"] for row in rows}
