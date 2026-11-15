@@ -8,7 +8,7 @@
 #   ./scripts/opencode_pipeline.sh review     # picks up implemented issues
 #   ./scripts/opencode_pipeline.sh fix        # picks up reviewed issues
 #   ./scripts/opencode_pipeline.sh pr         # opens PRs for fixed issues
-#   ./scripts/opencode_pipeline.sh ci_check   # checks CI + CodeRabbit, posts AC to issue
+#   ./scripts/opencode_pipeline.sh ci_check   # checks CI and posts AC to issue
 #   ./scripts/opencode_pipeline.sh arbiter    # watchdog: resets stalemates
 #   ./scripts/opencode_pipeline.sh status     # show state of all issues
 #   ./scripts/opencode_pipeline.sh timesheet  # show model usage log
@@ -879,7 +879,7 @@ cmd_fix() {
 
             local fix_context
             if [[ "$cur_state" == "ci_failing" ]]; then
-                fix_context="CI checks and CodeRabbit review found these problems on the open PR"
+                fix_context="CI checks found these problems on the open PR"
             else
                 fix_context="The code reviewer found these problems"
             fi
@@ -1101,8 +1101,7 @@ Steps:
 2. For each failing check, find its run ID and fetch the logs:
    gh run list --branch pipeline/issue-${issue} --limit 5
    gh run view <run_id> --log-failed
-3. Read any CodeRabbit review: gh pr view ${pr_number} --comments
-4. Identify the root cause of each failure — is it a real bug, a flaky test, or a missing feature?
+3. Identify the root cause of each failure — is it a real bug, a flaky test, or a missing feature?
 
 Then do TWO things:
 
@@ -1115,8 +1114,6 @@ A. Write a structured report to this exact file: ${ci_critique}
    1. <specific testable fix — e.g. 'Add test for X', 'Fix selector Y in component Z'>
    2. ...
 
-   ## CodeRabbit Issues (if any)
-   - <severity> <file>:<line> — <description>
 
    If a check is clearly flaky (test passed in other shards, no code change could affect it),
    note it as FLAKY and do NOT list it in Acceptance Criteria.
@@ -2063,7 +2060,7 @@ case "$ROLE" in
         echo "       $0 review       — reviews in the issue's worktree"
         echo "       $0 fix          — fixes critique or CI failures"
         echo "       $0 pr           — opens PR"
-        echo "       $0 ci_check     — checks CI + CodeRabbit, posts AC, routes failures back"
+        echo "       $0 ci_check     — checks CI, posts AC, routes failures back"
         echo "       $0 arbiter      — watchdog: resets stalemates every 5m"
         echo "       $0 model_manager — refreshes model pool every 10m"
         echo "       $0 main_fixer   — surveys CI across all PRs, fixes main-branch regressions"
