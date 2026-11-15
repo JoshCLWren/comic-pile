@@ -1,4 +1,5 @@
 name: Fixed Model Factory Dispatcher
+run-name: Factory dispatch · ${{ inputs.source_run_id && format('completion {0}', inputs.source_run_id) || inputs.target || inputs.mode || github.event_name }}
 
 on:
   schedule:
@@ -7,6 +8,10 @@ on:
     - cron: '7 * * * *'
   workflow_dispatch:
     inputs:
+      source_run_id:
+        description: Advisory Entry completion that woke this scheduling cycle
+        required: false
+        type: string
       mode:
         description: Dispatch strategy when no explicit worker is supplied
         required: true

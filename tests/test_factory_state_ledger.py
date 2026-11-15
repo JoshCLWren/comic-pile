@@ -212,7 +212,8 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     assert "factory_state_ledger.py runtime-outcome" in entry
     assert "gh workflow run factory-completion-drain.yml" in entry
     assert "persist_outcome:" not in drain
-    assert "source_run_id" not in drain
+    assert "source_run_id" in drain
+    assert "factory-state-cache" not in drain
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
     assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()

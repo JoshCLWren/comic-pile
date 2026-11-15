@@ -31,8 +31,8 @@ jobs:
   # The preceding job owns the entire worker lease and its release. A
   # completion wakeup is therefore a signal only, never an assignment.
   signal_completion:
-    name: Wake completion drain after worker exits
-    needs: run
+    name: Wake completion drain after trusted outcome persistence
+    needs: [run, persist_outcome]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -48,7 +48,7 @@ jobs:
           # reliably delivered. Explicit workflow_dispatch is supported and
           # the drain's concurrency group coalesces bursts of completions.
           gh workflow run factory-completion-drain.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main
+            --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id="$GITHUB_RUN_ID"
 
   # Persist the terminal outcome in this trusted, *separate* runner after the
   # model execution job exits. The capacity drain can remain blocked behind

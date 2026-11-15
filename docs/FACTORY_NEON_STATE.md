@@ -422,3 +422,14 @@ provider backoff. Physical allocation includes indexes and dead tuples and is
 not active payload size. `factory_state_events` had 13,813 rows and allocated
 3,973,120 bytes. `pg_stat_statements` is unavailable, so these observations do
 not establish per-cycle query counts or achieved savings.
+
+### Completion signals replace demand reconstruction
+
+Entry waits for the trusted terminal-outcome collector before sending its run
+ID to the completion bridge. The bridge performs one Actions dispatch, with no
+checkout, Neon connection, registry read, issue/PR listing, model selection, or
+lease mutation. The dispatcher remains the sole scheduling/assignment authority.
+The former five-minute completion-demand scan and duplicate capacity-refill
+workflow are removed. Missed signals use the canonical hourly dispatcher
+watchdog; productive roster cycles retain their existing bounded successor.
+Migration-lane reconciliation remains in its dedicated event workflow.
