@@ -313,10 +313,9 @@ static ISSUE_PAGE_SQL: LazyLock<String> = LazyLock::new(|| {
 
 /// Count of a thread's issues, optionally filtered by `status`.
 static ISSUE_COUNT_SQL: LazyLock<String> = LazyLock::new(|| {
-    format!(
-        "SELECT count(*) FROM issues i WHERE i.thread_id = $1 \
-         AND ($2::text IS NULL OR i.status = $2)"
-    )
+    "SELECT count(*) FROM issues i WHERE i.thread_id = $1 \
+     AND ($2::text IS NULL OR i.status = $2)"
+        .to_string()
 });
 
 /// Decode Python's `{position},{id}` cursor. A malformed token is a 400, an
