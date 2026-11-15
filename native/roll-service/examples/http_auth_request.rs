@@ -10,7 +10,6 @@
 use axum::{
     body::{to_bytes, Body},
     http::{header, Request},
-    Router,
 };
 use comicpile_roll_service::{config::Config, router, AppState};
 use std::sync::Arc;

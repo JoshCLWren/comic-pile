@@ -15,12 +15,16 @@ from uuid import uuid4
 
 import asyncpg
 import pytest
-from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import User
 
-from auth_budget_controls import extra_query_fails_budget, per_row_queries_fail_budget
+from auth_budget_controls import (
+    auth_token,
+    extra_query_fails_budget,
+    grow_accounts,
+    per_row_queries_fail_budget,
+)
 from route_harness import assert_declared_budget, cargo_example_path, measure_route
 
 SECRET = "synthetic-native-auth-logout-n1-secret"
@@ -33,29 +37,6 @@ LARGE_ACCOUNTS = 200
 # The logout route is cookie-authenticated, so the double-submit pair is sent
 # exactly as the React client sends it.
 CSRF = "synthetic-native-auth-logout-csrf"
-
-
-def _token(username: str, *, jti: str) -> str:
-    """Mint an access token the native verifier accepts for one fixture user."""
-    return jwt.encode(
-        {"sub": username, "jti": jti, "type": "access", "pc": 0, "exp": 4_102_444_800},
-        SECRET,
-        algorithm="HS256",
-    )
-
-
-async def _grow_accounts(url: str, prefix: str, start: int, total: int) -> None:
-    """Add peer accounts until the fixture holds ``total`` rows."""
-    raw = await asyncpg.connect(url)
-    try:
-        for index in range(start, total):
-            await raw.execute(
-                "INSERT INTO users (username, email) VALUES ($1, $2)",
-                f"{prefix}_peer{index}",
-                f"{prefix}_peer{index}@example.invalid",
-            )
-    finally:
-        await raw.close()
 
 
 @pytest.mark.asyncio

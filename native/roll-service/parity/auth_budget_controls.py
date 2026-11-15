@@ -16,9 +16,71 @@ from __future__ import annotations
 
 import asyncpg
 import pytest
+from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from route_harness import assert_declared_budget, db_counters
+
+#: Far-future expiry so a measurement never depends on wall-clock drift.
+FIXTURE_TOKEN_EXPIRY = 4_102_444_800
+
+
+def auth_token(
+    username: str,
+    *,
+    jti: str,
+    secret: str,
+    token_type: str,
+    password_epoch: int = 0,
+) -> str:
+    """Mint one native-compatible access or refresh credential for a fixture.
+
+    Args:
+        username: ``sub`` claim naming the seeded account.
+        jti: Token identifier the revocation table is keyed by.
+        secret: HS256 secret the native verifier is configured with.
+        token_type: ``access`` or ``refresh``, matching the native claim check.
+        password_epoch: ``pc`` claim; the credential epoch the token was minted at.
+
+    Returns:
+        The signed JWT.
+    """
+    assert token_type in {"access", "refresh"}
+    return jwt.encode(
+        {
+            "sub": username,
+            "jti": jti,
+            "type": token_type,
+            "pc": password_epoch,
+            "exp": FIXTURE_TOKEN_EXPIRY,
+        },
+        secret,
+        algorithm="HS256",
+    )
+
+
+async def grow_accounts(url: str, prefix: str, start: int, total: int) -> None:
+    """Add peer accounts until the fixture holds ``total`` rows.
+
+    Args:
+        url: DSN of the isolated ``roll_test_dml`` role.
+        prefix: Per-test account prefix that keeps fixtures isolated.
+        start: First peer index that does not exist yet.
+        total: Row count the fixture must reach.
+
+    Returns:
+        None.
+    """
+    raw = await asyncpg.connect(url)
+    try:
+        for index in range(start, total):
+            await raw.execute(
+                "INSERT INTO users (username, email) VALUES ($1, $2)",
+                f"{prefix}_peer{index}",
+                f"{prefix}_peer{index}@example.invalid",
+            )
+    finally:
+        await raw.close()
 
 
 async def _injected_statements(engine: AsyncEngine, url: str, count: int) -> int:
