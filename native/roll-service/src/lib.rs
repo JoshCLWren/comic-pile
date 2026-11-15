@@ -625,14 +625,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             delete(legacy_dependencies::delete),
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
-        .route(
-            "/api/v1/issue-identity/cbl-sources/folders",
-            get(cbl_catalog::list_cbl_source_folders),
-        )
-        .route(
-            "/api/v1/issue-identity/cbl-sources/browse",
-            get(cbl_catalog::browse_cbl_source_catalog),
-        )
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
             "/api/v1/identity-inbox/search/issues",

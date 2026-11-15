@@ -6,7 +6,7 @@
   ],
   "defaults": {
     "runtime": "python-fastapi",
-    "status": "transitional",
+    "status": "live transitional Python with callers",
     "owning_issue": null,
     "consumers": [
       "frontend/src/services/api-cbl-sources.ts",
@@ -18,21 +18,19 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/issue-identity/cbl-sources/browse",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/index.py",
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843
+      "runtime": "python-fastapi",
+      "status": "live transitional Python with callers"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/issue-identity/cbl-sources/folders",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/index.py",
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4843
+      "runtime": "python-fastapi",
+      "status": "live transitional Python with callers"
     }
   ]
 }
