@@ -23,17 +23,13 @@ def test_push_smoke_workers_are_derived_from_current_provider_rows() -> None:
     assert ".github/scripts/factory_candidate_health.py" in workflow
 
 
-def test_stale_run_cancellation_retries_transient_status_race() -> None:
+def test_controller_deployment_preserves_active_sessions_and_recovers_leases() -> None:
+    """A new controller revision must not cancel useful in-flight work."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-
-    assert "cancel_succeeded=false" in workflow
-    assert "for _ in {1..15}; do" in workflow
-    assert '[[ "$current_status" == completed ]]' in workflow
-    assert '[[ "$current_status" == queued || "$current_status" == in_progress ]]' in workflow
-    assert 'cancel_output=""' in workflow
-    assert 'grep -qi "workflow run that is completed"' in workflow
-    assert 'status_from_cancel=true' in workflow
-    assert 'if [[ "$status_from_cancel" != true ]]; then' in workflow
+    assert 'gh run cancel' not in workflow
+    assert 'release_cancelled_worker_leases' not in workflow
+    assert 'python3 "$controller" reconcile' in workflow
+    assert 'Existing sessions keep their pinned workflow' in workflow
 
 
 def test_roster_dispatch_mode_cannot_fall_through_to_smoke_selection() -> None:

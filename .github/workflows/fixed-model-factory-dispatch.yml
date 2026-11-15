@@ -521,73 +521,6 @@ jobs:
           # live claims/heads and changed comments before selecting its lease.
           history_cache_dir="$(mktemp -d "$RUNNER_TEMP/factory-attempt-history.XXXXXX")"
           export FACTORY_ATTEMPT_HISTORY_CACHE="$history_cache_dir/comments.json"
-          owner_pattern='^factory:(local|[1-9][0-9]*)$'
-
-          heartbeat_worker_for_run() {
-            local run_id="$1"
-            gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | jq -rs --arg run "$run_id" '
-                  [
-                    .[][]?
-                    | select(.body | test("(?m)^Run: " + $run + "$"))
-                    | .body
-                    | capture("Worker: opencode-free-model-factory-(?<worker>[0-9]+)").worker
-                  ]
-                  | last // empty
-                '
-          }
-
-          release_cancelled_worker_leases() {
-            local worker="$1"
-            local owner="factory:${worker}"
-            local number current_labels other_owner latest_labels target_labels
-            local expected_lock='.github/factory-expected-workers.json'
-
-            # Roster-derived allowlist: never revive a hard-coded max worker id.
-            [[ "$worker" =~ ^[0-9]+$ ]] \
-              && jq -e --argjson w "$worker" '.expected_workers | index($w) != null' \
-                "$expected_lock" >/dev/null || {
-              echo "Refusing lease recovery for unknown historical fixed-model worker ${worker}" >&2
-              return 1
-            }
-
-            while IFS= read -r number; do
-              [[ -n "$number" ]] || continue
-              current_labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}" --jq '[.labels[].name]')"
-              jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$current_labels" || continue
-              other_owner="$(jq -r --arg owner "$owner" --arg pattern "$owner_pattern" \
-                '[.[] | select(test($pattern) and . != $owner)] | first // empty' <<< "$current_labels")"
-              if [[ -n "$other_owner" ]]; then
-                echo "Skipping #${number}; another worker already owns it via ${other_owner}"
-                continue
-              fi
-
-              latest_labels="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${number}" --jq '[.labels[].name]')"
-              jq -e --arg owner "$owner" 'index($owner) != null' >/dev/null <<< "$latest_labels" || {
-                echo "Skipping #${number}; ${owner} is no longer current"
-                continue
-              }
-              other_owner="$(jq -r --arg owner "$owner" --arg pattern "$owner_pattern" \
-                '[.[] | select(test($pattern) and . != $owner)] | first // empty' <<< "$latest_labels")"
-              if [[ -n "$other_owner" ]]; then
-                echo "Skipping #${number}; takeover observed via ${other_owner}"
-                continue
-              fi
-
-              target_labels="$(jq -c --arg owner "$owner" '
-                map(if . == $owner then "factory:unowned" else . end) | unique
-              ' <<< "$latest_labels")"
-              echo "Releasing cancelled Factory ${worker} lease on #${number}"
-              gh api --method PUT \
-                "repos/${GITHUB_REPOSITORY}/issues/${number}/labels" \
-                --input - <<< "{\"labels\":${target_labels}}" >/dev/null
-            done < <(
-              gh api --paginate \
-                "repos/${GITHUB_REPOSITORY}/issues?state=open&labels=factory%3A${worker}&per_page=100" \
-                --jq '.[].number'
-            )
-          }
-
           dispatch_assigned_worker() {
             local worker="$1"
             local assignment kind attempt=1
@@ -613,7 +546,7 @@ jobs:
             echo "Factory ${worker} assignment: ${assignment}"
             while (( attempt <= 3 )); do
               echo "Starting Factory ${worker} (dispatch attempt ${attempt}/3)"
-              if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
+              if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker" -f assignment="$assignment"; then
                 dispatched_count=$((dispatched_count + 1))
                 return 0
               fi
@@ -628,86 +561,9 @@ jobs:
             return 1
           }
 
-          if [[ "$EVENT_NAME" == push ]]; then
-            echo "Fixed-model automation changed at ${DEPLOY_SHA}; canceling older entry runs"
-            stale_runs="$({
-              for status in queued in_progress; do
-                gh run list --workflow free-model-factory-entry.yml --status "$status" --limit 100 \
-                  --json databaseId,headSha \
-                  | jq -r --arg sha "$DEPLOY_SHA" '.[] | select(.headSha != $sha) | .databaseId'
-              done
-            } | sort -u)"
-
-            while IFS= read -r run_id; do
-              [[ -n "$run_id" ]] || continue
-              worker="$(heartbeat_worker_for_run "$run_id")"
-              echo "Canceling stale fixed-model entry run ${run_id}${worker:+ for Factory ${worker}}"
-              cancel_succeeded=false
-              status_from_cancel=false
-              run_status=""
-              conclusion=""
-              # GitHub can briefly report a queued run after the run completes
-              # between stale-run listing and the cancellation request.
-              for _ in {1..15}; do
-                cancel_output=""
-                if cancel_output="$(gh run cancel "$run_id" 2>&1)"; then
-                  cancel_succeeded=true
-                  break
-                fi
-                if grep -qi "workflow run that is completed" <<< "$cancel_output"; then
-                  echo "Stale fixed-model entry run ${run_id} completed before cancellation"
-                  cancel_succeeded=true
-                  status_from_cancel=true
-                  run_status=completed
-                  conclusion=cancelled
-                  break
-                fi
-                current_status="$(gh run view "$run_id" --json status --jq '.status')"
-                if [[ "$current_status" == completed ]]; then
-                  cancel_succeeded=true
-                  break
-                fi
-                [[ "$current_status" == queued || "$current_status" == in_progress ]] || {
-                  echo "Unable to cancel stale fixed-model entry run ${run_id}; status=${current_status}" >&2
-                  exit 1
-                }
-                sleep 2
-              done
-              [[ "$cancel_succeeded" == true ]] || {
-                echo "Unable to cancel stale fixed-model entry run ${run_id}; status=${current_status:-unknown}" >&2
-                exit 1
-              }
-
-              # If cancellation itself reported the run as completed, the
-              # status endpoint is known to be stale and must not overwrite it.
-              if [[ "$status_from_cancel" != true ]]; then
-                # Bounded wait: 30s per run, not 180s. A hung run must not hold
-                # the dispatch concurrency group and starve the next cron tick;
-                # controller reconciliation recovers any lease it abandons.
-                for _ in {1..15}; do
-                  read -r run_status conclusion < <(
-                    gh run view "$run_id" --json status,conclusion \
-                      --jq '[.status, (.conclusion // "")] | @tsv'
-                  )
-                  [[ "$run_status" == completed ]] && break
-                  sleep 2
-                done
-              fi
-              [[ "$run_status" == completed ]] || {
-                echo "Stale fixed-model entry run ${run_id} did not reach a terminal state within 30s; leaving it to reconciliation" >&2
-                continue
-              }
-              if [[ "$conclusion" != cancelled ]]; then
-                echo "Run ${run_id} completed as ${conclusion:-unknown}; normal worker handoff remains authoritative"
-                continue
-              fi
-              if [[ -z "$worker" ]]; then
-                echo "Cancelled run ${run_id} had no fixed-model heartbeat; controller reconciliation will recover any abandoned lease"
-                continue
-              fi
-              release_cancelled_worker_leases "$worker"
-            done <<< "$stale_runs"
-          fi
+          # Existing sessions keep their pinned workflow and checkpoints across
+          # controller deployments. Lease expiry/liveness reconciliation recovers
+          # interruptions; a new main SHA is not a worker failure.
 
           if [[ "$EVENT_NAME" == workflow_dispatch && -n "${DISPATCH_WORKER:-}" ]]; then
             awk -F '\t' -v worker="$DISPATCH_WORKER" '$1 == worker {found=1} END {exit !found}' "$manifest"

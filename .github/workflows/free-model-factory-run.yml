@@ -3,23 +3,22 @@ name: Fixed free-model factory runner
 on:
   workflow_call:
     inputs:
+      assignment:
+        description: Bounded dispatcher assignment with target, exact head and claim token
+        required: true
+        type: string
       worker:
         description: Durable factory executor slot
         required: true
         type: string
-      model_exclusions:
-        description: Trusted Neon model health exclusions without credentials
-        required: true
-        type: string
-      heartbeat_comment_id:
-        description: Advisory registry comment ID from trusted Neon snapshot
-        required: false
-        type: string
+    outputs:
       attempt_comment_id:
-        description: Advisory latest-attempt comment ID from trusted Neon snapshot
-        required: false
-        type: string
+        description: Advisory registry locator from trusted preparation
+        value: ${{ jobs.validate_assignment.outputs.attempt_id }}
     secrets:
+      NEON_API_KEY:
+        description: Restricted connection resolution in trusted cleanup jobs only
+        required: false
       OPENCODE_API_KEY:
         required: false
       OPENCODE_ZEN_API_KEY:
@@ -80,20 +79,57 @@ concurrency:
 
 env:
   FACTORY_BUDGET_SECONDS: '6000'
-  FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}
-  FACTORY_HEARTBEAT_COMMENT_ID: ${{ inputs.heartbeat_comment_id }}
-  FACTORY_ATTEMPT_COMMENT_ID: ${{ inputs.attempt_comment_id }}
   KILO_VERSION: '7.4.22'
   KILO_LINUX_X64_BASELINE_SHA256: 'bf817ad53bc95b16abe92e7a2389cc9f509c62c3510c23ecc58e151a4455cb41'
 
 jobs:
+  validate_assignment:
+    name: Validate assignment under worker lock (trusted)
+    outputs:
+      exclusions: ${{ steps.prepare.outputs.exclusions }}
+      heartbeat_id: ${{ steps.prepare.outputs.heartbeat_id }}
+      attempt_id: ${{ steps.prepare.outputs.attempt_id }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      checks: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+      - name: Verify original active claim and live target
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
+          FACTORY_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          printf '%s' "$FACTORY_ASSIGNMENT" | python3 .github/scripts/factory-work-controller.py validate-assignment --worker "$FACTORY_WORKER" >/dev/null
+          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$FACTORY_WORKER")"
+          jq -e 'type == "object"' <<< "$snapshot" >/dev/null
+          echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
+          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
+          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
+
   factory:
+    needs: validate_assignment
     runs-on: ubuntu-latest
     # Allow the agent a full budget plus setup and handoff time.
     timeout-minutes: 120
     outputs:
       worker_session_started: ${{ steps.worker_session.outputs.started }}
     env:
+      FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}
+      FACTORY_HEARTBEAT_COMMENT_ID: ${{ needs.validate_assignment.outputs.heartbeat_id }}
+      FACTORY_ATTEMPT_COMMENT_ID: ${{ needs.validate_assignment.outputs.attempt_id }}
       # Workflow token handles GitHub API, labels, comments, and backlog-zero
       # workflow dispatch. Git fetch/push and PR creation use the dedicated
       # PAT so pull_request workflows and initial review use a trusted actor.
@@ -831,6 +867,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true'
         env:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
@@ -1044,6 +1081,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
         run: |
           set -Eeuo pipefail
           [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
@@ -1055,8 +1093,9 @@ jobs:
             echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
+          claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
-            --worker "$FACTORY_WORKER" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
+            --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
 
   release_post_session_lease:
     needs: factory
@@ -1085,6 +1124,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
         run: |
           set -Eeuo pipefail
           [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
@@ -1095,6 +1135,7 @@ jobs:
             echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
+          claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
-            --worker "$FACTORY_WORKER" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
+            --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
 

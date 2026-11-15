@@ -176,9 +176,11 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     # The trusted Entry snapshot job reads Neon; the reusable worker never does.
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     snapshot, collector = entry.split("\n  persist_outcome:", 1)
-    assert "model_health_snapshot:" in snapshot
-    assert "factory-state-cache" in snapshot
-    assert "model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}" in snapshot
+    preparation = reusable["jobs"]["validate_assignment"]
+    assert model_job["needs"] == "validate_assignment"
+    assert any(step.get("uses") == "./.github/actions/factory-state-cache"
+               for step in preparation["steps"])
+    assert model_job["env"]["FACTORY_MODEL_EXCLUSIONS"] == "${{ needs.validate_assignment.outputs.exclusions }}"
     assert "FACTORY_STATE_DSN_FILE" not in snapshot
     assert "factory-state-cache" in collector
     # The collector always waits for the worker. After #5137 it also needs
@@ -202,9 +204,9 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert checkout["with"]["persist-credentials"] is False
     assert "factory_checkpoint_handoff.py" in collector
     if "ATTEMPT_COMMENT_ID:" in collector:
-        assert "model_health_snapshot" in needs_set
+        assert "run" in needs_set
         assert collector_job["permissions"]["issues"] == "write"
-        assert "needs.model_health_snapshot.outputs.attempt_id" in collector
+        assert "needs.run.outputs.attempt_comment_id" in collector
         assert "issues/comments/$ATTEMPT_COMMENT_ID" in collector
     assert "run / factory" in collector
 

@@ -298,7 +298,7 @@ def renew_verified_workers(repo: str, workers: list[str]) -> int:
     return asyncio.run(_renew_verified(repo, workers))
 
 
-def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
+def worker_claim(repo: str, worker: str, *, active_only: bool = False) -> tuple[str, list[int]] | None:
     """Capture the existing claim before a controller mutates ownership labels.
 
     Args:
@@ -319,8 +319,8 @@ def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
         conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
         try:
             raw = await conn.fetchval(
-                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-                _keys(repo, worker, [])[0],
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1 AND (NOT $2::boolean OR expires_at>now())",
+                _keys(repo, worker, [])[0], active_only,
             )
             if raw is None:
                 return None

@@ -239,7 +239,7 @@ jobs:
                 ;;
             esac
 
-            if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker"; then
+            if gh workflow run free-model-factory-entry.yml --ref main -f worker="$worker" -f assignment="$assignment"; then
               echo "Started Factory ${worker} replacement capacity"
             else
               echo "Unable to start Factory ${worker}; releasing its assignment" >&2
