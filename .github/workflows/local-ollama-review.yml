@@ -30,7 +30,8 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # Three hours is deliberately generous while measuring slow on-device inference.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
         with:
