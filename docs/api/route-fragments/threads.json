@@ -237,7 +237,7 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
-      "dest": "/api/native_roll.rs",
+      "dest": "/api/index.py",
       "src": "^/api/v1/threads/[^/]+/issues$"
     },
     {
