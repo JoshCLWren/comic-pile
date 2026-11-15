@@ -10,3 +10,14 @@
 //! a row: it is derived from the path prefixes of active lists. The SQL below uses
 //! `split_part`/`strpos` so folder listing stays a single aggregate query even
 //! when the catalog contains thousands of paths.
+
+use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use utoipa::ToSchema;
+
+const MAX_PAGE_SIZE: i64 = 100;
