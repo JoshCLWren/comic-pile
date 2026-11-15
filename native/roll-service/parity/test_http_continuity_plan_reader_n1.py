@@ -21,12 +21,13 @@ the measured assertions rather than passing a low count.
 
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from jose import jwt
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import (
@@ -39,6 +40,7 @@ from app.models import (
     User,
 )
 from route_harness import (
+    SQL_BUDGET_SOURCES,
     assert_declared_budget,
     cargo_example_path,
     db_counters,
@@ -84,11 +86,11 @@ async def _seed_plan(
     *,
     issue_count: int,
     suffix: str,
-) -> tuple[int, int]:
+) -> int:
     """Create one thread with ``issue_count`` issues and its authoritative list.
 
     Returns:
-        The ``(plan_id, list_id)`` of the freshly seeded Option E plan.
+        The identifier of the freshly seeded Option E continuity plan.
     """
     thread = Thread(
         user_id=owner.id,
@@ -141,7 +143,7 @@ async def _seed_plan(
         )
     )
     await db.commit()
-    return plan.id, reading_list.id
+    return plan.id
 
 
 @pytest.mark.asyncio
@@ -155,10 +157,10 @@ async def test_reader_statements_do_not_grow_with_library_size() -> None:
             owner = User(username=username, password_changed_at=None)
             db.add(owner)
             await db.flush()
-            small_plan_id, _ = await _seed_plan(
+            owner_id = owner.id
+            small_plan_id = await _seed_plan(
                 db, owner, issue_count=SMALL_ISSUES, suffix="small"
             )
-            owner_id = owner.id
 
         token = _token(username, jti=f"jti-{uuid4().hex}")
         env = {
@@ -172,7 +174,8 @@ async def test_reader_statements_do_not_grow_with_library_size() -> None:
         _, _, small_top_before = await db_counters(engine)
         small_nested_before = await db_nested_statements(engine)
         small_response, _, _, _ = await run_rust_example(
-            BINARY, {**env, "RUST_ROLL_TEST_URI": f"/api/v2/continuity-plans/{small_plan_id}/reader"}
+            BINARY,
+            {**env, "RUST_ROLL_TEST_URI": f"/api/v2/continuity-plans/{small_plan_id}/reader"},
         )
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -200,21 +203,17 @@ async def test_reader_statements_do_not_grow_with_library_size() -> None:
         )
 
         async with AsyncSession(engine, expire_on_commit=False) as db:
-            large_plan_id, _ = await _seed_plan(
-                db, db.get_sync(owner_id) if False else owner, issue_count=LARGE_ISSUES, suffix="large"
-            ) if False else (None, None)
-        # Seed the large plan on the same owner (re-fetch the owner handle).
-        async with AsyncSession(engine, expire_on_commit=False) as db:
             owner_row = await db.get(User, owner_id)
             assert owner_row is not None
-            large_plan_id, _ = await _seed_plan(
+            large_plan_id = await _seed_plan(
                 db, owner_row, issue_count=LARGE_ISSUES, suffix="large"
             )
 
         _, _, large_top_before = await db_counters(engine)
         large_nested_before = await db_nested_statements(engine)
         large_response, _, _, _ = await run_rust_example(
-            BINARY, {**env, "RUST_ROLL_TEST_URI": f"/api/v2/continuity-plans/{large_plan_id}/reader"}
+            BINARY,
+            {**env, "RUST_ROLL_TEST_URI": f"/api/v2/continuity-plans/{large_plan_id}/reader"},
         )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
@@ -251,17 +250,14 @@ async def test_reader_statements_do_not_grow_with_library_size() -> None:
 
 def test_reader_budget_rejects_extra_statement_and_n1() -> None:
     """Prove the reader budget guards fail on an extra query and on N+1 growth."""
-    document = __import__("json").loads(
-        (__import__("pathlib").Path(__file__).resolve().parents[3] / "docs/api/sql-budget-sources.json").read_text(
-            encoding="utf-8"
-        )
-    )
+    document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
     budget = next(
         entry["sql_budget"]
         for entry in document["operations"]
         if entry["method"] == ROUTE[0] and entry["path"] == ROUTE[1]
     )
     maximum = budget["max_statements"]
+    assert maximum > 0
 
     # A single deliberately added query must exceed the ceiling and fail.
     with pytest.raises(AssertionError):
@@ -271,6 +267,6 @@ def test_reader_budget_rejects_extra_statement_and_n1() -> None:
     with pytest.raises(AssertionError):
         _assert_no_growth(maximum, maximum + LARGE_ISSUES)
 
-    # The pinned small/large baselines must be accepted by the same guards.
+    # The pinned ceiling itself must be accepted by the same guards.
     assert_declared_budget(ROUTE[0], ROUTE[1], maximum)
     _assert_no_growth(maximum, maximum)
