@@ -372,6 +372,9 @@ async def test_issue_patch_error_branches() -> None:
         # checkout probes + transaction control + owner/idempotency lookups +
         # rollback); the 404 lookup and 422 validation paths are cheaper. The
         # bound is a regression guard, not a per-row allowance.
+        assert delta_404 is not None and delta_404_large is not None, (
+            "pg_stat_statements is required"
+        )
         for delta in [delta_404, delta_404_large, delta_409, delta_422]:
             assert delta is not None, "pg_stat_statements is required"
             assert delta <= 8, f"error path issued too many statements: {delta}"
