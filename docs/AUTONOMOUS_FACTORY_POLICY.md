@@ -837,14 +837,20 @@ Adding worker IDs does not provision provider accounts or secrets. Existing Neon
 model-health exclusions, source cooldowns, account-level budget accounting, and
 runtime authorization must remain authoritative.
 
-## Owner-authorized recovery draft exception (2026-11-15)
+## Owner-authorized persisted work PRs (2026-11-15, #5183)
 
-For checkpoint recovery only, trusted factory wrappers automatically publish
-unvalidated snapshots onto an isolated checkpoint branch and draft PR before
-pre-push delivery checks pass. This explicit owner exception to the draft-PR
-prohibition and pre-push delivery rule preserves interrupted work; it does not
-permit pushing unchecked edits to an assigned review PR, claiming semantic
-approval, marking failed work successful, or bypassing product merge gates.
-The existing validated delivery path remains authoritative. See
-[deterministic checkpoint handoff](FACTORY_CHECKPOINTS.md) for branch naming,
-independent cancellation reconciliation, reporting and safe retention.
+Trusted wrappers publish unvalidated code periodically and at finalization on the
+actual normal, non-draft issue implementation PR against `main`. This is the
+resumable unit of work, with a real issue title, intentional scoped closure,
+acceptance/handoff context and parsed producer metadata. Repairs advance the
+assigned PR branch atomically with a tracking ref, under the actual live lease;
+no competing recovery PR is created. Any eligible agent continues that same PR.
+
+The active actual factory owns the PR. When execution ends, incomplete work is
+released to `factory:changes-requested` + `factory:unowned` for repair pickup.
+Old-run reconciliation preserves resumed owners, stages and ordinary commits.
+Publication never certifies checks, approval or successful delivery. Failed
+checks preserve code and remain failed. Normal product CI/review/merge gates
+remain intact; the existing factory-only fast lane is unchanged. See
+[persisted work handoff](FACTORY_CHECKPOINTS.md) for trusted execution, branch
+identity, cancellation reconciliation and retention.

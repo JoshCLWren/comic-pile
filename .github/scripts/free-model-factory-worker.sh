@@ -453,10 +453,11 @@ stage_trusted_kilo_helper
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
 
-# Snapshots are saved on a private per-run recovery branch, never the PR ref.
+# Issue snapshots are the normal work PR; repairs advance the assigned PR atomically.
 # A separate Git index avoids interfering with an agent editing files.
 CHECKPOINT_PID=''
 CHECKPOINT_LOG=''
+CHECKPOINT_REF_FILE=''
 start_work_checkpoint() {
   [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] || return 0
   [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
@@ -469,18 +470,20 @@ start_work_checkpoint() {
       log "checkpoint issue linkage unavailable for PR #${NUMBER}; preserving explicit unknown-issue identity"
     fi
   fi
+  CHECKPOINT_REF_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-persisted-ref.XXXXXXXX")"
+  export FACTORY_CHECKPOINT_REF_FILE="$CHECKPOINT_REF_FILE"
   CHECKPOINT_LOG="${RUNNER_TEMP:-/tmp}/factory-work-checkpoint-${GITHUB_RUN_ID}.log"
   FACTORY_CHECKPOINT_ISSUE="$checkpoint_issue" FACTORY_CHECKPOINT_MODEL="$MODEL" \
     FACTORY_CHECKPOINT_RUNTIME_MODEL="$RUNTIME_MODEL" \
     bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
   CHECKPOINT_PID="$!"
-  log "automatic work recovery checkpoints enabled for run $GITHUB_RUN_ID (every 45s)"
+  log "automatic persisted work enabled for run $GITHUB_RUN_ID (every 45s)"
 }
 
 stop_work_checkpoint() {
   [[ -n "$CHECKPOINT_PID" ]] || return 0
   kill -USR1 "$CHECKPOINT_PID" 2>/dev/null || true
-  wait "$CHECKPOINT_PID" || log 'automatic recovery checkpoint writer did not exit cleanly'
+  wait "$CHECKPOINT_PID" || log 'persisted work writer did not exit cleanly'
   CHECKPOINT_PID=''
   [[ ! -f "$CHECKPOINT_LOG" ]] || tail -n 8 "$CHECKPOINT_LOG" || true
 }
@@ -488,14 +491,20 @@ stop_work_checkpoint() {
 discard_delivered_checkpoint() {
   [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
   stop_work_checkpoint
-  # Reconciliation proves incorporation and completion before deleting the
-  # exact checkpoint. An open recovery draft must never lose its head branch.
+  # Record exact-head validation; canonical open work branches are retained.
   python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
     --run-id "$GITHUB_RUN_ID" --delivered-pr "$1" --cleanup || \
     log 'checkpoint cleanup deferred to independent reconciliation'
 }
 
-trap 'stop_work_checkpoint; release_owned_targets session-end-handoff || true' EXIT
+finish_persisted_work() {
+  stop_work_checkpoint
+  release_owned_targets session-end-handoff || true
+  # Release the saved PR as well as its source issue, after execution really ends.
+  [[ -z "${GITHUB_RUN_ID:-}" ]] || python3 "$TRUSTED_CHECKPOINT_HANDOFF" \
+    --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --source-ended || true
+}
+trap 'finish_persisted_work' EXIT
 
 MODE=''
 NUMBER=''
@@ -602,6 +611,14 @@ done
 # performs the final synchronous snapshot on all other handoff/failure paths.
 [[ -z "$CHECKPOINT_PID" ]] || kill -USR2 "$CHECKPOINT_PID" 2>/dev/null || true
 
+# Flush synchronously and adopt the saved parent chain before overlap detection.
+# EXPECTED_HEAD stays the initial base so validation covers the entire attempt.
+stop_work_checkpoint
+if ! adopt_persisted_work; then
+  record_terminal_outcome control_plane_failure 'persisted ancestry moved; work retained'
+  exit 2
+fi
+
 if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
   record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
   exit 2
@@ -634,8 +651,8 @@ fi
 if [[ "$MODE" == 'issue' ]]; then
   if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
     if ! record_pr_provenance "$pr" "$NUMBER"; then
-      log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
-      gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+      log "PR #${pr} provenance needs reconciliation; preserving the work PR"
+      release_target "$pr" factory:changes-requested provenance-incomplete pr || true
       record_terminal_outcome control_plane_failure "PR #${pr} could not prove durable issue assignment provenance"
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
@@ -654,6 +671,8 @@ if [[ "$MODE" == 'issue' ]]; then
     post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
     discard_delivered_checkpoint "$pr"
+  elif [[ -n "${CHECKPOINT_REF_FILE:-}" && -s "$CHECKPOINT_REF_FILE" ]]; then
+    record_terminal_outcome work_failure "issue #${NUMBER} work is preserved; final validation/delivery failed"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
@@ -705,6 +724,12 @@ if (( agent_status != 0 )); then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'review-agent-failed'
   record_agent_failure_outcome "$agent_status"
   log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if [[ -n "$FACTORY_PUSH_BLOCKED_REASON" ]]; then
+  release_pr_and_issue "$NUMBER" "$BRANCH" factory:changes-requested failed-validation
+  record_terminal_outcome work_failure "PR #${NUMBER} failed trusted checks; work retained"
   exit 0
 fi
 

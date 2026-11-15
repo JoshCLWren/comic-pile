@@ -193,3 +193,85 @@ def test_pr_repair_branch_names_original_issue_and_model(tmp_path: Path) -> None
         if proc.poll() is None:
             proc.kill()
             proc.wait()
+
+
+def function(name: str) -> str:
+    """Extract a trusted wrapper function without starting a factory session."""
+    source = (CHECKPOINT.parent / 'free-model-factory-worker-primitives.sh').read_text()
+    offset = source.index(f'\n{name}() {{') + 1
+    return source[offset:source.index('\n}\n', offset) + 3]
+
+
+def test_finalize_adopts_saved_ancestry_and_updates_same_pr_without_reapplying(tmp_path: Path) -> None:
+    """Real Git finalization validates all saved bytes and never opens another PR."""
+    work = repo(tmp_path)
+    base = git(work, 'rev-parse', 'HEAD')
+    (work / 'tracked.rs').write_text('fn persisted() {}\n')
+    proc = start(work)
+    try:
+        saved = wait_for_ref(work)
+        stop(proc)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    branch = 'factory/work-checkpoints/issue-123/provider-exact-model-free/123456'
+    state = tmp_path / 'saved-ref'
+    state.write_text(f'{saved}\n{branch}\n')
+    script = '\n'.join([
+        'set -Eeuo pipefail', f'EXPECTED_HEAD={base}', 'MODE=issue BRANCH=old WORKER=42',
+        f'CHECKPOINT_REF_FILE={state}', 'GITHUB_REPOSITORY=test/checkpoint',
+        'log() { echo "$*" >&2; }',
+        # Clean worktree after adoption must still validate the entire initial diff.
+        'reject_out_of_scope_diff() { [[ "$3" == "$EXPECTED_HEAD" ]]; }',
+        'factory_run_fast_checks() { git diff "$1" HEAD -- tracked.rs | rg "fn persisted" >&2; }',
+        'find_overlapping_factory_pr() { printf "{}"; }',
+        'factory_advance_display() { printf test; }',
+        'factory_push_credential() { printf "pat\\tplaceholder"; }',
+        'factory_git_push() { shift 2; git push "$@"; }',
+        'gh() { [[ "$*" == "pr list "* ]] || return 17; printf 5152; }',
+        function('adopt_persisted_work'), function('_persist_issue_pr_untraced'),
+        'adopt_persisted_work', '[[ -z "$(git status --porcelain)" ]]',
+        '_persist_issue_pr_untraced 123 "$BRANCH"',
+    ])
+    result = subprocess.run(['bash', '-c', script], cwd=work, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == '5152'
+    head = remote_ref(work)
+    assert head != saved
+    assert git(work, 'rev-parse', f'{head}^') == saved
+    assert git(work, 'show', f'{head}:tracked.rs') == 'fn persisted() {}'
+    assert git(work, 'status', '--porcelain') == ''
+
+
+def test_pr_repair_pushes_original_branch_and_tracking_ref_atomically(tmp_path: Path) -> None:
+    work = repo(tmp_path)
+    source = git(work, 'branch', '--show-current')
+    git(work, 'push', 'origin', source)
+    (work / 'tracked.rs').write_text('fn repaired() {}\n')
+    proc = start(work, mode='pr', issue='123')
+    try:
+        saved = wait_for_ref(work)
+        stop(proc)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    assert git(work, 'ls-remote', 'origin', f'refs/heads/{source}').split()[0] == saved
+    # A newer remote worker commit makes both updates fail, preserving that head
+    # and the prior tracking ref instead of force-pushing either branch.
+    newer = subprocess.run(['git', 'commit-tree', f'{saved}^{{tree}}', '-p', saved],
+                           cwd=work, input='ordinary resumed commit\n', text=True,
+                           check=True, capture_output=True).stdout.strip()
+    git(work, 'push', 'origin', f'{newer}:refs/heads/{source}')
+    (work / 'tracked.rs').write_text('fn stale_writer() {}\n')
+    proc = start(work, mode='pr', issue='123')
+    try:
+        time.sleep(1.4)
+        stop(proc)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    assert remote_ref(work) == saved
+    assert git(work, 'ls-remote', 'origin', f'refs/heads/{source}').split()[0] == newer
