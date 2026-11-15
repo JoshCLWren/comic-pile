@@ -274,7 +274,7 @@ def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
 def test_regular_status_job_prunes_only_in_trusted_controller():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
-    assert "cron: '*/5 * * * *'" in workflow
+    assert "cron: '*/15 * * * *'" in workflow
     assert "Prune expired generic GitHub discovery snapshots" in workflow
     assert "factory_state_cache.py prune-expired" in workflow
     assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-expired")
@@ -282,3 +282,106 @@ def test_regular_status_job_prunes_only_in_trusted_controller():
     # Cleanup no longer depends on a large scheduled PR-history recovery sweep.
     reconciliation = (root / ".github/workflows/factory-issue-pr-state-reconciler.yml").read_text()
     assert "factory_state_cache.py prune-expired" not in reconciliation
+
+
+def test_compacted_registry_retains_essential_evidence_without_old_history():
+    from datetime import datetime, timezone
+
+    def comment(id, updated, body, association="OWNER"):
+        return {
+            "id": id, "created_at": updated, "updated_at": updated,
+            "body": body, "author_association": association,
+        }
+
+    records = [
+        comment(1, "2026-10-01T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\nWorker: opencode-free-model-factory-7\nAttempt outcome: provider_failure\nUpdated: 2026-10-01T00:00:00Z"),
+        comment(2, "2026-10-02T00:00:00Z", "Source: kilo-auto\nModel: free/test\nAttempt outcome: model_unavailable\nUpdated: 2026-10-02T00:00:00Z"),
+        comment(3, "2026-10-03T00:00:00Z", "<!-- factory-model-retired-410:v1 -->\nSource: kilo-auto\nModel: free/test\nUpdated: 2026-10-03T00:00:00Z"),
+        comment(4, "2026-10-04T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\nWorker: opencode-free-model-factory-7\nAttempt outcome: success\nUpdated: 2026-10-04T00:00:00Z"),
+        comment(5, "2026-10-05T00:00:00Z", "Source: kilo-auto\nModel: free/test\nAttempt outcome: success\nUpdated: 2026-10-05T00:00:00Z"),
+        comment(6, "2026-11-14T23:00:00Z", "Run: 555\nWorker: opencode-free-model-factory-8"),
+        comment(7, "2026-10-06T00:00:00Z", "untrusted ancient filler", "NONE"),
+        comment(8, "2026-11-15T00:00:00Z", "untrusted fresh observation", "NONE"),
+        comment(9, "2026-10-07T00:00:00Z", "<!-- factory-completion-funnel:v1 -->\nUpdated: 2026-10-07T00:00:00Z"),
+    ]
+    compacted = cache.compact_registry_comments(
+        records,
+        trusted=lambda row: row.get("author_association") == "OWNER",
+        now=datetime(2026, 11, 15, 12, tzinfo=timezone.utc),
+    )
+    assert {row["id"] for row in compacted} == {3, 4, 5, 6, 8, 9}
+    assert [row["id"] for row in compacted] == [3, 4, 5, 9, 6, 8]
+    # Preserve the freshest GitHub update so the incremental cursor never
+    # starts paging all the old registry comments again.
+    since = []
+    merged = cache.incremental_comments(compacted, lambda cursor: since.append(cursor) or [])
+    assert since == ["2026-11-14T23:59:00Z"]
+    assert merged == compacted
+
+
+def test_compacted_registry_has_bounded_growth_and_honors_edited_old_comment():
+    from datetime import datetime, timezone
+
+    now = datetime(2026, 11, 15, 12, tzinfo=timezone.utc)
+    historic = [
+        {"id": i, "created_at": f"2026-10-{(i % 28) + 1:02d}T00:00:00Z",
+         "updated_at": f"2026-10-{(i % 28) + 1:02d}T00:00:00Z",
+         "body": "unrelated historical comment", "author_association": "OWNER"}
+        for i in range(1, 1001)
+    ]
+    fresh = {"id": 1001, "created_at": "2026-11-15T11:00:00Z",
+             "updated_at": "2026-11-15T11:00:00Z",
+             "body": "current", "author_association": "OWNER"}
+    slim = cache.compact_registry_comments(
+        [*historic, fresh], trusted=lambda _: True, now=now,
+    )
+    assert [item["id"] for item in slim] == [1001]
+    edited = {**historic[0], "updated_at": "2026-11-15T11:30:00Z",
+              "body": "edited historical observation"}
+    merged = cache.incremental_comments(slim, lambda _: [edited])
+    again = cache.compact_registry_comments(merged, trusted=lambda _: True, now=now)
+    assert {item["id"] for item in again} == {1, 1001}
+
+
+def test_expired_generic_cache_reads_only_prior_digest(monkeypatch):
+    from datetime import datetime, timezone
+
+    observed = []
+    def fake_run(sql, key, *, one):
+        observed.append((sql, key, one))
+        return {"payload": [{"stdout_sha256": "same-hash"}],
+                "expires_at": datetime(2026, 1, 1, tzinfo=timezone.utc)}
+
+    monkeypatch.setattr(cache, "_run", fake_run)
+    payload, fresh = cache._read("factory-github-get-v1:JoshCLWren/comic-pile:sha")
+    assert not fresh
+    assert payload == [{"stdout_sha256": "same-hash"}]
+    assert "CASE WHEN expires_at > now() THEN payload" in observed[0][0]
+    assert "jsonb_build_object" in observed[0][0]
+    assert observed[0][2] is True
+
+
+def test_expired_identical_github_get_extends_ttl_without_payload_rewrite(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"stdout_sha256": "digest-123"}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: True)
+    renewed = []
+    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *args: renewed.append(args))
+    monkeypatch.setattr(cache, "_publish", lambda *_: pytest.fail("unchanged payload must not be rewritten"))
+    key = "factory-github-get-v1:JoshCLWren/comic-pile:hash"
+    result = cache.cached_json(key, lambda _: [{"stdout_zlib_b64": "compressed", "stdout_sha256": "digest-123"}], ttl_seconds=1200)
+    assert result[0]["stdout_sha256"] == "digest-123"
+    assert len(renewed) == 1
+    assert renewed[0][0] == key
+
+
+def test_changed_github_get_replaces_payload(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"stdout_sha256": "old"}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: True)
+    published = []
+    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *_: pytest.fail("changed response cannot extend stale data"))
+    monkeypatch.setattr(cache, "_publish", lambda *args: published.append(args))
+    new = [{"stdout_zlib_b64": "new", "stdout_sha256": "new"}]
+    assert cache.cached_json("factory-github-get-v1:r:h", lambda _: new) == new
+    assert published[0][2] == new
