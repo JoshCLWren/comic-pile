@@ -181,9 +181,24 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert "model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}" in snapshot
     assert "FACTORY_STATE_DSN_FILE" not in snapshot
     assert "factory-state-cache" in collector
-    assert "needs: run" in collector
-    assert "if: ${{ always() }}" in collector
-    assert "actions: read" in collector
+    # The collector always waits for the worker. After #5137 it also needs
+    # the trusted Neon snapshot to use the existing attempt comment ID.
+    # Check the dependency graph, not a YAML spelling that changed from a
+    # scalar to a list when that second dependency was introduced.
+    entry_jobs = yaml.safe_load(entry)["jobs"]
+    collector_job = entry_jobs["persist_outcome"]
+    needs = collector_job["needs"]
+    needs_set = {needs} if isinstance(needs, str) else set(needs)
+    assert "run" in needs_set
+    assert collector_job["if"] == "${{ always() }}"
+    assert collector_job["permissions"]["actions"] == "read"
+    assert collector_job["permissions"]["contents"] == "read"
+    assert collector_job["permissions"]["pull-requests"] == "read"
+    if "ATTEMPT_COMMENT_ID:" in collector:
+        assert "model_health_snapshot" in needs_set
+        assert collector_job["permissions"]["issues"] == "write"
+        assert "needs.model_health_snapshot.outputs.attempt_id" in collector
+        assert "issues/comments/$ATTEMPT_COMMENT_ID" in collector
     assert "run / factory" in collector
 
 
@@ -194,3 +209,64 @@ def test_recovery_watchdog_loads_paginated_compatible_neon_registry() -> None:
     assert "issues/1093/comments?per_page=100" not in workflow
     assert "factory_heartbeat_health.py" in workflow
     assert "uses: ./.github/actions/factory-state-cache" in workflow
+
+
+def test_unchanged_snapshot_extends_ttl_without_rewriting_payload(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    data = [{"number": 3, "body": "large stable response" * 1000}]
+    monkeypatch.setattr(cache, "_read", lambda _: (data, False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: True)
+    monkeypatch.setattr(cache, "_publish", lambda *_: pytest.fail("unchanged payload must not be rewritten"))
+    extended = []
+    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *args: extended.append(args))
+    assert cache.cached_json("cache-key", lambda _: data, ttl_seconds=450) == data
+    assert len(extended) == 1
+    assert extended[0][0] == "cache-key"
+    assert extended[0][2:] == (450, 1)
+
+
+def test_changed_snapshot_still_persists_new_content(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"number": 3}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: True)
+    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *_: pytest.fail("changed payload must be saved"))
+    published = []
+    monkeypatch.setattr(cache, "_publish", lambda *args: published.append(args))
+    assert cache.cached_json("cache-key", lambda _: [{"number": 4}], ttl_seconds=450) == [{"number": 4}]
+    assert published[0][2] == [{"number": 4}]
+
+
+def test_prune_is_bounded_and_cannot_delete_leases_or_projections(monkeypatch):
+    executed = []
+    def fake_run(statement, *args, one=False):
+        executed.append((statement, args, one))
+        return {"deleted": 4}
+    monkeypatch.setattr(cache, "_run", fake_run)
+    assert cache._prune_expired_github_cache(200) == 4
+    query, args, one = executed[0]
+    assert args == (200,) and one is True
+    assert "DELETE FROM public.factory_state_kv" in query
+    assert "factory-github-get-v1:%" in query
+    assert "expires_at < now() - interval '30 minutes'" in query
+    assert "refresh_until IS NULL OR" in query
+    with pytest.raises(ValueError, match="batch"):
+        cache._prune_expired_github_cache(1001)
+
+
+def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    calls = []
+    def prune():
+        calls.append(True)
+        return 200 if len(calls) < 3 else 12
+    monkeypatch.setattr(cache, "_prune_expired_github_cache", prune)
+    assert cache.main(["prune-expired"]) == 0
+    assert len(calls) == 3
+
+
+def test_hourly_sweep_prunes_only_in_trusted_controller():
+    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/factory-issue-pr-state-reconciler.yml").read_text()
+    assert "cron: '31 * * * *'" in workflow
+    assert "Prune expired generic GitHub discovery snapshots" in workflow
+    assert "factory_state_cache.py prune-expired" in workflow
+    assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-expired")

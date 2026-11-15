@@ -628,6 +628,7 @@ def test_active_unknown_run_uses_shared_neon_registry_without_full_scan(
         sys.modules,
         "factory_completion_controller",
         types.SimpleNamespace(registry_comments=lambda: registry_calls.append(True) or [
+            # GitHub comment bodies contain real newlines, not escaped ``\n`` text.
             {"id": 1, "body": "Run: 99\nWorker: opencode-free-model-factory-13\n"}
         ]),
     )

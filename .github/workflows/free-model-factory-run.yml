@@ -69,7 +69,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  FACTORY_BUDGET_SECONDS: '1200'
+  FACTORY_BUDGET_SECONDS: '6000'
   FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}
   FACTORY_HEARTBEAT_COMMENT_ID: ${{ inputs.heartbeat_comment_id }}
   FACTORY_ATTEMPT_COMMENT_ID: ${{ inputs.attempt_comment_id }}
@@ -79,7 +79,8 @@ env:
 jobs:
   factory:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Allow the agent a full budget plus setup and handoff time.
+    timeout-minutes: 120
     outputs:
       worker_session_started: ${{ steps.worker_session.outputs.started }}
     env:
@@ -895,401 +896,9 @@ jobs:
             exit 1
           fi
 
-      - name: Probe pinned NVIDIA model before OpenCode smoke
-        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia'
-        shell: bash
-        env:
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-        run: |
-          set -Eeuo pipefail
-          [[ -n "${NVIDIA_API_KEY:-}" ]] || { echo 'NVIDIA_API_KEY missing after lane configured=true' >&2; exit 1; }
-          request="$(jq -nc --arg model "$MODEL" '{model:$model,messages:[{role:"user",content:"Reply with exactly FIXED_MODEL_OK"}],max_tokens:16}')"
-          response="$RUNNER_TEMP/nvidia-probe.json"
-          headers="$RUNNER_TEMP/nvidia-probe-headers.txt"
-          retirement_marker='<!-- factory-model-retired-410:v1 -->'
-          # Neon already holds sticky retired pins; no GitHub registry scan.
-          if jq -e --arg model "$MODEL" \
-              '(.nvidia // []) | index($model) != null' \
-              "$RUNNER_TEMP/factory-neon-model-exclusions.json" >/dev/null; then
-            echo "Skipping Neon-excluded NVIDIA model: ${MODEL}" >&2
-            printf 'model_retired_410\tPreviously unavailable or retired NVIDIA model: %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
-            exit 1
-          fi
-          attempt=0
-          max_attempts=3
-          code=""
-          curl_exit=0
-          while (( attempt < max_attempts )); do
-            attempt=$((attempt + 1))
-            curl_exit=0
-            # Capture curl's transport status. `|| true` would discard exit 28
-            # (HTTP 000 / 0-byte timeout) and skip the transient retry path.
-            code="$(curl --silent --show-error --dump-header "$headers" --output "$response" --write-out '%{http_code}' \
-              --connect-timeout 5 --max-time 45 \
-              --header "Authorization: Bearer ${NVIDIA_API_KEY}" \
-              --header 'Content-Type: application/json' \
-              --data "$request" \
-              https://integrate.api.nvidia.com/v1/chat/completions)" || curl_exit=$?
-            code="${code:-000}"
-            echo "NVIDIA probe curl exit ${curl_exit} HTTP ${code} (attempt ${attempt}/${max_attempts})" >&2
-            if [[ "$code" == "404" ]]; then
-              echo "Pinned NVIDIA model is not currently invokable for this account: ${MODEL}" >&2
-              echo 'No fallback is allowed for a fixed-model lane.' >&2
-              cat "$response" >&2 || true
-              printf 'model_unavailable\tNVIDIA probe HTTP 404 for %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
-              exit 1
-            fi
-            if [[ "$code" == "410" ]]; then
-              echo "NVIDIA permanently retired model: ${MODEL}" >&2
-              retirement_body="$(printf '%s\nSource: nvidia\nModel: %s\nReason: provider returned HTTP 410 Gone\nUpdated: %s' \
-                "$retirement_marker" "$MODEL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
-              gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
-                -f body="$retirement_body" >/dev/null
-              printf 'model_retired_410\tNVIDIA returned HTTP 410 Gone for %s; model is permanently retired\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
-              exit 1
-            fi
-            [[ "$code" =~ ^2 ]] && break
-            transient=0
-            # HTTP 000 is curl's empty-response sentinel (typically exit 28).
-            # Treat it like 429: retry, then soft-exit 0. Never write 410.
-            if [[ "$code" == "000" || "$code" == "429" || "$code" == "502" || "$code" == "503" || "$code" == "504" ]]; then
-              transient=1
-            fi
-            if [[ "$curl_exit" =~ ^(6|7|28|35|52|56)$ ]]; then
-              transient=1
-            fi
-            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$response" 2>/dev/null; then
-              transient=1
-            fi
-            if (( transient )); then
-              if (( attempt < max_attempts )); then
-                retry_after="$(grep -i '^retry-after:' "$headers" 2>/dev/null | tail -n1 | sed -E 's/^[^:]+:[[:space:]]*//I' | tr -d '\r' | grep -E '^[0-9]+' || true)"
-                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
-                  delay=$(( retry_after > 60 ? 60 : retry_after ))
-                else
-                  delay=$(( 5 * attempt ))
-                fi
-                echo "NVIDIA probe transient HTTP ${code} curl_exit ${curl_exit} (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
-                cat "$response" >&2 || true
-                sleep "$delay"
-                continue
-              fi
-              echo "Transient NVIDIA probe failure HTTP ${code} curl_exit ${curl_exit} after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
-              cat "$response" >&2 || true
-              exit 0
-            fi
-            break
-          done
-          [[ "$code" =~ ^2 ]] || {
-            echo "Pinned NVIDIA model probe failed HTTP ${code}" >&2
-            cat "$response" >&2 || true
-            printf 'provider_failure\tNVIDIA probe HTTP %s curl_exit %s\n' "$code" "$curl_exit" > "$RUNNER_TEMP/factory-discovery-outcome"
-            exit 1
-          }
-          echo "NVIDIA probe succeeded for ${MODEL}"
-
-      - name: Smoke exact pinned model through OpenCode
-        id: smoke
-        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) != 'kilo-auto'
-        shell: bash
-        env:
-          DEEPSEEK_MODE: ${{ steps.lane.outputs.deepseek_mode }}
-          RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
-          SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          WORKER: ${{ steps.lane.outputs.worker }}
-          EXISTING_OPENCODE_KEY: ${{ secrets.OPENCODE_API_KEY || secrets.OPENCODE_ZEN_API_KEY }}
-        run: |
-          set -Eeuo pipefail
-          # Dynamic catalog workers retry distinct, proven-free models within this job.
-          # Pinned DeepSeek and other provider lanes retain their existing smoke.
-          if [[ "${DEEPSEEK_MODE:-}" == normal ]] && \
-            [[ "${SOURCE:-}" == opencode-free || "${SOURCE:-}" == openrouter-free ]]; then
-            [[ -z "$(git status --porcelain)" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
-            catalog="$RUNNER_TEMP/factory-${SOURCE}-catalog"
-            comments="$RUNNER_TEMP/factory-model-preflight-comments.json"
-            if [[ "$SOURCE" == opencode-free ]]; then
-              catalog="$RUNNER_TEMP/factory-opencode-free-catalog"
-              comments="$RUNNER_TEMP/factory-opencode-attempt-comments.json"
-            fi
-            [[ -s "$catalog" && -s "$comments" ]] || {
-              printf 'control_plane_failure\tDynamic free-model catalog/history unavailable\n' > "$RUNNER_TEMP/factory-discovery-outcome"
-              exit 1
-            }
-            attempted=()
-            if [[ -f "$RUNNER_TEMP/factory-model-preflight-attempted" ]]; then
-              mapfile -t attempted < "$RUNNER_TEMP/factory-model-preflight-attempted"
-            fi
-            max_candidates=5
-            for (( smoke_attempt=1; smoke_attempt<=max_candidates; smoke_attempt++ )); do
-              model="${RUNTIME_MODEL#*/}"
-              echo "Smoke candidate: $RUNTIME_MODEL"
-              prompt='Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.'
-              marker_file="$RUNNER_TEMP/crouton-tool-smoke-marker"
-              rm -f "$marker_file"
-              if [[ "$SOURCE" == opencode-free && "$model" == crouton-alpha-free ]]; then
-                if [[ -n "${EXISTING_OPENCODE_KEY:-}" ]]; then
-                  echo "::add-mask::$EXISTING_OPENCODE_KEY"
-                  export OPENCODE_API_KEY="$EXISTING_OPENCODE_KEY"
-                else
-                  unset OPENCODE_API_KEY
-                fi
-                prompt="Use the bash tool to run exactly: printf 'FIXED_MODEL_OPENCODE_OK' > '$marker_file'. After it succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK."
-              else
-                unset OPENCODE_API_KEY
-              fi
-              set +e
-              timeout --signal=TERM --kill-after=10s 180s \
-                opencode run --standalone -m "$RUNTIME_MODEL" --agent build "$prompt" \
-                > "$RUNNER_TEMP/fixed-model-smoke.log" 2>&1
-              status=$?
-              set -e
-              cat "$RUNNER_TEMP/fixed-model-smoke.log"
-              outcome="$RUNNER_TEMP/factory-discovery-outcome"
-              rm -f "$outcome"
-              python3 .github/scripts/factory_live_opencode.py \
-                --smoke-log "$RUNNER_TEMP/fixed-model-smoke.log" \
-                --runtime-model "$RUNTIME_MODEL" --outcome-file "$outcome"
-              if [[ -f "$outcome" ]] && grep -Eq '^(model_unavailable|provider_quota)' "$outcome"; then
-                # Keep model-specific evidence even if the next candidate succeeds.
-                IFS=$'\t' read -r kind detail < "$outcome"
-                now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-                type=factory-model-unavailable
-                [[ "$kind" == provider_quota ]] && type=factory-provider-quota
-                gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
-                  -f body="<!-- ${type}:v1 run=${GITHUB_RUN_ID} -->
-                  Worker: opencode-free-model-factory-${WORKER}
-                  Model: ${model}
-                  Source: ${SOURCE}
-                  Attempt outcome: ${kind}
-                  Detail: ${detail}
-                  Updated: ${now}
-                  Run: ${GITHUB_RUN_ID}" >/dev/null
-                attempted+=("$model")
-                exclusions=()
-                for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
-                if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
-                  --provider "$SOURCE" --catalog "$catalog" --comments "$comments" --worker "$WORKER" --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
-                  --rotation "${GITHUB_RUN_NUMBER:-0}" "${exclusions[@]}")"; then
-                  echo "::error::All eligible zero-cost OpenCode models exhausted after ${#attempted[@]} smoke failures"
-                  exit 1
-                fi
-                RUNTIME_MODEL="$(jq -r '.runtime_model' <<< "$selected")"
-                continue
-              fi
-              if (( status != 0 )); then
-                if ! grep -Eiq '429|too many requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(500|502|503|504)|ECONNRESET|ETIMEDOUT|connection reset|timed out' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-                  exit "$status"
-                fi
-                echo "Transient smoke failure for $RUNTIME_MODEL; rotating within $SOURCE" >&2
-                attempted+=("$model")
-                exclusions=()
-                for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
-                if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
-                  --provider "$SOURCE" --catalog "$catalog" --comments "$comments" --worker "$WORKER" --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
-                  --rotation "${GITHUB_RUN_NUMBER:-0}" "${exclusions[@]}")"; then
-                  echo "No additional proven-free model after transient smoke errors" >&2
-                  exit 1
-                fi
-                RUNTIME_MODEL="$(jq -er '.runtime_model' <<< "$selected")"
-                continue
-              fi
-              if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-                echo "Smoke was successful but $RUNTIME_MODEL did not honor the response contract; trying a different model" >&2
-                attempted+=("$model")
-                exclusions=()
-                for prior in "${attempted[@]}"; do exclusions+=(--attempted "$prior"); done
-                if ! selected="$(python3 .github/scripts/factory_live_opencode.py \
-                  --provider "$SOURCE" --catalog "$catalog" --comments "$comments" --worker "$WORKER" --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
-                  --rotation "${GITHUB_RUN_NUMBER:-0}" "${exclusions[@]}")"; then
-                  echo "No remaining free model obeyed the smoke contract" >&2
-                  exit 1
-                fi
-                RUNTIME_MODEL="$(jq -er '.runtime_model' <<< "$selected")"
-                continue
-              fi
-              if [[ "$SOURCE" == opencode-free && "$model" == crouton-alpha-free ]] && \
-                [[ "$(cat "$marker_file" 2>/dev/null || true)" != FIXED_MODEL_OPENCODE_OK ]]; then
-                echo 'Crouton did not invoke shell tool' >&2; exit 1
-              fi
-              [[ -z "$(git status --porcelain)" ]] || { echo 'Smoke modified worktree' >&2; exit 1; }
-              echo "model=$model" >> "$GITHUB_OUTPUT"
-              echo "runtime_model=$RUNTIME_MODEL" >> "$GITHUB_OUTPUT"
-              echo "Dynamic free-model smoke succeeded: $RUNTIME_MODEL"
-              exit 0
-            done
-            echo "All $max_candidates smoke candidates exhausted without a usable free model" >&2
-            exit 1
-          fi
-          before="$(git status --porcelain)"
-          [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
-          smoke_prompt='Reply with exactly FIXED_MODEL_OPENCODE_OK. Do not edit files, run commands, or use tools.'
-          if [[ "$RUNTIME_MODEL" == 'opencode/crouton-alpha-free' ]]; then
-            # An answer alone is not proof the agent can execute coding tools.
-            crouton_marker="$RUNNER_TEMP/crouton-tool-smoke-marker"
-            rm -f "$crouton_marker"
-            smoke_prompt="Use the bash tool to run exactly: printf 'FIXED_MODEL_OPENCODE_OK' > '$crouton_marker'. After it succeeds, reply with exactly FIXED_MODEL_OPENCODE_OK."
-          fi
-          set +e
-          timeout --signal=TERM --kill-after=10s 180s \
-            opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
-            "$smoke_prompt" \
-            2>&1 | tee "$RUNNER_TEMP/fixed-model-smoke.log"
-          status=${PIPESTATUS[0]}
-          set -e
-          python3 .github/scripts/factory_live_opencode.py \
-            --smoke-log "$RUNNER_TEMP/fixed-model-smoke.log" \
-            --runtime-model "$RUNTIME_MODEL" \
-            --outcome-file "$RUNNER_TEMP/factory-discovery-outcome"
-          if [[ -f "$RUNNER_TEMP/factory-discovery-outcome" ]] && \
-            grep -Eq '^(model_unavailable|provider_quota)' "$RUNNER_TEMP/factory-discovery-outcome"; then
-            exit 1
-          fi
-          if [[ "$DEEPSEEK_MODE" != normal && "$status" -ne 0 ]]; then
-            if grep -Eiq 'FreeTierError|403|401|Forbidden|Unauthorized' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              printf 'provider_failure\tPinned DeepSeek rejected %s authentication (401/403)\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
-            elif grep -Eiq '429|Too Many Requests|rate.?limit|FreeUsageLimitError' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              printf 'provider_failure\tPinned DeepSeek rate limited in %s mode\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
-            else
-              printf 'provider_failure\tPinned DeepSeek failed in %s mode\n' "$DEEPSEEK_MODE" > "$RUNNER_TEMP/factory-discovery-outcome"
-            fi
-            exit "$status"
-          fi
-          if (( status != 0 )); then
-            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
-              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 0
-            fi
-            exit "$status"
-          fi
-          if ! grep -q 'FIXED_MODEL_OPENCODE_OK' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/fixed-model-smoke.log"; then
-              echo "Transient smoke failure detected for ${RUNTIME_MODEL}; allowing worker to proceed with built-in retry handling" >&2
-              cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-              exit 0
-            fi
-            echo "Smoke did not return FIXED_MODEL_OPENCODE_OK" >&2
-            cat "$RUNNER_TEMP/fixed-model-smoke.log" >&2 || true
-            exit 1
-          fi
-          if [[ "$RUNTIME_MODEL" == 'opencode/crouton-alpha-free' ]] && \
-            [[ "$(cat "$crouton_marker" 2>/dev/null || true)" != 'FIXED_MODEL_OPENCODE_OK' ]]; then
-            echo 'Crouton smoke did not complete a real shell tool invocation' >&2
-            exit 1
-          fi
-          [[ -z "$(git status --porcelain)" ]] || { echo 'Model smoke modified the worktree' >&2; exit 1; }
-
-      - name: Prove pinned DeepSeek can invoke OpenCode shell tools
-        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.deepseek_mode != 'normal'
-        shell: bash
-        env:
-          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model }}
-        run: |
-          set -Eeuo pipefail
-          marker="$RUNNER_TEMP/deepseek-lane-tool-${{ steps.lane.outputs.worker }}.txt"
-          rm -f "$marker"
-          timeout --signal=TERM --kill-after=10s 180s \
-            opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
-            "Use the shell tool to run exactly: printf DEEPSEEK_LANE_TOOL_OK > '$marker'. Then respond DONE. Do not edit repository files." \
-            2>&1 | tee "$RUNNER_TEMP/deepseek-lane-tool-smoke.log"
-          [[ "$(cat "$marker" 2>/dev/null)" == DEEPSEEK_LANE_TOOL_OK ]] || {
-            echo '::error::Pinned DeepSeek did not execute shell tool'
-            exit 1
-          }
-          [[ -z "$(git status --porcelain)" ]] || { echo '::error::DeepSeek tool probe modified repository'; exit 1; }
-
-      - name: Prove Pixel Canary can use OpenCode tools
-        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
-        shell: bash
-        env:
-          RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
-        run: |
-          set -Eeuo pipefail
-          before="$(git status --porcelain)"
-          [[ -z "$before" ]] || { echo 'Tool smoke requires clean worktree' >&2; exit 1; }
-          set +e
-          timeout --signal=TERM --kill-after=10s 180s \
-            opencode run --standalone -m "$RUNTIME_MODEL" --agent build \
-            'Use the shell tool exactly once to run: printf PIXEL_CANARY_TOOL_OK. Then reply with exactly PIXEL_CANARY_AGENT_OK. Do not edit files.' \
-            2>&1 | tee "$RUNNER_TEMP/pixel-canary-tool-smoke.log"
-          status=${PIPESTATUS[0]}
-          set -e
-          (( status == 0 )) || exit "$status"
-          grep -q 'PIXEL_CANARY_TOOL_OK' "$RUNNER_TEMP/pixel-canary-tool-smoke.log" || {
-            echo 'Pixel Canary did not demonstrate OpenCode tool execution' >&2
-            exit 1
-          }
-          grep -q 'PIXEL_CANARY_AGENT_OK' "$RUNNER_TEMP/pixel-canary-tool-smoke.log" || {
-            echo 'Pixel Canary did not complete the tool smoke contract' >&2
-            exit 1
-          }
-          [[ -z "$(git status --porcelain)" ]] || { echo 'Pixel Canary tool smoke modified the worktree' >&2; exit 1; }
-
-      - name: Smoke Kilo Auto Free through Kilo CLI
-        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'kilo-auto'
-        shell: bash
-        env:
-          FACTORY_RUNTIME_MODEL: ${{ steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
-        run: |
-          set -Eeuo pipefail
-          before="$(git status --porcelain)"
-          [[ -z "$before" ]] || { echo 'Smoke requires clean worktree' >&2; exit 1; }
-          attempt=0
-          max_attempts=3
-          while (( attempt < max_attempts )); do
-            attempt=$((attempt + 1))
-            set +e
-            bash .github/scripts/kilo-auto-factory-run.sh \
-              180 \
-              'ComicPile Kilo Auto Free smoke' \
-              'Reply with exactly KILO_AUTO_FREE_OK. Do not edit files, run commands, or use tools.' \
-              "$RUNNER_TEMP/kilo-auto-smoke.log"
-            status=$?
-            set -e
-            python3 .github/scripts/factory_live_opencode.py \
-              --smoke-log "$RUNNER_TEMP/kilo-auto-smoke.log" \
-              --runtime-model "$FACTORY_RUNTIME_MODEL" \
-              --outcome-file "$RUNNER_TEMP/factory-discovery-outcome"
-            if [[ -f "$RUNNER_TEMP/factory-discovery-outcome" ]] && \
-              grep -q '^provider_quota' "$RUNNER_TEMP/factory-discovery-outcome"; then
-              echo 'Kilo quota exhausted; ending before session and pausing the shared free account' >&2
-              exit 1
-            fi
-            if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
-              break
-            fi
-            if grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
-              if (( attempt < max_attempts )); then
-                retry_after="$(grep -Ei 'retry-after:[[:space:]]*[0-9]+' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null | tail -n1 | grep -Eo '[0-9]+' | tail -n1 || true)"
-                if [[ "$retry_after" =~ ^[0-9]+$ ]]; then
-                  delay=$(( retry_after > 60 ? 60 : retry_after ))
-                else
-                  delay=$(( 5 * attempt ))
-                fi
-                echo "Kilo smoke transient failure (attempt ${attempt}/${max_attempts}); retrying after ${delay}s" >&2
-                cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
-                sleep "$delay"
-                continue
-              fi
-              echo "Transient Kilo smoke failure after ${attempt} attempts; allowing worker to proceed with built-in retry handling" >&2
-              cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
-              exit 0
-            fi
-            # Non-transient failure without sentinel - break to final error handling
-            break
-          done
-          if grep -q 'KILO_AUTO_FREE_OK' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
-            echo "Kilo smoke succeeded"
-          elif grep -Eiq '429|Too Many Requests|rate.?limit|overloaded|temporar(il)?y unavailable|bad gateway|gateway timeout|service unavailable|HTTP[^0-9]*(502|503|504)|ECONNRESET|ETIMEDOUT|connection reset' "$RUNNER_TEMP/kilo-auto-smoke.log" 2>/dev/null; then
-            echo "Transient Kilo smoke failure detected; allowing worker to proceed with built-in retry handling" >&2
-            cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
-            exit 0
-          else
-            echo "Kilo smoke did not return KILO_AUTO_FREE_OK" >&2
-            cat "$RUNNER_TEMP/kilo-auto-smoke.log" >&2 || true
-            exit 1
-          fi
-          [[ -z "$(git status --porcelain)" ]] || { echo 'Kilo smoke modified the worktree' >&2; exit 1; }
+      # The first model invocation is the real leased coding/review mission.
+      # Catalog and free-price checks do not spend inference tokens.
+      # No extra smoke, chat-completion probe, or tool-canary prompt.
 
       - name: Run continuous fixed-model factory session
         id: worker_session
@@ -1298,8 +907,8 @@ jobs:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
-          FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
-          FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
+          FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}
           FACTORY_DISPLAY: ${{ steps.executor.outputs.display || steps.lane.outputs.display }}
           FACTORY_BRANCH_SUFFIX: ${{ steps.executor.outputs.branch_suffix || steps.lane.outputs.branch_suffix }}
         run: |
@@ -1317,7 +926,7 @@ jobs:
         if: always() && vars.FACTORY_OMNIROUTE_ENABLED == 'on' && steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'omniroute-free'
         shell: bash
         env:
-          MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
           [[ -n "${OMNIROUTE_MANAGEMENT_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]] || {
@@ -1362,7 +971,7 @@ jobs:
         shell: bash
         env:
           WORKER: ${{ steps.lane.outputs.worker }}
-          MODEL: ${{ steps.smoke.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
+          MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MINUTE: ${{ steps.lane.outputs.minute }}
           CONFIGURED: ${{ steps.lane.outputs.configured }}
@@ -1375,7 +984,15 @@ jobs:
           [[ -n "${WORKER:-}" ]] || exit 0
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          if [[ "$CONFIGURED" != true ]]; then outcome='unconfigured'; else outcome="$JOB_STATUS"; fi
+          # A green wrapper exit is NOT evidence of useful coding. The trusted
+          # post-run classifier will publish the final delivery verdict.
+          if [[ "$CONFIGURED" != true ]]; then
+            outcome='unconfigured'
+          elif [[ "$JOB_STATUS" == success ]]; then
+            outcome='finished'
+          else
+            outcome='failure'
+          fi
           body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
             "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
           # Neon provides a candidate ID. Verify the marker live before PATCH;
@@ -1409,8 +1026,8 @@ jobs:
             attempt_outcome='control_plane_failure'
             attempt_detail="factory controller assignment failed with exit status ${worker_status}"
           elif [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
-            attempt_outcome='success'
-            attempt_detail='factory job completed successfully'
+            attempt_outcome='classification_pending'
+            attempt_detail='wrapper exited; awaiting trusted work/delivery classification'
           elif [[ "$CONFIGURED" != true ]]; then
             attempt_outcome='unknown_failure'
             attempt_detail="factory lane was not executable: ${REASON}"
@@ -1420,6 +1037,20 @@ jobs:
           fi
           attempt_body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nOutcome: %s\nAttempt outcome: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
             "$attempt_marker" "$WORKER" "$MODEL" "$SOURCE" "$outcome" "$attempt_outcome" "$attempt_detail" "$now" "$GITHUB_RUN_ID")"
+          # Sticky NVIDIA 410 retirement is reported from the real work attempt.
+          # Never send a separate inference request just to test the model.
+          if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]; then
+            retirement_marker='<!-- factory-model-retired-410:v1 -->'
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+              -f body="${retirement_marker}
+          Worker: opencode-free-model-factory-${WORKER}
+          Model: ${MODEL}
+          Source: nvidia
+          Attempt outcome: model_retired_410
+          Detail: Confirmed HTTP 410 during actual assigned work
+          Updated: ${now}
+          Run: ${GITHUB_RUN_ID}" >/dev/null
+          fi
           # Keep a run-specific failure snapshot: later successes overwrite the worker record.
           if [[ "$SOURCE" == opencode-free && ( "$attempt_outcome" == model_unavailable || "$attempt_outcome" == provider_quota ) ]]; then
             # Retain a run-specific record even after the worker selects another model.

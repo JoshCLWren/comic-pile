@@ -15,6 +15,7 @@ permissions:
   contents: read
   actions: read
   issues: write
+  pull-requests: read
 
 jobs:
   classifier-tests:
@@ -54,6 +55,21 @@ jobs:
           gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log > "$RUNNER_TEMP/fixed-model.log"
           python .github/scripts/classify-fixed-model-run.py \
             --log "$RUNNER_TEMP/fixed-model.log" > "$RUNNER_TEMP/runtime-outcome.json"
+          # Backup and primary collectors must agree: a log claim is not PR
+          # delivery proof. Verify one targeted GitHub PR before persistence.
+          delivery_pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/runtime-outcome.json")"
+          if [[ -n "$delivery_pr" ]]; then
+            [[ "$delivery_pr" =~ ^[1-9][0-9]*$ ]] || exit 1
+            delivery="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr")"
+            jq -e --arg repo "$GITHUB_REPOSITORY" --argjson number "$delivery_pr" '
+              .number == $number and .head.repo.full_name == $repo and
+              (.state == "open" or .merged == true) and
+              (.head.sha | test("^[0-9a-f]{40}$"))
+            ' <<< "$delivery" >/dev/null || {
+              echo "::error::Unverified PR handoff #$delivery_pr"
+              exit 1
+            }
+          fi
           worker="$(jq -r '.worker // empty' "$RUNNER_TEMP/runtime-outcome.json")"
           if [[ -z "$worker" ]]; then
             echo 'The fixed-model job did not reach lane resolution; no durable worker marker can be identified.'
@@ -90,6 +106,8 @@ jobs:
           detail="$(jq -r .detail "$data")"
           proven="$(jq -r 'if .exact_model_proven then "yes" else "no" end' "$data")"
           persisted="$(jq -r 'if .persisted_work then "yes" else "no" end' "$data")"
+          delivery_state="$(jq -r '.delivery_outcome // "none"' "$data")"
+          delivery_pr="$(jq -r '.delivery_pr // empty' "$data")"
           selected_kind="$(jq -r '.selected_kind // ""' "$data")"
           selected_number="$(jq -r '.selected_number // ""' "$data")"
           selected='none'
@@ -97,8 +115,15 @@ jobs:
             selected="${selected_kind} #${selected_number}"
           fi
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nAttempt outcome: %s\nExact OpenCode model proven: %s\nSelected: %s\nPersisted useful work: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
-            "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$outcome_class" "$proven" "$selected" "$persisted" "$detail" "$now" "$RUN_URL")"
+          body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nAgent outcome: %s\nAttempt outcome: %s\nExact model execution proven: %s\nSelected: %s\nPersisted work signal: %s\nVerified delivery: %s\nDelivered PR: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
+            "$marker" "$WORKER" "$model" "$source" "$minute" "$outcome" "$outcome_class" "$proven" "$selected" "$persisted" "$delivery_state" "${delivery_pr:-none}" "$detail" "$now" "$RUN_URL")"
+          {
+            echo "### Observed factory worker outcome"
+            echo
+            echo "Agent: \`$outcome_class\`"
+            echo "Verified delivery: \`$delivery_state\`"
+            echo "PR: \`${delivery_pr:-none}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
           # The shared snapshot usually has the worker's existing durable
           # marker. Avoid paginating every historical comment on each completed
           # worker run. A missing cached marker MUST be verified against live

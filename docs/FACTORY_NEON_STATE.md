@@ -187,6 +187,30 @@ scanning live GitHub.
   compare per-workflow REST request telemetry and quota samples before/after.
   No claim of an achieved percentage reduction is made without that evidence.
 
+## Compact cache transport and automatic expiration
+
+The generic `factory-github-get-v1` cache stores responses over 4 KiB using
+zlib plus base64 **only when the encoded result is smaller**. The trusted
+read-through shim transparently decodes them before writing the original
+GitHub CLI output. Older raw snapshots remain readable during rollout. This
+reduces database-to-runner traffic; it does not change GitHub response shapes
+or eliminate the original live GitHub request on a miss.
+
+The hourly trusted factory issue-state reconciler also runs a bounded
+`prune-expired` operation against the same restricted database. It only
+removes `factory-github-get-v1:%` rows expired by more than 30 minutes,
+skips active refresh locks, and processes at most 1,000 rows in five batches.
+It never prunes projections, provider health, worker reservations, registry
+comments or event history. PostgreSQL autovacuum reclaims dead tuples
+eventually; the job does not require or invoke VACUUM FULL.
+
+When a refreshed snapshot is byte-for-byte unchanged at the parsed JSON
+record level, its TTL is extended without retransmitting the entire snapshot
+as a new UPDATE parameter or rewriting its external TOAST value. The hourly
+canonical PR-history query projects only number, branch ref, state, and
+merge timestamp before passing it to Neon, while keeping live exact-target
+validation for sensitive decisions.
+
 ## Remaining API work
 
 Issue/PR events now update individual Neon projections and a live listing
@@ -279,3 +303,13 @@ A DB outage must not turn missing data into healthy evidence. New claims still
 require the existing transactional Neon lease and GitHub ownership check.
 The read-only projections have bounded fallbacks, but neither missing cache
 nor a late webhook is grounds to merge.
+
+## Work as smoke
+
+The fixed-model runner no longer spends inference requests on standalone model
+smoke prompts, NVIDIA chat probes, Kilo smokes, or tool-canary prompts. Trusted
+catalog checks, existing Neon model exclusions, and the zero-price Pixel Canary
+catalog guard remain. Only a real leased coding/review mission invokes an LLM.
+A successful real-session exit proves the selected model, and an unassigned
+worker is recorded as idle without provider inference. Delivery still requires
+verified PR persistence and lease handoff, independent of model execution.

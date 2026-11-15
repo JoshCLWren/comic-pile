@@ -235,7 +235,6 @@ def main() -> None:
     assert 'https://router.requesty.ai/v1' in runner
     assert 'https://ai-gateway.vercel.sh/v1' in runner
     assert 'Require Pixel Canary to remain zero-price' in runner
-    assert 'Prove Pixel Canary can use OpenCode tools' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
@@ -246,13 +245,11 @@ def main() -> None:
     assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE' not in runner
     assert 'factory_omniroute_smoke.sh' not in runner
     assert 'Select execution candidate at dispatch time' in runner
-    assert 'Probe pinned NVIDIA model before OpenCode smoke' in runner
-    assert '"$code" == "000"' in runner
-    assert '"$curl_exit" =~ ^(6|7|28|35|52|56)$' in runner
-    assert 'provider_failure\\tNVIDIA probe HTTP' in runner
-    assert 'Smoke exact pinned model through OpenCode' in runner
+    assert 'Run continuous fixed-model factory session' in runner
+    assert 'Probe pinned NVIDIA model before OpenCode smoke' not in runner
+    assert 'Smoke exact pinned model through OpenCode' not in runner
     assert "KILO_VERSION: '7.4.22'" in runner
-    assert 'Smoke Kilo Auto Free through Kilo CLI' in runner
+    assert 'Smoke Kilo Auto Free through Kilo CLI' not in runner
     assert 'PR_REBASE_TOKEN: ${{ secrets.PR_REBASE_TOKEN }}' in runner
     assert 'x-access-token:${PR_REBASE_TOKEN}' in runner
 
