@@ -628,12 +628,8 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     python = burndown.get("python_fastapi")
     assert isinstance(total, int) and isinstance(native, int) and isinstance(python, int)
     assert "<!-- route-burndown:begin" in agents
-    assert f"Live v2 operations: {total} ({native} native-rust + {python} python orphan)" in agents
+    assert f"Live v2 operations: {total} ({native} native-rust + {python} python-fastapi)" in agents
     assert "`/api/native_roll.rs`, `/api/native_issue.rs`" in agents
-    assert (
-        "Python orphan: `GET /api/v2/reading-boundaries/{thread_id} "
-        "-> python-fastapi` via `/api/index.py`" in agents
-    )
     assert "`POST /api/v2/reading-boundaries -> native-rust`" in agents
     assert "`GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`" in agents
     assert "see `docs/api/v2-route-inventory.json` (authoritative)" in agents
