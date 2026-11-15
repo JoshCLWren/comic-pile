@@ -89,22 +89,42 @@ PY
 
 # Complete JSON responses only. Transport failures and incomplete model output
 # are separate: retry incomplete output once, without inventing evidence.
+# Allow a very slow local 7B model a full two hours per HTTP attempt while
+# recording the actual network timing. A Cloudflare 524 may still terminate
+# the connection first; the curl metrics distinguish that from client timeout.
 review_valid=false
 for semantic_attempt in 1 2; do
   delivered=false
   for transport_attempt in 1 2 3; do
-    if curl -fsS --connect-timeout 20 -m 900 -X POST "${REVIEW_PROVIDER_URL%/}/v1/chat/completions" \
+    curl_exit=0
+    if curl -fsS --connect-timeout 60 --max-time 7200 -X POST "${REVIEW_PROVIDER_URL%/}/v1/chat/completions" \
       -H "Authorization: Bearer ${REVIEW_PROVIDER_KEY}" -H "Content-Type: application/json" \
-      --data-binary @/tmp/req.json > /tmp/resp.json 2>/tmp/curl.err; then
+      --data-binary @/tmp/req.json \
+      --write-out 'http=%{http_code} connect_s=%{time_connect} tls_s=%{time_appconnect} first_byte_s=%{time_starttransfer} total_s=%{time_total} bytes=%{size_download}\n' \
+      --output /tmp/resp.json > /tmp/curl.metrics 2>/tmp/curl.err; then
       delivered=true
+    else
+      curl_exit=$?
+    fi
+    metrics="$(tr -d '\n' < /tmp/curl.metrics)"
+    printf '[local-review-timing] semantic_attempt=%s transport_attempt=%s curl_exit=%s %s\n' \
+      "$semantic_attempt" "$transport_attempt" "$curl_exit" "$metrics"
+    if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+      printf -- '- Semantic attempt %s, HTTP attempt %s: curl exit %s, %s\n' \
+        "$semantic_attempt" "$transport_attempt" "$curl_exit" "$metrics" >> "$GITHUB_STEP_SUMMARY"
+    fi
+    if [[ "$delivered" == true ]]; then
       break
+    fi
+    if [[ "$metrics" == http=524\ * ]]; then
+      echo "::warning::HTTP 524 came from the upstream proxy before the 7200-second client timeout" >&2
     fi
     echo "Provider transport attempt $transport_attempt failed" >&2
     cat /tmp/curl.err >&2
     if [[ "$transport_attempt" != 3 ]]; then sleep 10; fi
   done
   if [[ "$delivered" != true ]]; then
-    echo "::error::Review provider unavailable after three attempts" >&2
+    echo "::error::Review provider unavailable after three timed attempts" >&2
     exit 1
   fi
 
