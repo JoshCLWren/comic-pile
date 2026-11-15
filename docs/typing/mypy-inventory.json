@@ -29,7 +29,6 @@
     "app/api/dependency_group.py",
     "app/api/dependency_group_batch.py",
     "app/api/health.py",
-    "app/api/identity_inbox.py",
     "app/api/images.py",
     "app/api/issue.py",
     "app/api/issue_dependency_batch.py",
@@ -188,7 +187,6 @@
     "app/schemas/dependency.py",
     "app/schemas/dependency_group.py",
     "app/schemas/error.py",
-    "app/schemas/identity_inbox.py",
     "app/schemas/issue.py",
     "app/schemas/issue_dependency_batch.py",
     "app/schemas/migration.py",
@@ -273,7 +271,6 @@
     "app/services/explicit_reader_order_migration.py",
     "app/services/github_service.py",
     "app/services/health_probe.py",
-    "app/services/identity_inbox.py",
     "app/services/image_delivery.py",
     "app/services/issue.py",
     "app/services/issue_identity_reconciliation.py",
@@ -614,7 +611,6 @@
     "tests/test_history.py",
     "tests/test_history_events.py",
     "tests/test_history_issue_stability_regression.py",
-    "tests/test_identity_inbox_list_performance.py",
     "tests/test_image_delivery_api.py",
     "tests/test_import_all.py",
     "tests/test_intent_weighted_acceptance.py",
@@ -55699,5 +55695,7 @@
       "severity": "error",
       "message": "Untyped decorator makes function \"test_validate_export_rejects_removed_or_sensitive_payloads\" untyped"
     }
-  ]
+  ],
+  "module_annotations": {},
+  "file_annotations": []
 }
