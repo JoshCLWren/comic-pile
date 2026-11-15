@@ -324,6 +324,16 @@ def classify(log: str) -> Result:
             detail="no assignment was leased; model inference was skipped",
         )
 
+    # An actual assigned NVIDIA invocation returned HTTP 410. No extra probe.
+    if values["source"] == "nvidia" and re.search(
+        r"(?m)^(?:\d{4}-\d{2}-\d{2}T\S+Z\s+)?NVIDIA permanently retired model: "
+        + re.escape(values["model"]) + r"\s*$",
+        log,
+    ):
+        return Result(
+            **common, outcome="MODEL RETIRED", outcome_class="model_retired_410",
+            detail="trusted assigned NVIDIA worker received permanent HTTP 410",
+        )
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
     if QUOTA_RE.search(log) or (
@@ -562,6 +572,20 @@ class ClassifierTests(unittest.TestCase):
         self.assertFalse(result.exact_model_proven)
         self.assertEqual(result.outcome_class, "no_work")
 
+    def test_real_nvidia_410_retires_without_probe(self) -> None:
+        log = (
+            "Factory 11 locked: source=nvidia model=stepfun-ai/step-3.7-flash "
+            "runtime=nvidia/stepfun-ai/step-3.7-flash minute=:15 "
+            "scheduler=dispatcher configured=true\n"
+            "[factory:11] checked out issue #4839 on factory/11-4839-nvidia\n"
+            "[factory:11] agent exit status 1 for issue #4839\n"
+            "HTTP 410 Gone\n"
+            "NVIDIA permanently retired model: stepfun-ai/step-3.7-flash\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "model_retired_410")
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.delivery_outcome, "none")
     def test_timeout_without_push_does_not_count_as_delivery(self) -> None:
         log = (
             "Factory 105 locked: source=z-ai model=glm-4.7-flash "

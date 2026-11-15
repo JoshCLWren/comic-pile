@@ -77,6 +77,8 @@ def test_throttle_and_model_missing_remain_distinct() -> None:
 
     assert 'record_terminal_outcome provider_throttle' in text
     assert 'record_terminal_outcome model_unavailable' in text
+    assert 'record_terminal_outcome model_retired_410' in text
+    assert "NVIDIA permanently retired model: %s" in text
     assert 'HTTP[^0-9]*404' in text
     assert 'HTTP[^0-9]*410' in text
 

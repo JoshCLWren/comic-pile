@@ -1037,6 +1037,20 @@ jobs:
           fi
           attempt_body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nOutcome: %s\nAttempt outcome: %s\nDetail: %s\nUpdated: %s\nRun: %s' \
             "$attempt_marker" "$WORKER" "$MODEL" "$SOURCE" "$outcome" "$attempt_outcome" "$attempt_detail" "$now" "$GITHUB_RUN_ID")"
+          # Sticky NVIDIA 410 retirement is reported from the real work attempt.
+          # Never send a separate inference request just to test the model.
+          if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]; then
+            retirement_marker='<!-- factory-model-retired-410:v1 -->'
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" \
+              -f body="${retirement_marker}
+          Worker: opencode-free-model-factory-${WORKER}
+          Model: ${MODEL}
+          Source: nvidia
+          Attempt outcome: model_retired_410
+          Detail: Confirmed HTTP 410 during actual assigned work
+          Updated: ${now}
+          Run: ${GITHUB_RUN_ID}" >/dev/null
+          fi
           # Keep a run-specific failure snapshot: later successes overwrite the worker record.
           if [[ "$SOURCE" == opencode-free && ( "$attempt_outcome" == model_unavailable || "$attempt_outcome" == provider_quota ) ]]; then
             # Retain a run-specific record even after the worker selects another model.

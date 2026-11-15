@@ -317,10 +317,19 @@ def test_numbered_lease_release_requires_authoritative_worker_evidence() -> None
     policy = _policy()
     now = 1_800_000_000
     labels = ["factory", "factory:7", "factory:building"]
+    ttl = _load_module("factory_work_policy", SCRIPTS / "factory_work_policy.py").FIXED_LEASE_TTL_SECONDS
 
+    # Before expiry, no history reconciliation may steal a numbered lease.
     assert policy.lease_reconciliation_action(
         labels,
-        latest_activity_epoch=now - 901,
+        latest_activity_epoch=now - ttl + 1,
+        now_epoch=now,
+        active_fixed_workers=set(),
+        has_unresolved_active_runs=False,
+    ) == policy.LEASE_ACTION_HOLD_NUMBERED
+    assert policy.lease_reconciliation_action(
+        labels,
+        latest_activity_epoch=now - ttl - 1,
         now_epoch=now,
         active_fixed_workers=set(),
         has_unresolved_active_runs=False,
