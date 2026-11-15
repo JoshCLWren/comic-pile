@@ -350,3 +350,12 @@ def test_source_execution_fence_uses_trusted_workflow_run_metadata(
         runs.insert(0, {'id': int(RUN) + 1, 'display_title': runs[0]['display_title']})
     monkeypatch.setattr(handoff, 'obj', lambda *_: {'workflow_runs': runs})
     assert handoff.newer_worker_run(REPO, run, '46') is expected
+
+
+def test_completed_failed_source_with_missing_stage_becomes_repair_pickup(harness: dict) -> None:
+    harness['drafts'] = [harness['pr']]
+    harness['issue']['labels'] = labels('factory', 'factory:unowned')
+    harness['pr']['labels'] = labels('factory', 'factory:unowned')
+    handoff.publish(REPO, RUN)
+    assert handoff.labels_of(harness['pr']) == {'factory', 'factory:unowned', 'factory:changes-requested'}
+    assert 'factory:unowned' in handoff.labels_of(harness['issue'])

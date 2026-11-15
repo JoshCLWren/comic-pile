@@ -298,7 +298,9 @@ def set_work_labels(repo: str, pr: dict, issue: dict, saved: dict, run: dict,
     if (source_owners - {owner} or source_labels & HOLDS or pr_labels & HOLDS
             or {label for label in pr_labels if OWNER_RE.fullmatch(label)} - {owner}):
         return "another live owner or hold preserved"
-    if run.get("status") == "completed" and newer_worker_run(repo, run, saved["worker"]):
+    if (run.get("status") == "completed" and (source_owners or any(
+            OWNER_RE.fullmatch(label) for label in pr_labels))
+            and newer_worker_run(repo, run, saved["worker"])):
         return "later factory execution or incomplete run view preserved"
     # A newer ordinary commit or lease belongs to its resumed worker, even if
     # that worker happens to have the same factory identity as this old run.
@@ -317,7 +319,8 @@ def set_work_labels(repo: str, pr: dict, issue: dict, saved: dict, run: dict,
         if owners - {owner} or current_labels & HOLDS:
             continue
         # Once released, another controller may have advanced this stage.
-        if not active and not owners and "factory:building" not in current_labels:
+        if (not active and not owners and "factory:building" not in current_labels
+                and current_labels & STAGES):
             continue
         labels = {label for label in current_labels
                   if label not in STAGES and label != "factory:unowned"

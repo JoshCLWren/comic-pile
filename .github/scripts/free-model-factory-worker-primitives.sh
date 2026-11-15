@@ -871,6 +871,11 @@ _persist_issue_pr_untraced() {
     log 'same-issue overlap appeared during validation; refusing duplicate PR' >&2
     return 1
   fi
+  if [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" ]]; then
+    python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+      --run-id "$GITHUB_RUN_ID" --check-write --mode issue --number "$number" \
+      --worker "$WORKER" --work-branch "$branch" || return 1
+  fi
   git commit --allow-empty -m "factory: advance #${number} with $(factory_advance_display)" >&2
   # The agent may be running on a local worktree branch whose name differs from
   # the target branch. Push the exact commit we just created, then verify that
@@ -964,6 +969,11 @@ _persist_pr_changes_untraced() {
     log "PR #${pr} corrected fast-check failures in the same lease; safe persistence gates passed"
   fi
   git add -A
+  if [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" ]]; then
+    python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+      --run-id "$GITHUB_RUN_ID" --check-write --mode pr --number "$pr" \
+      --worker "$WORKER" --work-branch "$branch" || return 1
+  fi
   git commit --allow-empty -m "factory: advance PR #${pr} with $(factory_advance_display)"
   local pushed_head remote_head push_credential
   pushed_head="$(git rev-parse HEAD)"
