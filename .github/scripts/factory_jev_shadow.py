@@ -820,12 +820,40 @@ def main() -> int:
     parser.add_argument("--issues", type=Path, required=True)
     parser.add_argument("--prs", type=Path, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--factory-health", type=Path, help="Trusted Neon worker and provider health snapshot")
     args = parser.parse_args()
     issues = json.loads(args.issues.read_text(encoding="utf-8"))
     prs = json.loads(args.prs.read_text(encoding="utf-8"))
     if not isinstance(issues, list) or not isinstance(prs, list):
         raise ValueError("invalid GitHub candidate snapshot")
-    report = select_report(issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""))
+    health_summary: dict[str, Any] | None = None
+    if args.factory_health:
+        try:
+            health = json.loads(args.factory_health.read_text(encoding="utf-8"))
+            if not isinstance(health, dict) or not isinstance(health.get("workers"), list) or not isinstance(health.get("cooling"), list):
+                raise ValueError("invalid health snapshot")
+            # Trusted operational counts only. No credentials or model-generated logs.
+            health_summary = {
+                "worker_count": len(health["workers"]),
+                "cooling_models": len(health["cooling"]),
+                "productive_workers": sum(
+                    1 for worker in health["workers"]
+                    if isinstance(worker, dict) and int(worker.get("productive") or 0) > 0
+                ),
+            }
+        except (OSError, ValueError, TypeError, OverflowError):
+            health_summary = {"status": "unavailable"}
+
+    def informed_jev(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
+        if health_summary and health_summary.get("status") != "unavailable":
+            payload = {**payload, "state": {**payload["state"], "factory_health": health_summary}}
+        return call_jev(payload, api_key)
+
+    report = select_report(
+        issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""), client=informed_jev
+    )
+    if health_summary is not None:
+        report["factory_health"] = health_summary
     print(markdown(report))
     if args.output:
         args.output.write_text(
