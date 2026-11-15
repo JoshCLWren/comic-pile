@@ -134,35 +134,35 @@ pub async fn sync_released_issues(
     Json(payload): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
-    
+
     // Parse the as_of date string
     let _as_of = DateTime::parse_from_rfc3339(&payload.as_of)
         .map_err(|_| ApiError::BadRequest("Invalid date format. Expected RFC 3339.".to_string()))?
         .with_timezone(&Utc);
-    
+
     // Get all sources and enabled sources for the user
     let all_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
                            FROM reading_plan_release_sources rps
                            JOIN continuity_plans cp ON cp.id = rps.plan_id
                            JOIN external_identities ei ON ei.id = rps.external_identity_id
                            WHERE cp.user_id = $1";
-    
+
     let all_sources_rows = connection
         .query(all_sources_sql, &[&user.id()])
         .await
         .map_err(db::query_error)?;
-    
+
     let enabled_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
                               FROM reading_plan_release_sources rps
                               JOIN continuity_plans cp ON cp.id = rps.plan_id
                               JOIN external_identities ei ON ei.id = rps.external_identity_id
                               WHERE cp.user_id = $1 AND rps.enabled = true";
-    
+
     let enabled_sources_rows = connection
         .query(enabled_sources_sql, &[&user.id()])
         .await
         .map_err(db::query_error)?;
-    
+
     let report = SyncReport {
         total_sources: all_sources_rows.len() as i64,
         enabled_sources: enabled_sources_rows.len() as i64,
@@ -181,7 +181,7 @@ pub async fn sync_released_issues(
         skipped_sources: 0,
         failures: vec![],
     };
-    
+
     if enabled_sources_rows.is_empty() {
         // No enabled sources, return empty report
         return Ok(Json(SyncResponse {
@@ -190,7 +190,7 @@ pub async fn sync_released_issues(
             result: report,
         }));
     }
-    
+
     // For now, return a successful response with placeholder data
     // The full implementation would require:
     // 1. Building a ComicVine client
@@ -200,10 +200,10 @@ pub async fn sync_released_issues(
     // 5. Adopting issues using the provider_issue_adoption service
     // 6. Extending plans with adopted issues
     // 7. Updating last_synced_at for successful sources
-    
+
     // TODO: Implement the full sync logic based on the Python implementation
     // This requires additional services and repositories to be implemented in Rust
-    
+
     Ok(Json(SyncResponse {
         success: true,
         message: "Sync completed successfully".to_string(),

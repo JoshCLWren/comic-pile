@@ -2,7 +2,7 @@ name: Factory Status Pages
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -98,20 +98,34 @@ jobs:
               -f "sha=${main_sha}" >/dev/null
           fi
 
-          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/index.html?ref=${branch}" \
-            --jq '.sha' 2>/dev/null || true)"
-          content="$(base64 -w0 site/index.html)"
-          args=(
-            --method PUT
-            "repos/${GITHUB_REPOSITORY}/contents/index.html"
-            -f "branch=${branch}"
-            -f 'message=chore: refresh factory dashboard'
-            -f "content=${content}"
-          )
-          if [[ -n "$existing_sha" ]]; then
-            args+=(-f "sha=${existing_sha}")
-          fi
-          gh api "${args[@]}" --jq '.commit.sha'
+          # Large dashboard pages cannot fit in one Linux command argument.
+          # Build the GitHub Contents API request as a file and stream it to gh.
+          publish_snapshot() {
+            local filepath="$1" destination="$2" message="$3" existing_sha="$4"
+            local payload_file
+            payload_file="$(mktemp "$RUNNER_TEMP/factory-status-payload.XXXXXX")"
+            python3 - "$filepath" "$branch" "$message" "$existing_sha" "$payload_file" <<'PY'
+          import base64
+          import json
+          import sys
+          from pathlib import Path
+
+          source, branch, message, sha, destination = sys.argv[1:]
+          request = {
+              "branch": branch,
+              "message": message,
+              "content": base64.b64encode(Path(source).read_bytes()).decode("ascii"),
+          }
+          if sha:
+              request["sha"] = sha
+          Path(destination).write_text(json.dumps(request, separators=(",", ":")))
+          PY
+            gh api --method PUT "repos/${GITHUB_REPOSITORY}/contents/${destination}" --input "$payload_file" --jq '.commit.sha'
+            rm -f "$payload_file"
+          }
+
+          existing_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/index.html?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
+          publish_snapshot site/index.html index.html 'chore: refresh factory dashboard' "$existing_sha"
 
           # Public normalized counts keyed by immutable merged SHA, never logs
           # or credentials. Update only when attribution changed.
@@ -119,11 +133,7 @@ jobs:
             cache_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json?ref=${branch}" --jq '.sha' 2>/dev/null || true)"
             local_sha="$(git hash-object site/funnel-cache.json)"
             if [[ "$cache_sha" != "$local_sha" ]]; then
-              cache_args=(--method PUT "repos/${GITHUB_REPOSITORY}/contents/funnel-cache.json"
-                -f "branch=${branch}" -f 'message=chore: cache merged factory attribution'
-                -f "content=$(base64 -w0 site/funnel-cache.json)")
-              if [[ -n "$cache_sha" ]]; then cache_args+=(-f "sha=${cache_sha}"); fi
-              gh api "${cache_args[@]}" --jq '.commit.sha'
+              publish_snapshot site/funnel-cache.json funnel-cache.json 'chore: cache merged factory attribution' "$cache_sha"
             fi
           fi
 
