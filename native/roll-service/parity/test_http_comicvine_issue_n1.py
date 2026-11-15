@@ -7,7 +7,6 @@ does not grow with library size.
 
 from __future__ import annotations
 
-import json
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -73,8 +72,8 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
                 "RETURNING id",
             )
             await raw.execute(
-                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, updated_at) "
-                "VALUES ($1, $2, 'confirmed', 1.0, NOW())",
+                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, created_at, updated_at) "
+                "VALUES ($1, $2, 'confirmed', 1.0, NOW(), NOW())",
                 issue_id,
                 ext_id,
             )
@@ -137,8 +136,8 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
                 "RETURNING id",
             )
             await raw.execute(
-                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, updated_at) "
-                "VALUES ($1, $2, 'confirmed', 1.0, NOW())",
+                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, created_at, updated_at) "
+                "VALUES ($1, $2, 'confirmed', 1.0, NOW(), NOW())",
                 new_issue_id,
                 ext_id,
             )

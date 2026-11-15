@@ -7,7 +7,6 @@ with library size.
 
 from __future__ import annotations
 
-import json
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
