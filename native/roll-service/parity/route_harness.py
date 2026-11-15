@@ -178,6 +178,9 @@ class RouteMeasurement:
     db_blocks: int
     db_bytes: int
     db_statements: int | None
+    db_application_statements: int | None
+    db_transaction_control_statements: int | None
+    db_runtime_overhead_statements: int | None
     db_nested_statements: int | None
     body: dict[str, object]
 
@@ -201,6 +204,111 @@ async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) 
         return int(row.scalar_one())
     except DBAPIError:
         return None
+
+
+async def db_statement_breakdown(engine: AsyncEngine) -> StatementBreakdown | None:
+    """Return isolated-role statement counts split by execution responsibility.
+
+    The administrative connection reads ``pg_stat_statements`` with
+    ``track=all``. Top-level application statements, transaction controls, and
+    pool-checkout probes are classified independently; trigger/function queries
+    are returned as nested statements.
+
+    Args:
+        engine: Route database engine. The administrative URL is read from the
+            environment when available.
+
+    Returns:
+        The measured statement split, or None when no administrative URL is
+        configured or the statement extension is unavailable.
+    """
+    admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if admin_url is None:
+        return None
+    admin_engine = create_async_engine(admin_url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        async with admin_engine.connect() as admin:
+            try:
+                row = await admin.execute(
+                    text(
+                        """
+                        WITH role_statements AS (
+                            SELECT s.calls,
+                                   s.toplevel,
+                                   lower(regexp_replace(
+                                       btrim(s.query),
+                                       '[[:space:]]+',
+                                       ' ',
+                                       'g'
+                                   )) AS normalized_query
+                            FROM pg_stat_statements s
+                            JOIN pg_roles r ON r.oid = s.userid
+                            WHERE r.rolname = 'roll_test_dml'
+                              AND s.dbid = (
+                                  SELECT oid FROM pg_database
+                                  WHERE datname = current_database()
+                              )
+                        )
+                        SELECT
+                            COALESCE(
+                                SUM(calls) FILTER (
+                                    WHERE toplevel
+                                      AND normalized_query NOT IN ('select 1', 'select $1')
+                                      AND normalized_query NOT IN (
+                                          'begin', 'commit', 'rollback', 'abort', 'end'
+                                      )
+                                      AND normalized_query NOT LIKE 'begin %'
+                                      AND normalized_query NOT LIKE 'set local %'
+                                      AND normalized_query NOT LIKE 'set transaction %'
+                                      AND normalized_query NOT LIKE 'savepoint %'
+                                      AND normalized_query NOT LIKE 'release savepoint %'
+                                      AND normalized_query NOT LIKE 'rollback to %'
+                                ),
+                                0
+                            ) AS application,
+                            COALESCE(
+                                SUM(calls) FILTER (
+                                    WHERE toplevel
+                                      AND (
+                                          normalized_query IN (
+                                              'begin', 'commit', 'rollback', 'abort', 'end'
+                                          )
+                                          OR normalized_query LIKE 'begin %'
+                                          OR normalized_query LIKE 'set local %'
+                                          OR normalized_query LIKE 'set transaction %'
+                                          OR normalized_query LIKE 'savepoint %'
+                                          OR normalized_query LIKE 'release savepoint %'
+                                          OR normalized_query LIKE 'rollback to %'
+                                      )
+                                ),
+                                0
+                            ) AS transaction_control,
+                            COALESCE(
+                                SUM(calls) FILTER (
+                                    WHERE toplevel
+                                      AND normalized_query IN ('select 1', 'select $1')
+                                ),
+                                0
+                            ) AS runtime_overhead,
+                            COALESCE(
+                                SUM(calls) FILTER (WHERE NOT toplevel),
+                                0
+                            ) AS nested
+                        FROM role_statements
+                        """
+                    )
+                )
+            except DBAPIError:
+                return None
+            values = row.one()
+            return StatementBreakdown(
+                application=int(values[0]),
+                transaction_control=int(values[1]),
+                runtime_overhead=int(values[2]),
+                nested=int(values[3]),
+            )
+    finally:
+        await admin_engine.dispose()
 
 
 async def db_counters(engine: AsyncEngine) -> tuple[int, int, int | None]:
@@ -289,6 +397,21 @@ def format_measurement(measurement: RouteMeasurement) -> str:
         if measurement.db_nested_statements is not None
         else "n/a"
     )
+    application = (
+        str(measurement.db_application_statements)
+        if measurement.db_application_statements is not None
+        else "n/a"
+    )
+    control = (
+        str(measurement.db_transaction_control_statements)
+        if measurement.db_transaction_control_statements is not None
+        else "n/a"
+    )
+    overhead = (
+        str(measurement.db_runtime_overhead_statements)
+        if measurement.db_runtime_overhead_statements is not None
+        else "n/a"
+    )
     return (
         "route-harness "
         f"route={measurement.route} fixture={measurement.fixture} "
@@ -297,6 +420,9 @@ def format_measurement(measurement: RouteMeasurement) -> str:
         f"child_cpu_ms={measurement.child_cpu_ms:.2f} "
         f"db_xacts={measurement.db_xacts} db_blocks={measurement.db_blocks} "
         f"db_bytes={measurement.db_bytes} db_statements={statements} "
+        f"db_application_statements={application} "
+        f"db_transaction_control_statements={control} "
+        f"db_runtime_overhead_statements={overhead} "
         f"db_nested_statements={nested}"
     )
 
@@ -310,9 +436,11 @@ async def measure_route(
 ) -> RouteMeasurement:
     """Measure one invocation: snapshot counters, run, snapshot, print, return."""
     xacts_before, blocks_before, statements_before = await db_counters(engine)
+    breakdown_before = await db_statement_breakdown(engine)
     nested_before = await db_nested_statements(engine)
     result, raw, wall, cpu = await run_rust_example(binary, env)
     xacts_after, blocks_after, statements_after = await db_counters(engine)
+    breakdown_after = await db_statement_breakdown(engine)
     nested_after = await db_nested_statements(engine)
     body = result.get("body")
     assert isinstance(body, dict)
@@ -329,6 +457,21 @@ async def measure_route(
         db_statements=(
             statements_after - statements_before
             if statements_after is not None and statements_before is not None
+            else None
+        ),
+        db_application_statements=(
+            breakdown_after.application - breakdown_before.application
+            if breakdown_after is not None and breakdown_before is not None
+            else None
+        ),
+        db_transaction_control_statements=(
+            breakdown_after.transaction_control - breakdown_before.transaction_control
+            if breakdown_after is not None and breakdown_before is not None
+            else None
+        ),
+        db_runtime_overhead_statements=(
+            breakdown_after.runtime_overhead - breakdown_before.runtime_overhead
+            if breakdown_after is not None and breakdown_before is not None
             else None
         ),
         db_nested_statements=(
