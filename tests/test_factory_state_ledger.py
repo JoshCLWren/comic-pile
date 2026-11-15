@@ -157,6 +157,10 @@ def test_trusted_collector_verifies_code_handoff_before_persistence():
     assert 'delivery_pr="$(jq -r' in entry
     assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
     assert "pull-requests: read" in entry
+    observer = (root / ".github/workflows/fixed-model-runtime-observer.yml").read_text()
+    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in observer
+    assert "pull-requests: read" in observer
+    assert "Verified delivery: %s" in observer
 
 
 def test_only_trusted_collectors_and_observer_use_ledger():
