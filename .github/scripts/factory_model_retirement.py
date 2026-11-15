@@ -256,6 +256,15 @@ def decide_pin(
     source = row["source"]
     model = row["model"]
     retired_410 = retired_410_models or set()
+    # A catalog-backed worker is never retired because one published model
+    # disappears. The runtime picks a different verified free model.
+    if model == "@catalog" and source in {
+        "opencode-free", "openrouter-free", "vercel-ai-gateway"
+    }:
+        return PinDecision(
+            worker=worker, source=source, model=model, action="keep",
+            reason="dynamic live-catalog worker slot",
+        )
     if retirement_key(source, model) in retired_models:
         return PinDecision(
             worker=worker,
