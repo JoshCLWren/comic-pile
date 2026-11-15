@@ -68,6 +68,17 @@ jobs:
           neon-api-key: ${{ secrets.NEON_API_KEY }}
           neon-project-id: ${{ vars.NEON_PROJECT_ID }}
 
+      - name: Prune expired generic GitHub discovery snapshots
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ -z "${FACTORY_STATE_DSN_FILE:-}" ]]; then
+            echo "::notice::Factory Neon unavailable; expired cache cleanup deferred"
+            exit 0
+          fi
+          python3 .github/scripts/factory_state_cache.py prune-expired
+
       - name: Install Neon-first GitHub read shim
         shell: bash
         run: |
