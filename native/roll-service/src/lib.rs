@@ -562,50 +562,6 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::list_completed_threads),
         )
         .route(
-            "/api/v1/threads/{thread_id}",
-            put(threads::update_thread),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}",
-            delete(threads::delete_thread_handler),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/exclude",
-            post(threads::exclude_thread_handler),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/restore",
-            post(threads::restore_thread_handler),
-        )
-        .route(
-            "/api/v1/threads/reactivate",
-            post(threads::reactivate_thread_handler),
-        )
-        .route(
-            "/api/v1/threads/stale",
-            get(threads::list_stale_threads_handler),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}/set-pending",
-            post(threads::set_pending_thread_handler),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}:setCurrentIssue",
-            post(threads::set_current_issue_handler),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}:migrateToIssues",
-            post(threads::migrate_thread_to_issues_handler),
-        )
-        .route(
-            "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-            post(threads::migrate_thread_to_issues_simple_handler),
-        )
-        .route(
-            "/api/v1/threads/check-duplicates",
-            post(threads::check_potential_duplicates_handler),
-        )
-        .route(
             "/api/v2/reading-lists",
             get(reading_list::list_reading_lists),
         )
@@ -714,6 +670,10 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route(
             "/api/v1/threads/{thread_id}/issue-dependencies",
             get(issue_read::get_thread_issue_dependencies),
+        )
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            get(issue_read::list_thread_issues),
         )
         .route(
             "/api/v1/threads/{thread_id}/dependencies",

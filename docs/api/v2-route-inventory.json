@@ -977,237 +977,6 @@
       "ingress_destination": "/api/native_roll.rs",
       "burndown_status": "native Rust",
       "verified_against": "vercel.json"
-    },
-    {
-      "method": "PUT",
-      "path": "/api/v1/threads/{thread_id}",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread read; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "DELETE",
-      "path": "/api/v1/threads/{thread_id}",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread delete; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/exclude",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread update; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/restore",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread update; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/reactivate",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 2,
-        "transaction_control_statements": 1,
-        "total_statements": 3,
-        "basis": "thread read + status update in one transaction; set-based",
-        "grows_with_data": false,
-        "max_statements": 5,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "GET",
-      "path": "/api/v1/threads/stale",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread read; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}/set-pending",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread update; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:setCurrentIssue",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread update; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:migrateToIssues",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 2,
-        "transaction_control_statements": 1,
-        "total_statements": 3,
-        "basis": "thread read + issue migration in one transaction; set-based",
-        "grows_with_data": false,
-        "max_statements": 5,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/{thread_id}:migrateToIssuesSimple",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread update; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
-    },
-    {
-      "method": "POST",
-      "path": "/api/v1/threads/check-duplicates",
-      "runtime": "native-rust",
-      "status": "target",
-      "owning_issue": 4832,
-      "consumers": [],
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json",
-      "sql_budget": {
-        "application_statements": 1,
-        "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "single thread read; set-based",
-        "grows_with_data": false,
-        "max_statements": 2,
-        "proof_reference": "",
-        "measurement_status": "pending-fixture"
-      }
     }
   ],
   "full_surface": {
@@ -1221,16 +990,16 @@
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 126,
-      "v1_shadowed_by_rust": 0,
-      "v1_live_python": 118,
+      "v1_shadowed_by_rust": 1,
+      "v1_live_python": 117,
       "v1_orphaned": 7,
       "unversioned_total": 20,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 17,
       "unversioned_orphaned": 2,
       "total_python_surface": 146,
-      "total_shadowed_by_rust": 0,
-      "total_live_python": 135,
+      "total_shadowed_by_rust": 1,
+      "total_live_python": 134,
       "total_orphaned": 9
     },
     "catch_all": {
@@ -2801,8 +2570,8 @@
         ],
         "method": "GET",
         "path": "/api/v1/threads/{thread_id}/issues",
-        "ingress_destination": "/api/index.py",
-        "burndown_status": "live transitional Python with callers",
+        "ingress_destination": "/api/native_roll.rs",
+        "burndown_status": "shadowed by Rust",
         "verified_against": "vercel.json"
       },
       {

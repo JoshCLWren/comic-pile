@@ -297,17 +297,7 @@ fn app() -> Router {
             "/api/v2/threads/{thread_id}/issue-order",
             put(native_dispatch),
         )
-        .route("/api/v1/threads/{thread_id}", put(native_dispatch))
-        .route("/api/v1/threads/{thread_id}", delete(native_dispatch))
-        .route("/api/v1/threads/{thread_id}/exclude", post(native_dispatch))
-        .route("/api/v1/threads/{thread_id}/restore", post(native_dispatch))
-        .route("/api/v1/threads/reactivate", post(native_dispatch))
-        .route("/api/v1/threads/stale", get(native_dispatch))
-        .route("/api/v1/threads/{thread_id}/set-pending", post(native_dispatch))
-        .route("/api/v1/threads/{thread_id}:setCurrentIssue", post(native_dispatch))
-        .route("/api/v1/threads/{thread_id}:migrateToIssues", post(native_dispatch))
-        .route("/api/v1/threads/{thread_id}:migrateToIssuesSimple", post(native_dispatch))
-        .route("/api/v1/threads/check-duplicates", post(native_dispatch))
+        .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
         .route("/api/v2/issues/{issue_id}", delete(native_dispatch))
         .route(
             "/api/v2/continuity-plans/{plan_id}/reader",
