@@ -349,3 +349,23 @@ catalog guard remain. Only a real leased coding/review mission invokes an LLM.
 A successful real-session exit proves the selected model, and an unassigned
 worker is recorded as idle without provider inference. Delivery still requires
 verified PR persistence and lease handoff, independent of model execution.
+
+## Fibonacci failure backoff and credential-free dispatch
+
+Workers stay registered in `.github/free-model-factories.tsv` even when their
+provider is not configured. The dispatcher and capacity-refill paths check
+credential **presence booleans** before assigning leases or starting Actions
+Entry runners. Adding the corresponding secret makes the existing worker
+eligible on the next scheduled offer. No provider credentials are logged or
+passed to models by the eligibility filter.
+
+For failures after an executable worker starts, the trusted Neon outcome
+projection tracks a per-worker, per-pinned-model failure streak in
+`factory-worker-backoff-v1`. Fibonacci retry delays begin at 5, 5, 10, 15,
+25, 40 minutes and grow toward a 24-hour cap. At 14 consecutive failures the
+worker stops being automatically dispatched. Its model is **not** retired or
+removed from the roster; a different pin or expiration of the 90-day state
+TTL permits a new attempt. A verified successful or healthy idle model session,
+or persisted code delivery, resets the streak. Unconfigured runners are not
+treated as inference failures. This worker-local guard supplements existing
+per-model availability and per-provider quota protections.

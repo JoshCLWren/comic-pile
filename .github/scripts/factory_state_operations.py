@@ -108,6 +108,54 @@ def exponential_provider_delay(
     return min(4 * 3600, max(base, int(max(0, prior_duration) * 2)))
 
 
+
+# Worker failures get durable Fibonacci backoff while retaining their roster pins.
+# Credential absence is gated before lease assignment, never charged to a model.
+WORKER_RETRY_CLASSES = frozenset({
+    "agent_timeout", "provider_failure", "provider_throttle", "provider_quota",
+    "model_unavailable", "model_policy_violation", "environment_failure",
+    "control_plane_failure", "unknown_failure",
+})
+WORKER_SUSPEND_AFTER = 14
+
+
+def fibonacci_worker_delay(streak: int) -> int:
+    """Five-minute Fibonacci retries capped at 24 hours per attempt."""
+    if streak < 1:
+        raise ValueError("failure streak must be positive")
+    previous, current = 1, 1
+    for _ in range(1, streak):
+        previous, current = current, previous + current
+    return min(86400, previous * 300)
+
+
+def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -> str | None:
+    """The 90-day state TTL is not the not-before time for a retry."""
+    if record is None:
+        return None
+    payload = record["payload"]
+    if isinstance(payload, str):
+        payload = json.loads(payload)
+    state = payload[0] if isinstance(payload, list) and payload else {}
+    if not isinstance(state, dict):
+        return None
+    # Changing the pin unblocks its lane without deleting history.
+    if state.get("source") and (state["source"], state.get("model")) != (source, model):
+        return None
+    if state.get("suspended") is True:
+        return "suspended after repeated failures (new pin or TTL will reenable)"
+    retry_at = state.get("next_retry_at")
+    if retry_at is not None:
+        try:
+            if datetime.fromisoformat(str(retry_at)) > now:
+                return f"Fibonacci retry deferred until {retry_at}"
+        except ValueError:
+            return "invalid worker backoff state"
+        return None
+    # Backward compatibility: old timeout keys stored their delay in expires_at.
+    return "legacy timeout cooling in Neon" if record["expires_at"] > now else None
+
+
 async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, Any]) -> bool:
     """Idempotently update model, provider, retry and worker metrics projections."""
     worker = str(outcome.get("worker") or "")
@@ -257,40 +305,49 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 """DELETE FROM public.factory_state_kv WHERE cache_key=$1
                    AND coalesce((payload->0->>'run_id')::bigint,0) <= $2""",
                 f"factory-provider-backoff-v1:{repo}:source:{source}", run_id)
-        # Local agent timeouts should cool down the responsible worker, NOT an
-        # unrelated provider/model. Keep the streak in the existing TTL-backed
-        # Neon KV so it survives individual GitHub Actions job boundaries.
+        # Each worker pins one model, so this breaker is model-local and does
+        # not punish other models from the same provider. Retain streak across
+        # retry windows; a successful verified session resets it.
         worker_key = f"factory-worker-backoff-v1:{repo}:worker:{worker}"
-        if classification == "agent_timeout" and not delivered:
+        if classification in WORKER_RETRY_CLASSES and not delivered:
             previous_worker = await conn.fetchrow(
-                """SELECT payload,updated_at FROM public.factory_state_kv
-                   WHERE cache_key=$1 FOR UPDATE""", worker_key)
-            previous_data = (previous_worker["payload"] if previous_worker else None)
-            if isinstance(previous_data, str):
-                previous_data = json.loads(previous_data)
-            old = previous_data[0] if isinstance(previous_data, list) and previous_data else {}
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1 FOR UPDATE",
+                worker_key,
+            )
+            prior = previous_worker["payload"] if previous_worker else None
+            if isinstance(prior, str):
+                prior = json.loads(prior)
+            old = prior[0] if isinstance(prior, list) and prior else {}
+            if not isinstance(old, dict):
+                old = {}
             prior_run = int(old.get("run_id") or 0)
             if prior_run <= run_id:
-                age = ((observed - previous_worker["updated_at"]).total_seconds()
-                       if previous_worker else float("inf"))
-                streak = (min(6, int(old.get("streak") or 0) + 1)
-                          if age <= 12 * 3600 and age >= 0 else 1)
-                seconds = min(3600, 120 * (1 << (streak - 1)))
+                same_pin = old.get("source") == source and old.get("model") == model
+                streak = int(old.get("streak") or 0) + 1 if same_pin else 1
+                suspended = streak >= WORKER_SUSPEND_AFTER
+                retry_at = (
+                    None if suspended else
+                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                )
                 await conn.execute(
                     """INSERT INTO public.factory_state_kv
                          (cache_key,payload,fetched_at,expires_at,updated_at)
-                       VALUES($1,$2::jsonb,now(),now()+$3::int * interval '1 second',now())
+                       VALUES($1,$2::jsonb,now(),now()+interval '90 days',now())
                        ON CONFLICT(cache_key) DO UPDATE SET
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
                     worker_key, json.dumps([{
-                        "outcome": "agent_timeout", "streak": streak, "run_id": run_id
-                    }]), seconds)
-        elif delivered or classification == "success":
+                        "source": source, "model": model, "outcome": classification,
+                        "streak": streak, "run_id": run_id,
+                        "suspended": suspended, "next_retry_at": retry_at,
+                    }]),
+                )
+        elif delivered or (proven and classification in {"success", "no_work"}):
             await conn.execute(
                 """DELETE FROM public.factory_state_kv WHERE cache_key=$1
                    AND coalesce((payload->0->>'run_id')::bigint,0) <= $2""",
-                worker_key, run_id)
+                worker_key, run_id,
+            )
         kind = str(outcome.get("selected_kind") or "")
         number = str(outcome.get("selected_number") or "")
         if kind == "pr" and number.isdigit() and not delivered and classification in {"work_failure","agent_timeout","unknown_failure","environment_failure"}:
@@ -340,9 +397,9 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
            WHERE repo=$1 AND expires_at>now() GROUP BY source""",repo)}
     now = datetime.now(timezone.utc)
     backoffs = {
-        str(r["cache_key"]).rsplit(":", 1)[-1]
+        str(r["cache_key"]).rsplit(":", 1)[-1]: r
         for r in await conn.fetch(
-            """SELECT cache_key FROM public.factory_state_kv
+            """SELECT cache_key,payload,expires_at FROM public.factory_state_kv
                WHERE cache_key LIKE $1 AND expires_at>now()""",
             f"factory-worker-backoff-v1:{repo}:worker:%")
     }
@@ -354,8 +411,9 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
             continue
         source,model = pair
         m,b = models.get(pair),budgets.get(source)
-        if worker in backoffs:
-            rejected.append(f"{worker}: timed-out agent cooling in Neon")
+        retry_reason = worker_backoff_reason(backoffs.get(worker), source, model, now)
+        if retry_reason:
+            rejected.append(f"{worker}: {retry_reason}")
         elif m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
                     and m["cooldown_until"] and m["cooldown_until"]>now)):
             rejected.append(f"{worker}: model {model} {m['status']}")
