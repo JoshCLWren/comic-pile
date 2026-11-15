@@ -55,7 +55,7 @@
       "model": "kilo-auto/free",
       "minute": "40",
       "scheduler": "dispatcher",
-      "display_name": "Kilo Auto Free \u00b7 Forge"
+      "display_name": "Kilo Auto Free · Forge"
     },
     {
       "worker": "51",
@@ -312,6 +312,110 @@
       "minute": "40",
       "scheduler": "dispatcher",
       "display_name": "Cloudflare Gemma 4 26B Free"
+    },
+    {
+      "worker": "121",
+      "source": "requesty",
+      "model": "novita/ling-3.1-flash",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Ling 3.1 Flash"
+    },
+    {
+      "worker": "122",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron 3 Ultra"
+    },
+    {
+      "worker": "123",
+      "source": "requesty",
+      "model": "nvidia/muse-glimmer-30b",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Muse Glimmer 30B"
+    },
+    {
+      "worker": "124",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron Nano Omni"
+    },
+    {
+      "worker": "125",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron Nano 30B"
+    },
+    {
+      "worker": "126",
+      "source": "requesty",
+      "model": "mistral/leanstral-1-5",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Leanstral 1.5"
+    },
+    {
+      "worker": "127",
+      "source": "openrouter-free",
+      "model": "particle-ai/particle-1:free",
+      "minute": "45",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Particle-1 Free"
+    },
+    {
+      "worker": "128",
+      "source": "openrouter-free",
+      "model": "dots-studio/dots-3-note-preview:free",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Dots3 Note Free"
+    },
+    {
+      "worker": "129",
+      "source": "openrouter-free",
+      "model": "inclusionai/ling-3.2-flash:free",
+      "minute": "55",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Ling 3.2 Flash Free"
+    },
+    {
+      "worker": "130",
+      "source": "nvidia",
+      "model": "mistralai/mistral-large-4-1t-a52b",
+      "minute": "0",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA Mistral Large 4"
+    },
+    {
+      "worker": "131",
+      "source": "nvidia",
+      "model": "nvidia/nemotron-3.5-bolt-e4b",
+      "minute": "5",
+      "scheduler": "dispatcher",
+      "display_name": "NVIDIA Nemotron 3.5 Bolt E4B"
+    },
+    {
+      "worker": "132",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/openai/gpt-oss-20b",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare GPT OSS 20B"
+    },
+    {
+      "worker": "133",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/qwen/qwen3.8-27b",
+      "minute": "15",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare Qwen 3.8 27B"
     }
   ],
   "expected_workers": [
@@ -353,7 +457,20 @@
     117,
     118,
     119,
-    120
+    120,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133
   ],
   "retired_workers": [
     9,
@@ -418,14 +535,12 @@
     "codestral-latest",
     "deepseek-v4-flash-free",
     "deepseek-v4.1-flash-free",
-    "dots-studio/dots-3-note-preview:free",
     "exo-free",
     "fledge-alpha-free",
     "google/diffusiongemma-26b-a4b-it",
     "hy3-free",
     "inclusionai/ling-3.0-flash-fin:free",
     "inclusionai/ling-3.0-flash-vl:free",
-    "inclusionai/ling-3.2-flash:free",
     "jev-1.13-free",
     "laguna-s-2.1-free",
     "ling-3.0-flash-fin-free",

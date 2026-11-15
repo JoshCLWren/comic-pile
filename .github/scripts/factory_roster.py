@@ -77,11 +77,21 @@ REQUESTY_APPROVED_MODELS = frozenset(
         "nvidia/nemotron-3.5-lightning-30b-a3b",
         "poolside/laguna-xs.2",
         "google/gemma-4-31b-it",
+        "novita/ling-3.1-flash",
+        "nvidia/muse-glimmer-30b",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "mistral/leanstral-1-5",
     }
 )
 # Time-boxed $0 OpenRouter promo catalog ids that omit the ``:free`` suffix.
 CLOUDFLARE_WORKERS_AI_FREE_MODELS = frozenset(
-    {"@cf/zai-org/glm-4.7-flash", "@cf/google/gemma-4-26b-a4b-it"}
+    {
+        "@cf/zai-org/glm-4.7-flash",
+        "@cf/google/gemma-4-26b-a4b-it",
+        "@cf/openai/gpt-oss-20b",
+        "@cf/qwen/qwen3.8-27b",
+    }
 )
 # Only the documented Workers Free models, never Workers Paid-only frontier models.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha", "stealth/crouton-alpha"})

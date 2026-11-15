@@ -276,14 +276,19 @@ def test_discovered_free_models_reuse_existing_worker_slots(validate) -> None:
 
 
 
-def test_worker_56_dots_preview_is_retired_by_discovery(validate) -> None:
-    """A dead OpenRouter preview pin cannot reenter the generated roster."""
+def test_worker_56_dots_preview_retirement_keeps_identity(validate) -> None:
+    """Worker 56 stays retired even after a separately approved fresh model pin."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert "56" not in {row["worker"] for row in rows}
     assert 56 in lock["retired_workers"]
     assert 56 not in lock["expected_workers"]
-    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
+    assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
+    assert any(
+        row["source"] == "openrouter-free"
+        and row["model"] == "dots-studio/dots-3-note-preview:free"
+        for row in rows
+    )
 
 
 def test_worker_76_fledge_alpha_free_is_retired_by_discovery(validate) -> None:
