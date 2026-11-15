@@ -262,8 +262,8 @@
         "basis": "approximate worst-case for persist (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot); refine via parity harness",
         "max_statements": 27,
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
-        "measurement_status": "partial-branch",
-        "measured_test_reference": "native/roll-service/parity/test_http_issue_read_rate_n1.py"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_issue_read_rate_n1.py,native/roll-service/parity/test_http_issue_patch_branches_n1.py"
       }
     },
     {
