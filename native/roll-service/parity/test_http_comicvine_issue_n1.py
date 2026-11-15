@@ -100,10 +100,13 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
         _, _, s_before = await db_counters(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
+        # The canonical wire body is the IssueIntelligence object itself, not an
+        # envelope: assert the real field shape rather than a wrapper key.
         small_body = small_response.get("body")
-        assert isinstance(small_body, dict)
-        intelligence = small_body.get("intelligence")
-        assert intelligence is not None, "expected comicvine intelligence object"
+        assert isinstance(small_body, dict), small_body
+        assert small_body.get("comicvine_issue_id") == "12345", small_body
+        assert small_body.get("metadata_status") == "refresh_pending", small_body
+        assert "intelligence" not in small_body, small_body
         _, _, s_after = await db_counters(engine)
         small_delta = (
             (s_after - s_before) if s_before is not None and s_after is not None else None
@@ -150,9 +153,10 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
-        assert isinstance(large_body, dict)
-        intelligence = large_body.get("intelligence")
-        assert intelligence is not None, "expected comicvine intelligence object"
+        assert isinstance(large_body, dict), large_body
+        assert large_body.get("comicvine_issue_id") == "67890", large_body
+        assert large_body.get("metadata_status") == "refresh_pending", large_body
+        assert "intelligence" not in large_body, large_body
         _, _, s_after2 = await db_counters(engine)
         large_delta = (
             (s_after2 - s_before2)
