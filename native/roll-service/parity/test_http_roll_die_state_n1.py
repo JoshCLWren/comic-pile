@@ -136,23 +136,39 @@ async def test_roll_die_state_statements_do_not_grow_with_library_size() -> None
         finally:
             await raw.close()
 
-        _, _, s_before2 = await db_counters(engine)
+        await reset_statement_stats()
+        large_before = await db_statement_breakdown(engine)
+        assert large_before is not None
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
         assert isinstance(large_body, dict)
         assert large_body.get("default_die") == 6
         assert large_body.get("die") == small_body.get("die")
-        _, _, s_after2 = await db_counters(engine)
-        large_delta = (
-            s_after2 - s_before2 if s_before2 is not None and s_after2 is not None else None
+        large_after = await db_statement_breakdown(engine)
+        assert large_after is not None
+        large_delta = StatementBreakdown(
+            application=large_after.application - large_before.application,
+            transaction_control=large_after.transaction_control - large_before.transaction_control,
+            runtime_overhead=large_after.runtime_overhead - large_before.runtime_overhead,
+            nested=large_after.nested - large_before.nested,
         )
 
         print(f"small_delta={small_delta} large_delta={large_delta}", flush=True)
-        assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
-        assert_declared_budget("GET", "/api/v2/roll/die-state", small_delta, large_delta)
-        assert large_delta <= small_delta, (
-            f"statement count grew with library size: {small_delta} -> {large_delta}"
+        assert_measured_statement_breakdown("GET", "/api/v2/roll/die-state", small_delta)
+        assert_measured_statement_breakdown("GET", "/api/v2/roll/die-state", large_delta)
+        assert_declared_budget(
+            "GET",
+            "/api/v2/roll/die-state",
+            small_delta.top_level,
+            large_delta.top_level,
         )
+        assert_no_statement_growth(
+            "GET",
+            "/api/v2/roll/die-state",
+            small_delta.top_level,
+            large_delta.top_level,
+        )
+        assert small_delta.nested == large_delta.nested == 0
     finally:
         await engine.dispose()
