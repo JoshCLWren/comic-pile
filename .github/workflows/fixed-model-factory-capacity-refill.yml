@@ -73,6 +73,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EVENT_NAME: ${{ github.event_name }}
           COMPLETED_RUN_ID: ${{ github.event.workflow_run.id }}
+          FACTORY_HAS_NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY != '' }}
+          FACTORY_HAS_Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY != '' }}
+          FACTORY_HAS_OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY != '' }}
+          FACTORY_HAS_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
+          FACTORY_HAS_ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY != '' }}
+          FACTORY_HAS_REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY != '' }}
+          FACTORY_HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
+          FACTORY_HAS_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY != '' }}
+          FACTORY_HAS_AION_API_KEY: ${{ secrets.AION_API_KEY != '' }}
+          FACTORY_HAS_COHERE_API_KEY: ${{ secrets.COHERE_API_KEY != '' }}
+          FACTORY_HAS_TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY != '' }}
+          FACTORY_HAS_AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY != '' }}
+          FACTORY_HAS_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+          FACTORY_HAS_OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY != '' }}
+          FACTORY_HAS_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+          FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
@@ -170,6 +186,9 @@ jobs:
             echo "Bootstrapping all configured fixed-model slots: ${workers}"
           fi
 
+          # Apply the same credential and durable cooldown gates as dispatcher.
+          workers="$(python3 .github/scripts/factory_dispatch_credential_filter.py filter <<< "$workers")"
+          workers="$(python3 .github/scripts/factory_state_operations.py filter <<< "$workers")"
           # Quota-paused workers stay rostered but are not refilled until reset.
           workers="$(python3 .github/scripts/factory_quota_pause.py filter <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
