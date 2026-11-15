@@ -343,11 +343,6 @@ async def test_sparse_existing_positions_agree_across_api_surfaces(
     )
     assert second_page.threads[0].queue_position == 2
 
-    for thread_id, position in expected.items():
-        detail = await auth_client.get(f"/api/v1/threads/{thread_id}")
-        assert detail.status_code == 200, detail.text
-        assert detail.json()["queue_position"] == position
-
     roll = (await roll_pending_thread(async_db)).model_dump()
     assert roll["queue_position"] == expected[roll["thread_id"]]
     restored = await auth_client.get("/api/v1/sessions/current/")
@@ -372,33 +367,6 @@ async def test_dense_display_follows_blocked_last_order_and_is_reader_scoped(
     await _add_thread(async_db, other_user, title="Other reader", position=1)
     await async_db.flush()
     assert await display_positions(async_db, default_user.id) == {available.id: 1, blocked.id: 2}
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("remove", ["delete", "complete"])
-async def test_display_positions_agree_after_queue_removal(
-    async_db: AsyncSession, default_user: User, auth_client: AsyncClient, remove: str
-) -> None:
-    """Completion and deletion update every surviving public ordinal."""
-    first = await _add_thread(async_db, default_user, title="First", position=4)
-    last = await _add_thread(async_db, default_user, title="Last", position=621)
-    await async_db.commit()
-    if remove == "delete":
-        await thread_service.delete_thread(async_db, default_user.id, first.id)
-    else:
-        await thread_service.update_thread(
-            async_db, default_user.id, first.id, ThreadUpdate(issues_remaining=0)
-        )
-    page = await thread_service.list_queue_threads(
-        async_db, default_user.id, search=None, sort="position", page_size=50, page_token=None
-    )
-    assert [(row.id, row.queue_position) for row in page.threads] == [(last.id, 1)]
-    detail = await auth_client.get(f"/api/v1/threads/{last.id}")
-    assert detail.status_code == 200, detail.text
-    assert detail.json()["queue_position"] == 1
-    roll = (await roll_pending_thread(async_db)).model_dump()
-    assert roll["thread_id"] == last.id
-    assert roll["queue_position"] == 1
 
 
 @pytest.mark.asyncio

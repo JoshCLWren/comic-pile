@@ -119,22 +119,6 @@ def _register_health(app: FastAPI) -> None:
     app.include_router(health.router, prefix="/api/v1", tags=["health"])
 
 
-def _register_bug_reports(app: FastAPI) -> None:
-    """Register bug-report routers."""
-    from app.api import bug_report
-
-    app.include_router(bug_report.router, prefix="/api/bug-reports", tags=["bug-reports"])
-    app.include_router(bug_report.router, prefix="/api/v1/bug-reports", tags=["bug-reports"])
-
-
-def _register_auth(app: FastAPI) -> None:
-    """Register authentication routers."""
-    from app.api import auth
-
-    app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-    app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-
-
 def _register_threads(app: FastAPI) -> None:
     """Register thread routers."""
     from app.api import thread
@@ -172,13 +156,6 @@ def _register_taste(app: FastAPI) -> None:
     from app.api import taste
 
     app.include_router(taste.router, prefix="/api/v1", tags=["taste"])
-
-
-def _register_tags(app: FastAPI) -> None:
-    """Register tag routers (absolute ``/api/v1`` paths)."""
-    from app.api import tags
-
-    app.include_router(tags.router)
 
 
 def _register_reading_orders(app: FastAPI) -> None:
@@ -224,33 +201,12 @@ def _register_sessions(app: FastAPI) -> None:
     app.include_router(session.router, prefix="/api/v1/sessions", tags=["session"])
 
 
-def _register_reading_mode(app: FastAPI) -> None:
-    """Register reading-mode routers (absolute ``/api/v1`` paths)."""
-    from app.api import reading_mode
-
-    app.include_router(reading_mode.router, tags=["reading-mode"])
-
-
 def _register_undo(app: FastAPI) -> None:
     """Register undo routers."""
     from app.api import undo
 
     app.include_router(undo.router, prefix="/api/undo", tags=["undo"])
     app.include_router(undo.router, prefix="/api/v1/undo", tags=["undo"])
-
-
-def _register_preferences(app: FastAPI) -> None:
-    """Register user-preference routers."""
-    from app.api import preferences
-
-    app.include_router(preferences.router, prefix="/api/v1", tags=["users"])
-
-
-def _register_taste_signals(app: FastAPI) -> None:
-    """Register user taste-signal routers."""
-    from app.api import taste_signal
-
-    app.include_router(taste_signal.router, prefix="/api/v1", tags=["taste-signals"])
 
 
 def _register_traffic_metrics(app: FastAPI) -> None:
@@ -286,13 +242,6 @@ def _register_catalog(app: FastAPI) -> None:
     app.include_router(catalog.router, tags=["catalog"])
 
 
-def _register_identity_inbox(app: FastAPI) -> None:
-    """Register identity-inbox routers (absolute ``/api/v1`` paths)."""
-    from app.api import identity_inbox
-
-    app.include_router(identity_inbox.router, tags=["identity-inbox"])
-
-
 def _register_issue_identity(app: FastAPI) -> None:
     """Register issue-identity routers (absolute ``/api/v1`` paths)."""
     from app.api import issue_identity
@@ -305,8 +254,6 @@ def _register_cbl_adoption(app: FastAPI) -> None:
     from app.api import cbl_plan_adoption
 
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
-
-
 
 
 def _register_test_helpers(app: FastAPI) -> None:
@@ -322,8 +269,6 @@ def _register_test_helpers(app: FastAPI) -> None:
 _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("roll", frozenset({"roll"}), _register_roll),
     RouterMount("health", frozenset({"health"}), _register_health),
-    RouterMount("bug-reports", frozenset({"bug-reports"}), _register_bug_reports),
-    RouterMount("auth", frozenset({"auth"}), _register_auth),
     RouterMount("threads", frozenset({"threads"}), _register_threads),
     RouterMount("issues", frozenset({"issues", "threads"}), _register_issues),
     RouterMount(
@@ -333,7 +278,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     ),
     RouterMount("creators", frozenset({"creators"}), _register_creators),
     RouterMount("taste", frozenset({"taste"}), _register_taste),
-    RouterMount("tags", frozenset({"tags"}), _register_tags),
     RouterMount(
         "reading-orders",
         frozenset({"reading-orders", "threads"}),
@@ -343,10 +287,7 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
     RouterMount("reading-plan-sync", frozenset({"reading-plan-sync"}), _register_reading_plan_sync),
     RouterMount("cron", frozenset({"cron"}), _register_cron),
     RouterMount("sessions", frozenset({"sessions"}), _register_sessions),
-    RouterMount("reading-mode", frozenset({"reading-mode"}), _register_reading_mode),
     RouterMount("undo", frozenset({"undo"}), _register_undo),
-    RouterMount("preferences", frozenset({"users"}), _register_preferences),
-    RouterMount("taste-signals", frozenset({"users"}), _register_taste_signals),
     RouterMount("traffic-metrics", frozenset({"traffic-metrics"}), _register_traffic_metrics),
     RouterMount(
         "bootstrap-telemetry",
@@ -373,7 +314,6 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
         _register_dependencies,
     ),
     RouterMount("catalog", frozenset({"catalog"}), _register_catalog),
-    RouterMount("identity-inbox", frozenset({"identity-inbox"}), _register_identity_inbox),
     RouterMount("issue-identity", frozenset({"issue-identity"}), _register_issue_identity),
     RouterMount("cbl-adoption", frozenset({"cbl"}), _register_cbl_adoption),
 )

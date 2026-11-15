@@ -1,0 +1,626 @@
+[
+  {
+    "path": "/api/roll/dismiss-pending",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.roll",
+    "name": "dismiss_pending_roll"
+  },
+  {
+    "path": "/api/v1/roll/dismiss-pending",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.roll",
+    "name": "dismiss_pending_roll"
+  },
+  {
+    "path": "/api/bug-reports/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.bug_report",
+    "name": "create_bug_report"
+  },
+  {
+    "path": "/api/v1/bug-reports/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.bug_report",
+    "name": "create_bug_report"
+  },
+  {
+    "path": "/api/auth/register",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "register_user"
+  },
+  {
+    "path": "/api/auth/login",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "login_user"
+  },
+  {
+    "path": "/api/auth/refresh",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "refresh_access_token"
+  },
+  {
+    "path": "/api/auth/logout",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "logout_user"
+  },
+  {
+    "path": "/api/auth/csrf",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.auth",
+    "name": "get_csrf_token"
+  },
+  {
+    "path": "/api/auth/me",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.auth",
+    "name": "get_current_user_info"
+  },
+  {
+    "path": "/api/auth/forgot-password",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "forgot_password"
+  },
+  {
+    "path": "/api/auth/reset-password",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "reset_password"
+  },
+  {
+    "path": "/api/v1/auth/register",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "register_user"
+  },
+  {
+    "path": "/api/v1/auth/login",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "login_user"
+  },
+  {
+    "path": "/api/v1/auth/refresh",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "refresh_access_token"
+  },
+  {
+    "path": "/api/v1/auth/logout",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "logout_user"
+  },
+  {
+    "path": "/api/v1/auth/csrf",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.auth",
+    "name": "get_csrf_token"
+  },
+  {
+    "path": "/api/v1/auth/me",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.auth",
+    "name": "get_current_user_info"
+  },
+  {
+    "path": "/api/v1/auth/forgot-password",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "forgot_password"
+  },
+  {
+    "path": "/api/v1/auth/reset-password",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.auth",
+    "name": "reset_password"
+  },
+  {
+    "path": "/api/threads/{thread_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.thread",
+    "name": "get_thread"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.thread",
+    "name": "get_thread"
+  },
+  {
+    "path": "/api/v1/threads/completed/threads",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.thread",
+    "name": "list_completed_threads"
+  },
+  {
+    "path": "/api/v1/issues/{issue_id}/comicvine",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.issue",
+    "name": "get_issue_comicvine_intelligence"
+  },
+  {
+    "path": "/api/v1/issues/{issue_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.issue",
+    "name": "get_issue"
+  },
+  {
+    "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.comicvine_resolution",
+    "name": "api_series_import_status"
+  },
+  {
+    "path": "/api/v1/creators",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "list_creators_endpoint"
+  },
+  {
+    "path": "/api/v1/creators/summaries",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.creators",
+    "name": "get_creator_summaries_endpoint"
+  },
+  {
+    "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.taste",
+    "name": "dismiss_taste_discovery"
+  },
+  {
+    "path": "/api/v1/tags/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "list_tags"
+  },
+  {
+    "path": "/api/v1/tags/effective/issue/{issue_id}/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "get_issue_effective_tags"
+  },
+  {
+    "path": "/api/v1/tags/effective/thread/{thread_id}/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "get_thread_effective_tags"
+  },
+  {
+    "path": "/api/v1/tags/effective/plan/{plan_id}/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "get_plan_effective_tags"
+  },
+  {
+    "path": "/api/v1/tags/effective/thread/{thread_id}/issues/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "get_thread_issues_effective_tags"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "get_tag"
+  },
+  {
+    "path": "/api/v1/tags/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.tags",
+    "name": "create_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/",
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.tags",
+    "name": "update_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/",
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.tags",
+    "name": "delete_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/assign/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.tags",
+    "name": "assign_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/unassign/",
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.tags",
+    "name": "unassign_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/bulk-assign/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.tags",
+    "name": "bulk_assign_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/bulk-unassign/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.tags",
+    "name": "bulk_unassign_tag"
+  },
+  {
+    "path": "/api/v1/tags/{tag_id}/usage/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.tags",
+    "name": "get_tag_usage"
+  },
+  {
+    "path": "/api/v1/reading-orders/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.reading_orders",
+    "name": "list_reading_orders"
+  },
+  {
+    "path": "/api/v1/reading-orders/{reading_order_id}/items",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_orders",
+    "name": "insert_reading_order_item"
+  },
+  {
+    "path": "/api/sessions/{session_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.session",
+    "name": "get_session"
+  },
+  {
+    "path": "/api/sessions/{session_id}/snapshots",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.session",
+    "name": "get_session_snapshots"
+  },
+  {
+    "path": "/api/v1/sessions/{session_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.session",
+    "name": "get_session"
+  },
+  {
+    "path": "/api/v1/sessions/{session_id}/snapshots",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.session",
+    "name": "get_session_snapshots"
+  },
+  {
+    "path": "/api/v1/reading-mode",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.reading_mode",
+    "name": "get_reading_mode"
+  },
+  {
+    "path": "/api/v1/reading-mode",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_mode",
+    "name": "set_reading_mode"
+  },
+  {
+    "path": "/api/v1/reading-mode/dismiss-suggestion",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_mode",
+    "name": "dismiss_reading_mode_suggestion"
+  },
+  {
+    "path": "/api/v1/reading-mode/suggest",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.reading_mode",
+    "name": "suggest_reading_mode"
+  },
+  {
+    "path": "/api/v1/users/me/preferences",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.preferences",
+    "name": "get_user_preferences"
+  },
+  {
+    "path": "/api/v1/users/me/preferences",
+    "methods": [
+      "PATCH"
+    ],
+    "module": "app.api.preferences",
+    "name": "patch_user_preferences"
+  },
+  {
+    "path": "/api/v1/users/me/taste-signals",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.taste_signal",
+    "name": "list_taste_signals"
+  },
+  {
+    "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.taste_signal",
+    "name": "set_taste_signal_verdict"
+  },
+  {
+    "path": "/api/v1/dependencies/blocked",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.dependency",
+    "name": "get_all_blocked_thread_ids"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/dependencies",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.dependency",
+    "name": "list_thread_dependencies"
+  },
+  {
+    "path": "/api/v1/issues/{issue_id}/dependencies",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.dependency",
+    "name": "list_issue_dependencies"
+  },
+  {
+    "path": "/api/v1/dependencies/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.dependency",
+    "name": "create_dependency"
+  },
+  {
+    "path": "/api/v1/dependencies/{dependency_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.dependency",
+    "name": "get_dependency"
+  },
+  {
+    "path": "/api/v1/dependencies/{dependency_id}",
+    "methods": [
+      "PATCH"
+    ],
+    "module": "app.api.dependency",
+    "name": "update_dependency_note"
+  },
+  {
+    "path": "/api/v1/dependencies/{dependency_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.dependency",
+    "name": "delete_dependency"
+  },
+  {
+    "path": "/api/v1/threads/{thread_id}/issue-dependencies",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.issue_dependency_batch",
+    "name": "list_thread_issue_dependencies"
+  },
+  {
+    "path": "/api/v1/continuity-rules/",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.continuity_rule",
+    "name": "list_continuity_rules"
+  },
+  {
+    "path": "/api/v1/continuity-rules/{rule_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.continuity_rule",
+    "name": "get_continuity_rule"
+  },
+  {
+    "path": "/api/v1/continuity-rules/",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.continuity_rule",
+    "name": "create_continuity_rule"
+  },
+  {
+    "path": "/api/v1/continuity-rules/{rule_id}",
+    "methods": [
+      "PUT"
+    ],
+    "module": "app.api.continuity_rule",
+    "name": "update_continuity_rule"
+  },
+  {
+    "path": "/api/v1/continuity-rules/{rule_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "module": "app.api.continuity_rule",
+    "name": "delete_continuity_rule"
+  },
+  {
+    "path": "/api/v1/catalog/series-mappings/commit",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.catalog",
+    "name": "commit_series_mapping"
+  },
+  {
+    "path": "/api/v1/identity-inbox",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_list_inbox"
+  },
+  {
+    "path": "/api/v1/identity-inbox/search/issues",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_search_comicvine_issues"
+  },
+  {
+    "path": "/api/v1/identity-inbox/{mapping_id}",
+    "methods": [
+      "GET"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_get_inbox_item"
+  },
+  {
+    "path": "/api/v1/identity-inbox/{mapping_id}/confirm",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_confirm_candidate"
+  },
+  {
+    "path": "/api/v1/identity-inbox/{mapping_id}/reject",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_reject_candidate"
+  },
+  {
+    "path": "/api/v1/identity-inbox/{mapping_id}/defer",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_defer_item"
+  },
+  {
+    "path": "/api/v1/identity-inbox/{mapping_id}/skip",
+    "methods": [
+      "POST"
+    ],
+    "module": "app.api.identity_inbox",
+    "name": "api_skip_item"
+  }
+]

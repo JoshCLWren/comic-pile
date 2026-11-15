@@ -52,17 +52,11 @@
       "User(id=1)",
       "user_id=1"
     ],
-    "tests/test_momentum.py": [
-      "user_id=1"
-    ],
     "tests/test_prompt_eligibility.py": [
       "user_id=1"
     ],
     "tests/test_queue_api.py": [
       "User(id=123)"
-    ],
-    "tests/test_read_frontier_service.py": [
-      "user_id=2"
     ],
     "tests/test_reading_list_evaluator.py": [
       "user_id=1"

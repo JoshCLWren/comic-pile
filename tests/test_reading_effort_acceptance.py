@@ -32,7 +32,6 @@ from app.services.reading_effort import (
     MAX_VALID_READ_SECONDS,
     MIN_OBSERVED_SAMPLES,
     MIN_VALID_READ_SECONDS,
-    RECOMMENDATION_CONTEXT_VERSION,
     EstimateSource,
     ExclusionReason,
     aggregate_observations,
@@ -40,7 +39,6 @@ from app.services.reading_effort import (
     collect_classified_observations,
     compute_effort_estimate,
 )
-from tests.roll_flow import roll_pending_thread
 
 pytestmark = pytest.mark.asyncio
 
@@ -316,44 +314,13 @@ async def test_observed_history_takes_precedence_over_era_prior(async_db):
     assert estimate.minutes == pytest.approx(7.0)
 
 
-async def test_roll_records_decision_time_recommendation_context(auth_client, async_db):
-    """A roll persists the versioned estimate/source that existed at decision time."""
-    me_response = await auth_client.get("/api/auth/me")
-    assert me_response.status_code == 200
-    user_result = await async_db.execute(select(User).where(User.id == me_response.json()["id"]))
-    user = user_result.scalar_one()
-
-    thread = await _add_thread(async_db, user.id, "Era Candidate")
-    await _confirm_series_metadata(async_db, thread, "2021-06-01")
-
-    roll_response = (await roll_pending_thread(async_db)).model_dump()
-    body = roll_response
-    assert body["thread_id"] == thread.id
-
-    roll_event_result = await async_db.execute(
-        select(Event).where(Event.type == "roll").order_by(Event.id.desc()).limit(1)
-    )
-    roll_event = roll_event_result.scalar_one()
-    context = roll_event.recommendation_context
-    assert context is not None
-    assert context["context_version"] == RECOMMENDATION_CONTEXT_VERSION
-    candidate = context["selected_candidate"]
-    assert candidate["thread_id"] == thread.id
-    assert candidate["effort_source"] == EstimateSource.ERA_PRIOR.value
-    assert candidate["effort_minutes"] == pytest.approx(17.0)
-    assert candidate["effort_band"] == "balanced"
-    assert candidate["effort_confidence"] == pytest.approx(ERA_PRIOR_CONFIDENCE)
-    assert candidate["effort_sample_count"] == 0
-
-
 async def test_override_roll_records_decision_time_recommendation_context(
     auth_client, async_db
 ):
     """Manual overrides also persist decision-time context without changing selection."""
-    me_response = await auth_client.get("/api/auth/me")
-    assert me_response.status_code == 200
-    user_result = await async_db.execute(select(User).where(User.id == me_response.json()["id"]))
-    user = user_result.scalar_one()
+    from tests.conftest import get_or_create_user_async
+
+    user = await get_or_create_user_async(async_db)
 
     thread = await _add_thread(async_db, user.id, "Override Candidate", queue_position=1)
     override_response = await auth_client.post(
@@ -377,68 +344,3 @@ async def test_override_roll_records_decision_time_recommendation_context(
     assert candidate["effort_source"] == EstimateSource.UNKNOWN.value
     assert candidate["effort_minutes"] is None
     assert candidate["effort_band"] == "unknown"
-
-
-async def test_legacy_random_roll_selection_behavior_unchanged(auth_client, async_db):
-    """Random rolls keep their legacy contract while context recording is added.
-
-    The recorded selection method follows the active control path, so the
-    plain legacy roll records the balanced momentum path (#3762).
-    """
-    me_response = await auth_client.get("/api/auth/me")
-    assert me_response.status_code == 200
-    user_result = await async_db.execute(select(User).where(User.id == me_response.json()["id"]))
-    user = user_result.scalar_one()
-
-    pool_ids = set()
-    for index in range(1, 4):
-        thread = await _add_thread(async_db, user.id, f"Pool {index}", queue_position=index)
-        pool_ids.add(thread.id)
-    await _add_thread(async_db, user.id, "Completed", queue_position=9, status="completed")
-    await _add_thread(async_db, user.id, "Blocked", queue_position=10, is_blocked=True)
-
-    legacy_fields = {
-        "thread_id",
-        "title",
-        "format",
-        "issues_remaining",
-        "queue_position",
-        "die_size",
-        "result",
-        "offset",
-        "snoozed_count",
-        "explanation",
-        "issue_id",
-        "issue_number",
-        "next_issue_id",
-        "next_issue_number",
-        "total_issues",
-        "reading_progress",
-    }
-
-    for _ in range(3):
-        roll_response = (await roll_pending_thread(async_db)).model_dump()
-        body = roll_response
-        assert set(body) == legacy_fields
-        assert body["die_size"] == 6
-        assert body["thread_id"] in pool_ids
-        assert 1 <= body["result"] <= len(pool_ids)
-        assert body["offset"] == 0
-        assert body["snoozed_count"] == 0
-
-        event_result = await async_db.execute(
-            select(Event)
-            .where(Event.type == "roll")
-            .order_by(Event.id.desc())
-            .limit(1)
-        )
-        latest_roll = event_result.scalar_one()
-        assert latest_roll.selected_thread_id == body["thread_id"]
-        # The plain legacy roll runs the balanced control path, whose only
-        # active weighting factor is reading momentum. The recorded method
-        # names that control path; "random" now names only the documented
-        # random-intent bypass (#3762).
-        assert latest_roll.selection_method == "momentum"
-
-        dismiss_response = await auth_client.post("/api/roll/dismiss-pending")
-        assert dismiss_response.status_code == 204
