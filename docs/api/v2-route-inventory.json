@@ -1002,11 +1002,11 @@
       "ingress_source": "vercel.json",
       "catch_all_src": "/api(?:/.*)?",
       "catch_all_dest": "/api/native_roll.rs",
-<<<<<<< HEAD
       "v1_total": 126,
       "v1_shadowed_by_rust": 1,
       "v1_live_python": 117,
-      "unversioned_total": 21,
+      "v1_orphaned": 7,
+      "unversioned_total": 20,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 17,
       "unversioned_orphaned": 2,
