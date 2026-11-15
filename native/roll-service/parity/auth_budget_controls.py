@@ -14,19 +14,14 @@ This module is shared harness code, not a test: it holds no ``test_`` functions.
 
 from __future__ import annotations
 
-import os
-
 import asyncpg
 import pytest
+from sqlalchemy.ext.asyncio import AsyncEngine
 
 from route_harness import assert_declared_budget, db_counters
 
 
-async def _injected_statements(
-    engine: object,
-    url: str,
-    count: int,
-) -> int:
+async def _injected_statements(engine: AsyncEngine, url: str, count: int) -> int:
     """Inject ``count`` statements under the isolated route role and measure them.
 
     Args:
@@ -39,10 +34,10 @@ async def _injected_statements(
     """
     raw = await asyncpg.connect(url)
     try:
-        _, _, before = await db_counters(engine)  # type: ignore[arg-type]
+        _, _, before = await db_counters(engine)
         for _ in range(count):
             await raw.execute("SELECT 1")
-        _, _, after = await db_counters(engine)  # type: ignore[arg-type]
+        _, _, after = await db_counters(engine)
     finally:
         await raw.close()
     assert before is not None and after is not None, (
@@ -54,7 +49,7 @@ async def _injected_statements(
 
 
 async def extra_query_fails_budget(
-    engine: object,
+    engine: AsyncEngine,
     url: str,
     *,
     method: str,
@@ -79,7 +74,7 @@ async def extra_query_fails_budget(
 
 
 async def per_row_queries_fail_budget(
-    engine: object,
+    engine: AsyncEngine,
     url: str,
     *,
     method: str,
@@ -104,15 +99,3 @@ async def per_row_queries_fail_budget(
     injected = await _injected_statements(engine, url, rows)
     with pytest.raises(AssertionError, match="declared maximum"):
         assert_declared_budget(method, path, measured + injected)
-
-
-def environment_url() -> str:
-    """Return the isolated parity DSN, failing when it is missing.
-
-    Returns:
-        The ``RUST_ROLL_PARITY_DATABASE_URL`` value.
-
-    Raises:
-        KeyError: When the parity DSN is not configured.
-    """
-    return os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
