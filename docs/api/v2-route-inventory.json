@@ -991,7 +991,7 @@
       "catch_all_dest": "/api/native_roll.rs",
       "v1_total": 126,
       "v1_shadowed_by_rust": 0,
-      "v1_live_python": 116,
+      "v1_live_python": 118,
       "v1_orphaned": 7,
       "unversioned_total": 20,
       "unversioned_shadowed_by_rust": 0,
@@ -999,7 +999,7 @@
       "unversioned_orphaned": 2,
       "total_python_surface": 146,
       "total_shadowed_by_rust": 0,
-      "total_live_python": 133,
+      "total_live_python": 135,
       "total_orphaned": 9
     },
     "catch_all": {
@@ -1803,17 +1803,17 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/browse",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/browse",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
@@ -1845,17 +1845,17 @@
         "verified_against": "vercel.json"
       },
       {
-        "runtime": "native-rust",
-        "status": "target",
-        "owning_issue": 4843,
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/folders",
+        "runtime": "python-fastapi",
+        "status": "transitional",
+        "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/folders",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
+        "ingress_destination": "/api/index.py",
+        "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
       },
       {
