@@ -237,9 +237,11 @@ def cached_json(
                 return shared
 
         # A cold cache has no safe stale result. Give the single refresh
-        # owner time to publish rather than launching competing GitHub scans
-        # after only three seconds. On a genuine outage, retain live fallback.
-        for _ in range(15):
+        # owner time to publish rather than launching competing GitHub scans.
+        # Contenders wait here; a sufficiently long bounded wait allows them
+        # to observe the winner's published result instead of starting duplicate
+        # live fetches. On a genuine outage, retain live fallback.
+        for _ in range(120):
             time.sleep(1)
             try:
                 data, fresh = _read(key)
@@ -247,6 +249,10 @@ def cached_json(
                 break
             if fresh:
                 return data or []
+        # If we had previous cache data, prefer it over a duplicate live fetch
+        # to avoid contenders repeating the winner's GitHub discovery work.
+        if previous is not None:
+            return previous
         print(f"[factory-state] refresh wait exceeded for {key}, fetching GitHub live", file=sys.stderr)
         return fetch(previous or [])
 
