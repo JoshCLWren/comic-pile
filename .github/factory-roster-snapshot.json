@@ -416,6 +416,102 @@
       "minute": "15",
       "scheduler": "dispatcher",
       "display_name": "Cloudflare Qwen 3.8 27B"
+    },
+    {
+      "worker": "134",
+      "source": "gemini-free",
+      "model": "gemini-3.8-flash",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "Google Gemini 3.8 Flash Free"
+    },
+    {
+      "worker": "135",
+      "source": "gemini-free",
+      "model": "gemini-3.1-flash-lite",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "Google Gemini 3.1 Flash Lite Free"
+    },
+    {
+      "worker": "136",
+      "source": "groq-free",
+      "model": "openai/gpt-oss-120b",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "Groq GPT OSS 120B Free"
+    },
+    {
+      "worker": "137",
+      "source": "groq-free",
+      "model": "openai/gpt-oss-20b",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "Groq GPT OSS 20B Free"
+    },
+    {
+      "worker": "138",
+      "source": "groq-free",
+      "model": "qwen/qwen3.8-27b",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "Groq Qwen 3.8 27B Free"
+    },
+    {
+      "worker": "139",
+      "source": "vercel-ai-gateway",
+      "model": "reflection/beam-free",
+      "minute": "45",
+      "scheduler": "dispatcher",
+      "display_name": "Vercel Reflection Beam Free"
+    },
+    {
+      "worker": "140",
+      "source": "vercel-ai-gateway",
+      "model": "nvidia/nemotron-3.5-lightning-free",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "Vercel Nemotron 3.5 Lightning Free"
+    },
+    {
+      "worker": "141",
+      "source": "vercel-ai-gateway",
+      "model": "stealth/glyph-cluster",
+      "minute": "55",
+      "scheduler": "dispatcher",
+      "display_name": "Vercel Glyph Cluster Free"
+    },
+    {
+      "worker": "142",
+      "source": "aion-free",
+      "model": "aion-labs/aion-3.5-mini",
+      "minute": "0",
+      "scheduler": "dispatcher",
+      "display_name": "Aion Labs 3.5 Mini Free Credits"
+    },
+    {
+      "worker": "143",
+      "source": "cohere-eval",
+      "model": "command-a-plus-05-2026",
+      "minute": "5",
+      "scheduler": "dispatcher",
+      "display_name": "Cohere Command A Plus Evaluation"
+    },
+    {
+      "worker": "144",
+      "source": "typhoon-free",
+      "model": "typhoon-v2.5-30b-a3b-instruct",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "Typhoon 2.5 Instruct Free"
+    },
+    {
+      "worker": "145",
+      "source": "typhoon-free",
+      "model": "typhoon-v2.1-12b-instruct",
+      "minute": "15",
+      "scheduler": "dispatcher",
+      "display_name": "Typhoon 2.1 Instruct Free"
     }
   ],
   "expected_workers": [
@@ -470,7 +566,19 @@
     130,
     131,
     132,
-    133
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145
   ],
   "retired_workers": [
     9,

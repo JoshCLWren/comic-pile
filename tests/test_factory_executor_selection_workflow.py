@@ -60,11 +60,29 @@ def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
     assert "https://api.orcarouter.ai/v1" in workflow
     assert "https://router.requesty.ai/v1" in workflow
     assert "https://ai-gateway.vercel.sh/v1" in workflow
-    assert "Require Pixel Canary to remain zero-price" in workflow
+    assert "Require Vercel model to remain zero-price" in workflow
     assert "Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}" in workflow
     assert "OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}" in workflow
     assert "MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}" in workflow
     assert 'package: "@opencode/ai/providers/openai-compatible"' in workflow
+
+
+def test_new_free_api_sources_use_real_provider_models_and_credentials() -> None:
+    """Each new provider has an authenticated OpenAI-compatible runtime route."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    for source, secret, url in (
+        ("gemini-free", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai"),
+        ("groq-free", "GROQ_API_KEY", "https://api.groq.com/openai/v1"),
+        ("aion-free", "AION_API_KEY", "https://api.aionlabs.ai/v1"),
+        ("cohere-eval", "COHERE_API_KEY", "https://api.cohere.ai/compatibility/v1"),
+        ("typhoon-free", "TYPHOON_API_KEY", "https://api.opentyphoon.ai/v1"),
+    ):
+        assert source in workflow
+        assert f"{secret}: ${{{{ secrets.{secret} }}}}" in workflow
+        assert f"missing-{secret}" in workflow
+        assert url in workflow
+    assert "comic-pile-factory-oai/1.0" in workflow
+    assert "Require Vercel model to remain zero-price" in workflow
 
 
 def test_model_requests_are_reserved_for_the_real_work_session() -> None:
@@ -72,7 +90,7 @@ def test_model_requests_are_reserved_for_the_real_work_session() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     prework = workflow.split("- name: Run continuous fixed-model factory session", 1)[0]
     assert "Wait for exact model in OpenCode catalog" in prework
-    assert "Require Pixel Canary to remain zero-price" in prework
+    assert "Require Vercel model to remain zero-price" in prework
     assert "opencode run" not in prework
     assert "KILO_AUTO_FREE_OK" not in prework
     assert "/chat/completions" not in prework

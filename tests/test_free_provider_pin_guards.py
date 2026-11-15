@@ -185,7 +185,10 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     ollama = [row for row in rows if row['source'] == 'ollama-cloud']
     assert not ollama  # Worker 55 retired after quota exhaustion.
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
-    assert vercel == []
+    assert {row['model'] for row in vercel} == {
+        'reflection/beam-free', 'nvidia/nemotron-3.5-lightning-free',
+        'stealth/glyph-cluster',
+    }
     assert all(row['worker'] != '72' for row in rows)
     assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
@@ -193,6 +196,25 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
     assert {48, 55}.issubset(set(lock['retired_workers']))
     assert {'codestral-latest', 'nemotron-3-nano:30b'}.issubset(set(lock['retired_models']))
+
+
+
+def test_additional_free_api_source_pins_reject_paid_model_ids(validate) -> None:
+    """Only specifically documented free/evaluation models may occupy new lanes."""
+    factory_roster = validate._ROSTER
+    pairs = {
+        'gemini-free': ('gemini-3.8-flash', 'gemini-4-argon'),
+        'groq-free': ('openai/gpt-oss-120b', 'anthropic/claude-sonnet'),
+        'vercel-ai-gateway': ('reflection/beam-free', 'google/gemini-4-argon'),
+        'aion-free': ('aion-labs/aion-3.5-mini', 'aion-labs/aion-2.0'),
+        'cohere-eval': ('command-a-plus-05-2026', 'command-a-03-2025'),
+        'typhoon-free': ('typhoon-v2.5-30b-a3b-instruct', 'typhoon-pro'),
+    }
+    for source, (good, bad) in pairs.items():
+        validate.assert_free_provider_pins([{'worker': '999', 'source': source, 'model': good}])
+        with pytest.raises(AssertionError):
+            validate.assert_free_provider_pins([{'worker': '999', 'source': source, 'model': bad}])
+    assert factory_roster.PROTECTED_SOURCES.issuperset(pairs)
 
 
 def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:

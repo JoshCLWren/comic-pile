@@ -49,6 +49,11 @@ PROTECTED_SOURCES = frozenset(
         "orcarouter",
         "requesty",
         "cloudflare-workers-ai",
+        "gemini-free",
+        "groq-free",
+        "aion-free",
+        "cohere-eval",
+        "typhoon-free",
     }
 )
 Z_AI_FREE_MODELS = frozenset({"glm-4.5-flash", "glm-4.7-flash"})
@@ -95,6 +100,13 @@ CLOUDFLARE_WORKERS_AI_FREE_MODELS = frozenset(
 )
 # Only the documented Workers Free models, never Workers Paid-only frontier models.
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha", "stealth/crouton-alpha"})
+GEMINI_FREE_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-flash-lite"})
+GROQ_FREE_MODELS = frozenset({"openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"})
+VERCEL_ZERO_PRICE_MODELS = frozenset({"reflection/beam-free", "nvidia/nemotron-3.5-lightning-free", "stealth/glyph-cluster"})
+AION_FREE_CREDIT_MODELS = frozenset({"aion-labs/aion-3.5-mini"})
+COHERE_EVALUATION_MODELS = frozenset({"command-a-plus-05-2026"})
+TYPHOON_FREE_MODELS = frozenset({"typhoon-v2.5-30b-a3b-instruct", "typhoon-v2.1-12b-instruct"})
+
 LOCK_SCHEMA_VERSION = 1
 # Automation-owned frozen view of the committed roster + lock. Discovery
 # rewrites it in the same commit as the TSV/lock so guard tests never need a
