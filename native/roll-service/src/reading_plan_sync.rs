@@ -136,7 +136,7 @@ pub async fn sync_released_issues(
     let connection = db::checkout(&state).await?;
     
     // Parse the as_of date string
-    let as_of = DateTime::parse_from_rfc3339(&payload.as_of)
+    let _as_of = DateTime::parse_from_rfc3339(&payload.as_of)
         .map_err(|_| ApiError::BadRequest("Invalid date format. Expected RFC 3339.".to_string()))?
         .with_timezone(&Utc);
     
