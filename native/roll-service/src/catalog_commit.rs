@@ -74,7 +74,7 @@ fn unauthorized(code: &str) -> ApiError {
     ApiError::Unauthorized(code.to_string())
 }
 
-fn now_f64() -> f64 {
+pub(crate) fn now_f64() -> f64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
