@@ -103,7 +103,8 @@
       "method": "GET",
       "path": "/api/threads/{thread_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/threads/[0-9]+$"
+      "src": "^/api/threads/[0-9]+$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "unversioned_operations",
@@ -201,7 +202,8 @@
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/threads/[0-9]+$"
+      "src": "^/api/v1/threads/[0-9]+$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",

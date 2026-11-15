@@ -1902,14 +1902,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v2/reading\\-boundaries/[^/]+$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "/api(?:/.*)?",
       "dest": "/api/native_roll.rs"
     },

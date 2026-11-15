@@ -295,14 +295,8 @@ jobs:
             echo "Main $sha has $failing failed product CI run(s) out of $total - drain will pause merges"
             echo "failing=$failing" >> "$GITHUB_OUTPUT"
             echo "main_red=true" >> "$GITHUB_OUTPUT"
-            # Ensure main-breakage P0 exists (best-effort, deduplicated by main-health-gate)
-            names="$(jq -r '.failing_names' <<< "$health")"
-            open_issue="$(gh issue list --state open --limit 100 --label "main-breakage" --json number --jq '.[0].number // empty' 2>/dev/null || true)"
-            if [[ -z "$open_issue" ]]; then
-              gh api "repos/${GITHUB_REPOSITORY}/labels/main-breakage" >/dev/null 2>&1 || gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" -f name="main-breakage" -f color="B60205" -f description="Main is red - factory blocked until base is green" >/dev/null 2>&1 || true
-              echo "No open main-breakage; main-health-gate will open one shortly (fallback create)"
-              gh issue create --title "Main is red at ${sha:0:12} - factory blocked" --body "Main ${sha} has ${failing} failing check(s): ${names}. Dispatcher detected red main. Fix main CI before factory merges. <!-- comic-pile-main-health-gate:v1 -->" --label "user-reported" --label "bug" --label "priority:P0" --label "factory" --label "factory:unowned" --label "ralph-status:pending" --label "main-breakage" >/dev/null 2>&1 || true
-            fi
+            # Signal only: do not manufacture an issue for a failing CI run.
+            # Existing CI check/run evidence and main_red=true gate merges.
           else
             echo "Main $sha is green (total=$total failing=$failing)"
             echo "main_red=false" >> "$GITHUB_OUTPUT"
@@ -440,6 +434,12 @@ jobs:
       # pass ranks an existing completion action instead. The controller uses
       # the decision only within existing interchangeable classes and otherwise
       # falls back.
+      - name: Configure restricted Neon factory health snapshot
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
       - name: Rank factory work selection with Jev (active selection)
         if: steps.api_budget.outputs.allow == 'true' && !inputs.target
         continue-on-error: true
@@ -459,8 +459,17 @@ jobs:
             --json number,title,body,labels,createdAt,updatedAt > "$issues"
           gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 500 \
             --json number,title,body,labels,headRefName,headRefOid,createdAt,updatedAt,isDraft,mergeable,mergeStateStatus,isCrossRepository,statusCheckRollup > "$prs"
+          health="$RUNNER_TEMP/jev-factory-health.json"
+          if [[ -n "${FACTORY_STATE_DSN_FILE:-}" ]]; then
+            python3 .github/scripts/factory_state_operations.py stats \
+              --repo "$GITHUB_REPOSITORY" > "$health" || rm -f "$health"
+          fi
+          health_args=()
+          if [[ -s "$health" ]]; then
+            health_args=(--factory-health "$health")
+          fi
           python3 .github/scripts/factory_jev_shadow.py \
-            --issues "$issues" --prs "$prs" \
+            --issues "$issues" --prs "$prs" "${health_args[@]}" \
             --output "$RUNNER_TEMP/jev-shadow.json" >> "$GITHUB_STEP_SUMMARY"
           # Make the report available only to later steps of this same trusted
           # dispatcher job. A failed/abstaining report is safe to pass through:
@@ -487,6 +496,7 @@ jobs:
           DEPLOY_SHA: ${{ github.sha }}
           DISPATCH_WORKER: ${{ inputs.worker }}
           DISPATCH_MODE: ${{ inputs.mode }}
+          OPENROUTER_JEV_API_KEY: ${{ secrets.OPENROUTER_JEV_API_KEY }}
         run: |
           set -Eeuo pipefail
           manifest='.github/free-model-factories.tsv'
@@ -794,6 +804,24 @@ jobs:
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
             echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+
+          # Jev may promote one already-eligible worker. This cannot bypass
+          # quota, cooldown, source budgets, or the trusted capacity cap.
+          # Provider failure or abstention retains the existing roster order.
+          if [[ -n "${OPENROUTER_JEV_API_KEY:-}" ]] && (( $(jq 'length' <<< "$workers") > 1 )); then
+            worker_file="$RUNNER_TEMP/jev-eligible-workers.json"
+            health_file="$RUNNER_TEMP/jev-worker-health.json"
+            printf '%s\n' "$workers" > "$worker_file"
+            if python3 .github/scripts/factory_state_operations.py stats \
+                --repo "$GITHUB_REPOSITORY" > "$health_file"; then
+              selected="$(python3 .github/scripts/factory_jev_shadow.py \
+                --workers "$worker_file" --factory-health "$health_file")" || selected=""
+              if [[ -n "$selected" ]] && jq -e --argjson old "$workers" \
+                  'length == ($old | length) and (sort == ($old | sort))' <<< "$selected" >/dev/null; then
+                workers="$selected"
+              fi
+            fi
           fi
 
           echo "Dispatching workers through centralized assignment: $workers"

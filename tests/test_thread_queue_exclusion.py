@@ -18,6 +18,7 @@ The contract these tests pin down:
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 from datetime import UTC, datetime
 
 import pytest
@@ -26,7 +27,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import hash_password
+from app.auth import create_access_token, hash_password
 from app.models import (
     CustomCBLEntry,
     CustomCBLList,
@@ -317,21 +318,17 @@ async def _assert_issue_rows_unchanged(async_db: AsyncSession, ids: SeriesIds) -
     assert issues[2].read_at is None
 
 
-async def _login(client: AsyncClient, username: str) -> dict[str, str]:
-    """Authenticate a reader and return its request headers.
+def _auth_headers(username: str) -> dict[str, str]:
+    """Build request headers for an existing test reader.
 
     Args:
-        client: Unauthenticated client.
-        username: Reader to log in as.
+        username: Existing reader username.
 
     Returns:
         Authorization headers for that reader.
     """
-    response = await client.post(
-        "/api/v1/auth/login", json={"username": username, "password": "password"}
-    )
-    assert response.status_code == 200
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    token = create_access_token(data={"sub": username, "jti": str(uuid4())})
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def _excluded_thread_ids(auth_client: AsyncClient) -> list[int]:
@@ -577,8 +574,8 @@ async def test_exclusion_is_isolated_per_reader(
     _ = other_reader
     ids = await _seed_series(async_db, owning_reader)
 
-    owner_headers = await _login(client, OWNER_USERNAME)
-    other_headers = await _login(client, OTHER_USERNAME)
+    owner_headers = _auth_headers(OWNER_USERNAME)
+    other_headers = _auth_headers(OTHER_USERNAME)
 
     assert (
         await client.post(f"/api/v1/threads/{ids.thread_id}/exclude", headers=owner_headers)

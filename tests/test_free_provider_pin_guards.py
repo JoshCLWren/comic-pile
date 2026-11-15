@@ -185,7 +185,10 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     ollama = [row for row in rows if row['source'] == 'ollama-cloud']
     assert not ollama  # Worker 55 retired after quota exhaustion.
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
-    assert vercel == []
+    assert {row['model'] for row in vercel} == {
+        'reflection/beam-free', 'nvidia/nemotron-3.5-lightning-free',
+        'stealth/glyph-cluster',
+    }
     assert all(row['worker'] != '72' for row in rows)
     assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
@@ -193,6 +196,25 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
     assert {48, 55}.issubset(set(lock['retired_workers']))
     assert {'codestral-latest', 'nemotron-3-nano:30b'}.issubset(set(lock['retired_models']))
+
+
+
+def test_additional_free_api_source_pins_reject_paid_model_ids(validate) -> None:
+    """Only specifically documented free/evaluation models may occupy new lanes."""
+    factory_roster = validate._ROSTER
+    pairs = {
+        'gemini-free': ('gemini-3.8-flash', 'gemini-4-argon'),
+        'groq-free': ('openai/gpt-oss-120b', 'anthropic/claude-sonnet'),
+        'vercel-ai-gateway': ('reflection/beam-free', 'google/gemini-4-argon'),
+        'aion-free': ('aion-labs/aion-3.5-mini', 'aion-labs/aion-2.0'),
+        'cohere-eval': ('command-a-plus-05-2026', 'command-a-03-2025'),
+        'typhoon-free': ('typhoon-v2.5-30b-a3b-instruct', 'typhoon-pro'),
+    }
+    for source, (good, bad) in pairs.items():
+        validate.assert_free_provider_pins([{'worker': '999', 'source': source, 'model': good}])
+        with pytest.raises(AssertionError):
+            validate.assert_free_provider_pins([{'worker': '999', 'source': source, 'model': bad}])
+    assert factory_roster.PROTECTED_SOURCES.issuperset(pairs)
 
 
 def test_z_ai_and_ollama_cloud_pin_guards_reject_paid_ids(validate) -> None:
@@ -276,14 +298,19 @@ def test_discovered_free_models_reuse_existing_worker_slots(validate) -> None:
 
 
 
-def test_worker_56_dots_preview_is_retired_by_discovery(validate) -> None:
-    """A dead OpenRouter preview pin cannot reenter the generated roster."""
+def test_worker_56_dots_preview_retirement_keeps_identity(validate) -> None:
+    """Worker 56 stays retired even after a separately approved fresh model pin."""
     rows = validate.load_roster_rows(validate.MANIFEST)
     lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
     assert "56" not in {row["worker"] for row in rows}
     assert 56 in lock["retired_workers"]
     assert 56 not in lock["expected_workers"]
-    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
+    assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
+    assert any(
+        row["source"] == "openrouter-free"
+        and row["model"] == "dots-studio/dots-3-note-preview:free"
+        for row in rows
+    )
 
 
 def test_worker_76_fledge_alpha_free_is_retired_by_discovery(validate) -> None:

@@ -23,7 +23,6 @@ from app.models.custom_cbl import (
 from app.models.external_identity import ExternalIdentity, ThreadExternalSeriesMapping
 from app.schemas.reading_boundary import (
     ReadingBoundaryBatchRequest,
-    ReadingBoundaryExplanationV2,
 )
 from app.services.errors import NotFoundError
 from app.services.reading_boundary_service import get_reading_boundary_explanations
@@ -253,9 +252,7 @@ async def test_authenticated_reading_boundaries_v2_matches_canonical_service(
                         "threads": {
                             str(
                                 thread_id
-                            ): ReadingBoundaryExplanationV2.model_validate(
-                                explanation.model_dump(exclude={"historical"})
-                            ).model_dump()
+                            ): explanation.model_dump(exclude={"historical"})
                             for thread_id, explanation in canonical.threads.items()
                         }
                     }

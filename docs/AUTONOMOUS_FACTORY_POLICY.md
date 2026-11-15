@@ -12,6 +12,10 @@ Success is measured by issues truthfully closed and production defects removed. 
 
 For original owner-requested engineering objectives, follow [`docs/OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md`](OBJECTIVE_FIRST_ENGINEERING_CONTRACT.md): do not redefine the finish line through a self-authored issue, partial PR, shadow-only phase, or a ready-to-merge milestone. A runnable objective is done only after merged, deployed, and end-to-end verified on the real intended path; issue-level closure may be narrower than the owner's objective.
 
+## Owner-directed Rust cutover backlog freeze (2026-11-15)
+
+Scheduled factories, local coding agents, reviewers and automated controllers **must not open new GitHub issues or sub-issues, split existing issues, or convert CI/test findings into new backlog tickets without an explicit owner instruction for that exact creation**. Continue repairing problems within the approved issue/PR/objective when safe. When genuine out-of-scope work is encountered, attach compact evidence to the existing canonical issue or PR comment and leave ownership and acceptance truthful; do not manufacture a second executable parent or a swarm of children. Keep existing issues and PRs moving and close completed work normally. An owner-directed interactive change may explicitly authorize a bounded split with a parent checklist and a clearly designated execution owner. This freeze does not change the existing single-incident production deployment recovery mechanism; main CI failures must remain check/run failures, never new main-breakage issues.
+
 ## Continuous delivery cycle
 
 The delivery factory follows this permanent cycle:
@@ -791,3 +795,44 @@ all pages of open same-issue factory PR files. Reuse an available overlapping
 PR and its exact branch/head; preserve live ownership and fork checkout fences.
 Revalidate before a new PR is created. Unreadable state or a live owner blocks
 duplicate creation; disjoint files remain eligible for separate PRs.
+
+## Additional provider free-tier lanes (2026-11-15)
+
+This fleet uses free-only or evaluation-only credentials. The roster and source caps
+are not equivalent to a provider-side spending limit. API keys MUST belong to
+accounts/projects that cannot auto-bill beyond a free allowance. Missing keys
+skip execution; never substitute a paid model, silently switch to a billed plan,
+or copy a credential into source control.
+
+- `gemini-free`: `GEMINI_API_KEY`, free-tier Google AI Studio project only;
+  `gemini-3.8-flash` and `gemini-3.1-flash-lite`. On the Google free tier,
+  prompt content may be used for product improvement; never submit secrets.
+  Base URL: https://generativelanguage.googleapis.com/v1beta/openai
+- `groq-free`: `GROQ_API_KEY`, free account and tool-capable GPT-OSS 120B,
+  GPT-OSS 20B, and Qwen 3.8 27B. Shared rate limits (including tokens/day)
+  are enforced by Groq, with a conservative factory daily dispatch cap.
+  Base URL: https://api.groq.com/openai/v1
+- `vercel-ai-gateway`: existing `AI_GATEWAY_API_KEY`; only explicit zero-price
+  models (`reflection/beam-free`, `nvidia/nemotron-3.5-lightning-free`,
+  `stealth/glyph-cluster`). Every run checks current catalog input and output
+  prices **before** inference; missing or paid entries fail closed. The $5 free
+  monthly credit is not authorization to consume paid model inference.
+- `aion-free`: `AION_API_KEY`, daily free allowance (20K tokens). Pin only
+  Aion 3.5 Mini; paid model price may consume the free daily allowance.
+  Use an account without paid top-ups or auto-payment. One dispatch per UTC day.
+  Base URL: https://api.aionlabs.ai/v1
+- `cohere-eval`: `COHERE_API_KEY`, free evaluation key only. Command A+;
+  1K evaluation requests per month. Do not treat this key as paid production.
+  Base URL: https://api.cohere.ai/compatibility/v1
+- `typhoon-free`: `TYPHOON_API_KEY`, 2.5 30B and 2.1 12B model variants.
+  Free research/light-use tier with conservative daily dispatch cap.
+  Base URL: https://api.opentyphoon.ai/v1
+
+LLM7.io is **not** a coding factory lane because the provider restricts tool
+calling to paid Pro access. Do not add a fake free contributor slot. Its text-only
+free tier may be considered for a separately implemented independent static
+reviewer, subject to review-stage routing and separate credentials.
+
+Adding worker IDs does not provision provider accounts or secrets. Existing Neon
+model-health exclusions, source cooldowns, account-level budget accounting, and
+runtime authorization must remain authoritative.

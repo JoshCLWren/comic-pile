@@ -32,7 +32,8 @@
       "method": "GET",
       "path": "/api/sessions/{session_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/[0-9]+$"
+      "src": "^/api/sessions/[0-9]+$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "unversioned_operations",
@@ -53,7 +54,8 @@
       "method": "GET",
       "path": "/api/sessions/{session_id}/snapshots",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/sessions/[^/]+/snapshots$"
+      "src": "^/api/sessions/[^/]+/snapshots$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -81,7 +83,8 @@
       "method": "GET",
       "path": "/api/v1/sessions/{session_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/[0-9]+$"
+      "src": "^/api/v1/sessions/[0-9]+$",
+      "exclude_from_inventory": true
     },
     {
       "bucket": "v1_operations",
@@ -102,7 +105,8 @@
       "method": "GET",
       "path": "/api/v1/sessions/{session_id}/snapshots",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/sessions/[^/]+/snapshots$"
+      "src": "^/api/v1/sessions/[^/]+/snapshots$",
+      "exclude_from_inventory": true
     }
   ]
 }

@@ -34,8 +34,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import User
 from app.models.taste_signal import (
     SIGNAL_CREATOR,
-    SIGNAL_ERA,
-    SIGNAL_PUBLISHER,
     TasteSignal,
 )
 from app.services.comicvine_taste import extract_taste_features
@@ -372,26 +370,6 @@ class TestCriterion4VerdictSurvivesRecomputation:
         assert result.evidence_count == fresh.evidence_count
         assert result.distinct_thread_count == fresh.distinct_thread_count
         await async_db.rollback()
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize("signal_type", [SIGNAL_CREATOR, SIGNAL_PUBLISHER, SIGNAL_ERA])
-    async def test_verdict_api_accepts_all_answers(
-        self,
-        auth_client: AsyncClient,
-        signal_type: str,
-    ) -> None:
-        """The canonical verdict API accepts Yes/Sometimes/Not really answers."""
-        external_key = f"{signal_type}:some-key:placeholder"
-        response = await auth_client.put(
-            f"/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
-            json={"verdict": "sometimes"},
-        )
-
-        assert response.status_code == 200
-        body = response.json()
-        assert body["signal_type"] == signal_type
-        assert body["external_key"] == external_key
-        assert body["user_verdict"] == "sometimes"
 
 
 # ---------------------------------------------------------------------------

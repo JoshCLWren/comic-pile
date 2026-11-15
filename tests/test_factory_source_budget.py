@@ -36,7 +36,16 @@ SOURCES = {
     "119": "cloudflare-workers-ai",
     "120": "cloudflare-workers-ai",
 }
-CAPS = {"orcarouter": 1, "requesty": 4, "cloudflare-workers-ai": 1}
+CAPS = {
+    "orcarouter": 1,
+    "requesty": 4,
+    "cloudflare-workers-ai": 1,
+    "gemini-free": 2,
+    "groq-free": 2,
+    "aion-free": 1,
+    "cohere-eval": 1,
+    "typhoon-free": 1,
+}
 
 
 def test_committed_budgets_stay_under_account_limits() -> None:
@@ -56,8 +65,12 @@ def test_committed_roster_pins_smoked_router_lanes() -> None:
     assert "nvidia/nemotron-3-ultra-550b-a55b" in lock["retired_models"]
     assert "nvidia/nemotron-3-super-120b-a12b" in lock["retired_models"]
     assert "nvidia/nemotron-3-ultra-550b-a55b" not in {
-        row["model"] for row in rows.values()
+        row["model"] for row in rows.values() if row["source"] == "nvidia"
     }
+    assert any(
+        row["source"] == "requesty" and row["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
+        for row in rows.values()
+    )
     assert "nvidia/nemotron-3-super-120b-a12b" not in {
         row["model"] for row in rows.values()
     }
@@ -69,6 +82,8 @@ def test_cloudflare_free_source_guards_and_daily_cap() -> None:
     """Workers Free pins are allowlisted and the dispatch cap is shared."""
     assert roster.cloudflare_workers_ai_model_is_free("@cf/zai-org/glm-4.7-flash")
     assert roster.cloudflare_workers_ai_model_is_free("@cf/google/gemma-4-26b-a4b-it")
+    assert roster.cloudflare_workers_ai_model_is_free("@cf/openai/gpt-oss-20b")
+    assert roster.cloudflare_workers_ai_model_is_free("@cf/qwen/qwen3.8-27b")
     assert not roster.cloudflare_workers_ai_model_is_free("@cf/zai-org/glm-5.3")
     assert not roster.cloudflare_workers_ai_model_is_free("@cf/moonshotai/kimi-k2.7-code")
     titles = ["Factory 119 · fixed-model entry"]
@@ -98,6 +113,8 @@ def test_router_pin_guards() -> None:
     assert not roster.orcarouter_model_is_free("orca/orcaverify-text1.0-free")
     assert roster.requesty_model_is_approved("requesty/nvidia/nemotron-3-ultra-550b-a55b")
     assert roster.requesty_model_is_approved("nvidia/nemotron-3.5-lightning-30b-a3b")
+    assert roster.requesty_model_is_approved("novita/ling-3.1-flash")
+    assert roster.requesty_model_is_approved("mistral/leanstral-1-5")
     assert not roster.requesty_model_is_approved("openai/gpt-5")
 
 

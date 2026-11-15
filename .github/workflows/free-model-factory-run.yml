@@ -38,6 +38,16 @@ on:
         required: false
       REQUESTY_API_KEY:
         required: false
+      GEMINI_API_KEY:
+        required: false
+      GROQ_API_KEY:
+        required: false
+      AION_API_KEY:
+        required: false
+      COHERE_API_KEY:
+        required: false
+      TYPHOON_API_KEY:
+        required: false
       CLOUDFLARE_API_TOKEN:
         required: false
       AI_GATEWAY_API_KEY:
@@ -100,6 +110,11 @@ jobs:
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}
       REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      AION_API_KEY: ${{ secrets.AION_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
@@ -187,6 +202,7 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
+            gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
             z-ai|ollama-cloud|mistral|orcarouter|requesty)
               if [[ "$model" == "${source}/"* ]]; then
                 runtime_model="$model"
@@ -202,6 +218,16 @@ jobs:
                 if [[ -n "${ORCAROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-ORCAROUTER_API_KEY'; fi
               elif [[ "$source" == "requesty" ]]; then
                 if [[ -n "${REQUESTY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-REQUESTY_API_KEY'; fi
+              elif [[ "$source" == "gemini-free" ]]; then
+                if [[ -n "${GEMINI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-GEMINI_API_KEY'; fi
+              elif [[ "$source" == "groq-free" ]]; then
+                if [[ -n "${GROQ_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-GROQ_API_KEY'; fi
+              elif [[ "$source" == "aion-free" ]]; then
+                if [[ -n "${AION_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AION_API_KEY'; fi
+              elif [[ "$source" == "cohere-eval" ]]; then
+                if [[ -n "${COHERE_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-COHERE_API_KEY'; fi
+              elif [[ "$source" == "typhoon-free" ]]; then
+                if [[ -n "${TYPHOON_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-TYPHOON_API_KEY'; fi
               else
                 if [[ -n "${MISTRAL_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-MISTRAL_API_KEY'; fi
               fi
@@ -360,6 +386,7 @@ jobs:
 
           case "$SOURCE" in
             cloudflare-workers-ai) ;&
+            gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
             nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
@@ -690,6 +717,11 @@ jobs:
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'orcarouter' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'requesty' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'gemini-free' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'groq-free' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'aion-free' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'cohere-eval' ||
+            (steps.executor.outputs.source || steps.lane.outputs.source) == 'typhoon-free' ||
             (steps.executor.outputs.source || steps.lane.outputs.source) == 'cloudflare-workers-ai'
           )
         shell: bash
@@ -741,6 +773,41 @@ jobs:
               env_name='REQUESTY_API_KEY'
               provider_name='Requesty router'
               ;;
+            gemini-free)
+              key="${GEMINI_API_KEY:-}"
+              base_url='https://generativelanguage.googleapis.com/v1beta/openai'
+              provider_id='gemini-free'
+              env_name='GEMINI_API_KEY'
+              provider_name='Google Gemini API Free'
+              ;;
+            groq-free)
+              key="${GROQ_API_KEY:-}"
+              base_url='https://api.groq.com/openai/v1'
+              provider_id='groq-free'
+              env_name='GROQ_API_KEY'
+              provider_name='GroqCloud Free'
+              ;;
+            aion-free)
+              key="${AION_API_KEY:-}"
+              base_url='https://api.aionlabs.ai/v1'
+              provider_id='aion-free'
+              env_name='AION_API_KEY'
+              provider_name='Aion Labs Daily Free Credit'
+              ;;
+            cohere-eval)
+              key="${COHERE_API_KEY:-}"
+              base_url='https://api.cohere.ai/compatibility/v1'
+              provider_id='cohere-eval'
+              env_name='COHERE_API_KEY'
+              provider_name='Cohere Evaluation Key'
+              ;;
+            typhoon-free)
+              key="${TYPHOON_API_KEY:-}"
+              base_url='https://api.opentyphoon.ai/v1'
+              provider_id='typhoon-free'
+              env_name='TYPHOON_API_KEY'
+              provider_name='Typhoon Free API'
+              ;;
             cloudflare-workers-ai)
               key="${CLOUDFLARE_API_TOKEN:-}"
               [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "Cloudflare account ID unavailable" >&2; exit 1; }
@@ -775,6 +842,8 @@ jobs:
                   package: "@opencode/ai/providers/openai-compatible",
                   env: [$envname],
                   settings: {baseURL: $base_url},
+                  headers: (if $provider == "gemini-free"
+                    then {"x-goog-api-client": "comic-pile-factory-oai/1.0"} else {} end),
                   models: {($model): {name: $model}}
                 }
               }
@@ -785,7 +854,7 @@ jobs:
           rm -f "$temp_config"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
-      - name: Require Pixel Canary to remain zero-price
+      - name: Require Vercel model to remain zero-price
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
         shell: bash
         env:
@@ -803,7 +872,7 @@ jobs:
               ((.pricing.output // "1") | tonumber) == 0
             )] | length == 1
           ' "$catalog" >/dev/null; then
-            echo "Pixel Canary is missing or no longer zero-price; refusing free-fleet execution: ${MODEL}" >&2
+            echo "Vercel model is missing or no longer zero-price; refusing free-fleet execution: ${MODEL}" >&2
             printf 'model_unavailable\tVercel AI Gateway model is missing or no longer zero-price: %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
             exit 1
           fi
