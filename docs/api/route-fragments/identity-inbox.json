@@ -1,7 +1,13 @@
 {
   "family": "identity-inbox",
   "owned_path_patterns": [
-    "^/api/v1/identity\\-inbox$"
+    "^/api/v1/identity\\-inbox$",
+    "^/api/v1/identity\\-inbox/search/issues$",
+    "^/api/v1/identity\\-inbox/[^/]+$",
+    "^/api/v1/identity\\-inbox/[^/]+/confirm$",
+    "^/api/v1/identity\\-inbox/[^/]+/reject$",
+    "^/api/v1/identity\\-inbox/[^/]+/defer$",
+    "^/api/v1/identity\\-inbox/[^/]+/skip$"
   ],
   "defaults": {
     "runtime": "python-fastapi",
