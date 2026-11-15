@@ -1083,9 +1083,9 @@ SELECT json_build_object(
 
 fn iso_timestamp(column: &str) -> String {
     format!(
-        "CASE WHEN {column} IS NULL THEN NULL \$
-         WHEN date_trunc('second', {column}) = {column} \$
-         THEN to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') \$
+        "CASE WHEN {column} IS NULL THEN NULL $$
+         WHEN date_trunc('second', {column}) = {column} $$
+         THEN to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') $$
          ELSE to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END"
     )
 }
@@ -1205,9 +1205,9 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let position: i32 = cursor.values[1].parse().unwrap_or(0);
             let id: i32 = cursor.values[2].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR (CASE WHEN $10::boolean \$
-                 THEN ({blocked}) AND (t.queue_position, t.id) > ($11::int, $12::int) \$
-                 ELSE (((NOT ({blocked})) AND (t.queue_position, t.id) > ($11::int, $12::int)) \$
+                "AND (NOT $9::boolean OR (CASE WHEN $10::boolean \
+                 THEN ({blocked}) AND (t.queue_position, t.id) > ($11::int, $12::int) \
+                 ELSE (((NOT ({blocked})) AND (t.queue_position, t.id) > ($11::int, $12::int)) \
                  OR ({blocked})) END))"
                     .to_string(),
                 vec![
@@ -1230,7 +1230,7 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let created = cursor.values[0].clone();
             let id: i32 = cursor.values[1].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR t.created_at < ($10::text)::timestamptz \$
+                "AND (NOT $9::boolean OR t.created_at < ($10::text)::timestamptz \
                  OR (t.created_at = ($10::text)::timestamptz AND t.id < $11::int))"
                     .to_string(),
                 vec![Param::Bool(true), Param::Text(created), Param::Int(id)],
@@ -1512,7 +1512,7 @@ mod tests {
         assert_eq!(
             checked_in.trim_end(),
             generated.trim_end(),
-            "Regenerate native/contracts/threads-v2.openapi.json with \$
+            "Regenerate native/contracts/threads-v2.openapi.json with $
              cargo run --example threads_openapi"
         );
     }
