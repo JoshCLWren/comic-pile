@@ -264,9 +264,14 @@ def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
     assert len(calls) == 3
 
 
-def test_hourly_sweep_prunes_only_in_trusted_controller():
-    workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/factory-issue-pr-state-reconciler.yml").read_text()
-    assert "cron: '31 * * * *'" in workflow
+def test_regular_status_job_prunes_only_in_trusted_controller():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
+    assert "cron: '*/5 * * * *'" in workflow
     assert "Prune expired generic GitHub discovery snapshots" in workflow
     assert "factory_state_cache.py prune-expired" in workflow
     assert workflow.index("uses: ./.github/actions/factory-state-cache") < workflow.index("factory_state_cache.py prune-expired")
+    assert workflow.index("factory_state_cache.py prune-expired") < workflow.index("Generate factory dashboard")
+    # Cleanup no longer depends on a large scheduled PR-history recovery sweep.
+    reconciliation = (root / ".github/workflows/factory-issue-pr-state-reconciler.yml").read_text()
+    assert "factory_state_cache.py prune-expired" not in reconciliation
