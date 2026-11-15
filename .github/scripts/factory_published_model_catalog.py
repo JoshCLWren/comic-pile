@@ -27,7 +27,7 @@ PUBLIC_CATALOGS: dict[str, str] = {
 }
 
 
-class CatalogUnavailable(RuntimeError):
+class CatalogUnavailableError(RuntimeError):
     """A provider catalog cannot prove an eligible route."""
 
 
@@ -61,7 +61,7 @@ def free_model_ids(source: str, catalog: Mapping[str, Any]) -> list[str]:
         raise ValueError(f"source does not expose verified zero-price catalog: {source}")
     rows = catalog.get("data")
     if not isinstance(rows, list):
-        raise CatalogUnavailable("published model catalog has no data list")
+        raise CatalogUnavailableError("published model catalog has no data list")
     return sorted({
         row["id"]
         for row in rows
@@ -80,7 +80,7 @@ def choose_model(
         if model not in (exclusions or set())
     ]
     if not candidates:
-        raise CatalogUnavailable(f"{source}: no verified zero-price models available")
+        raise CatalogUnavailableError(f"{source}: no verified zero-price models available")
     # Deterministic across runs, independent of manually curated roster pins.
     seed = hashlib.sha256(f"{source}:{worker}".encode()).digest()
     return candidates[int.from_bytes(seed[:8], "big") % len(candidates)]
@@ -97,18 +97,18 @@ def published_catalog(source: str, *, timeout: float = 20) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
-                raise CatalogUnavailable(f"{source}: model catalog HTTP {response.status}")
+                raise CatalogUnavailableError(f"{source}: model catalog HTTP {response.status}")
             raw = response.read(5_000_001)
     except (OSError, urllib.error.URLError) as exc:
-        raise CatalogUnavailable(f"{source}: model catalog unavailable") from exc
+        raise CatalogUnavailableError(f"{source}: model catalog unavailable") from exc
     if len(raw) > 5_000_000:
-        raise CatalogUnavailable(f"{source}: model catalog exceeded size limit")
+        raise CatalogUnavailableError(f"{source}: model catalog exceeded size limit")
     try:
         catalog = json.loads(raw)
     except (ValueError, UnicodeDecodeError) as exc:
-        raise CatalogUnavailable(f"{source}: invalid published catalog JSON") from exc
+        raise CatalogUnavailableError(f"{source}: invalid published catalog JSON") from exc
     if not isinstance(catalog, dict):
-        raise CatalogUnavailable(f"{source}: catalog must be a JSON object")
+        raise CatalogUnavailableError(f"{source}: catalog must be a JSON object")
     return catalog
 
 
@@ -125,18 +125,18 @@ def main(argv: list[str] | None = None) -> int:
             if args.catalog_json else published_catalog(args.source)
         )
         if not isinstance(catalog, dict):
-            raise CatalogUnavailable("catalog must be an object")
+            raise CatalogUnavailableError("catalog must be an object")
         excluded: set[str] = set()
         if args.exclusions_file and args.exclusions_file.is_file():
             raw = json.loads(args.exclusions_file.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                raise CatalogUnavailable("Neon model exclusions are invalid")
+                raise CatalogUnavailableError("Neon model exclusions are invalid")
             models = raw.get(args.source, [])
             if not isinstance(models, list) or not all(isinstance(x, str) for x in models):
-                raise CatalogUnavailable("Neon model exclusions are invalid")
+                raise CatalogUnavailableError("Neon model exclusions are invalid")
             excluded = set(models)
         model = choose_model(args.source, args.worker, catalog, excluded)
-    except (CatalogUnavailable, ValueError, OSError, json.JSONDecodeError) as exc:
+    except (CatalogUnavailableError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(f"factory catalog: {exc}", file=sys.stderr)
         return 1
     print(json.dumps({"source": args.source, "model": model, "catalog_verified": True}))
