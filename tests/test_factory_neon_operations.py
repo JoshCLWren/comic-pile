@@ -22,7 +22,7 @@ REPO = "JoshCLWren/comic-pile"
 
 
 class FakeConnection:
-    def __init__(self, *, models=(), budgets=(), reservations=(), events=(), retries=(), metrics=(), backoffs=()):
+    def __init__(self, *, models=(), budgets=(), reservations=(), events=(), retries=(), metrics=(), backoffs=(), model_backoffs=()):
         self.models = models
         self.budgets = budgets
         self.reservations = reservations
@@ -30,10 +30,11 @@ class FakeConnection:
         self.retries = retries
         self.metrics = metrics
         self.backoffs = backoffs
+        self.model_backoffs = model_backoffs
 
     async def fetch(self, statement, *args):
         if "FROM public.factory_state_kv" in statement:
-            return self.backoffs
+            return self.model_backoffs if "factory-model-backoff-v1" in str(args) else self.backoffs
         if "FROM public.factory_model_health" in statement:
             return self.models
         if "FROM public.factory_provider_budget" in statement:
@@ -301,3 +302,86 @@ def test_missing_credentials_are_not_inference_failures():
     assert "unconfigured" not in operations.WORKER_RETRY_CLASSES
     assert "unknown_failure" in operations.WORKER_RETRY_CLASSES
     assert "agent_timeout" in operations.WORKER_RETRY_CLASSES
+
+
+def test_all_actionable_model_failures_use_fibonacci_without_credential_penalty():
+    # Every real inference failure class must count; credential, checkout,
+    # and controller failures belong to the worker, not an unrelated model.
+    for name in ("provider_failure", "provider_throttle", "provider_quota",
+                 "model_unavailable", "model_policy_violation", "agent_timeout"):
+        assert operations.attributable_model_failure(name, False), name
+    for name in ("work_failure", "unknown_failure"):
+        assert operations.attributable_model_failure(name, True), name
+        assert not operations.attributable_model_failure(name, False)
+    for name in ("environment_failure", "control_plane_failure", "unconfigured", "no_work"):
+        assert not operations.attributable_model_failure(name, True), name
+    assert "work_failure" in operations.WORKER_RETRY_CLASSES
+
+
+def test_history_seeds_failed_source_model_without_double_counting_current_run():
+    def event(kind: str, run_id: int, outcome: str, *, proven=False):
+        return {"event_type": kind, "detail": {
+            "source": "kilo-auto", "model": "kilo-auto/free",
+            "run_id": str(run_id), "outcome_class": outcome,
+            "exact_model_proven": proven,
+        }}
+    old = [
+        event("worker_failed", 50, "work_failure", proven=True),
+        event("worker_failed", 49, "provider_throttle"),
+        event("worker_failed", 48, "unknown_failure"),  # Old pre-session abort
+        event("worker_failed", 47, "agent_timeout"),
+        event("worker_completed", 46, "success", proven=True),
+        event("worker_failed", 45, "work_failure", proven=True),
+    ]
+    # A current terminal event already in Neon must never count twice.
+    rows = [event("worker_failed", 51, "work_failure", proven=True), *old]
+    assert operations.historical_failure_streak(rows, 51, "kilo-auto", "kilo-auto/free", model_only=True) == 3
+    assert operations.historical_failure_streak(rows, 51, "kilo-auto", "kilo-auto/free", model_only=False) == 3
+    assert operations.historical_failure_streak(rows, 51, "z-ai", "x", model_only=True) == 0
+
+
+def test_completed_delivery_resets_shared_streak_across_workers():
+    def event(kind: str, run_id: int, outcome: str, *, delivered=False, proven=True):
+        return {"event_type": kind, "detail": {
+            "source": "kilo-auto", "model": "kilo-auto/free",
+            "run_id": str(run_id), "outcome_class": outcome,
+            "exact_model_proven": proven, "persisted_work": delivered,
+        }}
+    # This can come from either worker 46 or 98: shared source/model is key.
+    rows = [event("worker_failed", 71, "work_failure"),
+            event("worker_completed", 70, "unknown_failure", delivered=True),
+            event("worker_failed", 69, "work_failure")]
+    assert operations.historical_failure_streak(rows, 72, "kilo-auto", "kilo-auto/free", model_only=True) == 1
+
+
+def test_shared_model_fibonacci_backoff_blocks_both_workers_not_other_models():
+    now = datetime.now(UTC)
+    model_state = [{
+        "cache_key": f"factory-model-backoff-v1:{REPO}:source:kilo-auto:model:kilo-auto/free",
+        "payload": [{"source": "kilo-auto", "model": "kilo-auto/free",
+                     "streak": 5, "next_retry_at": (now + timedelta(minutes=25)).isoformat(),
+                     "suspended": False}],
+        "expires_at": now + timedelta(days=90),
+    }]
+    db = FakeConnection(model_backoffs=model_state)
+    with patch.object(operations, "_roster", return_value={
+        "46": ("kilo-auto", "kilo-auto/free"),
+        "98": ("kilo-auto", "kilo-auto/free"),
+        "41": ("opencode-free", "other-free"),
+    }):
+        kept, denied = run(operations._eligibility(db, REPO, ["46", "98", "41"]))
+    assert kept == ["41"]
+    assert len(denied) == 2
+    assert all("source/model" in item for item in denied)
+
+
+def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
+    import inspect
+    source = inspect.getsource(operations.project_runtime)
+    assert "pg_advisory_xact_lock" in source
+    assert "prior_model_run <= run_id" in source
+    assert "model_key, run_id" in source
+    assert "factory-model-backoff-v1:" in source
+    # Fresh attempts bootstrap from prior Neon terminal events, not GitHub.
+    assert "await _recent_streak(conn, run_id, source, model)" in source
+    assert "classification in WORKER_RETRY_CLASSES" in source
