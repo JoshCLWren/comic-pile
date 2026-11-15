@@ -93,6 +93,15 @@ def test_expired_model_cooldown_is_eligible_for_a_new_probe():
     assert not denied
 
 
+def test_provider_streak_is_not_reset_by_capacity_reservations():
+    import inspect
+    source = inspect.getsource(operations.project_runtime)
+    assert 'factory-provider-backoff-v1:' in source
+    assert 'delay_seconds' in source
+    assert 'observed_at' in source
+    assert 'SELECT last_outcome,updated_at,cooldown_until' not in source
+
+
 def test_provider_exponential_backoff_doubles_and_caps():
     base = operations.exponential_provider_delay
     assert base("provider_throttle", None, 0, float("inf")) == 1800
