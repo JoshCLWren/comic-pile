@@ -154,6 +154,10 @@ def test_parity_runner_uses_workspace_target(
     target: str | None,
 ) -> None:
     """Actual parity entrypoints follow workspace defaults and target overrides."""
+    import sys
+    import uuid
+    from importlib.util import module_from_spec, spec_from_file_location
+
     parity_dir = REPOSITORY_ROOT / "native/roll-service/parity"
     monkeypatch.syspath_prepend(str(parity_dir))
     monkeypatch.delenv("RUST_ROLL_ISSUE_READ_RATE_EXAMPLE", raising=False)
@@ -161,15 +165,18 @@ def test_parity_runner_uses_workspace_target(
         monkeypatch.delenv("CARGO_TARGET_DIR", raising=False)
     else:
         monkeypatch.setenv("CARGO_TARGET_DIR", target)
-    module = importlib.import_module(module_name)
+
+    module_path = parity_dir / f"{module_name}.py"
+    isolated_name = f"{module_name}_isolated_{uuid.uuid4().hex}"
+    spec = spec_from_file_location(isolated_name, module_path)
+    assert spec is not None and spec.loader is not None
+    module = module_from_spec(spec)
+    sys.modules[isolated_name] = module
     try:
-        importlib.reload(module)
+        spec.loader.exec_module(module)
         target_path = Path(target or "target")
         if not target_path.is_absolute():
             target_path = REPOSITORY_ROOT / target_path
         assert module.RUNNER == target_path / "debug/examples" / example
     finally:
-        # Do not leave environment-derived runner globals in the import cache.
-        import sys
-
-        sys.modules.pop(module_name, None)
+        sys.modules.pop(isolated_name, None)
