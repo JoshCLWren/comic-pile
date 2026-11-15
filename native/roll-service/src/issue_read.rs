@@ -304,12 +304,10 @@ pub struct ThreadIssueListResponse {
 fn decode_thread_issue_cursor(token: &str) -> Result<(i32, i32), ApiError> {
     let mut parts = token.split(',');
     match (parts.next(), parts.next(), parts.next()) {
-        (Some(position), Some(id), None) => {
-            match (position.parse::<i32>(), id.parse::<i32>()) {
-                (Ok(position), Ok(id)) => Ok((position, id)),
-                _ => Err(ApiError::BadRequest("Invalid page_token format".into())),
-            }
-        }
+        (Some(position), Some(id), None) => match (position.parse::<i32>(), id.parse::<i32>()) {
+            (Ok(position), Ok(id)) => Ok((position, id)),
+            _ => Err(ApiError::BadRequest("Invalid page_token format".into())),
+        },
         _ => Err(ApiError::BadRequest("Invalid page_token format".into())),
     }
 }
