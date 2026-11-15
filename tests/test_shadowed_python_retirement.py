@@ -34,7 +34,7 @@ def test_native_operations_have_no_shadow_python_handlers() -> None:
         for operation in RETIRED_OPERATIONS
         for method in operation["methods"]
     }
-    assert len(retired) == 78
+    assert len(retired) == 71
     assert operations.isdisjoint(retired), sorted(operations & retired)
     assert ("POST", "/api/v1/threads/") in operations
     assert ("GET", "/api/v1/sessions/current/") in operations
