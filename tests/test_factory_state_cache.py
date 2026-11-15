@@ -341,3 +341,47 @@ def test_compacted_registry_has_bounded_growth_and_honors_edited_old_comment():
     merged = cache.incremental_comments(slim, lambda _: [edited])
     again = cache.compact_registry_comments(merged, trusted=lambda _: True, now=now)
     assert {item["id"] for item in again} == {1, 1001}
+
+
+def test_expired_generic_cache_reads_only_prior_digest(monkeypatch):
+    from datetime import datetime, timezone
+
+    observed = []
+    def fake_run(sql, key, *, one):
+        observed.append((sql, key, one))
+        return {"payload": [{"stdout_sha256": "same-hash"}],
+                "expires_at": datetime(2026, 1, 1, tzinfo=timezone.utc)}
+
+    monkeypatch.setattr(cache, "_run", fake_run)
+    payload, fresh = cache._read("factory-github-get-v1:JoshCLWren/comic-pile:sha")
+    assert not fresh
+    assert payload == [{"stdout_sha256": "same-hash"}]
+    assert "CASE WHEN expires_at > now() THEN payload" in observed[0][0]
+    assert "jsonb_build_object" in observed[0][0]
+    assert observed[0][2] is True
+
+
+def test_expired_identical_github_get_extends_ttl_without_payload_rewrite(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"stdout_sha256": "digest-123"}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: True)
+    renewed = []
+    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *args: renewed.append(args))
+    monkeypatch.setattr(cache, "_publish", lambda *_: pytest.fail("unchanged payload must not be rewritten"))
+    key = "factory-github-get-v1:JoshCLWren/comic-pile:hash"
+    result = cache.cached_json(key, lambda _: [{"stdout_zlib_b64": "compressed", "stdout_sha256": "digest-123"}], ttl_seconds=1200)
+    assert result[0]["stdout_sha256"] == "digest-123"
+    assert len(renewed) == 1
+    assert renewed[0][0] == key
+
+
+def test_changed_github_get_replaces_payload(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"stdout_sha256": "old"}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: True)
+    published = []
+    monkeypatch.setattr(cache, "_refresh_without_rewrite", lambda *_: pytest.fail("changed response cannot extend stale data"))
+    monkeypatch.setattr(cache, "_publish", lambda *args: published.append(args))
+    new = [{"stdout_zlib_b64": "new", "stdout_sha256": "new"}]
+    assert cache.cached_json("factory-github-get-v1:r:h", lambda _: new) == new
+    assert published[0][2] == new
