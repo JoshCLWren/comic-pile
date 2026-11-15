@@ -40,7 +40,7 @@ SMALL_ACCOUNTS = 5
 LARGE_ACCOUNTS = 200
 
 
-def _token_pair_is_real(body: dict[str, object]) -> str:
+def _token_pair_is_real(body: dict[str, object], expected_subject: str) -> str:
     """Require the canonical bearer pair shape; return the access token."""
     access = body.get("access_token")
     refresh = body.get("refresh_token")
@@ -49,7 +49,7 @@ def _token_pair_is_real(body: dict[str, object]) -> str:
     assert access != refresh, "access and refresh credentials must differ"
     assert body.get("token_type") == "bearer", body
     claims = jwt.decode(access, SECRET, algorithms=["HS256"])
-    assert claims["sub"].endswith("-registered"), claims
+    assert claims["sub"] == expected_subject, claims
     assert claims["type"] == "access", claims
     return access
 
@@ -83,14 +83,14 @@ async def test_register_statements_do_not_grow_with_account_count() -> None:
             "RUST_ROLL_TEST_BODY": (
                 f'{{"username":"{small_username}",'
                 f'"email":"{small_username}@example.invalid",'
-                '"password":"native-register-budget-password"}}'
+                '"password":"native-register-budget-password"}'
             ),
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
         small = await measure_route(BINARY, env, engine, ROUTE, "small")
         assert small.status == 200, small.body
-        small_access = _token_pair_is_real(small.body)
+        small_access = _token_pair_is_real(small.body, small_username)
 
         raw = await asyncpg.connect(url)
         try:
@@ -115,11 +115,11 @@ async def test_register_statements_do_not_grow_with_account_count() -> None:
         env["RUST_ROLL_TEST_BODY"] = (
             f'{{"username":"{large_username}",'
             f'"email":"{large_username}@example.invalid",'
-            '"password":"native-register-budget-password"}}'
+            '"password":"native-register-budget-password"}'
         )
         large = await measure_route(BINARY, env, engine, ROUTE, "large")
         assert large.status == 200, large.body
-        _token_pair_is_real(large.body)
+        _token_pair_is_real(large.body, large_username)
 
         assert small.db_statements is not None and large.db_statements is not None, (
             "pg_stat_statements is required"

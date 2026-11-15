@@ -142,7 +142,8 @@ async def test_reset_password_statements_do_not_grow_with_account_count() -> Non
         replay = await measure_route(
             BINARY, {**env, "RUST_ROLL_TEST_BODY": _body(small_token)}, engine, ROUTE, "replay"
         )
-        assert replay.status == 401, "a consumed reset token must be rejected on replay"
+        assert replay.status == 400, replay.body
+        assert replay.body.get("detail") == "Invalid or expired reset request.", replay.body
 
         await grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
         large_token = f"reset-{uuid4().hex}"
