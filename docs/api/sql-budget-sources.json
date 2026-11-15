@@ -151,14 +151,14 @@
       "method": "GET",
       "path": "/api/v2/continuity-plans/{plan_id}/recovery",
       "sql_budget": {
-        "application_statements": 5,
+        "application_statements": 7,
         "transaction_control_statements": 0,
-        "total_statements": 5,
-        "basis": "auth extractor 1 + plan lookup 1 + linked sources 1 + saved issues 1 + candidate lists 1; set-based",
+        "total_statements": 7,
+        "basis": "auth extractor/checkout probe 2 + plan lookup 1 + linked sources 1 + saved issues 1 + candidate lists 1 + handler checkout probe 1; set-based",
         "grows_with_data": false,
-        "max_statements": 5,
+        "max_statements": 7,
         "proof_reference": "native/roll-service/src/reading_plan_recovery.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured"
       }
     },
     {
