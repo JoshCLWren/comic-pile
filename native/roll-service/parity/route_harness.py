@@ -206,6 +206,33 @@ async def _role_statement_count(connection: AsyncConnection, *, toplevel: bool) 
         return None
 
 
+async def reset_statement_stats() -> None:
+    """Reset PostgreSQL statement statistics before one isolated route request.
+
+    ``pg_stat_statements`` groups statements by PostgreSQL query id and keeps
+    one representative text for the group. A checkout probe can therefore share
+    a group with an application statement unless the group is first observed
+    while the probe is the only statement in flight. Resetting immediately
+    before the mounted request guarantees that the probe establishes the
+    representative text; route statements then accumulate in separate groups.
+
+    Args:
+        None.
+
+    Returns:
+        None; a reset failure raises the database error.
+    """
+    admin_url = os.environ.get("RUST_ROLL_TEST_DATABASE_URL")
+    if admin_url is None:
+        return
+    admin_engine = create_async_engine(admin_url.replace("postgresql://", "postgresql+asyncpg://"))
+    try:
+        async with admin_engine.connect() as admin:
+            await admin.execute(text("SELECT pg_stat_statements_reset()"))
+    finally:
+        await admin_engine.dispose()
+
+
 async def db_statement_breakdown(engine: AsyncEngine) -> StatementBreakdown | None:
     """Return isolated-role statement counts split by execution responsibility.
 

@@ -31,6 +31,7 @@ from route_harness import (
     assert_no_statement_growth,
     cargo_example_path,
     db_statement_breakdown,
+    reset_statement_stats,
     run_rust_example,
 )
 
@@ -178,6 +179,7 @@ async def _measure_route(
     if body is not None:
         env["RUST_ROLL_TEST_BODY"] = json.dumps(body)
 
+    await reset_statement_stats()
     before = await db_statement_breakdown(engine)
     response, _, _, _ = await run_rust_example(BINARY, env)
     after = await db_statement_breakdown(engine)
