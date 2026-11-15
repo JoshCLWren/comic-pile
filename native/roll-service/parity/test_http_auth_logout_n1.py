@@ -65,7 +65,9 @@ async def test_auth_logout_statements_do_not_grow_with_account_count() -> None:
                 **os.environ,
                 "RUST_ROLL_TEST_METHOD": METHOD,
                 "RUST_ROLL_TEST_URI": ROUTE,
-                "RUST_ROLL_TEST_TOKEN": _token(prefix, jti=jti),
+                "RUST_ROLL_TEST_TOKEN": auth_token(
+                    prefix, jti=jti, secret=SECRET, token_type="access"
+                ),
                 "RUST_ROLL_TEST_CSRF": CSRF,
                 "RUST_ROLL_DATABASE_URL": url,
                 "RUST_ROLL_JWT_SECRET": SECRET,
@@ -86,7 +88,7 @@ async def test_auth_logout_statements_do_not_grow_with_account_count() -> None:
             await raw.close()
         assert revoked == 1, "logout must revoke the exact presented token"
 
-        await _grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
+        await grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
         large_jti = f"jti-{uuid4().hex}"
         large = await measure_route(BINARY, env_for(large_jti), engine, ROUTE, "large")
         assert large.status == 200, large.body

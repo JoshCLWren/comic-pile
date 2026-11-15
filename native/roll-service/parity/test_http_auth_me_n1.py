@@ -13,14 +13,17 @@ from __future__ import annotations
 import os
 from uuid import uuid4
 
-import asyncpg
 import pytest
-from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import User
 
-from auth_budget_controls import extra_query_fails_budget, per_row_queries_fail_budget
+from auth_budget_controls import (
+    auth_token,
+    extra_query_fails_budget,
+    grow_accounts,
+    per_row_queries_fail_budget,
+)
 from route_harness import assert_declared_budget, cargo_example_path, measure_route
 
 SECRET = "synthetic-native-auth-me-n1-secret"
@@ -30,29 +33,6 @@ EXAMPLE = cargo_example_path("http_auth_request")
 BINARY = str(EXAMPLE)
 SMALL_ACCOUNTS = 5
 LARGE_ACCOUNTS = 200
-
-
-def _token(username: str, *, jti: str) -> str:
-    """Mint an access token the native verifier accepts for one fixture user."""
-    return jwt.encode(
-        {"sub": username, "jti": jti, "type": "access", "pc": 0, "exp": 4_102_444_800},
-        SECRET,
-        algorithm="HS256",
-    )
-
-
-async def _grow_accounts(url: str, prefix: str, start: int, total: int) -> None:
-    """Add peer accounts until the fixture holds ``total`` rows."""
-    raw = await asyncpg.connect(url)
-    try:
-        for index in range(start, total):
-            await raw.execute(
-                "INSERT INTO users (username, email) VALUES ($1, $2)",
-                f"{prefix}_peer{index}",
-                f"{prefix}_peer{index}@example.invalid",
-            )
-    finally:
-        await raw.close()
 
 
 @pytest.mark.asyncio
@@ -75,7 +55,9 @@ async def test_auth_me_statements_do_not_grow_with_account_count() -> None:
                 )
             await db.commit()
             owner_id = owner.id
-            token = _token(prefix, jti=f"jti-{uuid4().hex}")
+            token = auth_token(
+                prefix, jti=f"jti-{uuid4().hex}", secret=SECRET, token_type="access"
+            )
 
         env = {
             **os.environ,
@@ -92,7 +74,7 @@ async def test_auth_me_statements_do_not_grow_with_account_count() -> None:
         assert small.body.get("email") == f"{prefix}@example.invalid", small.body
         assert small.body.get("is_admin") is False, small.body
 
-        await _grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
+        await grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
         large = await measure_route(BINARY, env, engine, ROUTE, "large")
         assert large.status == 200, large.body
         assert large.body.get("id") == owner_id, large.body
