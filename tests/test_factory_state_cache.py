@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / ".github/scripts/factory_state_cache.py"
+sys.path.insert(0, str(MODULE_PATH.parent))
 SPEC = importlib.util.spec_from_file_location("factory_state_cache_test", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 cache = importlib.util.module_from_spec(SPEC)
