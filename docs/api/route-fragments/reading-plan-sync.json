@@ -1,0 +1,24 @@
+{
+  "family": "reading-plan-sync",
+  "owned_path_patterns": [
+    "^/api/v1/reading-plan-sync(?:/.*)?$"
+  ],
+  "defaults": {
+    "runtime": "python-fastapi",
+    "status": "transitional",
+    "owning_issue": null,
+    "consumers": [
+      "frontend/src/services/api-continuity-plans.ts"
+    ]
+  },
+  "operations": [
+    {
+      "bucket": "v1_operations",
+      "method": "GET",
+      "path": "/api/v1/reading-plan-sync/status",
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/reading-plan-sync/status$",
+      "owning_issue": 4851
+    }
+  ]
+}
