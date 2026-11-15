@@ -28,26 +28,26 @@
     {
       "worker": "41",
       "source": "opencode-free",
-      "model": "mimo-v2.6-flash-free",
+      "model": "@catalog",
       "minute": "15",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode MiMo V2.6 Flash Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "42",
       "source": "opencode-free",
-      "model": "nemotron-3-ultra-free",
+      "model": "@catalog",
       "minute": "20",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Nemotron 3 Ultra Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "45",
       "source": "opencode-free",
-      "model": "nemotron-3.5-lightning-free",
+      "model": "@catalog",
       "minute": "35",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Nemotron 3.5 Lightning Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "46",
@@ -55,15 +55,15 @@
       "model": "kilo-auto/free",
       "minute": "40",
       "scheduler": "dispatcher",
-      "display_name": "Kilo Auto Free \u00b7 Forge"
+      "display_name": "Kilo Auto Free · Forge"
     },
     {
       "worker": "51",
       "source": "openrouter-free",
-      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "model": "@catalog",
       "minute": "5",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Nemotron 3 Ultra Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "54",
@@ -76,50 +76,50 @@
     {
       "worker": "60",
       "source": "openrouter-free",
-      "model": "cohere/north-mini-code:free",
+      "model": "@catalog",
       "minute": "30",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Cohere North Mini Code Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "61",
       "source": "openrouter-free",
-      "model": "google/gemma-4-31b-it:free",
+      "model": "@catalog",
       "minute": "55",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Gemma 4 31B Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "62",
       "source": "openrouter-free",
-      "model": "google/gemma-4-26b-a4b-it:free",
+      "model": "@catalog",
       "minute": "0",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Gemma 4 26B Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "64",
       "source": "openrouter-free",
-      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+      "model": "@catalog",
       "minute": "35",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Nemotron 3 Omni Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "65",
       "source": "openrouter-free",
-      "model": "nvidia/nemotron-3.5-lightning:free",
+      "model": "@catalog",
       "minute": "25",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Nemotron 3.5 Lightning Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "75",
       "source": "opencode-free",
-      "model": "nemotron-3.5-super-vl-free",
+      "model": "@catalog",
       "minute": "25",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Nemotron 3.5 Super Vl Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "80",
@@ -172,26 +172,26 @@
     {
       "worker": "99",
       "source": "openrouter-free",
-      "model": "liquid/lfm-3-1.7b:free",
+      "model": "@catalog",
       "minute": "0",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter LFM3 1.7B Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "100",
       "source": "openrouter-free",
-      "model": "recursive/flint-v1.0:free",
+      "model": "@catalog",
       "minute": "5",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Flint Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "102",
       "source": "openrouter-free",
-      "model": "nvidia/nemotron-3.5-super-vl:free",
+      "model": "@catalog",
       "minute": "15",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Nemotron 3.5 Super VL Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "103",
@@ -220,66 +220,66 @@
     {
       "worker": "108",
       "source": "openrouter-free",
-      "model": "thinkingmachines/inkling-2-small:free",
+      "model": "@catalog",
       "minute": "10",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Inkling 2 Small Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "109",
       "source": "openrouter-free",
-      "model": "baidu/ernie-5.5-flash-preview:free",
+      "model": "@catalog",
       "minute": "30",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter ERNIE 5.5 Flash Preview Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "111",
       "source": "opencode-free",
-      "model": "glm-5.3-flash-free",
+      "model": "@catalog",
       "minute": "50",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode GLM 5.3 Flash Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "112",
       "source": "opencode-free",
-      "model": "minimax-m3.1-flash-free",
+      "model": "@catalog",
       "minute": "0",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode MiniMax M3.1 Flash Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "113",
       "source": "opencode-free",
-      "model": "flint-40b-free",
+      "model": "@catalog",
       "minute": "5",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Flint 40B Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "114",
       "source": "opencode-free",
-      "model": "beam-free",
+      "model": "@catalog",
       "minute": "10",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Beam Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "115",
       "source": "opencode-free",
-      "model": "iceman-free",
+      "model": "@catalog",
       "minute": "15",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode Iceman Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "116",
       "source": "opencode-free",
-      "model": "longcat-2.5-free",
+      "model": "@catalog",
       "minute": "45",
       "scheduler": "dispatcher",
-      "display_name": "OpenCode LongCat 2.5 Free"
+      "display_name": "OpenCode Free catalog slot"
     },
     {
       "worker": "117",
@@ -364,10 +364,10 @@
     {
       "worker": "127",
       "source": "openrouter-free",
-      "model": "particle-ai/particle-1:free",
+      "model": "@catalog",
       "minute": "45",
       "scheduler": "dispatcher",
-      "display_name": "OpenRouter Particle-1 Free"
+      "display_name": "OpenRouter Free catalog slot"
     },
     {
       "worker": "132",
@@ -428,26 +428,26 @@
     {
       "worker": "139",
       "source": "vercel-ai-gateway",
-      "model": "reflection/beam-free",
+      "model": "@catalog",
       "minute": "45",
       "scheduler": "dispatcher",
-      "display_name": "Vercel Reflection Beam Free"
+      "display_name": "Vercel zero-price catalog slot"
     },
     {
       "worker": "140",
       "source": "vercel-ai-gateway",
-      "model": "nvidia/nemotron-3.5-lightning-free",
+      "model": "@catalog",
       "minute": "50",
       "scheduler": "dispatcher",
-      "display_name": "Vercel Nemotron 3.5 Lightning Free"
+      "display_name": "Vercel zero-price catalog slot"
     },
     {
       "worker": "141",
       "source": "vercel-ai-gateway",
-      "model": "stealth/glyph-cluster",
+      "model": "@catalog",
       "minute": "55",
       "scheduler": "dispatcher",
-      "display_name": "Vercel Glyph Cluster Free"
+      "display_name": "Vercel zero-price catalog slot"
     },
     {
       "worker": "142",
