@@ -62,10 +62,19 @@ def _payload(value: Any) -> list[dict[str, Any]] | None:
 
 
 def _read(key: str) -> tuple[list[dict[str, Any]] | None, bool]:
-    row = _run(
-        "SELECT payload, expires_at FROM public.factory_state_kv WHERE cache_key=$1",
-        key, one=True,
+    # When a generic GET expires, the caller will fetch GitHub again. Return
+    # just its prior digest, not megabytes of expired JSON over the wire.
+    # Fresh GETs still return the complete original response.
+    query = (
+        """SELECT CASE WHEN expires_at > now() THEN payload
+                  ELSE jsonb_build_array(jsonb_build_object(
+                      'stdout_sha256', payload->0->>'stdout_sha256'))
+                END AS payload, expires_at
+           FROM public.factory_state_kv WHERE cache_key=$1"""
+        if key.startswith("factory-github-get-v1:")
+        else "SELECT payload, expires_at FROM public.factory_state_kv WHERE cache_key=$1"
     )
+    row = _run(query, key, one=True)
     if row is None:
         return None, False
     data = _payload(row["payload"])
@@ -263,6 +272,16 @@ def cached_json(
         raise
 
     unchanged = previous is not None and result == previous
+    if (not unchanged and key.startswith("factory-github-get-v1:")
+            and previous and len(previous) == 1 and len(result) == 1
+            and isinstance(previous[0], dict) and isinstance(result[0], dict)):
+        # Compressed cached GETs contain their source-byte digest. An expired
+        # snapshot can refresh its TTL without fetching the old TOAST value
+        # from Neon or rewriting it when GitHub returned identical bytes.
+        old_digest = previous[0].get("stdout_sha256")
+        unchanged = isinstance(old_digest, str) and bool(old_digest) and (
+            old_digest == result[0].get("stdout_sha256")
+        )
     try:
         if unchanged:
             _refresh_without_rewrite(key, owner, ttl_seconds, len(result))
