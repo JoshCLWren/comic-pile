@@ -387,9 +387,8 @@ pub async fn list_thread_issues(
         ));
     }
 
-    let (cursor_position, cursor_id) = cursor.map_or((None, None), |(position, id)| {
-        (Some(position), Some(id))
-    });
+    let (cursor_position, cursor_id) =
+        cursor.map_or((None, None), |(position, id)| (Some(position), Some(id)));
     let rows = connection
         .query(
             &*ISSUE_PAGE_SQL,
@@ -424,7 +423,9 @@ pub async fn list_thread_issues(
         })
         .collect();
     let next_page_token = if has_more {
-        issues.last().map(|last| format!("{},{}", last.position, last.id))
+        issues
+            .last()
+            .map(|last| format!("{},{}", last.position, last.id))
     } else {
         None
     };
@@ -623,8 +624,13 @@ mod tests {
 
     #[test]
     fn page_tokens_round_trip_python_cursor_semantics() {
-        assert_eq!(parse_issue_page_token("12,34").expect("valid token"), (12, 34));
-        for bad in ["", "12", "12,", "12,34,", "12,34,56", "a,b", "1,b", "-,2", "1.5,2"] {
+        assert_eq!(
+            parse_issue_page_token("12,34").expect("valid token"),
+            (12, 34)
+        );
+        for bad in [
+            "", "12", "12,", "12,34,", "12,34,56", "a,b", "1,b", "-,2", "1.5,2",
+        ] {
             let error = parse_issue_page_token(bad).expect_err(bad);
             assert_eq!(error.status(), StatusCode::BAD_REQUEST, "{bad}");
             assert!(
