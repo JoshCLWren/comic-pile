@@ -4,7 +4,7 @@
     "^/api/v1/taste/discoveries(?:/.*)?$"
   ],
   "defaults": {
-    "runtime": "python-fastapi",
+    "runtime": "native-rust",
     "status": "transitional",
     "owning_issue": 4853,
     "consumers": [
