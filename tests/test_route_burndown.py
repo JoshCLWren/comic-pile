@@ -198,28 +198,7 @@ def test_full_surface_matches_deployed_ingress() -> None:
         for item in unversioned_ops
         if item.get("burndown_status") == "shadowed by Rust"
     ]
-    assert len(shadowed_unversioned) == sum(
-        item.get("ingress_destination") == "/api/native_roll.rs"
-        and item.get("runtime") == "python-fastapi"
-        for item in unversioned_ops
-    )
-    assert any(
-        item.get("path") == "/api/auth/login"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in unversioned_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/bug-reports/"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in unversioned_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/threads/{thread_id}"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in unversioned_ops
-    )
+    assert len(shadowed_unversioned) == 0
     live_v1 = [
         item
         for item in v1_ops
@@ -249,59 +228,6 @@ def test_full_surface_matches_deployed_ingress() -> None:
         item.get("burndown_status") == "shadowed by Rust"
         for item in v1_ops
         if str(item.get("path", "")).startswith("/api/v1/tags")
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/users/me/preferences"
-        and item.get("burndown_status") == "shadowed by Rust"
-        and item.get("owning_issue") == 4834
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "PATCH"
-        and item.get("path") == "/api/v1/users/me/preferences"
-        and item.get("burndown_status") == "shadowed by Rust"
-        and item.get("owning_issue") == 4834
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/users/me/taste-signals"
-        and item.get("burndown_status") == "shadowed by Rust"
-        and item.get("owning_issue") == 4834
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "PUT"
-        and item.get("path")
-        == "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict"
-        and item.get("burndown_status") == "shadowed by Rust"
-        and item.get("owning_issue") == 4834
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "GET"
-        and item.get("path") == "/api/v1/reading-mode"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/reading-mode"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/reading-mode/dismiss-suggestion"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
-    )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/reading-mode/suggest"
-        and item.get("burndown_status") == "shadowed by Rust"
-        for item in v1_ops
     )
     assert any(
         item.get("method") == "POST"
