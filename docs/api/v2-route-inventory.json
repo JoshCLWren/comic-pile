@@ -2209,11 +2209,10 @@
         "method": "GET",
         "path": "/api/v1/issue-identity/cbl-sources/browse",
         "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "status": "target",
+        "owning_issue": 4843,
         "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
+          "frontend/src/services/api-custom-cbl.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "shadowed by Rust",
@@ -2264,11 +2263,10 @@
         "method": "GET",
         "path": "/api/v1/issue-identity/cbl-sources/folders",
         "runtime": "python-fastapi",
-        "status": "transitional",
-        "owning_issue": null,
+        "status": "target",
+        "owning_issue": 4843,
         "consumers": [
-          "frontend/src/services/api-cbl-sources.ts",
-          "frontend/src/services/api-reading-graph.ts"
+          "frontend/src/services/api-custom-cbl.ts"
         ],
         "ingress_destination": "/api/native_roll.rs",
         "burndown_status": "shadowed by Rust",
