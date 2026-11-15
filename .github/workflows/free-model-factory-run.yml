@@ -1376,7 +1376,15 @@ jobs:
           [[ -n "${WORKER:-}" ]] || exit 0
           marker="<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-${WORKER} -->"
           now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          if [[ "$CONFIGURED" != true ]]; then outcome='unconfigured'; else outcome="$JOB_STATUS"; fi
+          # A green wrapper exit is NOT evidence of useful coding. The trusted
+          # post-run classifier will publish the final delivery verdict.
+          if [[ "$CONFIGURED" != true ]]; then
+            outcome='unconfigured'
+          elif [[ "$JOB_STATUS" == success ]]; then
+            outcome='finished'
+          else
+            outcome='failure'
+          fi
           body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nModel: %s\nSource: %s\nSlot: :%02d hourly\nOutcome: %s\nConfiguration: %s\nUpdated: %s\nRun: %s' \
             "$marker" "$WORKER" "$MODEL" "$SOURCE" "$MINUTE" "$outcome" "$REASON" "$now" "$GITHUB_RUN_ID")"
           # Neon provides a candidate ID. Verify the marker live before PATCH;
@@ -1410,8 +1418,8 @@ jobs:
             attempt_outcome='control_plane_failure'
             attempt_detail="factory controller assignment failed with exit status ${worker_status}"
           elif [[ "$CONFIGURED" == true && "$JOB_STATUS" == success ]]; then
-            attempt_outcome='success'
-            attempt_detail='factory job completed successfully'
+            attempt_outcome='classification_pending'
+            attempt_detail='wrapper exited; awaiting trusted work/delivery classification'
           elif [[ "$CONFIGURED" != true ]]; then
             attempt_outcome='unknown_failure'
             attempt_detail="factory lane was not executable: ${REASON}"

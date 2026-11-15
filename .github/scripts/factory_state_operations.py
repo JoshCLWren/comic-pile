@@ -114,7 +114,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     persisted = outcome.get("persisted_work") is True
     delivered = (persisted and outcome.get("delivery_outcome") == "persisted"
                  and str(outcome.get("delivery_pr") or "").isdecimal())
-    completed = classification in {"success", "no_work"} or delivered
+    completed = classification == "success" or delivered
+    failed = classification not in {"success", "no_work"} and not delivered
     observed = datetime.now(timezone.utc)
     # A trusted job-log collector can attest multiple attempted free models.
     # This evidence belongs to this same idempotent runtime transaction.
@@ -142,8 +143,8 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                  failures=factory_worker_metrics.failures+EXCLUDED.failures,
                  last_run_id=greatest(factory_worker_metrics.last_run_id,EXCLUDED.last_run_id),
                  updated_at=now()""",
-            repo, worker, source, model, int(persisted), int(completed),
-            int(not completed), run_id)
+            repo, worker, source, model, int(delivered), int(completed),
+            int(failed), run_id)
         if classification == "model_retired_410":
             status, until = "retired", None
         elif classification in MODEL_COOLDOWNS:
