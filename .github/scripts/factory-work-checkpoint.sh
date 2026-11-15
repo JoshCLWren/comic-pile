@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Trusted factory-only recovery writer. Never checks out a different branch,
-# edits the agent's index, or pushes into a production/review PR branch.
+# Trusted deterministic work writer. A private index leaves the agent alone;
+# assigned PR updates are fenced by live ownership and atomic fast-forward pushes.
 set -Eeuo pipefail
 
 [[ "$#" -eq 4 ]] || { echo 'usage: factory-work-checkpoint.sh MODE NUMBER WORKER RUN_ID' >&2; exit 2; }
@@ -37,13 +37,17 @@ trap ':' USR2
 publish_checkpoint() {
   [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" && -n "${GITHUB_REPOSITORY:-}" ]] || return 0
   python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" --run-id "$run_id" || {
-    echo '::warning::Checkpoint saved; draft publication will retry on the next interval' >&2
+    echo '::warning::Checkpoint saved; work PR publication will retry on the next interval' >&2
     return 1
   }
 }
 
 checkpoint_once() {
-  local current_tree commit
+  local current_tree commit parent local_head
+  if [[ -n "${TRUSTED_CHECKPOINT_HANDOFF:-}" ]]; then
+    python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+      --run-id "$run_id" --check-write --mode "$mode" --number "$number" --worker "$worker" --work-branch "${ref#refs/heads/}" || return 1
+  fi
   # The agent can inspect refs, but this writer only snapshots the exact
   # checked-out target branch. Never follow its arbitrary branch switches.
   [[ "$(git symbolic-ref --quiet --short HEAD 2>/dev/null || :)" == "$source_branch" ]] || return 0
@@ -53,17 +57,33 @@ checkpoint_once() {
   GIT_INDEX_FILE="$index" git add -A -- . || return 1
   current_tree="$(GIT_INDEX_FILE="$index" git write-tree)" || return 1
   if [[ "$current_tree" == "$last_tree" ]]; then
-    # A successful git push does not prove GitHub accepted the draft API call.
+    # A successful git push does not prove GitHub accepted PR publication.
     [[ "$last_commit" == "$base_sha" ]] || publish_checkpoint
     return 0
   fi
-  commit="$(printf 'checkpoint(factory): worker %s run %s %s #%s (unreviewed recovery only)\n\nIssue: %s\nModel: %s\nRuntime-model: %s\nSource-branch: %s\nBase-commit: %s\n' \
-    "$worker" "$run_id" "$mode" "$number" "${issue:-unknown}" "$model" "$runtime_model" "$source_branch" "$base_sha" | git commit-tree "$current_tree" -p "$last_commit")" || return 1
-  # Every attempt owns a unique ref. The parent chain makes each update
-  # fast-forward-only; neither main nor the assigned PR branch is touched.
-  if GIT_TERMINAL_PROMPT=0 git push --quiet origin "$commit:$ref"; then
+  parent="$last_commit"
+  local_head="$(git rev-parse HEAD)" || return 1
+  # Preserve ordinary commits made after a wrapper/worker adopted this ancestry.
+  if git merge-base --is-ancestor "$last_commit" "$local_head"; then
+    parent="$local_head"
+  elif ! git merge-base --is-ancestor "$local_head" "$last_commit"; then
+    echo '::warning::Diverged local ancestry; retaining persisted work' >&2
+    return 1
+  fi
+  commit="$(printf 'checkpoint(factory): worker %s run %s %s #%s (persisted work; validation pending)\n\nIssue: %s\nModel: %s\nRuntime-model: %s\nSource-branch: %s\nBase-commit: %s\n' \
+    "$worker" "$run_id" "$mode" "$number" "${issue:-unknown}" "$model" "$runtime_model" "$source_branch" "$base_sha" | git commit-tree "$current_tree" -p "$parent")" || return 1
+  local -a destinations=("$commit:$ref")
+  if [[ "$mode" == pr ]]; then
+    # Both refs advance together or neither does. No force push or side PR.
+    destinations+=("$commit:refs/heads/$source_branch")
+  fi
+  if GIT_TERMINAL_PROMPT=0 git push --atomic --quiet origin "${destinations[@]}"; then
     last_tree="$current_tree"
     last_commit="$commit"
+    if [[ -n "${FACTORY_CHECKPOINT_REF_FILE:-}" ]]; then
+      printf '%s\n%s\n' "$commit" "${ref#refs/heads/}" > "$FACTORY_CHECKPOINT_REF_FILE.tmp"
+      mv "$FACTORY_CHECKPOINT_REF_FILE.tmp" "$FACTORY_CHECKPOINT_REF_FILE"
+    fi
     printf '[factory-checkpoint] saved %s #%s: %s (%s)\n' "$mode" "$number" "$ref" "$commit"
     publish_checkpoint
   else
@@ -82,7 +102,7 @@ while :; do
   kill "$sleep_pid" 2>/dev/null || true
   checkpoint_once || echo '::warning::Factory checkpoint attempt failed' >&2
   if (( stop_requested != 0 )); then
-    # TERM/USR1 can arrive while git or the draft API call is running. Capture
+    # TERM/USR1 can arrive while git or PR publication is running. Capture
     # again after that operation so a final correction cannot miss the flush.
     checkpoint_once || echo '::warning::Final factory checkpoint attempt failed' >&2
     break

@@ -22,37 +22,61 @@ BASE = "b" * 40
 BRANCH = f"factory/work-checkpoints/issue-4853/kilo-auto-free/{RUN}"
 
 
+def labels(*names: str) -> list[dict]:
+    """Build GitHub label objects."""
+    return [{"name": name} for name in names]
+
+
 @pytest.fixture
 def harness(monkeypatch: pytest.MonkeyPatch) -> dict:
     state: dict = {
-        "run": {"status": "completed", "html_url": f"https://github.com/{REPO}/actions/runs/{RUN}"},
+        "run": {"id": int(RUN), "status": "completed", "display_title": "Factory 46 · fixed-model entry",
+                "html_url": f"https://github.com/{REPO}/actions/runs/{RUN}"},
         "saved": {"head": HEAD, "base": BASE, "tree": "c" * 40,
-                  "branch": BRANCH, "mode": "pr", "number": 5152,
+                  "branch": BRANCH, "mode": "issue", "number": 4853,
                   "worker": "46", "issue": "4853", "model": "kilo-auto/free"},
         "drafts": [], "calls": [], "comments": [], "incorporated": False,
+        "issue": {"number": 4853, "state": "open", "title": "Implement real work",
+                  "body": "Acceptance: deliver it. Do not close #4737. Fixes #999.",
+                  "labels": labels("factory", "factory:46", "factory:building")},
+        "pr": {"number": 5152, "state": "open", "draft": False,
+               "title": "Custom work title", "body": "Custom description", "base": {"ref": "main"},
+               "head": {"ref": "factory/98-4853-kilo-auto", "sha": HEAD,
+                        "repo": {"full_name": REPO}},
+               "labels": labels("factory", "factory:46", "factory:building")},
+        "producers": [],
     }
     monkeypatch.setattr(handoff, "verified_run", lambda *_: state["run"])
+    monkeypatch.setattr(handoff, "newer_worker_run", lambda *_: False)
     monkeypatch.setattr(handoff, "checkpoint", lambda *_: state["saved"])
     monkeypatch.setattr(handoff, "recovery_prs", lambda *_: state["drafts"])
     monkeypatch.setattr(handoff, "incorporated", lambda *_: state["incorporated"])
     monkeypatch.setattr(handoff, "pages", lambda *_: state["comments"])
+    monkeypatch.setattr(handoff, "record_producer", lambda _, pr, saved:
+                        state["producers"].append((pr["number"], saved["worker"], pr["head"]["sha"])))
 
     def obj(endpoint: str) -> dict:
-        if endpoint.endswith("/pulls/5200") and state["drafts"]:
-            return state["drafts"][0]
-        if "/pulls/" in endpoint:
-            return {"number": 5152, "state": "open", "head": {
-                "ref": "factory/98-4853-kilo-auto", "sha": "d" * 40,
-                "repo": {"full_name": REPO}}, "merged": False}
-        return {"number": 5152}
+        if "/compare/" in endpoint:
+            return {"status": "ahead"}
+        if endpoint.endswith("/4853"):
+            return state["issue"]
+        return state["pr"]
 
     def api(endpoint: str, method: str = "GET", **fields: object) -> object:
         state["calls"].append((endpoint, method, fields))
         if method == "POST" and endpoint.endswith("/pulls"):
-            result = {"number": 5200, "state": "open", "draft": True, "labels": [],
-                      "head": {"sha": HEAD}}
+            result = state["pr"]
+            result.update({"title": fields["title"], "body": fields["body"], "draft": fields["draft"]})
+            result["head"]["ref"] = fields["head"]
             state["drafts"].append(result)
             return result
+        if method == "PUT" and endpoint.endswith("/labels"):
+            target = state["issue"] if "/4853/" in endpoint else state["pr"]
+            values = fields["labels"]
+            assert isinstance(values, list)
+            target["labels"] = labels(*values)
+        if method == "POST" and endpoint.endswith("/comments"):
+            state["comments"].append({"body": fields["body"], "user": {"login": "github-actions[bot]"}})
         return None
 
     monkeypatch.setattr(handoff, "obj", obj)
@@ -60,112 +84,103 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> dict:
     return state
 
 
-def test_first_saved_repair_gets_linked_draft_without_mutating_original(harness: dict) -> None:
+def test_issue_publication_is_actual_normal_scoped_work_pr(harness: dict) -> None:
     result = handoff.publish(REPO, RUN)
     assert result["saved"] and result["published"] and not result["validated"]
-    assert result["checkpoint_sha"] == HEAD
-    create = next(call for call in harness["calls"] if call[0].endswith("/pulls"))
-    assert create[2]["draft"] is True
-    assert create[2]["head"] == BRANCH
-    assert create[2]["base"] == "factory/98-4853-kilo-auto"
-    assert "4853" in create[2]["body"] and "kilo-auto/free" in create[2]["body"]
-    assert not any(call[0].endswith("/pulls/5152") for call in harness["calls"])
-    assert not any(call[0].endswith("/issues/5152/labels") for call in harness["calls"])
-    assert any(call[0].endswith("/issues/5152/comments") for call in harness["calls"])
+    create = next(call[2] for call in harness["calls"] if call[0].endswith("/pulls"))
+    assert create["draft"] is False and create["base"] == "main"
+    assert create["head"] == BRANCH and create["title"] == "Implement real work"
+    assert create["body"].startswith("Closes #4853.")
+    assert "close #4737" not in create["body"] and "Fixes #999" not in create["body"]
+    assert "Worker: opencode-free-model-factory-46" in create["body"]
+    assert "Acceptance: deliver it" in create["body"]
+    assert harness["producers"] == [(5152, "46", HEAD)]
+    for target in (harness["issue"], harness["pr"]):
+        assert handoff.labels_of(target) == {"factory", "factory:unowned",
+            "factory:changes-requested"} | ({"ralph-status:in-review"} if target is harness["issue"] else set())
 
 
-def test_publication_retries_without_duplicate_pr_and_preserves_owner(harness: dict) -> None:
+def test_publication_retries_same_pr_without_duplicate_or_overwriting_custom_body(harness: dict) -> None:
     handoff.publish(REPO, RUN)
-    harness["drafts"][0]["labels"] = [{"name": "factory:local"}, {"name": "factory"}]
+    harness["pr"]["body"] = "Custom handoff and acceptance"
+    harness["pr"]["title"] = "Actual continued work"
     harness["calls"].clear()
-    handoff.publish(REPO, RUN)
-    assert not any(call[0].endswith("/pulls") for call in harness["calls"])
-    assert not any(call[0].endswith("/labels") for call in harness["calls"])
-    assert any(call[0].endswith("/comments") for call in harness["calls"])
-
-
-
-def test_existing_ready_recovery_keeps_its_state_and_accurate_link(harness: dict) -> None:
-    """A manually published checkpoint must be reused without calling it a draft."""
-    harness["drafts"] = [{"number": 5200, "state": "open", "draft": False,
-                          "labels": [{"name": "factory"}, {"name": "factory:local"}]}]
     result = handoff.publish(REPO, RUN)
-    assert result["published"] and result["recovery_pr"] == 5200
-    assert not any(call[1] == "PATCH" or call[0].endswith("/pulls")
-                   for call in harness["calls"])
-    comments = [call[2]["body"] for call in harness["calls"]
-                if call[0].endswith("/comments")]
-    assert comments and "This recovery PR contains" in comments[0]
-    assert "This draft" not in comments[0]
+    assert result["work_pr"] == 5152
+    assert not any(call[0].endswith("/pulls") or call[1] == "PATCH" for call in harness["calls"])
+    assert harness["pr"]["body"] == "Custom handoff and acceptance"
 
-def test_issue_work_gets_main_draft(harness: dict) -> None:
-    harness["saved"]["mode"] = "issue"
+
+def test_active_assignment_owns_pr_then_source_end_releases_for_repair(harness: dict) -> None:
+    harness["run"]["status"] = "in_progress"
     handoff.publish(REPO, RUN)
-    create = next(call for call in harness["calls"] if call[0].endswith("/pulls"))
-    assert create[2]["base"] == "main"
+    assert handoff.labels_of(harness["pr"]) == {"factory", "factory:46", "factory:building"}
+    handoff.publish(REPO, RUN, source_ended=True)
+    assert handoff.labels_of(harness["pr"]) == {"factory", "factory:unowned", "factory:changes-requested"}
+    assert "factory:unowned" in handoff.labels_of(harness["issue"])
+
+
+@pytest.mark.parametrize("target", ["pr", "issue"])
+def test_another_owner_is_never_overwritten(harness: dict, target: str) -> None:
+    harness["drafts"] = [harness["pr"]]
+    harness[target]["labels"] = labels("factory", "factory:local", "factory:review")
+    handoff.publish(REPO, RUN)
+    assert handoff.labels_of(harness[target]) == {"factory", "factory:local", "factory:review"}
+
+
+def test_resumed_same_factory_commit_and_stage_survive_old_run_sweep(harness: dict) -> None:
+    harness["drafts"] = [harness["pr"]]
+    harness["saved"]["resumed"] = True
+    harness["pr"]["labels"] = labels("factory", "factory:46", "factory:review")
+    harness["issue"]["labels"] = labels("factory", "factory:46", "factory:review")
+    handoff.publish(REPO, RUN, cleanup=True)
+    assert not any(call[1] in {"PUT", "DELETE", "PATCH"} for call in harness["calls"])
+
+
+def test_assigned_repair_uses_original_pr_and_retains_unintegrated_legacy_bytes(harness: dict) -> None:
+    harness["saved"]["mode"] = "pr"
+    harness["saved"]["number"] = 5152
+    harness["pr"]["head"]["sha"] = "d" * 40
+    harness["drafts"] = [{"number": 5200, "state": "open"}]
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert result["work_pr"] == 5152
+    assert not any(call[0].endswith("/pulls") or call[1] in {"PUT", "PATCH", "DELETE"}
+                   for call in harness["calls"])
+    assert any(BRANCH in call[2].get("body", "") and HEAD in call[2].get("body", "")
+               for call in harness["calls"])
+
+
+def test_open_canonical_pr_is_never_deleted_even_if_bytes_incorporated(harness: dict) -> None:
+    handoff.publish(REPO, RUN)
+    harness["incorporated"] = True
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert result["published"]
+    assert not any(call[1] == "DELETE" for call in harness["calls"])
 
 
 def test_no_saved_diff_does_not_create_empty_pr(harness: dict) -> None:
     harness["saved"] = None
-    assert handoff.publish(REPO, RUN) == {
-        "saved": False, "published": False, "validated": False,
-    }
+    assert handoff.publish(REPO, RUN) == {"saved": False, "published": False, "validated": False}
     assert not harness["calls"]
 
 
 def test_failed_work_is_retained_and_stays_unvalidated(harness: dict) -> None:
     harness["run"]["conclusion"] = "failure"
     result = handoff.publish(REPO, RUN, cleanup=True)
-    assert result["saved"] and result["published"]
-    assert result["validated"] is False
+    assert result["saved"] and result["published"] and result["validated"] is False
     assert not any(call[1] == "DELETE" for call in harness["calls"])
 
 
-def test_incorporated_completed_work_closes_draft_then_deletes_only_saved_ref(harness: dict) -> None:
+def test_validation_requires_trusted_exact_head_record(harness: dict) -> None:
     handoff.publish(REPO, RUN)
-    harness["calls"].clear()
+    harness["comments"].append({"body": handoff.validation_marker(RUN, HEAD),
+                                "user": {"login": "untrusted"}})
+    assert not handoff.validated_head(REPO, harness["pr"], RUN)
     harness["incorporated"] = True
-    result = handoff.publish(REPO, RUN, cleanup=True)
-    assert result["retired"]
-    assert any(call[1] == "PATCH" and call[2] == {"state": "closed"}
-               for call in harness["calls"])
-    deletes = [call[0] for call in harness["calls"] if call[1] == "DELETE"]
-    assert deletes == [f"repos/{REPO}/git/refs/heads/{BRANCH}"]
-
-
-@pytest.mark.parametrize("change", ["running", "owner", "ready", "hold"])
-def test_live_or_owned_or_ready_work_cannot_be_cleaned(harness: dict, change: str) -> None:
-    handoff.publish(REPO, RUN)
-    harness["incorporated"] = True
-    if change == "running":
-        harness["run"]["status"] = "in_progress"
-    elif change == "owner":
-        harness["drafts"][0]["labels"] = [{"name": "factory:42"}]
-    elif change == "ready":
-        harness["drafts"][0]["draft"] = False
-    else:
-        harness["drafts"][0]["labels"] = [{"name": "do-not-merge"}]
-    harness["calls"].clear()
-    handoff.publish(REPO, RUN, cleanup=True)
-    assert not any(call[1] in {"DELETE", "PATCH"} for call in harness["calls"])
-
-
-def test_closed_draft_alone_is_not_permission_to_discard(harness: dict) -> None:
-    harness["drafts"] = [{"number": 5200, "state": "closed", "draft": True}]
-    result = handoff.publish(REPO, RUN, cleanup=True)
-    assert result["saved"] and not result["published"]
-    assert not any(call[1] == "DELETE" for call in harness["calls"])
-
-
-def test_only_trusted_explicit_discard_retires_unincorporated_bytes(harness: dict) -> None:
-    harness["drafts"] = [{"number": 5200, "state": "closed", "draft": True}]
-    harness["comments"] = [{"body": "<!-- factory-checkpoint-discard:v1 -->",
-                            "author_association": "NONE"}]
-    handoff.publish(REPO, RUN, cleanup=True)
-    assert not any(call[1] == "DELETE" for call in harness["calls"])
-    harness["comments"][0]["author_association"] = "OWNER"
-    result = handoff.publish(REPO, RUN, cleanup=True)
-    assert result["retired"]
+    handoff.record_delivery(REPO, RUN, harness["saved"], 5152)
+    assert handoff.validated_head(REPO, harness["pr"], RUN)
+    harness["pr"]["head"]["sha"] = "d" * 40
+    assert not handoff.validated_head(REPO, harness["pr"], RUN)
 
 
 def test_incorporation_proves_additions_modes_and_deletions(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -229,7 +244,7 @@ def test_workflow_and_entry_keep_recovery_independent_and_failure_visible() -> N
     assert "--cleanup" in workflow and "--sweep" in workflow
     entry = (ROOT / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert "--outcome" in entry
-    assert "Code saved to recovery; PR delivery incomplete; worker failed:" in entry
+    assert "Code saved on the work PR; validation incomplete; worker failed:" in entry
     assert 'if [[ "$verdict" == failed ]]; then' in entry
 
 
@@ -260,3 +275,78 @@ def test_empty_sweep_is_a_successful_noop(
     monkeypatch.setattr(sys, "argv", ["handoff", "--repo", REPO, "--sweep"])
     assert handoff.main() == 0
     assert json.loads(capsys.readouterr().out) == []
+
+
+def test_ordinary_commit_tip_keeps_immutable_origin_and_never_resets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    later = 'e' * 40
+    origin = (f'checkpoint(factory): worker 46 run {RUN} issue #4853 '
+              f'(persisted work; validation pending)\n\nIssue: 4853\n'
+              f'Model: kilo-auto/free\nBase-commit: {BASE}\n')
+    monkeypatch.setattr(handoff, 'pages', lambda *_: [
+        {'ref': f'refs/heads/{BRANCH}', 'object': {'sha': later}},
+    ])
+    def read(path: str) -> dict:
+        if '/compare/' in path:
+            return {'status': 'ahead'}
+        if path.endswith(later):
+            return {'sha': later, 'message': 'Continue implementation normally',
+                    'tree': {'sha': later}, 'parents': [{'sha': HEAD}]}
+        return {'sha': HEAD, 'message': origin, 'parents': [{'sha': BASE}]}
+    monkeypatch.setattr(handoff, 'obj', read)
+    saved = handoff.checkpoint(REPO, RUN)
+    assert saved is not None
+    assert saved['head'] == later and saved['base'] == BASE and saved['resumed'] is True
+    assert saved['origin_head'] == HEAD
+
+
+@pytest.mark.parametrize('change', ['completed', 'foreign-worker', 'owner', 'hold', 'pr-owner'])
+def test_writer_fence_checks_actual_source_and_canonical_pr_ownership(
+    harness: dict, change: str,
+) -> None:
+    harness['run']['status'] = 'in_progress'
+    harness['drafts'] = [harness['pr']]
+    assert handoff.check_write(REPO, RUN, 'issue', 4853, '46', BRANCH)
+    if change == 'completed':
+        harness['run']['status'] = 'completed'
+    elif change == 'foreign-worker':
+        harness['run']['display_title'] = 'Factory 42 · fixed-model entry'
+    elif change == 'hold':
+        harness['issue']['labels'].append({'name': 'do-not-merge'})
+    else:
+        target = 'pr' if change == 'pr-owner' else 'issue'
+        harness[target]['labels'] = labels('factory', 'factory:42', 'factory:building')
+    assert not handoff.check_write(REPO, RUN, 'issue', 4853, '46', BRANCH)
+
+
+def test_tracking_ref_validation_accepts_normal_descendant_on_original_pr(harness: dict) -> None:
+    harness['saved']['mode'] = 'pr'
+    harness['saved']['number'] = 5152
+    harness['pr']['head']['sha'] = 'd' * 40
+    harness['incorporated'] = True
+    result = handoff.record_delivery(REPO, RUN, harness['saved'], 5152)
+    assert result['validated'] and result['work_pr'] == 5152
+    assert handoff.validated_head(REPO, harness['pr'], RUN)
+
+
+def test_newer_same_factory_execution_protects_old_head_and_stage(
+    harness: dict, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness['drafts'] = [harness['pr']]
+    monkeypatch.setattr(handoff, 'newer_worker_run', lambda *_: True)
+    result = handoff.publish(REPO, RUN, cleanup=True)
+    assert 'later factory execution' in result['stage']
+    assert not any(call[1] in {'PUT', 'DELETE', 'PATCH'} for call in harness['calls'])
+
+
+@pytest.mark.parametrize('newer,expected', [(True, True), (False, False)])
+def test_source_execution_fence_uses_trusted_workflow_run_metadata(
+    monkeypatch: pytest.MonkeyPatch, newer: bool, expected: bool,
+) -> None:
+    run = {'id': int(RUN)}
+    runs = [{'id': int(RUN), 'display_title': 'Factory 46 · fixed-model entry'}]
+    if newer:
+        runs.insert(0, {'id': int(RUN) + 1, 'display_title': runs[0]['display_title']})
+    monkeypatch.setattr(handoff, 'obj', lambda *_: {'workflow_runs': runs})
+    assert handoff.newer_worker_run(REPO, run, '46') is expected
