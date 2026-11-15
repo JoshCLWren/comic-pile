@@ -422,6 +422,7 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     engine = create_async_engine(url.replace("postgresql://", "postgresql+asyncpg://"))
     try:
+        await reset_statement_stats()
         before = await db_statement_breakdown(engine)
         assert before is not None
         connection = await asyncpg.connect(url)
