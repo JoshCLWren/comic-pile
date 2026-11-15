@@ -196,20 +196,24 @@ GitHub CLI output. Older raw snapshots remain readable during rollout. This
 reduces database-to-runner traffic; it does not change GitHub response shapes
 or eliminate the original live GitHub request on a miss.
 
-The hourly trusted factory issue-state reconciler also runs a bounded
-`prune-expired` operation against the same restricted database. It only
+The existing trusted Factory Status Pages workflow runs a bounded
+`prune-expired` operation against the same restricted database when it
+executes (normally every five minutes and after updates to that workflow).
+It is independent of the timeout-prone historical PR recovery sweep. It only
 removes `factory-github-get-v1:%` rows expired by more than 30 minutes,
 skips active refresh locks, and processes at most 1,000 rows in five batches.
 It never prunes projections, provider health, worker reservations, registry
 comments or event history. PostgreSQL autovacuum reclaims dead tuples
 eventually; the job does not require or invoke VACUUM FULL.
 
-When a refreshed snapshot is byte-for-byte unchanged at the parsed JSON
+When a refreshed snapshot is unchanged at the parsed JSON
 record level, its TTL is extended without retransmitting the entire snapshot
 as a new UPDATE parameter or rewriting its external TOAST value. The hourly
 canonical PR-history query projects only number, branch ref, state, and
-merge timestamp before passing it to Neon, while keeping live exact-target
-validation for sensitive decisions.
+merge timestamp before passing it to Neon. GitHub CLI does not support
+`--slurp` and `--jq` together, so the history query applies `--jq` per
+page with `--paginate` and reconstructs the nested page array locally.
+Live exact-target verification remains mandatory for sensitive decisions.
 
 ## Remaining API work
 
