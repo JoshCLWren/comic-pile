@@ -17,7 +17,16 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import assert_declared_budget, cargo_example_path, db_counters, run_rust_example
+from route_harness import (
+    StatementBreakdown,
+    assert_declared_budget,
+    assert_measured_statement_breakdown,
+    assert_no_statement_growth,
+    cargo_example_path,
+    db_statement_breakdown,
+    reset_statement_stats,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-roll-die-state-n1-secret"
 STORED_EPOCH = 1_767_225_600
