@@ -36,7 +36,12 @@ async def _seed_plan_with_lists(
     raw: asyncpg.Connection, owner_id: int, *, list_count: int, retained_count: int
 ) -> int:
     plan_id = await raw.fetchval(
-        "INSERT INTO continuity_plans (user_id, name) VALUES ($1, $2) RETURNING id",
+        """
+        INSERT INTO continuity_plans
+            (user_id, name, ordering_mode, nodes_json, lanes_json, created_at, updated_at)
+        VALUES ($1, $2, 'informational', '[]'::json, '[]'::json, NOW(), NOW())
+        RETURNING id
+        """,
         owner_id,
         f"Plan {uuid4().hex[:8]}",
     )
