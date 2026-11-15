@@ -253,10 +253,27 @@ async fn sync_inner(
 #[allow(dead_code)]
 pub fn get_sync_status_documentation() {}
 
+/// Documentation-only operation for the sync handler.
+#[utoipa::path(
+    post,
+    path = "/api/v1/reading-plan-sync/sync",
+    tag = "reading-plan-sync",
+    operation_id = "reading_plan_sync_sync",
+    request_body = SyncRequest,
+    responses(
+        (status = 200, description = "Sync run report for the caller's release sources", body = SyncResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+#[allow(dead_code)]
+pub fn sync_released_issues_endpoint_documentation() {}
+
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(get_sync_status_documentation),
-    components(schemas(SyncStatusSource, SyncStatusResponse)),
+    paths(get_sync_status_documentation, sync_released_issues_endpoint_documentation),
+    components(schemas(SyncStatusSource, SyncStatusResponse, SyncRequest, SourceSyncFailure, SyncReport, SyncResponse)),
     modifiers(&ReadingPlanSyncSecurityAddon)
 )]
 pub struct ReadingPlanSyncApi;
