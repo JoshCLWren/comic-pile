@@ -1,0 +1,50 @@
+name: Factory Model Contract Tests
+
+on:
+  pull_request:
+    paths:
+      - '.github/free-model-factories.tsv'
+      - '.github/factory-expected-workers.json'
+      - '.github/factory-roster-snapshot.json'
+      - '.github/scripts/factory_model_catalog.py'
+      - '.github/scripts/factory_model_retirement.py'
+      - '.github/scripts/factory_published_model_catalog.py'
+      - '.github/scripts/factory_provider_registry.py'
+      - '.github/scripts/factory_roster.py'
+      - '.github/scripts/factory_state_operations.py'
+      - '.github/scripts/validate-free-model-factories.py'
+      - '.github/workflows/free-model-factory-run.yml'
+      - '.github/workflows/factory-model-contracts.yml'
+      - 'tests/test_factory_catalog_slot_migration.py'
+      - 'tests/test_factory_published_model_catalog.py'
+      - 'tests/test_factory_model_discovery_retirement.py'
+      - 'tests/test_free_provider_pin_guards.py'
+      - 'tests/test_free_model_factories.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    name: Catalog/roster contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install factory-only test requirements
+        run: python3 -m pip install pytest PyYAML
+      - name: Verify model-independent roster and runtime contracts
+        run: |
+          python3 -m pytest -q \
+            tests/test_factory_catalog_slot_migration.py \
+            tests/test_factory_published_model_catalog.py \
+            tests/test_factory_model_discovery_retirement.py \
+            tests/test_free_provider_pin_guards.py \
+            tests/test_free_model_factories.py \
+            tests/test_factory_neon_operations.py
+      - name: Validate production factory roster and lock
+        run: python3 .github/scripts/validate-free-model-factories.py
