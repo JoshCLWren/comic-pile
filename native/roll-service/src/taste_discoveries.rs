@@ -295,8 +295,8 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
 /// `GET /api/v1/taste/discoveries` — ranked prompt-eligible discoveries.
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
     query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
+    user: AuthenticatedUser,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
     let Query(query) =
         query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
