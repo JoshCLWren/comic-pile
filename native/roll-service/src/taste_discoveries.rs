@@ -31,7 +31,10 @@
 
 #![forbid(unsafe_code)]
 
-use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
+use crate::{
+    auth::{self, VerifiedAccessClaims},
+    db, ApiError, AppState,
+};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -296,10 +299,11 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
     query: Result<Query<TasteDiscoveryQuery>, axum::extract::rejection::QueryRejection>,
-    user: AuthenticatedUser,
+    claims: VerifiedAccessClaims,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
     let Query(query) =
         query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
+    let user = auth::authenticate_claims(&state, &claims).await?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
         return Err(ApiError::Unprocessable(
@@ -671,7 +675,7 @@ mod tests {
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
             Ok(Query(TasteDiscoveryQuery { limit: None })),
-            AuthenticatedUser::for_test(7001),
+            VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
         )
         .await
         .expect("list owned taste discoveries");
@@ -698,7 +702,7 @@ mod tests {
         let Json(second) = list_taste_discoveries(
             State(state.clone()),
             Ok(Query(TasteDiscoveryQuery { limit: None })),
-            user,
+            VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
         )
         .await
         .expect("second list is suppressed by the cooldown");
@@ -711,7 +715,7 @@ mod tests {
         let Json(limited) = list_taste_discoveries(
             State(state.clone()),
             Ok(Query(TasteDiscoveryQuery { limit: Some(1) })),
-            AuthenticatedUser::for_test(7001),
+            VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
         )
         .await
         .expect("bounded listing");
@@ -720,7 +724,7 @@ mod tests {
         let Json(foreign) = list_taste_discoveries(
             State(state.clone()),
             Ok(Query(TasteDiscoveryQuery { limit: None })),
-            AuthenticatedUser::for_test(7002),
+            VerifiedAccessClaims::for_test("taste-dismiss-other", "jti-7002", 0),
         )
         .await
         .expect("foreign owner listing");
@@ -738,7 +742,7 @@ mod tests {
             let error = list_taste_discoveries(
                 State(state.clone()),
                 Ok(Query(TasteDiscoveryQuery { limit: Some(limit) })),
-                AuthenticatedUser::for_test(7001),
+                VerifiedAccessClaims::for_test("taste-dismiss-test", "jti-7001", 0),
             )
             .await
             .expect_err("out-of-range limit must 422");
