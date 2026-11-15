@@ -173,11 +173,11 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     openrouter = [row for row in rows if row['source'] == 'openrouter-free']
     assert openrouter
     for row in openrouter:
-        assert validate.openrouter_model_is_free(row['model']), row
+        assert row['model'] == validate._ROSTER.CATALOG_MODEL_SLOT, row
     opencode = [row for row in rows if row['source'] == 'opencode-free']
     assert opencode
     for row in opencode:
-        assert validate.opencode_model_is_free(row['model']), row
+        assert row['model'] == validate._ROSTER.CATALOG_MODEL_SLOT, row
     z_ai = [row for row in rows if row['source'] == 'z-ai']
     assert z_ai
     for row in z_ai:
@@ -185,10 +185,7 @@ def test_manifest_openrouter_pins_are_all_free(validate) -> None:
     ollama = [row for row in rows if row['source'] == 'ollama-cloud']
     assert not ollama  # Worker 55 retired after quota exhaustion.
     vercel = [row for row in rows if row['source'] == 'vercel-ai-gateway']
-    assert {row['model'] for row in vercel} == {
-        'reflection/beam-free', 'nvidia/nemotron-3.5-lightning-free',
-        'stealth/glyph-cluster',
-    }
+    assert {row['model'] for row in vercel} == {validate._ROSTER.CATALOG_MODEL_SLOT}
     assert all(row['worker'] != '72' for row in rows)
     assert 'stealth/pixel-canary' not in {row['model'] for row in rows}
     mistral = [row for row in rows if row['source'] == 'mistral']
@@ -205,7 +202,7 @@ def test_additional_free_api_source_pins_reject_paid_model_ids(validate) -> None
     pairs = {
         'gemini-free': ('gemini-3.8-flash', 'gemini-4-argon'),
         'groq-free': ('openai/gpt-oss-120b', 'anthropic/claude-sonnet'),
-        'vercel-ai-gateway': ('reflection/beam-free', 'google/gemini-4-argon'),
+        'vercel-ai-gateway': ('@catalog', 'google/gemini-4-argon'),
         'aion-free': ('aion-labs/aion-3.5-mini', 'aion-labs/aion-2.0'),
         'cohere-eval': ('command-a-plus-05-2026', 'command-a-03-2025'),
         'typhoon-free': ('typhoon-v2.5-30b-a3b-instruct', 'typhoon-pro'),
@@ -288,9 +285,9 @@ def test_discovered_free_models_reuse_existing_worker_slots(validate) -> None:
         ("75", "nemotron-3.5-super-vl-free"),
     ):
         pin = by_worker.get(worker)
-        if pin is not None and pin["model"] == model:
+        if pin is not None:
             assert pin["source"] == "opencode-free"
-            assert validate.opencode_model_is_free(pin["model"])
+            assert pin["model"] == validate._ROSTER.CATALOG_MODEL_SLOT
             assert pin["scheduler"] == "dispatcher"
         else:
             # These promotional models may be retired by discovery later.
@@ -308,7 +305,8 @@ def test_worker_56_dots_preview_retirement_keeps_identity(validate) -> None:
     assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
     assert any(
         row["source"] == "openrouter-free"
-        and row["model"] == "dots-studio/dots-3-note-preview:free"
+        and row["worker"] == "128"
+        and row["model"] == validate._ROSTER.CATALOG_MODEL_SLOT
         for row in rows
     )
 
@@ -436,7 +434,7 @@ def test_workers_94_95_retired_after_catalog_discovery(validate) -> None:
         assert committed_104_pin["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
         assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
     # OpenRouter :free Super VL is now pinned as worker 102 (expansion PR).
-    assert by_worker["102"]["model"] == "nvidia/nemotron-3.5-super-vl:free"
+    assert by_worker["102"]["model"] == validate._ROSTER.CATALOG_MODEL_SLOT
 
 
 def test_ghost_workers_49_58_63_73_83_94_are_retired(validate) -> None:
@@ -455,6 +453,6 @@ def test_ghost_workers_49_58_63_73_83_94_are_retired(validate) -> None:
     assert "cat-jam-free" in lock["retired_models"]
     assert "minimax/minimax-m3.1-flash:free" in lock["retired_models"]
     assert by_worker["42"]["source"] == "opencode-free"
-    assert by_worker["42"]["model"] == "nemotron-3-ultra-free"
+    assert by_worker["42"]["model"] == validate._ROSTER.CATALOG_MODEL_SLOT
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
