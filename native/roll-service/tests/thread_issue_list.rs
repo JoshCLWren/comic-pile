@@ -117,31 +117,30 @@ async fn seed_issue(
     position: i32,
     read: bool,
 ) -> i32 {
-    let read_at: Option<String> = if read {
-        Some("2026-11-01 12:34:56.789012+00".into())
+    let connection = state.pool.get().await.unwrap();
+    if read {
+        connection
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, status, read_at, created_at, position)
+                 VALUES ($1,$2,'read','2026-11-01 12:34:56.789012+00'::timestamptz,NOW(),$3)
+                 RETURNING id",
+                &[&thread_id, &number, &position],
+            )
+            .await
+            .unwrap()
+            .get(0)
     } else {
-        None
-    };
-    state
-        .pool
-        .get()
-        .await
-        .unwrap()
-        .query_one(
-            "INSERT INTO issues (thread_id, issue_number, status, read_at, created_at, position)
-             VALUES ($1,$2,$3,$4,NOW(),$5)
-             RETURNING id",
-            &[
-                &thread_id,
-                &number,
-                &if read { "read" } else { "unread" },
-                &read_at,
-                &position,
-            ],
-        )
-        .await
-        .unwrap()
-        .get(0)
+        connection
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, status, created_at, position)
+                 VALUES ($1,$2,'unread',NOW(),$3)
+                 RETURNING id",
+                &[&thread_id, &number, &position],
+            )
+            .await
+            .unwrap()
+            .get(0)
+    }
 }
 
 async fn user_id(state: &Arc<AppState>, username: &str) -> i32 {

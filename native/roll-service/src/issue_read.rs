@@ -361,7 +361,7 @@ pub async fn list_thread_issues(
             ));
         }
     }
-    let page_size = i64::from(query.page_size.unwrap_or(50));
+    let page_size = query.page_size.unwrap_or(50);
     if !(1..=100).contains(&page_size) {
         return Err(ApiError::Unprocessable(
             "page_size must be between 1 and 100".to_string(),
@@ -407,7 +407,7 @@ pub async fn list_thread_issues(
         .map_err(db::query_error)?
         .get(0);
 
-    let has_more = rows.len() as i64 > page_size;
+    let has_more = rows.len() as i64 > i64::from(page_size);
     let issues: Vec<IssueDetailResponse> = rows
         .into_iter()
         .take(page_size as usize)
