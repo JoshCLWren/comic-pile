@@ -7,7 +7,6 @@ with library size.
 
 from __future__ import annotations
 
-import json
 import os
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
@@ -66,7 +65,7 @@ async def test_delete_issue_statements_do_not_grow_with_library_size() -> None:
                 "SELECT id FROM issues WHERE thread_id=$1 ORDER BY position LIMIT 1",
                 thread.id,
             )
-            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
         finally:
             await raw.close()
 

@@ -15,9 +15,8 @@ from uuid import uuid4
 import asyncpg
 import pytest
 from jose import jwt
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.models import Issue, Thread, User
 from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
 
 SECRET = "synthetic-native-issue-patch-branches-secret"
@@ -131,10 +130,18 @@ async def test_issue_patch_status_only_branch() -> None:
         finally:
             await raw.close()
 
-        # Status: unread (on a different issue)
+        # Status: unread (on a different issue in the large library)
+        raw = await asyncpg.connect(url)
+        try:
+            large_issue_id = await raw.fetchval(
+                "SELECT id FROM issues WHERE thread_id=$1 ORDER BY position OFFSET 10 LIMIT 1",
+                thread_id,
+            )
+        finally:
+            await raw.close()
         body = {"status": "unread", "idempotency_key": f"key-{uuid4().hex}"}
         large_response, large_delta = await _run_patch(
-            engine, BINARY, env, url, issue_ids[10] if len(issue_ids) > 10 else issue_ids[1], body
+            engine, BINARY, env, url, large_issue_id, body
         )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")
@@ -196,10 +203,18 @@ async def test_issue_patch_rating_only_branch() -> None:
         finally:
             await raw.close()
 
-        # Rating only on a different issue
+        # Rating only on a different issue in the large library
+        raw = await asyncpg.connect(url)
+        try:
+            large_issue_id = await raw.fetchval(
+                "SELECT id FROM issues WHERE thread_id=$1 ORDER BY position OFFSET 10 LIMIT 1",
+                thread_id,
+            )
+        finally:
+            await raw.close()
         body = {"rating": 3.5, "idempotency_key": f"key-{uuid4().hex}"}
         large_response, large_delta = await _run_patch(
-            engine, BINARY, env, url, issue_ids[10] if len(issue_ids) > 10 else issue_ids[1], body
+            engine, BINARY, env, url, large_issue_id, body
         )
         assert large_response.get("status") == 200, large_response
         large_body = large_response.get("body")

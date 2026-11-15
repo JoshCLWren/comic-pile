@@ -65,11 +65,11 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
                 "SELECT id FROM issues WHERE thread_id=$1 ORDER BY position LIMIT 1",
                 thread.id,
             )
-            owner_id = await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
+            await raw.fetchval("SELECT id FROM users WHERE username=$1", username)
             # Create a confirmed comicvine mapping for the issue
             ext_id = await raw.fetchval(
-                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, metadata_json) "
-                "VALUES ('comicvine', 'issue', '12345', 'https://comicvine.gamespot.com/issue/12345', '{}') "
+                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) "
+                "VALUES ('comicvine', 'issue', '12345', 'https://comicvine.gamespot.com/issue/12345', '{}', NOW(), NOW()) "
                 "RETURNING id",
             )
             await raw.execute(
@@ -132,8 +132,8 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
             )
             # Create a confirmed comicvine mapping for the new issue
             ext_id = await raw.fetchval(
-                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, metadata_json) "
-                "VALUES ('comicvine', 'issue', '67890', 'https://comicvine.gamespot.com/issue/67890', '{}') "
+                "INSERT INTO external_identities (provider, entity_type, external_id, external_url, metadata_json, created_at, updated_at) "
+                "VALUES ('comicvine', 'issue', '67890', 'https://comicvine.gamespot.com/issue/67890', '{}', NOW(), NOW()) "
                 "RETURNING id",
             )
             await raw.execute(
