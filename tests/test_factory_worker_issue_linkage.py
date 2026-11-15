@@ -72,7 +72,7 @@ gh() {
   if [[ "$*" == 'api repos/owner/repo/issues/3314' ]]; then
     printf '%s' '{"state":"open","labels":[{"name":"factory:54"}]}'
   elif [[ "$*" == 'api repos/owner/repo/pulls/3314' ]]; then
-    printf '%s' '{"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ref":"fix/3271-durable-review-migration-handoff"}}'
+    printf '%s' '{"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ref":"fix/3271-durable-review-migration-handoff"},"labels":[{"name":"factory:review"}]}'
   else
     echo 'unexpected discovery call' >&2
     return 1

@@ -39,12 +39,13 @@ def test_assignment_validation_reads_only_target(controller, assignment, monkeyp
     monkeypatch.setattr(controller, 'target_json', lambda _: {
         'state': 'open', 'labels': [{'name': 'factory:54'}]})
     monkeypatch.setattr(controller, 'live_pr_state', lambda _: {
-        'head': {'sha': 'a' * 40, 'ref': 'local/continue'}})
+        'head': {'sha': 'a' * 40, 'ref': 'local/continue'},
+        'labels': [{'name': 'factory:review'}]})
     monkeypatch.setattr(controller, 'candidate_is_live_executable', lambda _: True)
     assert controller.validate_assignment('54', json.dumps(assignment)) == assignment
 
 
-@pytest.mark.parametrize('change', ['worker', 'claim', 'head', 'ci', 'owner'])
+@pytest.mark.parametrize('change', ['worker', 'claim', 'head', 'ci', 'owner', 'stage'])
 def test_assignment_rejects_stale_or_ineligible_context(controller, assignment, monkeypatch, change):
     """Neither stale inputs nor a running CI job may allocate a model session."""
     monkeypatch.setattr(controller, 'worker_claim', lambda *_, **__: (
@@ -52,7 +53,8 @@ def test_assignment_rejects_stale_or_ineligible_context(controller, assignment, 
     monkeypatch.setattr(controller, 'target_json', lambda _: {
         'state': 'open', 'labels': [{'name': 'factory:55' if change == 'owner' else 'factory:54'}]})
     monkeypatch.setattr(controller, 'live_pr_state', lambda _: {
-        'head': {'sha': ('b' if change == 'head' else 'a') * 40, 'ref': 'local/continue'}})
+        'head': {'sha': ('b' if change == 'head' else 'a') * 40, 'ref': 'local/continue'},
+        'labels': [{'name': 'factory:changes-requested' if change == 'stage' else 'factory:review'}]})
     monkeypatch.setattr(controller, 'candidate_is_live_executable', lambda _: change != 'ci')
     with pytest.raises(ValueError):
         controller.validate_assignment('55' if change == 'worker' else '54', json.dumps(assignment))
@@ -83,3 +85,57 @@ def test_dispatcher_deploy_does_not_cancel_work_in_progress():
     workflow = (ROOT / '.github/workflows/fixed-model-factory-dispatch.yml').read_text()
     assert 'gh run cancel' not in workflow
     assert 'release_cancelled_worker_leases' not in workflow
+
+
+def test_trusted_validation_and_health_outputs_are_under_worker_lock():
+    """A queued duplicate validates after acquiring its reusable worker lock."""
+    import yaml
+
+    workflow = yaml.safe_load((ROOT / '.github/workflows/free-model-factory-run.yml').read_text())
+    assert workflow['concurrency']['group'] == 'fixed-model-factory-${{ inputs.worker }}'
+    preparation = workflow['jobs']['validate_assignment']
+    factory = workflow['jobs']['factory']
+    assert factory['needs'] == 'validate_assignment'
+    assert preparation['outputs']['exclusions'] == '${{ steps.prepare.outputs.exclusions }}'
+    assert 'NEON_API_KEY' not in json.dumps(factory)
+    assert 'FACTORY_STATE_DSN_FILE' not in json.dumps(factory)
+    assert 'validate-assignment' in json.dumps(preparation)
+
+
+def test_assigned_worker_general_cleanup_does_not_scan_or_mutate():
+    """Exercise startup/EXIT cleanup with a dispatcher assignment present."""
+    import os
+    import re
+    import subprocess
+
+    source = (ROOT / '.github/scripts/free-model-factory-worker-primitives.sh').read_text()
+    match = re.search(r'(?ms)^release_owned_targets\(\) \{\n.*?^\}', source)
+    assert match
+    script = match.group(0) + '\nlog() { :; }\ngh() { exit 99; }\nrelease_owned_targets session-end-handoff'
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
+                            env={**os.environ, 'FACTORY_ASSIGNMENT': '{"claim_id":"old"}'})
+    assert result.returncode == 0, result.stderr
+
+
+def test_fork_route_rejects_a_newer_head_before_review():
+    """Static fork review must remain bound to the dispatcher-selected commit."""
+    import os
+    import re
+    import subprocess
+
+    source = (ROOT / '.github/scripts/factory-fork-worker.sh').read_text()
+    match = re.search(r'(?ms)^factory_route_fork_assignment\(\) \{\n.*?^\}', source)
+    assert match
+    script = match.group(0) + '''
+MODE=pr
+NUMBER=9001
+log() { :; }
+gh() { printf '%s' "$TEST_PR"; }
+factory_route_fork_assignment
+'''
+    payload = {'head': {'sha': 'b' * 40, 'ref': 'branch', 'repo': {'full_name': 'fork/repo'}},
+               'base': {'repo': {'full_name': 'owner/repo'}}}
+    result = subprocess.run(['bash', '-c', script], capture_output=True, text=True,
+                            env={**os.environ, 'FACTORY_ASSIGNMENT': json.dumps({'head': 'a' * 40}),
+                                 'GITHUB_REPOSITORY': 'owner/repo', 'TEST_PR': json.dumps(payload)})
+    assert result.returncode == 2

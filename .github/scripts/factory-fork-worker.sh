@@ -12,6 +12,10 @@ factory_route_fork_assignment() {
   head="$(jq -er '.head.sha' <<< "$info")" || return 2
   branch="$(jq -er '.head.ref' <<< "$info")" || return 2
   [[ "$head" =~ ^[a-f0-9]{40}$ ]] || return 2
+  if [[ -n "${FACTORY_ASSIGNMENT:-}" && "$head" != "$(jq -r '.head' <<< "$FACTORY_ASSIGNMENT")" ]]; then
+    log 'fork PR head moved after assignment; refusing stale execution'
+    return 2
+  fi
   EXPECTED_HEAD="$head"
   BRANCH="$branch"
   PR_HEAD_REPOSITORY="$repository"

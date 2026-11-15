@@ -1720,6 +1720,8 @@ def validate_assignment(worker: str, raw: str) -> dict[str, object]:
         live = live_pr_state(number)
         if live['head']['sha'] != context.get('head') or live['head']['ref'] != context.get('branch'):
             raise ValueError('Assignment PR head moved')
+        if stage_of(labels_of(live)) != context.get('stage'):
+            raise ValueError('Assignment PR stage changed')
         candidate = Candidate('pr', number, 3, 0, '', stage=str(context.get('stage') or ''))
         if not candidate_is_live_executable(candidate):
             raise ValueError('Assignment PR is waiting or no longer executable')

@@ -373,6 +373,9 @@ select_controller_assignment() {
     fi
     BRANCH="$(jq -r '.head.ref' <<< "$target")"
     ASSIGNED_PR_STAGE="$(jq -r '.stage' <<< "$assignment")"
+    if ! jq -e --arg stage "$ASSIGNED_PR_STAGE" '[.labels[].name] | index($stage) != null' <<< "$target" >/dev/null; then
+      log 'assigned PR stage changed'; return 3
+    fi
     read_trusted_completion_decision "$NUMBER" "$WORKER"
   else
     BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"

@@ -395,8 +395,10 @@ The dispatcher now sends a bounded JSON `assignment` workflow input containing
 worker, target kind/number, stage, linked issue, branch, exact PR SHA, and the
 original transactional claim UUID. It is forwarded directly through Entry to
 the reusable runner; no artifact or global queue snapshot is transferred.
-Entry verifies the live, unexpired Neon claim and authoritative GitHub target
-before allowing model execution. The worker reads only its target, checks the
+Trusted preparation inside the reusable worker concurrency lock verifies the
+live, unexpired Neon claim, authoritative GitHub target and stage before
+allowing model execution. That same job exports bounded model-health outputs;
+it replaces the former Entry snapshot job. The worker reads only its target, checks the
 expected SHA before and after checkout, and preserves normal checkpoint/PR
 publication behavior. Every dispatcher entrypoint supplies this input.
 
