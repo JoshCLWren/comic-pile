@@ -370,9 +370,7 @@ pub async fn list_thread_issues(
         .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
     let next_page_token = if issues.len() > page_size as usize {
         issues.truncate(page_size as usize);
-        issues
-            .last()
-            .map(|last| format!("{},{}", last.position, last.id))
+        issues.last().map(|last| format!("{},{}", last.position, last.id))
     } else {
         None
     };
@@ -504,7 +502,8 @@ mod tests {
             total_count: 5,
             page_size: 1,
             next_page_token: Some("2,7".into()),
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(payload["issues"][0]["issue_number"], "Annual 1");
         assert_eq!(payload["total_count"], 5);
         assert_eq!(payload["page_size"], 1);
