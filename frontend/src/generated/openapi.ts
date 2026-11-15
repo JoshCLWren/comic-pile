@@ -3705,25 +3705,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Issues
-         * @description List all issues for a thread with optional status filter and pagination.
-         *
-         *     Args:
-         *         thread_id: The thread ID to list issues for.
-         *         current_user: The authenticated user making the request.
-         *         db: SQLAlchemy session for database operations.
-         *         status_filter: Optional filter by issue status (read/unread).
-         *         page_size: Number of issues to return per page.
-         *         page_token: Token for pagination continuation.
-         *
-         *     Returns:
-         *         IssueListResponse with paginated issues.
-         *
-         *     Raises:
-         *         HTTPException: If thread not found.
-         */
-        get: operations["list_issues_api_v1_threads__thread_id__issues_get"];
+        /** Same-path native OpenAPI for the browser's issue-list read. */
+        get: operations["list_thread_issues_documentation"];
         put?: never;
         /**
          * Create Issues
@@ -13110,6 +13093,14 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        ThreadIssueListResponse: {
+            issues: components["schemas"]["IssueDetailResponse"][];
+            next_page_token?: string | null;
+            /** Format: int64 */
+            page_size: number;
+            /** Format: int64 */
+            total_count: number;
+        };
         ThreadIssuesEffectiveTagsResponse: {
             issues: components["schemas"]["EffectiveTagsResponse"][];
             /** Format: int32 */
@@ -19159,38 +19150,68 @@ export interface operations {
             };
         };
     };
-    list_issues_api_v1_threads__thread_id__issues_get: {
+    list_thread_issues_documentation: {
         parameters: {
             query?: {
-                status?: string | null;
+                /** @description Optional read or unread filter */
+                status?: string;
+                /** @description 1-100 issues (default 50) */
                 page_size?: number;
-                page_token?: string | null;
+                /** @description position,id continuation cursor */
+                page_token?: string;
             };
             header?: never;
             path: {
+                /** @description Owned thread ID */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Owner-scoped, paginated issues */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueListResponse"];
+                    "application/json": components["schemas"]["ThreadIssueListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Invalid page token */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Thread not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid status or page size */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
