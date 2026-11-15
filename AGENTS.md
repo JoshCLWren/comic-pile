@@ -542,7 +542,7 @@ make migrate  # Run migrations (or: alembic upgrade head)
 - Branch from `main`: `git checkout -b phase/X-description`
 - Commit messages: imperative, component-scoped (e.g., "Add thread creation API endpoint")
 - Run the required lint/typecheck/build gates and targeted tests before committing; leave full test suites and aggregate coverage to CI
-- Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. This repo relies on CodeRabbit signals that do not arrive on draft PRs for the current plan/tier.
+- Open PRs as **ready for review by default**. Do **not** open draft PRs unless the user explicitly asks for a draft. Review requirements come from the factory's independent exact-head review policy and required CI, not from CodeRabbit.
 - **Do not add or repair changelog Markdown for implementation PRs.** Release notes are published after merge by the dedicated release writer to the database-backed release ledger. `docs/changelog.md` and `docs/changelog.d/` are frozen historical provenance only; release-note publication delays do not block implementation merges.
 - **Local factory sessions**: before the first commit of any issue-driven session, load the `local-factory-session` skill (`.agents/skills/local-factory-session/SKILL.md`). It covers hook installation and the inert-`core.hooksPath` caveat, exporting `OPENCODE_MODEL` and verifying the `Model:` commit trailer, atomic label reconciliation, review-fleet pickup state (`factory:review` + `factory:unowned`), and the 24h stale-expiration bot.
 
