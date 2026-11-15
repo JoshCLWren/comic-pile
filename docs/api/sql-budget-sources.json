@@ -194,12 +194,12 @@
       "method": "POST",
       "path": "/api/v2/dependencies/",
       "sql_budget": {
-        "application_statements": 10,
+        "application_statements": 12,
         "transaction_control_statements": 2,
-        "total_statements": 12,
-        "basis": "auth extractor 1 + advisory lock 1 + source owned-issue 1 + target owned-issue 1 + duplicate check 1 + next-unread check 1 + insert 1 + refresh_blocked_threads 2 + graph_preflight Option E snapshot 1 (+2 tx control); set-based",
+        "total_statements": 14,
+        "basis": "auth extractor 2 (connection-recovery checkout probe + user lookup) + handler checkout probe 1 + advisory lock 1 + source owned-issue 1 + target owned-issue 1 + duplicate check 1 + next-unread check 1 + insert 1 + refresh_blocked_threads 2 + graph_preflight Option E snapshot 1 (+2 tx control); measured 14, set-based",
         "grows_with_data": false,
-        "max_statements": 12,
+        "max_statements": 14,
         "proof_reference": "native/roll-service/src/dependencies.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_create_dependency_n1.py"
@@ -209,12 +209,12 @@
       "method": "DELETE",
       "path": "/api/v2/dependencies/{dependency_id}",
       "sql_budget": {
-        "application_statements": 5,
+        "application_statements": 7,
         "transaction_control_statements": 2,
-        "total_statements": 7,
-        "basis": "auth extractor 1 + advisory lock 1 + owner-scoped delete 1 + refresh_blocked_threads 2 (+2 tx control); set-based",
+        "total_statements": 9,
+        "basis": "auth extractor 2 (connection-recovery checkout probe + user lookup) + handler checkout probe 1 + advisory lock 1 + owner-scoped delete 1 + refresh_blocked_threads 2 (+2 tx control); measured 9, set-based",
         "grows_with_data": false,
-        "max_statements": 7,
+        "max_statements": 9,
         "proof_reference": "native/roll-service/src/dependencies.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_delete_dependency_n1.py"
@@ -240,12 +240,12 @@
       "method": "DELETE",
       "path": "/api/v2/issues/{issue_id}",
       "sql_budget": {
-        "application_statements": 14,
+        "application_statements": 16,
         "transaction_control_statements": 2,
-        "total_statements": 16,
-        "basis": "auth extractor 1 + reader lock 1 + issue lookup 1 + thread lock 1 + reference_names 5 (lists, plans, node-plans, dependencies, events) + delete 1 + position reseat 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 (+2 tx control); set-based",
+        "total_statements": 18,
+        "basis": "auth extractor 2 (connection-recovery checkout probe + user lookup) + handler checkout probe 1 + reader lock 1 + issue lookup 1 + thread lock 1 + reference_names 5 (lists, plans, node-plans, dependencies, events) + delete 1 + position reseat 1 + recreate tracking 1 + graph_preflight 1 + audit event 1 (+2 tx control); measured 18, set-based",
         "grows_with_data": false,
-        "max_statements": 16,
+        "max_statements": 18,
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_delete_issue_n1.py"
@@ -255,27 +255,27 @@
       "method": "PATCH",
       "path": "/api/v2/issues/{issue_id}",
       "sql_budget": {
-        "application_statements": 25,
+        "application_statements": 33,
         "transaction_control_statements": 2,
-        "total_statements": 27,
-        "grows_with_data": true,
-        "basis": "approximate worst-case for persist (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot); refine via parity harness",
-        "max_statements": 27,
+        "total_statements": 35,
+        "grows_with_data": false,
+        "basis": "measured maximum across status-only, rating-only, idempotency replay, error and roll_offer branches; roll_offer completion is the worst case (advisory lock, owner/issue locks, idempotency, status/rating writes, refresh, audit, snapshot, die advance) plus 3 auth/checkout probe statements and 2 tx control; set-based, no per-row growth",
+        "max_statements": 35,
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
         "measurement_status": "measured",
-        "measured_test_reference": "native/roll-service/parity/test_http_issue_read_rate_n1.py,native/roll-service/parity/test_http_issue_patch_branches_n1.py"
+        "measured_test_reference": "native/roll-service/parity/test_http_issue_patch_branches_n1.py"
       }
     },
     {
       "method": "GET",
       "path": "/api/v2/issues/{issue_id}/comicvine",
       "sql_budget": {
-        "application_statements": 1,
+        "application_statements": 2,
         "transaction_control_statements": 0,
-        "total_statements": 1,
-        "basis": "auth folded into one owner-scoped statement; set-based",
+        "total_statements": 2,
+        "basis": "auth folded into one owner-scoped statement 1 + connection-recovery checkout probe 1; measured 2, set-based",
         "grows_with_data": false,
-        "max_statements": 1,
+        "max_statements": 2,
         "proof_reference": "native/roll-service/src/comicvine_issue.rs",
         "measurement_status": "measured",
         "measured_test_reference": "native/roll-service/parity/test_http_comicvine_issue_n1.py"
