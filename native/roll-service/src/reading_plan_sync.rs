@@ -134,7 +134,7 @@ pub async fn get_sync_status(
 pub async fn sync_released_issues(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Json(payload): Json<SyncRequest>,
+    Json(_payload): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
     let connection = db::checkout(&state).await?;
     
@@ -161,7 +161,7 @@ pub async fn sync_released_issues(
         .await
         .map_err(db::query_error)?;
     
-    let mut report = SyncReport {
+    let report = SyncReport {
         total_sources: all_sources_rows.len() as i64,
         enabled_sources: enabled_sources_rows.len() as i64,
         checked_sources: 0,
