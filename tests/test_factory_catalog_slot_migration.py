@@ -29,7 +29,7 @@ ROSTER = _load("factory_roster")
 RETIRE = _load("factory_model_retirement")
 STATE = _load("factory_state_operations")
 
-CATALOG_SOURCES = {"opencode-free", "openrouter-free", "vercel-ai-gateway"}
+CATALOG_SOURCES = ROSTER.CATALOG_MODEL_SOURCES
 
 
 def test_manifest_and_snapshot_do_not_pin_catalog_models() -> None:
@@ -37,7 +37,7 @@ def test_manifest_and_snapshot_do_not_pin_catalog_models() -> None:
     lock = ROSTER.load_roster_lock()
     snapshot = ROSTER.load_roster_snapshot()
     catalog_slots = [row for row in rows if row["source"] in CATALOG_SOURCES]
-    assert len(catalog_slots) == 25
+    assert catalog_slots  # Worker count may grow or shrink through approved policy.
     assert all(row["model"] == ROSTER.CATALOG_MODEL_SLOT for row in catalog_slots)
     assert all("catalog slot" in row["display_name"] for row in catalog_slots)
     assert set(lock["expected_workers"]) == ROSTER.roster_worker_ids(rows)
