@@ -93,7 +93,9 @@ async def test_roll_die_state_statements_do_not_grow_with_library_size() -> None
             "RUST_ROLL_DATABASE_URL": url,
             "RUST_ROLL_JWT_SECRET": SECRET,
         }
-        _, _, s_before = await db_counters(engine)
+        await reset_statement_stats()
+        breakdown_before = await db_statement_breakdown(engine)
+        assert breakdown_before is not None
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
         small_body = small_response.get("body")
@@ -102,9 +104,17 @@ async def test_roll_die_state_statements_do_not_grow_with_library_size() -> None
         assert small_body.get("ladder") == [2, 4, 6, 8, 10, 12, 20]
         assert isinstance(small_body.get("die"), int)
         assert "last_roll" in small_body
-        _, _, s_after = await db_counters(engine)
-        small_delta = (
-            s_after - s_before if s_before is not None and s_after is not None else None
+        breakdown_after = await db_statement_breakdown(engine)
+        assert breakdown_after is not None
+        small_delta = StatementBreakdown(
+            application=breakdown_after.application - breakdown_before.application,
+            transaction_control=(
+                breakdown_after.transaction_control - breakdown_before.transaction_control
+            ),
+            runtime_overhead=(
+                breakdown_after.runtime_overhead - breakdown_before.runtime_overhead
+            ),
+            nested=breakdown_after.nested - breakdown_before.nested,
         )
 
         raw = await asyncpg.connect(url)
