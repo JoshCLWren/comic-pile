@@ -84,6 +84,20 @@ def test_publication_retries_without_duplicate_pr_and_preserves_owner(harness: d
     assert any(call[0].endswith("/comments") for call in harness["calls"])
 
 
+
+def test_existing_ready_recovery_keeps_its_state_and_accurate_link(harness: dict) -> None:
+    """A manually published checkpoint must be reused without calling it a draft."""
+    harness["drafts"] = [{"number": 5200, "state": "open", "draft": False,
+                          "labels": [{"name": "factory"}, {"name": "factory:local"}]}]
+    result = handoff.publish(REPO, RUN)
+    assert result["published"] and result["recovery_pr"] == 5200
+    assert not any(call[1] == "PATCH" or call[0].endswith("/pulls")
+                   for call in harness["calls"])
+    comments = [call[2]["body"] for call in harness["calls"]
+                if call[0].endswith("/comments")]
+    assert comments and "This recovery PR contains" in comments[0]
+    assert "This draft" not in comments[0]
+
 def test_issue_work_gets_main_draft(harness: dict) -> None:
     harness["saved"]["mode"] = "issue"
     handoff.publish(REPO, RUN)
