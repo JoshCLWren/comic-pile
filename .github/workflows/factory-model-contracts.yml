@@ -39,7 +39,7 @@ jobs:
         run: python3 -m pip install pytest PyYAML
       - name: Verify model-independent roster and runtime contracts
         run: |
-          python3 -m pytest --noconftest -q \
+          python3 -m pytest --noconftest -o addopts='' -q \
             tests/test_factory_catalog_slot_migration.py \
             tests/test_factory_published_model_catalog.py \
             tests/test_factory_model_discovery_retirement.py \
