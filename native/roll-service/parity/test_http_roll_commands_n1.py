@@ -439,7 +439,7 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
         after = await db_statement_breakdown(engine)
         assert after is not None
         assert after.application - before.application == 4
-        assert after.top_level > before.top_level
+        assert after.top_level - before.top_level == 4
 
         document = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))
         entries = [
@@ -448,10 +448,44 @@ async def test_extra_and_n_plus_one_queries_fail_roll_budget_guards(
             if entry["method"] == method and entry["path"] == path
         ]
         assert len(entries) == 1
-        maximum = entries[0]["sql_budget"]["max_statements"]
+        budget = entries[0]["sql_budget"]
+        assert isinstance(budget, dict)
+        application = budget["application_statements"]
+        control = budget["transaction_control_statements"]
+        overhead = budget.get("runtime_overhead_statements", 0)
+        nested = budget.get("max_nested_statements", 0)
+        assert isinstance(application, int)
+        assert isinstance(control, int)
+        assert isinstance(overhead, int)
+        assert isinstance(nested, int)
+        baseline = StatementBreakdown(
+            application=application,
+            transaction_control=control,
+            runtime_overhead=overhead,
+            nested=nested,
+        )
+        extra_query = StatementBreakdown(
+            application=baseline.application + 1,
+            transaction_control=baseline.transaction_control,
+            runtime_overhead=baseline.runtime_overhead,
+            nested=baseline.nested,
+        )
+        n_plus_one = StatementBreakdown(
+            application=baseline.application + 4,
+            transaction_control=baseline.transaction_control,
+            runtime_overhead=baseline.runtime_overhead,
+            nested=baseline.nested,
+        )
+        with pytest.raises(AssertionError, match="application statement count changed"):
+            assert_measured_statement_breakdown(method, path, extra_query)
         with pytest.raises(AssertionError, match="declared maximum"):
-            assert_declared_budget(method, path, maximum + 1)
+            assert_declared_budget(method, path, extra_query.top_level)
         with pytest.raises(AssertionError, match="grew with data size"):
-            assert_no_statement_growth(method, path, before.top_level, after.top_level)
+            assert_no_statement_growth(
+                method,
+                path,
+                baseline.top_level,
+                n_plus_one.top_level,
+            )
     finally:
         await engine.dispose()
