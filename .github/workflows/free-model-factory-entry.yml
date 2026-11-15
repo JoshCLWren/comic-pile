@@ -167,7 +167,7 @@ jobs:
               exit 1
             }
           fi
-          # Authoritative remote-ref/PR enrichment distinguishes saved recovery
+          # Authoritative remote-ref/PR enrichment distinguishes persisted work
           # from validated PR delivery. Never convert a failing worker into success.
           checkpoint_args=(--repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID"
             --cleanup --outcome "$RUNNER_TEMP/worker-outcome.json")
@@ -175,7 +175,7 @@ jobs:
             checkpoint_args+=(--delivered-pr "$delivery_pr")
           fi
           python3 .github/scripts/factory_checkpoint_handoff.py "${checkpoint_args[@]}" || {
-            echo "::warning::Recovery publication failed; independent checkpoint reconciliation will retry"
+            echo "::warning::Work PR publication failed; independent checkpoint reconciliation will retry"
           }
           # Worker identity comes from the trusted dispatch input, *not* from
           # any untrusted text in a model-generated log.
@@ -218,7 +218,7 @@ jobs:
           else
             verdict="failed"
             if [[ "$saved" == true ]]; then
-              message="Code saved to recovery; PR delivery incomplete; worker failed: $classification (recovery PR: ${recovery_pr:-publication pending})"
+              message="Code saved on the work PR; validation incomplete; worker failed: $classification (work PR: ${recovery_pr:-publication pending})"
             else
               message="No verified saved code or PR delivery; worker failed: $classification"
             fi
@@ -229,7 +229,7 @@ jobs:
             echo "$message"
             echo
             printf 'Neon terminal classification: `%s`\n' "$classification"
-            printf 'Checkpoint saved: `%s`; recovery PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
+            printf 'Checkpoint saved: `%s`; work PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
           # Publish the same final verdict to the existing registry marker.
           # Use Neon-discovered ID, never re-page all historical comments.

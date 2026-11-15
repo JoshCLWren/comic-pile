@@ -9,11 +9,12 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -61,10 +62,19 @@ def _payload(value: Any) -> list[dict[str, Any]] | None:
 
 
 def _read(key: str) -> tuple[list[dict[str, Any]] | None, bool]:
-    row = _run(
-        "SELECT payload, expires_at FROM public.factory_state_kv WHERE cache_key=$1",
-        key, one=True,
+    # When a generic GET expires, the caller will fetch GitHub again. Return
+    # just its prior digest, not megabytes of expired JSON over the wire.
+    # Fresh GETs still return the complete original response.
+    query = (
+        """SELECT CASE WHEN expires_at > now() THEN payload
+                  ELSE jsonb_build_array(jsonb_build_object(
+                      'stdout_sha256', payload->0->>'stdout_sha256'))
+                END AS payload, expires_at
+           FROM public.factory_state_kv WHERE cache_key=$1"""
+        if key.startswith("factory-github-get-v1:")
+        else "SELECT payload, expires_at FROM public.factory_state_kv WHERE cache_key=$1"
     )
+    row = _run(query, key, one=True)
     if row is None:
         return None, False
     data = _payload(row["payload"])
@@ -262,6 +272,16 @@ def cached_json(
         raise
 
     unchanged = previous is not None and result == previous
+    if (not unchanged and key.startswith("factory-github-get-v1:")
+            and previous and len(previous) == 1 and len(result) == 1
+            and isinstance(previous[0], dict) and isinstance(result[0], dict)):
+        # Compressed cached GETs contain their source-byte digest. An expired
+        # snapshot can refresh its TTL without fetching the old TOAST value
+        # from Neon or rewriting it when GitHub returned identical bytes.
+        old_digest = previous[0].get("stdout_sha256")
+        unchanged = isinstance(old_digest, str) and bool(old_digest) and (
+            old_digest == result[0].get("stdout_sha256")
+        )
     try:
         if unchanged:
             _refresh_without_rewrite(key, owner, ttl_seconds, len(result))
@@ -314,6 +334,78 @@ def incremental_comments(
             raise ValueError("GitHub returned a malformed issue comment")
         by_id[comment["id"]] = comment
     return sorted(by_id.values(), key=lambda comment: (comment.get("created_at") or "", comment["id"]))
+
+
+
+def compact_registry_comments(
+    comments: list[dict[str, Any]],
+    *,
+    trusted: Callable[[dict[str, Any]], bool],
+    now: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """Keep the evidence consumers need, not the entire historical issue thread.
+
+    Registry readers need recent run mappings, the latest observation per worker,
+    the latest evidence per provider/model, sticky model retirements, and the
+    latest completion funnel. Older historical comments remain on GitHub.
+    Preserve GitHub metadata verbatim so trust checks run at every consumer.
+    """
+    now = datetime.now(timezone.utc) if now is None else now
+    recent_cutoff = now - timedelta(hours=48)
+    retained: dict[int, dict[str, Any]] = {}
+    newest: dict[tuple[str, ...], tuple[datetime, dict[str, Any]]] = {}
+
+    def timestamp(value: Any) -> datetime | None:
+        if not isinstance(value, str):
+            return None
+        try:
+            result = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        return result.astimezone(timezone.utc) if result.tzinfo else None
+
+    def keep_latest(key: tuple[str, ...], updated: datetime, comment: dict[str, Any]) -> None:
+        old = newest.get(key)
+        if old is None or updated >= old[0]:
+            newest[key] = (updated, comment)
+
+    for comment in comments:
+        if not isinstance(comment, dict) or not isinstance(comment.get("id"), int):
+            continue
+        metadata_time = timestamp(comment.get("updated_at")) or timestamp(comment.get("created_at"))
+        if metadata_time is not None:
+            keep_latest(("cursor",), metadata_time, comment)
+            if metadata_time >= recent_cutoff:
+                retained[comment["id"]] = comment
+        if not trusted(comment):
+            continue
+
+        body = str(comment.get("body") or "")
+        observed_match = re.search(r"(?m)^Updated:\s*(\S+)\s*$", body)
+        observed = (timestamp(observed_match.group(1)) if observed_match else None) or metadata_time
+        if observed is None:
+            continue
+        worker = re.search(r"(?m)^Worker:\s*opencode-free-model-factory-(\d+)\s*$", body)
+        if worker:
+            kind = ("heartbeat" if "<!-- factory-heartbeat:v1" in body
+                    else "attempt" if "<!-- factory-attempt-outcome:v1" in body
+                    else "legacy")
+            keep_latest(("worker", worker.group(1), kind), observed, comment)
+
+        source = re.search(r"(?m)^Source:\s*(\S+)\s*$", body)
+        model = re.search(r"(?m)^Model:\s*(\S+)\s*$", body)
+        if source and model and (
+            "Attempt outcome:" in body or "<!-- factory-model-retired-410:v1 -->" in body
+        ):
+            # A retirement remains sticky even when later attempts are published.
+            kind = "retired" if "<!-- factory-model-retired-410:v1 -->" in body else "attempt"
+            keep_latest(("model", source.group(1), model.group(1), kind), observed, comment)
+        if "<!-- factory-completion-funnel:v1 -->" in body:
+            keep_latest(("funnel",), observed, comment)
+
+    for _updated, comment in newest.values():
+        retained[comment["id"]] = comment
+    return sorted(retained.values(), key=lambda row: (str(row.get("created_at") or ""), row["id"]))
 
 
 def main(argv: list[str]) -> int:
