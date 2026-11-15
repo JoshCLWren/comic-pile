@@ -61,6 +61,16 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
         source = row['source']
         model = row['model']
         worker = row['worker']
+        # A catalog slot is a typed selector, never an API model identifier.
+        # The execution runner must resolve an actual published free model.
+        if model == _ROSTER.CATALOG_MODEL_SLOT:
+            assert source in _ROSTER.CATALOG_MODEL_SOURCES, (
+                f'worker {worker}: catalog selector on non-catalog source'
+            )
+            continue
+        assert source not in _ROSTER.CATALOG_MODEL_SOURCES, (
+            f'worker {worker}: catalog source still hardcodes an API model ID'
+        )
         if source == 'opencode-free':
             assert opencode_model_is_free(model), (
                 f'worker {worker} opencode-free pin must be a free OpenCode model '
@@ -79,10 +89,6 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
             assert ollama_cloud_model_is_free(model), (
                 f'worker {worker} ollama-cloud pin must be a documented free '
                 f'starter model, got {model!r}'
-            )
-        elif source == 'vercel-ai-gateway':
-            assert model in _ROSTER.VERCEL_ZERO_PRICE_MODELS, (
-                f'worker {worker} vercel-ai-gateway pin must be an explicitly $0 model, got {model!r}'
             )
         elif source == 'mistral':
             assert mistral_model_is_pinned(model), (
