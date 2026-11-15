@@ -248,45 +248,48 @@ async def db_statement_breakdown(engine: AsyncEngine) -> StatementBreakdown | No
                                   SELECT oid FROM pg_database
                                   WHERE datname = current_database()
                               )
+                        ),
+                        classified AS (
+                            SELECT calls,
+                                   toplevel,
+                                   normalized_query IN ('select 1', 'select $1')
+                                       AS is_runtime_overhead,
+                                   (
+                                       normalized_query IN (
+                                           'begin', 'commit', 'rollback', 'abort', 'end'
+                                       )
+                                       OR normalized_query LIKE 'begin %'
+                                       OR normalized_query LIKE 'start transaction %'
+                                       OR normalized_query LIKE 'commit %'
+                                       OR normalized_query LIKE 'rollback %'
+                                       OR normalized_query LIKE 'abort %'
+                                       OR normalized_query LIKE 'end %'
+                                       OR normalized_query LIKE 'set local %'
+                                       OR normalized_query LIKE 'set transaction %'
+                                       OR normalized_query LIKE 'savepoint %'
+                                       OR normalized_query LIKE 'release savepoint %'
+                                       OR normalized_query LIKE 'prepare transaction %'
+                                   ) AS is_transaction_control
+                            FROM role_statements
                         )
                         SELECT
                             COALESCE(
                                 SUM(calls) FILTER (
                                     WHERE toplevel
-                                      AND normalized_query NOT IN ('select 1', 'select $1')
-                                      AND normalized_query NOT IN (
-                                          'begin', 'commit', 'rollback', 'abort', 'end'
-                                      )
-                                      AND normalized_query NOT LIKE 'begin %'
-                                      AND normalized_query NOT LIKE 'set local %'
-                                      AND normalized_query NOT LIKE 'set transaction %'
-                                      AND normalized_query NOT LIKE 'savepoint %'
-                                      AND normalized_query NOT LIKE 'release savepoint %'
-                                      AND normalized_query NOT LIKE 'rollback to %'
+                                      AND NOT is_runtime_overhead
+                                      AND NOT is_transaction_control
                                 ),
                                 0
                             ) AS application,
                             COALESCE(
                                 SUM(calls) FILTER (
-                                    WHERE toplevel
-                                      AND (
-                                          normalized_query IN (
-                                              'begin', 'commit', 'rollback', 'abort', 'end'
-                                          )
-                                          OR normalized_query LIKE 'begin %'
-                                          OR normalized_query LIKE 'set local %'
-                                          OR normalized_query LIKE 'set transaction %'
-                                          OR normalized_query LIKE 'savepoint %'
-                                          OR normalized_query LIKE 'release savepoint %'
-                                          OR normalized_query LIKE 'rollback to %'
-                                      )
+                                    WHERE toplevel AND is_transaction_control
                                 ),
                                 0
                             ) AS transaction_control,
                             COALESCE(
                                 SUM(calls) FILTER (
-                                    WHERE toplevel
-                                      AND normalized_query IN ('select 1', 'select $1')
+                                    WHERE toplevel AND is_runtime_overhead
                                 ),
                                 0
                             ) AS runtime_overhead,
@@ -294,7 +297,7 @@ async def db_statement_breakdown(engine: AsyncEngine) -> StatementBreakdown | No
                                 SUM(calls) FILTER (WHERE NOT toplevel),
                                 0
                             ) AS nested
-                        FROM role_statements
+                        FROM classified
                         """
                     )
                 )
