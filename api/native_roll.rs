@@ -268,6 +268,7 @@ fn app() -> Router {
             post(native_dispatch),
         )
         .route("/api/v1/reading-plan-sync/status", get(native_dispatch))
+        .route("/api/v1/reading-plan-sync/sync", post(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", get(native_dispatch))
         .route("/api/v2/queue-entries/{thread_id}", patch(native_dispatch))
         .route("/api/v2/queue-orders", post(native_dispatch))

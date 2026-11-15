@@ -8,6 +8,7 @@ use axum::{extract::State, Json};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio_postgres::Row;
 
 const STATUS_SQL: &str = "SELECT rps.id, rps.plan_id, rps.thread_id, \
      rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at \
