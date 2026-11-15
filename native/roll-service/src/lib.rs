@@ -660,6 +660,14 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(comicvine_issue::issue_intelligence),
         )
         .route(
+            "/api/v1/issue-identity/cbl-sources/browse",
+            get(cbl_catalog::browse_cbl_source_catalog),
+        )
+        .route(
+            "/api/v1/issue-identity/cbl-sources/folders",
+            get(cbl_catalog::list_cbl_source_folders),
+        )
+        .route(
             "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
             get(comicvine_resolution::series_import_status),
         )
