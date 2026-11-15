@@ -200,6 +200,14 @@ stage_trusted_review_controller() {
   export TRUSTED_REVIEW_CONTROLLER
 }
 
+# Pin the checkpoint writer to trusted main before loading arbitrary PR code.
+# The model may edit repository scripts but cannot replace this running helper.
+stage_trusted_checkpoint_helper() {
+  TRUSTED_WORK_CHECKPOINT="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-work-checkpoint.XXXXXXXX")"
+  cp .github/scripts/factory-work-checkpoint.sh "$TRUSTED_WORK_CHECKPOINT"
+  chmod +x "$TRUSTED_WORK_CHECKPOINT"
+}
+
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
 # small override only so it invokes the trusted helper staged from main.
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
@@ -437,10 +445,40 @@ select_controller_assignment() {
 
 ensure_owner_label
 stage_trusted_guard
+stage_trusted_checkpoint_helper
 stage_trusted_kilo_helper
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
-trap 'release_owned_targets session-end-handoff || true' EXIT
+
+# Snapshots are saved on a private per-run recovery branch, never the PR ref.
+# A separate Git index avoids interfering with an agent editing files.
+CHECKPOINT_PID=''
+CHECKPOINT_LOG=''
+start_work_checkpoint() {
+  [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] || return 0
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  CHECKPOINT_LOG="${RUNNER_TEMP:-/tmp}/factory-work-checkpoint-${GITHUB_RUN_ID}.log"
+  bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
+  CHECKPOINT_PID="$!"
+  log "automatic work recovery checkpoints enabled for run $GITHUB_RUN_ID (every 45s)"
+}
+
+stop_work_checkpoint() {
+  [[ -n "$CHECKPOINT_PID" ]] || return 0
+  kill -USR1 "$CHECKPOINT_PID" 2>/dev/null || true
+  wait "$CHECKPOINT_PID" || log 'automatic recovery checkpoint writer did not exit cleanly'
+  CHECKPOINT_PID=''
+  [[ ! -f "$CHECKPOINT_LOG" ]] || tail -n 8 "$CHECKPOINT_LOG" || true
+}
+
+discard_delivered_checkpoint() {
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  # The normal PR delivery now owns these bytes and all existing checks. Only
+  # discard snapshots after a confirmed issue/PR push and handoff.
+  git push --quiet origin ":refs/heads/factory/work-checkpoints/${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+}
+
+trap 'stop_work_checkpoint; release_owned_targets session-end-handoff || true' EXIT
 
 MODE=''
 NUMBER=''
@@ -489,6 +527,7 @@ elif (( fork_route != 0 && fork_route != 1 )); then
 fi
 if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
   checkout_target "$MODE" "$NUMBER" "$BRANCH"
+  start_work_checkpoint
 fi
 
 available="$(remaining)"
@@ -541,6 +580,10 @@ while :; do
   (( agent_timeout >= 300 )) || break
 done
 
+# Force the final pending edit snapshot before any normal push, lint gate, or
+# lease handoff. If this run is canceled instead, earlier timed snapshots survive.
+stop_work_checkpoint
+
 if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
   record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
   exit 2
@@ -592,6 +635,7 @@ if [[ "$MODE" == 'issue' ]]; then
     # separate plain-prose handoff as its App (#3135); others post nothing.
     post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
+    discard_delivered_checkpoint
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
@@ -627,6 +671,7 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$pushed_stage" "$pushed_reason"
   post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
+  discard_delivered_checkpoint
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
