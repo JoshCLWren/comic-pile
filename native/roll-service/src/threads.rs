@@ -400,7 +400,7 @@ pub async fn get_thread_detail(
     let connection = db::checkout(&state).await?;
     let row = connection
         .query_opt(
-            "WITH auth AS (
+            "rWITH auth AS (
                  SELECT u.id AS user_id
                  FROM users u
                  WHERE u.username = $1
@@ -1083,9 +1083,9 @@ SELECT json_build_object(
 
 fn iso_timestamp(column: &str) -> String {
     format!(
-        "CASE WHEN {column} IS NULL THEN NULL \
-         WHEN date_trunc('second', {column}) = {column} \
-         THEN to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') \
+        "CASE WHEN {column} IS NULL THEN NULL \$
+         WHEN date_trunc('second', {column}) = {column} \$
+         THEN to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') \$
          ELSE to_char({column} AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END"
     )
 }
@@ -1205,9 +1205,9 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let position: i32 = cursor.values[1].parse().unwrap_or(0);
             let id: i32 = cursor.values[2].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR (CASE WHEN $10::boolean \
-                 THEN ({blocked}) AND (t.queue_position, t.id) > ($11::int, $12::int) \
-                 ELSE (((NOT ({blocked})) AND (t.queue_position, t.id) > ($11::int, $12::int)) \
+                "AND (NOT $9::boolean OR (CASE WHEN $10::boolean \$
+                 THEN ({blocked}) AND (t.queue_position, t.id) > ($11::int, $12::int) \$
+                 ELSE (((NOT ({blocked})) AND (t.queue_position, t.id) > ($11::int, $12::int)) \$
                  OR ({blocked})) END))"
                     .to_string(),
                 vec![
@@ -1230,7 +1230,7 @@ fn cursor_clause(sort: &str, cursor: Option<&QueueCursor>) -> (String, Vec<Param
             let created = cursor.values[0].clone();
             let id: i32 = cursor.values[1].parse().unwrap_or(0);
             (
-                "AND (NOT $9::boolean OR t.created_at < ($10::text)::timestamptz \
+                "AND (NOT $9::boolean OR t.created_at < ($10::text)::timestamptz \$
                  OR (t.created_at = ($10::text)::timestamptz AND t.id < $11::int))"
                     .to_string(),
                 vec![Param::Bool(true), Param::Text(created), Param::Int(id)],
@@ -1512,7 +1512,7 @@ mod tests {
         assert_eq!(
             checked_in.trim_end(),
             generated.trim_end(),
-            "Regenerate native/contracts/threads-v2.openapi.json with \
+            "Regenerate native/contracts/threads-v2.openapi.json with \$
              cargo run --example threads_openapi"
         );
     }
@@ -1530,7 +1530,7 @@ pub async fn update_thread(
     let connection = db::checkout(&state).await?;
     let row = connection
         .query_opt(
-            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+            "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                      t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                      t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                      t.manual_creator_credits::text
@@ -1578,7 +1578,7 @@ pub async fn delete_thread_handler(
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let connection = db::checkout(&state).await?;
     let result = sqlx::query!(
-        r"DELETE FROM threads WHERE id = \$1 AND user_id = (SELECT id FROM users WHERE username = \$2)",
+        r"rDELETE FROM threads WHERE id = \$1 AND user_id = (SELECT id FROM users WHERE username = \$2)",
         &[&thread_id, &claims.username()]
     )
     .execute(&*connection)
@@ -1600,7 +1600,7 @@ pub async fn exclude_thread_handler(
     let connection = db::checkout(&state).await?;
     let thread = sql::query_as!(
         Thread,
-        r#"SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+        r#"rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                  t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                  t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                  t.manual_creator_credits::text
@@ -1622,7 +1622,7 @@ pub async fn exclude_thread_handler(
     let connection2 = db::checkout(&state).await?;
     let row = connection2
         .query_opt(
-            r#"SELECT t.id, t.title, t.format, t.queue_position,
+            r#"rSELECT t.id, t.title, t.format, t.queue_position,
                      t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                      t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                      t.manual_creator_credits::text
@@ -1671,7 +1671,7 @@ pub async fn restore_thread_handler(
     let connection = db::checkout(&state).await?;
     let thread = sql::query_as!(
         Thread,
-        "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+        "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                  t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                  t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                  t.manual_creator_credits::text
@@ -1693,7 +1693,7 @@ pub async fn restore_thread_handler(
     let connection2 = db::checkout(&state).await?;
     let row = connection2
         .query_opt(
-            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+            "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                      t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                      t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                      t.manual_creator_credits::text
@@ -1743,7 +1743,7 @@ pub async fn reactivate_thread_handler(
     let connection = db::checkout(&state).await?;
     let thread = sql::query_as!(
         Thread,
-        "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+        "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                  t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                  t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                  t.manual_creator_credits::text
@@ -1765,7 +1765,7 @@ pub async fn reactivate_thread_handler(
     let connection2 = db::checkout(&state).await?;
     let row = connection2
         .query_opt(
-            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+            "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                      t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                      t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                      t.manual_creator_credits::text
@@ -1864,7 +1864,7 @@ pub async fn migrate_thread_to_issues_handler(
     let connection = db::checkout(&state).await?;
     let row = connection
         .query_opt(
-            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+            "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                      t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                      t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                      t.manual_creator_credits::text
@@ -1915,7 +1915,7 @@ pub async fn migrate_thread_to_issues_simple_handler(
     let connection = db::checkout(&state).await?;
     let row = connection
         .query_opt(
-            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+            "rSELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
                      t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
                      t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
                      t.manual_creator_credits::text
