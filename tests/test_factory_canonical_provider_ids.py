@@ -24,7 +24,7 @@ def test_every_compatible_provider_round_trips_published_model_id(registry):
     """Selector is canonical provider plus unmodified upstream model ID."""
     for source, provider in registry.PROVIDERS.items():
         model = "upstream/model-v1"
-        env = {provider.credential: "secret", **{key: "account" for key in provider.additional_credentials}}
+        env = {provider.credential: "secret", **dict.fromkeys(provider.additional_credentials, "account")}
         resolution = registry.resolve(source, model, env)
         assert resolution["runtime_model"] == f"{provider.provider}/{model}"
         assert resolution["configured"]
