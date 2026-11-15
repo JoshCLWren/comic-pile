@@ -38,4 +38,4 @@ def test_native_operations_have_no_shadow_python_handlers() -> None:
     assert operations.isdisjoint(retired), sorted(operations & retired)
     assert ("POST", "/api/v1/threads/") in operations
     assert ("GET", "/api/v1/sessions/current/") in operations
-    assert ("GET", "/api/v2/reading-boundaries/{thread_id}") in operations
+    assert ("GET", "/api/v2/reading-boundaries/{thread_id}") not in operations

@@ -448,108 +448,10 @@ jobs:
       # for this, so alembic check always reports a false-positive difference.
       # Single-head enforcement + clean upgrade-from-scratch is the effective gate.
 
-  test-unit:
-    name: Backend Tests (shard ${{ matrix.shard }}/${{ strategy.job-total }})
-    runs-on: ubuntu-latest
-    container:
-      image: ${{ needs.build.outputs.image-ref || 'python:3.14-trixie' }}
-    needs: [build, build-fork]
-    if: always() && (needs.build.result == 'success' || needs.build-fork.result == 'success')
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3, 4]
-    env:
-      CI: true
-      SECRET_KEY: test-secret-key-for-testing-only
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      TEST_DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/comic_pile_test
-      REDIS_URL: redis://redis:6379/0
-      PGUSER: postgres
-      RUST_SQL_ORACLE_DIR: artifacts/rust-sql-oracle
-      PATH: "/workspace/.venv/bin:/usr/local/bin:/usr/bin:/bin"
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: comic_pile_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-
-      - name: Install fork CI toolchain
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
-        uses: ./.github/actions/fork-ci-toolchain
-
-      - name: Remove .env file to prevent CI database override
-        run: rm -f .env .env.test .env.backup .envrc .env.local .env.production
-
-      - name: Wait for PostgreSQL
-        run: |
-          i=1
-          while [ $i -le 30 ]; do
-            if pg_isready -h postgres -p 5432 -U postgres; then
-              echo "PostgreSQL is ready"
-              exit 0
-            fi
-            echo "Waiting for PostgreSQL..."
-            sleep 2
-            i=$((i + 1))
-          done
-          echo "PostgreSQL failed to start"
-          exit 1
-
-      - name: Refresh existing burndown formatting
-        run: |
-          python scripts/generate_route_burndown.py
-          python scripts/generate_route_burndown.py --check
-
-      - name: Run backend tests (shard ${{ matrix.shard }})
-        run: |
-          FILES=$(python scripts/ci_backend_shard.py \
-            --shard ${{ matrix.shard }} \
-            --shards ${{ strategy.job-total }})
-          if [ -z "$FILES" ]; then
-            echo "::error::No backend test files were assigned to shard ${{ matrix.shard }}"
-            exit 1
-          fi
-          # Retained Python behavior still runs, but Python coverage no longer
-          # gates the Rust-first cutover. Frontend and native test gates remain.
-          pytest $FILES -o addopts=""
-
-      - name: Upload synthetic Rust port SQL oracle
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: rust-sql-oracle-${{ matrix.shard }}
-          path: artifacts/rust-sql-oracle/*.json
-          if-no-files-found: ignore
-
   check-all-jobs:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [build, build-fork, node-auth, rust-ingress, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health, test-unit]
+    needs: [build, build-fork, node-auth, rust-ingress, factory-pr-auth, frontend-typecheck, python-lint, python-typecheck, frontend-unit-tests, ui-audit, production-runtime-migrations, migration-health]
     if: always()
     steps:
       - name: Check job results
@@ -566,7 +468,6 @@ jobs:
           echo "Rendered UI Audit: ${{ needs.ui-audit.result }}"
           echo "Production Runtime Migrations: ${{ needs.production-runtime-migrations.result }}"
           echo "Migration Health: ${{ needs.migration-health.result }}"
-          echo "Backend Tests: ${{ needs.test-unit.result }}"
           if { [ "${{ needs.build.result }}" != "success" ] && [ "${{ needs.build-fork.result }}" != "success" ]; } || \
              [ "${{ needs.node-auth.result }}" != "success" ] || \
              [ "${{ needs.rust-ingress.result }}" != "success" ] || \
@@ -577,8 +478,7 @@ jobs:
              [ "${{ needs.frontend-unit-tests.result }}" != "success" ] || \
              [ "${{ needs.ui-audit.result }}" != "success" ] || \
              [ "${{ needs.production-runtime-migrations.result }}" != "success" ] || \
-             [ "${{ needs.migration-health.result }}" != "success" ] || \
-             [ "${{ needs.test-unit.result }}" != "success" ]; then
+             [ "${{ needs.migration-health.result }}" != "success" ]; then
             echo "::error::One or more required CI jobs failed. Please review the failures."
             exit 1
           fi

@@ -93,11 +93,6 @@
     "tests/test_taste_acceptance.py": [
       "user_id=1"
     ],
-    "tests/test_test_helpers.py": [
-      "user_id=1",
-      "user_id=7",
-      "user_id=99"
-    ],
     "tests/test_thread_api.py": [
       "User(id=999)"
     ]

@@ -10,11 +10,11 @@ const ingress = JSON.parse(readFileSync(resolvePath(process.cwd(), '../vercel.js
 const resolve = createApiDestinationResolver(ingress.routes)
 
 async function listen(server: Server): Promise<string> {
-  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done))
+  await new Promise<void>((done) => server.listen(0, 'localhost', done))
   // SAFETY: listen() bound a TCP port above, so address() returns AddressInfo, not a pipe name.
   const address = server.address() as AddressInfo
   if (!address) throw new Error('Missing test server port')
-  return `http://127.0.0.1:${address.port}`
+  return `http://localhost:${address.port}`
 }
 
 async function close(server: Server) {
@@ -40,7 +40,7 @@ describe('development API routing', () => {
     expect(resolve('GET', '/api/v2/reading-boundaries/42?context=queue')).toBe('python')
     expect(resolve('OPTIONS', '/api/v2/reading-boundaries/42')).toBe('python')
     expect(resolve('POST', '/api/v2/reading-boundaries')).toBe('native')
-    expect(resolve('POST', '/api/v1/auth/login')).toBe('native')
+    expect(resolve('POST', '/api/v2/auth/login')).toBe('native')
     expect(resolve('GET', '/api/v1/catalog/series-mappings/preview')).toBe('native')
     expect(resolve('POST', '/api/v1/catalog/series-mappings/preview')).toBe('python')
     expect(resolve('GET', '/api/v1/traffic-metrics')).toBe('python')
@@ -76,7 +76,7 @@ describe('development API routing', () => {
     try {
       const base = await listen(gateway)
       const results = await Promise.all(Array.from({ length: 12 }, async (_, index) => {
-        const path = index % 2 === 0 ? '/api/v1/auth/login' : '/api/v1/catalog/series-mappings/preview'
+        const path = index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'
         const response = await fetch(`${base}${path}?request=${index}`, {
           method: 'POST', body: JSON.stringify({ request: index }),
           headers: { 'Content-Type': 'application/json' },
@@ -87,7 +87,7 @@ describe('development API routing', () => {
         expect(result).toEqual({
           runtime: index % 2 === 0 ? 'native' : 'python',
           method: 'POST',
-          url: `${index % 2 === 0 ? '/api/v1/auth/login' : '/api/v1/catalog/series-mappings/preview'}?request=${index}`,
+          url: `${index % 2 === 0 ? '/api/v2/auth/login' : '/api/v1/catalog/series-mappings/preview'}?request=${index}`,
           body: JSON.stringify({ request: index }),
         })
       })

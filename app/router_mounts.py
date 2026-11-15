@@ -21,7 +21,6 @@ fall through to the JSON 404 fallback.
 
 from __future__ import annotations
 
-import os
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -170,7 +169,6 @@ def _register_reading_boundary(app: FastAPI) -> None:
     from app.api import reading_boundary
 
     app.include_router(reading_boundary.router, prefix="/api/v1", tags=["reading-boundaries"])
-    app.include_router(reading_boundary.v2_router, prefix="/api/v2", tags=["reading-boundaries-v2"])
 
 
 def _register_reading_plan_sync(app: FastAPI) -> None:
@@ -256,13 +254,6 @@ def _register_cbl_adoption(app: FastAPI) -> None:
     app.include_router(cbl_plan_adoption.router, tags=["cbl-adoption-commit"])
 
 
-def _register_test_helpers(app: FastAPI) -> None:
-    """Register the test-helper router."""
-    from app.api.test_helpers import router as test_helpers_router
-
-    app.include_router(test_helpers_router, prefix="/api", tags=["test"])
-
-
 #: Deferred mounts in historical ``include_router`` order. Segments were derived
 #: from the effective eager route table; ``tests/test_cold_start_router_loading.py``
 #: fails if a route's segment is missing here.
@@ -322,16 +313,10 @@ _CORE_MOUNTS: tuple[RouterMount, ...] = (
 def build_router_mounts(environment: str) -> tuple[RouterMount, ...]:
     """Return the deferred mounts for the current environment.
 
-    Test helpers exist only when the test environment is active, matching the
-    eager registration contract.
-
     Args:
         environment: Current application environment string.
 
     Returns:
-        Ordered mounts, test-helper filtering applied.
+        Ordered mounts of production API handlers.
     """
-    mounts = list(_CORE_MOUNTS)
-    if os.getenv("TEST_ENVIRONMENT") == "true":
-        mounts.append(RouterMount("test-helpers", frozenset({"test"}), _register_test_helpers))
-    return tuple(mounts)
+    return _CORE_MOUNTS

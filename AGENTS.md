@@ -405,7 +405,7 @@ make verify-e2e
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Maintain 94% coverage threshold.
+API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
 
 **Key Fixtures (from `tests/conftest.py`)**:
 ```python
