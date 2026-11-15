@@ -573,6 +573,13 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/reading-plan-sync/status$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/reading\\-mode$",
       "methods": [
         "GET",
