@@ -52,7 +52,6 @@ router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 
 #: Upper bound for a single batch summary request (issue #2028 performance scope).
 #: One request never grows past a small fixed number of queries and bounded rows.
-MAX_CREATOR_KEYS = 50
 
 #: Bounded comparison limits (issue #3091).
 MIN_COMPARISON_CREATORS = 2
@@ -78,50 +77,6 @@ def _split_creator_keys(raw: str) -> list[str]:
     return keys
 
 
-def _validate_creator_keys(raw: str | None) -> list[str]:
-    """Validate a creator keys query parameter into a bounded key list.
-
-    Args:
-        raw: Raw ``keys`` query parameter value.
-
-    Returns:
-        Unique validated creator keys.
-
-    Raises:
-        HTTPException: When the parameter is missing, unbounded, or malformed.
-    """
-    if not raw or not raw.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="keys must be a non-empty comma-separated list of creator keys",
-        )
-
-    keys = _split_creator_keys(raw)
-    if not keys:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="keys must be a non-empty comma-separated list of creator keys",
-        )
-
-    if len(keys) > MAX_CREATOR_KEYS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"keys may list at most {MAX_CREATOR_KEYS} creators per request",
-        )
-
-    for key in keys:
-        parts = key.split(":")
-        valid = len(parts) == 2 and parts[0] == "creator" and parts[1].isdigit()
-        if not valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Invalid creator key {key!r}: expected creator:<external-person-id> "
-                    "(stable ComicVine person id, no display names)"
-                ),
-            )
-
-    return keys
 
 
 def _validate_comparison_keys(raw: str | None) -> list[str]:
@@ -603,7 +558,6 @@ async def get_creator_series_drilldown_endpoint(
 
 
 __all__ = [
-    "MAX_CREATOR_KEYS",
     "MIN_COMPARISON_CREATORS",
     "MAX_COMPARISON_CREATORS",
     "router",

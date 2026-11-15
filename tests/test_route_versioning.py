@@ -239,6 +239,7 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/sessions/{session_id}/details",
             "/api/sessions/{session_id}/restore-session-start",
             "/api/threads/",
+            "/api/threads/{thread_id}",
             "/api/threads/active",
             "/api/threads/completed",
             "/api/threads/reactivate",

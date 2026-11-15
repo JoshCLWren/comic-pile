@@ -1,10 +1,4 @@
-"""Catalog API endpoints for series-mapping preview and commit.
-
-Only the two operations the browser calls remain
-(``POST /catalog/series-mappings/preview`` and
-``POST /catalog/series-mappings/commit``); the unused search, upsert,
-attach, and mapping-list handlers were pruned as zero-browser dead code.
-"""
+"""Python catalog series-mapping preview; commits are implemented by Rust."""
 
 from typing import Annotated
 

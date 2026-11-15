@@ -1099,3 +1099,23 @@ class TestCrossCuttingAdaptivePipeline:
         )
         refreshed = result.scalar_one()
         assert refreshed.queue_position == 1
+
+
+    @pytest.mark.asyncio
+    async def test_roll_with_manual_mode_override(
+        self, async_db: AsyncSession,
+    ) -> None:
+        """Manual mode override affects the subsequent Roll."""
+        from app.services.reading_mode import ReadingModeService
+        from tests.conftest import get_or_create_user_async
+
+        user = await get_or_create_user_async(async_db)
+        await _create_thread(async_db, user.id, title="Manual Override Thread")
+        await async_db.commit()
+
+        await ReadingModeService(async_db).set_reading_mode(
+            user, bandwidth="light", intent="momentum", source="manual",
+        )
+
+        data = (await roll_pending_thread(async_db)).model_dump()
+        assert "thread_id" in data

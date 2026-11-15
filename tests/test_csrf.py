@@ -50,3 +50,15 @@ async def test_protected_endpoint_rejects_mismatched_csrf_token(auth_client: Asy
 
     assert response.status_code == 403
     assert response.json() == {"detail": "CSRF token missing or invalid"}
+
+
+@pytest.mark.asyncio
+async def test_safe_methods_do_not_require_csrf_token(auth_client: AsyncClient) -> None:
+    """Safe methods keep working without CSRF tokens."""
+    auth_client.headers.pop(CSRF_HEADER_NAME, None)
+    auth_client.cookies.delete(CSRF_COOKIE_NAME)
+
+    response = await auth_client.get("/api/v1/sessions/current/")
+
+    assert response.status_code == 200
+

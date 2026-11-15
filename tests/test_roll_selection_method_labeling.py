@@ -26,7 +26,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Event, Thread, User
+from app.models import Event, RecommendationContext, Thread, User
 from app.services.roll_service import derive_recorded_selection_method
 from comic_pile.recommendation_selection import SelectionMode
 from tests.roll_flow import roll_pending_thread
@@ -242,3 +242,70 @@ async def test_forced_legacy_control_mode_records_legacy_method(
     event = await _latest_roll_event(async_db)
     assert event.selection_method == "legacy"
     assert event.recommendation_reason_codes == ["forced_legacy"]
+
+
+@pytest.mark.asyncio
+async def test_balanced_intent_records_one_method_across_pools(
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """One fixed intent records one selection method for every roll.
+
+    This is the reported symptom: with Balanced intent for all rolls, one roll
+    recorded "Selected by random" and the next recorded "Selected by
+    momentum". The first pool carries no momentum signal, the second one does,
+    and both rolls must still record the same method.
+    """
+    await _add_thread(async_db, default_user, "Spider-Man", queue_position=1)
+    rated = await _add_thread(async_db, default_user, "Iron Man", queue_position=2)
+    await async_db.commit()
+
+    await roll_pending_thread(async_db, intent="balanced", bandwidth="balanced")
+    first_event = await _latest_roll_event(async_db)
+    first_context = await _context_for(async_db, first_event)
+
+    # Clear the pending roll so the next one can be drawn.
+    from comic_pile.reading_session import get_or_create
+
+    session = await get_or_create(async_db, user_id=default_user.id, existing_user=default_user)
+    session.pending_thread_id = None
+    session.pending_thread_updated_at = None
+    await async_db.commit()
+
+    # Give one candidate a strong recent rating so the momentum weights of the
+    # second pool really differ from the first one.
+    rated.last_rating = 5.0
+    rated.last_activity_at = datetime.now(UTC) - timedelta(hours=1)
+    await async_db.commit()
+
+    await roll_pending_thread(async_db, intent="balanced", bandwidth="balanced")
+    second_event = await _latest_roll_event(async_db)
+    second_context = await _context_for(async_db, second_event)
+
+    # The two draws really did differ: only the second one carried a
+    # weighting signal.
+    assert first_context.random_bypass is True
+    assert second_context.random_bypass is False
+
+    # The recorded selection context still follows the active mode.
+    assert first_event.selection_method == "momentum"
+    assert second_event.selection_method == "momentum"
+    assert first_event.recommendation_reason_codes == ["momentum_weighted"]
+    assert second_event.recommendation_reason_codes == ["momentum_weighted"]
+
+
+
+async def _context_for(db: AsyncSession, event: Event) -> RecommendationContext:
+    """Return the recommendation context recorded for one roll event.
+
+    Args:
+        db: Active database session.
+        event: Roll event whose context is requested.
+
+    Returns:
+        The persisted recommendation context for the event.
+    """
+    result = await db.execute(
+        select(RecommendationContext).where(RecommendationContext.event_id == event.id)
+    )
+    return result.scalar_one()
