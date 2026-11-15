@@ -2,6 +2,10 @@
 
 Guidelines for AI agents working in this codebase.
 
+## Rust-cutover backlog freeze (owner direction, 2026-11-15)
+
+Agents and autonomous factories may work existing issues, PRs and approved objectives, but must **not create GitHub issues or sub-issues or split work into new tickets** without an explicit interactive owner instruction. Record out-of-scope discoveries in the existing issue/PR handoff instead. See `docs/AUTONOMOUS_FACTORY_POLICY.md` for the canonical scope and deployment-recovery exception. A failing main CI check is not a new issue.
+
 ## Engineering objective completion
 
 For Comic Pile local factory delivery in Codex, use
