@@ -241,6 +241,7 @@ pub async fn list_activity(
     fetched.sort_by(|a, b| a.sort_key.cmp(&b.sort_key).then(a.event_id.cmp(&b.event_id)));
 
     // Coalesce related issue-command/dice-command rate pairs into one display.
+    let cursor_source = fetched.last().cloned();
     let mut logical: Vec<ActivityRow> = Vec::new();
     for row in fetched {
         if is_rate_like(&row.event_type)
@@ -283,9 +284,8 @@ pub async fn list_activity(
 
     let items: Vec<ActivityItem> = page.iter().map(to_item).collect();
 
-    let next_page_token = if has_more || fetched.len() as i64 >= fetch_limit {
-        // Use last fetched underlying row as cursor.
-        fetched.last().map(|row| encode_cursor(&row.timestamp, row.event_id))
+    let next_page_token = if has_more {
+        cursor_source.as_ref().map(|row| encode_cursor(&row.timestamp, row.event_id))
     } else {
         None
     };
