@@ -79,7 +79,7 @@ def _run(fn: Any, *args: Any) -> Any:
     return asyncio.run(call())
 
 
-def _provider_cooldown(source: str, outcome: str, observed: datetime) -> datetime | None:
+def _provider_cooldown(source: str, outcome: str, observed: datetime, seconds: int | None = None) -> datetime | None:
     if outcome not in TRANSIENT:
         return None
     if outcome == "provider_quota":
@@ -90,7 +90,22 @@ def _provider_cooldown(source: str, outcome: str, observed: datetime) -> datetim
                 return datetime.fromtimestamp(reset, timezone.utc)
         except (ImportError, ValueError, KeyError):
             pass
-    return observed + timedelta(seconds=TRANSIENT[outcome])
+    return observed + timedelta(seconds=seconds if seconds is not None else TRANSIENT[outcome])
+
+
+def exponential_provider_delay(
+    outcome: str, prior_outcome: str | None, prior_duration: float,
+    age_seconds: float,
+) -> int:
+    """Double recent provider cooldowns without penalizing recovered providers.
+
+    This derives the prior delay from the existing durable Neon budget row,
+    avoiding new schema or one independent timer per concurrent worker.
+    """
+    base = TRANSIENT[outcome]
+    if prior_outcome not in TRANSIENT or age_seconds < 0 or age_seconds > 12 * 3600:
+        return base
+    return min(4 * 3600, max(base, int(max(0, prior_duration) * 2)))
 
 
 async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, Any]) -> bool:
@@ -169,7 +184,22 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
         if attributed and classification in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
-            until = _provider_cooldown(source, classification, observed)
+            previous = await conn.fetchrow(
+                """SELECT last_outcome,updated_at,cooldown_until
+                   FROM public.factory_provider_budget
+                   WHERE repo=$1 AND source=$2 FOR UPDATE""", repo, source)
+            prior_window = (
+                (previous["cooldown_until"] - previous["updated_at"]).total_seconds()
+                if previous and previous["cooldown_until"] else 0
+            )
+            age = (
+                (observed - previous["updated_at"]).total_seconds()
+                if previous else float("inf")
+            )
+            delay = exponential_provider_delay(
+                classification, previous["last_outcome"] if previous else None,
+                prior_window, age)
+            until = _provider_cooldown(source, classification, observed, delay)
             await conn.execute(
                 """INSERT INTO public.factory_provider_budget
                      (repo,source,cooldown_until,quota_reset_at,last_outcome,last_run_id)
@@ -201,12 +231,46 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             )
         # Provider success clears a transient breaker only if no later breaker
         # was recorded. Another concurrent worker may still have hit a limit.
-        if attributed and proven and classification not in TRANSIENT:
+        if attributed and proven and classification not in TRANSIENT and classification != "no_work":
             await conn.execute(
                 """UPDATE public.factory_provider_budget SET cooldown_until=NULL,
                    last_outcome=$3,last_run_id=$4,updated_at=now()
                    WHERE repo=$1 AND source=$2 AND last_run_id <= $4""",
                 repo, source, classification, run_id)
+        # Local agent timeouts should cool down the responsible worker, NOT an
+        # unrelated provider/model. Keep the streak in the existing TTL-backed
+        # Neon KV so it survives individual GitHub Actions job boundaries.
+        worker_key = f"factory-worker-backoff-v1:{repo}:worker:{worker}"
+        if classification == "agent_timeout" and not delivered:
+            previous_worker = await conn.fetchrow(
+                """SELECT payload,updated_at FROM public.factory_state_kv
+                   WHERE cache_key=$1 FOR UPDATE""", worker_key)
+            previous_data = (previous_worker["payload"] if previous_worker else None)
+            if isinstance(previous_data, str):
+                previous_data = json.loads(previous_data)
+            old = previous_data[0] if isinstance(previous_data, list) and previous_data else {}
+            prior_run = int(old.get("run_id") or 0)
+            if prior_run <= run_id:
+                age = ((observed - previous_worker["updated_at"]).total_seconds()
+                       if previous_worker else float("inf"))
+                streak = (min(6, int(old.get("streak") or 0) + 1)
+                          if age <= 12 * 3600 and age >= 0 else 1)
+                seconds = min(3600, 120 * (1 << (streak - 1)))
+                await conn.execute(
+                    """INSERT INTO public.factory_state_kv
+                         (cache_key,payload,fetched_at,expires_at,updated_at)
+                       VALUES($1,$2::jsonb,now(),now()+$3::int * interval '1 second',now())
+                       ON CONFLICT(cache_key) DO UPDATE SET
+                         payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
+                         expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
+                    worker_key, json.dumps([{
+                        "outcome": "agent_timeout", "streak": streak, "run_id": run_id
+                    }]), seconds)
+        elif delivered or classification == "success":
+            await conn.execute(
+                """DELETE FROM public.factory_state_kv WHERE cache_key=$1
+                   AND coalesce((payload->0->>'run_id')::bigint,0) <= $2""",
+                worker_key, run_id)
         kind = str(outcome.get("selected_kind") or "")
         number = str(outcome.get("selected_number") or "")
         if kind == "pr" and number.isdigit() and not delivered and classification in {"work_failure","agent_timeout","unknown_failure","environment_failure"}:
@@ -228,7 +292,9 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                        VALUES($1,$2,$3,$4,1,$5,now()+$6::int * interval '1 second',$7)
                        ON CONFLICT(repo,pr_number,head_sha,stage) DO UPDATE SET
                          attempts=factory_pr_stage_retry.attempts+1,outcome=EXCLUDED.outcome,
-                         retry_after=EXCLUDED.retry_after,
+                         retry_after=now() + least(3600,
+                           $6::int * (1 << least(factory_pr_stage_retry.attempts, 5)))
+                           * interval '1 second',
                          last_run_id=greatest(factory_pr_stage_retry.last_run_id,EXCLUDED.last_run_id),
                          updated_at=now()
                        WHERE factory_pr_stage_retry.last_run_id < EXCLUDED.last_run_id""",
@@ -253,6 +319,13 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         """SELECT source,count(*) n FROM public.factory_provider_reservation
            WHERE repo=$1 AND expires_at>now() GROUP BY source""",repo)}
     now = datetime.now(timezone.utc)
+    backoffs = {
+        str(r["cache_key"]).rsplit(":", 1)[-1]
+        for r in await conn.fetch(
+            """SELECT cache_key FROM public.factory_state_kv
+               WHERE cache_key LIKE $1 AND expires_at>now()""",
+            f"factory-worker-backoff-v1:{repo}:worker:%")
+    }
     kept, rejected = [], []
     for worker in workers:
         pair = roster.get(worker)
@@ -261,7 +334,9 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
             continue
         source,model = pair
         m,b = models.get(pair),budgets.get(source)
-        if m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
+        if worker in backoffs:
+            rejected.append(f"{worker}: timed-out agent cooling in Neon")
+        elif m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
                     and m["cooldown_until"] and m["cooldown_until"]>now)):
             rejected.append(f"{worker}: model {model} {m['status']}")
         elif b and b["cooldown_until"] and b["cooldown_until"]>now:

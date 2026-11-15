@@ -91,6 +91,16 @@ def test_expired_model_cooldown_is_eligible_for_a_new_probe():
     assert not denied
 
 
+def test_provider_exponential_backoff_doubles_and_caps():
+    base = operations.exponential_provider_delay
+    assert base("provider_throttle", None, 0, float("inf")) == 1800
+    assert base("provider_throttle", "provider_throttle", 1800, 1800) == 3600
+    assert base("provider_throttle", "provider_throttle", 3600, 3600) == 7200
+    assert base("provider_failure", "provider_throttle", 9000, 5) == 14400
+    assert base("provider_throttle", "provider_throttle", 14400, 13 * 3600) == 1800
+    assert base("provider_throttle", "success", 14400, 60) == 1800
+
+
 def test_provider_cooldown_affects_its_account_not_every_source():
     future = datetime.now(UTC) + timedelta(minutes=20)
     db = FakeConnection(budgets=[{
