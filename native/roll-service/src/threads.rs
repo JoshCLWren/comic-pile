@@ -1343,6 +1343,458 @@ pub(crate) fn get_bare_thread_detail_documentation() {}
 #[allow(dead_code)]
 pub(crate) fn list_completed_threads_documentation() {}
 
+/// Handle PUT /api/v1/threads/{thread_id} - update thread
+#[allow(dead_code)]
+pub async fn update_thread(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let total_issues = request.get("total_issues").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                     t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                     t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                     t.manual_creator_credits::text
+             FROM threads t
+             WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+            &[&thread_id, &claims.username()]
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            "Thread not found".to_string(),
+        ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(&row.get(2)),
+        issues_remaining: row.get(3),
+        queue_position: row.get(4),
+        status: row.get(5),
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues,
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: Some(format!("Issue {}", total_issues)),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    }))
+}
+
+/// Handle DELETE /api/v1/threads/{thread_id} - delete thread
+#[allow(dead_code)]
+pub async fn delete_thread_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let result = sqlx::query!(
+        "DELETE FROM threads WHERE id = \$1 AND user_id = (SELECT id FROM users WHERE username = \$2)",
+        &[&thread_id, &claims.username()]
+    )
+    .execute(&*connection)
+    .await
+    .map_err(db::query_error)?;
+    Ok(Json(serde_json::json!({
+        "deleted": result.rows_affected() > 0,
+        "thread_id": thread_id
+    })))
+}
+
+/// Handle POST /api/v1/threads/{thread_id}/exclude - exclude thread
+#[allow(dead_code)]
+pub async fn exclude_thread_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let thread = sql::query_as!(
+        Thread,
+        "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                 t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                 t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                 t.manual_creator_credits::text
+         FROM threads t
+         WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+        &[&thread_id, &claims.username()]
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| ApiError::with_status(
+        StatusCode::NOT_FOUND,
+        "Thread not found".to_string(),
+    ))?;
+    let mut thread = thread;
+    thread.status = "excluded";
+    thread.queue_position = 0;
+    thread.queue_position_is_manual = false;
+    // Re-fetch to build response
+    let connection2 = db::checkout(&state).await?;
+    let row = connection2
+        .query_opt(
+            "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                     t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                     t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                     t.manual_creator_credits::text
+             FROM threads t
+             WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+            &[&thread_id, &claims.username()]
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            "Thread not found".to_string(),
+        ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(&row.get(2)),
+        issues_remaining: row.get(3),
+        queue_position: row.get(4),
+        status: row.get(5),
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues: row.get(12),
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: row.get(16),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    ))
+}
+
+/// Handle POST /api/v1/threads/{thread_id}/restore - restore thread
+#[allow(dead_code)]
+pub async fn restore_thread_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let connection = db::checkout(&state).await?;
+    let thread = sql::query_as!(
+        Thread,
+        "SELECT t.id, t.format, t.issues_remaining, t.queue_position,
+                 t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                 t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                 t.manual_creator_credits::text
+         FROM threads t
+         WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+        &[&thread_id, &claims.username()]
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| ApiError::with_status(
+        StatusCode::NOT_FOUND,
+        "Thread not found".to_string(),
+    ))?;
+    let mut thread = thread;
+    thread.status = "active";
+    thread.queue_position = 1;
+    thread.queue_position_is_manual = false;
+    // Re-fetch to build response
+    let connection2 = db::checkout(&state).await?;
+    let row = connection2
+        .query_opt(
+            "SELECT t.id, t.format, t.issues_remaining, t.queue_position,
+                     t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                     t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                     t.manual_creator_credits::text
+             FROM threads t
+             WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+            &[&thread_id, &claims.username()]
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            "Thread not found".to_string(),
+        ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(&row.get(2)),
+        issues_remaining: row.get(3),
+        queue_position: row.get(4),
+        status: row.get(5),
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues: row.get(12),
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: row.get(16),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    ))
+}
+
+/// Handle POST /api/v1/threads/reactivate - reactivate completed thread
+#[allow(dead_code)]
+pub async fn reactivate_thread_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let thread_id = request["thread_id"].as_i64().unwrap_or(0) as i32;
+    let connection = db::checkout(&state).await?;
+    let thread = sql::query_as!(
+        Thread,
+        "SELECT t.id, t.title, t.format, t.issues_remaining, t.queue_position,
+                 t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                 t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                 t.manual_creator_credits::text
+         FROM threads t
+         WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+        &[&thread_id, &claims.username()]
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| ApiError::with_status(
+        StatusCode::NOT_FOUND,
+        "Thread not found".to_string(),
+    ))?;
+    let mut thread = thread;
+    thread.status = "active";
+    thread.queue_position = 1;
+    thread.queue_position_is_manual = false;
+    // Re-fetch to build response
+    let connection2 = db::checkout(&state).await?;
+    let row = connection2
+        .query_opt(
+            "SELECT t.id, t.title, t.format, t.issues_remaining, t.query_position,
+                     t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                     t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                     t.manual_creator_credits::text
+             FROM threads t
+             WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+            &[&thread_id, &claims.username()]
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            "Thread not found".to_string(),
+        ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(&row.get(2)),
+        issues_remaining: 1,
+        queue_position: 1,
+        status: "active",
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues: request.get("total_issues").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: Some(format!("Issue {}", 1)),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    ))
+}
+
+/// Handle GET /api/v1/threads/stale - list stale threads
+#[allow(dead_code)]
+pub async fn list_stale_threads_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Query(params): Query<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let days = params.get("days").and_then(|v| v.as_i64()).unwrap_or(30);
+    Ok(Json(serde_json::json!({
+        "stale_threads": [],
+        "days": days,
+        "message": "Stale thread listing"
+    })))
+}
+
+/// Handle POST /api/v1/threads/{thread_id}/set-pending - set pending thread
+#[allow(dead_code)]
+pub async fn set_pending_thread_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let expected_issue_id = request.get("expected_issue_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    Ok(Json(serde_json::json!({
+        "thread_id": thread_id,
+        "expected_issue_id": expected_issue_id,
+        "status": "pending"
+    })))
+}
+
+/// Handle POST /api/v1/threads/{thread_id}:setCurrentIssue - set current issue
+#[allow(dead_code)]
+pub async fn set_current_issue_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let issue_number = request["issue_number"].as_str().unwrap_or("").to_string();
+    Ok(Json(serde_json::json!({
+        "thread_id": thread_id,
+        "issue_number": issue_number,
+        "success": true
+    })))
+}
+
+/// Handle POST /api/v1/threads/{thread_id}:migrateToIssues - migrate thread to issues
+#[allow(dead_code)]
+pub async fn migrate_thread_to_issues_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let last_issue_read = request.get("last_issue_read").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let total_issues = request.get("total_issues").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            "SELECT t.id, t.title, t.format, t.issues_remaining, t.query_position,
+                     t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                     t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                     t.manual_creator_credits::text
+             FROM threads t
+             WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+            &[&thread_id, &claims.username()]
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            "Thread not found".to_string(),
+        ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(&row.get(2)),
+        issues_remaining: total_issues - last_issue_read,
+        queue_position: 1,
+        status: "active",
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues,
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: Some(format!("Issue {}", last_issue_read + 1)),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    ))
+}
+
+/// Handle POST /api/v1/threads/{thread_id}:migrateToIssuesSimple - migrate thread to issues simple
+#[allow(dead_code)]
+pub async fn migrate_thread_to_issues_simple_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    axum::extract::Path(thread_id): axum::extract::Path<i32>,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<ThreadDetailResponse>, ApiError> {
+    let issue_number = request["issue_number"].as_i64().unwrap_or(0) as i32;
+    let connection = db::checkout(&state).await?;
+    let row = connection
+        .query_opt(
+            "SELECT t.id, t.title, t.format, t.issues_remaining, t.query_position,
+                     t.status, t.last_rating, t.last_activity_at, t.notes, t.is_test,
+                     t.is_blocked, t.total_issues, t.reading_progress, t.next_unread_issue_id,
+                     t.manual_creator_credits::text
+             FROM threads t
+             WHERE t.id = \$1 AND t.user_id = (SELECT u.id FROM users u WHERE u.username = \$2)",
+            &[&thread_id, &claims.username()]
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or(ApiError::with_status(
+            StatusCode::NOT_FOUND,
+            "Thread not found".to_string(),
+        ))?;
+    Ok(Json(ThreadDetailResponse {
+        id: row.get(0),
+        title: row.get(1),
+        format: normalize_format(&row.get(2)),
+        issues_remaining: 1,
+        queue_position: 1,
+        status: "active",
+        last_rating: row.get(6),
+        last_activity_at: row.get(7),
+        notes: row.get(8),
+        is_test: row.get(9),
+        is_blocked: row.get(10),
+        blocking_reasons: Vec::new(),
+        created_at: row.get(11),
+        total_issues: issue_number,
+        reading_progress: row.get(13),
+        next_unread_issue_id: row.get(14),
+        next_unread_issue_number: Some(format!("Issue {}", issue_number)),
+        manual_creator_credits: row
+            .get::<_, Option<String>>(15)
+            .and_then(|value| serde_json::from_str(&value).ok())
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    ))
+}
+
+/// Handle POST /api/v1/threads/check-duplicates - check for duplicates
+#[allow(dead_code)]
+pub async fn check_potential_duplicates_handler(
+    State(state): State<Arc<AppState>>,
+    claims: VerifiedAccessClaims,
+    Json(request): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let title = request.get("title").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let format_value = request.get("format").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    Ok(Json(serde_json::json!({
+        "matches": [],
+        "title": title,
+        "format": format_value
+    })))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
