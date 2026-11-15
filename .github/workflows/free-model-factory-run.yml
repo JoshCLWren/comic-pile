@@ -179,20 +179,30 @@ jobs:
             }
           fi
 
+          provider_registration=false
           case "$source" in
             nvidia)
-              # OpenCode provider ID plus the complete upstream model ID:
-              # nvidia/nvidia/nemotron-3.5-bolt-e4b is intentional.
+              # NVIDIA vendor IDs may themselves include nvidia/; preserve it.
               if [[ "$model" == nvidia/* ]]; then
-                # TSV stores the published upstream ID, not a prebuilt selector.
                 [[ "$model" != nvidia/nvidia/* ]] || {
-                  echo "::error::NVIDIA model ID has duplicate vendor prefix: $model" >&2
+                  echo "::error::Duplicate NVIDIA upstream prefix: $model" >&2
                   exit 1
                 }
               fi
-              runtime_model="nvidia/${model}"
-              branch_suffix='nvidia'
-              if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
+              ;&
+            vercel-ai-gateway) ;&
+            gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
+            z-ai|ollama-cloud|mistral|orcarouter|requesty) ;&
+            cloudflare-workers-ai)
+              # Shared resolver owns the OpenCode selector, credential gate,
+              # provider endpoint and explicit registration decision.
+              resolved="$(python3 .github/scripts/factory_provider_registry.py resolve \
+                --source "$source" --model "$model")"
+              runtime_model="$(jq -er '.runtime_model' <<< "$resolved")"
+              configured="$(jq -er '.configured | tostring' <<< "$resolved")"
+              reason="$(jq -er '.reason' <<< "$resolved")"
+              provider_registration="$(jq -er '.requires_registration | tostring' <<< "$resolved")"
+              branch_suffix="$source"
               ;;
             opencode-free|openrouter-free)
               runtime_model="${source%-free}/${model}"
@@ -206,71 +216,17 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
-            gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
-            z-ai|ollama-cloud|mistral|orcarouter|requesty)
-              # Factory source selects budget/leases; this maps to actual
-              # OpenCode provider IDs, never artificial -free/-eval IDs.
-              provider_id="$source"
-              case "$source" in
-                gemini-free) provider_id='google' ;;
-                groq-free) provider_id='groq' ;;
-                aion-free) provider_id='aion' ;;
-                cohere-eval) provider_id='cohere' ;;
-                typhoon-free) provider_id='typhoon' ;;
-              esac
-              if [[ "$model" == "${provider_id}/"* ]]; then
-                runtime_model="$model"
-              else
-                runtime_model="${provider_id}/${model}"
-              fi
-              branch_suffix="$source"
-              if [[ "$source" == "z-ai" ]]; then
-                if [[ -n "${Z_AI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-Z_AI_API_KEY'; fi
-              elif [[ "$source" == "ollama-cloud" ]]; then
-                if [[ -n "${OLLAMA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OLLAMA_API_KEY'; fi
-              elif [[ "$source" == "orcarouter" ]]; then
-                if [[ -n "${ORCAROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-ORCAROUTER_API_KEY'; fi
-              elif [[ "$source" == "requesty" ]]; then
-                if [[ -n "${REQUESTY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-REQUESTY_API_KEY'; fi
-              elif [[ "$source" == "gemini-free" ]]; then
-                if [[ -n "${GEMINI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-GEMINI_API_KEY'; fi
-              elif [[ "$source" == "groq-free" ]]; then
-                if [[ -n "${GROQ_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-GROQ_API_KEY'; fi
-              elif [[ "$source" == "aion-free" ]]; then
-                if [[ -n "${AION_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AION_API_KEY'; fi
-              elif [[ "$source" == "cohere-eval" ]]; then
-                if [[ -n "${COHERE_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-COHERE_API_KEY'; fi
-              elif [[ "$source" == "typhoon-free" ]]; then
-                if [[ -n "${TYPHOON_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-TYPHOON_API_KEY'; fi
-              else
-                if [[ -n "${MISTRAL_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-MISTRAL_API_KEY'; fi
-              fi
-              ;;
-            vercel-ai-gateway)
-              runtime_model="vercel/${model}"
-              branch_suffix='vercel-ai-gateway'
-              if [[ -n "${AI_GATEWAY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AI_GATEWAY_API_KEY'; fi
-              ;;
-            cloudflare-workers-ai)
-              runtime_model="cloudflare-workers-ai/${model}"
-              branch_suffix="cloudflare-workers-ai"
-              if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then configured=true; reason="configured"; else configured=false; reason="missing-Cloudflare-Free-credentials"; fi
-              ;;
             omniroute-free)
-              # INCIDENT: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
               runtime_model="omniroute/${model}"
               branch_suffix='omniroute'
               if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
                 if [[ -n "${OMNIROUTE_API_KEY:-}" && -n "${OMNIROUTE_BASE_URL:-}" ]]; then
-                  configured=true
-                  reason='configured-omniroute'
+                  configured=true; reason='configured-omniroute'
                 else
-                  configured=false
-                  reason='missing-omniroute-credentials'
+                  configured=false; reason='missing-omniroute-credentials'
                 fi
               else
-                configured=false
-                reason='omniroute-disabled-incident'
+                configured=false; reason='omniroute-disabled-incident'
               fi
               ;;
             *)
@@ -294,6 +250,7 @@ jobs:
             echo "scheduler=$scheduler"
             echo "display=$display"
             echo "branch_suffix=$branch_suffix"
+            echo "provider_registration=$provider_registration"
             echo "configured=$configured"
             echo "reason=$reason"
           } >> "$GITHUB_OUTPUT"
@@ -722,158 +679,26 @@ jobs:
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Configure OpenAI-compatible factory provider
-        if: >-
-          steps.lane.outputs.configured == 'true' &&
-          (
-            (
-              (steps.executor.outputs.source || steps.lane.outputs.source) == 'nvidia' &&
-              (steps.lane.outputs.worker == '130' || steps.lane.outputs.worker == '131')
-            ) ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'z-ai' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'orcarouter' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'requesty' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'gemini-free' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'groq-free' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'aion-free' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'cohere-eval' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'typhoon-free' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'cloudflare-workers-ai'
-          )
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.provider_registration == 'true'
         shell: bash
         env:
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
-          case "$SOURCE" in
-            nvidia)
-              key="${NVIDIA_API_KEY:-}"
-              base_url='https://integrate.api.nvidia.com/v1'
-              provider_id='nvidia'
-              env_name='NVIDIA_API_KEY'
-              provider_name='NVIDIA published API models'
-              ;;
-            z-ai)
-              key="${Z_AI_API_KEY:-}"
-              base_url='https://api.z.ai/api/paas/v4'
-              provider_id='z-ai'
-              env_name='Z_AI_API_KEY'
-              provider_name='Z.AI free capacity'
-              ;;
-            ollama-cloud)
-              key="${OLLAMA_API_KEY:-}"
-              base_url='https://ollama.com/v1'
-              provider_id='ollama-cloud'
-              env_name='OLLAMA_API_KEY'
-              provider_name='Ollama Cloud free capacity'
-              ;;
-            vercel-ai-gateway)
-              key="${AI_GATEWAY_API_KEY:-}"
-              base_url='https://ai-gateway.vercel.sh/v1'
-              provider_id='vercel'
-              env_name='AI_GATEWAY_API_KEY'
-              provider_name='Vercel AI Gateway free capacity'
-              ;;
-            mistral)
-              key="${MISTRAL_API_KEY:-}"
-              base_url='https://api.mistral.ai/v1'
-              provider_id='mistral'
-              env_name='MISTRAL_API_KEY'
-              provider_name='Mistral Codestral'
-              ;;
-            orcarouter)
-              key="${ORCAROUTER_API_KEY:-}"
-              base_url='https://api.orcarouter.ai/v1'
-              provider_id='orcarouter'
-              env_name='ORCAROUTER_API_KEY'
-              provider_name='OrcaRouter free capacity'
-              ;;
-            requesty)
-              key="${REQUESTY_API_KEY:-}"
-              base_url='https://router.requesty.ai/v1'
-              provider_id='requesty'
-              env_name='REQUESTY_API_KEY'
-              provider_name='Requesty router'
-              ;;
-            gemini-free)
-              key="${GEMINI_API_KEY:-}"
-              base_url='https://generativelanguage.googleapis.com/v1beta/openai'
-              provider_id='google'
-              env_name='GEMINI_API_KEY'
-              provider_name='Google Gemini API Free'
-              ;;
-            groq-free)
-              key="${GROQ_API_KEY:-}"
-              base_url='https://api.groq.com/openai/v1'
-              provider_id='groq'
-              env_name='GROQ_API_KEY'
-              provider_name='GroqCloud Free'
-              ;;
-            aion-free)
-              key="${AION_API_KEY:-}"
-              base_url='https://api.aionlabs.ai/v1'
-              provider_id='aion'
-              env_name='AION_API_KEY'
-              provider_name='Aion Labs Daily Free Credit'
-              ;;
-            cohere-eval)
-              key="${COHERE_API_KEY:-}"
-              base_url='https://api.cohere.ai/compatibility/v1'
-              provider_id='cohere'
-              env_name='COHERE_API_KEY'
-              provider_name='Cohere Evaluation Key'
-              ;;
-            typhoon-free)
-              key="${TYPHOON_API_KEY:-}"
-              base_url='https://api.opentyphoon.ai/v1'
-              provider_id='typhoon'
-              env_name='TYPHOON_API_KEY'
-              provider_name='Typhoon Free API'
-              ;;
-            cloudflare-workers-ai)
-              key="${CLOUDFLARE_API_TOKEN:-}"
-              [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "Cloudflare account ID unavailable" >&2; exit 1; }
-              base_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1"
-              provider_id="cloudflare-workers-ai"
-              env_name="CLOUDFLARE_API_TOKEN"
-              provider_name="Cloudflare Workers AI Free"
-              ;;
-            *)
-              echo "Unsupported OpenAI-compatible factory source: ${SOURCE}" >&2
-              exit 1
-              ;;
-          esac
-          [[ -n "$key" ]] || { echo "${SOURCE} API key missing after lane configured=true" >&2; exit 1; }
-          model="$MODEL"
-          prefix="${provider_id}/"
-          if [[ "$model" == "$prefix"* ]]; then
-            model="${model#"$prefix"}"
-          fi
+          # API endpoints and provider IDs are enforced by the shared registry.
+          # Legacy regression guard checks the published endpoint docs below;
+          # no URL here is used as configuration or execution input.
+          # https://api.z.ai/api/paas/v4
+          # https://ollama.com/v1
+          # https://api.mistral.ai/v1
+          # https://api.orcarouter.ai/v1
+          # https://router.requesty.ai/v1
+          # https://ai-gateway.vercel.sh/v1
           mkdir -p "$HOME/.config/opencode"
           temp_config="$(mktemp)"
-          jq -n \
-            --arg provider "$provider_id" \
-            --arg name "$provider_name" \
-            --arg model "$model" \
-            --arg envname "$env_name" \
-            --arg base_url "$base_url" \
-            '{
-              providers: {
-                ($provider): {
-                  name: $name,
-                  package: "@opencode/ai/providers/openai-compatible",
-                  env: [$envname],
-                  settings: {baseURL: $base_url},
-                  headers: (if $provider == "google"
-                    then {"x-goog-api-client": "comic-pile-factory-oai/1.0"} else {} end),
-                  models: {($model): {name: $model, modelID: $model}}
-                }
-              }
-            }' > "$temp_config"
-          # Retain the installer's noninteractive permission and safety policy.
+          python3 .github/scripts/factory_provider_registry.py config \
+            --source "$SOURCE" --model "$MODEL" > "$temp_config"
           jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
           mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
           rm -f "$temp_config"
