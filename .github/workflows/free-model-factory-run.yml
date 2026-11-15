@@ -334,7 +334,8 @@ jobs:
           }
           # Dynamic free slots rotate within a live catalog. Pinned slots must
           # honor the Neon eligibility decision before contacting a provider.
-          if [[ "$SOURCE" != opencode-free || "$DEEPSEEK_MODE" != normal ]] &&
+          if [[ "$SOURCE" != openrouter-free && "$SOURCE" != vercel-ai-gateway ]] &&
+             [[ "$SOURCE" != opencode-free || "$DEEPSEEK_MODE" != normal ]] &&
              jq -e --arg source "$SOURCE" --arg model "$LANE_MODEL" \
                '(.[$source] // []) | index($model) != null' "$exclusions_file" >/dev/null; then
             printf 'model_unavailable\tPinned model excluded by trusted Neon health\n' > "$discovery_outcome"
@@ -344,7 +345,7 @@ jobs:
           case "$SOURCE" in
             cloudflare-workers-ai) ;&
             gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
-            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)
+            nvidia|kilo-auto|z-ai|ollama-cloud|mistral|orcarouter|requesty)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
@@ -354,6 +355,26 @@ jobs:
                 echo "display=$LANE_DISPLAY"
                 echo "branch_suffix=$LANE_BRANCH_SUFFIX"
                 echo "reason=selected-by-runtime-evidence"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            vercel-ai-gateway)
+              # Published pricing is authoritative; TSV model is only a
+              # legacy display hint. Do not make a chargeable inference probe.
+              if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
+                  --source "$SOURCE" --worker "$WORKER" \
+                  --exclusions-file "$exclusions_file")"; then
+                printf 'control_plane_failure\tVercel zero-price catalog unavailable or has no eligible models\n' > "$discovery_outcome"
+                exit 1
+              fi
+              model="$(jq -er '.model' <<< "$selection")"
+              {
+                echo "source=$SOURCE"
+                echo "model=$model"
+                echo "runtime_model=vercel/$model"
+                echo "display=Vercel Free · $model"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                echo "reason=selected-from-published-zero-price-catalog"
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -401,18 +422,25 @@ jobs:
               exit 0
               ;;
             openrouter-free)
-              # Keep OpenRouter's known-free route while OmniRoute is disabled.
-              if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
-                {
-                  echo "source=$SOURCE"
-                  echo "model=$LANE_MODEL"
-                  echo "runtime_model=$LANE_RUNTIME_MODEL"
-                  echo "display=$LANE_DISPLAY"
-                  echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                  echo "reason=selected-by-runtime-evidence"
-                } >> "$GITHUB_OUTPUT"
-                exit 0
+              # Resolve from OpenRouter's current :free catalog and verified
+              # zero prompt/completion pricing, never a magic TSV model ID.
+              # The same policy holds regardless of OmniRoute's state.
+              if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
+                  --source "$SOURCE" --worker "$WORKER" \
+                  --exclusions-file "$exclusions_file")"; then
+                printf 'control_plane_failure\tOpenRouter published free catalog unavailable or empty\n' > "$discovery_outcome"
+                exit 1
               fi
+              model="$(jq -er '.model' <<< "$selection")"
+              {
+                echo "source=$SOURCE"
+                echo "model=$model"
+                echo "runtime_model=openrouter/$model"
+                echo "display=OpenRouter Free · $model"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                echo "reason=selected-from-published-zero-price-catalog"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
               ;;
             *)
               printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
