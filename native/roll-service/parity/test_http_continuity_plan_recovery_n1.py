@@ -83,7 +83,11 @@ async def _seed_plan_with_lists(
 
     for i in range(list_count):
         list_id = await raw.fetchval(
-            "INSERT INTO custom_cbl_lists (user_id, name, mode) VALUES ($1, $2, 'loose') RETURNING id",
+            """
+            INSERT INTO custom_cbl_lists (user_id, name, mode, created_at, updated_at)
+            VALUES ($1, $2, 'loose', NOW(), NOW())
+            RETURNING id
+            """,
             owner_id,
             f"List {i + 1}",
         )
