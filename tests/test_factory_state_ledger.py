@@ -155,8 +155,11 @@ def test_trusted_collector_verifies_code_handoff_before_persistence():
     root = Path(__file__).resolve().parents[1]
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
     assert 'delivery_pr="$(jq -r' in entry
-    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
-    assert "pull-requests: read" in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
+    assert '"repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert '.head.repo.full_name == $repo' in entry
+    assert "pull-requests: write" in entry
+    assert "factory_checkpoint_handoff.py" in entry
     assert 'ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}' in entry
     assert 'Verified delivery: %s' in entry
     assert 'existing_run > GITHUB_RUN_ID' in entry
@@ -253,9 +256,9 @@ def test_terminal_collector_can_download_ansi_colored_worker_logs() -> None:
     """The current gh CLI rejects raw job logs containing ANSI escape codes."""
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
-    assert 'gh api --allow-escape-sequences \\' in workflow
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-entry.log" --allow-escape-sequences' in workflow
     assert '"repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"' in workflow
-    assert '> "$RUNNER_TEMP/factory-entry.log"' in workflow
+    assert 'if gh api "$@" > "$file" 2> "$error_file"; then' in workflow
     assert "factory_state_ledger.py runtime-outcome" in workflow
     # The opt-out is only safe for redirected file output, never terminal output.
     assert "--allow-escape-sequences" not in (

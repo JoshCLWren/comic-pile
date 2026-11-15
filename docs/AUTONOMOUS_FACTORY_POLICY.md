@@ -836,3 +836,15 @@ reviewer, subject to review-stage routing and separate credentials.
 Adding worker IDs does not provision provider accounts or secrets. Existing Neon
 model-health exclusions, source cooldowns, account-level budget accounting, and
 runtime authorization must remain authoritative.
+
+## Owner-authorized recovery draft exception (2026-11-15)
+
+For checkpoint recovery only, trusted factory wrappers automatically publish
+unvalidated snapshots onto an isolated checkpoint branch and draft PR before
+pre-push delivery checks pass. This explicit owner exception to the draft-PR
+prohibition and pre-push delivery rule preserves interrupted work; it does not
+permit pushing unchecked edits to an assigned review PR, claiming semantic
+approval, marking failed work successful, or bypassing product merge gates.
+The existing validated delivery path remains authoritative. See
+[deterministic checkpoint handoff](FACTORY_CHECKPOINTS.md) for branch naming,
+independent cancellation reconciliation, reporting and safe retention.

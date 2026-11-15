@@ -206,6 +206,9 @@ stage_trusted_checkpoint_helper() {
   TRUSTED_WORK_CHECKPOINT="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-work-checkpoint.XXXXXXXX")"
   cp .github/scripts/factory-work-checkpoint.sh "$TRUSTED_WORK_CHECKPOINT"
   chmod +x "$TRUSTED_WORK_CHECKPOINT"
+  TRUSTED_CHECKPOINT_HANDOFF="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-checkpoint-handoff.XXXXXXXX.py")"
+  cp .github/scripts/factory_checkpoint_handoff.py "$TRUSTED_CHECKPOINT_HANDOFF"
+  export TRUSTED_CHECKPOINT_HANDOFF
 }
 
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
@@ -457,8 +460,19 @@ CHECKPOINT_LOG=''
 start_work_checkpoint() {
   [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] || return 0
   [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  local checkpoint_issue
+  if [[ "$MODE" == issue ]]; then
+    checkpoint_issue="$NUMBER"
+  else
+    checkpoint_issue="$(linked_issue_from_pr "$NUMBER")" || checkpoint_issue=''
+    if [[ -z "$checkpoint_issue" ]]; then
+      log "checkpoint issue linkage unavailable for PR #${NUMBER}; preserving explicit unknown-issue identity"
+    fi
+  fi
   CHECKPOINT_LOG="${RUNNER_TEMP:-/tmp}/factory-work-checkpoint-${GITHUB_RUN_ID}.log"
-  bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
+  FACTORY_CHECKPOINT_ISSUE="$checkpoint_issue" FACTORY_CHECKPOINT_MODEL="$MODEL" \
+    FACTORY_CHECKPOINT_RUNTIME_MODEL="$RUNTIME_MODEL" \
+    bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
   CHECKPOINT_PID="$!"
   log "automatic work recovery checkpoints enabled for run $GITHUB_RUN_ID (every 45s)"
 }
@@ -473,9 +487,12 @@ stop_work_checkpoint() {
 
 discard_delivered_checkpoint() {
   [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
-  # The normal PR delivery now owns these bytes and all existing checks. Only
-  # discard snapshots after a confirmed issue/PR push and handoff.
-  git push --quiet origin ":refs/heads/factory/work-checkpoints/${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+  stop_work_checkpoint
+  # Reconciliation proves incorporation and completion before deleting the
+  # exact checkpoint. An open recovery draft must never lose its head branch.
+  python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+    --run-id "$GITHUB_RUN_ID" --delivered-pr "$1" --cleanup || \
+    log 'checkpoint cleanup deferred to independent reconciliation'
 }
 
 trap 'stop_work_checkpoint; release_owned_targets session-end-handoff || true' EXIT
@@ -580,9 +597,10 @@ while :; do
   (( agent_timeout >= 300 )) || break
 done
 
-# Force the final pending edit snapshot before any normal push, lint gate, or
-# lease handoff. If this run is canceled instead, earlier timed snapshots survive.
-stop_work_checkpoint
+# Flush pending model edits before checks while retaining periodic protection
+# for the optional correction model run inside the persistence helpers. EXIT
+# performs the final synchronous snapshot on all other handoff/failure paths.
+[[ -z "$CHECKPOINT_PID" ]] || kill -USR2 "$CHECKPOINT_PID" 2>/dev/null || true
 
 if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
   record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
@@ -635,7 +653,7 @@ if [[ "$MODE" == 'issue' ]]; then
     # separate plain-prose handoff as its App (#3135); others post nothing.
     post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
-    discard_delivered_checkpoint
+    discard_delivered_checkpoint "$pr"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
@@ -671,7 +689,7 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$pushed_stage" "$pushed_reason"
   post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
-  discard_delivered_checkpoint
+  discard_delivered_checkpoint "$NUMBER"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
