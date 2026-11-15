@@ -197,7 +197,7 @@ def _load_controller_release(helpers: dict[str, object]):
         "OWNER_RE": __import__("re").compile(r"^factory:(?:unowned|[0-9]+)$"),
         "json": json,
         "release_lease": lambda *args: False,
-        "refresh_projection_after_label_change": lambda *_args: None,
+        "refresh_discovery_after_label_change": lambda *_args: None,
         **helpers,
     }
     exec(compile(module, "<factory-controller-release>", "exec"), namespace)
@@ -241,7 +241,7 @@ def test_trusted_cleanup_retry_clears_original_claim_when_labels_already_release
     release = _load_controller_release({
         "worker_claim": lambda repo, worker: ("old-claim-token", [4833, 5015]),
         "release_lease": lambda *args: releases.append(args) or True,
-        "refresh_projection_after_label_change":
+        "refresh_discovery_after_label_change":
             lambda number, target: refreshed.append(number),
     })
     assert release("45", "pre-session-abort-run-43450421076", expected_claim="old-claim-token") == []
