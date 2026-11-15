@@ -2,13 +2,46 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 import asyncpg
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from route_harness import db_counters, db_nested_statements
+from route_harness import (
+    SQL_BUDGET_SOURCES,
+    assert_declared_budget,
+    db_counters,
+    db_nested_statements,
+)
+
+
+def _declared_maximum(method: str, path: str) -> int:
+    """Return the declared ``max_statements`` for one measured native route."""
+    operations = json.loads(SQL_BUDGET_SOURCES.read_text(encoding="utf-8"))["operations"]
+    matching = [
+        entry for entry in operations if entry["method"] == method and entry["path"] == path
+    ]
+    assert len(matching) == 1, f"missing or duplicate SQL budget: {method} {path}"
+    maximum = matching[0]["sql_budget"]["max_statements"]
+    assert isinstance(maximum, int)
+    return maximum
+
+
+def test_declared_budget_rejects_one_extra_statement() -> None:
+    """A deliberate extra query must fail the corresponding route budget test.
+
+    The measured route tests call :func:`assert_declared_budget` with their
+    observed statement deltas. One uncatalogued query raises the measured count
+    by one, so the declared maximum must reject it; this pins that sensitivity
+    for a route added by #5148. The N+1 counterpart is the per-route
+    ``large_delta <= small_delta + 2`` assertion, which a per-row query fails.
+    """
+    maximum = _declared_maximum("POST", "/api/v2/dependencies/")
+    assert_declared_budget("POST", "/api/v2/dependencies/", maximum)
+    with pytest.raises(AssertionError, match="declared maximum"):
+        assert_declared_budget("POST", "/api/v2/dependencies/", maximum + 1)
 
 
 @pytest.mark.asyncio

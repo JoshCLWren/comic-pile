@@ -22,6 +22,11 @@ visible to the counter.
 `pg_stat_database` transaction and block deltas, HTTP response bytes, wall
 time, and child CPU are reported separately. Those database-wide deltas can
 include unrelated connections and are contextual telemetry, not exact route
-counts. The source registry currently marks 30 operations `pending-fixture`
-and the issue read-rate path `partial-branch`; these are explicit proof gaps
-under #4737, not passing measurement evidence.
+counts. Measured cases also read the isolated role's nested
+(`toplevel = false`) statement counter, so trigger and function work caused by
+the mutated rows is recorded separately from the declared
+application/transaction-control budget and must not grow between the small and
+large fixtures.
+
+The source registry currently marks 26 operations `pending-fixture`; those are
+explicit proof gaps under #4737, not passing measurement evidence.
