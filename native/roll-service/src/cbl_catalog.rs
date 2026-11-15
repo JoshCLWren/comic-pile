@@ -446,7 +446,7 @@ async fn list_cbl_sources_in_folder(
     }
 }
 
-fn map_list_items(rows: Vec<deadpool_postgres::Row>) -> Vec<CBLCatalogListItem> {
+fn map_list_items(rows: Vec<tokio_postgres::Row>) -> Vec<CBLCatalogListItem> {
     rows.into_iter()
         .map(|row| CBLCatalogListItem {
             id: row.get(0),
