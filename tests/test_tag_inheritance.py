@@ -540,6 +540,85 @@ class TestOncePerPlanInvariant:
             await async_db.flush()
 
 
+class TestEffectiveTagsApi:
+    """API representations expose navigable inheritance sources."""
+
+    async def test_issue_effective_tags_api(
+        self,
+        async_db: AsyncSession,
+        admin_user: User,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+    ) -> None:
+        """The issue endpoint returns direct tags and sourced effective tags."""
+        thread, issue, plan = await _create_thread_issue_plan(
+            async_db, owner_user, plan_name="Mignolaverse"
+        )
+        await _make_global(async_db, admin_user, "Horror", "ContinuityPlan", plan.id)
+        await _make_private(async_db, owner_user, "Physical", "Thread", thread.id)
+        await _make_private(async_db, owner_user, "Mine", "Issue", issue.id)
+
+        response = await owner_auth_client.get(f"/api/v1/tags/effective/issue/{issue.id}/")
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["target_type"] == "Issue"
+        assert payload["target_id"] == issue.id
+        assert [tag["name"] for tag in payload["direct_tags"]] == ["Mine"]
+        by_name = {entry["tag"]["name"]: entry for entry in payload["effective_tags"]}
+        assert set(by_name) == {"Horror", "Physical", "Mine"}
+        horror_sources = by_name["Horror"]["sources"]
+        assert horror_sources == [
+            {
+                "target_type": "ContinuityPlan",
+                "target_id": plan.id,
+                "display_name": "Mignolaverse",
+            }
+        ]
+        assert by_name["Physical"]["sources"][0]["target_type"] == "Thread"
+        assert by_name["Physical"]["sources"][0]["target_id"] == thread.id
+
+    async def test_thread_and_plan_effective_tags_api(
+        self,
+        async_db: AsyncSession,
+        admin_user: User,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+    ) -> None:
+        """Thread and plan endpoints return their direct tags as effective."""
+        thread, _issue, plan = await _create_thread_issue_plan(async_db, owner_user)
+        await _make_private(async_db, owner_user, "Physical", "Thread", thread.id)
+        await _make_global(async_db, admin_user, "Horror", "ContinuityPlan", plan.id)
+
+        thread_response = await owner_auth_client.get(
+            f"/api/v1/tags/effective/thread/{thread.id}/"
+        )
+        plan_response = await owner_auth_client.get(
+            f"/api/v1/tags/effective/plan/{plan.id}/"
+        )
+
+        assert thread_response.status_code == 200, thread_response.text
+        assert [t["name"] for t in thread_response.json()["direct_tags"]] == ["Physical"]
+        assert plan_response.status_code == 200, plan_response.text
+        assert [t["name"] for t in plan_response.json()["direct_tags"]] == ["Horror"]
+
+    async def test_foreign_issue_effective_tags_api_is_not_found(
+        self,
+        async_db: AsyncSession,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+        other_user: User,
+    ) -> None:
+        """Effective tags for another user's issue are not discoverable."""
+        _thread, issue, _plan = await _create_thread_issue_plan(
+            async_db, other_user, thread_id=7, issue_id=7, plan_id=7
+        )
+
+        response = await owner_auth_client.get(f"/api/v1/tags/effective/issue/{issue.id}/")
+
+        assert response.status_code == 404
+
+
 class TestThreadIssuesEffectiveTags:
     """Bulk effective tags power the thread detail issue rows (issue #3422)."""
 
@@ -659,3 +738,63 @@ class TestThreadIssuesEffectiveTags:
 
         assert [result.effective_tags for result in results] == [[], []]
         assert [result.direct_tags for result in results] == [[], []]
+
+    async def test_thread_issues_effective_tags_api(
+        self,
+        async_db: AsyncSession,
+        admin_user: User,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+    ) -> None:
+        """The bulk endpoint returns per-issue tags, including empty entries."""
+        thread, first, second, plan = await _create_thread_with_two_issues(
+            async_db, owner_user
+        )
+        await _make_private(async_db, owner_user, "Physical", "Thread", thread.id)
+        await _make_private(async_db, owner_user, "Mine", "Issue", first.id)
+        await _make_global(async_db, admin_user, "Horror", "ContinuityPlan", plan.id)
+
+        response = await owner_auth_client.get(
+            f"/api/v1/tags/effective/thread/{thread.id}/issues/"
+        )
+
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["thread_id"] == thread.id
+        assert [entry["target_id"] for entry in payload["issues"]] == [
+            first.id,
+            second.id,
+        ]
+        assert [tag["name"] for tag in payload["issues"][0]["direct_tags"]] == ["Mine"]
+        assert payload["issues"][1]["direct_tags"] == []
+        second_by_name = {
+            entry["tag"]["name"]: entry for entry in payload["issues"][1]["effective_tags"]
+        }
+        assert set(second_by_name) == {"Physical", "Horror"}
+        assert second_by_name["Physical"]["direct"] is False
+        assert second_by_name["Horror"]["sources"] == [
+            {
+                "target_type": "ContinuityPlan",
+                "target_id": plan.id,
+                "display_name": "Mignolaverse",
+            }
+        ]
+
+    async def test_foreign_thread_issues_api_is_not_found(
+        self,
+        async_db: AsyncSession,
+        owner_user: User,
+        owner_auth_client: AsyncClient,
+        other_user: User,
+    ) -> None:
+        """Bulk effective tags for another user's thread are not discoverable."""
+        thread, _first, _second, _plan = await _create_thread_with_two_issues(
+            async_db, other_user, thread_id=22, first_issue_id=23,
+            second_issue_id=24, plan_id=22,
+        )
+
+        response = await owner_auth_client.get(
+            f"/api/v1/tags/effective/thread/{thread.id}/issues/"
+        )
+
+        assert response.status_code == 404

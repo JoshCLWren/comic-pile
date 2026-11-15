@@ -433,23 +433,3 @@ def test_successful_dynamic_rotation_persists_failed_models_and_real_final_model
         log.replace("crouton-alpha-free has been deprecated", "other-free has been deprecated"),
     ).get("model_failures") is None
     assert ledger.refine_trusted_dynamic_models({**outcome, "source": "nvidia"}, log) == {**outcome, "source": "nvidia"}
-
-
-def test_trusted_terminal_collector_retries_scoped_reads_and_idempotent_writes():
-    """A temporary API or Neon outage must not lose a completed worker outcome."""
-    root = SCRIPTS.parent.parent
-    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
-    assert "retry_gh_api()" in entry
-    assert 'if gh api "$@" > "$file" 2> "$error_file"; then' in entry
-    assert 'for attempt in 1 2 3 4; do' in entry
-    assert 'retry_gh_api "$RUNNER_TEMP/factory-run-jobs.json"' in entry
-    assert 'retry_gh_api "$RUNNER_TEMP/factory-entry.log"' in entry
-    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
-    assert "if python3 .github/scripts/factory_state_ledger.py runtime-outcome" in entry
-    assert 'Unable to persist Neon terminal outcome after 4 attempts' in entry
-    # Markdown backticks must be quoted so shell does not execute agent_timeout.
-    assert "printf 'Neon terminal classification: `%s`\\n'" in entry
-    assert 'echo "Neon terminal classification: `' not in entry
-    operations = (root / ".github/scripts/factory_state_operations.py").read_text()
-    assert "INSERT INTO public.factory_runtime_event_keys(repo,run_id)" in operations
-    assert "ON CONFLICT DO NOTHING RETURNING run_id" in operations

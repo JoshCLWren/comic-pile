@@ -1,0 +1,532 @@
+"""API coverage for generalized continuity-rule CRUD."""
+
+from datetime import UTC, datetime
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.continuity_rule import ContinuityRule
+from app.models.dependency_group import DependencyGroup
+from app.models.issue import Issue
+from app.models.thread import Thread
+from app.models.user import User
+from tests.conftest import get_or_create_user_async
+
+
+async def _make_issue(async_db: AsyncSession, *, user_id: int, suffix: str) -> Issue:
+    """Create one owned thread and issue for continuity tests."""
+    thread = Thread(
+        title=f"Continuity {suffix}",
+        format="comic",
+        issues_remaining=1,
+        queue_position=1,
+        status="active",
+        user_id=user_id,
+        total_issues=1,
+        reading_progress="unstarted",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.flush()
+    return issue
+
+
+async def _make_group(async_db: AsyncSession, *, user_id: int, suffix: str) -> DependencyGroup:
+    """Create one owned crossover node for continuity tests."""
+    group = DependencyGroup(user_id=user_id, name=f"Crossover {suffix}")
+    async_db.add(group)
+    await async_db.flush()
+    return group
+
+
+def _payload(
+    source_type: str,
+    source_id: int,
+    target_type: str,
+    target_id: int,
+) -> dict[str, object]:
+    """Build the common item-read rule payload."""
+    return {
+        "source_type": source_type,
+        "source_id": source_id,
+        "target_type": target_type,
+        "target_id": target_id,
+        "satisfaction_type": "item_read",
+    }
+
+
+@pytest.mark.asyncio
+async def test_crud_supports_all_node_pairings_and_delete(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Issue/issue pairings CRUD; crossover pairings are rejected (#2553 P1)."""
+    user = await get_or_create_user_async(async_db)
+    issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"issue-{index}")
+        for index in range(4)
+    ]
+    groups = [
+        await _make_group(async_db, user_id=user.id, suffix=f"group-{index}")
+        for index in range(4)
+    ]
+    await async_db.commit()
+
+    # Only issue/issue compiles to canonical edges.
+    payloads = [
+        _payload("issue", issues[0].id, "issue", issues[1].id),
+    ]
+    created: list[dict[str, object]] = []
+    for payload in payloads:
+        response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+        assert response.status_code == 201, response.text
+        created.append(response.json())
+
+    # Crossover pairings do not compile and are rejected.
+    rejected_payloads = [
+        _payload("issue", issues[2].id, "crossover", groups[0].id),
+        _payload("crossover", groups[1].id, "issue", issues[3].id),
+        _payload("crossover", groups[2].id, "crossover", groups[3].id),
+    ]
+    for payload in rejected_payloads:
+        response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+        assert response.status_code == 400, response.text
+        assert response.json()["detail"]["code"] == "continuity_rule_not_compilable"
+
+    listed = await auth_client.get("/api/v1/continuity-rules/")
+    assert listed.status_code == 200
+    assert len(listed.json()) == 1
+
+    rule_id = int(created[0]["id"])
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["source_type"] == "issue"
+    assert fetched.json()["target_type"] == "issue"
+
+    updated_payload = dict(payloads[0])
+    updated_payload["note"] = "Read this first"
+    updated = await auth_client.put(
+        f"/api/v1/continuity-rules/{rule_id}",
+        json=updated_payload,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["note"] == "Read this first"
+
+    deleted = await auth_client.delete(f"/api/v1/continuity-rules/{rule_id}")
+    assert deleted.status_code == 204
+    missing = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
+    assert missing.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_selected_members_are_replaced_without_orphans(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Non-compilable rule types are rejected: they would never block Roll (#2553 P1)."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_group(async_db, user_id=user.id, suffix="selected-source")
+    target = await _make_group(async_db, user_id=user.id, suffix="selected-target")
+    first_member = await _make_issue(async_db, user_id=user.id, suffix="selected-first")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "crossover",
+        "source_id": source.id,
+        "target_type": "crossover",
+        "target_id": target.id,
+        "satisfaction_type": "selected_members_read",
+        "selected_member_issue_ids": [first_member.id],
+    }
+    created = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert created.status_code == 400, created.text
+    assert created.json()["detail"]["code"] == "continuity_rule_not_compilable"
+
+
+@pytest.mark.asyncio
+async def test_direct_and_transitive_cycles_are_rejected(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Cycle detection rejects both immediate reversals and longer loops."""
+    user = await get_or_create_user_async(async_db)
+    issue_a = await _make_issue(async_db, user_id=user.id, suffix="cycle-a")
+    issue_b = await _make_issue(async_db, user_id=user.id, suffix="cycle-b")
+    issue_c = await _make_issue(async_db, user_id=user.id, suffix="cycle-c")
+    await async_db.commit()
+
+    first = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", issue_a.id, "issue", issue_b.id),
+    )
+    assert first.status_code == 201
+
+    direct = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", issue_b.id, "issue", issue_a.id),
+    )
+    assert direct.status_code == 409
+    assert direct.json()["detail"]["code"] == "continuity_cycle"
+
+    second = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", issue_b.id, "issue", issue_c.id),
+    )
+    assert second.status_code == 201
+
+    transitive = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", issue_c.id, "issue", issue_a.id),
+    )
+    assert transitive.status_code == 409
+    assert transitive.json()["detail"]["code"] == "continuity_cycle"
+
+
+@pytest.mark.asyncio
+async def test_other_users_rules_are_hidden_and_unreferenceable(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Owned reads and reference validation do not expose another user's graph."""
+    current_user = await get_or_create_user_async(async_db)
+    owned_issue = await _make_issue(async_db, user_id=current_user.id, suffix="owned")
+    other_user = User(username="continuity-other", email="continuity-other@example.com")
+    async_db.add(other_user)
+    await async_db.flush()
+    foreign_issue = await _make_issue(async_db, user_id=other_user.id, suffix="foreign")
+    foreign_group = await _make_group(async_db, user_id=other_user.id, suffix="foreign")
+    foreign_rule = ContinuityRule(
+        user_id=other_user.id,
+        source_type="issue",
+        source_id=foreign_issue.id,
+        target_type="crossover",
+        target_id=foreign_group.id,
+        satisfaction_type="item_read",
+    )
+    async_db.add(foreign_rule)
+    await async_db.commit()
+
+    listed = await auth_client.get("/api/v1/continuity-rules/")
+    assert listed.status_code == 200
+    assert all(rule["id"] != foreign_rule.id for rule in listed.json())
+
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{foreign_rule.id}")
+    assert fetched.status_code == 404
+
+    foreign_reference = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", owned_issue.id, "crossover", foreign_group.id),
+    )
+    assert foreign_reference.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_converged_rule_crud_round_trips_targets(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A converged rule persists, returns, and removes its convergence targets."""
+    user = await get_or_create_user_async(async_db)
+    issues = [
+        await _make_issue(async_db, user_id=user.id, suffix=f"converged-{index}")
+        for index in range(2)
+    ]
+    target = await _make_issue(async_db, user_id=user.id, suffix="converged-target")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": issues[0].id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [
+            {"type": "issue", "id": issues[0].id},
+            {"type": "issue", "id": issues[1].id},
+        ],
+    }
+    created = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["satisfaction_type"] == "converged"
+    assert body["convergence_targets"] == [
+        {"type": "issue", "id": issues[0].id},
+        {"type": "issue", "id": issues[1].id},
+    ]
+
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{body['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["convergence_targets"] == body["convergence_targets"]
+
+    deleted = await auth_client.delete(f"/api/v1/continuity-rules/{body['id']}")
+    assert deleted.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_converged_rule_rejects_unowned_target(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Convergence targets must be owned by the authenticated user."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="converged-foreign-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="converged-foreign-target")
+    other_user = User(username="converged-other", email="converged-other@example.com")
+    async_db.add(other_user)
+    await async_db.flush()
+    foreign_issue = await _make_issue(async_db, user_id=other_user.id, suffix="converged-foreign")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": source.id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [{"type": "issue", "id": foreign_issue.id}],
+    }
+    response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_converged_rule_rejects_unowned_crossover_target(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """Convergence crossover targets must be owned by the authenticated user."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="converged-x-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="converged-x-target")
+    other_user = User(username="converged-x-other", email="converged-x-other@example.com")
+    async_db.add(other_user)
+    await async_db.flush()
+    foreign_group = DependencyGroup(user_id=other_user.id, name="Foreign crossover")
+    async_db.add(foreign_group)
+    await async_db.flush()
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": source.id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [{"type": "crossover", "id": foreign_group.id}],
+    }
+    response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_converged_rule_self_wait_is_rejected(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A converged gate whose target waits on itself must be rejected at save.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="self-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="self-target")
+    await async_db.commit()
+
+    payload = {
+        "source_type": "issue",
+        "source_id": source.id,
+        "target_type": "issue",
+        "target_id": target.id,
+        "satisfaction_type": "converged",
+        "convergence_targets": [{"type": "issue", "id": target.id}],
+    }
+    response = await auth_client.post("/api/v1/continuity-rules/", json=payload)
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "continuity_cycle"
+
+
+@pytest.mark.asyncio
+async def test_converged_gate_downstream_convergence_cycle_is_rejected(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A convergence target already downstream of the gate's target must cycle-reject.
+
+    Given item_read B→A (B must be read before A), a converged gate making B wait
+    for A would deadlock: A needs B readable and B needs A readable.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    a = await _make_issue(async_db, user_id=user.id, suffix="cycle-a")
+    b = await _make_issue(async_db, user_id=user.id, suffix="cycle-b")
+    c = await _make_issue(async_db, user_id=user.id, suffix="cycle-c")
+    await async_db.commit()
+
+    base = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json={
+            "source_type": "issue",
+            "source_id": b.id,
+            "target_type": "issue",
+            "target_id": a.id,
+            "satisfaction_type": "item_read",
+        },
+    )
+    assert base.status_code == 201, base.text
+
+    converged = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json={
+            "source_type": "issue",
+            "source_id": c.id,
+            "target_type": "issue",
+            "target_id": b.id,
+            "satisfaction_type": "converged",
+            "convergence_targets": [{"type": "issue", "id": a.id}],
+        },
+    )
+    assert converged.status_code == 409
+    assert converged.json()["detail"]["code"] == "continuity_cycle"
+
+
+@pytest.mark.asyncio
+async def test_converged_gate_cycle_through_existing_convergence_target_is_rejected(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+) -> None:
+    """A cycle formed through an existing rule's convergence targets must reject.
+
+    An existing converged rule gating B on C plus a new converged rule gating C on
+    B would deadlock both gates even though neither stored source→target edge alone
+    closes a loop, so convergence targets must participate in cycle detection.
+
+    Args:
+        auth_client: Authenticated API client fixture.
+        async_db: Async database session fixture.
+
+    Returns:
+        None.
+    """
+    user = await get_or_create_user_async(async_db)
+    b = await _make_issue(async_db, user_id=user.id, suffix="existing-b")
+    c = await _make_issue(async_db, user_id=user.id, suffix="existing-c")
+    x = await _make_issue(async_db, user_id=user.id, suffix="existing-x")
+    await async_db.commit()
+
+    first = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json={
+            "source_type": "issue",
+            "source_id": x.id,
+            "target_type": "issue",
+            "target_id": b.id,
+            "satisfaction_type": "converged",
+            "convergence_targets": [{"type": "issue", "id": c.id}],
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    second = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json={
+            "source_type": "issue",
+            "source_id": x.id,
+            "target_type": "issue",
+            "target_id": c.id,
+            "satisfaction_type": "converged",
+            "convergence_targets": [{"type": "issue", "id": b.id}],
+        },
+    )
+    assert second.status_code == 409
+    assert second.json()["detail"]["code"] == "continuity_cycle"
+
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_update_to_non_compilable_rule(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """PUT validates compilability: updating to a non-compiling shape is 400 (#2553)."""
+    user = await get_or_create_user_async(async_db)
+    issue_a = await _make_issue(async_db, user_id=user.id, suffix="put-a")
+    issue_b = await _make_issue(async_db, user_id=user.id, suffix="put-b")
+    group = await _make_group(async_db, user_id=user.id, suffix="put-group")
+    await async_db.commit()
+
+    # Start from a compilable rule.
+    created = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", issue_a.id, "issue", issue_b.id),
+    )
+    assert created.status_code == 201, created.text
+    rule_id = created.json()["id"]
+
+    # Updating to a crossover endpoint must be rejected, not silently saved.
+    bad = await auth_client.put(
+        f"/api/v1/continuity-rules/{rule_id}",
+        json=_payload("issue", issue_a.id, "crossover", group.id),
+    )
+    assert bad.status_code == 400, bad.text
+    assert bad.json()["detail"]["code"] == "continuity_rule_not_compilable"
+
+    original_source_id = issue_a.id
+    original_target_id = issue_b.id
+    # Expire the shared test session so this assertion reads persisted state,
+    # not a dirty identity-mapped instance from the rejected PUT.
+    async_db.expire_all()
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
+    assert fetched.status_code == 200
+    body = fetched.json()
+    assert body["target_type"] == "issue"
+    assert body["target_id"] == original_target_id
+    assert body["source_id"] == original_source_id
+
+
+@pytest.mark.asyncio
+async def test_put_rejects_converged_rule_with_crossover_prerequisite(
+    auth_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """A mixed issue+crossover convergence is rejected, not partially compiled."""
+    user = await get_or_create_user_async(async_db)
+    source = await _make_issue(async_db, user_id=user.id, suffix="mixed-source")
+    target = await _make_issue(async_db, user_id=user.id, suffix="mixed-target")
+    prereq = await _make_issue(async_db, user_id=user.id, suffix="mixed-prereq")
+    group = await _make_group(async_db, user_id=user.id, suffix="mixed-group")
+    await async_db.commit()
+
+    created = await auth_client.post(
+        "/api/v1/continuity-rules/",
+        json=_payload("issue", source.id, "issue", target.id),
+    )
+    assert created.status_code == 201, created.text
+    rule_id = created.json()["id"]
+
+    bad = await auth_client.put(
+        f"/api/v1/continuity-rules/{rule_id}",
+        json={
+            "source_type": "issue",
+            "source_id": source.id,
+            "target_type": "issue",
+            "target_id": target.id,
+            "satisfaction_type": "converged",
+            "convergence_targets": [
+                {"type": "issue", "id": prereq.id},
+                {"type": "crossover", "id": group.id},
+            ],
+        },
+    )
+    assert bad.status_code == 400, bad.text
+    assert bad.json()["detail"]["code"] == "continuity_rule_not_compilable"
+
+    fetched = await auth_client.get(f"/api/v1/continuity-rules/{rule_id}")
+    assert fetched.status_code == 200
+    assert fetched.json()["satisfaction_type"] == "item_read"

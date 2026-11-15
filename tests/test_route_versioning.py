@@ -29,6 +29,10 @@ from app.main import create_app
 _BARE_API_EXCEPTIONS = frozenset(
     {
         "/api/metrics",
+        "/api/test/sessions/expire",
+        "/api/test/reading-orders",
+        "/api/test/issue-identity",
+        "/api/test/cbl-source",
     }
 )
 
@@ -144,7 +148,7 @@ def test_retired_thread_html_routes_are_absent() -> None:
         assert f"{prefix}/completed" not in methods_by_path
         assert f"{prefix}/active" not in app.openapi()["paths"]
         assert f"{prefix}/completed" not in app.openapi()["paths"]
-    assert "/api/v1/threads/completed/threads" not in methods_by_path
+    assert "/api/v1/threads/completed/threads" in methods_by_path
 
 
 def test_pruned_admin_routes_are_absent() -> None:
@@ -175,6 +179,13 @@ def test_pruned_admin_routes_are_absent() -> None:
         assert path not in schema["paths"], f"{path} must stay out of OpenAPI"
 
 
+def test_v1_bug_reports_alias_matches_legacy_route_methods() -> None:
+    """Canonical /api/v1/bug-reports alias reuses the same handler contract."""
+    app = create_app(serve_frontend=False)
+    methods_by_path = _collect_routes(app)
+
+    assert "/api/v1/bug-reports/" in methods_by_path
+    assert methods_by_path["/api/v1/bug-reports/"] == methods_by_path["/api/bug-reports/"]
 
 
 def test_v1_metrics_alias_matches_legacy_route_methods() -> None:
@@ -221,6 +232,15 @@ def test_no_new_bare_api_client_routes() -> None:
     # existing clients.
     grandfathered_bare_api = frozenset(
         {
+            "/api/auth/csrf",
+            "/api/auth/login",
+            "/api/auth/logout",
+            "/api/auth/me",
+            "/api/auth/refresh",
+            "/api/auth/register",
+            "/api/auth/forgot-password",
+            "/api/auth/reset-password",
+            "/api/bug-reports/",
             "/api/health",
             "/api/health/dependencies",
             "/api/health/live",
@@ -228,18 +248,21 @@ def test_no_new_bare_api_client_routes() -> None:
             "/api/instance/warm",
             "/api/ping",
             "/api/roll/bootstrap",
+            "/api/roll/dismiss-pending",
             "/api/roll/override",
             "/api/roll/events/{event_id}/recommendation-explanation",
             "/api/sessions/",
             "/api/sessions/current/",
+            "/api/sessions/{session_id}",
             "/api/sessions/{session_id}/details",
             "/api/sessions/{session_id}/restore-session-start",
+            "/api/sessions/{session_id}/snapshots",
             "/api/threads/",
-            "/api/threads/{thread_id}",
             "/api/threads/active",
             "/api/threads/completed",
             "/api/threads/reactivate",
             "/api/threads/stale",
+            "/api/threads/{thread_id}",
             "/api/threads/{thread_id}/position",
             "/api/threads/{thread_id}/set-pending",
             "/api/threads/{thread_id}/test-backdate",

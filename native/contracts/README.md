@@ -187,16 +187,3 @@ pytest tests/test_rust_endpoint_oracle.py --no-cov
 This infrastructure does not change ingress. The Python bootstrap handlers and
 read model are removed (#4397, #4350); deleting the native Rust v2 handler
 remains #4299's scope.
-
-## Native operations retaining their original paths
-
-`same-path-runtime.openapi.json` is generated from Rust utoipa declarations and
-actual request/response DTOs for the native v1 and unversioned handlers. The
-Python schema exporter merges it before the canonical v2 document, so retiring
-shadowed Python handlers does not remove TypeScript client contracts.
-
-```bash
-cargo run --manifest-path native/roll-service/Cargo.toml --example same_path_openapi > native/contracts/same-path-runtime.openapi.json
-```
-
-The Rust drift test checks this artifact independently of the v2 contract.

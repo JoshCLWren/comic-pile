@@ -1031,21 +1031,3 @@ mod tests {
         assert_eq!(other.items[0].display_name, "Chris Other");
     }
 }
-
-/// Document the same-path native creators list using its actual response type.
-#[utoipa::path(get, path = "/api/v1/creators", tag = "creators",
-    params(CreatorListQuery),
-    responses((status = 200, description = "Creator list", body = CreatorListResponse),
-        (status = 400, description = "Invalid filters"),
-        (status = 401, description = "Not authenticated")),
-    security(("HTTPBearer" = [])))]
-pub fn list_creators_documentation() {}
-
-/// Document native creator summaries with the mounted query and response types.
-#[utoipa::path(get, path = "/api/v1/creators/summaries", tag = "creators",
-    params(SummariesQuery),
-    responses((status = 200, description = "Creator summaries", body = CreatorSummariesResponse),
-        (status = 400, description = "Invalid creator keys"),
-        (status = 401, description = "Not authenticated")),
-    security(("HTTPBearer" = [])))]
-pub fn get_summaries_documentation() {}

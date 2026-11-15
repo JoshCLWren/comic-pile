@@ -250,7 +250,7 @@ pub async fn suggest_reading_mode(
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub(crate) fn get_reading_mode_documentation() {}
+fn get_reading_mode_documentation() {}
 
 #[utoipa::path(
     post,
@@ -266,7 +266,7 @@ pub(crate) fn get_reading_mode_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub(crate) fn set_reading_mode_documentation() {}
+fn set_reading_mode_documentation() {}
 
 #[utoipa::path(
     post,
@@ -280,7 +280,7 @@ pub(crate) fn set_reading_mode_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub(crate) fn dismiss_reading_mode_suggestion_documentation() {}
+fn dismiss_reading_mode_suggestion_documentation() {}
 
 #[utoipa::path(
     post,
@@ -294,7 +294,7 @@ pub(crate) fn dismiss_reading_mode_suggestion_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-pub(crate) fn suggest_reading_mode_documentation() {}
+fn suggest_reading_mode_documentation() {}
 
 #[cfg(test)]
 mod tests {

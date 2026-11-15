@@ -53,8 +53,16 @@ async def test_batch_blocking_info_multiple_threads(auth_client, async_db, test_
     await async_db.refresh(target_issue)
     await async_db.refresh(loner_issue)
 
-    async_db.add(Dependency(source_issue_id=source_issue.id, target_issue_id=target_issue.id))
-    await async_db.commit()
+    dep_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
+        },
+    )
+    assert dep_resp.status_code == 201
 
     resp = await auth_client.post(
         "/api/v1/threads:getBlockingInfo",
@@ -117,8 +125,16 @@ async def test_batch_blocking_info_single_thread(auth_client, async_db, test_use
     await async_db.refresh(source_issue)
     await async_db.refresh(target_issue)
 
-    async_db.add(Dependency(source_issue_id=source_issue.id, target_issue_id=target_issue.id))
-    await async_db.commit()
+    dep_resp = await auth_client.post(
+        "/api/v1/dependencies/",
+        json={
+            "source_type": "issue",
+            "source_id": source_issue.id,
+            "target_type": "issue",
+            "target_id": target_issue.id,
+        },
+    )
+    assert dep_resp.status_code == 201
 
     single_resp = await auth_client.post(f"/api/v1/threads/{t2.id}:getBlockingInfo")
     assert single_resp.status_code == 200
@@ -307,3 +323,4 @@ async def test_batch_blocking_info_nonexistent_threads(auth_client, async_db, te
     )
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
+

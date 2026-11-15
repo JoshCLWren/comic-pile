@@ -17,40 +17,35 @@
       "method": "GET",
       "path": "/api/v1/continuity-rules/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-rules/$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/continuity\\-rules/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/continuity-rules/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-rules/$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/continuity\\-rules/$"
     },
     {
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/continuity-rules/{rule_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/continuity\\-rules/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/continuity-rules/{rule_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/continuity\\-rules/[^/]+$"
     },
     {
       "bucket": "v1_operations",
       "method": "PUT",
       "path": "/api/v1/continuity-rules/{rule_id}",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/continuity\\-rules/[^/]+$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/continuity\\-rules/[^/]+$"
     }
   ]
 }

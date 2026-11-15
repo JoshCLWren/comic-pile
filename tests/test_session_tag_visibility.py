@@ -115,6 +115,25 @@ async def test_history_rows_expose_visible_thread_tags(
 
 
 @pytest.mark.asyncio
+async def test_current_session_pending_thread_exposes_tags(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """The current-session payload carries tags on the pending-thread path."""
+    tagged = await _thread(async_db, default_user.id, "X-Men")
+    session = await _session_with_thread(async_db, default_user.id, tagged, pending=True)
+    await _tag_and_assign(async_db, default_user, tagged, "Physical")
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    assert response.status_code == 200, response.text
+    active = response.json()["active_thread"]
+    assert active is not None
+    assert active["id"] == tagged.id
+    assert [tag["name"] for tag in active["tags"]] == ["Physical"]
+
+
+@pytest.mark.asyncio
 async def test_current_session_rolled_thread_exposes_tags(
     auth_client: AsyncClient,
     async_db: AsyncSession,
@@ -133,6 +152,23 @@ async def test_current_session_rolled_thread_exposes_tags(
     assert active is not None
     assert active["id"] == tagged.id
     assert [tag["name"] for tag in active["tags"]] == ["Physical"]
+
+
+@pytest.mark.asyncio
+async def test_untagged_active_thread_reports_empty_tag_list(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An untagged active thread carries an empty tags list, not a missing field."""
+    untagged = await _thread(async_db, default_user.id, "Untagged Saga")
+    session = await _session_with_thread(async_db, default_user.id, untagged, pending=False)
+
+    response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    assert response.status_code == 200, response.text
+    active = response.json()["active_thread"]
+    assert active is not None
+    assert active["tags"] == []
 
 
 @pytest.mark.asyncio

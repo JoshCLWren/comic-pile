@@ -1,0 +1,265 @@
+"""Focused unit coverage for queue service orchestration.
+
+The queue router delegates every mutation to ``QueueService``. These tests
+pin the orchestration decisions (ownership lookup, change detection, and
+reorder-event write) without a database by mocking the repository and
+mutation boundaries.
+"""
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+
+from app.services import queue_service
+from app.services.errors import InvalidRequestError, NotFoundError
+
+
+def _make_thread(thread_id: int = 7, queue_position: int = 2) -> SimpleNamespace:
+    """Build a minimal thread stand-in carrying the fields the service reads.
+
+    Args:
+        thread_id: Thread primary key.
+        queue_position: Thread's current queue position.
+
+    Returns:
+        A simple namespace with the service-relevant thread fields.
+    """
+    return SimpleNamespace(
+        id=thread_id,
+        queue_position=queue_position,
+        queue_position_is_manual=False,
+    )
+
+
+def _fake_db() -> AsyncMock:
+    """Build a fake async session whose mutation methods record calls.
+
+    Returns:
+        An AsyncMock session stand-in.
+    """
+    return AsyncMock()
+
+
+async def _patch_service_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    thread: SimpleNamespace | None,
+    before: dict[int, int] | None = None,
+    after: dict[int, int] | None = None,
+) -> tuple[AsyncMock, AsyncMock, AsyncMock]:
+    """Patch every repository and mutation boundary the service relies on.
+
+    Args:
+        monkeypatch: Pytest monkeypatch fixture.
+        thread: Owned-thread lookup result (None → not owned).
+        before: Position map captured before the mutation.
+        after: Position map captured after the mutation.
+
+    Returns:
+        Tuple of (mutation mock, add_reorder_event mock, thread_to_response mock).
+    """
+    find_owned = AsyncMock(return_value=thread)
+    monkeypatch.setattr(queue_service.thread_repository, "find_owned", find_owned)
+
+    if before is not None:
+        positions = AsyncMock(side_effect=[before, after])
+    else:
+        positions = AsyncMock(return_value={})
+    monkeypatch.setattr(queue_service.queue_repository, "active_queue_positions", positions)
+
+    add_reorder_event = AsyncMock()
+    monkeypatch.setattr(queue_service.queue_repository, "add_reorder_event", add_reorder_event)
+
+    mutation = AsyncMock(return_value={})
+    monkeypatch.setattr(queue_service, "_move_to_position", mutation)
+
+    # The service compares the requested ordinal with the displayed Queue rank
+    # (a blocked series displays after every readable one), so the display
+    # lookup is stubbed from the fake thread's raw position (#4181).
+    display = AsyncMock(side_effect=lambda _db, fake_thread: fake_thread.queue_position)
+    monkeypatch.setattr(queue_service, "display_position", display)
+
+    to_response = AsyncMock(return_value={"id": thread.id if thread else None})
+    monkeypatch.setattr(queue_service, "thread_to_response", to_response)
+
+    return mutation, add_reorder_event, to_response
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_records_reorder_event_on_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real position change writes a reorder event and commits."""
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=_make_thread(),
+        before={10: 1, 7: 2, 11: 3},
+        after={7: 1, 10: 2, 11: 3},
+    )
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_position(1, 7, 1)
+
+    _mutation.assert_awaited_once_with(7, 1, 1, db, manual=True)
+    add_reorder_event.assert_awaited_once_with(db, 7)
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_noop_skips_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Moving a thread to its current position never mutates the queue."""
+    thread = _make_thread(queue_position=1)
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=thread,
+    )
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_position(1, 7, 1)
+
+    _mutation.assert_not_awaited()
+    add_reorder_event.assert_not_awaited()
+    assert thread.queue_position_is_manual is True
+    db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_missing_thread_raises_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A foreign or absent thread maps to the 404 domain error."""
+    _mutation, _add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=None,
+    )
+
+    service = queue_service.QueueService(_fake_db())
+    with pytest.raises(NotFoundError):
+        await service.move_to_position(1, 999, 3)
+
+    _mutation.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_move_to_position_invalid_target_raises_invalid_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An out-of-range target position surfaces as a 400-mapped error."""
+    _mutation, _add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=_make_thread(),
+        before={10: 1, 7: 2, 11: 3},
+        after={10: 1, 7: 2, 11: 3},
+    )
+
+    async def _raise_value_error(*_args, **_kwargs):
+        raise ValueError("Position 9 is out of range. Maximum position is 3.")
+
+    monkeypatch.setattr(queue_service, "_move_to_position", _raise_value_error)
+
+    service = queue_service.QueueService(_fake_db())
+    with pytest.raises(InvalidRequestError, match="Position 9 is out of range"):
+        await service.move_to_position(1, 7, 9)
+
+
+@pytest.mark.asyncio
+async def test_move_to_back_uses_back_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Move-to-back delegates to the back mutation and records the event."""
+    thread = _make_thread(queue_position=1)
+    find_owned = AsyncMock(return_value=thread)
+    monkeypatch.setattr(queue_service.thread_repository, "find_owned", find_owned)
+    monkeypatch.setattr(
+        queue_service.queue_repository,
+        "active_queue_positions",
+        AsyncMock(side_effect=[{7: 1, 10: 2}, {7: 3, 10: 1, 11: 2}]),
+    )
+    add_reorder_event = AsyncMock()
+    monkeypatch.setattr(queue_service.queue_repository, "add_reorder_event", add_reorder_event)
+    back_mutation = AsyncMock(return_value={})
+    monkeypatch.setattr(queue_service, "_move_to_back", back_mutation)
+    monkeypatch.setattr(
+        queue_service, "thread_to_response", AsyncMock(return_value={"id": 7})
+    )
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_back(1, 7)
+
+    back_mutation.assert_awaited_once_with(7, 1, db, manual=True)
+    add_reorder_event.assert_awaited_once_with(db, 7)
+
+
+@pytest.mark.asyncio
+async def test_move_to_back_noop_still_commits_manual_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Moving the back series to the back still commits the manual claim."""
+    thread = _make_thread(queue_position=2)
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=thread,
+        before={10: 1, 7: 2},
+        after={10: 1, 7: 2},
+    )
+
+    async def _mark_manual(*_args, **_kwargs):
+        thread.queue_position_is_manual = True
+        return {}
+
+    back_mutation = AsyncMock(side_effect=_mark_manual)
+    monkeypatch.setattr(queue_service, "_move_to_back", back_mutation)
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_back(1, 7)
+
+    back_mutation.assert_awaited_once_with(7, 1, db, manual=True)
+    add_reorder_event.assert_not_awaited()
+    db.commit.assert_awaited_once()
+    assert thread.queue_position_is_manual is True
+
+
+@pytest.mark.asyncio
+async def test_move_to_back_noop_skips_recommit_when_already_manual(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A no-reorder move adds no commit when the claim is already committed."""
+    thread = _make_thread(queue_position=2)
+    thread.queue_position_is_manual = True
+    _mutation, add_reorder_event, _to_response = await _patch_service_boundaries(
+        monkeypatch,
+        thread=thread,
+        before={7: 2, 10: 1},
+        after={7: 2, 10: 1},
+    )
+    back_mutation = AsyncMock(return_value={})
+    monkeypatch.setattr(queue_service, "_move_to_back", back_mutation)
+
+    db = _fake_db()
+    service = queue_service.QueueService(db)
+    await service.move_to_back(1, 7)
+
+    back_mutation.assert_awaited_once_with(7, 1, db, manual=True)
+    add_reorder_event.assert_not_awaited()
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_shuffle_delegates_to_shuffle_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Shuffle delegates straight to the queue shuffle mutation."""
+    shuffle = AsyncMock()
+    monkeypatch.setattr(queue_service, "_shuffle_queue", shuffle)
+
+    service = queue_service.QueueService(_fake_db())
+    await service.shuffle(1)
+
+    shuffle.assert_awaited_once_with(1, service._db)

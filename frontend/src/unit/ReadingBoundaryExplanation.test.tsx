@@ -18,7 +18,6 @@ function issue(overrides: Partial<BoundaryIssue> = {}): BoundaryIssue {
     issue_number: '1',
     label: 'One Year In #1',
     volume_label: 'One Year In (2025)',
-    reading_lists: [],
     ...overrides,
   }
 }
@@ -28,7 +27,6 @@ function explanation(overrides: Partial<Explanation> = {}): Explanation {
     thread_id: 1,
     state: 'available',
     summary: 'Saga #6 is available next.',
-    blockers: [],
     ...overrides,
   }
 }
@@ -89,7 +87,6 @@ describe('ReadingBoundaryExplanation', () => {
             kind: 'prerequisite',
             origin: 'reader_prerequisite',
             reason: 'Finish the previous issue first.',
-            waiting_on: [],
             editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' },
           },
         ],
@@ -228,14 +225,14 @@ describe('ReadingBoundaryExplanation', () => {
     expect(screen.queryByRole('button', { name: 'Show all reading requirements' })).not.toBeInTheDocument()
   })
 
-  it('falls back to a hold when a strict blocker has no waiting issues', () => {
+  it('falls back to a hold when a strict blocker omits waiting_on entirely', () => {
     renderExplanation({
       compact: true,
       explanation: explanation({
         state: 'blocked',
         summary: 'Reading order is blocked.',
         blockers: [
-          { kind: 'strict_order', origin: 'reading_list', reason: 'Strict source has no actionable comic.', waiting_on: [] },
+          { kind: 'strict_order', origin: 'reading_list', reason: 'Strict source has no actionable comic.' },
           { kind: 'hold', origin: 'reading_list', reason: 'Read One Year In first.', waiting_on: [issue()] },
         ],
       }),
@@ -338,7 +335,6 @@ describe('ReadingBoundaryExplanation', () => {
             kind: 'prerequisite',
             origin: 'reader_prerequisite',
             reason: 'Finish the previous issue first.',
-            waiting_on: [],
             editor: unroutable,
           },
         ],

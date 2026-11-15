@@ -85,38 +85,6 @@ Worker health and stale-run reconciliation still use some GitHub API reads.
 Per-item issue/PR projections and event-triggered selective reconciliation are
 follow-up work; **do not claim this change alone eliminates broad discovery**.
 
-## Recovery checkpoints for model-generated source code
-
-Neon is the coordination ledger, **not a storage location for model edits**.
-During each trusted, non-fork coding or PR-repair session, the wrapper now
-starts a checkpoint writer from the checked-out `main` snapshot. Every
-45 seconds it stages tracked and non-ignored new files in a **separate Git
-index**, creates an unreviewed commit with Git plumbing, and pushes it to
-`refs/heads/factory/work-checkpoints/<GitHub Actions run ID>`. A final
-best-effort checkpoint runs when the agent exits or the wrapper receives a
-termination signal. On a force-canceled runner, the last periodic push is
-the durable recovery point. An interrupted run may still lose up to one
-interval of edits, and a failed remote push cannot guarantee recovery.
-
-These refs are **not** PR heads and cannot bypass pre-push tests, exact-head
-review, or the merge controller. The trusted wrapper keeps the normal
-issue/PR handoff behavior unchanged, and removes its checkpoint ref only
-after the real changes were successfully pushed and handed off. Failed or
-incomplete attempts retain their recovery refs for a later worker or human.
-The wrapper logs the run ID and saved commit SHA so work can be found in Git.
-No worker has access to Neon credentials. Recovery commits are unreviewed
-and must be validated before use.
-
-For example, recover a failed run's diff without changing the PR branch:
-
-```bash
-git fetch origin refs/heads/factory/work-checkpoints/RUN_ID
-git diff FETCH_HEAD^ FETCH_HEAD
-```
-
-Do not directly merge recovery branches. Restore only applicable code through
-the canonical assigned issue/PR and the existing fast checks.
-
 ## Event-fed target projections
 
 A trusted `Factory Target Projection Ingest` workflow receives GitHub

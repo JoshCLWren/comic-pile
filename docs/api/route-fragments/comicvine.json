@@ -94,8 +94,7 @@
       "method": "GET",
       "path": "/api/v1/comicvine/series/{comicvine_volume_id}/import-status",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/comicvine/series/[^/]+/import\\-status$"
     },
     {
       "bucket": "v1_operations",

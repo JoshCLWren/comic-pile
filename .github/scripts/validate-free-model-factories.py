@@ -81,8 +81,9 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
                 f'starter model, got {model!r}'
             )
         elif source == 'vercel-ai-gateway':
-            assert model in _ROSTER.VERCEL_ZERO_PRICE_MODELS, (
-                f'worker {worker} vercel-ai-gateway pin must be an explicitly $0 model, got {model!r}'
+            raise AssertionError(
+                f'worker {worker} vercel-ai-gateway pin is retired '
+                f'(freemium; card required), got {model!r}'
             )
         elif source == 'mistral':
             assert mistral_model_is_pinned(model), (
@@ -97,23 +98,6 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
         elif source == 'requesty':
             assert requesty_model_is_approved(model), (
                 f'worker {worker} requesty pin must be an approved Requesty id, got {model!r}'
-            )
-        elif source == 'cloudflare-workers-ai':
-            assert _ROSTER.cloudflare_workers_ai_model_is_free(model), (
-                f'worker {worker} cloudflare Workers Free id not approved: {model!r}'
-            )
-        elif source in {
-            'gemini-free', 'groq-free', 'aion-free', 'cohere-eval', 'typhoon-free'
-        }:
-            allowed = {
-                'gemini-free': _ROSTER.GEMINI_FREE_MODELS,
-                'groq-free': _ROSTER.GROQ_FREE_MODELS,
-                'aion-free': _ROSTER.AION_FREE_CREDIT_MODELS,
-                'cohere-eval': _ROSTER.COHERE_EVALUATION_MODELS,
-                'typhoon-free': _ROSTER.TYPHOON_FREE_MODELS,
-            }[source]
-            assert model in allowed, (
-                f'worker {worker} {source} model is not in free/evaluation allowlist: {model!r}'
             )
 
 
@@ -250,7 +234,7 @@ def main() -> None:
     assert 'https://api.orcarouter.ai/v1' in runner
     assert 'https://router.requesty.ai/v1' in runner
     assert 'https://ai-gateway.vercel.sh/v1' in runner
-    assert 'Require Vercel model to remain zero-price' in runner
+    assert 'Require Pixel Canary to remain zero-price' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.

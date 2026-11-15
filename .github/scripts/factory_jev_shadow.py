@@ -814,135 +814,18 @@ def select_report(
     return {**report, "backpressure": backpressure_snapshot(issues, prs)}
 
 
-def choose_worker_order(
-    workers: list[str],
-    health: dict[str, Any],
-    api_key: str,
-    *,
-    client: Callable[[dict[str, Any], str], dict[str, Any]] = call_jev,
-) -> tuple[list[str], dict[str, Any]]:
-    """Let Jev promote one eligible worker; never create or bypass eligibility."""
-    window = workers[:8]
-    report: dict[str, Any] = {
-        "surface": "worker-dispatch", "baseline": window,
-        "chosen": None, "status": "unchanged", "reason": "insufficient candidates",
-    }
-    if len(window) < 2 or len(set(window)) != len(window):
-        return workers, report
-    if not api_key:
-        return workers, {**report, "reason": "missing dedicated key"}
-    roster = {}
-    for line in Path(".github/free-model-factories.tsv").read_text(encoding="utf-8").splitlines():
-        fields = line.split("\t")
-        if len(fields) >= 3 and not line.startswith("#"):
-            roster[fields[0]] = (fields[1], fields[2])
-    metrics = {}
-    for row in health.get("workers", []):
-        if isinstance(row, dict) and str(row.get("worker")) in window:
-            worker = str(row["worker"])
-            metrics.setdefault(worker, []).append(row)
-    evidence = {}
-    for worker in window:
-        source, model = roster.get(worker, ("unknown", "unknown"))
-        rows = metrics.get(worker, [])
-        evidence[worker] = {
-            "source": source, "model": model,
-            "attempts": sum(int(row.get("attempts") or 0) for row in rows),
-            "productive": sum(int(row.get("productive") or 0) for row in rows),
-            "completed": sum(int(row.get("completed") or 0) for row in rows),
-            "failures": sum(int(row.get("failures") or 0) for row in rows),
-        }
-    payload = {
-        "model": MODEL,
-        "state": {"workers": evidence},
-        "questions": {"next_action": {
-            "type": "choice",
-            "instructions": (
-                "Choose the next eligible coding worker most likely to deliver useful code "
-                "given observed attempts, productive deliveries and failures. Consider "
-                "provider diversity and sparse samples. All workers are already filtered "
-                "for hard quota and cooldown constraints. Select exactly one listed ID."
-            ),
-            "criteria": {worker: f"Dispatch eligible worker {worker}" for worker in window},
-        }},
-    }
-    try:
-        response = client(payload, api_key)
-        choice, confidence, probabilities = validated_choice(
-            [type("WorkerOption", (), {"action_id": worker})() for worker in window],
-            response,
-        )
-        top = probabilities[choice]
-        runner_up = max((p for key, p in probabilities.items() if key != choice), default=0)
-        if top < MIN_CHOICE_PROBABILITY or top - runner_up < MIN_CHOICE_MARGIN:
-            return workers, {**report, "status": "abstained", "reason": "confidence gate"}
-        return [choice, *[worker for worker in workers if worker != choice]], {
-            **report, "status": "chosen", "chosen": choice,
-            "confidence": confidence, "reason": "Jev promoted eligible worker",
-        }
-    except (HTTPError, URLError, OSError, ValueError, TypeError, KeyError):
-        return workers, {**report, "reason": "provider unavailable or invalid response"}
-
-
 def main() -> int:
     """Run from the dispatcher using read-only GitHub candidate snapshots."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--issues", type=Path)
+    parser.add_argument("--issues", type=Path, required=True)
     parser.add_argument("--prs", type=Path, required=True)
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--factory-health", type=Path, help="Trusted Neon worker and provider health snapshot")
-    parser.add_argument("--workers", type=Path, help="Eligible worker ID array")
     args = parser.parse_args()
-    if args.workers:
-        workers = json.loads(args.workers.read_text(encoding="utf-8"))
-        if not isinstance(workers, list) or not all(isinstance(w, str) for w in workers):
-            raise ValueError("invalid worker list")
-        health = {}
-        if args.factory_health:
-            try:
-                health = json.loads(args.factory_health.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                pass
-        ordered, decision = choose_worker_order(
-            workers, health, os.environ.get("OPENROUTER_JEV_API_KEY", "")
-        )
-        print(json.dumps(ordered))
-        print(json.dumps(decision), file=sys.stderr)
-        return 0
-    if not args.issues or not args.prs:
-        parser.error("--issues and --prs are required for work selection")
     issues = json.loads(args.issues.read_text(encoding="utf-8"))
     prs = json.loads(args.prs.read_text(encoding="utf-8"))
     if not isinstance(issues, list) or not isinstance(prs, list):
         raise ValueError("invalid GitHub candidate snapshot")
-    health_summary: dict[str, Any] | None = None
-    if args.factory_health:
-        try:
-            health = json.loads(args.factory_health.read_text(encoding="utf-8"))
-            if not isinstance(health, dict) or not isinstance(health.get("workers"), list) or not isinstance(health.get("cooling"), list):
-                raise ValueError("invalid health snapshot")
-            # Trusted operational counts only. No credentials or model-generated logs.
-            health_summary = {
-                "worker_count": len(health["workers"]),
-                "cooling_models": len(health["cooling"]),
-                "productive_workers": sum(
-                    1 for worker in health["workers"]
-                    if isinstance(worker, dict) and int(worker.get("productive") or 0) > 0
-                ),
-            }
-        except (OSError, ValueError, TypeError, OverflowError):
-            health_summary = {"status": "unavailable"}
-
-    def informed_jev(payload: dict[str, Any], api_key: str) -> dict[str, Any]:
-        if health_summary and health_summary.get("status") != "unavailable":
-            payload = {**payload, "state": {**payload["state"], "factory_health": health_summary}}
-        return call_jev(payload, api_key)
-
-    report = select_report(
-        issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""), client=informed_jev
-    )
-    if health_summary is not None:
-        report["factory_health"] = health_summary
+    report = select_report(issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""))
     print(markdown(report))
     if args.output:
         args.output.write_text(

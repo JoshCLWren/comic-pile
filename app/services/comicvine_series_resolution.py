@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import unicodedata
@@ -34,6 +35,8 @@ from comic_pile.comicvine_provider import (
 COMICVINE_PROVIDER = "comicvine"
 COMICVINE_SERIES_RESOLUTION_LOCK_NAMESPACE = 1_065_100_000
 COMICVINE_COLLECTION_PAGE_LIMIT = 100
+
+_pending_resolutions: dict[int, asyncio.Task[None]] = {}
 
 logger = logging.getLogger(__name__)
 
@@ -384,6 +387,51 @@ async def _run_series_resolution_impl(issue_id: int, user_id: int) -> None:
             confidence,
             len(identities),
         )
+
+
+async def schedule_series_issue_resolution(
+    db: AsyncSession, issue_id: int, user_id: int
+) -> bool:
+    """Schedule at most one background resolution for an unmapped issue.
+
+    The resolution runs asynchronously and does not block the caller.  A fast
+    database pre-check avoids spawning a background task when the issue already
+    has a confirmed mapping or lacks a confirmed thread-series mapping (so no
+    deterministic resolution is possible).  In-process deduplication prevents
+    fan-out from parallel requests for the same issue; a PostgreSQL advisory
+    transaction lock provides cross-process safety.
+
+    Args:
+        db: Async database session used for the fast pre-check.
+        issue_id: ComicPile issue identifier.
+        user_id: Owner user ID for authorization.
+
+    Returns:
+        True when a new background task was scheduled, False when one is already
+        pending or the issue is already confirmed / cannot be resolved.
+    """
+    pending = _pending_resolutions.get(issue_id)
+    if pending is not None and not pending.done():
+        return False
+
+    existing = await _find_existing_mapping(db, issue_id)
+    if existing is not None and existing.status == "confirmed":
+        return False
+
+    issue = await db.get(Issue, issue_id)
+    if issue is None:
+        return False
+    series_identity = await _confirmed_series_identity(db, issue.thread_id)
+    if series_identity is None:
+        return False
+
+    task = asyncio.create_task(
+        _run_series_resolution(issue_id, user_id),
+        name=f"comicvine-series-resolution-{issue_id}",
+    )
+    _pending_resolutions[issue_id] = task
+    task.add_done_callback(lambda finished: _pending_resolutions.pop(issue_id, None))
+    return True
 
 
 def _string(value: object) -> str | None:

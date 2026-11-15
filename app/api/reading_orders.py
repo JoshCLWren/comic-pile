@@ -11,6 +11,7 @@ HTTP status mapping. Business logic lives in
 ``app/repositories/reading_order_repository.py``.
 """
 
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
@@ -20,6 +21,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.schemas.reading_order import (
+    ReadingOrderListResponse,
     ThreadReadingOrdersResponse,
 )
 from app.services import reading_order_service
@@ -42,6 +44,15 @@ def _map_service_error(exc: ServiceError) -> HTTPException:
         HTTPException carrying the mapped status code and client-safe detail.
     """
     return HTTPException(status_code=_ERROR_STATUS[type(exc)], detail=exc.detail)
+
+
+@router.get("/api/v1/reading-orders/")
+async def list_reading_orders(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> ReadingOrderListResponse:
+    """List reading orders owned by the current user, ordered by name."""
+    return await reading_order_service.list_reading_orders(db, user_id=current_user.id)
 
 
 @router.get("/api/v1/threads/{thread_id}/reading-orders")
@@ -70,3 +81,41 @@ class InsertReadingOrderItemResponse(BaseModel):
     thread_id: int
     position: int
     total_items: int
+
+
+@router.post(
+    "/api/v1/reading-orders/{reading_order_id}/items",
+    response_model=InsertReadingOrderItemResponse,
+    status_code=201,
+)
+async def insert_reading_order_item(
+    reading_order_id: int,
+    payload: InsertReadingOrderItemRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> InsertReadingOrderItemResponse:
+    """Insert a thread into a reading order at a specified position.
+
+    Shifts existing items at or after the target position to make room. If the
+    thread already belongs to the reading order, it is moved to the target
+    position instead of being duplicated.
+    """
+    try:
+        resolved_order_id, resolved_thread_id, resolved_position, total = (
+            await reading_order_service.insert_reading_order_item(
+                db,
+                user_id=current_user.id,
+                reading_order_id=reading_order_id,
+                thread_id=payload.thread_id,
+                position=payload.position,
+            )
+        )
+    except ServiceError as exc:
+        raise _map_service_error(exc) from exc
+
+    return InsertReadingOrderItemResponse(
+        reading_order_id=resolved_order_id,
+        thread_id=resolved_thread_id,
+        position=resolved_position,
+        total_items=total,
+    )

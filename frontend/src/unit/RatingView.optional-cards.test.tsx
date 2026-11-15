@@ -141,7 +141,7 @@ function blockedBoundary(): ReadingBoundaryExplanation {
       kind: 'prerequisite',
       origin: 'reader_prerequisite',
       reason: 'Finish the previous issue first.',
-      waiting_on: [{ issue_id: 99, thread_id: 1, thread_title: 'Saga', issue_number: '2', label: 'Saga #2', reading_lists: [] }],
+      waiting_on: [{ issue_id: 99, thread_id: 1, thread_title: 'Saga', issue_number: '2', label: 'Saga #2' }],
       editor: { kind: 'prerequisite', thread_id: 1, label: 'prerequisites' },
     }],
   }
@@ -322,7 +322,7 @@ describe('Roll optional reading cards interaction (#2764)', () => {
       ratingView({
         readingContextRequested: true,
         readingBoundariesRequested: true,
-        readingBoundary: { thread_id: 1, state: 'available', summary: 'No live reading requirements block this series.', blockers: [] },
+        readingBoundary: { thread_id: 1, state: 'available', summary: 'No live reading requirements block this series.' },
         readerContext: {
           issue_id: 100,
           series: {

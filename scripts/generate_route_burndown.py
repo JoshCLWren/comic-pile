@@ -52,6 +52,8 @@ PYTHON_DESTINATION: Final = "/api/index.py"
 VERCEL_DESTINATIONS: Final = NATIVE_DESTINATIONS | {PYTHON_DESTINATION}
 CATCH_ALL_SRC: Final = "/api(?:/.*)?"
 CATCH_ALL_DEST: Final = "/api/native_roll.rs"
+ORPHAN_METHOD: Final = "GET"
+ORPHAN_PATH: Final = "/api/v2/reading-boundaries/{thread_id}"
 BURN_DOWN_ISSUE: Final = 4739
 METHOD_ORDER: Final = ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
 AGENTS_BEGIN_MARKER: Final = (
@@ -350,12 +352,7 @@ def _merge_route_fragments(
     inventory to remain a generated artifact.
     """
     merged = dict(inventory)
-    # v2 is exclusively Rust. Drop stale Python-only v2 inventory declarations
-    # as soon as their FastAPI handlers have been retired.
-    raw_operations = [
-        operation for operation in _validated_operations(inventory)
-        if operation["runtime"] != "python-fastapi"
-    ]
+    raw_operations = _validated_operations(inventory)
     raw_full = _object(inventory.get("full_surface"), "full_surface")
     buckets: dict[str, list[dict[str, object]]] = {
         "operations": raw_operations,
@@ -968,6 +965,7 @@ def _full_surface_summary(
     v1_operations: list[dict[str, object]],
     unversioned_operations: list[dict[str, object]],
     catch_all: dict[str, object],
+    orphan: dict[str, object],
 ) -> dict[str, object]:
     """Summarize full deployed surface counts for the inventory header.
 
@@ -975,6 +973,7 @@ def _full_surface_summary(
         v1_operations: Enriched ``/api/v1`` Python operations.
         unversioned_operations: Enriched ``/api/*`` Python operations.
         catch_all: Validated catch-all ingress entry.
+        orphan: Validated orphan operation entry.
 
     Returns:
         The deterministic full-surface summary object.
@@ -997,6 +996,8 @@ def _full_surface_summary(
         "ingress_source": "vercel.json",
         "catch_all_src": _string(catch_all.get("src"), "catch_all.src"),
         "catch_all_dest": _string(catch_all.get("dest"), "catch_all.dest"),
+        "orphan_method": _string(orphan.get("method"), "orphan.method"),
+        "orphan_path": _string(orphan.get("path"), "orphan.path"),
         "v1_total": v1_total,
         "v1_shadowed_by_rust": v1_shadowed,
         "v1_live_python": v1_live,
@@ -1012,32 +1013,96 @@ def _full_surface_summary(
     }
 
 
-def _validated_full_surface(inventory: dict[str, object]) -> dict[str, object]:
-    """Validate the Rust-default ingress declaration."""
-    full = _object(inventory.get("full_surface"), "full_surface")
+def _validated_full_surface(
+    inventory: dict[str, object],
+) -> tuple[dict[str, object], dict[str, object]]:
+    """Validate the full-surface declarations in ``inventory``.
+
+    Args:
+        inventory: Loaded inventory document.
+
+    Returns:
+        The catch-all entry and the orphan entry.
+
+    Raises:
+        BurndownGenerationError: When the declarations are missing or
+            malformed.
+    """
+    raw_full = inventory.get("full_surface")
+    if not isinstance(raw_full, dict):
+        raise BurndownGenerationError("inventory must define a full_surface object")
+    full = _object(raw_full, "full_surface")
     catch_all = _object(full.get("catch_all"), "full_surface.catch_all")
     catch_all["dest"] = CATCH_ALL_DEST
+    orphan = _object(full.get("orphan"), "full_surface.orphan")
     _string(catch_all.get("src"), "full_surface.catch_all.src")
     _string(catch_all.get("dest"), "full_surface.catch_all.dest")
-    return catch_all
+    _string(orphan.get("method"), "full_surface.orphan.method")
+    _string(orphan.get("path"), "full_surface.orphan.path")
+    return catch_all, orphan
 
 
 def _verify_full_surface_entries(
     catch_all: dict[str, object],
+    orphan: dict[str, object],
     routes: list[VercelRoute],
+    v2_operations: list[dict[str, object]],
 ) -> None:
-    """Verify unmatched API requests still go to the Rust catch-all."""
+    """Verify catch-all and orphan declarations against ingress and v2 ops.
+
+    Args:
+        catch_all: Declared catch-all entry.
+        orphan: Declared orphan entry.
+        routes: Vercel routes for ingress resolution.
+        v2_operations: Enriched v2 operations.
+
+    Raises:
+        BurndownGenerationError: When either declaration disagrees with
+            ``vercel.json`` or the v2 inventory.
+    """
     src = _string(catch_all.get("src"), "catch_all.src")
     dest = _string(catch_all.get("dest"), "catch_all.dest")
     if src != CATCH_ALL_SRC or dest != CATCH_ALL_DEST:
         raise BurndownGenerationError(
             f"catch-all must be {CATCH_ALL_SRC!r} -> {CATCH_ALL_DEST!r}"
         )
-    if not any(
+    found = any(
         route.src == CATCH_ALL_SRC and route.dest == CATCH_ALL_DEST
         for route in routes
-    ):
+    )
+    if not found:
         raise BurndownGenerationError("catch-all route missing from vercel.json")
+    method = _string(orphan.get("method"), "orphan.method")
+    path = _string(orphan.get("path"), "orphan.path")
+    if method != ORPHAN_METHOD or path != ORPHAN_PATH:
+        raise BurndownGenerationError(
+            f"orphan must be {ORPHAN_METHOD} {ORPHAN_PATH}"
+        )
+    destination = _resolve_destination(method, path, routes)
+    if destination != "/api/index.py":
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must ingress to /api/index.py"
+        )
+    matches = [
+        item
+        for item in v2_operations
+        if item.get("method") == method and item.get("path") == path
+    ]
+    if len(matches) != 1:
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must match exactly one v2 operation"
+        )
+    match = matches[0]
+    if match.get("runtime") != "python-fastapi":
+        raise BurndownGenerationError(f"orphan {method} {path} must be python-fastapi")
+    if match.get("ingress_destination") != "/api/index.py":
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must ingress to {CATCH_ALL_DEST!r}"
+        )
+    if match.get("burndown_status") != "unreferenced/orphaned":
+        raise BurndownGenerationError(
+            f"orphan {method} {path} must be unreferenced/orphaned"
+        )
 
 
 def _render_full_surface(
@@ -1058,8 +1123,8 @@ def _render_full_surface(
     Raises:
         BurndownGenerationError: When the inventory contradicts ingress.
     """
-    catch_all = _validated_full_surface(inventory)
-    _verify_full_surface_entries(catch_all, routes)
+    catch_all, orphan = _validated_full_surface(inventory)
+    _verify_full_surface_entries(catch_all, orphan, routes, v2_operations)
     raw_full = inventory.get("full_surface")
     assert isinstance(raw_full, dict)
     raw_full_map = {str(key): item for key, item in raw_full.items()}
@@ -1077,7 +1142,7 @@ def _render_full_surface(
         unversioned_raw, routes, "full_surface.unversioned_operations"
     )
     summary = _full_surface_summary(
-        v1_operations, unversioned_operations, catch_all
+        v1_operations, unversioned_operations, catch_all, orphan
     )
     return {
         "generated_by": "scripts/generate_route_burndown.py",
@@ -1085,6 +1150,7 @@ def _render_full_surface(
         "ingress_source": "vercel.json",
         "summary": summary,
         "catch_all": dict(catch_all),
+        "orphan": dict(orphan),
         "v1_operations": v1_operations,
         "unversioned_operations": unversioned_operations,
     }
@@ -1241,7 +1307,7 @@ def _render_agents_block(
         "> after changing `vercel.json`, route fragments, or the inventory.",
         "> API version is not implementation language.",
         "",
-        f"- Live v2 operations: {total} ({native} native-rust + {python_total} python-fastapi).",
+        f"- Live v2 operations: {total} ({native} native-rust + {python_total} python orphan).",
         "- Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).",
     ]
     if full_summary is not None:
@@ -1254,18 +1320,21 @@ def _render_agents_block(
         python_surface = full_summary["total_python_surface"]
         lines.append(
             f"- Full Python-handler surface: {python_surface} operations "
-            f"(v1 {v1_total} + unversioned {unversioned_total}); "
+            f"(v1 {v1_total} + unversioned {unversioned_total}) plus "
+            f"1 v2 orphan = {python_surface + 1} Python-handler operations; "
             f"v1 active {v1_live} live Python / {v1_shadowed} migrated "
             f"(shadowed by Rust); unversioned active {unversioned_live} live "
             f"Python / {unversioned_shadowed} migrated (shadowed by Rust); "
             "remaining declared methods use explicit Python exceptions."
         )
         lines.append(
-            "- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404)."
+            "- Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404); "
+            "orphan `GET /api/v2/reading-boundaries/{thread_id}` has an "
+            "explicit Python exception."
         )
         lines.append(
-            "- Full-surface inventory (v2 + v1 + unversioned + catch-all) "
-            "and per-operation callers: see "
+            "- Full-surface inventory (v2 + v1 + unversioned + catch-all + "
+            "orphan) and per-operation callers: see "
             "`docs/api/v2-route-inventory.json` `full_surface` (authoritative)."
         )
     for item in orphan_ops:

@@ -10,8 +10,11 @@ remains untouched when no momentum-weighted selection is requested.
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Event, Thread
 
@@ -215,3 +218,63 @@ def compute_momentum_bonus(
         now=now,
     )
     return min(rating_component + streak_component, _MAX_MOMENTUM_BONUS)
+
+
+async def weighted_momentum_selection(
+    db: AsyncSession | None,
+    bounded_rows: list,
+    user_id: int,
+    session_events: list[Event] | None = None,
+    now: datetime | None = None,
+) -> tuple[int, float, list[MomentumCandidateWeight]]:
+    """Select an index from bounded_rows using momentum-weighted random choice.
+
+    Returns:
+        A tuple of ``(selected_index, applied_max_bonus, candidate_weights)``
+        where selected_index is within the bounded pool, applied_max_bonus
+        reports the largest bonus value among candidates (for observability /
+        cap verification), and candidate_weights carries the exact chooser
+        weight plus reason codes for every bounded candidate in pool order.
+    """
+    if session_events is None:
+        session_events = []
+    if now is None:
+        now = datetime.now(UTC)
+
+    if not bounded_rows:
+        raise ValueError("bounded_rows must not be empty")
+
+    # Compute chooser weights plus per-candidate reason codes for the pool.
+    breakdowns = []
+    for row in bounded_rows:
+        # Handle both tuple rows (Thread, unread, issue_number) and plain threads.
+        thread_obj = row[0] if isinstance(row, tuple) else row
+        breakdowns.append(
+            compute_momentum_breakdown(
+                thread=thread_obj,
+                session_events=session_events,
+                last_rating=thread_obj.last_rating,
+                now=now,
+            )
+        )
+
+    weights = [breakdown.weight for breakdown in breakdowns]
+    bonuses = [weight - 1.0 for weight in weights]
+    max_bonus = max(bonuses) if bonuses else 0.0
+
+    # Weighted random selection using cumulative weights.
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        # Fallback to uniform random if weights collapse (should not happen).
+        selected_index = random.randint(0, len(bounded_rows) - 1)
+    else:
+        pick = random.uniform(0, total_weight)
+        cumulative = 0.0
+        selected_index = 0
+        for i, w in enumerate(weights):
+            cumulative += w
+            if pick <= cumulative:
+                selected_index = i
+                break
+
+    return selected_index, max_bonus, breakdowns

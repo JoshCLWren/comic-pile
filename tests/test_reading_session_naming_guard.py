@@ -13,8 +13,12 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 AUTH_MODULES = (
     REPOSITORY_ROOT / "app" / "auth.py",
+    REPOSITORY_ROOT / "app" / "api" / "auth.py",
+    REPOSITORY_ROOT / "app" / "services" / "password_reset_service.py",
+    REPOSITORY_ROOT / "app" / "services" / "password_reset_mailer.py",
     REPOSITORY_ROOT / "app" / "repositories" / "user_repository.py",
     REPOSITORY_ROOT / "app" / "repositories" / "revoked_token_repository.py",
+    REPOSITORY_ROOT / "app" / "repositories" / "password_reset_token_repository.py",
     REPOSITORY_ROOT / "app" / "repositories" / "failed_login_repository.py",
 )
 
@@ -255,6 +259,15 @@ def test_reading_session_is_not_exposed_under_a_bare_session_name() -> None:
     )
 
 
+def test_password_reset_service_documents_that_reading_history_survives() -> None:
+    """Password reset must document that reading sessions survive a reset."""
+    service_path = REPOSITORY_ROOT / "app" / "services" / "password_reset_service.py"
+    content = service_path.read_text(encoding="utf-8")
+    assert "reading-history table is never touched" in content or "reading sessions survive" in content.lower(), (
+        "password_reset_service.py must document that reading sessions survive password reset"
+    )
+
+
 def test_reading_session_repository_documents_its_auth_boundary() -> None:
     """The reading-session repository must state that it never touches auth state."""
     content = READING_SESSION_REPOSITORY_MODULE.read_text(encoding="utf-8")
@@ -275,7 +288,7 @@ def test_guard_detects_violation_in_previously_unscanned_module(tmp_path: Path) 
     The planted copy lives in ``tmp_path`` so a failed or interrupted run can
     never leave a tracked application module modified in the working tree.
     """
-    previously_skipped = REPOSITORY_ROOT / "app" / "repositories" / "revoked_token_repository.py"
+    previously_skipped = REPOSITORY_ROOT / "app" / "services" / "password_reset_mailer.py"
     assert previously_skipped in AUTH_MODULES, (
         f"{previously_skipped} must be a guarded auth module (issue #3772)"
     )

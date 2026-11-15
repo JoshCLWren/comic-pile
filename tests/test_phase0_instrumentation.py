@@ -157,9 +157,20 @@ async def test_roll_nullable_issue_fields_for_non_issue_tracked(
     superman = result.scalar_one()
     # Guard against drift in sample_data: Superman must be non-issue-tracked.
     assert superman.next_unread_issue_id is None
-    monkeypatch.setattr("comic_pile.recommendation_selection.random.randint", lambda _start, _end: 0)
-    monkeypatch.setattr("comic_pile.recommendation_selection.random.uniform", lambda _a, _b: 0.0)
-    monkeypatch.setattr("comic_pile.recommendation_selection.random.random", lambda: 0.0)
+    monkeypatch.setattr("app.momentum.random.randint", lambda _start, _end: 0)
+    monkeypatch.setattr("app.momentum.random.uniform", lambda _a, _b: 0.0)
+    # Also direct the thread selection to Superman when the service uses choice/weighted logic.
+    try:
+        import app.momentum as momentum_module
+
+        if hasattr(momentum_module.random, "choice"):
+            monkeypatch.setattr(
+                momentum_module.random,
+                "choice",
+                lambda seq: superman if superman in seq else seq[0],
+            )
+    except Exception:
+        pass
 
     data = (await roll_pending_thread(async_db)).model_dump()
     # The roll may still have selected an issue-tracked thread if the selection

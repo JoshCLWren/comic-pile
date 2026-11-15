@@ -17,32 +17,28 @@
       "method": "GET",
       "path": "/api/v1/reading-mode",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/reading\\-mode$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/reading-mode",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/reading\\-mode$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/reading-mode/dismiss-suggestion",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/reading\\-mode/dismiss\\-suggestion$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/reading-mode/suggest",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/reading\\-mode/suggest$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/reading\\-mode/suggest$"
     }
   ]
 }

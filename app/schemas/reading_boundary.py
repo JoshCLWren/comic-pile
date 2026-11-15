@@ -101,3 +101,11 @@ class ReadingBoundaryBatchResponse(BaseModel):
 
     threads: dict[int, ReadingBoundaryExplanation]
 
+class ReadingBoundaryExplanationV2(BaseModel):
+    """Canonical reading boundary without retired dependency associations."""
+
+    thread_id: int
+    state: Literal["blocked", "available", "complete", "unavailable"]
+    summary: str
+    next: ReadingBoundaryNext | None = None
+    blockers: list[ReadingBoundaryBlocker] = Field(default_factory=list)

@@ -78,6 +78,46 @@ async def test_roll_overflow(auth_client: AsyncClient, async_db: AsyncSession) -
 
 
 @pytest.mark.asyncio
+async def test_dismiss_pending_clears_pending_thread(
+    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
+) -> None:
+    """POST /roll/dismiss-pending clears pending thread in current session."""
+    _ = sample_data
+
+    await roll_pending_thread(async_db)
+
+    before_session = await auth_client.get("/api/v1/sessions/current/")
+    assert before_session.status_code == 200
+    assert before_session.json()["pending_thread_id"] is not None
+
+    dismiss_response = await auth_client.post("/api/v1/roll/dismiss-pending")
+    assert dismiss_response.status_code == 204
+
+    after_session = await auth_client.get("/api/v1/sessions/current/")
+    assert after_session.status_code == 200
+    assert after_session.json()["pending_thread_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_dismiss_pending_when_no_pending_exists(
+    auth_client: AsyncClient, sample_data: dict
+) -> None:
+    """POST /roll/dismiss-pending is idempotent when no pending thread exists."""
+    _ = sample_data
+
+    before_session = await auth_client.get("/api/v1/sessions/current/")
+    assert before_session.status_code == 200
+    assert before_session.json()["pending_thread_id"] is None
+
+    dismiss_response = await auth_client.post("/api/v1/roll/dismiss-pending")
+    assert dismiss_response.status_code == 204
+
+    after_session = await auth_client.get("/api/v1/sessions/current/")
+    assert after_session.status_code == 200
+    assert after_session.json()["pending_thread_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_roll_override_nonexistent(auth_client: AsyncClient, sample_data: dict) -> None:
     """Override returns 404 for non-existent thread."""
     _ = sample_data

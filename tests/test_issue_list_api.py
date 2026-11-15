@@ -307,6 +307,70 @@ async def test_validate_issue_order_returns_dependency_conflicts(
     assert "issue #2" in data["warnings"][0]
     assert "issue #1" in data["warnings"][0]
 
+async def test_get_issue_success(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """GET /issues/{issue_id} returns single issue details."""
+    user = await get_or_create_user_async(async_db)
+
+    thread = Thread(
+        title="Test Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["id"] == issue.id
+    assert data["thread_id"] == thread.id
+    assert data["issue_number"] == "1"
+    assert data["status"] == "unread"
+
+async def test_get_issue_not_found(auth_client: AsyncClient) -> None:
+    """GET /issues/{issue_id} returns 404 for non-existent issue."""
+    response = await auth_client.get("/api/v1/issues/999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+async def test_get_issue_other_user_issue(auth_client: AsyncClient, async_db: AsyncSession) -> None:
+    """GET /issues/{issue_id} returns 404 for issue owned by different user."""
+    other_user = User(username="other_user", created_at=datetime.now(UTC))
+    async_db.add(other_user)
+    await async_db.commit()
+
+    thread = Thread(
+        title="Other Thread",
+        format="Comic",
+        issues_remaining=5,
+        queue_position=1,
+        status="active",
+        user_id=other_user.id,
+        total_issues=5,
+        reading_progress="in_progress",
+        created_at=datetime.now(UTC),
+    )
+    async_db.add(thread)
+    await async_db.flush()
+
+    issue = Issue(thread_id=thread.id, issue_number="1", position=1, status="unread")
+    async_db.add(issue)
+    await async_db.commit()
+
+    response = await auth_client.get(f"/api/v1/issues/{issue.id}")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
 
 async def test_issue_ordering_in_api_response(
     auth_client: AsyncClient, async_db: AsyncSession
@@ -345,3 +409,4 @@ async def test_issue_ordering_in_api_response(
 
     expected_numbers = [str(i) for i in range(1, 11)] + ["Annual 2"]
     assert issue_numbers == expected_numbers
+

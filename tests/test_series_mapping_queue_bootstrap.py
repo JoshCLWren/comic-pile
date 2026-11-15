@@ -17,17 +17,20 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.external_identity import (
     ExternalIdentity,
     IssueExternalIdentityMapping,
+    ThreadExternalSeriesMapping,
 )
 from app.models.issue import Issue
 from app.models.thread import Thread
 from app.models.user import User
 
 PREVIEW_URL = "/api/v1/catalog/series-mappings/preview"
+COMMIT_URL = "/api/v1/catalog/series-mappings/commit"
 
 VOLUME_ID = 20764
 BOOTSTRAP_MODE = "queue_thread_bootstrap"
@@ -240,6 +243,66 @@ class TestQueueThreadBootstrapPreview:
         assert data["counts"]["unresolved"] == 0
         assert sum(data["counts"].values()) == len(data["rows"])
 
+    @pytest.mark.asyncio
+    async def test_unmapped_miniseries_commit_confirms_all_five(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """Approving the five safe rows confirms all five identities and the thread series."""
+        user = sample_data["user"]
+        thread, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="B.P.R.D.: King of Fear",
+            issue_numbers=["1", "2", "3", "4", "5"],
+        )
+        roster = [_roster_row(500000 + number, str(number)) for number in range(1, 6)]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        approved = _approvable_row_ids(preview_data["rows"])
+        assert approved == [f"issue:{issue.id}" for issue in issues]
+
+        with (
+            _patch_comicvine(roster),
+            patch("app.services.comicvine_fallback.refresh_issue_metadata", new=AsyncMock()),
+        ):
+            commit = await auth_client.post(
+                COMMIT_URL,
+                json={
+                    "preview_token": preview_data["preview_token"],
+                    "idempotency_key": "issue-3727-bootstrap",
+                    "approved_row_ids": approved,
+                },
+            )
+
+        assert commit.status_code == 200
+        commit_data = commit.json()
+        assert sorted(commit_data["confirmed_issue_ids"]) == sorted(issue.id for issue in issues)
+        assert commit_data["needs_review_issue_ids"] == []
+        assert commit_data["series_mapping"]["external_id"] == str(VOLUME_ID)
+        assert commit_data["series_mapping"]["status"] == "confirmed"
+
+        confirmed = (
+            await async_db.execute(
+                select(IssueExternalIdentityMapping).where(
+                    IssueExternalIdentityMapping.issue_id.in_([issue.id for issue in issues]),
+                    IssueExternalIdentityMapping.status == "confirmed",
+                )
+            )
+        ).scalars().all()
+        assert len(confirmed) == 5
+
+        thread_series = (
+            await async_db.execute(
+                select(ThreadExternalSeriesMapping).where(
+                    ThreadExternalSeriesMapping.thread_id == thread.id,
+                    ThreadExternalSeriesMapping.status == "confirmed",
+                )
+            )
+        ).scalars().all()
+        assert len(thread_series) == 1
 
     @pytest.mark.asyncio
     async def test_generic_mode_still_requires_confirmed_origin_evidence(
@@ -545,6 +608,127 @@ class TestQueueThreadBootstrapPreview:
         assert data["counts"]["already_confirmed"] == 1
         assert data["counts"]["safe_exact_match"] == 1
         assert data["counts"]["unresolved"] == 1
+
+
+class TestQueueThreadBootstrapCommit:
+    """The commit surface must confirm exactly the approved bootstrap rows."""
+
+    @pytest.mark.asyncio
+    async def test_stale_preview_is_refused_when_state_changes(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """A plan change between preview and commit invalidates the preview token."""
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="B.P.R.D.: King of Fear",
+            issue_numbers=["1", "2"],
+        )
+        roster = [_roster_row(500001, "1"), _roster_row(500002, "2")]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        approved = _approvable_row_ids(preview_data["rows"])
+        assert approved
+
+        # A concurrent correction changes the bound plan state after the preview was minted.
+        await _confirm_issue(async_db, issues[1], external_id="777777")
+
+        with (
+            _patch_comicvine(roster),
+            patch("app.services.comicvine_fallback.refresh_issue_metadata", new=AsyncMock()),
+        ):
+            commit = await auth_client.post(
+                COMMIT_URL,
+                json={
+                    "preview_token": preview_data["preview_token"],
+                    "idempotency_key": "issue-3727-stale",
+                    "approved_row_ids": approved,
+                },
+            )
+
+        assert commit.status_code == 409
+        assert commit.json()["detail"] == "preview_stale"
+
+    @pytest.mark.asyncio
+    async def test_commit_is_idempotent_for_a_repeated_request(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """Retrying the same commit key replays the stored result instead of rewriting."""
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="B.P.R.D.: King of Fear",
+            issue_numbers=["1", "2", "3"],
+        )
+        roster = [_roster_row(500000 + number, str(number)) for number in (1, 2, 3)]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        payload = {
+            "preview_token": preview_data["preview_token"],
+            "idempotency_key": "issue-3727-idempotent",
+            "approved_row_ids": _approvable_row_ids(preview_data["rows"]),
+        }
+
+        with (
+            _patch_comicvine(roster),
+            patch("app.services.comicvine_fallback.refresh_issue_metadata", new=AsyncMock()),
+        ):
+            first = await auth_client.post(COMMIT_URL, json=payload)
+            second = await auth_client.post(COMMIT_URL, json=payload)
+
+        assert first.status_code == 200
+        assert second.status_code == 200
+        assert first.json()["confirmed_issue_ids"] == second.json()["confirmed_issue_ids"]
+
+    @pytest.mark.asyncio
+    async def test_commit_refuses_rows_the_preview_did_not_mark_safe(
+        self, auth_client: AsyncClient, async_db: AsyncSession, sample_data
+    ) -> None:
+        """An ambiguous bootstrap row cannot be bulk-approved even when its id is valid."""
+        user = sample_data["user"]
+        _, issues = await _create_thread_with_issues(
+            async_db,
+            user_id=user.id,
+            title="B.P.R.D.: King of Fear",
+            issue_numbers=["1", "2"],
+        )
+        roster = [
+            _roster_row(500001, "1"),
+            _roster_row(500002, "2"),
+            _roster_row(500003, "2"),
+        ]
+
+        with _patch_comicvine(roster):
+            preview = await auth_client.post(PREVIEW_URL, json=_bootstrap_payload(issues[0].id))
+        assert preview.status_code == 200
+        preview_data = preview.json()
+        ambiguous = next(
+            row
+            for row in preview_data["rows"]
+            if row.get("issue_id") == issues[1].id and row.get("thread_id") is not None
+        )
+        assert ambiguous["classification"] == "needs_review_ambiguous"
+
+        with _patch_comicvine(roster):
+            commit = await auth_client.post(
+                COMMIT_URL,
+                json={
+                    "preview_token": preview_data["preview_token"],
+                    "idempotency_key": "issue-3727-unsafe",
+                    "approved_row_ids": [str(ambiguous["row_id"])],
+                },
+            )
+
+        assert commit.status_code == 422
+        assert commit.json()["detail"] == "invalid_approved_row"
 
 
 class TestApprovableRowIdsNumericOrdering:

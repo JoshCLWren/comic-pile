@@ -17,8 +17,7 @@
       "method": "POST",
       "path": "/api/v1/catalog/series-mappings/commit",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/catalog/series\\-mappings/commit$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/catalog/series\\-mappings/commit$"
     },
     {
       "bucket": "v1_operations",

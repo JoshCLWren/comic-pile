@@ -9,18 +9,47 @@ zero leakage of another user's library state, request validation, and constant
 query count regardless of the number of requested keys.
 """
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession
+from httpx import AsyncClient
+from sqlalchemy import event
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.models import Event, Issue, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping
 from app.repositories.creator_summary import manual_creator_id
 
 D1 = datetime(2026, 3, 1, tzinfo=UTC)
+D2 = datetime(2026, 3, 2, tzinfo=UTC)
+D3 = datetime(2026, 3, 3, tzinfo=UTC)
 
 _identity_serial = 0
+
+
+@contextmanager
+def _captured_selects(db_engine: AsyncEngine) -> Iterator[list[str]]:
+    """Yield a list that records SELECT statements executed on the engine."""
+    select_statements: list[str] = []
+
+    def _capture(
+        conn: object,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_statements.append(statement)
+
+    event.listen(db_engine.sync_engine, "before_cursor_execute", _capture)
+    try:
+        yield select_statements
+    finally:
+        event.remove(db_engine.sync_engine, "before_cursor_execute", _capture)
 
 
 async def _make_thread(
@@ -114,6 +143,781 @@ async def _rate(
 
 
 @pytest.mark.asyncio
+async def test_batch_summaries_return_multiple_creators(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A batch request summarizes every requested key visible in the library."""
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Team Book", issue_count=3, queue_position=1, read_through=3
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Writer One", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2, "name": "Artist Two", "role": "artist"}]
+    )
+    await _confirm_identity(
+        async_db,
+        issues[2],
+        creators=[
+            {"id": 1, "name": "Writer One", "role": "writer"},
+            {"id": 2, "name": "Artist Two", "role": "inker"},
+        ],
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
+    await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
+
+    response = await auth_client.get(
+        "/api/v1/creators/summaries?keys=creator:1,creator:2,creator:9999"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["summaries"]) == {"creator:1", "creator:2"}
+
+    writer = body["summaries"]["creator:1"]
+    assert writer["display_name"] == "Writer One"
+    assert writer["normalized_roles"] == ["writer"]
+    assert writer["ratings_count"] == 2
+    assert writer["average_rating"] == pytest.approx(4.5)
+    assert writer["read_unrated_count"] == 0
+    assert writer["upcoming_count"] == 0
+
+    artist = body["summaries"]["creator:2"]
+    assert artist["display_name"] == "Artist Two"
+    assert artist["normalized_roles"] == ["artist", "inker"]
+    assert artist["ratings_count"] == 2
+    assert artist["average_rating"] == pytest.approx(4.0)
+
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 3
+    assert coverage["rated_issues_with_creator_metadata"] == 3
+    assert coverage["ratings_complete"] is True
+    assert coverage["read_unrated_issues_total"] == 0
+    assert coverage["unread_issues_total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_one_issue_contributes_once_despite_multiple_roles(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """One issue is rated at most once per creator even with several roles."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Duo", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db,
+        issues[0],
+        creators=[
+            {"id": 7, "name": "Dan Rippley", "role": "writer"},
+            {"id": 7, "name": "Dan Rippley", "role": "artist"},
+        ],
+    )
+    await _rate(async_db, issues[0], rating=4.5, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:7")
+
+    assert response.status_code == 200
+    summary = response.json()["summaries"]["creator:7"]
+    assert summary["ratings_count"] == 1
+    assert summary["average_rating"] == pytest.approx(4.5)
+    assert summary["normalized_roles"] == ["artist", "writer"]
+
+
+@pytest.mark.asyncio
+async def test_comma_joined_role_is_split_and_deduplicated(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Provider role strings split on commas and stay headline-eligible."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Split", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db,
+        issues[0],
+        creators=[{"id": 21, "name": "Kelly Sue", "role": "writer, artist"}],
+    )
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:21")
+
+    assert response.status_code == 200
+    summary = response.json()["summaries"]["creator:21"]
+    assert summary["normalized_roles"] == ["artist", "writer"]
+    assert summary["ratings_count"] == 1
+    assert summary["average_rating"] == pytest.approx(5.0)
+
+
+@pytest.mark.asyncio
+async def test_cover_only_credit_never_distorts_headline(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A pure cover credit stays visible but never feeds the headline average."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Covered", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 8, "name": "Cover Gal", "role": "cover"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:8")
+
+    assert response.status_code == 200
+    body = response.json()
+    summary = body["summaries"]["creator:8"]
+    assert summary["display_name"] == "Cover Gal"
+    assert summary["normalized_roles"] == ["cover"]
+    assert summary["ratings_count"] == 0
+    assert summary["average_rating"] is None
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_unknown_role_stays_unclassified(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An unknown provider role string is never guessed into a headline role."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Layout", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 9, "name": "Lay Out", "role": "layout"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:9")
+
+    assert response.status_code == 200
+    summary = response.json()["summaries"]["creator:9"]
+    assert summary["normalized_roles"] == ["layout"]
+    assert summary["ratings_count"] == 0
+    assert summary["average_rating"] is None
+
+
+@pytest.mark.asyncio
+async def test_latest_effective_rating_wins(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """The latest effective rate event determines an issue's single rating."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Rerated", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 10, "name": "Retry Roe", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[0], rating=2.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:10")
+
+    assert response.status_code == 200
+    summary = response.json()["summaries"]["creator:10"]
+    assert summary["ratings_count"] == 1
+    assert summary["average_rating"] == pytest.approx(2.0)
+
+
+@pytest.mark.asyncio
+async def test_average_null_and_read_unrated_and_upcoming_counts(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unrated issues split into read-but-unrated and upcoming counts."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed", issue_count=4, queue_position=1, read_through=2
+    )
+    for issue in issues[:3]:
+        await _confirm_identity(
+            async_db, issue, creators=[{"id": 5, "name": "Courtney C.", "role": "writer"}]
+        )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _confirm_identity(
+        async_db,
+        issues[3],
+        metadata={"volume_id": "no-credits-here"},
+    )
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:5")
+
+    assert response.status_code == 200
+    body = response.json()
+    summary = body["summaries"]["creator:5"]
+    assert summary["ratings_count"] == 1
+    assert summary["average_rating"] == pytest.approx(4.0)
+    assert summary["read_unrated_count"] == 1
+    assert summary["upcoming_count"] == 1
+
+    coverage = body["coverage"]
+    assert coverage["ratings_complete"] is True
+    assert coverage["read_unrated_complete"] is True
+    assert coverage["unread_issues_total"] == 2
+    assert coverage["unread_issues_with_creator_metadata"] == 1
+    assert coverage["upcoming_complete"] is False
+
+
+@pytest.mark.asyncio
+async def test_partial_coverage_never_counts_absence_as_evidence(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Missing or unconfirmed metadata marks coverage partial, never negative."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Patchy", issue_count=3, queue_position=1, read_through=3
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 3, "name": "Ann A.", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db,
+        issues[1],
+        creators=[{"id": 4, "name": "Bo B.", "role": "artist"}],
+        provider="marvel",
+    )
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=4.0, timestamp=D2)
+    await _rate(async_db, issues[2], rating=3.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:3")
+
+    assert response.status_code == 200
+    coverage = response.json()["coverage"]
+    assert coverage["rated_issues_total"] == 3
+    assert coverage["rated_issues_with_creator_metadata"] == 1
+    assert coverage["ratings_complete"] is False
+
+
+@pytest.mark.asyncio
+async def test_foreign_and_unknown_keys_are_omitted(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Another user's creator keys never leak into the authenticated response."""
+    other_user = User(username="creator_summary_other")
+    async_db.add(other_user)
+    await async_db.flush()
+
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Mine", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1, "name": "Mine Writer", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    hidden_thread, hidden_issues = await _make_thread(
+        async_db, other_user, title="Hidden", issue_count=1, queue_position=2, read_through=1
+    )
+    assert hidden_thread is not None
+    await _confirm_identity(
+        async_db,
+        hidden_issues[0],
+        creators=[{"id": 999, "name": "Hidden Writer", "role": "writer"}],
+    )
+    await _rate(async_db, hidden_issues[0], rating=5.0, timestamp=D1)
+
+    response = await auth_client.get(
+        "/api/v1/creators/summaries?keys=creator:1,creator:999,creator:424242"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["summaries"]) == {"creator:1"}
+    assert body["summaries"]["creator:1"]["ratings_count"] == 1
+    assert body["coverage"]["rated_issues_total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_manual_thread_credits_attribute_every_owned_issue(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Thread-level manual credits attribute the creator to each owned issue.
+
+    Manual credits are stored once on the thread and read back from a
+    thread-only statement (issue #3387), so every owned issue in that thread is
+    attributed when the issue itself carries no confirmed ComicVine credit.
+    """
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Manual Book", issue_count=3, queue_position=1, read_through=3
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    manual_key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await auth_client.get(f"/api/v1/creators/summaries?keys={manual_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    summary = body["summaries"][manual_key]
+    assert summary["display_name"] == "Manual Writer"
+    assert summary["normalized_roles"] == ["writer"]
+    assert summary["ratings_count"] == 3
+    assert summary["average_rating"] == 4.0
+    assert summary["read_unrated_count"] == 0
+    assert summary["upcoming_count"] == 0
+    assert body["coverage"]["rated_issues_total"] == 3
+    assert body["coverage"]["rated_issues_with_creator_metadata"] == 3
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_confirmed_comicvine_credits_suppress_thread_manual_credits(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Confirmed issue credits win over the thread's manual credits for that issue.
+
+    The two credit sources are joined from different reads — confirmed issue
+    metadata and the thread-only manual-credit read — so this pins the precedence
+    rule across both.
+    """
+    thread, issues = await _make_thread(
+        async_db, default_user, title="Mixed Book", issue_count=3, queue_position=1, read_through=3
+    )
+    thread.manual_creator_credits = [{"name": "Manual Writer", "roles": ["writer"]}]
+    await async_db.flush()
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 7, "name": "Provider Writer", "role": "writer"}]
+    )
+    for issue in issues:
+        await _rate(async_db, issue, rating=4.0, timestamp=D1)
+
+    manual_key = f"creator:{manual_creator_id('Manual Writer')}"
+    response = await auth_client.get(f"/api/v1/creators/summaries?keys=creator:7,{manual_key}")
+
+    assert response.status_code == 200
+    body = response.json()
+    # The issue with confirmed ComicVine credits is attributed to that provider
+    # credit only, so the thread's manual credit covers just the other two.
+    assert body["summaries"]["creator:7"]["ratings_count"] == 1
+    assert body["summaries"][manual_key]["ratings_count"] == 2
+    assert body["coverage"]["rated_issues_with_creator_metadata"] == 3
+    assert body["coverage"]["ratings_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_empty_library_returns_empty_summaries_and_vacuous_coverage(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """An empty library yields no summaries and zero totals with complete True."""
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:1")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summaries"] == {}
+    assert body["coverage"]["rated_issues_total"] == 0
+    assert body["coverage"]["ratings_complete"] is True
+    assert body["coverage"]["upcoming_complete"] is True
+
+
+@pytest.mark.asyncio
+async def test_duplicate_keys_are_deduplicated(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Repeated and whitespace-padded keys collapse to one summary."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Dupes", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 12, "name": "Twice T.", "role": "writer"}]
+    )
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:12,%20creator:12")
+
+    assert response.status_code == 200
+    assert list(response.json()["summaries"]) == ["creator:12"]
+
+
+@pytest.mark.asyncio
+async def test_creator_key_validation_errors(
+    auth_client: AsyncClient,
+) -> None:
+    """Malformed, empty, or unbounded keys parameters are rejected."""
+    missing = await auth_client.get("/api/v1/creators/summaries")
+    assert missing.status_code == 400
+
+    empty = await auth_client.get("/api/v1/creators/summaries?keys=")
+    assert empty.status_code == 400
+
+    at_limit = await auth_client.get(
+        "/api/v1/creators/summaries?keys=" + ",".join(f"creator:{i}" for i in range(1, 51))
+    )
+    assert at_limit.status_code == 200
+
+    too_many = await auth_client.get(
+        "/api/v1/creators/summaries?keys=" + ",".join(f"creator:{i}" for i in range(1, 52))
+    )
+    assert too_many.status_code == 400
+    assert "at most 50" in too_many.json()["detail"]
+
+    for bad_key in ["writer:1", "creator:abc", "creator:", "creator:1:2"]:
+        response = await auth_client.get(f"/api/v1/creators/summaries?keys={bad_key}")
+        assert response.status_code == 400, bad_key
+        assert "creator:<external-person-id>" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_unauthenticated_request_is_rejected(
+    client: AsyncClient,
+) -> None:
+    """The batch endpoint requires an authenticated user."""
+    response = await client.get("/api/v1/creators/summaries?keys=creator:1")
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_bounded_constant_query_count(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """One request serves any key count with a fixed, constant query count (<= 5)."""
+    _thread, issues = await _make_thread(
+        async_db, default_user, title="Wide", issue_count=6, queue_position=1, read_through=6
+    )
+    for index, issue in enumerate(issues, start=1):
+        await _confirm_identity(
+            async_db,
+            issue,
+            creators=[{"id": index + 100, "name": f"Writer {index}", "role": "writer"}],
+        )
+        await _rate(async_db, issue, rating=float(index), timestamp=D1)
+    await async_db.flush()
+
+    await auth_client.get("/api/v1/creators/summaries?keys=creator:101")
+
+    with _captured_selects(db_engine) as one_key_selects:
+        one_key = await auth_client.get("/api/v1/creators/summaries?keys=creator:101")
+    with _captured_selects(db_engine) as six_key_selects:
+        six_keys = await auth_client.get(
+            "/api/v1/creators/summaries?keys="
+            + ",".join(f"creator:{index + 100}" for index in range(1, 7))
+        )
+
+    assert one_key.status_code == 200
+    assert six_keys.status_code == 200
+    assert len(six_keys.json()["summaries"]) == 6
+    assert len(one_key_selects) == len(six_key_selects)
+    assert len(one_key_selects) <= 5, one_key_selects
+
+
+@pytest.mark.asyncio
+async def test_same_display_name_different_stable_ids(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Two creators can share a display name but have distinct stable IDs."""
+    thread1, issues1 = await _make_thread(
+        async_db, default_user, title="Book One", issue_count=1, queue_position=1, read_through=1
+    )
+    thread2, issues2 = await _make_thread(
+        async_db, default_user, title="Book Two", issue_count=1, queue_position=1, read_through=1
+    )
+    # Both creators share the same display name but have different external IDs
+    await _confirm_identity(
+        async_db, issues1[0], creators=[{"id": 111, "name": "Shared Name", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues2[0], creators=[{"id": 222, "name": "Shared Name", "role": "artist"}]
+    )
+    await _rate(async_db, issues1[0], rating=4.5, timestamp=D1)
+    await _rate(async_db, issues2[0], rating=3.0, timestamp=D2)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:111,creator:222")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["summaries"]) == {"creator:111", "creator:222"}
+
+    summary_111 = body["summaries"]["creator:111"]
+    summary_222 = body["summaries"]["creator:222"]
+
+    assert summary_111["ratings_count"] == 1
+    assert summary_111["average_rating"] == pytest.approx(4.5)
+    assert summary_222["ratings_count"] == 1
+    assert summary_222["average_rating"] == pytest.approx(3.0)
+    assert summary_111["display_name"] == "Shared Name"
+    assert summary_222["display_name"] == "Shared Name"
+
+
+@pytest.mark.asyncio
+async def test_creator_multiple_rated_issues(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A creator credited on several rating events accumulates correct aggregated counts."""
+    thread, issues = await _make_thread(
+        async_db, default_user, title="MultiRate", issue_count=3, queue_position=1, read_through=3
+    )
+    # Creator with multiple rated issues (multiple issues under same creator)
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 333, "name": "Multi Rated Creator", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 333, "name": "Multi Rated Creator", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 333, "name": "Multi Rated Creator", "role": "writer"}]
+    )
+    # Rate each issue at different levels
+    await _rate(async_db, issues[0], rating=5.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=4.0, timestamp=D2)
+    await _rate(async_db, issues[2], rating=3.0, timestamp=D3)
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:333")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:333" in body["summaries"]
+    summary = body["summaries"]["creator:333"]
+    # Should have three rated issues, average of (5+4+3)/3 = 4.0
+    assert summary["ratings_count"] == 3
+    assert summary["average_rating"] == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
+async def test_creator_zero_rating_average_is_none(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """A creator with only non-rating events should not display as 0★."""
+    thread, issues = await _make_thread(
+        async_db, default_user, title="ZeroRating", issue_count=1, queue_position=1, read_through=1
+    )
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 444, "name": "Zero Rating Creator", "role": "writer"}]
+    )
+    # No rating events; only read-through status
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:444")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:444" in body["summaries"]
+    summary = body["summaries"]["creator:444"]
+    assert summary["ratings_count"] == 0
+    assert summary["average_rating"] is None
+
+
+@pytest.mark.asyncio
+async def test_read_unread_issues_in_multiple_threads(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Unread credited issues can appear across multiple threads, all counted toward upcoming."""
+    # Create two separate threads each with one unread issue credited to same creator
+    thread_a, issues_a = await _make_thread(
+        async_db, default_user, title="Thread A", issue_count=1, queue_position=1, read_through=1
+    )
+    thread_b, issues_b = await _make_thread(
+        async_db, default_user, title="Thread B", issue_count=1, queue_position=2, read_through=0
+    )
+    await _confirm_identity(
+        async_db,
+        issues_a[0],
+        creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}],
+    )
+    await _confirm_identity(
+        async_db,
+        issues_b[0],
+        creators=[{"id": 555, "name": "Cross-Thread Creator", "role": "writer"}],
+    )
+    await _rate(async_db, issues_a[0], rating=4.0, timestamp=D1)
+    # issues_b[0] remains unread
+
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:555")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:555" in body["summaries"]
+    summary = body["summaries"]["creator:555"]
+    # Upcoming count should be 1 (the unread issue in thread_b)
+    assert summary["upcoming_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_malformed_credits_do_not_break_summaries(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Malformed creator_credits (non-array values) do not break the summary request."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Malformed Test",
+        issue_count=2,
+        queue_position=1,
+        read_through=2,
+    )
+
+    # First issue has valid credits
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 777, "name": "Valid Creator", "role": "writer"}]
+    )
+
+    # Second issue has malformed credits (string instead of array)
+    await _confirm_identity(
+        async_db,
+        issues[1],
+        metadata={"creator_credits": "this is not an array", "volume_id": "test"},
+    )
+
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
+
+    # Request only the valid creator - should not fail due to malformed credits
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:777")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "creator:777" in body["summaries"]
+    summary = body["summaries"]["creator:777"]
+    assert summary["ratings_count"] == 1
+    assert summary["average_rating"] == pytest.approx(4.0)
+
+    # Coverage should include both issues (global coverage not affected by malformed credits)
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 2
+    assert coverage["rated_issues_with_creator_metadata"] == 1  # Only one has valid credits
+
+
+@pytest.mark.asyncio
+async def test_small_requests_only_fetch_requested_creators(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    db_engine: AsyncEngine,
+    default_user: User,
+) -> None:
+    """Small requests fetch only data for requested creators, not the entire library."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Large Library",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
+    )
+
+    # Create issues with different creators
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 1001, "name": "Creator A", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 1002, "name": "Creator B", "role": "artist"}]
+    )
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 1003, "name": "Creator C", "role": "writer"}]
+    )
+
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
+    await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
+
+    # Request only one creator - should only return data for that creator
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:1001")
+
+    assert response.status_code == 200
+    body = response.json()
+
+    # Should only contain the requested creator
+    assert set(body["summaries"]) == {"creator:1001"}
+    assert "creator:1002" not in body["summaries"]
+    assert "creator:1003" not in body["summaries"]
+
+    # Coverage should reflect the entire library (global coverage)
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 3
+    assert coverage["rated_issues_with_creator_metadata"] == 3
+    assert coverage["ratings_complete"] is True
+
+    # Summary for requested creator should be correct
+    summary = body["summaries"]["creator:1001"]
+    assert summary["display_name"] == "Creator A"
+    assert summary["ratings_count"] == 1
+    assert summary["average_rating"] == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
+async def test_global_coverage_not_affected_by_requested_keys(
+    auth_client: AsyncClient,
+    async_db: AsyncSession,
+    default_user: User,
+) -> None:
+    """Global coverage totals include all issues with creator metadata, not just requested ones."""
+    thread, issues = await _make_thread(
+        async_db,
+        default_user,
+        title="Coverage Test",
+        issue_count=3,
+        queue_position=1,
+        read_through=3,
+    )
+
+    # Issues with different creators
+    await _confirm_identity(
+        async_db, issues[0], creators=[{"id": 2001, "name": "Creator X", "role": "writer"}]
+    )
+    await _confirm_identity(
+        async_db, issues[1], creators=[{"id": 2002, "name": "Creator Y", "role": "artist"}]
+    )
+    await _confirm_identity(
+        async_db, issues[2], creators=[{"id": 2003, "name": "Creator Z", "role": "writer"}]
+    )
+
+    await _rate(async_db, issues[0], rating=4.0, timestamp=D1)
+    await _rate(async_db, issues[1], rating=3.0, timestamp=D2)
+    await _rate(async_db, issues[2], rating=5.0, timestamp=D3)
+
+    # Request only one creator - coverage should still include all issues
+    response = await auth_client.get("/api/v1/creators/summaries?keys=creator:2001")
+
+    assert response.status_code == 200
+    body = response.json()
+
+    # Coverage should reflect all issues with creator metadata
+    coverage = body["coverage"]
+    assert coverage["rated_issues_total"] == 3
+    assert coverage["rated_issues_with_creator_metadata"] == 3
+    assert coverage["ratings_complete"] is True
+
+    # Only requested creator should have summary data
+    assert "creator:2001" in body["summaries"]
+    assert "creator:2002" not in body["summaries"]
+    assert "creator:2003" not in body["summaries"]
+
+
+@pytest.mark.asyncio
 async def test_subset_projection_matches_full_library_with_manual_fallback(
     async_db: AsyncSession,
     default_user: User,
@@ -123,6 +927,7 @@ async def test_subset_projection_matches_full_library_with_manual_fallback(
     from app.repositories.creator_summary import (
         load_creator_summary_inputs,
         load_creator_summary_inputs_for_creators,
+        manual_creator_id,
     )
     from app.services import creator_summary as service
 
@@ -198,6 +1003,7 @@ async def test_unusable_confirmed_credit_keeps_manual_fallback(
     bad_credit: dict[str, object],
 ) -> None:
     """SQL credit validation must not suppress manual attribution for invalid credits."""
+    from app.repositories.creator_summary import manual_creator_id
     from app.services.creator_summary import get_creator_summaries
 
     thread, issues = await _make_thread(

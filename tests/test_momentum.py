@@ -6,6 +6,8 @@ Cover:
 - Low-rated recent runs do not receive an automatic positive boost solely for recency.
 - Bonuses are capped and never exceed the bounded pool limits (implicitly by
   design, since bonuses only affect weights within the bounded pool).
+- Pure-random bypass remains untouched (weights equal 1.0 when no positive
+  momentum applies).
 - Streak depth, decay, rating interaction, and cap behavior.
 """
 
@@ -17,6 +19,7 @@ from app.momentum import (
     _decay_factor,
     compute_momentum_bonus,
     compute_momentum_breakdown,
+    weighted_momentum_selection,
     _MAX_MOMENTUM_BONUS,
     MOMENTUM_RECENT_HIGH_RATING,
     MOMENTUM_SAME_THREAD_MOMENTUM,
@@ -116,6 +119,26 @@ async def test_bonus_is_capped() -> None:
 
 
 @pytest.mark.asyncio
+async def test_pure_random_bypass_untouched() -> None:
+    """When all bonuses are zero, selection remains pure-random (equal weights)."""
+    now = datetime.now(UTC)
+    rows = [(FakeThread(id=1, last_rating=3.0, last_activity_at=now - timedelta(hours=1)), 5, "1")]
+    # Manually construct bounded_rows matching roll tuple format.
+    bounded_rows = [(rows[0][0], rows[0][1], rows[0][2])]
+    index, max_bonus, breakdowns = await weighted_momentum_selection(
+        db=None,
+        bounded_rows=bounded_rows,
+        user_id=1,
+        session_events=[],
+        now=now,
+    )
+    assert index == 0
+    assert max_bonus == 0.0
+    assert breakdowns[0].weight == pytest.approx(1.0)
+    assert breakdowns[0].factors == ()
+
+
+@pytest.mark.asyncio
 async def test_breakdown_reports_reason_codes_and_chooser_weight() -> None:
     """Breakdown carries stable reason codes and the exact chooser weight."""
     now = datetime.now(UTC)
@@ -130,6 +153,28 @@ async def test_breakdown_reports_reason_codes_and_chooser_weight() -> None:
     assert breakdown.weight == pytest.approx(1.0 + bonus)
     assert MOMENTUM_RECENT_HIGH_RATING in breakdown.factors
     assert MOMENTUM_SAME_THREAD_MOMENTUM in breakdown.factors
+
+
+@pytest.mark.asyncio
+async def test_selection_returns_per_candidate_weights_in_pool_order() -> None:
+    """Weighted selection exposes chooser weights and codes for every candidate."""
+    now = datetime.now(UTC)
+    hot = FakeThread(id=1, last_rating=5.0, last_activity_at=now - timedelta(hours=1))
+    cold = FakeThread(id=2, last_rating=None)
+    bounded_rows = [(hot, 3, "1"), (cold, 3, "2")]
+    _, max_bonus, breakdowns = await weighted_momentum_selection(
+        db=None,
+        bounded_rows=bounded_rows,
+        user_id=1,
+        session_events=[],
+        now=now,
+    )
+    assert [b.candidate_id for b in breakdowns] == [1, 2]
+    assert breakdowns[0].weight > 1.0
+    assert breakdowns[0].factors == (MOMENTUM_RECENT_HIGH_RATING,)
+    assert breakdowns[1].weight == pytest.approx(1.0)
+    assert breakdowns[1].factors == ()
+    assert max_bonus == pytest.approx(breakdowns[0].weight - 1.0)
 
 
 @pytest.mark.asyncio
@@ -188,3 +233,4 @@ async def test_high_rating_without_activity_timestamp_does_not_crash() -> None:
     bonus = compute_momentum_bonus(thread, session_events=[], now=now)
     # No activity timestamp => fully decayed; no positive boost is awarded.
     assert bonus == 0.0
+

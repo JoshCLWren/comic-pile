@@ -217,6 +217,11 @@ async def test_session_apis_include_all_die_changing_events(
     assert await build_ladder_path(session.id, async_db) == "6 → 8 → 10 → 8"
     assert await get_current_die(session.id, async_db) == 8
 
+    session_response = await auth_client.get(f"/api/v1/sessions/{session.id}")
+    assert session_response.status_code == 200
+    assert session_response.json()["ladder_path"] == "6 → 8 → 10 → 8"
+    assert session_response.json()["current_die"] == 8
+
     details_response = await auth_client.get(f"/api/v1/sessions/{session.id}/details")
     assert details_response.status_code == 200
     assert details_response.json()["ladder_path"] == "6 → 8 → 10 → 8"

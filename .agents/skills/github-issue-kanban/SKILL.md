@@ -43,7 +43,7 @@ Before editing code:
    Ralph status, factory stage, and factory owner. Do not use add-only or sequential label calls.
 
 4. Make the smallest complete change within the issue scope.
-5. If required work is outside the issue, **do not create a new issue or split the parent**. Record the specific blocker or needed follow-up in the existing issue's canonical resume comment and ask the owner/interactive coordinator for an explicit scope decision. Only an owner-directed interactive session may authorize creating a child ticket during the Rust cutover. Do not create speculative bug, CI, test, or feature tickets simply to clear the current task.
+5. If required work is outside the issue, create a linked issue before expanding scope.
 
 Issue work is expected to produce a pull request. After local verification, commit the
 implementation, push the branch, and open a ready-for-review PR linked to the issue. Do not

@@ -172,3 +172,29 @@ async def test_thread_reading_orders_enriches_many_items(
     assert second_items["Alpha"]["is_read"] is False
     assert second_items["Alpha"]["issue_number"] == "2"
     assert second_items["Gamma"]["is_read"] is True
+
+
+@pytest.mark.asyncio
+async def test_insert_reports_sql_count_for_multi_item_order(
+    batch_client: AsyncClient, async_db: AsyncSession
+) -> None:
+    """Inserting into a multi-item order reports the SQL-counted total."""
+    user = (await async_db.execute(select(User).limit(1))).scalar_one()
+    threads = [await _make_thread(async_db, user_id=user.id, title=f"T{i}") for i in range(4)]
+    order = ReadingOrder(name="Counted", user_id=user.id)
+    async_db.add(order)
+    await async_db.flush()
+    for i, thread in enumerate(threads[:3], start=1):
+        async_db.add(
+            ReadingOrderItem(
+                reading_order_id=order.id, thread_id=thread.id, position=i
+            )
+        )
+    await async_db.commit()
+
+    response = await batch_client.post(
+        f"/api/v1/reading-orders/{order.id}/items",
+        json={"thread_id": threads[3].id, "position": 2},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["total_items"] == 4

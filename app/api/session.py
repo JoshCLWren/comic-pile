@@ -22,6 +22,8 @@ from app.schemas import (
     SessionHistoryListResponse,
     SessionListItem,
     SessionResponse,
+    SnapshotResponse,
+    SnapshotsListResponse,
 )
 from app.schemas.session import (
     SnoozedThreadInfo,
@@ -505,6 +507,72 @@ async def list_sessions(
     return SessionHistoryListResponse(sessions=responses, next_page_token=next_page_token)
 
 
+@router.get("/{session_id}")
+async def get_session(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SessionResponse:
+    """Get single session by ID.
+
+    Args:
+        session_id: The session ID to retrieve.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SessionResponse with session details.
+
+    Raises:
+        HTTPException: If session not found.
+    """
+    session = await get_owned_session_or_404(db, current_user.id, session_id)
+
+    _, active_thread = await get_session_with_thread_safe(session_id, db)
+
+    from sqlalchemy import func
+
+    snapshot_count_result = await db.execute(
+        select(func.count()).select_from(Snapshot).where(Snapshot.session_id == session.id)
+    )
+    snapshot_count = snapshot_count_result.scalar() or 0
+
+    return SessionResponse(
+        id=session.id,
+        started_at=session.started_at,
+        ended_at=session.ended_at,
+        start_die=session.start_die,
+        manual_die=session.manual_die,
+        user_id=session.user_id,
+        ladder_path=await build_ladder_path(session.id, db),
+        active_thread=active_thread,
+        current_die=await get_current_die(session.id, db),
+        last_rolled_result=active_thread.last_rolled_result if active_thread else None,
+        has_restore_point=snapshot_count > 0,
+        snapshot_count=snapshot_count,
+        pending_thread_id=session.pending_thread_id,
+        timezone=session.timezone,
+        reading_bandwidth=session.reading_bandwidth,
+        reading_intent=session.reading_intent,
+        reading_mode_source=session.reading_mode_source,
+        reading_mode_suggested=session.reading_mode_suggested,
+        bandwidth=build_session_bandwidth_state(
+            predicted_bandwidth=session.predicted_bandwidth,
+            active_bandwidth=session.active_bandwidth,
+            confidence=session.bandwidth_confidence,
+            source=session.bandwidth_source,
+            mode_version=session.bandwidth_version,
+        ),
+        intent=build_session_intent_state(
+            predicted_intent=session.predicted_intent,
+            active_intent=session.active_intent,
+            confidence=session.intent_confidence,
+            source=session.intent_source,
+            mode_version=session.intent_version,
+        ),
+    )
+
+
 @router.get("/{session_id}/details")
 async def get_session_details(
     session_id: int,
@@ -543,6 +611,48 @@ async def get_session_details(
         current_die=await get_current_die(session_obj.id, db),
         timezone=session_obj.timezone,
         events=formatted_events,
+    )
+
+
+@router.get("/{session_id}/snapshots")
+async def get_session_snapshots(
+    session_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> SnapshotsListResponse:
+    """Get session snapshots list.
+
+    Args:
+        session_id: The session ID to get snapshots for.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        SnapshotsListResponse with list of snapshots.
+
+    Raises:
+        HTTPException: If session not found.
+    """
+    await get_owned_session_or_404(db, current_user.id, session_id)
+
+    snapshots_result = await db.execute(
+        select(Snapshot)
+        .where(Snapshot.session_id == session_id)
+        .order_by(Snapshot.created_at.desc(), Snapshot.id.desc())
+    )
+    snapshots = snapshots_result.scalars().all()
+
+    return SnapshotsListResponse(
+        session_id=session_id,
+        snapshots=[
+            SnapshotResponse(
+                id=s.id,
+                session_id=s.session_id,
+                created_at=s.created_at,
+                description=s.description,
+            )
+            for s in snapshots
+        ],
     )
 
 
@@ -638,3 +748,4 @@ async def get_correction_sheet_examples(
         CorrectionSheetExamplesResponse with examples for each choice.
     """
     return await generate_correction_examples(db, current_user.id)
+

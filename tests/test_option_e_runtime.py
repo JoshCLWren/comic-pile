@@ -421,7 +421,7 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
                    origin="reader"),
     ])
     later.next_unread_issue_id = later_issues[1].id
-    list_id, later_id = reading_list.id, later.id
+    list_id, first_id, later_id = reading_list.id, first.id, later.id
     first_issue_id, later_issue_id = first_issues[0].id, later_issues[0].id
     source_issue_id = prerequisite_issues[0].id
     await async_db.commit()
@@ -438,6 +438,10 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
 
     single = await auth_client.post(f"/api/v1/threads/{later_id}:getBlockingInfo")
     assert single.json() == explanation
+    detail = await auth_client.get(f"/api/v1/threads/{later_id}")
+    assert detail.status_code == 200
+    assert detail.json()["next_unread_issue_id"] == later_issue_id
+    assert detail.json()["blocking_reasons"] == explanation["blocking_reasons"]
     page = await list_queue_threads(
         async_db, user.id, search=None, sort="position", page_size=50, page_token=None
     )
@@ -472,6 +476,8 @@ async def test_live_explanations_agree_for_all_reader_surfaces(
     await async_db.refresh(later)
     assert later.next_unread_issue_id != later_issue_id
     assert later.is_blocked is False
+    first_detail = await auth_client.get(f"/api/v1/threads/{first_id}")
+    assert first_detail.json()["is_blocked"] is False
 
 
 async def test_option_e_linked_list_blockers(
@@ -517,6 +523,10 @@ async def test_option_e_linked_list_blockers(
 
     single = await auth_client.post(f"/api/v1/threads/{later.id}:getBlockingInfo")
     assert single.json() == explanation
+    detail = await auth_client.get(f"/api/v1/threads/{later.id}")
+    assert detail.status_code == 200
+    assert detail.json()["next_unread_issue_id"] == later_issue_id
+    assert detail.json()["blocking_reasons"] == explanation["blocking_reasons"]
 
     page = await list_queue_threads(
         async_db, user.id, search=None, sort="position", page_size=50, page_token=None,
@@ -552,6 +562,8 @@ async def test_option_e_linked_list_blockers(
     await async_db.refresh(later)
     assert later.next_unread_issue_id != later_issue_id
     assert later.is_blocked is False
+    first_detail = await auth_client.get(f"/api/v1/threads/{first.id}")
+    assert first_detail.json()["is_blocked"] is False
 
 
 async def test_reading_list_reader_is_inactive_until_approved(

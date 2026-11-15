@@ -23,6 +23,11 @@ _EXPORT_MODULES: dict[str, str] = {
     "AnalyticsMetricsResponse": "app.schemas.analytics",
     "RecentSession": "app.schemas.analytics",
     "TopRatedThread": "app.schemas.analytics",
+    "UserRegisterRequest": "app.schemas.auth",
+    "UserLoginRequest": "app.schemas.auth",
+    "TokenResponse": "app.schemas.auth",
+    "UserResponse": "app.schemas.auth",
+    "RefreshTokenRequest": "app.schemas.auth",
     "ThreadCreate": "app.schemas.thread",
     "ThreadUpdate": "app.schemas.thread",
     "ThreadResponse": "app.schemas.thread",
@@ -60,6 +65,9 @@ _EXPORT_MODULES: dict[str, str] = {
     "PerformanceMetricQuery": "app.schemas.performance_metric",
     "PerformanceMetricSummary": "app.schemas.performance_metric",
     "PerformanceMetricComparison": "app.schemas.performance_metric",
+    "ThemeId": "app.schemas.preferences",
+    "UserPreferencesResponse": "app.schemas.preferences",
+    "UserPreferencesPatchRequest": "app.schemas.preferences",
     "RollResponse": "app.schemas.roll",
     "OverrideRequest": "app.schemas.roll",
     "SetCurrentIssueRequest": "app.schemas.roll",
@@ -135,6 +143,7 @@ __all__ = [
     "RecommendationContextResponse",
     "RecommendationDiagnosticsResponse",
     "RecommendationExplanationResponse",
+    "RefreshTokenRequest",
     "RollResponse",
     "RollingRecommendationContext",
     "SessionBandwidthState",
@@ -149,6 +158,7 @@ __all__ = [
     "SetCurrentIssueResponse",
     "SnapshotResponse",
     "SnapshotsListResponse",
+    "ThemeId",
     "ThreadCreate",
     "ThreadDependenciesResponse",
     "ThreadDetail",
@@ -156,7 +166,13 @@ __all__ = [
     "ThreadListResponse",
     "ThreadResponse",
     "ThreadUpdate",
+    "TokenResponse",
     "TopRatedThread",
+    "UserLoginRequest",
+    "UserPreferencesPatchRequest",
+    "UserPreferencesResponse",
+    "UserRegisterRequest",
+    "UserResponse",
 ]
 
 
@@ -189,6 +205,13 @@ def __dir__() -> list[str]:
 
 if TYPE_CHECKING:
     from app.schemas.analytics import AnalyticsMetricsResponse, RecentSession, TopRatedThread
+    from app.schemas.auth import (
+        RefreshTokenRequest,
+        TokenResponse,
+        UserLoginRequest,
+        UserRegisterRequest,
+        UserResponse,
+    )
     from app.schemas.dependency import (
         BlockingExplanation,
         DependencyCreate,
@@ -216,6 +239,11 @@ if TYPE_CHECKING:
         PerformanceMetricCreate,
         PerformanceMetricQuery,
         PerformanceMetricSummary,
+    )
+    from app.schemas.preferences import (
+        ThemeId,
+        UserPreferencesPatchRequest,
+        UserPreferencesResponse,
     )
     from app.schemas.recommendation_context import (
         RecommendationContextCreate,

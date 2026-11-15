@@ -23,18 +23,43 @@ from app.schemas import (
     IssueResponse,
     ThreadIssueCreatorsResponse,
 )
+from app.schemas.comicvine import ComicVineIssueIntelligence
 from app.schemas.reader_context import ReaderContextResponse
 from app.services import issue as issue_service
 from app.services.comicvine_intelligence import (
+    get_issue_intelligence,
     get_thread_issue_creators,
 )
 from app.services.reader_context import get_reader_context
-from app.services.ownership import get_owned_thread_or_404
+from app.services.ownership import get_owned_issue_or_404, get_owned_thread_or_404
 from comic_pile.dependencies import validate_position_dependency_consistency
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["issues"])
+
+
+@router.get(
+    "/issues/{issue_id}/comicvine",
+    response_model=ComicVineIssueIntelligence | None,
+)
+async def get_issue_comicvine_intelligence(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> ComicVineIssueIntelligence | None:
+    """Return curated ComicVine intelligence for a user-owned ComicPile issue.
+
+    Args:
+        issue_id: ComicPile issue identifier.
+        current_user: Authenticated owner of the requested issue.
+        db: Async database session.
+
+    Returns:
+        Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
+    """
+    await get_owned_issue_or_404(db, current_user.id, issue_id)
+    return await get_issue_intelligence(db, issue_id, current_user.id)
 
 
 @router.get(
@@ -272,6 +297,30 @@ async def create_issues(
     )
 
 
+@router.get("/issues/{issue_id}", response_model=IssueResponse)
+async def get_issue(
+    issue_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> IssueResponse:
+    """Get a single issue by ID.
+
+    Args:
+        issue_id: The issue ID to retrieve.
+        current_user: The authenticated user making the request.
+        db: SQLAlchemy session for database operations.
+
+    Returns:
+        IssueResponse with issue details.
+
+    Raises:
+        HTTPException: If issue not found.
+    """
+    issue = await get_owned_issue_or_404(db, current_user.id, issue_id)
+
+    return issue_to_response(issue)
+
+
 @router.post("/issues/{issue_id}:move", status_code=status.HTTP_204_NO_CONTENT)
 async def move_issue(
     issue_id: int,
@@ -408,3 +457,4 @@ async def bulk_mark_issue_unread(
     """
     await issue_service.bulk_mark_issue_unread(db, request.issue_ids, current_user.id)
     await db.commit()
+

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -20,6 +20,7 @@ from app.models.user import User
 from app.schemas.taste_discovery import TasteDiscoveryListResponse
 from app.services.taste_bank import (
     MAX_ACTIVE_DISCOVERIES,
+    dismiss_discovery,
     list_discoveries,
 )
 
@@ -50,3 +51,34 @@ async def list_taste_discoveries(
         Ranked eligible discoveries with concise evidence context.
     """
     return await list_discoveries(db, user_id=current_user.id, limit=limit)
+
+
+@router.post("/discoveries/{signal_id}/dismiss")
+async def dismiss_taste_discovery(
+    signal_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, bool]:
+    """Dismiss a discovery card without giving a verdict.
+
+    Dismissal only starts a temporary suppression window; it never sets a
+    verdict, so it can never count as confirmation.
+
+    Args:
+        signal_id: Target taste signal id.
+        current_user: The authenticated reader.
+        db: Async database session.
+
+    Returns:
+        A small acknowledgement payload.
+
+    Raises:
+        HTTPException: 404 when the signal is missing or not owned by the user.
+    """
+    signal = await dismiss_discovery(db, signal_id=signal_id, user_id=current_user.id)
+    if signal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Taste discovery {signal_id} not found",
+        )
+    return {"dismissed": True}

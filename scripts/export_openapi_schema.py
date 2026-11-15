@@ -23,7 +23,6 @@ DEFAULT_OUTPUT = Path("frontend/src/generated/openapi.json")
 # separate checked-in artifact; this exporter merges it into the single client
 # document so the generated TypeScript types cover the real deployed runtime.
 NATIVE_RUNTIME_CONTRACT: Final = ROOT / "native" / "contracts" / "v2-runtime.openapi.json"
-NATIVE_SAME_PATH_CONTRACT: Final = ROOT / "native" / "contracts" / "same-path-runtime.openapi.json"
 SCHEMA_REF_PREFIX: Final = "#/components/schemas/"
 
 # Bare ``/api`` domain paths retained in the client-facing schema. Everything
@@ -228,11 +227,9 @@ def client_openapi_schema() -> dict[str, Any]:
     """Build the single client-facing schema from Python plus native runtime."""
     from app.main import app
 
-    native = merge_native_runtime_contract(
-        load_native_runtime_contract(NATIVE_SAME_PATH_CONTRACT),
-        load_native_runtime_contract(),
+    return prune_legacy_bare_paths(
+        merge_native_runtime_contract(app.openapi(), load_native_runtime_contract())
     )
-    return prune_legacy_bare_paths(merge_native_runtime_contract(app.openapi(), native))
 
 
 def render_openapi_schema(schema: dict[str, Any]) -> str:

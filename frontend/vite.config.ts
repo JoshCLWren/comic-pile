@@ -4,8 +4,6 @@ import sri from 'vite-plugin-sri'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import { createApiProxy } from './scripts/api-proxy.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -44,15 +42,30 @@ export default defineConfig(() => ({
   server: {
     host: '0.0.0.0',
     proxy: {
-      // Match the deployed method/path split, including native v1 aliases and
-      // the remaining Python exceptions. API version does not select runtime.
-      '/api': createApiProxy(
-        JSON.parse(readFileSync(path.resolve(__dirname, '../vercel.json'), 'utf8')).routes,
-        {
-          native: process.env.VITE_NATIVE_API_URL || 'http://localhost:8010',
-          python: process.env.VITE_API_URL || 'http://localhost:8000',
+      // Production routes every native v2 resource before the Python
+      // catch-all; mirror that split in local development.
+      '/api/v2': {
+        target: process.env.VITE_NATIVE_API_URL || 'http://localhost:8010',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/api': {
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err)
+          })
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.method, req.url)
+          })
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url)
+          })
         },
-      ),
+      },
     },
   },
   build: {

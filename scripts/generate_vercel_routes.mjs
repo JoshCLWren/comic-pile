@@ -275,22 +275,7 @@ function run() {
         || !sameOperationIds(full.v1_operations, nextInventory.full_surface.v1_operations)
         || !sameOperationIds(full.unversioned_operations, nextInventory.full_surface.unversioned_operations)
         || full.catch_all.dest !== RUST) {
-      const current = JSON.parse(readFileSync('vercel.json', 'utf8')).routes;
-      const expected = JSON.parse(nextVercel).routes;
-      const firstDiff = Array.from({length: Math.max(current.length, expected.length)})
-        .findIndex((_, i) => JSON.stringify(current[i]) !== JSON.stringify(expected[i]));
-      const actualIds = new Set([...full.v1_operations, ...full.unversioned_operations]
-        .map(o => o.method + ' ' + o.path));
-      const expectedIds = new Set([...nextInventory.full_surface.v1_operations,
-        ...nextInventory.full_surface.unversioned_operations].map(o => o.method + ' ' + o.path));
-      const excess = [...actualIds].filter(id => !expectedIds.has(id)).slice(0, 10);
-      const missing = [...expectedIds].filter(id => !actualIds.has(id)).slice(0, 10);
-      throw new Error('Stale Vercel Python allowlist. Run node scripts/generate_vercel_routes.mjs'
-        + '; route index=' + firstDiff
-        + '; actual=' + JSON.stringify(current[firstDiff])
-        + '; expected=' + JSON.stringify(expected[firstDiff])
-        + '; stale inventory IDs=' + JSON.stringify(excess)
-        + '; missing inventory IDs=' + JSON.stringify(missing));
+      throw new Error('Stale Vercel Python allowlist. Run node scripts/generate_vercel_routes.mjs');
     }
     console.log('Verified Rust-default ingress and ' + operations.length + ' Python route operations');
     return;

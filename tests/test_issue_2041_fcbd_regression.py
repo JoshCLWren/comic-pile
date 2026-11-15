@@ -148,14 +148,7 @@ async def test_unread_fcbd_excludes_ultimates_18_from_roll_until_satisfied(
     assert ultimates_thread.id in roll_ids_after
     assert fcbd_thread.id not in roll_ids_after
 
-    from sqlalchemy import select
-
-    from app.models import ReadingSession
-
-    session = (await async_db.execute(select(ReadingSession).where(ReadingSession.user_id == user.id))).scalar_one()
-    session.pending_thread_id = None
-    session.pending_thread_updated_at = None
-    await async_db.commit()
+    await auth_client.post("/api/v1/roll/dismiss-pending")
     rolled_after = (await roll_pending_thread(async_db)).model_dump()
     assert rolled_after["thread_id"] == ultimates_thread.id
 

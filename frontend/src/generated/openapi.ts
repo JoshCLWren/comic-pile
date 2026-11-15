@@ -81,8 +81,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the mounted v2 CSRF handler. */
-        get: operations["csrf_documentation___api_v1_auth_csrf"];
+        /**
+         * Get Csrf Token
+         * @description Return a CSRF token and ensure the CSRF cookie is present.
+         */
+        get: operations["get_csrf_token_api_v1_auth_csrf_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -100,8 +103,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the mounted v2 forgot-password handler. */
-        post: operations["forgot_password_documentation___api_v1_auth_forgot_password"];
+        /**
+         * Forgot Password
+         * @description Enumeration-safe forgot-password request.
+         *
+         *     Same acknowledgement whether email exists or not, and returned before any
+         *     outbound email attempt so provider latency cannot distinguish a known
+         *     address from an unknown one. Rate-limited via existing application limiter.
+         */
+        post: operations["forgot_password_api_v1_auth_forgot_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -117,8 +127,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the mounted v2 login handler. */
-        post: operations["login_documentation___api_v1_auth_login"];
+        /**
+         * Login User
+         * @description Authenticate user and return tokens.
+         *
+         *     Args:
+         *         login_data: User login data (username, password). Login uses the
+         *             username identifier only; email-shaped values are rejected with a
+         *             clear, actionable message.
+         *         request: Incoming request used for cookie security policy and IP extraction.
+         *         response: Outgoing response used to set auth cookies.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         TokenResponse with access and refresh tokens.
+         *
+         *     Raises:
+         *         HTTPException: If credentials are invalid or account is locked out.
+         */
+        post: operations["login_user_api_v1_auth_login_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -134,8 +161,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the mounted v2 logout handler. */
-        post: operations["logout_documentation___api_v1_auth_logout"];
+        /**
+         * Logout User
+         * @description Logout user by revoking their current token if valid.
+         *
+         *     Args:
+         *         request: FastAPI Request object for accessing authorization header.
+         *         response: Response object used to clear auth cookies.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Dictionary with success message.
+         *
+         *     Note:
+         *         This endpoint allows logout even with invalid/expired tokens to enable
+         *         clients to clear local storage and redirect to login.
+         */
+        post: operations["logout_user_api_v1_auth_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -149,8 +191,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the mounted v2 current-user handler. */
-        get: operations["me_documentation___api_v1_auth_me"];
+        /**
+         * Get Current User Info
+         * @description Get current authenticated user's information.
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *
+         *     Returns:
+         *         UserResponse with user details.
+         */
+        get: operations["get_current_user_info_api_v1_auth_me_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -169,10 +220,22 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Documentation-only operation for the mounted v2 refresh handler.
-         * @description The refresh cookie is an alternative to the optional JSON body token.
+         * Refresh Access Token
+         * @description Refresh access token using refresh token.
+         *
+         *     Args:
+         *         request: Incoming request used to read refresh token cookies.
+         *         response: Outgoing response used to rotate refresh cookies.
+         *         refresh_data: Refresh token request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         TokenResponse with new access and refresh tokens.
+         *
+         *     Raises:
+         *         HTTPException: If refresh token is invalid or revoked.
          */
-        post: operations["refresh_documentation___api_v1_auth_refresh"];
+        post: operations["refresh_access_token_api_v1_auth_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -188,8 +251,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the mounted v2 registration handler. */
-        post: operations["register_documentation___api_v1_auth_register"];
+        /**
+         * Register User
+         * @description Register a new user and return tokens.
+         *
+         *     Args:
+         *         user_data: User registration data (username, email, password).
+         *         request: Incoming request used for cookie security policy.
+         *         response: Outgoing response used to set auth cookies.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         TokenResponse with access and refresh tokens.
+         *
+         *     Raises:
+         *         HTTPException: 422 if the password is shorter than the advertised
+         *             minimum, 400 if username or email already exists, or 400 if the
+         *             username is email-shaped (login is username-only).
+         */
+        post: operations["register_user_api_v1_auth_register_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -205,8 +285,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the mounted v2 reset-password handler. */
-        post: operations["reset_password_documentation___api_v1_auth_reset_password"];
+        /**
+         * Reset Password
+         * @description Complete password reset with atomic token consumption and session revocation.
+         */
+        post: operations["reset_password_api_v1_auth_reset_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -248,8 +331,27 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the mounted versioned create. */
-        post: operations["create_v1_documentation"];
+        /**
+         * Create Bug Report
+         * @description Create a bug report or feature request issue on GitHub.
+         *
+         *     Non-admin users are limited to one successfully created issue per rolling
+         *     hour; admins bypass the limit. The limit is enforced server-side by
+         *     ``submit_github_issue`` before GitHub is called.
+         *
+         *     Args:
+         *         body: Report type, title, description, and optional diagnostics.
+         *         current_user: The authenticated user.
+         *         db: Database session that owns the durable rate-limit state.
+         *
+         *     Returns:
+         *         Created GitHub issue URL.
+         *
+         *     Raises:
+         *         HTTPException: If validation fails, GitHub integration is unavailable,
+         *             the non-admin hourly limit is reached, or GitHub rejects the issue.
+         */
+        post: operations["create_bug_report_api_v1_bug_reports__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1070,8 +1172,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Document the same-path native creators list using its actual response type. */
-        get: operations["list_creators_documentation"];
+        /**
+         * List Creators Endpoint
+         * @description Return bounded personal creator discovery list for the authenticated user.
+         *
+         *     The default collection is creators with at least one rated issue for the
+         *     current user (headline-eligible rating). Rows include canonical key, display
+         *     name, personal ratings count, personal average rating, and compact normalized
+         *     roles. Ordering is deterministic with a stable canonical-key tie-breaker so
+         *     pagination is correct across pages. Name search is bounded and user-scoped.
+         *     ``average_rating`` sorting handles ``null`` explicitly (nulls last) so the
+         *     contract remains deterministic if filtering expands to include unrated
+         *     creators later.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         search: Optional bounded case-insensitive name substring.
+         *         sort: Deterministic browse ordering.
+         *         limit: Bounded page size.
+         *         offset: Page offset.
+         *         min_ratings: Minimum rated-sample filter for browse.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Bounded creator list with deterministic ordering and coverage state.
+         */
+        get: operations["list_creators_endpoint_api_v1_creators_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1173,8 +1299,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Document native creator summaries with the mounted query and response types. */
-        get: operations["get_summaries_documentation"];
+        /**
+         * Get Creator Summaries Endpoint
+         * @description Return bounded personal summary statistics for the requested creator keys.
+         *
+         *     Only creator keys visible in the authenticated user's own confirmed issue
+         *     metadata are summarized; unknown or foreign keys are silently omitted so a
+         *     creator key can never leak another user's library state.
+         *
+         *     Args:
+         *         current_user: Authenticated user whose library is aggregated.
+         *         keys: Comma-separated canonical creator keys.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Batch summary keyed by requested visible creator keys, plus explicit
+         *         coverage state.
+         *
+         *     Raises:
+         *         HTTPException: When the ``keys`` parameter is missing, unbounded, or malformed.
+         */
+        get: operations["get_creator_summaries_endpoint_api_v1_creators_summaries_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2146,10 +2291,21 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Documentation-only operation for the mounted single-issue read.
-         * @description Return one owner-scoped issue. Wire parity with Python GET /api/v1/issues/{issue_id}: {id, thread_id, issue_number, position, status, read_at, created_at}. Missing or foreign issues return 404 with the Python detail text.
+         * Get Issue
+         * @description Get a single issue by ID.
+         *
+         *     Args:
+         *         issue_id: The issue ID to retrieve.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         IssueResponse with issue details.
+         *
+         *     Raises:
+         *         HTTPException: If issue not found.
          */
-        get: operations["get_issue_documentation"];
+        get: operations["get_issue_api_v1_issues__issue_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2165,7 +2321,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["issue_intelligence_docs___api_v1_issues__issue_id__comicvine"];
+        /**
+         * Get Issue Comicvine Intelligence
+         * @description Return curated ComicVine intelligence for a user-owned ComicPile issue.
+         *
+         *     Args:
+         *         issue_id: ComicPile issue identifier.
+         *         current_user: Authenticated owner of the requested issue.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         Curated ComicVine intelligence, or ``None`` when no confirmed mapping exists.
+         */
+        get: operations["get_issue_comicvine_intelligence_api_v1_issues__issue_id__comicvine_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2182,10 +2350,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Documentation-only operation for the mounted issue-dependencies read.
-         * @description Return owner-scoped incoming and outgoing dependency edges for one issue. Wire parity with Python GET /api/v1/issues/{issue_id}/dependencies: {issue_id, incoming, outgoing}, each edge carrying dependency_id, source_issue_id, source_issue_number, source_thread_id, source_thread_title. Bounded to two edge queries; no per-row fan-out.
+         * List Issue Dependencies
+         * @description List all incoming and outgoing dependency edges for a specific issue.
          */
-        get: operations["get_issue_dependencies_documentation"];
+        get: operations["list_issue_dependencies_api_v1_issues__issue_id__dependencies_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2461,9 +2629,37 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["get_reading_mode_documentation"];
+        /**
+         * Get Reading Mode
+         * @description Return the active session's current reading mode.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         service: Reading mode service dependency.
+         *
+         *     Returns:
+         *         The current reading-mode state.
+         */
+        get: operations["get_reading_mode_api_v1_reading_mode_get"];
         put?: never;
-        post: operations["set_reading_mode_documentation"];
+        /**
+         * Set Reading Mode
+         * @description Set the active session reading mode.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         payload: The reading-mode set request.
+         *         current_user: The authenticated user making the request.
+         *         service: Reading mode service dependency.
+         *
+         *     Returns:
+         *         The newly stored reading-mode state.
+         *
+         *     Raises:
+         *         HTTPException: If the source is invalid or resolution fails.
+         */
+        post: operations["set_reading_mode_api_v1_reading_mode_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2479,7 +2675,23 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["dismiss_reading_mode_suggestion_documentation"];
+        /**
+         * Dismiss Reading Mode Suggestion
+         * @description Dismiss the reading-mode suggestion without changing the current mode.
+         *
+         *     The dismissal is remembered only for the active session so the suggestion
+         *     does not immediately reappear in the same session, but it never prevents
+         *     future manual access.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         service: Reading mode service dependency.
+         *
+         *     Returns:
+         *         The unchanged reading-mode state with the suggestion cleared.
+         */
+        post: operations["dismiss_reading_mode_suggestion_api_v1_reading_mode_dismiss_suggestion_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2495,7 +2707,22 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["suggest_reading_mode_documentation"];
+        /**
+         * Suggest Reading Mode
+         * @description Mark the active session as a candidate for the reading-mode quiz.
+         *
+         *     Used by flows that detect low confidence or repeated mismatch (for example
+         *     the Snooze correction flow) to offer the quiz without forcing it.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         current_user: The authenticated user making the request.
+         *         service: Reading mode service dependency.
+         *
+         *     Returns:
+         *         The reading-mode state with the suggestion enabled.
+         */
+        post: operations["suggest_reading_mode_api_v1_reading_mode_suggest_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2701,8 +2928,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the list handler. */
-        get: operations["reading_orders_list"];
+        /**
+         * List Reading Orders
+         * @description List reading orders owned by the current user, ordered by name.
+         */
+        get: operations["list_reading_orders_api_v1_reading_orders__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2720,8 +2950,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Documentation-only operation for the insert handler. */
-        post: operations["reading_orders_insert_item"];
+        /**
+         * Insert Reading Order Item
+         * @description Insert a thread into a reading order at a specified position.
+         *
+         *     Shifts existing items at or after the target position to make room. If the
+         *     thread already belongs to the reading order, it is moved to the target
+         *     position instead of being duplicated.
+         */
+        post: operations["insert_reading_order_item_api_v1_reading_orders__reading_order_id__items_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2849,7 +3086,15 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["dismiss_pending_documentation"];
+        /**
+         * Dismiss Pending Roll
+         * @description Clear any pending thread for the current session.
+         *
+         *     Args:
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         */
+        post: operations["dismiss_pending_roll_api_v1_roll_dismiss_pending_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3053,8 +3298,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for the versioned mounted read. */
-        get: operations["get_session_v1_documentation"];
+        /**
+         * Get Session
+         * @description Get single session by ID.
+         *
+         *     Args:
+         *         session_id: The session ID to retrieve.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         SessionResponse with session details.
+         *
+         *     Raises:
+         *         HTTPException: If session not found.
+         */
+        get: operations["get_session_api_v1_sessions__session_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3134,8 +3393,22 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** OpenAPI declaration for both legacy and versioned same-path aliases. */
-        get: operations["list_session_snapshots_documentation"];
+        /**
+         * Get Session Snapshots
+         * @description Get session snapshots list.
+         *
+         *     Args:
+         *         session_id: The session ID to get snapshots for.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         SnapshotsListResponse with list of snapshots.
+         *
+         *     Raises:
+         *         HTTPException: If session not found.
+         */
+        get: operations["get_session_snapshots_api_v1_sessions__session_id__snapshots_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3151,9 +3424,46 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_tags_documentation"];
+        /**
+         * List Tags
+         * @description Return all tags visible to the current user.
+         *
+         *     Global tags are visible to everyone; the user also sees their own private
+         *     tags. The optional ``search`` filter narrows to tags whose name contains
+         *     the given text (case-insensitive) for the inline tag picker.
+         *
+         *     Args:
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *         search: Optional name filter.
+         *
+         *     Returns:
+         *         List of visible tags.
+         */
+        get: operations["list_tags_api_v1_tags__get"];
         put?: never;
-        post: operations["create_tag_documentation"];
+        /**
+         * Create Tag
+         * @description Create a tag or return an existing global tag.
+         *
+         *     Non-admin users can only create private tags. When the normalized name
+         *     matches an existing global tag, the global tag is returned instead of
+         *     creating a duplicate.
+         *
+         *     Args:
+         *         request: The creation request.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The resulting tag and creation metadata.
+         *
+         *     Raises:
+         *         HTTPException 403: When a non-admin requests a global tag.
+         *         HTTPException 400: When the color is invalid or the name is empty.
+         *         HTTPException 409: When a requested name collides with an existing global.
+         */
+        post: operations["create_tag_api_v1_tags__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3167,7 +3477,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["effective_issue_documentation"];
+        /**
+         * Get Issue Effective Tags
+         * @description Return direct and effective tags for one owned issue.
+         *
+         *     Effective tags union the issue's direct tags, its thread's tags, and the
+         *     tags of every Reading Plan owned by the viewer that contains the issue. A
+         *     tag contributed through several paths appears once with every source
+         *     retained so the UI can navigate to each source object.
+         *
+         *     Args:
+         *         issue_id: Primary key of the issue.
+         *         current_user: The authenticated user; must own the issue's thread.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Direct and effective tags for the issue.
+         *
+         *     Raises:
+         *         HTTPException 404: When the issue does not exist or is not owned.
+         */
+        get: operations["get_issue_effective_tags_api_v1_tags_effective_issue__issue_id___get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3183,7 +3513,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["effective_plan_documentation"];
+        /**
+         * Get Plan Effective Tags
+         * @description Return direct and effective tags for one owned Reading Plan.
+         *
+         *     Reading Plans have no parents in v1, so effective tags are exactly the
+         *     directly assigned visible tags.
+         *
+         *     Args:
+         *         plan_id: Primary key of the plan.
+         *         current_user: The authenticated user; must own the plan.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Direct and effective tags for the plan.
+         *
+         *     Raises:
+         *         HTTPException 404: When the plan does not exist or is not owned.
+         */
+        get: operations["get_plan_effective_tags_api_v1_tags_effective_plan__plan_id___get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3199,7 +3547,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["effective_thread_documentation"];
+        /**
+         * Get Thread Effective Tags
+         * @description Return direct and effective tags for one owned thread.
+         *
+         *     Threads have no parents in v1, so effective tags are exactly the directly
+         *     assigned visible tags.
+         *
+         *     Args:
+         *         thread_id: Primary key of the thread.
+         *         current_user: The authenticated user; must own the thread.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Direct and effective tags for the thread.
+         *
+         *     Raises:
+         *         HTTPException 404: When the thread does not exist or is not owned.
+         */
+        get: operations["get_thread_effective_tags_api_v1_tags_effective_thread__thread_id___get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3215,7 +3581,28 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["effective_thread_issues_documentation"];
+        /**
+         * Get Thread Issues Effective Tags
+         * @description Return direct and effective tags for every issue in one owned thread.
+         *
+         *     Bulk read for the thread detail issue rows (issue #3422): each issue's
+         *     effective tags union its direct tags, its thread's tags, and the tags of
+         *     every Reading Plan owned by the viewer that contains the issue. Issues
+         *     without any visible tag appear with empty tag lists so the client can
+         *     distinguish "no tags" from missing data without fallback requests.
+         *
+         *     Args:
+         *         thread_id: Primary key of the thread.
+         *         current_user: The authenticated user; must own the thread.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Per-issue direct and effective tags in canonical position order.
+         *
+         *     Raises:
+         *         HTTPException 404: When the thread does not exist or is not owned.
+         */
+        get: operations["get_thread_issues_effective_tags_api_v1_tags_effective_thread__thread_id__issues__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3231,10 +3618,69 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["get_tag_documentation"];
-        put: operations["update_tag_documentation"];
+        /**
+         * Get Tag
+         * @description Return a single tag, enforcing visibility.
+         *
+         *     Global tags are visible to any authenticated user; private tags are visible
+         *     only to their owner.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The visible tag.
+         *
+         *     Raises:
+         *         HTTPException 404: When the tag does not exist or is not visible.
+         */
+        get: operations["get_tag_api_v1_tags__tag_id___get"];
+        /**
+         * Update Tag
+         * @description Update an existing tag.
+         *
+         *     Global tags require admin access. Private tags require ownership: they are
+         *     invisible to every other user, administrators included. Renaming a private
+         *     tag to a global name is refused.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         request: The update request.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The updated tag.
+         *
+         *     Raises:
+         *         HTTPException 403: When the user lacks permission.
+         *         HTTPException 400: When the color is invalid.
+         *         HTTPException 409: When the new name collides with a global tag.
+         */
+        put: operations["update_tag_api_v1_tags__tag_id___put"];
         post?: never;
-        delete: operations["delete_tag_documentation"];
+        /**
+         * Delete Tag
+         * @description Delete a tag and cascade its assignments.
+         *
+         *     Global tags require admin access. Private tags require ownership: they are
+         *     invisible to every other user, administrators included. Deletion removes
+         *     all assignments and runs registered deletion hook consumers.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Deletion statistics.
+         *
+         *     Raises:
+         *         HTTPException 403: When the user lacks permission.
+         */
+        delete: operations["delete_tag_api_v1_tags__tag_id___delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3249,7 +3695,27 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["assign_tag_documentation"];
+        /**
+         * Assign Tag
+         * @description Attach a tag to a target.
+         *
+         *     Global tags require admin access to assign. Private tags require ownership
+         *     of the tag and of the target (or admin access). Assignment is idempotent.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         request: The assignment request.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The assignment.
+         *
+         *     Raises:
+         *         HTTPException 403: When the user lacks permission.
+         *         HTTPException 404: When the tag or target does not exist.
+         */
+        post: operations["assign_tag_api_v1_tags__tag_id__assign__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3265,7 +3731,29 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["bulk_assign_tag_documentation"];
+        /**
+         * Bulk Assign Tag
+         * @description Attach one tag to many targets of one type.
+         *
+         *     Only the requested tag assignment is created; unrelated tags on the
+         *     selected targets are never replaced or removed. Every target is validated
+         *     first, so a missing or forbidden target fails the whole request without
+         *     partial changes.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         request: The bulk assignment request.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Which targets were newly assigned and which already carried the tag.
+         *
+         *     Raises:
+         *         HTTPException 403: When the user lacks permission.
+         *         HTTPException 404: When the tag or any target does not exist.
+         */
+        post: operations["bulk_assign_tag_api_v1_tags__tag_id__bulk_assign__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3281,7 +3769,28 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["bulk_unassign_tag_documentation"];
+        /**
+         * Bulk Unassign Tag
+         * @description Remove one tag from many targets of one type.
+         *
+         *     Only the requested tag assignment is removed; unrelated tags on the
+         *     selected targets are never touched. Targets without the assignment are
+         *     reported rather than treated as errors.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         request: The bulk unassignment request.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Which targets were unassigned and which already lacked the tag.
+         *
+         *     Raises:
+         *         HTTPException 403: When the user lacks permission.
+         *         HTTPException 404: When the tag does not exist.
+         */
+        post: operations["bulk_unassign_tag_api_v1_tags__tag_id__bulk_unassign__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3298,7 +3807,27 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete: operations["unassign_tag_documentation"];
+        /**
+         * Unassign Tag
+         * @description Remove an assignment from a target.
+         *
+         *     Global tags can be unassigned only by admins; private tags by their
+         *     owner or an admin.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         request: The unassignment request.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         The removed assignment.
+         *
+         *     Raises:
+         *         HTTPException 403: When the user lacks permission.
+         *         HTTPException 404: When the tag or assignment does not exist.
+         */
+        delete: operations["unassign_tag_api_v1_tags__tag_id__unassign__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3311,7 +3840,23 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["usage_tag_documentation"];
+        /**
+         * Get Tag Usage
+         * @description Return assignment usage information for a tag.
+         *
+         *     Powers the delete-confirmation dialog: total and per-target-type
+         *     assignment counts plus the tag references held by consumers such as roll
+         *     filtering, counted without removing anything.
+         *
+         *     Args:
+         *         tag_id: Primary key of the tag.
+         *         current_user: The authenticated user.
+         *         db: Database session.
+         *
+         *     Returns:
+         *         Assignment counts by target type and total, with consumer references.
+         */
+        get: operations["get_tag_usage_api_v1_tags__tag_id__usage__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3362,10 +3907,24 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Documentation-only operation for the mounted dismiss.
-         * @description Dismiss one owner-scoped taste discovery without recording a verdict. Wire parity with Python POST /api/v1/taste/discoveries/{signal_id}/dismiss: writes prompt_suppressed_until = NOW() + 14 days and returns {dismissed: true}. Missing or foreign signals return 404 with the Python detail text.
+         * Dismiss Taste Discovery
+         * @description Dismiss a discovery card without giving a verdict.
+         *
+         *     Dismissal only starts a temporary suppression window; it never sets a
+         *     verdict, so it can never count as confirmation.
+         *
+         *     Args:
+         *         signal_id: Target taste signal id.
+         *         current_user: The authenticated reader.
+         *         db: Async database session.
+         *
+         *     Returns:
+         *         A small acknowledgement payload.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the signal is missing or not owned by the user.
          */
-        post: operations["dismiss_documentation"];
+        post: operations["dismiss_taste_discovery_api_v1_taste_discoveries__signal_id__dismiss_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3443,7 +4002,30 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_completed_threads_documentation"];
+        /**
+         * List Completed Threads
+         * @description List completed threads with deterministic cursor-based pagination.
+         *
+         *     Every retained sort has a deterministic cursor contract with stable
+         *     tie-breakers so that search results remain correct across multiple pages.
+         *     Changing ``search`` or ``sort`` invalidates any prior cursor.
+         *
+         *     Args:
+         *         request: FastAPI request object for rate limiting.
+         *         search: Optional case-insensitive title search filter.
+         *         sort: Sort order – ``position``, ``title``, or ``created``.
+         *         page_size: Threads per page (default 50, max 200).
+         *         page_token: Opaque cursor token for pagination continuation.
+         *         current_user: The authenticated user making the request.
+         *         db: SQLAlchemy session for database operations.
+         *
+         *     Returns:
+         *         Paginated completed threads plus ``next_page_token`` when more pages exist.
+         *
+         *     Raises:
+         *         HTTPException: If the sort value is unsupported or the page token is stale/malformed.
+         */
+        get: operations["list_completed_threads_api_v1_threads_completed_threads_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3560,7 +4142,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["get_thread_detail_documentation"];
+        /**
+         * Get Thread
+         * @description Get a single owned thread by ID.
+         *
+         *     Raises:
+         *         HTTPException: 404 when the thread does not exist for this user.
+         */
+        get: operations["get_thread_api_v1_threads__thread_id__get"];
         /**
          * Update Thread
          * @description Update an owned thread.
@@ -4165,15 +4754,21 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for reading user preferences. */
-        get: operations["get_user_preferences_documentation"];
+        /**
+         * Read the authenticated user's preferences.
+         * @description Return the authenticated user's persisted preferences. When no preference row exists yet, server defaults (currently ``classic``) are resolved so existing and new users need no backfill step.
+         */
+        get: operations["get_user_preferences_api_v1_users_me_preferences_get"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Documentation-only operation for updating user preferences. */
-        patch: operations["patch_user_preferences_documentation"];
+        /**
+         * Apply a partial update to the authenticated user's preferences.
+         * @description Update the authenticated user's preferences. The current request shape supports the ``theme`` field; unknown theme ids are rejected.
+         */
+        patch: operations["patch_user_preferences_api_v1_users_me_preferences_patch"];
         trace?: never;
     };
     "/api/v1/users/me/taste-signals": {
@@ -4183,8 +4778,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Documentation-only operation for listing Taste Bank signals. */
-        get: operations["list_taste_signals_documentation"];
+        /**
+         * List the authenticated user's Taste Bank signals.
+         * @description Return every persisted Taste Bank signal owned by the authenticated user, ordered by signal type then external key. The list is empty before any discovery or verdict exists.
+         */
+        get: operations["list_taste_signals_api_v1_users_me_taste_signals_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4201,8 +4799,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Documentation-only operation for recording a Taste Bank verdict. */
-        put: operations["set_taste_signal_verdict_documentation"];
+        /**
+         * Record an explicit verdict for one Taste Bank signal.
+         * @description Confirm, qualify, or reject a single Taste Bank discovery for the authenticated user. Only the targeted user 's matching (signal_type, external_key) row is written. Inferred evidence columns are preserved untouched and the response time is recorded. Repeated responses are idempotent; a missing row is created so direct user assertions work without prior inference.
+         */
+        put: operations["set_taste_signal_verdict_api_v1_users_me_taste_signals__signal_type___external_key__verdict_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -4555,6 +5156,26 @@ export interface paths {
         put?: never;
         /** Documentation-only operation for the mounted v2 reading-boundaries batch. */
         post: operations["reading_boundary_batch_documentation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v2/reading-boundaries/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Reading Boundary V2
+         * @description Explain live canonical constraints without querying historical rows.
+         */
+        get: operations["get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5096,11 +5717,6 @@ export interface components {
             /** Format: int32 */
             total_threads: number;
         };
-        AssignTagRequest: {
-            /** Format: int32 */
-            target_id: number;
-            target_type: string;
-        };
         /**
          * BatchBlockingExplanationRequest
          * @description Schema for batch blocking-info request.
@@ -5445,40 +6061,48 @@ export interface components {
         };
         /** @enum {string} */
         BoundaryState: "blocked" | "available" | "complete" | "unavailable";
-        /** @description Request schema for creating a bug report or feature request. */
+        /**
+         * BugReportCreate
+         * @description Request schema for creating a bug report or feature request.
+         */
         BugReportCreate: {
+            /** Description */
             description: string;
-            diagnostics?: null | components["schemas"]["BugReportDiagnostics"];
-            report_type?: components["schemas"]["ReportType"];
+            diagnostics?: components["schemas"]["BugReportDiagnostics"] | null;
+            /**
+             * Report Type
+             * @default bug
+             * @enum {string}
+             */
+            report_type: "bug" | "feature";
+            /** Title */
             title: string;
         };
-        /** @description Structured browser diagnostics (`userAgent` alias on the wire). */
+        /**
+         * BugReportDiagnostics
+         * @description Structured diagnostics collected from the browser.
+         */
         BugReportDiagnostics: {
+            /** Errors */
             errors: components["schemas"]["DiagnosticError"][];
             performance: components["schemas"]["DiagnosticPerformance"];
             screen: components["schemas"]["DiagnosticScreen"];
             scroll: components["schemas"]["DiagnosticScroll"];
+            /** Timestamp */
             timestamp: string;
+            /** Url */
             url: string;
+            /** Useragent */
             userAgent: string;
             viewport: components["schemas"]["DiagnosticViewport"];
         };
-        /** @description Response after successfully creating a GitHub issue. */
+        /**
+         * BugReportResponse
+         * @description Response after successfully creating a GitHub issue.
+         */
         BugReportResponse: {
+            /** Issue Url */
             issue_url: string;
-        };
-        BulkAssignRequest: {
-            target_ids: number[];
-            target_type: string;
-        };
-        BulkAssignResponse: {
-            affected_ids: number[];
-            already_ids: number[];
-            requested_ids: number[];
-            still_inherited_ids: number[];
-            /** Format: int32 */
-            tag_id: number;
-            target_type: string;
         };
         /**
          * CBLAdoptionCommitRequest
@@ -6488,6 +7112,22 @@ export interface components {
             thread_title: string;
         };
         /**
+         * ComicVineComicPileMatch
+         * @description One user-owned ComicPile representation of an external issue.
+         */
+        ComicVineComicPileMatch: {
+            /** Issue Id */
+            issue_id: number;
+            /** Issue Number */
+            issue_number: string;
+            /** Status */
+            status: string;
+            /** Thread Id */
+            thread_id: number;
+            /** Thread Title */
+            thread_title: string;
+        };
+        /**
          * ComicVineCreator
          * @description One credited creator and their provider-supplied roles.
          *
@@ -6523,6 +7163,43 @@ export interface components {
             site_detail_url?: string | null;
             /** Store Date */
             store_date?: string | null;
+        };
+        /**
+         * ComicVineIssueIntelligence
+         * @description Curated ComicVine metadata for one confirmed ComicPile issue mapping.
+         */
+        ComicVineIssueIntelligence: {
+            /** Comicvine Issue Id */
+            comicvine_issue_id: string;
+            /** Comicvine Url */
+            comicvine_url?: string | null;
+            /** Cover Date */
+            cover_date?: string | null;
+            /** Creators */
+            creators?: components["schemas"]["ComicVineCreator"][];
+            /** Description */
+            description?: string | null;
+            /** Image Url */
+            image_url?: string | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /**
+             * Metadata Status
+             * @default not_deep_fetched
+             */
+            metadata_status: string;
+            /** Name */
+            name?: string | null;
+            /** Refresh Retry After Seconds */
+            refresh_retry_after_seconds?: number | null;
+            /** Series Id */
+            series_id?: number | null;
+            /** Series Name */
+            series_name?: string | null;
+            /** Store Date */
+            store_date?: string | null;
+            /** Story Arcs */
+            story_arcs?: components["schemas"]["ComicVineStoryArc"][];
         };
         /**
          * ComicVineMappingHealth
@@ -6572,6 +7249,26 @@ export interface components {
          * @enum {string}
          */
         ComicVineMappingStatus: "not_applicable" | "fully_mapped" | "partial" | "unresolved" | "needs_review";
+        /**
+         * ComicVineRelatedIssue
+         * @description One external issue related through explicit story-arc membership.
+         */
+        ComicVineRelatedIssue: {
+            /** Comicpile Matches */
+            comicpile_matches?: components["schemas"]["ComicVineComicPileMatch"][];
+            /** Comicvine Issue Id */
+            comicvine_issue_id: string;
+            /** Comicvine Url */
+            comicvine_url?: string | null;
+            /** Cover Date */
+            cover_date?: string | null;
+            /** Issue Number */
+            issue_number?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Series Name */
+            series_name?: string | null;
+        };
         /**
          * ComicVineResolveResponse
          * @description Result of resolving a correction input that may be a pasted URL.
@@ -6686,6 +7383,22 @@ export interface components {
             results: components["schemas"]["ComicVineSeriesResult"][];
             /** Total Available */
             total_available?: number | null;
+        };
+        /**
+         * ComicVineStoryArc
+         * @description An explicit ComicVine story arc and its unordered issue membership.
+         */
+        ComicVineStoryArc: {
+            /** Comicvine Arc Id */
+            comicvine_arc_id: number;
+            /** Comicvine Url */
+            comicvine_url?: string | null;
+            /** Name */
+            name: string;
+            /** Related Issues */
+            related_issues?: components["schemas"]["ComicVineRelatedIssue"][];
+            /** Total Related Count */
+            total_related_count?: number | null;
         };
         CommitRequest: {
             approved_row_ids?: string[];
@@ -6893,10 +7606,43 @@ export interface components {
              */
             ordering_mode: "informational" | "strict_sequential";
         };
+        /**
+         * ContinuityRuleCreate
+         * @description Schema for creating a generalized continuity rule.
+         */
+        ContinuityRuleCreate: {
+            /** Checkpoint Issue Id */
+            checkpoint_issue_id?: number | null;
+            /** Convergence Targets */
+            convergence_targets?: components["schemas"]["ConvergenceTarget"][];
+            /** Note */
+            note?: string | null;
+            /**
+             * Satisfaction Type
+             * @enum {string}
+             */
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
+            /** Selected Member Issue Ids */
+            selected_member_issue_ids?: number[];
+            /** Source Id */
+            source_id: number;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "issue" | "crossover";
+            /** Target Id */
+            target_id: number;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "issue" | "crossover";
+        };
         ContinuityRuleRequest: {
             /** Format: int32 */
             checkpoint_issue_id?: number | null;
-            convergence_targets?: components["schemas"]["ConvergenceTarget"][];
+            convergence_targets?: components["schemas"]["NativeConvergenceTarget"][];
             note?: string | null;
             satisfaction_type: string;
             selected_member_issue_ids?: number[];
@@ -6907,24 +7653,51 @@ export interface components {
             target_id: number;
             target_type: string;
         };
+        /**
+         * ContinuityRuleResponse
+         * @description Schema for a persisted generalized continuity rule.
+         */
         ContinuityRuleResponse: {
-            /** Format: int32 */
-            checkpoint_issue_id?: number | null;
+            /** Checkpoint Issue Id */
+            checkpoint_issue_id: number | null;
+            /** Convergence Targets */
             convergence_targets: components["schemas"]["ConvergenceTarget"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
             created_at: string;
-            /** Format: int32 */
+            /** Id */
             id: number;
-            note?: string | null;
-            satisfaction_type: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Satisfaction Type
+             * @enum {string}
+             */
+            satisfaction_type: "item_read" | "all_members_read" | "checkpoint" | "selected_members_read" | "converged";
+            /** Selected Member Issue Ids */
             selected_member_issue_ids: number[];
-            /** Format: int32 */
+            /** Source Id */
             source_id: number;
-            source_type: string;
-            /** Format: int32 */
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "issue" | "crossover";
+            /** Target Id */
             target_id: number;
-            target_type: string;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "issue" | "crossover";
+            /**
+             * Updated At
+             * Format: date-time
+             */
             updated_at: string;
-            /** Format: int32 */
+            /** User Id */
             user_id: number;
         };
         /**
@@ -6940,10 +7713,18 @@ export interface components {
              */
             node_type: "issue" | "crossover" | "thread";
         };
+        /**
+         * ConvergenceTarget
+         * @description A single node a converged continuity rule waits for.
+         */
         ConvergenceTarget: {
-            /** Format: int32 */
+            /** Id */
             id: number;
-            type: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "issue" | "crossover";
         };
         /**
          * CorrectionSheetExamplesResponse
@@ -6990,17 +7771,6 @@ export interface components {
             insert_after_issue_id?: number | null;
             /** @description Reader-facing range, e.g. `1-3, 5` or `Annual 1`. */
             issue_range: string;
-        };
-        CreateTagRequest: {
-            color?: string;
-            include_near_matches?: boolean;
-            name: string;
-            scope?: string;
-        };
-        CreateTagResponse: {
-            near_matches: components["schemas"]["NearMatch"][];
-            redirected_to_global: boolean;
-            tag: components["schemas"]["Tag"];
         };
         /** @description An issue's credited creator with stable provider identity and merged roles. */
         Creator: {
@@ -7740,23 +8510,69 @@ export interface components {
              */
             thread_title: string;
         };
+        /**
+         * CreatorListItem
+         * @description One row in the bounded creator discovery collection.
+         *
+         *     The row mirrors the headline rating semantics from ``#2028``/``#2037``:
+         *     only effective ``rate`` events with a headline-eligible role feed
+         *     ``ratings_count``/``average_rating`` and one issue counts at most once
+         *     even when a creator has several roles on that issue.
+         */
         CreatorListItem: {
-            /** Format: double */
+            /**
+             * Average Rating
+             * @description Average of the user's latest effective ratings across issues attributed to this creator with a headline-eligible role. ``null`` when no headline-eligible ratings (explicit null handling for deterministic ordering).
+             */
             average_rating?: number | null;
+            /**
+             * Canonical Creator Key
+             * @description Stable normalized creator key (e.g. ``creator:12345``).
+             */
             canonical_creator_key: string;
+            /**
+             * Display Name
+             * @description Human-readable creator name from confirmed issue metadata.
+             */
             display_name: string;
-            normalized_roles: string[];
-            /** Format: int64 */
+            /**
+             * Normalized Roles
+             * @description Distinct roles seen for this creator across the user's issues.
+             */
+            normalized_roles?: string[];
+            /**
+             * Ratings Count
+             * @description Number of distinct rated issues contributing to the headline average.
+             * @default 0
+             */
             ratings_count: number;
         };
+        /**
+         * CreatorListResponse
+         * @description Response body for the bounded personal creator list endpoint.
+         */
         CreatorListResponse: {
-            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            /** @description Coverage state distinguishing complete from lower-bound statistics. */
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            /**
+             * Items
+             * @description Bounded, deterministically ordered page of creators with at least one rated issue for the authenticated user.
+             */
             items: components["schemas"]["CreatorListItem"][];
-            /** Format: int64 */
+            /**
+             * Limit
+             * @description Page size requested.
+             */
             limit: number;
-            /** Format: int64 */
+            /**
+             * Offset
+             * @description Page offset requested.
+             */
             offset: number;
-            /** Format: int64 */
+            /**
+             * Total
+             * @description Total number of creators matching the filter before pagination.
+             */
             total: number;
         };
         /**
@@ -8366,10 +9182,19 @@ export interface components {
              */
             total: number;
         };
+        /**
+         * CreatorSummariesResponse
+         * @description Response body for the batch creator summary API.
+         */
         CreatorSummariesResponse: {
-            coverage: components["schemas"]["NativeCreatorSummaryCoverage"];
+            /** @description Coverage state distinguishing complete from lower-bound statistics. */
+            coverage: components["schemas"]["CreatorSummaryCoverage"];
+            /**
+             * Summaries
+             * @description Mapping from canonical creator key to summary data for every requested key visible in the authenticated user's library.
+             */
             summaries: {
-                [key: string]: components["schemas"]["NativeCreatorSummaryItem"];
+                [key: string]: components["schemas"]["CreatorSummaryItem"];
             };
         };
         /**
@@ -8887,6 +9712,26 @@ export interface components {
             total_issues?: number | null;
         };
         /**
+         * DependencyCreate
+         * @description Schema for creating dependencies.
+         */
+        DependencyCreate: {
+            /** Source Id */
+            source_id: number;
+            /**
+             * Source Type
+             * @enum {string}
+             */
+            source_type: "thread" | "issue";
+            /** Target Id */
+            target_id: number;
+            /**
+             * Target Type
+             * @enum {string}
+             */
+            target_type: "thread" | "issue";
+        };
+        /**
          * @description Flat wire request mirroring the Python `DependencyCreate` payload so the
          *     Dependency Builder migrates without changing its semantics.
          */
@@ -9084,7 +9929,12 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * DependencyNoteUpdate
+         * @description Schema for updating a dependency note.
+         */
         DependencyNoteUpdate: {
+            /** Note */
             note?: string | null;
         };
         /**
@@ -9116,66 +9966,93 @@ export interface components {
             position: number;
         };
         /**
-         * @description Issue-level dependency response mirroring the Python `DependencyResponse`
-         *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
+         * DependencyResponse
+         * @description Schema for dependency payload.
          */
         DependencyResponse: {
-            /** Format: date-time */
+            /**
+             * Created At
+             * Format: date-time
+             */
             created_at: string;
-            /** Format: int32 */
+            /** Id */
             id: number;
-            /** @default true */
+            /**
+             * Is Issue Level
+             * @default true
+             */
             is_issue_level: boolean;
+            /** Note */
             note?: string | null;
-            /** Format: int32 */
+            /** Source Issue Id */
             source_issue_id?: number | null;
-            /** Format: int32 */
+            /** Source Issue Thread Id */
             source_issue_thread_id?: number | null;
+            /** Source Label */
             source_label?: string | null;
-            /** Format: int32 */
+            /** Source Thread Id */
             source_thread_id?: number | null;
-            /** Format: int32 */
+            /** Target Issue Id */
             target_issue_id?: number | null;
-            /** Format: int32 */
+            /** Target Issue Thread Id */
             target_issue_thread_id?: number | null;
+            /** Target Label */
             target_label?: string | null;
-            /** Format: int32 */
+            /** Target Thread Id */
             target_thread_id?: number | null;
+            /** Warning */
             warning?: string | null;
         };
-        /** @description A captured console error entry. */
+        /**
+         * DiagnosticError
+         * @description A captured console error entry.
+         */
         DiagnosticError: {
+            /** Message */
             message: string;
+            /** Timestamp */
             timestamp: string;
         };
-        /** @description Performance timing diagnostic information (both fields optional). */
+        /**
+         * DiagnosticPerformance
+         * @description Performance timing diagnostic information.
+         */
         DiagnosticPerformance: {
-            /** Format: double */
+            /** Domcontentloaded */
             domContentLoaded?: number | null;
-            /** Format: double */
+            /** Loadcomplete */
             loadComplete?: number | null;
         };
-        /** @description Screen diagnostic information (`pixelRatio` alias on the wire). */
+        /**
+         * DiagnosticScreen
+         * @description Screen diagnostic information.
+         */
         DiagnosticScreen: {
-            /** Format: int32 */
+            /** Height */
             height: number;
-            /** Format: double */
+            /** Pixelratio */
             pixelRatio: number;
-            /** Format: int32 */
+            /** Width */
             width: number;
         };
-        /** @description Scroll position diagnostic information. */
+        /**
+         * DiagnosticScroll
+         * @description Scroll position diagnostic information.
+         */
         DiagnosticScroll: {
-            /** Format: int32 */
+            /** X */
             x: number;
-            /** Format: int32 */
+            /** Y */
             y: number;
         };
-        /** @description Viewport diagnostic information. */
+        /**
+         * DiagnosticViewport
+         * @description Viewport diagnostic information.
+         */
         DiagnosticViewport: {
-            /** Format: int32 */
+            /** Height */
             height: number;
-            /** Format: int32 */
+            /** Width */
             width: number;
         };
         DiceCommandReceipt: {
@@ -9189,16 +10066,46 @@ export interface components {
         };
         /** @enum {string} */
         EditorKind: "reading_list" | "prerequisite" | "issue";
-        EffectiveTag: {
+        /**
+         * EffectiveTagResponse
+         * @description One deduplicated effective tag with every contributing source.
+         *
+         *     Attributes:
+         *         tag: The tag itself.
+         *         direct: ``True`` when the tag is directly assigned to the queried
+         *             object (it may additionally be inherited through parent paths).
+         *         sources: Every object whose direct assignment contributes this tag,
+         *             including the queried object itself for direct assignments. A tag
+         *             inherited through several paths appears once with all of its
+         *             sources retained.
+         */
+        EffectiveTagResponse: {
+            /** Direct */
             direct: boolean;
-            sources: components["schemas"]["InheritanceSource"][];
-            tag: components["schemas"]["Tag"];
+            /** Sources */
+            sources: components["schemas"]["InheritanceSourceResponse"][];
+            tag: components["schemas"]["TagResponse"];
         };
+        /**
+         * EffectiveTagsResponse
+         * @description Direct and effective tags for one object.
+         *
+         *     Attributes:
+         *         target_type: Polymorphic target type of the queried object.
+         *         target_id: Primary key of the queried object.
+         *         direct_tags: Tags directly assigned to the object and visible to the
+         *             viewer.
+         *         effective_tags: Union of direct and inherited visible tags,
+         *             deduplicated by tag with all contributing sources retained.
+         */
         EffectiveTagsResponse: {
-            direct_tags: components["schemas"]["Tag"][];
-            effective_tags: components["schemas"]["EffectiveTag"][];
-            /** Format: int32 */
+            /** Direct Tags */
+            direct_tags: components["schemas"]["TagResponse"][];
+            /** Effective Tags */
+            effective_tags: components["schemas"]["EffectiveTagResponse"][];
+            /** Target Id */
             target_id: number;
+            /** Target Type */
             target_type: string;
         };
         /**
@@ -9298,8 +10205,15 @@ export interface components {
             /** Selected Dependency Ids */
             selected_dependency_ids: number[];
         };
-        /** @description Request body for an enumeration-safe password-recovery email. */
+        /**
+         * ForgotPasswordRequest
+         * @description Enumeration-safe forgot-password request using recovery email.
+         */
         ForgotPasswordRequest: {
+            /**
+             * Email
+             * Format: email
+             */
             email: string;
         };
         /** HTTPValidationError */
@@ -9307,76 +10221,167 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
-        IdentityInboxActionResponse: {
-            message: string;
-            success: boolean;
-            updated_item?: null | components["schemas"]["IdentityInboxItem"];
-        };
-        IdentityInboxCandidate: {
-            comicvine_id?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            evidence_json: unknown;
-            evidence_source?: string | null;
-            /** Format: int32 */
-            external_identity_id: number;
-            external_url?: string | null;
-            metadata_json: unknown;
-            provider: string;
+        /**
+         * IdentityInboxActionRequest
+         * @description Request to confirm, reject, defer, or skip an inbox item.
+         */
+        IdentityInboxActionRequest: {
+            /**
+             * External Identity Id
+             * @description External identity ID to confirm (required for confirm action)
+             */
+            external_identity_id?: number | null;
+            /**
+             * Rejection Reason
+             * @description Reason when rejecting a candidate
+             */
             rejection_reason?: string | null;
+            /**
+             * Search Query
+             * @description Manual search query for unresolved issues
+             */
+            search_query?: string | null;
+        };
+        /**
+         * IdentityInboxActionResponse
+         * @description Response after performing an inbox action.
+         */
+        IdentityInboxActionResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+            updated_item?: components["schemas"]["IdentityInboxItem"] | null;
+        };
+        /**
+         * IdentityInboxCandidate
+         * @description One candidate match for an unresolved external identity.
+         */
+        IdentityInboxCandidate: {
+            /** Comicvine Id */
+            comicvine_id?: string | null;
+            /** Confidence */
+            confidence?: number | null;
+            /** Evidence Json */
+            evidence_json?: {
+                [key: string]: unknown;
+            };
+            /** Evidence Source */
+            evidence_source?: string | null;
+            /** External Identity Id */
+            external_identity_id: number;
+            /** External Url */
+            external_url?: string | null;
+            /** Metadata Json */
+            metadata_json?: {
+                [key: string]: unknown;
+            };
+            /** Provider */
+            provider: string;
+            /** Rejection Reason */
+            rejection_reason?: string | null;
+            /** Status */
             status: string;
         };
+        /**
+         * IdentityInboxItem
+         * @description One unresolved or ambiguous external identity mapping in the inbox.
+         */
         IdentityInboxItem: {
-            candidates: components["schemas"]["IdentityInboxCandidate"][];
-            /** Format: double */
+            /** Candidates */
+            candidates?: components["schemas"]["IdentityInboxCandidate"][];
+            /** Created At */
             created_at?: number | null;
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Issue Number */
             issue_number: string;
-            /** Format: int32 */
+            /** Mapping Id */
             mapping_id: number;
+            /** Provider */
             provider?: string | null;
+            /**
+             * Source Entry Summary
+             * @default
+             */
             source_entry_summary: string;
+            /** Status */
             status: string;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
+            /** Thread Title */
             thread_title: string;
-            /** Format: double */
+            /** Updated At */
             updated_at?: number | null;
+            /**
+             * Why Stopped
+             * @default
+             */
             why_stopped: string;
         };
+        /**
+         * IdentityInboxResponse
+         * @description Paginated list of unresolved identity inbox items.
+         */
         IdentityInboxResponse: {
-            items: components["schemas"]["IdentityInboxItem"][];
-            /** Format: int64 */
+            /** Items */
+            items?: components["schemas"]["IdentityInboxItem"][];
+            /**
+             * Limit
+             * @default 50
+             */
             limit: number;
-            /** Format: int64 */
+            /**
+             * Offset
+             * @default 0
+             */
             offset: number;
-            /** Format: int64 */
+            /**
+             * Total
+             * @default 0
+             */
             total: number;
         };
+        /**
+         * IdentityInboxSearchResponse
+         * @description Results from a manual ComicVine search for an unresolved issue.
+         */
         IdentityInboxSearchResponse: {
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Query */
             query: string;
-            results: components["schemas"]["IdentityInboxSearchResult"][];
-            /** Format: int64 */
+            /** Results */
+            results?: components["schemas"]["IdentityInboxSearchResult"][];
+            /** Total Available */
             total_available?: number | null;
         };
+        /**
+         * IdentityInboxSearchResult
+         * @description One result from a manual ComicVine search for an unresolved issue.
+         */
         IdentityInboxSearchResult: {
-            /** Format: int32 */
+            /** Comicvine Issue Id */
             comicvine_issue_id: number;
-            /** Format: int32 */
+            /** Comicvine Volume Id */
             comicvine_volume_id?: number | null;
-            evidence: string[];
+            /** Evidence */
+            evidence?: string[];
+            /** Image Url */
             image_url?: string | null;
+            /** Issue Name */
             issue_name?: string | null;
+            /** Issue Number */
             issue_number?: string | null;
+            /** Publisher */
             publisher?: string | null;
-            /** Format: double */
+            /** Score */
             score?: number | null;
+            /** Site Detail Url */
             site_detail_url?: string | null;
-            /** Format: int32 */
+            /** Start Year */
             start_year?: number | null;
+            /** Volume Name */
             volume_name?: string | null;
         };
         /**
@@ -9505,10 +10510,23 @@ export interface components {
             /** Total Items */
             total_items?: number | null;
         };
-        InheritanceSource: {
+        /**
+         * InheritanceSourceResponse
+         * @description One object responsible for an effective tag.
+         *
+         *     Attributes:
+         *         target_type: Polymorphic target type (``"Issue"``, ``"Thread"``, or
+         *             ``"ContinuityPlan"``).
+         *         target_id: Primary key of the source object.
+         *         display_name: Human-readable label for navigation (thread title, plan
+         *             name, or issue number).
+         */
+        InheritanceSourceResponse: {
+            /** Display Name */
             display_name: string;
-            /** Format: int32 */
+            /** Target Id */
             target_id: number;
+            /** Target Type */
             target_type: string;
         };
         /**
@@ -9518,22 +10536,28 @@ export interface components {
         InitializeSessionRequest: {
             timezone?: string | null;
         };
-        /** @description Python `InsertReadingOrderItemRequest`. */
+        /**
+         * InsertReadingOrderItemRequest
+         * @description Request schema for inserting an item into a reading order.
+         */
         InsertReadingOrderItemRequest: {
-            /** Format: int32 */
+            /** Position */
             position: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
-        /** @description Python `InsertReadingOrderItemResponse`. */
+        /**
+         * InsertReadingOrderItemResponse
+         * @description Response schema for inserting an item into a reading order.
+         */
         InsertReadingOrderItemResponse: {
-            /** Format: int32 */
+            /** Position */
             position: number;
-            /** Format: int32 */
+            /** Reading Order Id */
             reading_order_id: number;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
-            /** Format: int64 */
+            /** Total Items */
             total_items: number;
         };
         /**
@@ -9625,36 +10649,33 @@ export interface components {
             /** Issue Id */
             issue_id: number;
         };
-        /** @description Wire parity with Python `IssueDependenciesResponse`. */
+        /**
+         * IssueDependenciesResponse
+         * @description Schema for issue-level dependency listing.
+         */
         IssueDependenciesResponse: {
+            /** Incoming */
             incoming: components["schemas"]["IssueDependencyEdge"][];
-            /** Format: int32 */
+            /** Issue Id */
             issue_id: number;
+            /** Outgoing */
             outgoing: components["schemas"]["IssueDependencyEdge"][];
         };
-        /** @description Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`). */
+        /**
+         * IssueDependencyEdge
+         * @description Schema for a single issue dependency edge.
+         */
         IssueDependencyEdge: {
-            /** Format: int32 */
+            /** Dependency Id */
             dependency_id: number;
-            /** Format: int32 */
+            /** Source Issue Id */
             source_issue_id: number;
+            /** Source Issue Number */
             source_issue_number: string;
-            /** Format: int32 */
+            /** Source Thread Id */
             source_thread_id: number;
+            /** Source Thread Title */
             source_thread_title: string;
-        };
-        /** @description Wire parity with Python `IssueResponse` (`app/schemas/issue.py`). */
-        IssueDetailResponse: {
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            issue_number: string;
-            /** Format: int32 */
-            position: number;
-            read_at?: string | null;
-            status: string;
-            /** Format: int32 */
-            thread_id: number;
         };
         /**
          * IssueIdentityMapping
@@ -9996,35 +11017,155 @@ export interface components {
             /** Format: int32 */
             tracked_issue_count: number;
         };
-        NativeCreatorSummaryCoverage: {
-            /** Format: int64 */
-            rated_issues_total: number;
-            /** Format: int64 */
-            rated_issues_with_creator_metadata: number;
-            ratings_complete: boolean;
-            read_unrated_complete: boolean;
-            /** Format: int64 */
-            read_unrated_issues_total: number;
-            /** Format: int64 */
-            read_unrated_issues_with_creator_metadata: number;
-            /** Format: int64 */
-            unread_issues_total: number;
-            /** Format: int64 */
-            unread_issues_with_creator_metadata: number;
-            upcoming_complete: boolean;
+        NativeContinuityRuleResponse: {
+            /** Format: int32 */
+            checkpoint_issue_id?: number | null;
+            convergence_targets: components["schemas"]["NativeConvergenceTarget"][];
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            note?: string | null;
+            satisfaction_type: string;
+            selected_member_issue_ids: number[];
+            /** Format: int32 */
+            source_id: number;
+            source_type: string;
+            /** Format: int32 */
+            target_id: number;
+            target_type: string;
+            updated_at: string;
+            /** Format: int32 */
+            user_id: number;
         };
-        NativeCreatorSummaryItem: {
+        NativeConvergenceTarget: {
+            /** Format: int32 */
+            id: number;
+            type: string;
+        };
+        NativeDependencyNoteUpdate: {
+            note?: string | null;
+        };
+        /**
+         * @description Issue-level dependency response mirroring the Python `DependencyResponse`
+         *     fields the Dependency Builder consumes (`warning`, labels, thread ids).
+         */
+        NativeDependencyResponse: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int32 */
+            id: number;
+            /** @default true */
+            is_issue_level: boolean;
+            note?: string | null;
+            /** Format: int32 */
+            source_issue_id?: number | null;
+            /** Format: int32 */
+            source_issue_thread_id?: number | null;
+            source_label?: string | null;
+            /** Format: int32 */
+            source_thread_id?: number | null;
+            /** Format: int32 */
+            target_issue_id?: number | null;
+            /** Format: int32 */
+            target_issue_thread_id?: number | null;
+            target_label?: string | null;
+            /** Format: int32 */
+            target_thread_id?: number | null;
+            warning?: string | null;
+        };
+        /** @description Request body for an enumeration-safe password-recovery email. */
+        NativeForgotPasswordRequest: {
+            email: string;
+        };
+        NativeIdentityInboxActionResponse: {
+            message: string;
+            success: boolean;
+            updated_item?: null | components["schemas"]["NativeIdentityInboxItem"];
+        };
+        NativeIdentityInboxCandidate: {
+            comicvine_id?: string | null;
             /** Format: double */
-            average_rating?: number | null;
-            canonical_creator_key: string;
-            display_name: string;
-            normalized_roles: string[];
+            confidence?: number | null;
+            evidence_json: unknown;
+            evidence_source?: string | null;
+            /** Format: int32 */
+            external_identity_id: number;
+            external_url?: string | null;
+            metadata_json: unknown;
+            provider: string;
+            rejection_reason?: string | null;
+            status: string;
+        };
+        NativeIdentityInboxItem: {
+            candidates: components["schemas"]["NativeIdentityInboxCandidate"][];
+            /** Format: double */
+            created_at?: number | null;
+            /** Format: int32 */
+            issue_id: number;
+            issue_number: string;
+            /** Format: int32 */
+            mapping_id: number;
+            provider?: string | null;
+            source_entry_summary: string;
+            status: string;
+            /** Format: int32 */
+            thread_id: number;
+            thread_title: string;
+            /** Format: double */
+            updated_at?: number | null;
+            why_stopped: string;
+        };
+        NativeIdentityInboxResponse: {
+            items: components["schemas"]["NativeIdentityInboxItem"][];
             /** Format: int64 */
-            ratings_count: number;
+            limit: number;
             /** Format: int64 */
-            read_unrated_count: number;
+            offset: number;
             /** Format: int64 */
-            upcoming_count: number;
+            total: number;
+        };
+        NativeIdentityInboxSearchResponse: {
+            /** Format: int32 */
+            issue_id: number;
+            query: string;
+            results: components["schemas"]["NativeIdentityInboxSearchResult"][];
+            /** Format: int64 */
+            total_available?: number | null;
+        };
+        NativeIdentityInboxSearchResult: {
+            /** Format: int32 */
+            comicvine_issue_id: number;
+            /** Format: int32 */
+            comicvine_volume_id?: number | null;
+            evidence: string[];
+            image_url?: string | null;
+            issue_name?: string | null;
+            issue_number?: string | null;
+            publisher?: string | null;
+            /** Format: double */
+            score?: number | null;
+            site_detail_url?: string | null;
+            /** Format: int32 */
+            start_year?: number | null;
+            volume_name?: string | null;
+        };
+        /** @description Wire parity with Python `IssueDependenciesResponse`. */
+        NativeIssueDependenciesResponse: {
+            incoming: components["schemas"]["NativeIssueDependencyEdge"][];
+            /** Format: int32 */
+            issue_id: number;
+            outgoing: components["schemas"]["NativeIssueDependencyEdge"][];
+        };
+        /** @description Wire parity with Python `IssueDependencyEdge` (`app/schemas/dependency.py`). */
+        NativeIssueDependencyEdge: {
+            /** Format: int32 */
+            dependency_id: number;
+            /** Format: int32 */
+            source_issue_id: number;
+            source_issue_number: string;
+            /** Format: int32 */
+            source_thread_id: number;
+            source_thread_title: string;
         };
         NativeIssueListResponse: {
             issues: components["schemas"]["IssueMutationItem"][];
@@ -10033,6 +11174,10 @@ export interface components {
             page_size: number;
             /** Format: int32 */
             total_count: number;
+        };
+        /** @description Safe acknowledgement returned whether or not an account exists. */
+        NativePasswordResetResponse: {
+            message: string;
         };
         /** @description Confirmed provider series metadata for one queue row. */
         NativeQueueSeriesMetadata: {
@@ -10050,6 +11195,14 @@ export interface components {
             origin: components["schemas"]["BlockerOrigin"];
             reason: string;
             waiting_on: components["schemas"]["NativeBoundaryIssue"][];
+        };
+        NativeReadingBoundaryExplanationV2: {
+            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
+            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
+            state: components["schemas"]["BoundaryState"];
+            summary: string;
+            /** Format: int32 */
+            thread_id: number;
         };
         NativeReadingBoundaryNext: {
             editor?: null | components["schemas"]["NativeBoundaryEditorTarget"];
@@ -10087,35 +11240,85 @@ export interface components {
             /** Format: int32 */
             thread_id: number;
         };
+        /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
+        NativeRefreshTokenRequest: {
+            refresh_token: string;
+        };
         /** @description Result of reconciling a GitHub source identity with the ledger. */
         NativeReleaseSourceResponse: {
             exists: boolean;
             release?: null | components["schemas"]["MinimalReleaseResponse"];
         };
-        /** @description Canonical bandwidth state; invalid stored values normalize to `null`. */
-        NativeSessionBandwidthState: {
-            active_bandwidth?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            mode_version?: string | null;
-            predicted_bandwidth?: string | null;
-            source?: string | null;
+        /** @description Request body for completing a password reset with a single-use token. */
+        NativeResetPasswordRequest: {
+            new_password: string;
+            token: string;
         };
-        /** @description Canonical intent state; invalid stored values normalize to `null`. */
-        NativeSessionIntentState: {
-            active_intent?: string | null;
-            /** Format: double */
-            confidence?: number | null;
-            mode_version?: string | null;
-            predicted_intent?: string | null;
-            source?: string | null;
+        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
+        NativeSeriesImportStatusResponse: {
+            /** Format: int32 */
+            comicvine_volume_id: number;
+            imported: boolean;
+            /** Format: int32 */
+            issue_count?: number | null;
+            series_name?: string | null;
+            /** Format: int32 */
+            thread_id?: number | null;
         };
-        NearMatch: {
-            color: string;
+        /**
+         * @description Wire parity with Python `ThreadDependenciesResponse`
+         *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
+         *     thread's issues block others, `blocked_by` holds edges where this thread's
+         *     issues are blocked. Each entry is the enriched `DependencyResponse`.
+         */
+        NativeThreadDependenciesResponse: {
+            blocked_by: components["schemas"]["NativeDependencyResponse"][];
+            blocking: components["schemas"]["NativeDependencyResponse"][];
+        };
+        /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
+        NativeThreadIssueDependenciesResponse: {
+            issues: components["schemas"]["NativeIssueDependenciesResponse"][];
+            /** Format: int32 */
+            thread_id: number;
+        };
+        /** @description Response body for token endpoints, matching the Python wire contract. */
+        NativeTokenResponse: {
+            access_token: string;
+            refresh_token: string;
+            token_type: string;
+        };
+        /** @description Response body for the current-user endpoint. */
+        NativeUserResponse: {
+            email?: string | null;
             /** Format: int32 */
             id: number;
+            is_admin: boolean;
+            username: string;
+        };
+        /**
+         * NearMatchResponse
+         * @description A global tag that is a near match to a requested name.
+         *
+         *     Attributes:
+         *         id: Primary key.
+         *         name: Display name (original casing).
+         *         color: Hex ``#RRGGBB`` value.
+         *         normalized_name: Lowercased name used for matching.
+         *         scope: Always ``"global"``.
+         */
+        NearMatchResponse: {
+            /** Color */
+            color: string;
+            /** Id */
+            id: number;
+            /** Name */
             name: string;
+            /** Normalized Name */
             normalized_name: string;
+            /**
+             * Scope
+             * @default global
+             */
             scope: string;
         };
         /**
@@ -10202,8 +11405,12 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        /** @description Safe acknowledgement returned whether or not an account exists. */
+        /**
+         * PasswordResetResponse
+         * @description Safe acknowledgement regardless of account existence.
+         */
         PasswordResetResponse: {
+            /** Message */
             message: string;
         };
         PlanReaderBlocker: {
@@ -10787,7 +11994,7 @@ export interface components {
         };
         ReadingBoundaryBatchResponseV2: {
             threads: {
-                [key: string]: components["schemas"]["ReadingBoundaryExplanationV2"];
+                [key: string]: components["schemas"]["NativeReadingBoundaryExplanationV2"];
             };
         };
         /**
@@ -10831,12 +12038,22 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
+        /**
+         * ReadingBoundaryExplanationV2
+         * @description Canonical reading boundary without retired dependency associations.
+         */
         ReadingBoundaryExplanationV2: {
-            blockers: components["schemas"]["NativeReadingBoundaryBlocker"][];
-            next?: null | components["schemas"]["NativeReadingBoundaryNext"];
-            state: components["schemas"]["BoundaryState"];
+            /** Blockers */
+            blockers?: components["schemas"]["ReadingBoundaryBlocker"][];
+            next?: components["schemas"]["ReadingBoundaryNext"] | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "blocked" | "available" | "complete" | "unavailable";
+            /** Summary */
             summary: string;
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
         /**
@@ -11298,23 +12515,50 @@ export interface components {
             mode?: string | null;
             name: string;
         };
-        /** @description Current reading-mode state for the active session (wire response). */
+        /**
+         * ReadingModeResponse
+         * @description Current reading-mode state for the active session.
+         */
         ReadingModeResponse: {
-            bandwidth?: string | null;
-            intent?: string | null;
-            source?: string | null;
+            /** Bandwidth */
+            bandwidth: string | null;
+            /** Intent */
+            intent: string | null;
+            /** Source */
+            source: string | null;
+            /** Suggested */
             suggested: boolean;
         };
         /**
-         * @description Set request: `source` is required; `answers` (quiz) or resolved
-         *     `bandwidth`+`intent` (manual) supplies the mode, as in Python.
+         * ReadingModeSetRequest
+         * @description Request to set the active session reading mode.
+         *
+         *     Callers may submit resolved ``bandwidth``/``intent`` directly (manual
+         *     selector), or submit raw quiz ``answers`` with ``source="quiz"`` and let the
+         *     server resolve them through the canonical contract.
          */
         ReadingModeSetRequest: {
+            /**
+             * Answers
+             * @description Raw quiz answers keyed by question ID
+             */
             answers?: {
                 [key: string]: string;
             } | null;
+            /**
+             * Bandwidth
+             * @description Resolved bandwidth value
+             */
             bandwidth?: string | null;
+            /**
+             * Intent
+             * @description Resolved intent value
+             */
             intent?: string | null;
+            /**
+             * Source
+             * @description Origin of the setting: 'quiz' or 'manual'
+             */
             source: string;
         };
         /**
@@ -11356,8 +12600,12 @@ export interface components {
             /** Thread Title */
             thread_title: string;
         };
-        /** @description Python `ReadingOrderListResponse`. */
+        /**
+         * ReadingOrderListResponse
+         * @description Response schema for listing all reading orders owned by a user.
+         */
         ReadingOrderListResponse: {
+            /** Reading Orders */
             reading_orders: components["schemas"]["ReadingOrderSummary"][];
         };
         /**
@@ -11469,13 +12717,21 @@ export interface components {
             /** Total Items */
             total_items: number;
         };
-        /** @description One row of the reading-orders list (Python `ReadingOrderSummary`). */
+        /**
+         * ReadingOrderSummary
+         * @description Compact reading order metadata for projection and picker surfaces.
+         */
         ReadingOrderSummary: {
+            /** Description */
             description?: string | null;
-            /** Format: int32 */
+            /** Id */
             id: number;
+            /** Name */
             name: string;
-            /** Format: int64 */
+            /**
+             * Total Items
+             * @default 0
+             */
             total_items: number;
         };
         /**
@@ -11670,8 +12926,12 @@ export interface components {
             issue_id: number;
             label: string;
         };
-        /** @description Optional request body for token refresh; the refresh cookie is also accepted. */
+        /**
+         * RefreshTokenRequest
+         * @description Request schema for token refresh.
+         */
         RefreshTokenRequest: {
+            /** Refresh Token */
             refresh_token: string;
         };
         /** @description Request body for account registration. */
@@ -11816,11 +13076,6 @@ export interface components {
              */
             reason?: string | null;
         };
-        /**
-         * @description Report kind, mirroring Python `ReportType = Literal["bug", "feature"]`.
-         * @enum {string}
-         */
-        ReportType: "bug" | "feature";
         ResetDiceRequest: {
             idempotency_key: string;
         };
@@ -11829,9 +13084,14 @@ export interface components {
             die: number;
             replayed: boolean;
         };
-        /** @description Request body for completing a password reset with a single-use token. */
+        /**
+         * ResetPasswordRequest
+         * @description Request schema for password reset completion.
+         */
         ResetPasswordRequest: {
+            /** New Password */
             new_password: string;
+            /** Token */
             token: string;
         };
         /** @description The reader's current logical die and the approved ladder. */
@@ -12055,16 +13315,118 @@ export interface components {
              */
             series_name: string;
         };
-        /** @description Wire parity with Python `SeriesImportStatusResponse`. */
+        /**
+         * SeriesImportStatusResponse
+         * @description Server truth about one ComicVine volume's presence in the caller's queue.
+         *
+         *     A client that loses the ``series:import`` response (timeout, dropped
+         *     connection, gateway timeout) re-checks this endpoint before reporting
+         *     failure, so the answer must reflect committed server state for the
+         *     calling user only and must never leak another user's queue.
+         */
         SeriesImportStatusResponse: {
-            /** Format: int32 */
+            /** Comicvine Volume Id */
             comicvine_volume_id: number;
+            /**
+             * Imported
+             * @description True when the calling user already owns a thread confirmed against this ComicVine volume.
+             */
             imported: boolean;
-            /** Format: int32 */
+            /**
+             * Issue Count
+             * @description Issues the existing thread tracks, or null when not imported. The client reports this server count after a recovered import.
+             */
             issue_count?: number | null;
+            /**
+             * Series Name
+             * @description Title of the existing thread, or null when not imported.
+             */
             series_name?: string | null;
-            /** Format: int32 */
+            /**
+             * Thread Id
+             * @description Existing thread ID, or null when the volume is not imported.
+             */
             thread_id?: number | null;
+        };
+        /**
+         * SeriesMappingCommitRequest
+         * @description Schema for committing user-approved series mappings.
+         */
+        SeriesMappingCommitRequest: {
+            /**
+             * Approved Row Ids
+             * @description Preview row ids the caller approved; every entry must be safe_exact_match
+             */
+            approved_row_ids?: string[];
+            /**
+             * Idempotency Key
+             * @description Caller-supplied key applied to the complete material commit request
+             */
+            idempotency_key: string;
+            /**
+             * Preview Token
+             * @description User-bound signed token returned by the series mapping preview
+             */
+            preview_token: string;
+        };
+        /**
+         * SeriesMappingCommitResponse
+         * @description Schema for series mapping commit responses.
+         */
+        SeriesMappingCommitResponse: {
+            /**
+             * Already Confirmed Issue Ids
+             * @description Issues that already carried an agreeing confirmed mapping and required no write
+             */
+            already_confirmed_issue_ids?: number[];
+            /**
+             * Confirmed Issue Ids
+             * @description Issues whose provider identity was confirmed by this commit
+             */
+            confirmed_issue_ids?: number[];
+            /**
+             * Hydration Queued Issue Ids
+             * @description Newly confirmed issues handed to post-commit metadata hydration
+             */
+            hydration_queued_issue_ids?: number[];
+            /**
+             * Idempotency Key
+             * @description Idempotency key that produced this result
+             */
+            idempotency_key: string;
+            /**
+             * Needs Review Issue Ids
+             * @description Ambiguous, conflicting, special, cross-volume, or unresolved issues left for issue-level repair
+             */
+            needs_review_issue_ids?: number[];
+            /** @description Confirmed series evidence */
+            series_mapping: components["schemas"]["SeriesMappingCommitSeriesMapping"];
+        };
+        /**
+         * SeriesMappingCommitSeriesMapping
+         * @description Schema for the series evidence established by a commit.
+         */
+        SeriesMappingCommitSeriesMapping: {
+            /**
+             * Evidence Source
+             * @description Provenance recorded for the confirmation
+             */
+            evidence_source: string;
+            /**
+             * External Id
+             * @description Provider-specific series identifier
+             */
+            external_id: string;
+            /**
+             * Provider
+             * @description External provider name
+             */
+            provider: string;
+            /**
+             * Status
+             * @description Mapping status of the confirmed series evidence
+             */
+            status: string;
         };
         /**
          * SeriesMappingPreviewCounts
@@ -12312,33 +13674,6 @@ export interface components {
              */
             status: string;
         };
-        /** @description Active (pending or freshly rolled) thread projection for one session. */
-        SessionActiveThread: {
-            format: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            issue_id?: number | null;
-            issue_number?: string | null;
-            /** Format: int32 */
-            issues_read?: number | null;
-            /** Format: int32 */
-            issues_remaining: number;
-            /** Format: double */
-            last_rating?: number | null;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            next_issue_id?: number | null;
-            next_issue_number?: string | null;
-            /** Format: int32 */
-            queue_position: number;
-            reading_progress?: string | null;
-            tags: components["schemas"]["SessionTag"][];
-            title: string;
-            /** Format: int32 */
-            total_issues?: number | null;
-        };
         /**
          * SessionBandwidthState
          * @description Canonical ephemeral bandwidth state for the active reading session.
@@ -12359,42 +13694,6 @@ export interface components {
             predicted_bandwidth: ("light" | "balanced" | "deep") | null;
             /** Source */
             source: ("inferred" | "manual" | "snooze" | "quiz") | null;
-        };
-        /** @description Wire shape of Python `SessionResponse` for `get_session`. */
-        SessionDetailResponse: {
-            active_thread?: null | components["schemas"]["SessionActiveThread"];
-            bandwidth?: null | components["schemas"]["NativeSessionBandwidthState"];
-            correction?: unknown;
-            /** Format: int32 */
-            current_die: number;
-            ended_at?: string | null;
-            has_restore_point: boolean;
-            /** Format: int32 */
-            id: number;
-            intent?: null | components["schemas"]["NativeSessionIntentState"];
-            ladder_path: string;
-            /** Format: int32 */
-            last_rolled_result?: number | null;
-            /** Format: int32 */
-            manual_die?: number | null;
-            /** Format: int32 */
-            pending_thread_id?: number | null;
-            reading_bandwidth?: string | null;
-            reading_intent?: string | null;
-            reading_mode_source?: string | null;
-            reading_mode_suggested: boolean;
-            skipped_thread_ids: number[];
-            skipped_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            snapshot_count: number;
-            snoozed_thread_ids: number[];
-            snoozed_threads: components["schemas"]["SessionThreadSummary"][];
-            /** Format: int32 */
-            start_die: number;
-            started_at: string;
-            timezone?: string | null;
-            /** Format: int32 */
-            user_id: number;
         };
         /**
          * SessionDetailsResponse
@@ -12566,43 +13865,6 @@ export interface components {
             timezone?: string | null;
             /** User Id */
             user_id: number;
-        };
-        SessionSnapshotItem: {
-            created_at: string;
-            description?: string | null;
-            /** Format: int32 */
-            event_id?: number | null;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            session_id: number;
-        };
-        SessionSnapshotsResponse: {
-            /** Format: int32 */
-            session_id: number;
-            snapshots: components["schemas"]["SessionSnapshotItem"][];
-        };
-        /** @description One direct visible tag on the active thread. */
-        SessionTag: {
-            color: string;
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            name: string;
-            normalized_name: string;
-            /** Format: int32 */
-            owner_user_id?: number | null;
-            scope: string;
-            updated_at: string;
-        };
-        /**
-         * @description Compact thread summary used for the (empty on this endpoint) snoozed and
-         *     skipped lists, kept typed so the contract stays explicit.
-         */
-        SessionThreadSummary: {
-            /** Format: int32 */
-            id: number;
-            title: string;
         };
         /**
          * SetCurrentIssueRequest
@@ -12867,39 +14129,182 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        Tag: {
-            color: string;
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            name: string;
-            normalized_name: string;
-            /** Format: int32 */
-            owner_user_id?: number | null;
-            scope: string;
-            updated_at: string;
-        };
-        TagAssignmentResponse: {
-            created_at: string;
-            /** Format: int32 */
-            id: number;
-            /** Format: int32 */
-            tag_id: number;
-            /** Format: int32 */
+        /**
+         * TagAssignmentRequest
+         * @description Request to attach a tag to a target.
+         *
+         *     Attributes:
+         *         target_type: One of ``"Issue"``, ``"Thread"``, or ``"ContinuityPlan"``.
+         *         target_id: Primary key of the target row.
+         */
+        TagAssignmentRequest: {
+            /** Target Id */
             target_id: number;
+            target_type: components["schemas"]["TagTargetType"];
+        };
+        /**
+         * TagAssignmentResponse
+         * @description A tag assignment.
+         *
+         *     Attributes:
+         *         id: Primary key of the assignment.
+         *         tag_id: Referenced tag.
+         *         target_type: Type of the target.
+         *         target_id: Primary key of the target.
+         *         created_at: When the assignment was made.
+         */
+        TagAssignmentResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Tag Id */
+            tag_id: number;
+            /** Target Id */
+            target_id: number;
+            /** Target Type */
             target_type: string;
         };
+        /**
+         * TagBulkAssignmentRequest
+         * @description Request to attach or detach one tag across many targets of one type.
+         *
+         *     Bulk operations touch only the requested tag assignment: unrelated tags on
+         *     the selected targets are never replaced or removed.
+         *
+         *     Attributes:
+         *         target_type: One of ``"Issue"``, ``"Thread"``, or ``"ContinuityPlan"``.
+         *         target_ids: Primary keys of the target rows. Duplicates are ignored.
+         */
+        TagBulkAssignmentRequest: {
+            /** Target Ids */
+            target_ids: number[];
+            target_type: components["schemas"]["TagTargetType"];
+        };
+        /**
+         * TagBulkAssignmentResponse
+         * @description Result of a bulk tag assignment operation.
+         *
+         *     Attributes:
+         *         tag_id: Primary key of the tag.
+         *         target_type: Type of the targets.
+         *         requested_ids: Deduplicated target ids the request asked about.
+         *         affected_ids: Targets whose assignment state actually changed (newly
+         *             assigned for bulk-add, newly removed for bulk-remove).
+         *         already_ids: Targets already in the desired state (already assigned
+         *             for bulk-add, already unassigned for bulk-remove).
+         *         still_inherited_ids: Requested issues that keep the tag through
+         *             inheritance after a bulk removal (issue #3433). An issue
+         *             whose thread or containing Reading Plan still holds the tag keeps
+         *             showing it even though it has no direct assignment. Always empty
+         *             for bulk adds and for target types that cannot inherit in v1.
+         */
+        TagBulkAssignmentResponse: {
+            /** Affected Ids */
+            affected_ids: number[];
+            /** Already Ids */
+            already_ids: number[];
+            /** Requested Ids */
+            requested_ids: number[];
+            /** Still Inherited Ids */
+            still_inherited_ids?: number[];
+            /** Tag Id */
+            tag_id: number;
+            /** Target Type */
+            target_type: string;
+        };
+        /**
+         * TagCreate
+         * @description Request to create a tag.
+         *
+         *     Attributes:
+         *         name: Raw display name (1-100 characters). Casing and spacing are
+         *             preserved on storage and display; the matching key is lowercased
+         *             with repeated internal whitespace collapsed.
+         *         color: Palette name (e.g. ``"red"``) or a hex value matching a palette
+         *             entry. Defaults to ``"red"``.
+         *         scope: ``"global"`` (administrators only) or ``"private"``. Defaults to
+         *             ``"private"``. Non-admin requests for ``"global"`` are refused.
+         *         include_near_matches: When ``True``, the response populates
+         *             ``near_matches`` with global tags whose names are near matches.
+         *             Defaults to ``True`` to suggest similar global tags when creating
+         *             private tags.
+         */
+        TagCreate: {
+            /**
+             * Color
+             * @default red
+             */
+            color: string;
+            /**
+             * Include Near Matches
+             * @default true
+             */
+            include_near_matches: boolean;
+            /** Name */
+            name: string;
+            /** @default private */
+            scope: components["schemas"]["TagScope"];
+        };
+        /**
+         * TagCreateResponse
+         * @description Response to a tag creation request.
+         *
+         *     Attributes:
+         *         tag: The resulting tag. When ``redirected_to_global`` is ``True`` this
+         *             is the existing global tag the request matched.
+         *         redirected_to_global: ``True`` when a private-tag creation request
+         *             matched an existing global tag by normalized name.
+         *         near_matches: Global tags whose names are near matches to the request
+         *             name. Empty unless ``include_near_matches`` was ``True``.
+         */
+        TagCreateResponse: {
+            /**
+             * Near Matches
+             * @default []
+             */
+            near_matches: components["schemas"]["NearMatchResponse"][];
+            /**
+             * Redirected To Global
+             * @default false
+             */
+            redirected_to_global: boolean;
+            tag: components["schemas"]["TagResponse"];
+        };
+        /**
+         * TagDeleteResponse
+         * @description Response to a tag deletion.
+         *
+         *     Attributes:
+         *         tag_id: Primary key of the deleted tag.
+         *         assignments_removed: Number of ``tag_assignments`` rows deleted.
+         *         references_removed_by_consumers: Per-consumer counts of roll-filter or
+         *             other tag references removed during deletion. Empty when no
+         *             consumers are registered.
+         */
         TagDeleteResponse: {
-            /** Format: int64 */
+            /** Assignments Removed */
             assignments_removed: number;
+            /**
+             * References Removed By Consumers
+             * @default {}
+             */
             references_removed_by_consumers: {
                 [key: string]: number;
             };
-            /** Format: int32 */
+            /** Tag Id */
             tag_id: number;
         };
+        /**
+         * TagListResponse
+         * @description List of tags visible to a user.
+         */
         TagListResponse: {
-            tags: components["schemas"]["Tag"][];
+            /** Tags */
+            tags: components["schemas"]["TagResponse"][];
         };
         /**
          * TagResponse
@@ -12929,16 +14334,64 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * TagScope
+         * @description A tag's visibility scope.
+         * @enum {string}
+         */
+        TagScope: "global" | "private";
+        /**
+         * TagTargetType
+         * @description A taggable entity type.
+         *
+         *     Mirrors ``app.constants.TAG_TARGET_TYPES``; the two must stay in sync.
+         * @enum {string}
+         */
+        TagTargetType: "Issue" | "Thread" | "ContinuityPlan";
+        /**
+         * TagUpdate
+         * @description Request to update a tag.
+         *
+         *     Attributes:
+         *         name: New display name. Casing and spacing are preserved; the matching
+         *             key is lowercased with repeated internal whitespace collapsed.
+         *             Refused if it would collide with an existing global tag.
+         *         color: New palette name or hex value. ``None`` leaves the
+         *             color unchanged.
+         */
+        TagUpdate: {
+            /** Color */
+            color?: string | null;
+            /** Name */
+            name?: string | null;
+        };
+        /**
+         * TagUsageResponse
+         * @description Assignment usage information for a tag.
+         *
+         *     Attributes:
+         *         tag_id: Primary key of the tag.
+         *         total_assignments: Number of ``tag_assignments`` rows for the tag.
+         *         assignments_by_target_type: Assignment counts grouped by target type.
+         *         references_removed_by_consumers: Per-consumer counts of roll-filter or
+         *             other tag references removed during deletion. Empty when no
+         *             consumers are registered.
+         */
         TagUsageResponse: {
+            /** Assignments By Target Type */
             assignments_by_target_type: {
                 [key: string]: number;
             };
+            /**
+             * References Removed By Consumers
+             * @default {}
+             */
             references_removed_by_consumers: {
                 [key: string]: number;
             };
-            /** Format: int32 */
+            /** Tag Id */
             tag_id: number;
-            /** Format: int64 */
+            /** Total Assignments */
             total_assignments: number;
         };
         /**
@@ -12974,38 +14427,82 @@ export interface components {
              */
             generated_at: string;
         };
-        /** @description Wire parity with Python `{"dismissed": True}`. */
-        TasteDismissResponse: {
-            dismissed: boolean;
-        };
-        /** @description All Taste Bank signals owned by the authenticated user. */
+        /**
+         * TasteSignalListResponse
+         * @description All Taste Bank signals owned by the authenticated user.
+         *
+         *     Attributes:
+         *         signals: Canonical signals ordered by signal type then external key.
+         */
         TasteSignalListResponse: {
+            /** Signals */
             signals: components["schemas"]["TasteSignalResponse"][];
         };
-        /** @description Canonical representation of one persisted Taste Bank signal. */
+        /**
+         * TasteSignalResponse
+         * @description Canonical representation of one persisted Taste Bank signal.
+         *
+         *     Attributes:
+         *         user_id: Owning user; responses are always scoped to the caller.
+         *         signal_type: Category of the signal (creator, character, team,
+         *             publisher, or era).
+         *         external_key: Stable normalized key of the external feature.
+         *         display_name: Human-readable label for prompts.
+         *         affinity_estimate: Inferred affinity effect size, or ``None`` when
+         *             no inference exists yet. Never modified by verdict writes.
+         *         confidence: Inferred statistical confidence in [0, 1], or ``None``.
+         *             Never modified by verdict writes.
+         *         evidence_count: Distinct issues contributing inference evidence.
+         *             Never modified by verdict writes.
+         *         distinct_thread_count: Distinct threads contributing evidence.
+         *             Never modified by verdict writes.
+         *         user_verdict: Explicit user verdict, or ``None`` when inferred only.
+         *         verdict_at: When the current explicit verdict was recorded.
+         *         first_observed_at: First time this signal was observed for the user.
+         *         last_observed_at: Most recent observation for the user.
+         *         last_prompted_at: Most recent discovery prompt for this signal.
+         */
         TasteSignalResponse: {
-            /** Format: double */
+            /** Affinity Estimate */
             affinity_estimate?: number | null;
-            /** Format: double */
+            /** Confidence */
             confidence?: number | null;
+            /** Display Name */
             display_name: string;
-            /** Format: int32 */
+            /** Distinct Thread Count */
             distinct_thread_count: number;
-            /** Format: int32 */
+            /** Evidence Count */
             evidence_count: number;
+            /** External Key */
             external_key: string;
+            /** First Observed At */
             first_observed_at?: string | null;
+            /** Last Observed At */
             last_observed_at?: string | null;
+            /** Last Prompted At */
             last_prompted_at?: string | null;
+            /** Signal Type */
             signal_type: string;
-            /** Format: int32 */
+            /** User Id */
             user_id: number;
-            user_verdict?: string | null;
+            /** User Verdict */
+            user_verdict?: ("confirmed" | "sometimes" | "rejected") | null;
+            /** Verdict At */
             verdict_at?: string | null;
         };
-        /** @description Explicit user verdict on one Taste Bank signal. */
+        /**
+         * TasteVerdictRequest
+         * @description Explicit user verdict on a previously discovered taste signal.
+         *
+         *     Attributes:
+         *         verdict: The stable user decision to record for the signal.
+         */
         TasteVerdictRequest: {
-            verdict: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "confirmed" | "sometimes" | "rejected";
         };
         /**
          * ThreadConnectedResponse
@@ -13044,13 +14541,13 @@ export interface components {
             total_issues?: number | null;
         };
         /**
-         * @description Wire parity with Python `ThreadDependenciesResponse`
-         *     (`app/schemas/dependency.py`): the `blocking` list holds edges where this
-         *     thread's issues block others, `blocked_by` holds edges where this thread's
-         *     issues are blocked. Each entry is the enriched `DependencyResponse`.
+         * ThreadDependenciesResponse
+         * @description Schema for thread dependency listing.
          */
         ThreadDependenciesResponse: {
+            /** Blocked By */
             blocked_by: components["schemas"]["DependencyResponse"][];
+            /** Blocking */
             blocking: components["schemas"]["DependencyResponse"][];
         };
         /**
@@ -13063,31 +14560,58 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        /** @description The legacy single-thread response retained for the v1 and bare aliases. */
-        ThreadDetailResponse: {
+        /**
+         * ThreadDetail
+         * @description Schema for thread detail view (single thread with full detail fields).
+         */
+        ThreadDetail: {
+            /**
+             * Blocking Reasons
+             * @default []
+             */
             blocking_reasons: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
             created_at: string;
+            /** Format */
             format: string;
-            /** Format: int32 */
+            /** Id */
             id: number;
+            /**
+             * Is Blocked
+             * @default false
+             */
             is_blocked: boolean;
+            /** Is Test */
             is_test: boolean;
-            /** Format: int32 */
+            /** Issues Remaining */
             issues_remaining: number;
-            last_activity_at?: string | null;
-            /** Format: double */
-            last_rating?: number | null;
-            manual_creator_credits: unknown;
-            /** Format: int32 */
+            /** Last Activity At */
+            last_activity_at: string | null;
+            /** Last Rating */
+            last_rating: number | null;
+            /** Manual Creator Credits */
+            manual_creator_credits?: {
+                name: string;
+                roles: string[];
+            }[];
+            /** Next Unread Issue Id */
             next_unread_issue_id?: number | null;
+            /** Next Unread Issue Number */
             next_unread_issue_number?: string | null;
-            notes?: string | null;
-            /** Format: int32 */
+            /** Notes */
+            notes: string | null;
+            /** Queue Position */
             queue_position: number;
+            /** Reading Progress */
             reading_progress?: string | null;
+            /** Status */
             status: string;
+            /** Title */
             title: string;
-            /** Format: int32 */
+            /** Total Issues */
             total_issues?: number | null;
         };
         /**
@@ -13104,15 +14628,35 @@ export interface components {
             /** Thread Id */
             thread_id: number;
         };
-        /** @description Wire parity with Python `ThreadIssueDependenciesResponse`. */
+        /**
+         * ThreadIssueDependenciesResponse
+         * @description Issue dependency payloads for every issue in one owned thread.
+         */
         ThreadIssueDependenciesResponse: {
+            /** Issues */
             issues: components["schemas"]["IssueDependenciesResponse"][];
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
+        /**
+         * ThreadIssuesEffectiveTagsResponse
+         * @description Direct and effective tags for every issue in one thread.
+         *
+         *     Bulk read for surfaces that render many issues at once (the thread
+         *     detail issue rows in issue #3422): one response carries each issue's
+         *     effective tags so the client never issues one request per issue.
+         *
+         *     Attributes:
+         *         thread_id: Primary key of the thread.
+         *         issues: Per-issue direct and effective tags in canonical position
+         *             order. Issues without any visible tag still appear with empty
+         *             tag lists so clients can distinguish "no tags" from missing
+         *             data without fallback requests.
+         */
         ThreadIssuesEffectiveTagsResponse: {
+            /** Issues */
             issues: components["schemas"]["EffectiveTagsResponse"][];
-            /** Format: int32 */
+            /** Thread Id */
             thread_id: number;
         };
         /** @description One reader threads collection item. */
@@ -13254,10 +14798,19 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        /** @description Response body for token endpoints, matching the Python wire contract. */
+        /**
+         * TokenResponse
+         * @description Response schema for token endpoints.
+         */
         TokenResponse: {
+            /** Access Token */
             access_token: string;
+            /** Refresh Token */
             refresh_token: string;
+            /**
+             * Token Type
+             * @default bearer
+             */
             token_type: string;
         };
         /** @description Summary of one highly rated thread. */
@@ -13289,32 +14842,74 @@ export interface components {
              */
             instance_id: string;
         };
-        UpdateTagRequest: {
-            color?: string | null;
-            name?: string | null;
+        /**
+         * UserLoginRequest
+         * @description Request schema for user login.
+         */
+        UserLoginRequest: {
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
         };
         /**
+         * UserPreferencesPatchRequest
          * @description Partial update of the authenticated user's preferences.
          *
-         *     `theme` is optional: when omitted or explicit JSON null the current
-         *     preference is left unchanged and a missing row is seeded with the
-         *     default, exactly like the Python `UserPreferencesPatchRequest`.
+         *     Attributes:
+         *         theme: Optional theme id to apply. When omitted, the current theme
+         *             is left unchanged. Unknown values are rejected by validation.
          */
         UserPreferencesPatchRequest: {
-            theme?: string | null;
+            /** Theme */
+            theme?: ("classic" | "ink-gold" | "command-center") | null;
         };
-        /** @description Current preference values for the authenticated user. */
+        /**
+         * UserPreferencesResponse
+         * @description Current preference values for the authenticated user.
+         *
+         *     Attributes:
+         *         theme: The user's selected visual theme id. Resolves to ``classic``
+         *             when no preference row has been persisted yet.
+         *         user_id: Owning user id, always matching the authenticated principal.
+         */
         UserPreferencesResponse: {
-            theme: string;
-            /** Format: int32 */
+            /**
+             * Theme
+             * @default classic
+             * @enum {string}
+             */
+            theme: "classic" | "ink-gold" | "command-center";
+            /** User Id */
             user_id: number;
         };
-        /** @description Response body for the current-user endpoint. */
+        /**
+         * UserRegisterRequest
+         * @description Request schema for user registration.
+         */
+        UserRegisterRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /** Username */
+            username: string;
+        };
+        /**
+         * UserResponse
+         * @description Response schema for user information.
+         */
         UserResponse: {
-            email?: string | null;
-            /** Format: int32 */
+            /** Email */
+            email: string | null;
+            /** Id */
             id: number;
+            /** Is Admin */
             is_admin: boolean;
+            /** Username */
             username: string;
         };
         /** ValidationError */
@@ -13401,7 +14996,7 @@ export interface operations {
             };
         };
     };
-    csrf_documentation___api_v1_auth_csrf: {
+    get_csrf_token_api_v1_auth_csrf_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -13410,18 +15005,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Double-submit CSRF token */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CsrfResponse"];
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
         };
     };
-    forgot_password_documentation___api_v1_auth_forgot_password: {
+    forgot_password_api_v1_auth_forgot_password_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13434,7 +15031,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Enumeration-safe acknowledgement */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13443,30 +15040,18 @@ export interface operations {
                     "application/json": components["schemas"]["PasswordResetResponse"];
                 };
             };
-            /** @description Request payload failed validation */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Password-recovery rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    login_documentation___api_v1_auth_login: {
+    login_user_api_v1_auth_login_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13475,11 +15060,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["LoginRequest"];
+                "application/json": components["schemas"]["UserLoginRequest"];
             };
         };
         responses: {
-            /** @description Credentials accepted and bearer tokens issued */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13488,44 +15073,18 @@ export interface operations {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Username field contained an email address */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Incorrect username or password */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Login rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    logout_documentation___api_v1_auth_logout: {
+    logout_user_api_v1_auth_logout_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13534,25 +15093,20 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Bearer token revoked and refresh cookie cleared */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    me_documentation___api_v1_auth_me: {
+    get_current_user_info_api_v1_auth_me_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -13561,7 +15115,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Authenticated account profile */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13570,23 +15124,9 @@ export interface operations {
                     "application/json": components["schemas"]["UserResponse"];
                 };
             };
-            /** @description Not authenticated or token invalid */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
-    refresh_documentation___api_v1_auth_refresh: {
+    refresh_access_token_api_v1_auth_refresh_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13595,11 +15135,11 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
-            /** @description Refreshed bearer tokens issued */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13608,30 +15148,18 @@ export interface operations {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Missing, invalid, revoked or stale refresh token */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Refresh rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    register_documentation___api_v1_auth_register: {
+    register_user_api_v1_auth_register_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13640,11 +15168,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RegisterRequest"];
+                "application/json": components["schemas"]["UserRegisterRequest"];
             };
         };
         responses: {
-            /** @description Account created and bearer tokens issued */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13653,37 +15181,18 @@ export interface operations {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            /** @description Username or email is already registered */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Registration rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    reset_password_documentation___api_v1_auth_reset_password: {
+    reset_password_api_v1_auth_reset_password_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13696,7 +15205,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Password reset completed */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13705,33 +15214,14 @@ export interface operations {
                     "application/json": components["schemas"]["PasswordResetResponse"];
                 };
             };
-            /** @description Invalid or expired reset request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Password-recovery rate limit exceeded */
-            429: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -13755,7 +15245,7 @@ export interface operations {
             };
         };
     };
-    create_v1_documentation: {
+    create_bug_report_api_v1_bug_reports__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13768,7 +15258,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description GitHub issue created */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -13777,40 +15267,14 @@ export interface operations {
                     "application/json": components["schemas"]["BugReportResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid or blank title/description, or invalid diagnostics */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Non-admin GitHub issue rate limit reached */
-            429: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description GitHub issue creation failed */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description GitHub integration not configured */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -14428,7 +15892,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SeriesImportStatusResponse"];
+                    "application/json": components["schemas"]["NativeSeriesImportStatusResponse"];
                 };
             };
             /** @description Invalid or revoked access token */
@@ -15035,7 +16499,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"][];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"][];
                 };
             };
         };
@@ -15058,7 +16522,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"];
                 };
             };
         };
@@ -15079,7 +16543,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"];
                 };
             };
         };
@@ -15104,7 +16568,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ContinuityRuleResponse"];
+                    "application/json": components["schemas"]["NativeContinuityRuleResponse"];
                 };
             };
         };
@@ -15128,22 +16592,27 @@ export interface operations {
             };
         };
     };
-    list_creators_documentation: {
+    list_creators_endpoint_api_v1_creators_get: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                search: string | null;
-                sort: string | null;
-                limit: number | null;
-                offset: number | null;
-                min_ratings: number | null;
+            query?: {
+                /** @description Bounded case-insensitive name substring */
+                search?: string | null;
+                /** @description Browse ordering: name (alphabetical), ratings_count (most-rated), average_rating (personal average desc, nulls last) */
+                sort?: "name" | "ratings_count" | "average_rating";
+                /** @description Page size (bounded, max 50) */
+                limit?: number;
+                /** @description Page offset */
+                offset?: number;
+                /** @description Minimum rated-sample filter (0 = any sample size) */
+                min_ratings?: number;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Creator list */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15152,19 +16621,14 @@ export interface operations {
                     "application/json": components["schemas"]["CreatorListResponse"];
                 };
             };
-            /** @description Invalid filters */
-            400: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -15220,18 +16684,19 @@ export interface operations {
             };
         };
     };
-    get_summaries_documentation: {
+    get_creator_summaries_endpoint_api_v1_creators_summaries_get: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                keys: string | null;
+            query?: {
+                /** @description Comma-separated canonical creator keys */
+                keys?: string | null;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Creator summaries */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -15240,19 +16705,14 @@ export interface operations {
                     "application/json": components["schemas"]["CreatorSummariesResponse"];
                 };
             };
-            /** @description Invalid creator keys */
-            400: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -15867,7 +17327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
             /** @description Invalid dependency */
@@ -15952,7 +17412,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -16020,7 +17480,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DependencyNoteUpdate"];
+                "application/json": components["schemas"]["NativeDependencyNoteUpdate"];
             };
         };
         responses: {
@@ -16030,7 +17490,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -16071,7 +17531,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxResponse"];
                 };
             };
         };
@@ -16091,7 +17551,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxSearchResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxSearchResponse"];
                 };
             };
         };
@@ -16114,7 +17574,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxResponse"];
                 };
             };
         };
@@ -16141,7 +17601,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -16164,7 +17624,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -16191,7 +17651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -16214,7 +17674,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IdentityInboxActionResponse"];
+                    "application/json": components["schemas"]["NativeIdentityInboxActionResponse"];
                 };
             };
         };
@@ -16607,100 +18067,80 @@ export interface operations {
             };
         };
     };
-    get_issue_documentation: {
+    get_issue_api_v1_issues__issue_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Issue detail */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["IssueDetailResponse"];
+                    "application/json": components["schemas"]["IssueResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
-    issue_intelligence_docs___api_v1_issues__issue_id__comicvine: {
+    get_issue_comicvine_intelligence_api_v1_issues__issue_id__comicvine_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owner-scoped ComicPile issue id */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Stored ComicVine intelligence, or null without a mapping */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": null | components["schemas"]["IssueIntelligence"];
+                    "application/json": components["schemas"]["ComicVineIssueIntelligence"] | null;
                 };
             };
-            /** @description Invalid or revoked access token */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Issue is not owned by the reader */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    get_issue_dependencies_documentation: {
+    list_issue_dependencies_api_v1_issues__issue_id__dependencies_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned Issue identifier */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Issue dependencies */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -16709,26 +18149,14 @@ export interface operations {
                     "application/json": components["schemas"]["IssueDependenciesResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Issue not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -17000,7 +18428,7 @@ export interface operations {
             };
         };
     };
-    get_reading_mode_documentation: {
+    get_reading_mode_api_v1_reading_mode_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -17009,7 +18437,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Current reading-mode state */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17018,23 +18446,9 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingModeResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
-    set_reading_mode_documentation: {
+    set_reading_mode_api_v1_reading_mode_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -17047,7 +18461,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Newly stored reading-mode state */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17056,30 +18470,18 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingModeResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid source, quiz resolution, or mode values */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    dismiss_reading_mode_suggestion_documentation: {
+    dismiss_reading_mode_suggestion_api_v1_reading_mode_dismiss_suggestion_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -17088,7 +18490,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Unchanged reading-mode state with suggestion cleared */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17097,23 +18499,9 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingModeResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
-    suggest_reading_mode_documentation: {
+    suggest_reading_mode_api_v1_reading_mode_suggest_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -17122,7 +18510,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Reading-mode state with suggestion enabled */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17130,20 +18518,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ReadingModeResponse"];
                 };
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -17523,7 +18897,7 @@ export interface operations {
             };
         };
     };
-    reading_orders_list: {
+    list_reading_orders_api_v1_reading_orders__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -17532,7 +18906,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Reading orders owned by the caller, ordered by name */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -17541,23 +18915,9 @@ export interface operations {
                     "application/json": components["schemas"]["ReadingOrderListResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
-    reading_orders_insert_item: {
+    insert_reading_order_item_api_v1_reading_orders__reading_order_id__items_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -17572,7 +18932,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Thread seated at the requested position */
+            /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -17581,33 +18941,14 @@ export interface operations {
                     "application/json": components["schemas"]["InsertReadingOrderItemResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Reading order or thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Request payload failed validation */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -17876,7 +19217,7 @@ export interface operations {
             };
         };
     };
-    dismiss_pending_documentation: {
+    dismiss_pending_roll_api_v1_roll_dismiss_pending_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -17885,7 +19226,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description No Content. Pending thread cleared. */
+            /** @description Successful Response */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -18065,47 +19406,34 @@ export interface operations {
             };
         };
     };
-    get_session_v1_documentation: {
+    get_session_api_v1_sessions__session_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Single session */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionDetailResponse"];
+                    "application/json": components["schemas"]["SessionResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -18171,53 +19499,49 @@ export interface operations {
             };
         };
     };
-    list_session_snapshots_documentation: {
+    get_session_snapshots_api_v1_sessions__session_id__snapshots_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned reading session */
                 session_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Session restore snapshots */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionSnapshotsResponse"];
+                    "application/json": components["schemas"]["SnapshotsListResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Session not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    list_tags_documentation: {
+    list_tags_api_v1_tags__get: {
         parameters: {
-            query?: never;
+            query?: {
+                search?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18226,9 +19550,18 @@ export interface operations {
                     "application/json": components["schemas"]["TagListResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    create_tag_documentation: {
+    create_tag_api_v1_tags__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -18237,34 +19570,42 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateTagRequest"];
+                "application/json": components["schemas"]["TagCreate"];
             };
         };
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreateTagResponse"];
+                    "application/json": components["schemas"]["TagCreateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    effective_issue_documentation: {
+    get_issue_effective_tags_api_v1_tags_effective_issue__issue_id___get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Issue id */
                 issue_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18273,21 +19614,29 @@ export interface operations {
                     "application/json": components["schemas"]["EffectiveTagsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    effective_plan_documentation: {
+    get_plan_effective_tags_api_v1_tags_effective_plan__plan_id___get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Plan id */
                 plan_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18296,21 +19645,29 @@ export interface operations {
                     "application/json": components["schemas"]["EffectiveTagsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    effective_thread_documentation: {
+    get_thread_effective_tags_api_v1_tags_effective_thread__thread_id___get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Thread id */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18319,21 +19676,29 @@ export interface operations {
                     "application/json": components["schemas"]["EffectiveTagsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    effective_thread_issues_documentation: {
+    get_thread_issues_effective_tags_api_v1_tags_effective_thread__thread_id__issues__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Thread id */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18342,71 +19707,95 @@ export interface operations {
                     "application/json": components["schemas"]["ThreadIssuesEffectiveTagsResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    get_tag_documentation: {
+    get_tag_api_v1_tags__tag_id___get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Tag"];
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    update_tag_documentation: {
+    update_tag_api_v1_tags__tag_id___put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateTagRequest"];
+                "application/json": components["schemas"]["TagUpdate"];
             };
         };
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Tag"];
+                    "application/json": components["schemas"]["TagResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    delete_tag_documentation: {
+    delete_tag_api_v1_tags__tag_id___delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18415,25 +19804,33 @@ export interface operations {
                     "application/json": components["schemas"]["TagDeleteResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    assign_tag_documentation: {
+    assign_tag_api_v1_tags__tag_id__assign__post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AssignTagRequest"];
+                "application/json": components["schemas"]["TagAssignmentRequest"];
             };
         };
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18442,79 +19839,103 @@ export interface operations {
                     "application/json": components["schemas"]["TagAssignmentResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    bulk_assign_tag_documentation: {
+    bulk_assign_tag_api_v1_tags__tag_id__bulk_assign__post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BulkAssignRequest"];
+                "application/json": components["schemas"]["TagBulkAssignmentRequest"];
             };
         };
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkAssignResponse"];
+                    "application/json": components["schemas"]["TagBulkAssignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    bulk_unassign_tag_documentation: {
+    bulk_unassign_tag_api_v1_tags__tag_id__bulk_unassign__post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BulkAssignRequest"];
+                "application/json": components["schemas"]["TagBulkAssignmentRequest"];
             };
         };
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BulkAssignResponse"];
+                    "application/json": components["schemas"]["TagBulkAssignmentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
     };
-    unassign_tag_documentation: {
+    unassign_tag_api_v1_tags__tag_id__unassign__delete: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AssignTagRequest"];
+                "application/json": components["schemas"]["TagAssignmentRequest"];
             };
         };
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -18523,27 +19944,44 @@ export interface operations {
                     "application/json": components["schemas"]["TagAssignmentResponse"];
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
-    usage_tag_documentation: {
+    get_tag_usage_api_v1_tags__tag_id__usage__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Tag id */
                 tag_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description ok */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["TagUsageResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -18580,47 +20018,36 @@ export interface operations {
             };
         };
     };
-    dismiss_documentation: {
+    dismiss_taste_discovery_api_v1_taste_discoveries__signal_id__dismiss_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned taste signal identifier */
                 signal_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Dismissed */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TasteDismissResponse"];
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Taste discovery not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
         };
     };
@@ -18690,17 +20117,16 @@ export interface operations {
             };
         };
     };
-    list_completed_threads_documentation: {
+    list_completed_threads_api_v1_threads_completed_threads_get: {
         parameters: {
             query?: {
-                /** @description Case-insensitive title search */
-                search?: string;
-                /** @description position, title, or created */
+                search?: string | null;
+                /** @description Sort order: position, title, or created */
                 sort?: string;
-                /** @description 1-200 rows per page (default 50) */
+                /** @description Number of threads to return per page (default 50, max 200) */
                 page_size?: number;
-                /** @description Opaque continuation cursor */
-                page_token?: string;
+                /** @description Opaque cursor token for pagination continuation */
+                page_token?: string | null;
             };
             header?: never;
             path?: never;
@@ -18708,35 +20134,23 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Owner-scoped completed threads page */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadListResponse"];
+                    "application/json": components["schemas"]["QueueThreadListResponse"];
                 };
             };
-            /** @description Invalid sort or page token */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Invalid bounds */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -18877,40 +20291,34 @@ export interface operations {
             };
         };
     };
-    get_thread_detail_documentation: {
+    get_thread_api_v1_threads__thread_id__get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Owned Thread identifier */
                 thread_id: number;
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Owned thread detail */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadDetailResponse"];
+                    "application/json": components["schemas"]["ThreadDetail"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
+            /** @description Validation Error */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Thread not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -19027,7 +20435,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadDependenciesResponse"];
+                    "application/json": components["schemas"]["NativeThreadDependenciesResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -19133,7 +20541,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ThreadIssueDependenciesResponse"];
+                    "application/json": components["schemas"]["NativeThreadIssueDependenciesResponse"];
                 };
             };
             /** @description Not authenticated */
@@ -19707,7 +21115,7 @@ export interface operations {
             };
         };
     };
-    get_user_preferences_documentation: {
+    get_user_preferences_api_v1_users_me_preferences_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -19716,7 +21124,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The authenticated user's preferences */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19725,23 +21133,9 @@ export interface operations {
                     "application/json": components["schemas"]["UserPreferencesResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
-    patch_user_preferences_documentation: {
+    patch_user_preferences_api_v1_users_me_preferences_patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -19754,7 +21148,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The user's preferences after the update */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19763,30 +21157,18 @@ export interface operations {
                     "application/json": components["schemas"]["UserPreferencesResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unknown theme id */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
-    list_taste_signals_documentation: {
+    list_taste_signals_api_v1_users_me_taste_signals_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -19795,7 +21177,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Every Taste Bank signal owned by the authenticated user */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19804,30 +21186,14 @@ export interface operations {
                     "application/json": components["schemas"]["TasteSignalListResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
         };
     };
-    set_taste_signal_verdict_documentation: {
+    set_taste_signal_verdict_api_v1_users_me_taste_signals__signal_type___external_key__verdict_put: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Category of the targeted signal */
-                signal_type: string;
-                /** @description Stable normalized key of the targeted feature */
+                signal_type: "creator" | "character" | "team" | "publisher" | "era";
                 external_key: string;
             };
             cookie?: never;
@@ -19838,7 +21204,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The canonical updated signal after the verdict is persisted */
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19847,26 +21213,14 @@ export interface operations {
                     "application/json": components["schemas"]["TasteSignalResponse"];
                 };
             };
-            /** @description Not authenticated */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Unknown signal type, verdict, or oversized external key */
+            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
-            };
-            /** @description Database temporarily unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
-                content?: never;
             };
         };
     };
@@ -19926,7 +21280,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ForgotPasswordRequest"];
+                "application/json": components["schemas"]["NativeForgotPasswordRequest"];
             };
         };
         responses: {
@@ -19936,7 +21290,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PasswordResetResponse"];
+                    "application/json": components["schemas"]["NativePasswordResetResponse"];
                 };
             };
             /** @description Request payload failed validation */
@@ -19981,7 +21335,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenResponse"];
+                    "application/json": components["schemas"]["NativeTokenResponse"];
                 };
             };
             /** @description Username field contained an email address */
@@ -20063,7 +21417,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserResponse"];
+                    "application/json": components["schemas"]["NativeUserResponse"];
                 };
             };
             /** @description Not authenticated or token invalid */
@@ -20091,7 +21445,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": null | components["schemas"]["RefreshTokenRequest"];
+                "application/json": null | components["schemas"]["NativeRefreshTokenRequest"];
             };
         };
         responses: {
@@ -20101,7 +21455,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenResponse"];
+                    "application/json": components["schemas"]["NativeTokenResponse"];
                 };
             };
             /** @description Missing, invalid, revoked or stale refresh token */
@@ -20146,7 +21500,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenResponse"];
+                    "application/json": components["schemas"]["NativeTokenResponse"];
                 };
             };
             /** @description Username or email is already registered */
@@ -20188,7 +21542,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ResetPasswordRequest"];
+                "application/json": components["schemas"]["NativeResetPasswordRequest"];
             };
         };
         responses: {
@@ -20198,7 +21552,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PasswordResetResponse"];
+                    "application/json": components["schemas"]["NativePasswordResetResponse"];
                 };
             };
             /** @description Invalid or expired reset request */
@@ -20406,7 +21760,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DependencyResponse"];
+                    "application/json": components["schemas"]["NativeDependencyResponse"];
                 };
             };
             /** @description Invalid or duplicate dependency */
@@ -20834,6 +22188,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_reading_boundary_v2_api_v2_reading_boundaries__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadingBoundaryExplanationV2"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

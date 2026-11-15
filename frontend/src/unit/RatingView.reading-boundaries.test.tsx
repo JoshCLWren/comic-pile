@@ -131,7 +131,7 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
   it('renders canonical blockers independently of reader-context associations', () => {
     renderWithToast(ratingView({
       readingBoundariesRequested: true,
-      readingBoundary: { thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Finish the previous issue first.', waiting_on: [], editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' } }] },
+      readingBoundary: { thread_id: 1, state: 'blocked', summary: 'Waiting', blockers: [{ kind: 'prerequisite', origin: 'reader_prerequisite', reason: 'Finish the previous issue first.', editor: { kind: 'prerequisite', thread_id: 1, label: 'Saga prerequisites' } }] },
       readerContext: makeContext([
         {
           id: 1,
@@ -158,7 +158,7 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
   it('renders canonical availability independently of empty context edges', () => {
     renderWithToast(ratingView({
       readingBoundariesRequested: true,
-      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] },
+      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now' },
       readerContext: makeContext([], 'Saga'),
     }))
     expect(
@@ -225,7 +225,7 @@ describe('RatingView Reading Boundaries optional card (#2764 restores #2519 beha
     const onShowBoundaries = vi.fn()
     renderWithToast(ratingView({
       readingBoundariesRequested: true,
-      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now', blockers: [] },
+      readingBoundary: { thread_id: 1, state: 'available', summary: 'Available now' },
       onShowBoundaries,
     }))
 

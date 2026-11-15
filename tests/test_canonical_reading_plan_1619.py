@@ -169,6 +169,9 @@ async def test_legacy_reading_orders_remain_readable(auth_client: AsyncClient, a
     async_db.add(ReadingOrderItem(reading_order_id=order.id, thread_id=t.id, position=1))
     await async_db.commit()
 
+    listed = await auth_client.get("/api/v1/reading-orders/")
+    assert listed.status_code == 200, listed.text
+    assert any(o["name"] == "My Order" for o in listed.json()["reading_orders"])
     thread_orders = await auth_client.get(f"/api/v1/threads/{t.id}/reading-orders")
     assert thread_orders.status_code == 200, thread_orders.text
     assert len(thread_orders.json()["reading_orders"]) == 1
@@ -376,6 +379,8 @@ async def test_projection_remains_export_only_and_does_not_reintroduce_peer_sour
     fetched = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
     assert fetched.status_code == 200
     assert fetched.json()["nodes"][0]["ref_id"] == i.id
+    listed_orders = await auth_client.get("/api/v1/reading-orders/")
+    assert listed_orders.status_code == 200
     reread = await auth_client.get(f"/api/v1/continuity-plans/{plan_id}")
     assert reread.json()["nodes"] == fetched.json()["nodes"]
 

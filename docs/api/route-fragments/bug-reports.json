@@ -18,16 +18,14 @@
       "method": "POST",
       "path": "/api/bug-reports/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/bug\\-reports/$",
-      "exclude_from_inventory": true
+      "src": "^/api/bug\\-reports/$"
     },
     {
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/bug-reports/",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/bug\\-reports/$",
-      "exclude_from_inventory": true
+      "src": "^/api/v1/bug\\-reports/$"
     }
   ]
 }

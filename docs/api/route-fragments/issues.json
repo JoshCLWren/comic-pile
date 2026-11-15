@@ -86,8 +86,7 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-reader-context.ts"
-      ],
-      "exclude_from_inventory": true
+      ]
     },
     {
       "bucket": "v1_operations",
@@ -99,8 +98,7 @@
         "frontend/src/services/api-dependencies.ts",
         "frontend/src/services/api-issues.ts",
         "frontend/src/services/api-reader-context.ts"
-      ],
-      "exclude_from_inventory": true
+      ]
     },
     {
       "bucket": "v1_operations",

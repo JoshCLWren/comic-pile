@@ -1,10 +1,8 @@
 """Regression tests for deterministic OpenAPI schema generation."""
 
-import json
 from pathlib import Path
 
 from scripts.export_openapi_schema import (
-    client_openapi_schema,
     is_client_schema_path,
     merge_native_runtime_contract,
     prune_legacy_bare_paths,
@@ -231,49 +229,3 @@ def test_merge_native_runtime_contract_renames_transitive_references() -> None:
     assert merged["components"]["schemas"]["NativeHolder"]["properties"]["child"] == {
         "$ref": "#/components/schemas/NativeChild"
     }
-
-
-def test_native_same_path_contract_covers_retired_python_operations() -> None:
-    """Every removed handler keeps a Rust-owned client contract at its exact URL."""
-    root = Path(__file__).resolve().parents[1]
-    native = json.loads((root / "native/contracts/same-path-runtime.openapi.json").read_text())
-    retired = json.loads((root / "tests/fixtures/retired-python-handlers.json").read_text())
-    for operation in retired:
-        for method in operation["methods"]:
-            declaration = native["paths"][operation["path"]][method.lower()]
-            assert declaration["operationId"]
-            assert any(code.startswith("2") for code in declaration["responses"])
-
-
-def test_native_same_path_schema_has_no_missing_component_references() -> None:
-    """No contract references a removed Python-only model definition."""
-    root = Path(__file__).resolve().parents[1]
-    native = json.loads((root / "native/contracts/same-path-runtime.openapi.json").read_text())
-    schemas = native["components"]["schemas"]
-
-    def visit(value: object) -> None:
-        if isinstance(value, dict):
-            reference = value.get("$ref")
-            if isinstance(reference, str) and reference.startswith("#/components/schemas/"):
-                assert reference.removeprefix("#/components/schemas/") in schemas
-            for item in value.values():
-                visit(item)
-        elif isinstance(value, list):
-            for item in value:
-                visit(item)
-
-    visit(native)
-
-
-def test_client_schema_operation_ids_are_unique_across_native_aliases() -> None:
-    """Aliased Rust handlers retain DTOs without duplicate TypeScript operations."""
-    schema = client_openapi_schema()
-    seen: dict[str, tuple[str, str]] = {}
-    for path, item in schema["paths"].items():
-        for method, operation in item.items():
-            if not isinstance(operation, dict):
-                continue
-            operation_id = operation.get("operationId")
-            if isinstance(operation_id, str):
-                assert operation_id not in seen, (operation_id, seen.get(operation_id), (method, path))
-                seen[operation_id] = (method, path)

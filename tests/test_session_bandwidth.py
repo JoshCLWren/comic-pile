@@ -512,6 +512,26 @@ async def test_current_session_endpoint_exposes_bandwidth_state(
     assert data["bandwidth"]["mode_version"] == "1"
 
 
+@pytest.mark.asyncio
+async def test_get_session_by_id_exposes_null_bandwidth_for_legacy_row(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user
+) -> None:
+    """Legacy sessions serialize with null bandwidth fields, staying API-valid."""
+    session = ReadingSession(start_die=6, user_id=default_user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    response = await auth_client.get(f"/api/sessions/{session.id}")
+    assert response.status_code == 200
+    data = response.json()
+    # Bandwidth state is nested under the "bandwidth" field
+    assert data["bandwidth"] is not None
+    assert data["bandwidth"]["predicted_bandwidth"] is None
+    assert data["bandwidth"]["active_bandwidth"] is None
+    assert data["bandwidth"]["source"] is None
+
+
 def test_bandwidth_state_never_lands_on_thread_or_list_view() -> None:
     """AC5: Ephemeral state stays off durable affinity data and narrow views."""
     assert not hasattr(Thread, "predicted_bandwidth")

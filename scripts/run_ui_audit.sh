@@ -9,7 +9,6 @@ AUDIT_BASE_URL="http://127.0.0.1:${AUDIT_API_PORT}"
 AUDIT_READY_TIMEOUT_SECONDS="${AUDIT_READY_TIMEOUT_SECONDS:-120}"
 AUDIT_EVIDENCE_DIR="$ROOT_DIR/frontend/test-results/ui-audit"
 AUDIT_RUNNER_LOG="$AUDIT_EVIDENCE_DIR/runner.log"
-AUDIT_INGRESS_CONF="$AUDIT_EVIDENCE_DIR/ingress.conf"
 
 export E2E_API_PORT="$AUDIT_API_PORT"
 # The browser needs only the API on the host. Publishing just the container
@@ -45,8 +44,6 @@ command -v curl >/dev/null 2>&1 || {
 
 cd "$ROOT_DIR"
 mkdir -p "$AUDIT_EVIDENCE_DIR"
-export UI_AUDIT_INGRESS_CONF="$AUDIT_INGRESS_CONF"
-node scripts/generate_ui_audit_ingress.mjs vercel.json "$AUDIT_INGRESS_CONF"
 : > "$AUDIT_RUNNER_LOG"
 exec > >(tee -a "$AUDIT_RUNNER_LOG") 2>&1
 

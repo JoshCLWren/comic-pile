@@ -19,8 +19,7 @@
       "path": "/api/v1/users/me/preferences",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/users/me/preferences$",
-      "owning_issue": 4834,
-      "exclude_from_inventory": true
+      "owning_issue": 4834
     },
     {
       "bucket": "v1_operations",
@@ -28,8 +27,7 @@
       "path": "/api/v1/users/me/preferences",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/users/me/preferences$",
-      "owning_issue": 4834,
-      "exclude_from_inventory": true
+      "owning_issue": 4834
     },
     {
       "bucket": "v1_operations",
@@ -37,8 +35,7 @@
       "path": "/api/v1/users/me/taste-signals",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/users/me/taste\\-signals$",
-      "owning_issue": 4834,
-      "exclude_from_inventory": true
+      "owning_issue": 4834
     },
     {
       "bucket": "v1_operations",
@@ -46,8 +43,7 @@
       "path": "/api/v1/users/me/taste-signals/{signal_type}/{external_key}/verdict",
       "dest": "/api/native_roll.rs",
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
-      "owning_issue": 4834,
-      "exclude_from_inventory": true
+      "owning_issue": 4834
     }
   ]
 }

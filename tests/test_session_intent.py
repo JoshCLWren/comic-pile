@@ -254,6 +254,25 @@ async def test_current_session_endpoint_exposes_intent_state(
 
 
 @pytest.mark.asyncio
+async def test_get_session_by_id_exposes_null_intent_for_legacy_row(
+    auth_client: AsyncClient, async_db: AsyncSession, default_user
+) -> None:
+    """Legacy sessions serialize with null intent fields, staying API-valid."""
+    session = ReadingSession(start_die=6, user_id=default_user.id)
+    async_db.add(session)
+    await async_db.commit()
+    await async_db.refresh(session)
+
+    response = await auth_client.get(f"/api/sessions/{session.id}")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["intent"] is not None
+    assert data["intent"]["active_intent"] is None
+    assert data["intent"]["predicted_intent"] is None
+    assert data["intent"]["source"] is None
+
+
+@pytest.mark.asyncio
 async def test_new_session_defaults_intent_to_null_not_thread_affinity(
     async_db: AsyncSession, default_user
 ) -> None:
