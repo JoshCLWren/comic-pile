@@ -266,19 +266,6 @@ export type ListBlockedLegacyDependenciesResponse = Array<number>
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
 
-export interface ListThreadIssuesRequest {
-  path: {
-    thread_id: number
-  }
-  query?: {
-    status?: string
-    page_size?: number
-    page_token?: string
-  }
-}
-
-export type ListThreadIssuesResponse = components['schemas']['ThreadIssueListResponse']
-
 export interface ListThreadsRequest {
   query?: {
     search?: string
@@ -530,7 +517,6 @@ export interface NativeV2Client {
   list(): Promise<ListResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
-  listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
@@ -753,12 +739,6 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
-    },
-    listThreadIssues(args: ListThreadIssuesRequest) {
-      return client.get<ListThreadIssuesResponse>(
-        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
-        { params: compactQuery(args.query) },
-      )
     },
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(

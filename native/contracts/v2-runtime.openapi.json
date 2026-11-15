@@ -1129,87 +1129,6 @@
         ]
       }
     },
-    "/api/v1/threads/{thread_id}/issues": {
-      "get": {
-        "tags": [
-          "issues"
-        ],
-        "summary": "Same-path native OpenAPI for the browser's issue-list read.",
-        "operationId": "list_thread_issues_documentation",
-        "parameters": [
-          {
-            "name": "thread_id",
-            "in": "path",
-            "description": "Owned thread ID",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "description": "Optional read or unread filter",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "description": "1-100 issues (default 50)",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          },
-          {
-            "name": "page_token",
-            "in": "query",
-            "description": "position,id continuation cursor",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Owner-scoped, paginated issues",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid page token"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
-          },
-          "422": {
-            "description": "Invalid status or page size"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
-      }
-    },
     "/api/v2/analytics/metrics": {
       "get": {
         "tags": [
@@ -5010,47 +4929,6 @@
           }
         }
       },
-      "IssueDetailResponse": {
-        "type": "object",
-        "description": "Wire parity with Python `IssueResponse` (`app/schemas/issue.py`).",
-        "required": [
-          "id",
-          "thread_id",
-          "issue_number",
-          "position",
-          "status",
-          "created_at"
-        ],
-        "properties": {
-          "created_at": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "issue_number": {
-            "type": "string"
-          },
-          "position": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "read_at": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "thread_id": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
       "IssueIntelligence": {
         "type": "object",
         "description": "Wire parity with Python's ComicVineIssueIntelligence.",
@@ -7774,36 +7652,6 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
-          }
-        }
-      },
-      "ThreadIssueListResponse": {
-        "type": "object",
-        "required": [
-          "issues",
-          "total_count",
-          "page_size"
-        ],
-        "properties": {
-          "issues": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IssueDetailResponse"
-            }
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "page_size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "total_count": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       },

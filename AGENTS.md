@@ -60,7 +60,7 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 
 - Live v2 operations: 42 (42 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 146 operations (v1 126 + unversioned 20); v1 active 117 live Python / 1 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 148 operations (v1 127 + unversioned 21); v1 active 118 live Python / 0 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).

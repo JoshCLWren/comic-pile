@@ -136,8 +136,8 @@ test('served models reach summary and advance commit display without prose injec
         const rendered = spawnSync('bash', ['-c', `${display}\nSOURCE=kilo-auto\nDISPLAY='Kilo Auto Free'\nKILO_SERVED_MODELS_FILE="$1"\nfactory_advance_display`, '_', file], { encoding: 'utf8' });
         assert.equal(rendered.status, 0, rendered.stderr);
         assert.equal(rendered.stdout, 'Kilo Auto Free (served: reflection/beam,vendor/free-model)');
-        assert.match(primitives, /git commit --allow-empty -m "factory: advance #\$\{number\} with \$\(factory_advance_display\)"/);
-        assert.match(primitives, /git commit --allow-empty -m "factory: advance PR #\$\{pr\} with \$\(factory_advance_display\)"/);
+        assert.match(primitives, /git commit -m "factory: advance #\$\{number\} with \$\(factory_advance_display\)"/);
+        assert.match(primitives, /git commit -m "factory: advance PR #\$\{pr\} with \$\(factory_advance_display\)"/);
       } finally { rmSync(dir, { recursive: true, force: true }); }
     });
 });

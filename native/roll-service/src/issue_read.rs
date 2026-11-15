@@ -39,15 +39,15 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 
 /// Wire parity with Python `IssueResponse` (`app/schemas/issue.py`).
-#[derive(Debug, Clone, Deserialize, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct IssueDetailResponse {
     pub id: i32,
     pub thread_id: i32,
@@ -255,157 +255,6 @@ pub async fn get_thread_issue_dependencies(
     Ok(Json(ThreadIssueDependenciesResponse { thread_id, issues }))
 }
 
-// Browser-hot thread issue listing cut over from Python by #4832.
-// The ownership check, filtered count and bounded page run in one SQL
-// statement regardless of how many issues a reader has. The same-path
-// legacy POST remains Python until its own migration.
-
-const THREAD_ISSUES_PAGE_SQL: &str = r#"
-WITH owned AS (
-    SELECT id FROM threads WHERE id = $1 AND user_id = $2
-), matching AS (
-    SELECT i.id, i.thread_id, i.issue_number, i.position,
-           i.status, i.read_at, i.created_at
-    FROM issues i
-    JOIN owned t ON t.id = i.thread_id
-    WHERE ($3::text IS NULL OR i.status = $3)
-), totals AS (
-    SELECT count(*) AS total_count FROM matching
-), paged AS (
-    SELECT m.id, m.thread_id, m.issue_number, m.position, m.status,
-           to_char(m.read_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS read_at,
-           to_char(m.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
-    FROM matching m
-    WHERE ($4::integer IS NULL OR (m.position, m.id) > ($4, $5))
-    ORDER BY m.position, m.id
-    LIMIT $6
-)
-SELECT totals.total_count,
-       COALESCE((SELECT jsonb_agg(to_jsonb(p) ORDER BY p.position, p.id)
-                 FROM paged p)::text, '[]')
-FROM owned CROSS JOIN totals
-"#;
-
-#[derive(Debug, Default, Deserialize)]
-pub struct ThreadIssueListQuery {
-    pub status: Option<String>,
-    pub page_size: Option<i64>,
-    pub page_token: Option<String>,
-}
-
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct ThreadIssueListResponse {
-    pub issues: Vec<IssueDetailResponse>,
-    pub total_count: i64,
-    pub page_size: i64,
-    pub next_page_token: Option<String>,
-}
-
-fn decode_thread_issue_cursor(token: &str) -> Result<(i32, i32), ApiError> {
-    let mut parts = token.split(',');
-    match (parts.next(), parts.next(), parts.next()) {
-        (Some(position), Some(id), None) => match (position.parse::<i32>(), id.parse::<i32>()) {
-            (Ok(position), Ok(id)) => Ok((position, id)),
-            _ => Err(ApiError::BadRequest("Invalid page_token format".into())),
-        },
-        _ => Err(ApiError::BadRequest("Invalid page_token format".into())),
-    }
-}
-
-/// GET /api/v1/threads/{thread_id}/issues with Python pagination parity.
-pub async fn list_thread_issues(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Path(thread_id): Path<i32>,
-    Query(query): Query<ThreadIssueListQuery>,
-) -> Result<Json<ThreadIssueListResponse>, ApiError> {
-    if let Some(status) = query.status.as_deref() {
-        if !matches!(status, "unread" | "read") {
-            return Err(ApiError::Unprocessable(
-                "status must be unread or read".into(),
-            ));
-        }
-    }
-    let page_size = query.page_size.unwrap_or(50);
-    if !(1..=100).contains(&page_size) {
-        return Err(ApiError::Unprocessable(
-            "page_size must be between 1 and 100".into(),
-        ));
-    }
-    let cursor = query
-        .page_token
-        .as_deref()
-        .filter(|token| !token.is_empty())
-        .map(decode_thread_issue_cursor)
-        .transpose()?;
-    let (position, issue_id) = cursor
-        .map(|(position, issue_id)| (Some(position), Some(issue_id)))
-        .unwrap_or((None, None));
-    let limit = page_size + 1;
-    let connection = db::checkout(&state).await?;
-    let row = connection
-        .query_opt(
-            THREAD_ISSUES_PAGE_SQL,
-            &[
-                &thread_id,
-                &user.id(),
-                &query.status,
-                &position,
-                &issue_id,
-                &limit,
-            ],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| {
-            ApiError::with_status(
-                StatusCode::NOT_FOUND,
-                format!("Thread {thread_id} not found"),
-            )
-        })?;
-    let payload: String = row.get(1);
-    let mut issues: Vec<IssueDetailResponse> = serde_json::from_str(&payload)
-        .map_err(|_| ApiError::Internal("Internal Server Error".into()))?;
-    let next_page_token = if issues.len() > page_size as usize {
-        issues.truncate(page_size as usize);
-        issues
-            .last()
-            .map(|last| format!("{},{}", last.position, last.id))
-    } else {
-        None
-    };
-    Ok(Json(ThreadIssueListResponse {
-        issues,
-        total_count: row.get(0),
-        page_size,
-        next_page_token,
-    }))
-}
-
-/// Same-path native OpenAPI for the browser's issue-list read.
-#[utoipa::path(
-    get,
-    path = "/api/v1/threads/{thread_id}/issues",
-    tag = "issues",
-    params(
-        ("thread_id" = i32, Path, description = "Owned thread ID"),
-        ("status" = Option<String>, Query, description = "Optional read or unread filter"),
-        ("page_size" = Option<i64>, Query, description = "1-100 issues (default 50)"),
-        ("page_token" = Option<String>, Query, description = "position,id continuation cursor")
-    ),
-    responses(
-        (status = 200, description = "Owner-scoped, paginated issues", body = ThreadIssueListResponse),
-        (status = 400, description = "Invalid page token"),
-        (status = 401, description = "Not authenticated"),
-        (status = 404, description = "Thread not found"),
-        (status = 422, description = "Invalid status or page size"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn list_thread_issues_documentation() {}
-
 /// Documentation-only operation for the mounted single-issue read.
 #[utoipa::path(
     get,
@@ -464,51 +313,6 @@ pub fn get_thread_issue_dependencies_documentation() {}
 mod tests {
     use super::*;
     use serde_json::json;
-
-    #[test]
-    fn thread_issue_list_cursor_preserves_python_position_id_format() {
-        assert_eq!(decode_thread_issue_cursor("12,77").unwrap(), (12, 77));
-        for bad in ["invalid", "1", "1,2,3", "one,2", "1,two"] {
-            assert_eq!(
-                decode_thread_issue_cursor(bad).unwrap_err().detail(),
-                "Invalid page_token format"
-            );
-        }
-    }
-
-    #[test]
-    fn thread_issue_list_is_one_bounded_owner_scoped_statement() {
-        assert!(THREAD_ISSUES_PAGE_SQL.contains("JOIN owned t ON t.id = i.thread_id"));
-        assert!(THREAD_ISSUES_PAGE_SQL.contains("t.id = i.thread_id"));
-        assert!(THREAD_ISSUES_PAGE_SQL.contains("user_id = $2"));
-        assert!(THREAD_ISSUES_PAGE_SQL.contains("count(*) AS total_count"));
-        assert!(THREAD_ISSUES_PAGE_SQL.contains("LIMIT $6"));
-        assert!(THREAD_ISSUES_PAGE_SQL.contains("ORDER BY m.position, m.id"));
-        assert!(!THREAD_ISSUES_PAGE_SQL.contains(';'));
-    }
-
-    #[test]
-    fn thread_issue_list_response_keeps_python_fields() {
-        let payload = serde_json::to_value(ThreadIssueListResponse {
-            issues: vec![IssueDetailResponse {
-                id: 7,
-                thread_id: 3,
-                issue_number: "Annual 1".into(),
-                position: 2,
-                status: "unread".into(),
-                read_at: None,
-                created_at: "2026-11-15T00:00:00.000Z".into(),
-            }],
-            total_count: 5,
-            page_size: 1,
-            next_page_token: Some("2,7".into()),
-        })
-        .unwrap();
-        assert_eq!(payload["issues"][0]["issue_number"], "Annual 1");
-        assert_eq!(payload["total_count"], 5);
-        assert_eq!(payload["page_size"], 1);
-        assert_eq!(payload["next_page_token"], "2,7");
-    }
 
     #[test]
     fn detail_wire_matches_python_issue_response_fields() {
@@ -644,7 +448,6 @@ mod tests {
             "/api/v1/issues/7/comicvine",
             "/api/v1/issues/7/dependencies",
             "/api/v1/threads/7/issue-dependencies",
-            "/api/v1/threads/7/issues",
         ] {
             let response = app
                 .clone()

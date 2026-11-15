@@ -19239,36 +19239,6 @@
         ],
         "type": "object"
       },
-      "ThreadIssueListResponse": {
-        "properties": {
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/IssueDetailResponse"
-            },
-            "type": "array"
-          },
-          "next_page_token": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "page_size": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "total_count": {
-            "format": "int64",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "issues",
-          "total_count",
-          "page_size"
-        ],
-        "type": "object"
-      },
       "ThreadIssuesEffectiveTagsResponse": {
         "properties": {
           "issues": {
@@ -28804,44 +28774,61 @@
     },
     "/api/v1/threads/{thread_id}/issues": {
       "get": {
-        "operationId": "list_thread_issues_documentation",
+        "description": "List all issues for a thread with optional status filter and pagination.\n\nArgs:\n    thread_id: The thread ID to list issues for.\n    current_user: The authenticated user making the request.\n    db: SQLAlchemy session for database operations.\n    status_filter: Optional filter by issue status (read/unread).\n    page_size: Number of issues to return per page.\n    page_token: Token for pagination continuation.\n\nReturns:\n    IssueListResponse with paginated issues.\n\nRaises:\n    HTTPException: If thread not found.",
+        "operationId": "list_issues_api_v1_threads__thread_id__issues_get",
         "parameters": [
           {
-            "description": "Owned thread ID",
             "in": "path",
             "name": "thread_id",
             "required": true,
             "schema": {
-              "format": "int32",
+              "title": "Thread Id",
               "type": "integer"
             }
           },
           {
-            "description": "Optional read or unread filter",
             "in": "query",
             "name": "status",
             "required": false,
             "schema": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "pattern": "^(unread|read)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
             }
           },
           {
-            "description": "1-100 issues (default 50)",
             "in": "query",
             "name": "page_size",
             "required": false,
             "schema": {
-              "format": "int64",
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
               "type": "integer"
             }
           },
           {
-            "description": "position,id continuation cursor",
             "in": "query",
             "name": "page_token",
             "required": false,
             "schema": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page Token"
             }
           }
         ],
@@ -28850,26 +28837,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ThreadIssueListResponse"
+                  "$ref": "#/components/schemas/IssueListResponse"
                 }
               }
             },
-            "description": "Owner-scoped, paginated issues"
-          },
-          "400": {
-            "description": "Invalid page token"
-          },
-          "401": {
-            "description": "Not authenticated"
-          },
-          "404": {
-            "description": "Thread not found"
+            "description": "Successful Response"
           },
           "422": {
-            "description": "Invalid status or page size"
-          },
-          "503": {
-            "description": "Database temporarily unavailable"
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "security": [
@@ -28877,8 +28859,9 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Same-path native OpenAPI for the browser's issue-list read.",
+        "summary": "List Issues",
         "tags": [
+          "issues",
           "issues"
         ]
       },
