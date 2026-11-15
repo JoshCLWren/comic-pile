@@ -17,6 +17,8 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from factory_state_metrics import connect as measured_connect
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
@@ -38,9 +40,8 @@ def _dsn() -> str:
 
 
 async def _query(sql: str, *args: Any, one: bool = False) -> Any:
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         if one:
             return await conn.fetchrow(sql, *args)
