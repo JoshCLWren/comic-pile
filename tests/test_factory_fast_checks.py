@@ -363,7 +363,7 @@ echo "status=$status reason=$FACTORY_PUSH_BLOCKED_REASON"
         assert "status=1 reason=fast-checks-failed" in result.stdout, result.stderr
         assert "git:add" not in result.stderr and "git:commit" not in result.stderr
         assert "PUSH-CREDENTIAL" not in result.stderr
-        assert "git:reset --hard base" in result.stderr
+        assert "git:reset" not in result.stderr
         assert "report:" in result.stderr
 
 

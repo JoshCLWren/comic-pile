@@ -26,7 +26,6 @@ from app.services.comicvine_series_resolution import (
     _is_ambiguous_special,
     _normalize_issue_label,
     _run_series_resolution,
-    schedule_series_issue_resolution,
 )
 from comic_pile.comicvine_provider import ComicVineResponse, ComicVineRateLimitError
 
@@ -151,54 +150,6 @@ async def test_is_ambiguous_special_detects_non_issue_volumes(async_db: AsyncSes
     assert _is_ambiguous_special("One-Shot") is True
     assert _is_ambiguous_special("5") is False
     assert _is_ambiguous_special(None) is False
-
-
-@pytest.mark.asyncio
-async def test_schedule_skips_without_confirmed_series(
-    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """No background task is created when resolution cannot possibly succeed."""
-    user, issue, _series = await _seed(
-        async_db_committed, username="series_res_noseries", issue_number="5", confirmed_series=False
-    )
-    spy = AsyncMock()
-    monkeypatch.setattr(resolution_module, "_run_series_resolution", spy)
-
-    scheduled = await schedule_series_issue_resolution(async_db_committed, issue.id, user.id)
-
-    assert scheduled is False
-    spy.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_schedule_runs_when_series_confirmed(
-    async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A confirmed series mapping lets the resolver schedule and run."""
-    user, issue, _series = await _seed(
-        async_db_committed, username="series_res_sched", issue_number="5", confirmed_series=True
-    )
-    monkeypatch.setattr(resolution_module, "ComicVineClient", _FakeComicVineClient)
-    monkeypatch.setenv("COMICVINE_API_KEY", "test-key")
-    hydrate = AsyncMock()
-    monkeypatch.setattr(resolution_module, "hydrate_issue", hydrate)
-
-    scheduled = await schedule_series_issue_resolution(async_db_committed, issue.id, user.id)
-    assert scheduled is True
-
-    task = resolution_module._pending_resolutions[issue.id]
-    await task
-
-    mapping = (
-        await async_db_committed.execute(
-            select(IssueExternalIdentityMapping).where(
-                IssueExternalIdentityMapping.issue_id == issue.id
-            )
-        )
-    ).scalar_one_or_none()
-    assert mapping is not None
-    assert mapping.status == "confirmed"
-    hydrate.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -393,7 +344,7 @@ async def test_duplicate_match_does_not_auto_confirm(
 
 
 @pytest.mark.asyncio
-async def test_exception_containment_no_unretrieved_task(
+async def test_exception_containment_in_catalog_resolution(
     async_db_committed: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Regression test for defect 4 (#1628): unhandled exceptions must not escape."""
@@ -410,14 +361,8 @@ async def test_exception_containment_no_unretrieved_task(
         AsyncMock(side_effect=RuntimeError("simulated crash")),
     )
 
-    # Schedule and await the background task; no unretrieved exception should escape.
-    scheduled = await schedule_series_issue_resolution(async_db_committed, issue.id, user.id)
-    assert scheduled is True
-    task = resolution_module._pending_resolutions.get(issue.id)
-    assert task is not None
-    # Awaiting the task should complete without raising the simulated exception
-    # because the outer wrapper catches it.
-    await task
+    # Catalog awaits this wrapper directly; failures must remain contained.
+    await _run_series_resolution(issue.id, user.id)
 
 
 @pytest.mark.asyncio

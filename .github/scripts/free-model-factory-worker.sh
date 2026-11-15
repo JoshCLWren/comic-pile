@@ -200,6 +200,17 @@ stage_trusted_review_controller() {
   export TRUSTED_REVIEW_CONTROLLER
 }
 
+# Pin the checkpoint writer to trusted main before loading arbitrary PR code.
+# The model may edit repository scripts but cannot replace this running helper.
+stage_trusted_checkpoint_helper() {
+  TRUSTED_WORK_CHECKPOINT="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-work-checkpoint.XXXXXXXX")"
+  cp .github/scripts/factory-work-checkpoint.sh "$TRUSTED_WORK_CHECKPOINT"
+  chmod +x "$TRUSTED_WORK_CHECKPOINT"
+  TRUSTED_CHECKPOINT_HANDOFF="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-checkpoint-handoff.XXXXXXXX.py")"
+  cp .github/scripts/factory_checkpoint_handoff.py "$TRUSTED_CHECKPOINT_HANDOFF"
+  export TRUSTED_CHECKPOINT_HANDOFF
+}
+
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
 # small override only so it invokes the trusted helper staged from main.
 eval "$(declare -f run_agent | sed '1s/^run_agent /legacy_run_agent /')"
@@ -437,10 +448,63 @@ select_controller_assignment() {
 
 ensure_owner_label
 stage_trusted_guard
+stage_trusted_checkpoint_helper
 stage_trusted_kilo_helper
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
-trap 'release_owned_targets session-end-handoff || true' EXIT
+
+# Issue snapshots are the normal work PR; repairs advance the assigned PR atomically.
+# A separate Git index avoids interfering with an agent editing files.
+CHECKPOINT_PID=''
+CHECKPOINT_LOG=''
+CHECKPOINT_REF_FILE=''
+start_work_checkpoint() {
+  [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] || return 0
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  local checkpoint_issue
+  if [[ "$MODE" == issue ]]; then
+    checkpoint_issue="$NUMBER"
+  else
+    checkpoint_issue="$(linked_issue_from_pr "$NUMBER")" || checkpoint_issue=''
+    if [[ -z "$checkpoint_issue" ]]; then
+      log "checkpoint issue linkage unavailable for PR #${NUMBER}; preserving explicit unknown-issue identity"
+    fi
+  fi
+  CHECKPOINT_REF_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-persisted-ref.XXXXXXXX")"
+  export FACTORY_CHECKPOINT_REF_FILE="$CHECKPOINT_REF_FILE"
+  CHECKPOINT_LOG="${RUNNER_TEMP:-/tmp}/factory-work-checkpoint-${GITHUB_RUN_ID}.log"
+  FACTORY_CHECKPOINT_ISSUE="$checkpoint_issue" FACTORY_CHECKPOINT_MODEL="$MODEL" \
+    FACTORY_CHECKPOINT_RUNTIME_MODEL="$RUNTIME_MODEL" \
+    bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
+  CHECKPOINT_PID="$!"
+  log "automatic persisted work enabled for run $GITHUB_RUN_ID (every 45s)"
+}
+
+stop_work_checkpoint() {
+  [[ -n "$CHECKPOINT_PID" ]] || return 0
+  kill -USR1 "$CHECKPOINT_PID" 2>/dev/null || true
+  wait "$CHECKPOINT_PID" || log 'persisted work writer did not exit cleanly'
+  CHECKPOINT_PID=''
+  [[ ! -f "$CHECKPOINT_LOG" ]] || tail -n 8 "$CHECKPOINT_LOG" || true
+}
+
+discard_delivered_checkpoint() {
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  stop_work_checkpoint
+  # Record exact-head validation; canonical open work branches are retained.
+  python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+    --run-id "$GITHUB_RUN_ID" --delivered-pr "$1" --cleanup || \
+    log 'checkpoint cleanup deferred to independent reconciliation'
+}
+
+finish_persisted_work() {
+  stop_work_checkpoint
+  release_owned_targets session-end-handoff || true
+  # Release the saved PR as well as its source issue, after execution really ends.
+  [[ -z "${GITHUB_RUN_ID:-}" ]] || python3 "$TRUSTED_CHECKPOINT_HANDOFF" \
+    --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --source-ended || true
+}
+trap 'finish_persisted_work' EXIT
 
 MODE=''
 NUMBER=''
@@ -489,6 +553,7 @@ elif (( fork_route != 0 && fork_route != 1 )); then
 fi
 if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
   checkout_target "$MODE" "$NUMBER" "$BRANCH"
+  start_work_checkpoint
 fi
 
 available="$(remaining)"
@@ -541,6 +606,19 @@ while :; do
   (( agent_timeout >= 300 )) || break
 done
 
+# Flush pending model edits before checks while retaining periodic protection
+# for the optional correction model run inside the persistence helpers. EXIT
+# performs the final synchronous snapshot on all other handoff/failure paths.
+[[ -z "$CHECKPOINT_PID" ]] || kill -USR2 "$CHECKPOINT_PID" 2>/dev/null || true
+
+# Flush synchronously and adopt the saved parent chain before overlap detection.
+# EXPECTED_HEAD stays the initial base so validation covers the entire attempt.
+stop_work_checkpoint
+if ! adopt_persisted_work; then
+  record_terminal_outcome control_plane_failure 'persisted ancestry moved; work retained'
+  exit 2
+fi
+
 if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
   record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
   exit 2
@@ -573,8 +651,8 @@ fi
 if [[ "$MODE" == 'issue' ]]; then
   if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
     if ! record_pr_provenance "$pr" "$NUMBER"; then
-      log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
-      gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+      log "PR #${pr} provenance needs reconciliation; preserving the work PR"
+      release_target "$pr" factory:changes-requested provenance-incomplete pr || true
       record_terminal_outcome control_plane_failure "PR #${pr} could not prove durable issue assignment provenance"
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
@@ -592,6 +670,9 @@ if [[ "$MODE" == 'issue' ]]; then
     # separate plain-prose handoff as its App (#3135); others post nothing.
     post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
+    discard_delivered_checkpoint "$pr"
+  elif [[ -n "${CHECKPOINT_REF_FILE:-}" && -s "$CHECKPOINT_REF_FILE" ]]; then
+    record_terminal_outcome work_failure "issue #${NUMBER} work is preserved; final validation/delivery failed"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
@@ -627,6 +708,7 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$pushed_stage" "$pushed_reason"
   post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
+  discard_delivered_checkpoint "$NUMBER"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
@@ -642,6 +724,12 @@ if (( agent_status != 0 )); then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'review-agent-failed'
   record_agent_failure_outcome "$agent_status"
   log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if [[ -n "$FACTORY_PUSH_BLOCKED_REASON" ]]; then
+  release_pr_and_issue "$NUMBER" "$BRANCH" factory:changes-requested failed-validation
+  record_terminal_outcome work_failure "PR #${NUMBER} failed trusted checks; work retained"
   exit 0
 fi
 

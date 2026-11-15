@@ -132,7 +132,7 @@ fn now_seconds() -> f64 {
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-fn dismiss_pending_documentation() {}
+pub(crate) fn dismiss_pending_documentation() {}
 
 /// Also mount the legacy-handler alias.
 #[utoipa::path(
@@ -143,7 +143,7 @@ fn dismiss_pending_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-fn dismiss_pending_legacy_documentation() {}
+pub(crate) fn dismiss_pending_legacy_documentation() {}
 
 #[cfg(test)]
 mod tests {

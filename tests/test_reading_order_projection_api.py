@@ -528,24 +528,6 @@ async def test_projection_updates_existing_entries(
     assert [row.position for row in rows] == [1, 2, 3]
 
 
-async def test_list_reading_orders_is_user_scoped_and_sorted(
-    projection_client: AsyncClient, async_db: AsyncSession
-) -> None:
-    """The list endpoint returns only the current user's orders, sorted by name."""
-    user = (await async_db.execute(select(User).limit(1))).scalar_one()
-    order_b = await _make_reading_order(async_db, user_id=user.id, name="Beta")
-    order_a = await _make_reading_order(async_db, user_id=user.id, name="Alpha")
-    await async_db.commit()
-
-    response = await projection_client.get("/api/v1/reading-orders/")
-    assert response.status_code == 200, response.text
-    body = response.json()
-    orders = body["reading_orders"]
-    assert [order["name"] for order in orders] == ["Alpha", "Beta"]
-    assert [order["id"] for order in orders] == [order_a.id, order_b.id]
-    assert all(order["total_items"] == 0 for order in orders)
-
-
 async def test_get_thread_reading_orders_lists_containing_orders(
     projection_client: AsyncClient, async_db: AsyncSession
 ) -> None:

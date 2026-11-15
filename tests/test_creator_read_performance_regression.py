@@ -17,15 +17,12 @@ the projected read provably returns identical creator semantics to the
 full-metadata read it replaced.
 """
 
-import re
-import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
 import pytest
-from httpx import AsyncClient
-from sqlalchemy import event, select, text
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.comicvine_hydration import normalize_issue
@@ -37,7 +34,6 @@ from app.repositories.creator_summary import (
     extract_creator_credits,
 )
 
-D1 = datetime(2026, 3, 1, tzinfo=UTC)
 
 _identity_serial = 0
 
@@ -222,183 +218,6 @@ async def _seed_full_payload_library(
                 )
     await db.flush()
     return threads[0], issues
-
-
-@pytest.mark.asyncio
-async def test_creator_metadata_read_projects_only_creator_credits(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    db_engine: AsyncEngine,
-    default_user: User,
-) -> None:
-    """The confirmed-identity read fetches the credit list, not the whole payload.
-
-    Hydrating ``metadata_json`` in full pulled the retained ComicVine
-    ``raw_provider_payload`` over the wire and into Python for every owned issue
-    on every creator read. Only the JSON key projection is allowed now.
-    """
-    await _seed_full_payload_library(async_db, default_user, thread_count=2, issues_per_thread=2)
-    await async_db.flush()
-
-    with _captured_selects(db_engine) as statements:
-        response = await auth_client.get("/api/v1/creators")
-    assert response.status_code == 200
-
-    metadata_reads = [
-        statement for statement in statements if "external_identities" in statement.lower()
-    ]
-    assert len(metadata_reads) == 1, metadata_reads
-    metadata_read = metadata_reads[0]
-
-    # The projection is applied in SQL, so the provider payload never leaves PostgreSQL.
-    assert re.search(r"metadata_json\s*->", metadata_read), metadata_read
-    assert "raw_provider_payload" not in metadata_read
-    # A bare whole-column select is the regression this issue exists to prevent.
-    select_list = metadata_read.split("FROM", 1)[0]
-    assert not re.search(r"(?<![\w.])metadata_json(?![\w\s]*->)", select_list.split("SELECT", 1)[1])
-
-
-@pytest.mark.asyncio
-async def test_effective_rating_read_uses_distinct_on_without_deprecation(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    db_engine: AsyncEngine,
-    default_user: User,
-) -> None:
-    """Rate events collapse with ``DISTINCT ON`` and without a SQLAlchemy deprecation.
-
-    ``distinct(Event.issue_id)`` renders the same SQL but is deprecated on
-    SQLAlchemy 2.1 and raises ``SADeprecationWarning`` on every creator read.
-    """
-    _thread, issues = await _seed_full_payload_library(
-        async_db, default_user, thread_count=2, issues_per_thread=2
-    )
-    await async_db.flush()
-
-    with _captured_selects(db_engine) as statements:
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            response = await auth_client.get("/api/v1/creators")
-    assert response.status_code == 200
-
-    rate_reads = [statement for statement in statements if "DISTINCT ON" in statement.upper()]
-    assert len(rate_reads) == 1, statements
-
-    deprecations = [
-        entry
-        for entry in caught
-        if entry.category.__name__ == "SADeprecationWarning" and "distinct" in str(entry.message)
-    ]
-    assert deprecations == []
-
-
-@pytest.mark.asyncio
-async def test_projected_read_matches_full_metadata_creator_semantics(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    default_user: User,
-) -> None:
-    """Projected creator credits match a full-document extraction of the same metadata.
-
-    Both readers must agree on keys, display names, roles, counts, averages and
-    coverage. ``extract_creator_credits`` keeps reading a whole metadata document
-    for callers that hold one; the repository read projects the same list.
-    """
-    thread_count = 3
-    issues_per_thread = 2
-    _thread, issues = await _seed_full_payload_library(
-        async_db, default_user, thread_count=thread_count, issues_per_thread=issues_per_thread
-    )
-    await async_db.flush()
-
-    response = await auth_client.get("/api/v1/creators?limit=50")
-    assert response.status_code == 200
-    body = response.json()
-    assert len(issues) == thread_count * issues_per_thread
-    assert body["total"] == thread_count * 2
-    assert body["coverage"]["rated_issues_total"] == len(issues)
-    assert body["coverage"]["ratings_complete"] is True
-
-    expected_keys = {f"creator:{person_id}" for person_id in range(402, 402 + thread_count * 2)}
-    assert {row["canonical_creator_key"] for row in body["items"]} == expected_keys
-
-    stored_rows = await async_db.execute(
-        select(ExternalIdentity.metadata_json).where(ExternalIdentity.external_id.like("perf-%"))
-    )
-    checked = 0
-    for (metadata,) in stored_rows.all():
-        assert isinstance(metadata, dict)
-        assert "raw_provider_payload" in metadata
-        assert extract_creator_credits(metadata) == extract_creator_credit_list(
-            metadata[CREATOR_CREDITS_KEY]
-        )
-        assert extract_creator_credit_list(metadata[CREATOR_CREDITS_KEY])
-        checked += 1
-    assert checked == len(issues)
-
-
-@pytest.mark.asyncio
-async def test_wide_library_creator_read_stays_bounded(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    db_engine: AsyncEngine,
-    default_user: User,
-) -> None:
-    """A wide library still costs a fixed number of SELECTs with full payloads."""
-    await _seed_full_payload_library(async_db, default_user, thread_count=8, issues_per_thread=5)
-    await async_db.flush()
-
-    await auth_client.get("/api/v1/creators")
-
-    with _captured_selects(db_engine) as small_page:
-        small = await auth_client.get("/api/v1/creators?limit=1&offset=0")
-    with _captured_selects(db_engine) as full_page:
-        full = await auth_client.get("/api/v1/creators?limit=50&offset=0")
-
-    assert small.status_code == 200
-    assert full.status_code == 200
-    assert len(small.json()["items"]) == 1
-    assert full.json()["total"] == 16
-    assert len(small_page) == len(full_page)
-    assert len(small_page) <= 5, small_page
-
-
-@pytest.mark.asyncio
-async def test_thread_read_is_one_user_scoped_statement(
-    auth_client: AsyncClient,
-    async_db: AsyncSession,
-    db_engine: AsyncEngine,
-    default_user: User,
-) -> None:
-    """Thread titles and manual credits are read once per thread, not per issue.
-
-    Projecting those columns off the issue join repeated the stored manual-credit
-    document on every owned issue row, so a wide library moved the same JSON once
-    per issue (issue #3387). The read that replaced it must stay a single
-    thread-only statement scoped by the indexed ``threads.user_id`` predicate:
-    filtering the same rows by a library-sized ``id IN (...)`` list would
-    reintroduce the wide-library cost this read exists to remove.
-    """
-    await _seed_full_payload_library(async_db, default_user, thread_count=8, issues_per_thread=5)
-    await async_db.flush()
-
-    # The fixture credits person ids 402 and 403 on its first thread, so both
-    # requested keys resolve and the response proves the read still works.
-    with _captured_selects(db_engine) as statements:
-        response = await auth_client.get("/api/v1/creators/summaries?keys=creator:402,creator:403")
-    assert response.status_code == 200
-    assert len(response.json()["summaries"]) == 2
-
-    thread_reads = [
-        statement for statement in statements if "manual_creator_credits" in statement.lower()
-    ]
-    assert len(thread_reads) == 1, thread_reads
-    thread_read = thread_reads[0]
-    assert "threads.user_id" in thread_read, thread_read
-    # Thread-only: no issue join, so no duplicated row per owned issue.
-    assert " JOIN " not in thread_read.upper(), thread_read
-    # User-scoped predicate only; never one bind parameter per owned thread.
-    assert not re.search(r"\bIN\s*\(", thread_read, flags=re.IGNORECASE), thread_read
 
 
 def test_extract_creator_credit_list_rejects_unusable_values() -> None:

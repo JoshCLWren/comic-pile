@@ -124,8 +124,8 @@ def test_trusted_checks_retry_before_push(
     else:
         assert "status=1" in result.stdout
         assert "reason=fast-checks-failed" in result.stdout
-        assert "git:reset" in result.stderr
-        assert "git:clean" in result.stderr
+        assert "git:reset" not in result.stderr
+        assert "git:clean" not in result.stderr
         assert "reported-failure" in result.stderr
         assert "git:add" not in result.stderr
         assert "git:commit" not in result.stderr
