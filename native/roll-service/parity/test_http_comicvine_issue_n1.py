@@ -72,8 +72,8 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
                 "RETURNING id",
             )
             await raw.execute(
-                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, created_at, updated_at) "
-                "VALUES ($1, $2, 'confirmed', 1.0, NOW(), NOW())",
+                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at) "
+                "VALUES ($1, $2, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW())",
                 issue_id,
                 ext_id,
             )
@@ -136,8 +136,8 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
                 "RETURNING id",
             )
             await raw.execute(
-                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, created_at, updated_at) "
-                "VALUES ($1, $2, 'confirmed', 1.0, NOW(), NOW())",
+                "INSERT INTO issue_external_identity_mappings (issue_id, external_identity_id, status, confidence, evidence_json, created_at, updated_at) "
+                "VALUES ($1, $2, 'confirmed', 1.0, '{}'::jsonb, NOW(), NOW())",
                 new_issue_id,
                 ext_id,
             )
