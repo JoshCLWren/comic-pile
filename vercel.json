@@ -531,6 +531,20 @@
       "dest": "/api/native_roll.rs"
     },
     {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
       "src": "^/api/v1/issues/[0-9]+$",
       "methods": [
         "GET"
@@ -1684,14 +1698,6 @@
       "dest": "/api/index.py"
     },
     {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/browse$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/by\\-comicvine\\-issue/[^/]+$",
       "methods": [
         "GET",
@@ -1703,14 +1709,6 @@
       "src": "^/api/v1/issue\\-identity/cbl\\-sources/compare$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/issue\\-identity/cbl\\-sources/folders$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"
