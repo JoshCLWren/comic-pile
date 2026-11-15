@@ -282,14 +282,13 @@ pub async fn list_activity(
 
     let items: Vec<ActivityItem> = page.iter().map(to_item).collect();
 
-    let next_page_token = if has_more {
-        cursor_source
-            .as_ref()
+    let next_page_token = if has_more && !page.is_empty() {
+        page
+            .last()
             .map(|row| encode_cursor(&row.timestamp, row.event_id))
     } else {
         None
     };
-    // Better cursor: last page item's underlying? We don't retain. Use fetched last.
     let next_cursor = next_page_token.clone();
 
     Ok(Json(json!({
