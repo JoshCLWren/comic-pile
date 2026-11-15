@@ -306,7 +306,7 @@ def test_ci_pr_with_passing_required_checks_is_not_executable(
         "target_json",
         lambda number: {"labels": [{"name": "factory:ci"}]},
     )
-    monkeypatch.setattr(controller, "required_checks_failed", lambda number: False)
+    monkeypatch.setattr(controller, "required_checks_outcome", lambda number: 'passed')
 
     assert controller.candidate_is_live_executable(candidate) is False
 
@@ -324,6 +324,7 @@ def test_actionable_pr_stage_is_live_executable(
         "target_json",
         lambda number: {"labels": [{"name": stage}]},
     )
+    monkeypatch.setattr(controller, "required_checks_outcome", lambda number: 'passed')
 
     assert controller.candidate_is_live_executable(candidate) is True
 
@@ -540,9 +541,109 @@ def test_ci_pr_with_failed_required_checks_is_live_executable(
         "target_json",
         lambda number: {"labels": [{"name": "factory:ci"}]},
     )
-    monkeypatch.setattr(controller, "required_checks_failed", lambda number: True)
+    monkeypatch.setattr(controller, "required_checks_outcome", lambda number: 'failed')
 
     assert controller.candidate_is_live_executable(candidate) is True
+
+
+@pytest.mark.parametrize(
+    ("states", "outcome"),
+    [
+        (["PENDING"], "waiting"),
+        (["IN_PROGRESS"], "waiting"),
+        (["QUEUED"], "waiting"),
+        (["ACTION_REQUIRED"], "waiting"),
+        (["FAILURE", "PENDING"], "waiting"),
+        (["FAILURE", "SUCCESS"], "failed"),
+        (["STALE"], "failed"),
+        (["SUCCESS"], "passed"),
+        (["SUCCESS", "SKIPPED"], "passed"),
+        ([], "waiting"),
+        (["SOME_NEW_CHECK_STATE"], "waiting"),
+    ],
+)
+def test_required_ci_outcome_waits_for_all_terminal_checks(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    states: list[str],
+    outcome: str,
+) -> None:
+    """Only terminal exact-head CI results can unlock a model assignment."""
+    monkeypatch.setattr(
+        controller, "run_gh",
+        lambda *args, **kwargs: __import__("json").dumps(
+            [{"state": state} for state in states]
+        ),
+    )
+    assert controller.required_checks_outcome(1401) == outcome
+
+
+@pytest.mark.parametrize(
+    ("stage", "conflicted"),
+    [
+        ("factory:review", False),
+        ("factory:changes-requested", False),
+        ("factory:ci", False),
+        ("factory:changes-requested", True),
+    ],
+)
+def test_running_ci_prevents_pr_assignment_in_any_stage(
+    controller: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    stage: str,
+    conflicted: bool,
+) -> None:
+    candidate = controller.Candidate(
+        "pr", 1402, 3, 2, "2026-11-15T12:00:00Z",
+        stage=stage, conflicted=conflicted,
+    )
+    monkeypatch.setattr(
+        controller, "target_json",
+        lambda number: {"labels": [{"name": stage}]},
+    )
+    monkeypatch.setattr(controller, "required_checks_outcome", lambda number: "waiting")
+    assert not controller.candidate_is_live_executable(candidate)
+
+
+def test_ci_pending_never_acquires_worker_lease(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = controller.Candidate(
+        "pr", 1403, 3, 2, "2026-11-15T12:00:00Z", stage="factory:review",
+    )
+    monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda item: False)
+    monkeypatch.setattr(
+        controller, "acquire_lease",
+        lambda *args, **kwargs: pytest.fail("waiting CI cannot reserve a worker"),
+    )
+    assert controller.assign_candidate(candidate, "13") is False
+
+
+def test_ci_starting_during_lease_releases_reservation_before_mutations(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = controller.Candidate(
+        "pr", 1404, 3, 2, "2026-11-15T12:00:00Z", stage="factory:review",
+    )
+    statuses = iter([True, False])
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda item: next(statuses))
+    monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda worker: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *args: "ci-race-lease")
+    released: list[tuple[object, ...]] = []
+    monkeypatch.setattr(controller, "release_lease", lambda *args: released.append(args))
+    monkeypatch.setattr(
+        controller, "replace_factory_labels",
+        lambda *args, **kwargs: pytest.fail("CI started: labels must not be claimed"),
+    )
+    monkeypatch.setattr(
+        controller, "record_controller_lease_activity",
+        lambda *args, **kwargs: pytest.fail("CI started: no model claim marker"),
+    )
+
+    assert controller.assign_candidate(candidate, "13") is False
+    assert released == [(controller.REPO, "13", "ci-race-lease", "claim-rollback")]
 
 
 def test_active_fixed_workers_paginates_all_active_run_states(
