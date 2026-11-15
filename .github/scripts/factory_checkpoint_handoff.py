@@ -156,7 +156,7 @@ def link(repo: str, number: int, run_id: str, draft: int) -> None:
         return
     api(f"repos/{repo}/issues/{number}/comments", "POST", body=(
         f"{marker(run_id)}\nSaved recovery work: #{draft}. "
-        "This draft contains unvalidated snapshots, does not approve or replace this target, "
+        "This recovery PR contains unvalidated snapshots, does not approve or replace this target, "
         "and preserves its current owner."
     ))
 
