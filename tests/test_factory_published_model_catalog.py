@@ -26,7 +26,12 @@ def catalog_module():
 
 
 def model(model_id: str, prompt: str, completion: str) -> dict:
-    return {"id": model_id, "pricing": {"prompt": prompt, "completion": completion}}
+    return {
+        "id": model_id,
+        "pricing": {"prompt": prompt, "completion": completion},
+        "supported_parameters": ["tools"],
+        "endpoints": ["/api/v1/chat/completions"],
+    }
 
 
 def test_openrouter_uses_published_free_ids_and_rejects_paid(catalog_module) -> None:
@@ -35,6 +40,8 @@ def test_openrouter_uses_published_free_ids_and_rejects_paid(catalog_module) -> 
         model("vendor/free-lying", "0", "0"),
         model("vendor/verified:free", "0", "0"),
         model("vendor/paid:free", "0", "1"),
+        {**model("vendor/no-tools:free", "0", "0"), "supported_parameters": []},
+        {**model("vendor/no-chat:free", "0", "0"), "endpoints": ["/api/v1/messages"]},
         {"id": "vendor/unknown:free"},
     ]}
     assert catalog_module.free_model_ids("openrouter-free", catalog) == ["vendor/verified:free"]
@@ -44,9 +51,16 @@ def test_openrouter_uses_published_free_ids_and_rejects_paid(catalog_module) -> 
 
 def test_vercel_requires_zero_price_on_both_sides(catalog_module) -> None:
     catalog = {"data": [
-        {"id": "vendor/zero", "pricing": {"input": "0", "output": 0}},
-        {"id": "vendor/unknown", "pricing": {"input": "0"}},
-        {"id": "vendor/paid", "pricing": {"input": 0, "output": "0.0001"}},
+        {"id": "vendor/zero", "type": "language",
+         "supported_parameters": ["tools"], "pricing": {"input": "0", "output": 0}},
+        {"id": "vendor/unknown", "type": "language",
+         "supported_parameters": ["tools"], "pricing": {"input": "0"}},
+        {"id": "vendor/paid", "type": "language",
+         "supported_parameters": ["tools"], "pricing": {"input": 0, "output": "0.0001"}},
+        {"id": "vendor/image", "type": "image",
+         "supported_parameters": ["tools"], "pricing": {"input": 0, "output": 0}},
+        {"id": "vendor/no-tools", "type": "language",
+         "supported_parameters": [], "pricing": {"input": 0, "output": 0}},
     ]}
     assert catalog_module.free_model_ids("vercel-ai-gateway", catalog) == ["vendor/zero"]
 
