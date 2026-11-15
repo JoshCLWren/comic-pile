@@ -255,11 +255,10 @@ pub async fn get_thread_issue_dependencies(
     Ok(Json(ThreadIssueDependenciesResponse { thread_id, issues }))
 }
 
-
-//! Browser-hot thread issue listing cut over from Python by #4832.
-//! The ownership check, filtered count and bounded page run in one SQL
-//! statement regardless of how many issues a reader has. The same-path
-//! legacy POST remains Python until its own migration.
+// Browser-hot thread issue listing cut over from Python by #4832.
+// The ownership check, filtered count and bounded page run in one SQL
+// statement regardless of how many issues a reader has. The same-path
+// legacy POST remains Python until its own migration.
 
 const THREAD_ISSUES_PAGE_SQL: &str = r#"
 WITH owned AS (
@@ -349,7 +348,14 @@ pub async fn list_thread_issues(
     let row = connection
         .query_opt(
             THREAD_ISSUES_PAGE_SQL,
-            &[&thread_id, &user.id(), &query.status, &position, &issue_id, &limit],
+            &[
+                &thread_id,
+                &user.id(),
+                &query.status,
+                &position,
+                &issue_id,
+                &limit,
+            ],
         )
         .await
         .map_err(db::query_error)?
