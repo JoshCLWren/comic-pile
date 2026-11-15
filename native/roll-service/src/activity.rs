@@ -307,3 +307,16 @@ pub async fn list_activity(
 )]
 #[allow(dead_code)]
 pub fn list_activity_documentation() {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_round_trips() {
+        let token = encode_cursor("2026-11-08T10:01:54.440000Z", 42);
+        let (ts, id) = parse_cursor(&token).expect("cursor");
+        assert_eq!(ts, "2026-11-08T10:01:54.440000Z");
+        assert_eq!(id, 42);
+    }
+}
