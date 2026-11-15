@@ -279,3 +279,13 @@ A DB outage must not turn missing data into healthy evidence. New claims still
 require the existing transactional Neon lease and GitHub ownership check.
 The read-only projections have bounded fallbacks, but neither missing cache
 nor a late webhook is grounds to merge.
+
+## Work as smoke
+
+The fixed-model runner no longer spends inference requests on standalone model
+smoke prompts, NVIDIA chat probes, Kilo smokes, or tool-canary prompts. Trusted
+catalog checks, existing Neon model exclusions, and the zero-price Pixel Canary
+catalog guard remain. Only a real leased coding/review mission invokes an LLM.
+A successful real-session exit proves the selected model, and an unassigned
+worker is recorded as idle without provider inference. Delivery still requires
+verified PR persistence and lease handoff, independent of model execution.
