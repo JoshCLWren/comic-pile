@@ -183,6 +183,13 @@ jobs:
             nvidia)
               # OpenCode provider ID plus the complete upstream model ID:
               # nvidia/nvidia/nemotron-3.5-bolt-e4b is intentional.
+              if [[ "$model" == nvidia/* ]]; then
+                # TSV stores the published upstream ID, not a prebuilt selector.
+                [[ "$model" != nvidia/nvidia/* ]] || {
+                  echo "::error::NVIDIA model ID has duplicate vendor prefix: $model" >&2
+                  exit 1
+                }
+              fi
               runtime_model="nvidia/${model}"
               branch_suffix='nvidia'
               if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
