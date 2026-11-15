@@ -32,6 +32,8 @@ from factory_model_catalog import (
     strip_provider_prefix,
 )
 from factory_roster import (
+    CATALOG_MODEL_SLOT,
+    CATALOG_MODEL_SOURCES,
     PROTECTED_SOURCES,
     RosterLock,
     RosterRow,
@@ -258,9 +260,7 @@ def decide_pin(
     retired_410 = retired_410_models or set()
     # A catalog-backed worker is never retired because one published model
     # disappears. The runtime picks a different verified free model.
-    if model == "@catalog" and source in {
-        "opencode-free", "openrouter-free", "vercel-ai-gateway"
-    }:
+    if model == CATALOG_MODEL_SLOT and source in CATALOG_MODEL_SOURCES:
         return PinDecision(
             worker=worker, source=source, model=model, action="keep",
             reason="dynamic live-catalog worker slot",
