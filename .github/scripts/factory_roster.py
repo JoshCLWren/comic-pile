@@ -39,6 +39,8 @@ OPENCODE_DISPLAY_TOKEN_OVERRIDES = {"mimo": "MiMo"}
 OPENCODE_MUSE_SPARK_RE = re.compile(r"muse-spark", re.IGNORECASE)
 _VERSIONISH_TOKEN_RE = re.compile(r"^v?\d+(?:\.\d+)*$", re.IGNORECASE)
 CATALOG_SOURCES = frozenset({"opencode-free", "nvidia", "openrouter-free"})
+CATALOG_MODEL_SLOT = "@catalog"
+CATALOG_MODEL_SOURCES = frozenset({"opencode-free", "openrouter-free", "vercel-ai-gateway"})
 PROTECTED_SOURCES = frozenset(
     {
         "kilo-auto",
@@ -102,7 +104,7 @@ CLOUDFLARE_WORKERS_AI_FREE_MODELS = frozenset(
 OPENROUTER_FREE_PROMO_IDS = frozenset({"stealth/union-alpha", "stealth/crouton-alpha"})
 GEMINI_FREE_MODELS = frozenset({"gemini-3.8-flash", "gemini-3.1-flash-lite"})
 GROQ_FREE_MODELS = frozenset({"openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b"})
-VERCEL_ZERO_PRICE_MODELS = frozenset({"reflection/beam-free", "nvidia/nemotron-3.5-lightning-free", "stealth/glyph-cluster"})
+# Vercel price and model IDs are verified against its live public catalog.
 AION_FREE_CREDIT_MODELS = frozenset({"aion-labs/aion-3.5-mini"})
 COHERE_EVALUATION_MODELS = frozenset({"command-a-plus-05-2026"})
 TYPHOON_FREE_MODELS = frozenset({"typhoon-v2.5-30b-a3b-instruct", "typhoon-v2.1-12b-instruct"})
@@ -632,6 +634,7 @@ def write_roster_lock(path: Path, lock: RosterLock) -> None:
     """Persist the expected-worker lock as stable JSON."""
     payload = {
         "schema_version": LOCK_SCHEMA_VERSION,
+        "model_binding": "catalog-backed",
         "expected_workers": sorted({int(item) for item in lock["expected_workers"]}),
         "retired_workers": sorted({int(item) for item in lock["retired_workers"]}),
         "retired_models": sorted({str(item) for item in lock["retired_models"]}),
