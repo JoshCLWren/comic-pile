@@ -365,33 +365,64 @@ def issue_has_open_blocker(number: int, *, live: bool = False) -> bool:
     return any(str(item.get('state') or '').lower() == 'open' for item in blockers)
 
 
+# Required CI is the scheduler's signal, not work for a model to watch.
+# A completed failure takes precedence only after all required checks settle.
+REQUIRED_CHECK_PASSING_STATES = frozenset({'SUCCESS', 'NEUTRAL', 'SKIPPED'})
+
+
+def required_checks_outcome(pr_number: int) -> str:
+    """Classify required checks on the current PR head: waiting, failed, passed.
+
+    Treat missing, unparseable, and unknown evidence as waiting. Never turn a
+    partial failure into a model assignment while another required check runs.
+    The trusted CI reconciler handles green/failed transitions without models.
+    """
+    try:
+        output = run_gh(
+            ['pr', 'checks', str(pr_number), '--repo', REPO, '--required', '--json', 'state'],
+            check=False,
+        )
+        checks = json.loads(output) if output.strip() else None
+    except (RuntimeError, json.JSONDecodeError):
+        return 'waiting'
+    if not isinstance(checks, list) or not checks:
+        return 'waiting'
+    states: list[str] = []
+    for check in checks:
+        if not isinstance(check, dict) or not isinstance(check.get('state'), str):
+            return 'waiting'
+        states.append(check['state'].upper())
+    terminal = REQUIRED_CHECK_FAILURE_STATES | REQUIRED_CHECK_PASSING_STATES
+    if any(state not in terminal for state in states):
+        return 'waiting'
+    if any(state in REQUIRED_CHECK_FAILURE_STATES for state in states):
+        return 'failed'
+    return 'passed'
+
+
 def required_checks_failed(pr_number: int) -> bool:
-    """Return whether any required pull-request check has failed."""
-    try:
-        output = run_gh(['pr', 'checks', str(pr_number), '--repo', REPO, '--required', '--json', 'state'], check=False)
-    except RuntimeError:
-        return False
-    if not output.strip():
-        return False
-    try:
-        checks = cast(list[dict[str, Any]], json.loads(output))
-    except json.JSONDecodeError:
-        return False
-    return any(str(check.get('state', '')).upper() in REQUIRED_CHECK_FAILURE_STATES for check in checks)
+    """Return True only for terminal required-check failure on the current head."""
+    return required_checks_outcome(pr_number) == 'failed'
 
 
 def candidate_is_live_executable(candidate: Candidate) -> bool:
-    """Return whether a ranked candidate has an executable next action."""
+    """Return whether a ranked candidate can use a model *now*.
+
+    CI-in-progress suppresses every PR stage, including review, repair and
+    conflict work. CI-stage success is reconciled by the trusted controller
+    instead of assigning a model just to notice that CI finished.
+    """
     if candidate.kind == 'issue':
         return not issue_has_open_blocker(candidate.number)
     target = target_json(candidate.number)
     labels = {label['name'] for label in target.get('labels', [])}
     if 'factory:ready' in labels:
         return False
-    if candidate.conflicted:
-        return True
+    outcome = required_checks_outcome(candidate.number)
+    if outcome == 'waiting':
+        return False
     if 'factory:ci' in labels:
-        return required_checks_failed(candidate.number)
+        return outcome == 'failed'
     return True
 
 
@@ -516,6 +547,11 @@ def assign_candidate(
     for number in numbers:
         if not target_still_unowned(number):
             return False
+    # The ranked snapshot may have been taken before a CI run started. Do not
+    # allocate a Neon lease to a PR that is currently waiting on CI.
+    if candidate.kind == 'pr' and candidate.stage in STAGE_LABELS:
+        if not candidate_is_live_executable(candidate):
+            return False
     if candidate.kind == 'issue' and issue_has_open_blocker(candidate.number, live=True):
         # A fresh dependency was added after ranking; never convert an
         # advisory Neon cache hit into a blocked GitHub lease mutation.
@@ -551,6 +587,13 @@ def assign_candidate(
                 print(f'[factory-controller] Neon claim rollback failed ({type(exc).__name__})', file=sys.stderr)
     claimed: list[int] = []
     try:
+        # Close the race between the first check and the Neon reservation.
+        # A newly queued CI run must release the reservation before labels,
+        # comments, or model execution are written to GitHub.
+        if candidate.kind == 'pr' and candidate.stage in STAGE_LABELS:
+            if not candidate_is_live_executable(candidate):
+                release_verified_claims(claimed)
+                return False
         for number in numbers:
             # Revalidate immediately before the first lease mutation so a stale
             # idle snapshot cannot create a second lease.
