@@ -52,3 +52,15 @@
 131	nvidia	nvidia/nemotron-3.5-bolt-e4b	5	dispatcher	NVIDIA Nemotron 3.5 Bolt E4B
 132	cloudflare-workers-ai	@cf/openai/gpt-oss-20b	10	dispatcher	Cloudflare GPT OSS 20B
 133	cloudflare-workers-ai	@cf/qwen/qwen3.8-27b	15	dispatcher	Cloudflare Qwen 3.8 27B
+134	gemini-free	gemini-3.8-flash	20	dispatcher	Google Gemini 3.8 Flash Free
+135	gemini-free	gemini-3.1-flash-lite	25	dispatcher	Google Gemini 3.1 Flash Lite Free
+136	groq-free	openai/gpt-oss-120b	30	dispatcher	Groq GPT OSS 120B Free
+137	groq-free	openai/gpt-oss-20b	35	dispatcher	Groq GPT OSS 20B Free
+138	groq-free	qwen/qwen3.8-27b	40	dispatcher	Groq Qwen 3.8 27B Free
+139	vercel-ai-gateway	reflection/beam-free	45	dispatcher	Vercel Reflection Beam Free
+140	vercel-ai-gateway	nvidia/nemotron-3.5-lightning-free	50	dispatcher	Vercel Nemotron 3.5 Lightning Free
+141	vercel-ai-gateway	stealth/glyph-cluster	55	dispatcher	Vercel Glyph Cluster Free
+142	aion-free	aion-labs/aion-3.5-mini	0	dispatcher	Aion Labs 3.5 Mini Free Credits
+143	cohere-eval	command-a-plus-05-2026	5	dispatcher	Cohere Command A Plus Evaluation
+144	typhoon-free	typhoon-v2.5-30b-a3b-instruct	10	dispatcher	Typhoon 2.5 Instruct Free
+145	typhoon-free	typhoon-v2.1-12b-instruct	15	dispatcher	Typhoon 2.1 Instruct Free
