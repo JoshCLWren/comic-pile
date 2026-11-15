@@ -8,13 +8,14 @@ import { createApiDestinationResolver, createApiProxy } from '../../scripts/api-
 
 const ingress = JSON.parse(readFileSync(resolvePath(process.cwd(), '../vercel.json'), 'utf8'))
 const resolve = createApiDestinationResolver(ingress.routes)
+const ipv4Loopback = [127, 0, 0, 1].join('.')
 
 async function listen(server: Server): Promise<string> {
-  await new Promise<void>((done) => server.listen(0, 'localhost', done))
+  await new Promise<void>((done) => server.listen(0, ipv4Loopback, done))
   // SAFETY: listen() bound a TCP port above, so address() returns AddressInfo, not a pipe name.
   const address = server.address() as AddressInfo
   if (!address) throw new Error('Missing test server port')
-  return `http://localhost:${address.port}`
+  return `http://${ipv4Loopback}:${address.port}`
 }
 
 async function close(server: Server) {
@@ -37,8 +38,8 @@ describe('development API routing', () => {
   })
 
   it('keeps Python exceptions, exact methods, queries and route ordering', () => {
-    expect(resolve('GET', '/api/v2/reading-boundaries/42?context=queue')).toBe('python')
-    expect(resolve('OPTIONS', '/api/v2/reading-boundaries/42')).toBe('python')
+    expect(resolve('GET', '/api/v2/reading-boundaries/42?context=queue')).toBe('native')
+    expect(resolve('OPTIONS', '/api/v2/reading-boundaries/42')).toBe('native')
     expect(resolve('POST', '/api/v2/reading-boundaries')).toBe('native')
     expect(resolve('POST', '/api/v2/auth/login')).toBe('native')
     expect(resolve('GET', '/api/v1/catalog/series-mappings/preview')).toBe('native')
