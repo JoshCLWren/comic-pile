@@ -126,7 +126,9 @@ pub async fn list_activity(
     let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
     params.push(&user.id() as &(dyn tokio_postgres::types::ToSql + Sync));
     if let Some((ts, id)) = &cursor {
-        sql.push_str(" AND (e.timestamp > $2::timestamptz OR (e.timestamp = $2::timestamptz AND e.id > $3))");
+        sql.push_str(
+            " AND (e.timestamp > $2::timestamptz OR (e.timestamp = $2::timestamptz AND e.id > $3))",
+        );
         // placeholders handled below by binding; use positional params
         let _ = (ts, id);
     }
@@ -152,7 +154,9 @@ pub async fn list_activity(
     let cursor_id_owned: Option<i32> = cursor.as_ref().map(|(_, id)| *id);
 
     if cursor.is_some() {
-        sql.push_str(" AND (e.timestamp > $2::timestamptz OR (e.timestamp = $2::timestamptz AND e.id > $3))");
+        sql.push_str(
+            " AND (e.timestamp > $2::timestamptz OR (e.timestamp = $2::timestamptz AND e.id > $3))",
+        );
     }
     sql.push_str(" ORDER BY e.timestamp ASC, e.id ASC LIMIT $");
     let limit_placeholder = if cursor.is_some() { 4 } else { 2 };
@@ -163,10 +167,7 @@ pub async fn list_activity(
         let ts = cursor_ts_owned.as_ref().unwrap();
         let id = cursor_id_owned.unwrap();
         connection
-            .query(
-                &sql,
-                &[&user.id(), &ts, &id, &fetch_limit],
-            )
+            .query(&sql, &[&user.id(), &ts, &id, &fetch_limit])
             .await
             .map_err(db::query_error)?
     } else {
@@ -230,7 +231,11 @@ pub async fn list_activity(
         }
     }
 
-    fetched.sort_by(|a, b| a.sort_key.cmp(&b.sort_key).then(a.event_id.cmp(&b.event_id)));
+    fetched.sort_by(|a, b| {
+        a.sort_key
+            .cmp(&b.sort_key)
+            .then(a.event_id.cmp(&b.event_id))
+    });
 
     // Coalesce related issue-command/dice-command rate pairs into one display.
     let cursor_source = fetched.last().cloned();
@@ -243,7 +248,8 @@ pub async fn list_activity(
             let prev = logical.last().unwrap();
             let same_issue = prev.issue_id == row.issue_id && prev.issue_id.is_some();
             let same_rating = prev.rating == row.rating && prev.rating.is_some();
-            let close = (prev.timestamp_micros - row.timestamp_micros).abs() <= CAUSAL_WINDOW_MICROS;
+            let close =
+                (prev.timestamp_micros - row.timestamp_micros).abs() <= CAUSAL_WINDOW_MICROS;
             if same_issue && same_rating && close {
                 let mut merged = logical.pop().unwrap();
                 merged.die_before = merged.die_before.or(row.die_before);
@@ -277,7 +283,9 @@ pub async fn list_activity(
     let items: Vec<ActivityItem> = page.iter().map(to_item).collect();
 
     let next_page_token = if has_more {
-        cursor_source.as_ref().map(|row| encode_cursor(&row.timestamp, row.event_id))
+        cursor_source
+            .as_ref()
+            .map(|row| encode_cursor(&row.timestamp, row.event_id))
     } else {
         None
     };
