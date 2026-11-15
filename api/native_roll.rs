@@ -272,10 +272,7 @@ fn app() -> Router {
         .route("/api/v2/queue-orders", post(native_dispatch))
         .route("/api/v2/threads", get(native_dispatch))
         .route("/api/v1/threads/{thread_id}", get(native_dispatch))
-        .route(
-            "/api/v1/threads/{thread_id}/issues",
-            get(native_dispatch),
-        )
+        .route("/api/v1/threads/{thread_id}/issues", get(native_dispatch))
         .route("/api/threads/{thread_id}", get(native_dispatch))
         .route("/api/v1/threads/completed/threads", get(native_dispatch))
         .route("/api/v2/reading-graph", get(native_dispatch))
@@ -1131,21 +1128,15 @@ mod tests {
                 assert_eq!(unread["total_count"], 2);
                 assert_eq!(unread["issues"].as_array().expect("filtered").len(), 2);
 
-                let (status, missing, _, _) = call_app(request(
-                    "/api/v1/threads/999/issues".into(),
-                    &access,
-                ))
-                .await;
+                let (status, missing, _, _) =
+                    call_app(request("/api/v1/threads/999/issues".into(), &access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
                 assert_eq!(missing["detail"], "Thread 999 not found");
 
                 let other_name = format!("thread-issues-foreign-{}", std::process::id());
                 let (other_access, _, _) = register_session(&other_name).await;
-                let (status, _, _, _) = call_app(request(
-                    "/api/v1/threads/21/issues".into(),
-                    &other_access,
-                ))
-                .await;
+                let (status, _, _, _) =
+                    call_app(request("/api/v1/threads/21/issues".into(), &other_access)).await;
                 assert_eq!(status, StatusCode::NOT_FOUND);
             })
             .await;
