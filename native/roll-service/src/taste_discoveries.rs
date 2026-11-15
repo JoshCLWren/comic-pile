@@ -33,7 +33,7 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{rejection::QueryRejection, Path, Query, State},
     http::StatusCode,
     Json,
 };
@@ -296,8 +296,10 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
-    Query(query): Query<TasteDiscoveryQuery>,
+    query: Result<Query<TasteDiscoveryQuery>, QueryRejection>,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
+    let Query(query) =
+        query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
         return Err(ApiError::Unprocessable(
@@ -669,7 +671,7 @@ mod tests {
         let Json(first) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7001),
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("list owned taste discoveries");
@@ -696,7 +698,7 @@ mod tests {
         let Json(second) = list_taste_discoveries(
             State(state.clone()),
             user,
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("second list is suppressed by the cooldown");
@@ -709,7 +711,7 @@ mod tests {
         let Json(limited) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7001),
-            Query(TasteDiscoveryQuery { limit: Some(1) }),
+            Ok(Query(TasteDiscoveryQuery { limit: Some(1) })),
         )
         .await
         .expect("bounded listing");
@@ -718,7 +720,7 @@ mod tests {
         let Json(foreign) = list_taste_discoveries(
             State(state.clone()),
             AuthenticatedUser::for_test(7002),
-            Query(TasteDiscoveryQuery { limit: None }),
+            Ok(Query(TasteDiscoveryQuery { limit: None })),
         )
         .await
         .expect("foreign owner listing");
@@ -736,7 +738,7 @@ mod tests {
             let error = list_taste_discoveries(
                 State(state.clone()),
                 AuthenticatedUser::for_test(7001),
-                Query(TasteDiscoveryQuery { limit: Some(limit) }),
+                Ok(Query(TasteDiscoveryQuery { limit: Some(limit) })),
             )
             .await
             .expect_err("out-of-range limit must 422");
@@ -858,5 +860,43 @@ mod tests {
                 "{method} {uri} must require auth through the service router"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn list_rejects_malformed_limit_through_service_router() {
+        use crate::{auth::dto::Claims, router};
+        use axum::{
+            body::{to_bytes, Body},
+            http::{header, Request, StatusCode},
+        };
+        use jsonwebtoken::{encode, EncodingKey, Header as JwtHeader};
+        use tower::ServiceExt;
+
+        let (state, _user, _guard) = database_fixture().await;
+        let claims = Claims::access("taste-dismiss-test", "taste-router-jti", 0, 60);
+        let token = encode(
+            &JwtHeader::default(),
+            &claims,
+            &EncodingKey::from_secret(test_support::TEST_JWT_SECRET.as_bytes()),
+        )
+        .expect("encode access token");
+        let app = router(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/taste/discoveries?limit=abc")
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload, json!({"detail": "limit must be between 1 and 3"}));
     }
 }
