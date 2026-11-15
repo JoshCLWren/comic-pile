@@ -5,7 +5,7 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
 use std::sync::Arc;
 
@@ -35,6 +35,19 @@ pub struct SyncStatusResponse {
     pub sources: Vec<SyncStatusSource>,
 }
 
+/// Wire parity with Python `SyncStatusSource.last_synced_at`
+/// (`app/schemas/reading_plan_sync.py`): Pydantic v2 renders a UTC
+/// `datetime` as RFC 3339 with a `Z` suffix and omits fractional seconds
+/// when they are zero, so the native response must match byte for byte.
+fn format_synced_at(value: DateTime<Utc>) -> String {
+    let precision = if value.timestamp_subsec_micros() == 0 {
+        SecondsFormat::Secs
+    } else {
+        SecondsFormat::Micros
+    };
+    value.to_rfc3339_opts(precision, true)
+}
+
 pub async fn get_sync_status(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -58,9 +71,7 @@ pub async fn get_sync_status(
             external_identity_id: row.get(3),
             provider_volume_id: row.get(4),
             enabled: enabled_flag,
-            last_synced_at: row
-                .get::<_, Option<DateTime<Utc>>>(6)
-                .map(|value| value.to_rfc3339()),
+            last_synced_at: row.get::<_, Option<DateTime<Utc>>>(6).map(format_synced_at),
         });
     }
     Ok(Json(SyncStatusResponse {
@@ -151,5 +162,14 @@ mod tests {
         assert_eq!(response.total_sources, 0);
         assert_eq!(response.enabled_sources, 0);
         assert!(response.sources.is_empty());
+    }
+
+    #[test]
+    fn format_synced_at_matches_python_datetime_json() {
+        let whole_second = DateTime::from_timestamp(1_704_164_645, 0).expect("whole second");
+        assert_eq!(format_synced_at(whole_second), "2024-01-02T03:04:05Z");
+
+        let with_micros = DateTime::from_timestamp(1_704_164_645, 123_456_000).expect("micros");
+        assert_eq!(format_synced_at(with_micros), "2024-01-02T03:04:05.123456Z");
     }
 }
