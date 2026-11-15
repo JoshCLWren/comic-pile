@@ -24,7 +24,8 @@
       "method": "POST",
       "path": "/api/v1/taste/discoveries/{signal_id}/dismiss",
       "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$"
+      "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
+      "exclude_from_inventory": true
     }
   ]
 }

@@ -236,14 +236,6 @@ async def _setup_user_with_history(
     return threads
 
 
-async def _get_session_reading_mode(
-    auth_client: AsyncClient,
-) -> dict:
-    """Fetch the current reading mode from the API."""
-    response = await auth_client.get("/api/v1/reading-mode")
-    return response.json()
-
-
 # ---------------------------------------------------------------------------
 # AC-1: Strong historical light-evening behavior infers appropriate bandwidth
 # ---------------------------------------------------------------------------
@@ -1064,40 +1056,6 @@ class TestCrossCuttingAdaptivePipeline:
         assert "result" in data
         assert "explanation" in data
 
-    @pytest.mark.asyncio
-    async def test_roll_with_manual_mode_override(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """Manual mode override affects the subsequent Roll."""
-        from tests.conftest import get_or_create_user_async
-
-        user = await get_or_create_user_async(async_db)
-        await _create_thread(async_db, user.id, title="Manual Override Thread")
-        await async_db.commit()
-
-        await auth_client.post(
-            "/api/v1/reading-mode",
-            json={"bandwidth": "light", "intent": "momentum", "source": "manual"},
-        )
-
-        data = (await roll_pending_thread(async_db)).model_dump()
-        assert "thread_id" in data
-
-    @pytest.mark.asyncio
-    async def test_roll_with_quiz_mode(
-        self, auth_client: AsyncClient, async_db: AsyncSession,
-    ) -> None:
-        """Quiz mode sets bandwidth and intent that affect subsequent rolls."""
-        response = await auth_client.post(
-            "/api/v1/reading-mode",
-            json={"answers": {"brainpower": "easy", "pick": "explore"}, "source": "quiz"},
-        )
-        assert response.status_code == 200
-
-        mode = await _get_session_reading_mode(auth_client)
-        assert mode["bandwidth"] == "light"
-        assert mode["intent"] == "explore"
-        assert mode["source"] == "quiz"
 
     @pytest.mark.asyncio
     async def test_legacy_switch_available_in_roll(
@@ -1141,3 +1099,23 @@ class TestCrossCuttingAdaptivePipeline:
         )
         refreshed = result.scalar_one()
         assert refreshed.queue_position == 1
+
+
+    @pytest.mark.asyncio
+    async def test_roll_with_manual_mode_override(
+        self, async_db: AsyncSession,
+    ) -> None:
+        """Manual mode override affects the subsequent Roll."""
+        from app.services.reading_mode import ReadingModeService
+        from tests.conftest import get_or_create_user_async
+
+        user = await get_or_create_user_async(async_db)
+        await _create_thread(async_db, user.id, title="Manual Override Thread")
+        await async_db.commit()
+
+        await ReadingModeService(async_db).set_reading_mode(
+            user, bandwidth="light", intent="momentum", source="manual",
+        )
+
+        data = (await roll_pending_thread(async_db)).model_dump()
+        assert "thread_id" in data

@@ -57,3 +57,14 @@ def test_pages_workflow_probes_opencode_free_roster_fail_soft() -> None:
     )
     assert "OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}" in workflow
     assert "generate_factory_status_dashboard.py" in workflow
+
+
+def test_large_dashboard_upload_uses_file_input_not_process_arguments() -> None:
+    """Huge fleet dashboards must not hit Linux's per-argument size limit."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "publish_snapshot site/index.html index.html" in workflow
+    assert "publish_snapshot site/funnel-cache.json funnel-cache.json" in workflow
+    assert 'base64.b64encode(Path(source).read_bytes())' in workflow
+    assert '--input "$payload_file"' in workflow
+    assert '-f "content=\u0024{content}"' not in workflow
+    assert '-f "content=\u0024(base64 -w0 site/funnel-cache.json)"' not in workflow

@@ -1290,7 +1290,7 @@ impl utoipa::Modify for ThreadsSecurityAddon {
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-fn list_threads_documentation() {}
+pub(crate) fn list_threads_documentation() {}
 
 #[utoipa::path(
     get,
@@ -1305,7 +1305,7 @@ fn list_threads_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-fn get_thread_detail_documentation() {}
+pub(crate) fn get_thread_detail_documentation() {}
 
 #[utoipa::path(
     get,
@@ -1320,7 +1320,7 @@ fn get_thread_detail_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-fn get_bare_thread_detail_documentation() {}
+pub(crate) fn get_bare_thread_detail_documentation() {}
 
 #[utoipa::path(
     get,
@@ -1341,7 +1341,7 @@ fn get_bare_thread_detail_documentation() {}
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
-fn list_completed_threads_documentation() {}
+pub(crate) fn list_completed_threads_documentation() {}
 
 #[cfg(test)]
 mod tests {

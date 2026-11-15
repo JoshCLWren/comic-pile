@@ -44,13 +44,13 @@ export interface ConfirmRequest {
   body: components['schemas']['ActionRequest']
 }
 
-export type ConfirmResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type ConfirmResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface ContinuityRulesCreateRequest {
   body: components['schemas']['ContinuityRuleRequest']
 }
 
-export type ContinuityRulesCreateResponse = components['schemas']['NativeContinuityRuleResponse']
+export type ContinuityRulesCreateResponse = components['schemas']['ContinuityRuleResponse']
 
 export interface ContinuityRulesDeleteRequest {
   path: {
@@ -66,9 +66,9 @@ export interface ContinuityRulesGetRequest {
   }
 }
 
-export type ContinuityRulesGetResponse = components['schemas']['NativeContinuityRuleResponse']
+export type ContinuityRulesGetResponse = components['schemas']['ContinuityRuleResponse']
 
-export type ContinuityRulesListResponse = Array<components['schemas']['NativeContinuityRuleResponse']>
+export type ContinuityRulesListResponse = Array<components['schemas']['ContinuityRuleResponse']>
 
 export interface ContinuityRulesUpdateRequest {
   path: {
@@ -77,13 +77,13 @@ export interface ContinuityRulesUpdateRequest {
   body: components['schemas']['ContinuityRuleRequest']
 }
 
-export type ContinuityRulesUpdateResponse = components['schemas']['NativeContinuityRuleResponse']
+export type ContinuityRulesUpdateResponse = components['schemas']['ContinuityRuleResponse']
 
 export interface CreateDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
 
-export type CreateDependencyResponse = components['schemas']['NativeDependencyResponse']
+export type CreateDependencyResponse = components['schemas']['DependencyResponse']
 
 export interface CreateIssuesRequest {
   path: {
@@ -98,7 +98,7 @@ export interface CreateLegacyDependencyRequest {
   body: components['schemas']['DependencyCreateRequest']
 }
 
-export type CreateLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+export type CreateLegacyDependencyResponse = components['schemas']['DependencyResponse']
 
 export interface CreateQueueOrderRequest {
   body: components['schemas']['QueueOrderRequest']
@@ -120,7 +120,7 @@ export interface DeferRequest {
   }
 }
 
-export type DeferResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type DeferResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface DeleteDependencyRequest {
   path: {
@@ -165,10 +165,10 @@ export interface EligibleIssueIdsRequest {
 export type EligibleIssueIdsResponse = components['schemas']['RollEligibleIssueIdsResponse']
 
 export interface ForgotPasswordRequest {
-  body: components['schemas']['NativeForgotPasswordRequest']
+  body: components['schemas']['ForgotPasswordRequest']
 }
 
-export type ForgotPasswordResponse = components['schemas']['NativePasswordResetResponse']
+export type ForgotPasswordResponse = components['schemas']['PasswordResetResponse']
 
 export interface GetRequest {
   path: {
@@ -176,7 +176,7 @@ export interface GetRequest {
   }
 }
 
-export type GetResponse = components['schemas']['NativeIdentityInboxResponse']
+export type GetResponse = components['schemas']['IdentityInboxResponse']
 
 export interface GetLegacyDependencyRequest {
   path: {
@@ -184,7 +184,7 @@ export interface GetLegacyDependencyRequest {
   }
 }
 
-export type GetLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+export type GetLegacyDependencyResponse = components['schemas']['DependencyResponse']
 
 export type GetMetricsResponse = components['schemas']['StartupMetricsResponse']
 
@@ -210,7 +210,7 @@ export interface GetThreadDependenciesRequest {
   }
 }
 
-export type GetThreadDependenciesResponse = components['schemas']['NativeThreadDependenciesResponse']
+export type GetThreadDependenciesResponse = components['schemas']['ThreadDependenciesResponse']
 
 export interface GetThreadIssueDependenciesRequest {
   path: {
@@ -218,7 +218,7 @@ export interface GetThreadIssueDependenciesRequest {
   }
 }
 
-export type GetThreadIssueDependenciesResponse = components['schemas']['NativeThreadIssueDependenciesResponse']
+export type GetThreadIssueDependenciesResponse = components['schemas']['ThreadIssueDependenciesResponse']
 
 export type GetV1MetricsResponse = components['schemas']['StartupMetricsResponse']
 
@@ -260,11 +260,24 @@ export interface IssueReadRateRequest {
 
 export type IssueReadRateResponse = components['schemas']['IssueReadRateResponse']
 
-export type ListResponse = components['schemas']['NativeIdentityInboxResponse']
+export type ListResponse = components['schemas']['IdentityInboxResponse']
 
 export type ListBlockedLegacyDependenciesResponse = Array<number>
 
 export type ListReadingListsResponse = Array<components['schemas']['ReadingListSummary']>
+
+export interface ListThreadIssuesRequest {
+  path: {
+    thread_id: number
+  }
+  query?: {
+    status?: string
+    page_size?: number
+    page_token?: string
+  }
+}
+
+export type ListThreadIssuesResponse = components['schemas']['ThreadIssueListResponse']
 
 export interface ListThreadsRequest {
   query?: {
@@ -281,7 +294,7 @@ export interface LoginRequest {
   body: components['schemas']['LoginRequest']
 }
 
-export type LoginResponse = components['schemas']['NativeTokenResponse']
+export type LoginResponse = components['schemas']['TokenResponse']
 
 export type LogoutResponse = unknown
 
@@ -291,7 +304,7 @@ export interface ManualDieRequest {
 
 export type ManualDieResponse = components['schemas']['DiceCommandReceipt']
 
-export type MeResponse = components['schemas']['NativeUserResponse']
+export type MeResponse = components['schemas']['UserResponse']
 
 export type MetricsResponse = components['schemas']['AnalyticsMetricsResponse']
 
@@ -336,16 +349,16 @@ export type ReadingBoundaryBatchResponse = components['schemas']['ReadingBoundar
 export type ReadingGraphResponse = components['schemas']['ReadingGraphResponse']
 
 export interface RefreshRequest {
-  body?: null | components['schemas']['NativeRefreshTokenRequest']
+  body?: null | components['schemas']['RefreshTokenRequest']
 }
 
-export type RefreshResponse = components['schemas']['NativeTokenResponse']
+export type RefreshResponse = components['schemas']['TokenResponse']
 
 export interface RegisterRequest {
   body: components['schemas']['RegisterRequest']
 }
 
-export type RegisterResponse = components['schemas']['NativeTokenResponse']
+export type RegisterResponse = components['schemas']['TokenResponse']
 
 export interface RejectRequest {
   path: {
@@ -354,7 +367,7 @@ export interface RejectRequest {
   body: components['schemas']['ActionRequest']
 }
 
-export type RejectResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type RejectResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface ReleasesGetRequest {
   path: {
@@ -428,12 +441,12 @@ export interface ResetRequest {
 export type ResetResponse = components['schemas']['ResetDiceResponse']
 
 export interface ResetPasswordRequest {
-  body: components['schemas']['NativeResetPasswordRequest']
+  body: components['schemas']['ResetPasswordRequest']
 }
 
-export type ResetPasswordResponse = components['schemas']['NativePasswordResetResponse']
+export type ResetPasswordResponse = components['schemas']['PasswordResetResponse']
 
-export type SearchResponse = components['schemas']['NativeIdentityInboxSearchResponse']
+export type SearchResponse = components['schemas']['IdentityInboxSearchResponse']
 
 export interface SeriesImportStatusRequest {
   path: {
@@ -441,7 +454,7 @@ export interface SeriesImportStatusRequest {
   }
 }
 
-export type SeriesImportStatusResponse = components['schemas']['NativeSeriesImportStatusResponse']
+export type SeriesImportStatusResponse = components['schemas']['SeriesImportStatusResponse']
 
 export interface SkipRequest {
   path: {
@@ -449,16 +462,16 @@ export interface SkipRequest {
   }
 }
 
-export type SkipResponse = components['schemas']['NativeIdentityInboxActionResponse']
+export type SkipResponse = components['schemas']['IdentityInboxActionResponse']
 
 export interface UpdateLegacyDependencyRequest {
   path: {
     dependency_id: number
   }
-  body: components['schemas']['NativeDependencyNoteUpdate']
+  body: components['schemas']['DependencyNoteUpdate']
 }
 
-export type UpdateLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
+export type UpdateLegacyDependencyResponse = components['schemas']['DependencyResponse']
 
 export interface UpdateQueueEntryRequest {
   path: {
@@ -517,6 +530,7 @@ export interface NativeV2Client {
   list(): Promise<ListResponse>
   listBlockedLegacyDependencies(): Promise<ListBlockedLegacyDependenciesResponse>
   listReadingLists(): Promise<ListReadingListsResponse>
+  listThreadIssues(args: ListThreadIssuesRequest): Promise<ListThreadIssuesResponse>
   listThreads(args?: ListThreadsRequest): Promise<ListThreadsResponse>
   login(args: LoginRequest): Promise<LoginResponse>
   logout(): Promise<LogoutResponse>
@@ -739,6 +753,12 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
     },
     listReadingLists() {
       return client.get<ListReadingListsResponse>("/v2/reading-lists")
+    },
+    listThreadIssues(args: ListThreadIssuesRequest) {
+      return client.get<ListThreadIssuesResponse>(
+        `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issues`,
+        { params: compactQuery(args.query) },
+      )
     },
     listThreads(args: ListThreadsRequest = {}) {
       return client.get<ListThreadsResponse>(

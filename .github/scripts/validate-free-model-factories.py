@@ -81,9 +81,8 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
                 f'starter model, got {model!r}'
             )
         elif source == 'vercel-ai-gateway':
-            raise AssertionError(
-                f'worker {worker} vercel-ai-gateway pin is retired '
-                f'(freemium; card required), got {model!r}'
+            assert model in _ROSTER.VERCEL_ZERO_PRICE_MODELS, (
+                f'worker {worker} vercel-ai-gateway pin must be an explicitly $0 model, got {model!r}'
             )
         elif source == 'mistral':
             assert mistral_model_is_pinned(model), (
@@ -98,6 +97,23 @@ def assert_free_provider_pins(rows: list[dict[str, str]]) -> None:
         elif source == 'requesty':
             assert requesty_model_is_approved(model), (
                 f'worker {worker} requesty pin must be an approved Requesty id, got {model!r}'
+            )
+        elif source == 'cloudflare-workers-ai':
+            assert _ROSTER.cloudflare_workers_ai_model_is_free(model), (
+                f'worker {worker} cloudflare Workers Free id not approved: {model!r}'
+            )
+        elif source in {
+            'gemini-free', 'groq-free', 'aion-free', 'cohere-eval', 'typhoon-free'
+        }:
+            allowed = {
+                'gemini-free': _ROSTER.GEMINI_FREE_MODELS,
+                'groq-free': _ROSTER.GROQ_FREE_MODELS,
+                'aion-free': _ROSTER.AION_FREE_CREDIT_MODELS,
+                'cohere-eval': _ROSTER.COHERE_EVALUATION_MODELS,
+                'typhoon-free': _ROSTER.TYPHOON_FREE_MODELS,
+            }[source]
+            assert model in allowed, (
+                f'worker {worker} {source} model is not in free/evaluation allowlist: {model!r}'
             )
 
 
@@ -221,25 +237,18 @@ def main() -> None:
     assert 'ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}' in runner
     assert 'REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}' in runner
     assert 'AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}' in runner
-    assert 'nvidia)' in runner
     assert 'opencode-free|openrouter-free)' in runner
     assert 'kilo-auto)' in runner
-    assert 'z-ai|ollama-cloud|mistral|orcarouter|requesty)' in runner
-    assert 'vercel-ai-gateway)' in runner
-    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)' in runner
     assert 'Configure OpenAI-compatible factory provider' in runner
-    assert 'https://api.z.ai/api/paas/v4' in runner
-    assert 'https://ollama.com/v1' in runner
-    assert 'https://api.mistral.ai/v1' in runner
-    assert 'https://api.orcarouter.ai/v1' in runner
-    assert 'https://router.requesty.ai/v1' in runner
-    assert 'https://ai-gateway.vercel.sh/v1' in runner
-    assert 'Require Pixel Canary to remain zero-price' in runner
+    assert 'python3 .github/scripts/factory_provider_registry.py resolve' in runner
+    assert 'python3 .github/scripts/factory_provider_registry.py config' in runner
+    assert 'configure_adapter=$configure_adapter' in runner
+    assert Path('.github/scripts/factory_provider_registry.py').exists()
+    assert 'Require Vercel model to remain zero-price' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
     assert 'selected-by-runtime-evidence' in runner
-    assert 'if [[ "$model" == nvidia/* ]]' in runner or "if [[ \"$model\" == nvidia/* ]]" in runner
     assert "source='omniroute-free'" not in runner
     assert 'auto/best-free' not in runner
     assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE' not in runner

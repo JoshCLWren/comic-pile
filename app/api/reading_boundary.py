@@ -17,14 +17,11 @@ from app.schemas.reading_boundary import (
     ReadingBoundaryBatchRequest,
     ReadingBoundaryBatchResponse,
     ReadingBoundaryExplanation,
-    ReadingBoundaryExplanationV2,
 )
 from app.services import reading_boundary_service
 from app.services.errors import NotFoundError, ServiceError
 
 router = APIRouter(prefix="/reading-boundaries", tags=["reading-boundaries"])
-
-v2_router = APIRouter(prefix="/reading-boundaries", tags=["reading-boundaries-v2"])
 
 _ERROR_STATUS: dict[type[ServiceError], int] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
@@ -97,22 +94,3 @@ async def get_reading_boundary(
         raise _map_service_error(exc) from exc
 
 
-@v2_router.get("/{thread_id}", response_model=ReadingBoundaryExplanationV2)
-async def get_reading_boundary_v2(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> ReadingBoundaryExplanationV2:
-    """Explain live canonical constraints without querying historical rows."""
-    try:
-        result = await reading_boundary_service.get_reading_boundary_explanation(
-            db,
-            user_id=current_user.id,
-            thread_id=thread_id,
-            include_historical=False,
-        )
-    except ServiceError as exc:
-        raise _map_service_error(exc) from exc
-    return ReadingBoundaryExplanationV2.model_validate(
-        result.model_dump(exclude={"historical"})
-    )

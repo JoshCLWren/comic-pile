@@ -24,7 +24,7 @@ It performs no query construction and no direct persistence.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,14 +41,10 @@ from app.schemas.creator_comparison import (
 )
 from app.schemas.creator_detail import CreatorDetailResponse, CreatorSeriesIssueListResponse
 from app.schemas.creator_discovery import CreatorDiscoveryResponse
-from app.schemas.creator_list import CreatorListResponse
-from app.schemas.creator_summary import CreatorSummariesResponse
 from app.schemas.creator_team_chemistry import CreatorTeamChemistryResponse
 from app.services.creator_comparison import get_creator_comparison
 from app.services.creator_detail import get_creator_detail, get_creator_series_issues
 from app.services.creator_discovery import get_creator_discoveries
-from app.services.creator_list import get_creator_list
-from app.services.creator_summary import get_creator_summaries
 from app.services.creator_metric_drilldown import get_creator_metric_drilldown
 from app.services.creator_team_chemistry import get_creator_team_chemistry
 
@@ -56,7 +52,6 @@ router = APIRouter(prefix="/api/v1/creators", tags=["creators"])
 
 #: Upper bound for a single batch summary request (issue #2028 performance scope).
 #: One request never grows past a small fixed number of queries and bounded rows.
-MAX_CREATOR_KEYS = 50
 
 #: Bounded comparison limits (issue #3091).
 MIN_COMPARISON_CREATORS = 2
@@ -82,50 +77,6 @@ def _split_creator_keys(raw: str) -> list[str]:
     return keys
 
 
-def _validate_creator_keys(raw: str | None) -> list[str]:
-    """Validate a creator keys query parameter into a bounded key list.
-
-    Args:
-        raw: Raw ``keys`` query parameter value.
-
-    Returns:
-        Unique validated creator keys.
-
-    Raises:
-        HTTPException: When the parameter is missing, unbounded, or malformed.
-    """
-    if not raw or not raw.strip():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="keys must be a non-empty comma-separated list of creator keys",
-        )
-
-    keys = _split_creator_keys(raw)
-    if not keys:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="keys must be a non-empty comma-separated list of creator keys",
-        )
-
-    if len(keys) > MAX_CREATOR_KEYS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"keys may list at most {MAX_CREATOR_KEYS} creators per request",
-        )
-
-    for key in keys:
-        parts = key.split(":")
-        valid = len(parts) == 2 and parts[0] == "creator" and parts[1].isdigit()
-        if not valid:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Invalid creator key {key!r}: expected creator:<external-person-id> "
-                    "(stable ComicVine person id, no display names)"
-                ),
-            )
-
-    return keys
 
 
 def _validate_comparison_keys(raw: str | None) -> list[str]:
@@ -181,103 +132,6 @@ def _validate_comparison_keys(raw: str | None) -> list[str]:
             )
 
     return keys
-
-
-@router.get("", response_model=CreatorListResponse, include_in_schema=True)
-@router.get("/", response_model=CreatorListResponse, include_in_schema=False)
-async def list_creators_endpoint(
-    current_user: Annotated[User, Depends(get_current_user)],
-    search: str | None = Query(
-        default=None,
-        description="Bounded case-insensitive name substring",
-        max_length=100,
-    ),
-    sort: Literal["name", "ratings_count", "average_rating"] = Query(
-        default="name",
-        description="Browse ordering: name (alphabetical), ratings_count (most-rated), "
-        "average_rating (personal average desc, nulls last)",
-    ),
-    limit: int = Query(
-        default=20,
-        ge=1,
-        le=50,
-        description="Page size (bounded, max 50)",
-    ),
-    offset: int = Query(
-        default=0,
-        ge=0,
-        description="Page offset",
-    ),
-    min_ratings: int = Query(
-        default=0,
-        ge=0,
-        description="Minimum rated-sample filter (0 = any sample size)",
-    ),
-    db: AsyncSession = Depends(get_db),
-) -> CreatorListResponse:
-    """Return bounded personal creator discovery list for the authenticated user.
-
-    The default collection is creators with at least one rated issue for the
-    current user (headline-eligible rating). Rows include canonical key, display
-    name, personal ratings count, personal average rating, and compact normalized
-    roles. Ordering is deterministic with a stable canonical-key tie-breaker so
-    pagination is correct across pages. Name search is bounded and user-scoped.
-    ``average_rating`` sorting handles ``null`` explicitly (nulls last) so the
-    contract remains deterministic if filtering expands to include unrated
-    creators later.
-
-    Args:
-        current_user: Authenticated user whose library is aggregated.
-        search: Optional bounded case-insensitive name substring.
-        sort: Deterministic browse ordering.
-        limit: Bounded page size.
-        offset: Page offset.
-        min_ratings: Minimum rated-sample filter for browse.
-        db: Async database session.
-
-    Returns:
-        Bounded creator list with deterministic ordering and coverage state.
-    """
-    bounded_search = search.strip() if search and search.strip() else None
-    if bounded_search and len(bounded_search) > 100:
-        bounded_search = bounded_search[:100]
-    return await get_creator_list(
-        db,
-        current_user.id,
-        search=bounded_search,
-        sort=sort,
-        limit=limit,
-        offset=offset,
-        min_ratings=min_ratings,
-    )
-
-
-@router.get("/summaries", response_model=CreatorSummariesResponse)
-async def get_creator_summaries_endpoint(
-    current_user: Annotated[User, Depends(get_current_user)],
-    keys: str | None = Query(default=None, description="Comma-separated canonical creator keys"),
-    db: AsyncSession = Depends(get_db),
-) -> CreatorSummariesResponse:
-    """Return bounded personal summary statistics for the requested creator keys.
-
-    Only creator keys visible in the authenticated user's own confirmed issue
-    metadata are summarized; unknown or foreign keys are silently omitted so a
-    creator key can never leak another user's library state.
-
-    Args:
-        current_user: Authenticated user whose library is aggregated.
-        keys: Comma-separated canonical creator keys.
-        db: Async database session.
-
-    Returns:
-        Batch summary keyed by requested visible creator keys, plus explicit
-        coverage state.
-
-    Raises:
-        HTTPException: When the ``keys`` parameter is missing, unbounded, or malformed.
-    """
-    requested_keys = _validate_creator_keys(keys)
-    return await get_creator_summaries(db, current_user.id, requested_keys)
 
 
 @router.get("/compare", response_model=CreatorComparisonResponse)
@@ -704,7 +558,6 @@ async def get_creator_series_drilldown_endpoint(
 
 
 __all__ = [
-    "MAX_CREATOR_KEYS",
     "MIN_COMPARISON_CREATORS",
     "MAX_COMPARISON_CREATORS",
     "router",

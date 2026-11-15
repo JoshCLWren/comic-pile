@@ -126,22 +126,6 @@ async def test_list_threads_empty(async_db: AsyncSession) -> None:
 
 
 @pytest.mark.asyncio
-async def test_list_completed_threads(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/v1/threads/completed/threads returns completed rows only (#2567)."""
-    _ = sample_data
-    response = await auth_client.get("/api/v1/threads/completed/threads")
-    assert response.status_code == 200
-
-    data = response.json()
-    assert "threads" in data
-    threads = data["threads"]
-    assert len(threads) == 1
-    assert threads[0]["title"] == "Wonder Woman"
-    assert threads[0]["status"] == "completed"
-    assert data["next_page_token"] is None
-
-
-@pytest.mark.asyncio
 async def test_completed_threads_json_is_v1_only(
     auth_client: AsyncClient, sample_data: dict
 ) -> None:
@@ -149,136 +133,6 @@ async def test_completed_threads_json_is_v1_only(
     _ = sample_data
     response = await auth_client.get("/api/threads/completed/threads")
     assert response.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_queue_and_completed_paginate_independently(
-    auth_client: AsyncClient, async_db: AsyncSession, sample_data: dict
-) -> None:
-    """Active Queue and Finished Series page as independent collections (#2567).
-
-    Seeds enough active and completed rows to span several pages, then
-    verifies: active pages never contain completed rows, scrolling active
-    pages never changes the Finished Series count, every completed thread is
-    reachable on its own, and the ``position`` sort alias pages cleanly.
-    """
-    from datetime import UTC, datetime, timedelta
-
-    user_id = sample_data["user"].id
-    base = datetime.now(UTC)
-    for i in range(6):
-        async_db.add(
-            Thread(
-                title=f"Active Extra {i}",
-                format="Comic",
-                issues_remaining=1,
-                queue_position=100 + i,
-                status="active",
-                user_id=user_id,
-                created_at=base + timedelta(seconds=i),
-            )
-        )
-    for i in range(5):
-        async_db.add(
-            Thread(
-                title=f"Finished Extra {i}",
-                format="Comic",
-                issues_remaining=0,
-                queue_position=200 + i,
-                status="completed",
-                user_id=user_id,
-                created_at=base + timedelta(seconds=100 + i),
-            )
-        )
-    await async_db.commit()
-
-    async def collect(path: str, params: dict) -> list:
-        """Walk every page of a collection and return all rows."""
-        seen: list = []
-        token: str | None = None
-        for _ in range(10):
-            query = dict(params)
-            if token is not None:
-                query["page_token"] = token
-            response = await auth_client.get(path, params=query)
-            assert response.status_code == 200
-            body = response.json()
-            seen.extend(body["threads"])
-            token = body["next_page_token"]
-            if token is None:
-                break
-        return seen
-
-    completed_path = "/api/v1/threads/completed/threads"
-    before = await auth_client.get(completed_path, params={"page_size": 50})
-    assert before.status_code == 200
-    count_before = len(before.json()["threads"])
-
-    active_items = []
-    active_token: str | None = None
-    for _ in range(10):
-        active_page = await thread_service.list_queue_threads(
-            async_db,
-            user_id,
-            search=None,
-            sort="position",
-            page_size=2,
-            page_token=active_token,
-        )
-        active_items.extend(active_page.threads)
-        active_token = active_page.next_page_token
-        if active_token is None:
-            break
-    active = [{"id": thread.id, "status": thread.status} for thread in active_items]
-    assert len(active) == 10
-    assert all(thread["status"] == "active" for thread in active)
-    assert len({thread["id"] for thread in active}) == 10
-
-    after = await auth_client.get(completed_path, params={"page_size": 50})
-    assert after.status_code == 200
-    assert len(after.json()["threads"]) == count_before
-
-    completed = await collect(completed_path, {"page_size": 2})
-    assert len(completed) == 6
-    assert all(thread["status"] == "completed" for thread in completed)
-    assert len({thread["id"] for thread in completed}) == 6
-    assert {thread["id"] for thread in completed}.isdisjoint(
-        {thread["id"] for thread in active}
-    )
-
-    completed_by_position = await collect(
-        completed_path, {"page_size": 2, "sort": "position"}
-    )
-    assert len(completed_by_position) == 6
-    assert {thread["id"] for thread in completed_by_position} == {
-        thread["id"] for thread in completed
-    }
-
-
-@pytest.mark.asyncio
-async def test_get_thread(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /api/v1/threads/{id} returns single thread."""
-    _ = sample_data
-    response = await auth_client.get("/api/v1/threads/1")
-    assert response.status_code == 200
-
-    thread = response.json()
-    assert thread["id"] == 1
-    assert thread["title"] == "Superman"
-    assert thread["format"] == "Comic"
-    assert thread["issues_remaining"] == 10
-    assert thread["queue_position"] == 1
-    assert thread["status"] == "active"
-    assert "blocked_by_thread_ids" not in thread
-    assert "blocked_by_issue_ids" not in thread
-
-
-@pytest.mark.asyncio
-async def test_get_thread_not_found(auth_client: AsyncClient) -> None:
-    """Test GET /api/v1/threads/{id} returns 404 for non-existent thread."""
-    response = await auth_client.get("/api/v1/threads/999")
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
 
 
 @pytest.mark.asyncio
@@ -495,9 +349,6 @@ async def test_delete_thread(
 
     db_thread = await async_db.get(Thread, 1)
     assert db_thread is None
-
-    response = await auth_client.get("/api/v1/threads/1")
-    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -866,27 +717,6 @@ async def test_get_sessions_pagination(auth_client: AsyncClient, sample_data: di
 
 
 @pytest.mark.asyncio
-async def test_get_session(auth_client: AsyncClient, sample_data: dict) -> None:
-    """Test GET /sessions/{id} returns single session."""
-    response = await auth_client.get("/api/v1/sessions/1")
-    assert response.status_code == 200
-
-    session = response.json()
-    assert session["id"] == 1
-    assert session["start_die"] == 6
-    assert session["user_id"] == sample_data["user"].id
-    assert "ladder_path" in session
-
-
-@pytest.mark.asyncio
-async def test_get_session_not_found(auth_client: AsyncClient) -> None:
-    """Test GET /sessions/{id} returns 404 for non-existent session."""
-    response = await auth_client.get("/api/v1/sessions/999")
-    assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
-
-
-@pytest.mark.asyncio
 async def test_get_session_details(auth_client: AsyncClient, sample_data: dict) -> None:
     """Test GET /sessions/{id}/details returns events as JSON."""
     _ = sample_data
@@ -905,8 +735,8 @@ async def test_session_timestamp_consistency(
 ) -> None:
     """Test session timestamps are consistently formatted with timezone info.
 
-    Regression test for issue #245. Verifies that /details and /snapshots endpoints
-    return timestamps in the same ISO 8601 format with timezone information,
+    Regression test for issue #245. Verifies that /details returns timestamps
+    in ISO 8601 format with timezone information,
     ensuring the frontend displays consistent timestamps.
 
     Args:
@@ -914,32 +744,9 @@ async def test_session_timestamp_consistency(
         async_db: SQLAlchemy session for database operations.
         sample_data: Sample test data with sessions and events.
     """
-    from datetime import UTC, datetime
-
-    from app.models import Snapshot
-
-    # Create a snapshot for session 1 to ensure we have snapshot data to test
-    session = sample_data["sessions"][0]
-    event = sample_data["events"][0]
-
-    snapshot = Snapshot(
-        session_id=session.id,
-        event_id=event.id,
-        thread_states={},
-        description="Test snapshot for timestamp consistency",
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(snapshot)
-    await async_db.commit()
-    await async_db.refresh(snapshot)
-
     details_response = await auth_client.get("/api/v1/sessions/1/details")
     assert details_response.status_code == 200
     details_data = details_response.json()
-
-    snapshots_response = await auth_client.get("/api/v1/sessions/1/snapshots")
-    assert snapshots_response.status_code == 200
-    snapshots_data = snapshots_response.json()
 
     def assert_has_timezone(timestamp_str: str) -> None:
         """Assert ISO 8601 timestamp has timezone info.
@@ -964,11 +771,6 @@ async def test_session_timestamp_consistency(
     for event in details_data["events"]:
         assert_has_timezone(event["timestamp"])
 
-    # Verify all snapshot timestamps have timezone info
-    assert len(snapshots_data["snapshots"]) > 0, "Should have at least one snapshot"
-    for snapshot in snapshots_data["snapshots"]:
-        assert_has_timezone(snapshot["created_at"])
-
     # Verify timestamps are in ISO 8601 format
     import re
 
@@ -984,51 +786,6 @@ async def test_session_timestamp_consistency(
         assert iso8601_pattern.match(event["timestamp"]), (
             f"Event timestamp should be ISO 8601 format, got: {event['timestamp']}"
         )
-
-    for snapshot in snapshots_data["snapshots"]:
-        assert iso8601_pattern.match(snapshot["created_at"]), (
-            f"Snapshot created_at should be ISO 8601 format, got: {snapshot['created_at']}"
-        )
-
-
-@pytest.mark.asyncio
-async def test_get_thread_with_notes(
-    auth_client: AsyncClient, async_db: AsyncSession, test_username: str
-) -> None:
-    """Test GET /api/v1/threads/{id} returns thread with notes field."""
-    from datetime import UTC, datetime
-
-    from app.models import Thread, User
-
-    result = await async_db.execute(select(User).where(User.username == test_username))
-    user = result.scalar_one_or_none()
-    if not user:
-        user = User(username=test_username, created_at=datetime.now(UTC))
-        async_db.add(user)
-        await async_db.commit()
-        await async_db.refresh(user)
-
-    thread = Thread(
-        title="Wonder Woman",
-        format="Comic",
-        issues_remaining=8,
-        queue_position=1,
-        status="active",
-        user_id=user.id,
-        notes="Important character, historical significance",
-        created_at=datetime.now(UTC),
-    )
-    async_db.add(thread)
-    await async_db.commit()
-    await async_db.refresh(thread)
-
-    response = await auth_client.get(f"/api/v1/threads/{thread.id}")
-    assert response.status_code == 200
-
-    thread_data = response.json()
-    assert thread_data["id"] == thread.id
-    assert thread_data["title"] == "Wonder Woman"
-    assert thread_data["notes"] == "Important character, historical significance"
 
 
 @pytest.mark.asyncio

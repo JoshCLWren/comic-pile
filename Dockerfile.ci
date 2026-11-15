@@ -61,6 +61,9 @@ RUN pnpm install --frozen-lockfile
 # Stage 5: Frontend build.
 FROM frontend-deps AS frontend-build
 COPY frontend/ frontend/
+# Local API forwarding derives from production ingress, which must be present
+# when Vite evaluates its configuration inside this isolated Docker stage.
+COPY vercel.json ./vercel.json
 RUN pnpm --filter frontend run build
 
 # Stage 6: Final image with everything.

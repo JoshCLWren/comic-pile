@@ -38,6 +38,16 @@ on:
         required: false
       REQUESTY_API_KEY:
         required: false
+      GEMINI_API_KEY:
+        required: false
+      GROQ_API_KEY:
+        required: false
+      AION_API_KEY:
+        required: false
+      COHERE_API_KEY:
+        required: false
+      TYPHOON_API_KEY:
+        required: false
       CLOUDFLARE_API_TOKEN:
         required: false
       AI_GATEWAY_API_KEY:
@@ -100,6 +110,11 @@ jobs:
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}
       REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      AION_API_KEY: ${{ secrets.AION_API_KEY }}
+      COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+      TYPHOON_API_KEY: ${{ secrets.TYPHOON_API_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
@@ -164,17 +179,8 @@ jobs:
             }
           fi
 
+          configure_adapter=false
           case "$source" in
-            nvidia)
-              # TSV models may already include the vendor prefix (nvidia/...).
-              if [[ "$model" == nvidia/* ]]; then
-                runtime_model="$model"
-              else
-                runtime_model="nvidia/${model}"
-              fi
-              branch_suffix='nvidia'
-              if [[ -n "${NVIDIA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-NVIDIA_API_KEY'; fi
-              ;;
             opencode-free|openrouter-free)
               runtime_model="${source%-free}/${model}"
               branch_suffix='catalog-free'
@@ -187,37 +193,7 @@ jobs:
               configured=true
               reason='configured-anonymous-free'
               ;;
-            z-ai|ollama-cloud|mistral|orcarouter|requesty)
-              if [[ "$model" == "${source}/"* ]]; then
-                runtime_model="$model"
-              else
-                runtime_model="${source}/${model}"
-              fi
-              branch_suffix="$source"
-              if [[ "$source" == "z-ai" ]]; then
-                if [[ -n "${Z_AI_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-Z_AI_API_KEY'; fi
-              elif [[ "$source" == "ollama-cloud" ]]; then
-                if [[ -n "${OLLAMA_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-OLLAMA_API_KEY'; fi
-              elif [[ "$source" == "orcarouter" ]]; then
-                if [[ -n "${ORCAROUTER_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-ORCAROUTER_API_KEY'; fi
-              elif [[ "$source" == "requesty" ]]; then
-                if [[ -n "${REQUESTY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-REQUESTY_API_KEY'; fi
-              else
-                if [[ -n "${MISTRAL_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-MISTRAL_API_KEY'; fi
-              fi
-              ;;
-            vercel-ai-gateway)
-              runtime_model="vercel-ai-gateway/${model}"
-              branch_suffix='vercel-ai-gateway'
-              if [[ -n "${AI_GATEWAY_API_KEY:-}" ]]; then configured=true; reason='configured'; else configured=false; reason='missing-AI_GATEWAY_API_KEY'; fi
-              ;;
-            cloudflare-workers-ai)
-              runtime_model="cloudflare-workers-ai/${model}"
-              branch_suffix="cloudflare-workers-ai"
-              if [[ -n "${CLOUDFLARE_API_TOKEN:-}" && -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then configured=true; reason="configured"; else configured=false; reason="missing-Cloudflare-Free-credentials"; fi
-              ;;
             omniroute-free)
-              # INCIDENT: OmniRoute stays dark unless FACTORY_OMNIROUTE_ENABLED is on.
               runtime_model="omniroute/${model}"
               branch_suffix='omniroute'
               if [[ "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
@@ -234,8 +210,14 @@ jobs:
               fi
               ;;
             *)
-              echo "Unsupported factory source: ${source}" >&2
-              exit 1
+              # Source -> provider ID, credential gate, and model selector
+              # come from one typed registry, never ad hoc shell aliases.
+              resolution="$(python3 .github/scripts/factory_provider_registry.py resolve --source "$source" --model "$model")"
+              runtime_model="$(jq -er '.runtime_model' <<< "$resolution")"
+              branch_suffix="$(jq -er '.branch_suffix' <<< "$resolution")"
+              configured="$(jq -er '.configured | tostring' <<< "$resolution")"
+              reason="$(jq -er '.reason' <<< "$resolution")"
+              configure_adapter="$(jq -er '.configure_adapter | tostring' <<< "$resolution")"
               ;;
           esac
 
@@ -254,6 +236,7 @@ jobs:
             echo "scheduler=$scheduler"
             echo "display=$display"
             echo "branch_suffix=$branch_suffix"
+            echo "configure_adapter=$configure_adapter"
             echo "configured=$configured"
             echo "reason=$reason"
           } >> "$GITHUB_OUTPUT"
@@ -351,7 +334,8 @@ jobs:
           }
           # Dynamic free slots rotate within a live catalog. Pinned slots must
           # honor the Neon eligibility decision before contacting a provider.
-          if [[ "$SOURCE" != opencode-free || "$DEEPSEEK_MODE" != normal ]] &&
+          if [[ "$SOURCE" != openrouter-free && "$SOURCE" != vercel-ai-gateway ]] &&
+             [[ "$SOURCE" != opencode-free || "$DEEPSEEK_MODE" != normal ]] &&
              jq -e --arg source "$SOURCE" --arg model "$LANE_MODEL" \
                '(.[$source] // []) | index($model) != null' "$exclusions_file" >/dev/null; then
             printf 'model_unavailable\tPinned model excluded by trusted Neon health\n' > "$discovery_outcome"
@@ -360,7 +344,8 @@ jobs:
 
           case "$SOURCE" in
             cloudflare-workers-ai) ;&
-            nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)
+            gemini-free|groq-free|aion-free|cohere-eval|typhoon-free) ;&
+            nvidia|kilo-auto|z-ai|ollama-cloud|mistral|orcarouter|requesty)
               # These adapters cannot enumerate reliably. Preserve the lane
               # request and let the existing real invocation/probe prove it.
               {
@@ -370,6 +355,26 @@ jobs:
                 echo "display=$LANE_DISPLAY"
                 echo "branch_suffix=$LANE_BRANCH_SUFFIX"
                 echo "reason=selected-by-runtime-evidence"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+              ;;
+            vercel-ai-gateway)
+              # Published pricing is authoritative; TSV model is only a
+              # legacy display hint. Do not make a chargeable inference probe.
+              if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
+                  --source "$SOURCE" --worker "$WORKER" \
+                  --exclusions-file "$exclusions_file")"; then
+                printf 'control_plane_failure\tVercel zero-price catalog unavailable or has no eligible models\n' > "$discovery_outcome"
+                exit 1
+              fi
+              model="$(jq -er '.model' <<< "$selection")"
+              {
+                echo "source=$SOURCE"
+                echo "model=$model"
+                echo "runtime_model=vercel/$model"
+                echo "display=Vercel Free · $model"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                echo "reason=selected-from-published-zero-price-catalog"
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -417,18 +422,25 @@ jobs:
               exit 0
               ;;
             openrouter-free)
-              # Keep OpenRouter's known-free route while OmniRoute is disabled.
-              if [[ ! "${FACTORY_OMNIROUTE_ENABLED:-off}" =~ ^(1|on|true|yes)$ ]]; then
-                {
-                  echo "source=$SOURCE"
-                  echo "model=$LANE_MODEL"
-                  echo "runtime_model=$LANE_RUNTIME_MODEL"
-                  echo "display=$LANE_DISPLAY"
-                  echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                  echo "reason=selected-by-runtime-evidence"
-                } >> "$GITHUB_OUTPUT"
-                exit 0
+              # Resolve from OpenRouter's current :free catalog and verified
+              # zero prompt/completion pricing, never a magic TSV model ID.
+              # The same policy holds regardless of OmniRoute's state.
+              if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
+                  --source "$SOURCE" --worker "$WORKER" \
+                  --exclusions-file "$exclusions_file")"; then
+                printf 'control_plane_failure\tOpenRouter published free catalog unavailable or empty\n' > "$discovery_outcome"
+                exit 1
               fi
+              model="$(jq -er '.model' <<< "$selection")"
+              {
+                echo "source=$SOURCE"
+                echo "model=$model"
+                echo "runtime_model=openrouter/$model"
+                echo "display=OpenRouter Free · $model"
+                echo "branch_suffix=$LANE_BRANCH_SUFFIX"
+                echo "reason=selected-from-published-zero-price-catalog"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
               ;;
             *)
               printf 'control_plane_failure\tUnsupported provider adapter: %s\n' "$SOURCE" > "$discovery_outcome"
@@ -681,111 +693,25 @@ jobs:
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
       - name: Configure OpenAI-compatible factory provider
-        if: >-
-          steps.lane.outputs.configured == 'true' &&
-          (
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'z-ai' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'ollama-cloud' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'mistral' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'orcarouter' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'requesty' ||
-            (steps.executor.outputs.source || steps.lane.outputs.source) == 'cloudflare-workers-ai'
-          )
+        if: steps.lane.outputs.configured == 'true' && steps.lane.outputs.configure_adapter == 'true'
         shell: bash
         env:
           SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
         run: |
           set -Eeuo pipefail
-          case "$SOURCE" in
-            z-ai)
-              key="${Z_AI_API_KEY:-}"
-              base_url='https://api.z.ai/api/paas/v4'
-              provider_id='z-ai'
-              env_name='Z_AI_API_KEY'
-              provider_name='Z.AI free capacity'
-              ;;
-            ollama-cloud)
-              key="${OLLAMA_API_KEY:-}"
-              base_url='https://ollama.com/v1'
-              provider_id='ollama-cloud'
-              env_name='OLLAMA_API_KEY'
-              provider_name='Ollama Cloud free capacity'
-              ;;
-            vercel-ai-gateway)
-              key="${AI_GATEWAY_API_KEY:-}"
-              base_url='https://ai-gateway.vercel.sh/v1'
-              provider_id='vercel-ai-gateway'
-              env_name='AI_GATEWAY_API_KEY'
-              provider_name='Vercel AI Gateway free capacity'
-              ;;
-            mistral)
-              key="${MISTRAL_API_KEY:-}"
-              base_url='https://api.mistral.ai/v1'
-              provider_id='mistral'
-              env_name='MISTRAL_API_KEY'
-              provider_name='Mistral Codestral'
-              ;;
-            orcarouter)
-              key="${ORCAROUTER_API_KEY:-}"
-              base_url='https://api.orcarouter.ai/v1'
-              provider_id='orcarouter'
-              env_name='ORCAROUTER_API_KEY'
-              provider_name='OrcaRouter free capacity'
-              ;;
-            requesty)
-              key="${REQUESTY_API_KEY:-}"
-              base_url='https://router.requesty.ai/v1'
-              provider_id='requesty'
-              env_name='REQUESTY_API_KEY'
-              provider_name='Requesty router'
-              ;;
-            cloudflare-workers-ai)
-              key="${CLOUDFLARE_API_TOKEN:-}"
-              [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "Cloudflare account ID unavailable" >&2; exit 1; }
-              base_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/v1"
-              provider_id="cloudflare-workers-ai"
-              env_name="CLOUDFLARE_API_TOKEN"
-              provider_name="Cloudflare Workers AI Free"
-              ;;
-            *)
-              echo "Unsupported OpenAI-compatible factory source: ${SOURCE}" >&2
-              exit 1
-              ;;
-          esac
-          [[ -n "$key" ]] || { echo "${SOURCE} API key missing after lane configured=true" >&2; exit 1; }
-          model="$MODEL"
-          prefix="${provider_id}/"
-          if [[ "$model" == "$prefix"* ]]; then
-            model="${model#"$prefix"}"
-          fi
           mkdir -p "$HOME/.config/opencode"
           temp_config="$(mktemp)"
-          jq -n \
-            --arg provider "$provider_id" \
-            --arg name "$provider_name" \
-            --arg model "$model" \
-            --arg envname "$env_name" \
-            --arg base_url "$base_url" \
-            '{
-              providers: {
-                ($provider): {
-                  name: $name,
-                  package: "@opencode/ai/providers/openai-compatible",
-                  env: [$envname],
-                  settings: {baseURL: $base_url},
-                  models: {($model): {name: $model}}
-                }
-              }
-            }' > "$temp_config"
-          # Retain the installer's noninteractive permission and safety policy.
+          trap 'rm -f "$temp_config" "$temp_config.merged"' EXIT
+          # The registry owns the OpenCode ID, endpoint, key name, and exact
+          # upstream modelID. The output contains no secret values.
+          python3 .github/scripts/factory_provider_registry.py config \
+            --source "$SOURCE" --model "$MODEL" > "$temp_config"
           jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
           mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
-          rm -f "$temp_config"
           chmod 600 "$HOME/.config/opencode/opencode.json"
 
-      - name: Require Pixel Canary to remain zero-price
+      - name: Require Vercel model to remain zero-price
         if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
         shell: bash
         env:
@@ -803,7 +729,7 @@ jobs:
               ((.pricing.output // "1") | tonumber) == 0
             )] | length == 1
           ' "$catalog" >/dev/null; then
-            echo "Pixel Canary is missing or no longer zero-price; refusing free-fleet execution: ${MODEL}" >&2
+            echo "Vercel model is missing or no longer zero-price; refusing free-fleet execution: ${MODEL}" >&2
             printf 'model_unavailable\tVercel AI Gateway model is missing or no longer zero-price: %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
             exit 1
           fi

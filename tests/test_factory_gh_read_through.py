@@ -1,6 +1,7 @@
 """No-network regression coverage for Neon-first GitHub factory reads."""
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -143,6 +144,7 @@ def test_large_github_response_is_compressed_before_neon_storage() -> None:
     packed = read_through.pack_stdout(original)
     assert "stdout_zlib_b64" in packed
     assert "stdout" not in packed
+    assert packed["stdout_sha256"] == hashlib.sha256(original.encode()).hexdigest()
     assert len(json.dumps(packed)) < len(original) // 4
     assert read_through.unpack_stdout(packed) == original
 

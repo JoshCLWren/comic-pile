@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""One authoritative mapping from factory quota sources to OpenCode providers.
+
+Factory source keys remain stable for budgets and Neon. The provider/model
+selector and compatible API configuration are derived from this registry.
+Published upstream model IDs are passed through without prefix rewriting.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+from dataclasses import dataclass
+from collections.abc import Mapping
+
+
+@dataclass(frozen=True)
+class ProviderSpec:
+    provider: str
+    credential: str
+    endpoint: str
+    name: str
+    additional_credentials: tuple[str, ...] = ()
+    # None means every pinned model needs explicit compatible registration.
+    # A set means only these upstream models are missing from the CLI catalog.
+    explicit_models: frozenset[str] | None = None
+    headers: tuple[tuple[str, str], ...] = ()
+
+    def needs_registration(self, model: str) -> bool:
+        return self.explicit_models is None or model in self.explicit_models
+
+
+# Provider IDs, credential names, and endpoints belong here, not in workflows.
+# This is declarative integration metadata, not a model-name guesser.
+PROVIDERS: Mapping[str, ProviderSpec] = {
+    "nvidia": ProviderSpec("nvidia", "NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1", "NVIDIA published API models", explicit_models=frozenset({"mistralai/mistral-large-4-1t-a52b", "nvidia/nemotron-3.5-bolt-e4b"})),
+    "z-ai": ProviderSpec("z-ai", "Z_AI_API_KEY", "https://api.z.ai/api/paas/v4", "Z.AI free capacity"),
+    "ollama-cloud": ProviderSpec("ollama-cloud", "OLLAMA_API_KEY", "https://ollama.com/v1", "Ollama Cloud free capacity"),
+    "vercel-ai-gateway": ProviderSpec("vercel", "AI_GATEWAY_API_KEY", "https://ai-gateway.vercel.sh/v1", "Vercel AI Gateway free capacity"),
+    "mistral": ProviderSpec("mistral", "MISTRAL_API_KEY", "https://api.mistral.ai/v1", "Mistral Codestral"),
+    "orcarouter": ProviderSpec("orcarouter", "ORCAROUTER_API_KEY", "https://api.orcarouter.ai/v1", "OrcaRouter free capacity"),
+    "requesty": ProviderSpec("requesty", "REQUESTY_API_KEY", "https://router.requesty.ai/v1", "Requesty router"),
+    "gemini-free": ProviderSpec("google", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai", "Google Gemini API Free", headers=(("x-goog-api-client", "comic-pile-factory-oai/1.0"),)),
+    "groq-free": ProviderSpec("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1", "GroqCloud Free"),
+    "aion-free": ProviderSpec("aion", "AION_API_KEY", "https://api.aionlabs.ai/v1", "Aion Labs Daily Free Credit"),
+    "cohere-eval": ProviderSpec("cohere", "COHERE_API_KEY", "https://api.cohere.ai/compatibility/v1", "Cohere Evaluation Key"),
+    "typhoon-free": ProviderSpec("typhoon", "TYPHOON_API_KEY", "https://api.opentyphoon.ai/v1", "Typhoon Free API"),
+    "cloudflare-workers-ai": ProviderSpec("cloudflare-workers-ai", "CLOUDFLARE_API_TOKEN", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", "Cloudflare Workers AI Free", additional_credentials=("CLOUDFLARE_ACCOUNT_ID",)),
+}
+
+MODEL_ID_RE = re.compile(r"^[^\s\x00-\x1f]+$")
+
+
+def get_spec(source: str, model: str) -> ProviderSpec:
+    if source not in PROVIDERS:
+        raise ValueError(f"unknown factory source: {source}")
+    if not model or not MODEL_ID_RE.fullmatch(model) or model.startswith("/"):
+        raise ValueError("invalid upstream model ID")
+    return PROVIDERS[source]
+
+
+def missing_credentials(spec: ProviderSpec, env: Mapping[str, str]) -> list[str]:
+    return [key for key in (spec.credential, *spec.additional_credentials) if not env.get(key)]
+
+
+def resolve(source: str, model: str, env: Mapping[str, str]) -> dict[str, object]:
+    spec = get_spec(source, model)
+    missing = missing_credentials(spec, env)
+    return {
+        "runtime_model": f"{spec.provider}/{model}",
+        "branch_suffix": source,
+        "configured": not missing,
+        "reason": "configured" if not missing else f"missing-{missing[0]}",
+        "configure_adapter": spec.needs_registration(model),
+    }
+
+
+def compatible_config(source: str, model: str, env: Mapping[str, str]) -> dict[str, object]:
+    spec = get_spec(source, model)
+    if not spec.needs_registration(model):
+        raise ValueError(f"model uses the native OpenCode catalog: {source}/{model}")
+    missing = missing_credentials(spec, env)
+    if missing:
+        raise ValueError(f"missing provider configuration: {missing[0]}")
+    endpoint = spec.endpoint
+    if spec.additional_credentials:
+        endpoint = endpoint.replace("{account_id}", env["CLOUDFLARE_ACCOUNT_ID"])
+    return {"providers": {spec.provider: {
+        "name": spec.name,
+        "package": "@opencode/ai/providers/openai-compatible",
+        "env": [spec.credential],
+        "settings": {"baseURL": endpoint},
+        "headers": dict(spec.headers),
+        "models": {model: {"name": model, "modelID": model}},
+    }}}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("command", choices=("resolve", "config"))
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--model", required=True)
+    args = parser.parse_args()
+    try:
+        result = (resolve(args.source, args.model, os.environ) if args.command == "resolve"
+                  else compatible_config(args.source, args.model, os.environ))
+    except ValueError as exc:
+        parser.error(str(exc))
+    print(json.dumps(result, separators=(",", ":"), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -33,9 +33,9 @@ Never add the composite action to workflows that execute model-generated code.
 |---|---:|---|
 | `open-issues` | 7 minutes 30 seconds | GitHub `issue list` |
 | `open-prs` | 7 minutes 30 seconds | GitHub `pr list` |
-| `registry-comments` | 6 minutes | Issue #1093 comments, incremental by updated timestamp |
+| `registry-comments` | 15 minutes | Compact latest trusted worker/model evidence plus 48h recent comments; incremental by updated timestamp |
 
-The first heartbeat load visits historical pages once. Subsequent refreshes use
+The first heartbeat load visits historical pages once, then retains only the latest worker observations, latest per-model attempt evidence, sticky 410 retirements, the latest funnel record, and the last 48 hours of comments (plus an incremental cursor). Historical comments remain on GitHub and are not re-sent in every Neon read. Subsequent refreshes use
 GitHub's `since` query with a one-minute overlap, merging changes by immutable
 comment ID. Deletions are not visible through this incremental endpoint; a
 rare full refresh may still be needed if an administrator deletes heartbeat
@@ -84,6 +84,38 @@ These first-stage leases deliberately retain the live GitHub target checks.
 Worker health and stale-run reconciliation still use some GitHub API reads.
 Per-item issue/PR projections and event-triggered selective reconciliation are
 follow-up work; **do not claim this change alone eliminates broad discovery**.
+
+## Recovery checkpoints for model-generated source code
+
+Neon is the coordination ledger, **not a storage location for model edits**.
+During each trusted, non-fork coding or PR-repair session, the wrapper now
+starts a checkpoint writer from the checked-out `main` snapshot. Every
+45 seconds it stages tracked and non-ignored new files in a **separate Git
+index**, creates an unreviewed commit with Git plumbing, and pushes it to
+`refs/heads/factory/work-checkpoints/<GitHub Actions run ID>`. A final
+best-effort checkpoint runs when the agent exits or the wrapper receives a
+termination signal. On a force-canceled runner, the last periodic push is
+the durable recovery point. An interrupted run may still lose up to one
+interval of edits, and a failed remote push cannot guarantee recovery.
+
+These refs are **not** PR heads and cannot bypass pre-push tests, exact-head
+review, or the merge controller. The trusted wrapper keeps the normal
+issue/PR handoff behavior unchanged, and removes its checkpoint ref only
+after the real changes were successfully pushed and handed off. Failed or
+incomplete attempts retain their recovery refs for a later worker or human.
+The wrapper logs the run ID and saved commit SHA so work can be found in Git.
+No worker has access to Neon credentials. Recovery commits are unreviewed
+and must be validated before use.
+
+For example, recover a failed run's diff without changing the PR branch:
+
+```bash
+git fetch origin refs/heads/factory/work-checkpoints/RUN_ID
+git diff FETCH_HEAD^ FETCH_HEAD
+```
+
+Do not directly merge recovery branches. Restore only applicable code through
+the canonical assigned issue/PR and the existing fast checks.
 
 ## Event-fed target projections
 
@@ -169,7 +201,7 @@ scanning live GitHub.
   recent repository comments for 10 minutes; raw registry comments for
   15 minutes; all-PR history lists for 20 minutes. Individual issue/PR
   comments are cached for 30 minutes and issue dependency discovery for
-  60 minutes. The shared incremental registry has a separate 6-minute TTL.
+  60 minutes. The shared incremental registry has a separate 15-minute TTL and stores only compact current evidence.
   Expired or absent data is fetched once under the existing 75-second Neon
   refresh lease and published for concurrent readers. A Neon outage
   uses the live GitHub path.
@@ -198,7 +230,7 @@ or eliminate the original live GitHub request on a miss.
 
 The existing trusted Factory Status Pages workflow runs a bounded
 `prune-expired` operation against the same restricted database when it
-executes (normally every five minutes and after updates to that workflow).
+executes (normally every fifteen minutes and after updates to that workflow).
 It is independent of the timeout-prone historical PR recovery sweep. It only
 removes `factory-github-get-v1:%` rows expired by more than 30 minutes,
 skips active refresh locks, and processes at most 1,000 rows in five batches.
@@ -317,3 +349,42 @@ catalog guard remain. Only a real leased coding/review mission invokes an LLM.
 A successful real-session exit proves the selected model, and an unassigned
 worker is recorded as idle without provider inference. Delivery still requires
 verified PR persistence and lease handoff, independent of model execution.
+
+## Fibonacci failure backoff and credential-free dispatch
+
+Workers stay registered in `.github/free-model-factories.tsv` even when their
+provider is not configured. The dispatcher and capacity-refill paths check
+credential **presence booleans** before assigning leases or starting Actions
+Entry runners. Adding the corresponding secret makes the existing worker
+eligible on the next scheduled offer. No provider credentials are logged or
+passed to models by the eligibility filter.
+
+For failures after an executable worker starts, the trusted Neon outcome
+projection tracks a per-worker, per-pinned-model failure streak in
+`factory-worker-backoff-v1`. Fibonacci retry delays begin at 5, 5, 10, 15,
+25, 40 minutes and grow toward a 24-hour cap. At 14 consecutive failures the
+worker stops being automatically dispatched. Its model is **not** retired or
+removed from the roster; a different pin or expiration of the 90-day state
+TTL permits a new attempt. A verified successful or healthy idle model session,
+or persisted code delivery, resets the streak. Unconfigured runners are not
+treated as inference failures. This worker-local guard supplements existing
+per-model availability and per-provider quota protections.
+
+### Shared model failure protection
+
+Worker-level Fibonacci retry covers unsuccessful delivery, including
+`work_failure`, timeouts, and control-plane execution problems. The separate
+`factory-model-backoff-v1` Neon key covers **source/model** inference failures
+across worker IDs. For example, workers 46 and 98 must not alternate futile
+attempts on the same `kilo-auto/free` model. Model cooldown applies to trusted
+quota/throttle/unavailability/policy/model errors or agent timeouts; a code
+failure or unknown result only counts against the model if the exact model
+actually ran. Credential, checkout, and controller errors do not poison other
+models or providers.
+
+On first failure after upgrading older worker state, the projector reads up to
+64 recent terminal outcomes from Neon, stopping at verified delivery or
+completion, and seeds the Fibonacci streak without double-counting the
+current run. Model-level first updates are serialized with a transaction-scoped
+advisory lock; run IDs fence stale completion updates. A healthy model session
+or persisted delivery clears the shared breaker. The roster remains unchanged.
