@@ -61,6 +61,9 @@ def test_vercel_requires_zero_price_on_both_sides(catalog_module) -> None:
          "supported_parameters": ["tools"], "pricing": {"input": 0, "output": 0}},
         {"id": "vendor/no-tools", "type": "language",
          "supported_parameters": [], "pricing": {"input": 0, "output": 0}},
+        {"id": "vendor-variable", "type": "language",
+         "supported_parameters": ["tools"],
+         "pricing": {"input": 0, "output": 0, "varies_by_provider": True}},
     ]}
     assert catalog_module.free_model_ids("vercel-ai-gateway", catalog) == ["vendor/zero"]
 
