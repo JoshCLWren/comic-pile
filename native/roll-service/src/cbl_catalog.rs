@@ -277,9 +277,10 @@ async fn get_folders_and_counts(
             let direct: i64 = row.get(1);
             let total: i64 = row.get(2);
             child_total_sum += total;
+            let path = format!("{folder}/{name}");
             folders.push(CBLSourceFolder {
                 name,
-                path: name.clone(),
+                path,
                 direct_list_count: direct as i32,
                 total_list_count: total as i32,
             });
