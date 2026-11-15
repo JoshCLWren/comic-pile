@@ -98,10 +98,16 @@ def pack_stdout(stdout: str) -> dict[str, str]:
     if len(raw) < _COMPRESS_THRESHOLD:
         return {"stdout": stdout}
     compressed = zlib.compress(raw, level=6)
+    # A digest lets Neon refresh an expired identical response without
+    # transferring or rewriting the previous multi-megabyte JSONB payload.
+    digest = hashlib.sha256(raw).hexdigest()
     # base64 overhead is ~33%; avoid making incompressible data bigger.
     if len(compressed) * 4 >= len(raw) * 3:
-        return {"stdout": stdout}
-    return {"stdout_zlib_b64": base64.b64encode(compressed).decode("ascii")}
+        return {"stdout": stdout, "stdout_sha256": digest}
+    return {
+        "stdout_zlib_b64": base64.b64encode(compressed).decode("ascii"),
+        "stdout_sha256": digest,
+    }
 
 
 def unpack_stdout(record: dict[str, str]) -> str:
