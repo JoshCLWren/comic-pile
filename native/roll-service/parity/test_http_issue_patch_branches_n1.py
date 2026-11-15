@@ -31,7 +31,13 @@ BINARY = str(EXAMPLE)
 
 
 async def _setup_user_and_thread(engine, username: str, issue_count: int) -> tuple[int, int, list[int]]:
-    """Create user, thread, and issues. Returns (owner_id, thread_id, issue_ids)."""
+    """Create user, thread, and issues for test fixtures. Returns (owner_id, thread_id, issue_ids).
+
+    Uses raw asyncpg for rapid, self-contained test data setup. Deliberately bypasses
+    the auth service (no password hashing, validation) because test fixtures need to be
+    independent of the auth layer and fast to initialize. The engine parameter is accepted
+    for compatibility with test harnesses but the function manages its own asyncpg connection.
+    """
     url = os.environ["RUST_ROLL_PARITY_DATABASE_URL"]
     raw = await asyncpg.connect(url)
     try:
