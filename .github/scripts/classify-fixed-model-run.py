@@ -25,7 +25,6 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "model_policy_violation",
         "environment_failure",
         "control_plane_failure",
-        "unconfigured",
         "unknown_failure",
     }
 )
@@ -315,7 +314,6 @@ def classify(log: str) -> Result:
         return Result(
             **common,
             outcome="NOT YET PROVEN",
-            outcome_class="unconfigured",
             detail="lane was not configured, so the pinned model was never invoked",
         )
 
@@ -981,7 +979,6 @@ class ClassifierTests(unittest.TestCase):
         )
         result = classify(log)
         self.assertEqual(result.outcome, "NOT YET PROVEN")
-        self.assertEqual(result.outcome_class, "unconfigured")
         self.assert_canonical(result)
 
     def test_omniroute_setup_failure_is_unproven(self) -> None:
