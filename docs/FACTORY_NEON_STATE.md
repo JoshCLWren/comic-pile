@@ -369,3 +369,22 @@ TTL permits a new attempt. A verified successful or healthy idle model session,
 or persisted code delivery, resets the streak. Unconfigured runners are not
 treated as inference failures. This worker-local guard supplements existing
 per-model availability and per-provider quota protections.
+
+### Shared model failure protection
+
+Worker-level Fibonacci retry covers unsuccessful delivery, including
+`work_failure`, timeouts, and control-plane execution problems. The separate
+`factory-model-backoff-v1` Neon key covers **source/model** inference failures
+across worker IDs. For example, workers 46 and 98 must not alternate futile
+attempts on the same `kilo-auto/free` model. Model cooldown applies to trusted
+quota/throttle/unavailability/policy/model errors or agent timeouts; a code
+failure or unknown result only counts against the model if the exact model
+actually ran. Credential, checkout, and controller errors do not poison other
+models or providers.
+
+On first failure after upgrading older worker state, the projector reads up to
+64 recent terminal outcomes from Neon, stopping at verified delivery or
+completion, and seeds the Fibonacci streak without double-counting the
+current run. Model-level first updates are serialized with a transaction-scoped
+advisory lock; run IDs fence stale completion updates. A healthy model session
+or persisted delivery clears the shared breaker. The roster remains unchanged.
