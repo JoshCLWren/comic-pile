@@ -820,12 +820,25 @@ def main() -> int:
     parser.add_argument("--issues", type=Path, required=True)
     parser.add_argument("--prs", type=Path, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--factory-health", type=Path, help="Trusted Neon worker and provider health snapshot")
     args = parser.parse_args()
     issues = json.loads(args.issues.read_text(encoding="utf-8"))
     prs = json.loads(args.prs.read_text(encoding="utf-8"))
     if not isinstance(issues, list) or not isinstance(prs, list):
         raise ValueError("invalid GitHub candidate snapshot")
     report = select_report(issues, prs, os.environ.get("OPENROUTER_JEV_API_KEY", ""))
+    if args.factory_health:
+        try:
+            health = json.loads(args.factory_health.read_text(encoding="utf-8"))
+            if not isinstance(health, dict) or not isinstance(health.get("workers"), list) or not isinstance(health.get("cooling"), list):
+                raise ValueError("invalid health snapshot")
+            report["factory_health"] = {
+                "worker_count": len(health["workers"]),
+                "cooling_models": len(health["cooling"]),
+                "productive_workers": sum(1 for worker in health["workers"] if isinstance(worker, dict) and int(worker.get("productive") or 0) > 0),
+            }
+        except (OSError, ValueError, TypeError, OverflowError):
+            report["factory_health"] = {"status": "unavailable"}
     print(markdown(report))
     if args.output:
         args.output.write_text(
