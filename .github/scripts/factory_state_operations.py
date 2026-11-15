@@ -184,22 +184,38 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                      AND factory_model_health.status != 'retired'""",
                 repo, source, model, status, classification, until, observed if proven else None, run_id)
         if attributed and classification in TRANSIENT and source not in MODEL_SCOPED_SOURCES:
+            # Reservation bookkeeping updates budget.updated_at independently,
+            # so a provider failure streak must have its OWN durable timestamp.
+            backoff_key = f"factory-provider-backoff-v1:{repo}:source:{source}"
             previous = await conn.fetchrow(
-                """SELECT last_outcome,updated_at,cooldown_until
-                   FROM public.factory_provider_budget
-                   WHERE repo=$1 AND source=$2 FOR UPDATE""", repo, source)
-            prior_window = (
-                (previous["cooldown_until"] - previous["updated_at"]).total_seconds()
-                if previous and previous["cooldown_until"] else 0
-            )
-            age = (
-                (observed - previous["updated_at"]).total_seconds()
-                if previous else float("inf")
-            )
+                """SELECT payload FROM public.factory_state_kv
+                   WHERE cache_key=$1 FOR UPDATE""", backoff_key)
+            stored = previous["payload"] if previous else None
+            if isinstance(stored, str):
+                stored = json.loads(stored)
+            prior = stored[0] if isinstance(stored, list) and stored else {}
+            previous_run = int(prior.get("run_id") or 0)
+            try:
+                observed_prior = datetime.fromisoformat(str(prior["observed_at"]))
+                age = (observed - observed_prior).total_seconds()
+            except (KeyError, TypeError, ValueError):
+                age = float("inf")
             delay = exponential_provider_delay(
-                classification, previous["last_outcome"] if previous else None,
-                prior_window, age)
+                classification, prior.get("outcome"),
+                float(prior.get("delay_seconds") or 0), age)
             until = _provider_cooldown(source, classification, observed, delay)
+            if previous_run <= run_id:
+                await conn.execute(
+                    """INSERT INTO public.factory_state_kv
+                         (cache_key,payload,fetched_at,expires_at,updated_at)
+                       VALUES($1,$2::jsonb,now(),$3,now())
+                       ON CONFLICT(cache_key) DO UPDATE SET
+                         payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
+                         expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
+                    backoff_key, json.dumps([{
+                        "run_id": run_id, "outcome": classification,
+                        "delay_seconds": delay, "observed_at": observed.isoformat()
+                    }]), until)
             await conn.execute(
                 """INSERT INTO public.factory_provider_budget
                      (repo,source,cooldown_until,quota_reset_at,last_outcome,last_run_id)
@@ -237,6 +253,10 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                    last_outcome=$3,last_run_id=$4,updated_at=now()
                    WHERE repo=$1 AND source=$2 AND last_run_id <= $4""",
                 repo, source, classification, run_id)
+            await conn.execute(
+                """DELETE FROM public.factory_state_kv WHERE cache_key=$1
+                   AND coalesce((payload->0->>'run_id')::bigint,0) <= $2""",
+                f"factory-provider-backoff-v1:{repo}:source:{source}", run_id)
         # Local agent timeouts should cool down the responsible worker, NOT an
         # unrelated provider/model. Keep the streak in the existing TTL-backed
         # Neon KV so it survives individual GitHub Actions job boundaries.
