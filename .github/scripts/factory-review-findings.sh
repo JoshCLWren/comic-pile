@@ -174,7 +174,7 @@ factory_format_review_findings() {
 # be the thread connection's pageInfo, not a nested comments pageInfo.
 FACTORY_REVIEW_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line originalLine comments(first:100){totalCount pageInfo{hasNextPage endCursor} nodes{databaseId author{__typename login} authorAssociation body url createdAt}}}}}}}'
 FACTORY_THREAD_COMMENTS_QUERY='query($id:ID!,$endCursor:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{databaseId author{__typename login} authorAssociation body url createdAt}}}}}'
-FACTORY_UNRESOLVED_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{isResolved}}}}}'
+FACTORY_UNRESOLVED_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{isResolved comments(first:1){nodes{author{login}}}}}}}}'
 
 # Print the number of unresolved review threads across every page. Fails
 # closed (non-zero, no output) when any page cannot be fetched or parsed, or
@@ -189,7 +189,11 @@ factory_count_unresolved_review_threads() {
     if length == 0 then error("no review-thread pages")
     elif any(.[]; (conn.nodes | type) != "array") then error("invalid review-thread page")
     elif (last | conn.pageInfo.hasNextPage) != false then error("review-thread pagination incomplete")
-    else [.[] | conn.nodes[] | select(.isResolved != true)] | length end
+    else [.[] | conn.nodes[]
+      | select(.isResolved != true)
+      | select((.comments.nodes[0].author.login // "") as $login
+        | ($login != "coderabbitai" and $login != "coderabbitai[bot]"))]
+      | length end
   ' <<< "$pages" 2>/dev/null || return 1
 }
 
