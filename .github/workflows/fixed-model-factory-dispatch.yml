@@ -82,7 +82,7 @@ permissions:
 # Coalesce duplicate ingress events for this workflow only. The job-level
 # shared group below serializes every lease writer without canceling other lanes.
 concurrency:
-  group: ${{ inputs.target && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
+  group: ${{ (inputs.target || inputs.measure) && format('factory-manual-{0}', github.run_id) || 'fixed-model-factory-dispatch-ingress' }}
   queue: single
   cancel-in-progress: false
 
