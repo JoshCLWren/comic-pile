@@ -8,12 +8,15 @@ This script is invoked only by the factory gh shim in trusted controller jobs.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import zlib
 from urllib.parse import parse_qs
 
 
@@ -83,6 +86,43 @@ def allowed_read(args: list[str], repo: str) -> int | None:
     return None
 
 
+# GitHub list responses can exceed 50 MiB. PostgreSQL TOAST compresses data on
+# disk, but the default JSONB cache still transfers plain text for every read.
+# Encode large responses before they cross the Neon connection.
+_COMPRESS_THRESHOLD = 4096
+_MAX_DECOMPRESSED_BYTES = 128 * 1024 * 1024
+
+
+def pack_stdout(stdout: str) -> dict[str, str]:
+    raw = stdout.encode("utf-8")
+    if len(raw) < _COMPRESS_THRESHOLD:
+        return {"stdout": stdout}
+    compressed = zlib.compress(raw, level=6)
+    # base64 overhead is ~33%; avoid making incompressible data bigger.
+    if len(compressed) * 4 >= len(raw) * 3:
+        return {"stdout": stdout}
+    return {"stdout_zlib_b64": base64.b64encode(compressed).decode("ascii")}
+
+
+def unpack_stdout(record: dict[str, str]) -> str:
+    """Accept old raw snapshots and bounded, compressed new snapshots."""
+    if isinstance(record.get("stdout"), str):
+        return record["stdout"]
+    encoded = record.get("stdout_zlib_b64")
+    if not isinstance(encoded, str):
+        raise ValueError("invalid cached response format")
+    try:
+        compressed = base64.b64decode(encoded, validate=True)
+        inflater = zlib.decompressobj()
+        plain = inflater.decompress(compressed, _MAX_DECOMPRESSED_BYTES + 1)
+        if (len(plain) > _MAX_DECOMPRESSED_BYTES or not inflater.eof
+                or inflater.unused_data or inflater.unconsumed_tail):
+            raise ValueError("invalid or oversized compressed GitHub cache")
+        return plain.decode("utf-8")
+    except (binascii.Error, UnicodeError, zlib.error) as error:
+        raise ValueError("corrupt compressed GitHub cache") from error
+
+
 def projected(repo: str, kind: str) -> int:
     """Emit the complete event-fed issue/PR discovery snapshot when fresh."""
     if repo != os.environ.get("GITHUB_REPOSITORY") or kind not in {"issue", "pr"}:
@@ -120,7 +160,7 @@ def api(args: list[str]) -> int:
         response = subprocess.run(command, capture_output=True, text=True, check=False)
         if response.returncode:
             raise GitHubReadError(response.returncode, response.stderr)
-        return [{"stdout": response.stdout}]
+        return [pack_stdout(response.stdout)]
 
     try:
         response = cached_json(key, fetch, ttl_seconds=ttl)
@@ -128,10 +168,14 @@ def api(args: list[str]) -> int:
         print(error.stderr, file=sys.stderr, end="")
         return error.returncode
     # A corrupt cache must not be mistaken for an empty successful GitHub read.
-    if len(response) != 1 or not isinstance(response[0].get("stdout"), str):
+    try:
+        if len(response) != 1 or not isinstance(response[0], dict):
+            raise ValueError("invalid cached GitHub response shape")
+        stdout = unpack_stdout(response[0])
+    except ValueError:
         print("[factory-state] invalid cached GitHub read; retrying live", file=sys.stderr)
         return subprocess.call(command)
-    print(response[0]["stdout"], end="")
+    print(stdout, end="")
     return 0
 
 
