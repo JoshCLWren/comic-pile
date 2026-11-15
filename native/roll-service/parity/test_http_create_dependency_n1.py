@@ -134,6 +134,9 @@ async def test_create_dependency_statements_do_not_grow_with_library_size() -> N
         assert isinstance(small_body, dict)
         small_dependency_id = small_body.get("id")
         assert isinstance(small_dependency_id, int)
+        assert small_body.get("source_issue_id") == source_issue_id, small_body
+        assert small_body.get("target_issue_id") == target_issue_id, small_body
+        assert small_body.get("is_issue_level") is True, small_body
         _, _, s_after = await db_counters(engine)
         n_after = await db_nested_statements(engine)
         small_delta = (
@@ -209,6 +212,9 @@ async def test_create_dependency_statements_do_not_grow_with_library_size() -> N
         assert isinstance(large_body, dict)
         large_dependency_id = large_body.get("id")
         assert isinstance(large_dependency_id, int)
+        assert large_body.get("source_issue_id") == new_source_issue_id, large_body
+        assert large_body.get("target_issue_id") == new_target_issue_id, large_body
+        assert large_body.get("is_issue_level") is True, large_body
         _, _, s_after2 = await db_counters(engine)
         n_after2 = await db_nested_statements(engine)
         large_delta = (

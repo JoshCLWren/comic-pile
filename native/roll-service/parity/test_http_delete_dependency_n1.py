@@ -132,6 +132,9 @@ async def test_delete_dependency_statements_do_not_grow_with_library_size() -> N
         _, _, s_before = await db_counters(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
+        small_body = small_response.get("body")
+        assert isinstance(small_body, dict), small_body
+        assert small_body.get("message") == "Dependency deleted", small_body
         _, _, s_after = await db_counters(engine)
         n_after = await db_nested_statements(engine)
         small_delta = (
@@ -215,6 +218,9 @@ async def test_delete_dependency_statements_do_not_grow_with_library_size() -> N
         _, _, s_before2 = await db_counters(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
+        large_body = large_response.get("body")
+        assert isinstance(large_body, dict), large_body
+        assert large_body.get("message") == "Dependency deleted", large_body
         _, _, s_after2 = await db_counters(engine)
         n_after2 = await db_nested_statements(engine)
         large_delta = (

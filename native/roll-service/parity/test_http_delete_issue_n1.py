@@ -106,6 +106,14 @@ async def test_delete_issue_statements_do_not_grow_with_library_size() -> None:
             (n_after - n_before) if n_before is not None and n_after is not None else None
         )
 
+        # The 204 carries no body; prove the owned issue row is actually gone.
+        raw = await asyncpg.connect(url)
+        try:
+            remaining = await raw.fetchval("SELECT count(*) FROM issues WHERE id=$1", issue_id)
+        finally:
+            await raw.close()
+        assert remaining == 0, "deleted issue still exists"
+
         # Grow to 200 issues
         raw = await asyncpg.connect(url)
         try:
@@ -145,6 +153,15 @@ async def test_delete_issue_statements_do_not_grow_with_library_size() -> None:
         large_nested = (
             (n_after2 - n_before2) if n_before2 is not None and n_after2 is not None else None
         )
+
+        raw = await asyncpg.connect(url)
+        try:
+            remaining = await raw.fetchval(
+                "SELECT count(*) FROM issues WHERE id=$1", new_issue_id
+            )
+        finally:
+            await raw.close()
+        assert remaining == 0, "deleted issue still exists"
 
         print(
             f"small_delta={small_delta} large_delta={large_delta} "
