@@ -102,8 +102,10 @@ async def _seed_plan_with_lists(
             if issue_id is not None:
                 await raw.execute(
                     """
-                    INSERT INTO custom_cbl_entries (list_id, issue_id, position, gate, skipped, is_checkpoint, checkpoint_target_issue_ids)
-                    VALUES ($1, $2, $3, 'none', false, false, '[]'::jsonb)
+                    INSERT INTO custom_cbl_entries
+                        (list_id, issue_id, position, gate, skipped, is_checkpoint,
+                         checkpoint_target_issue_ids, created_at)
+                    VALUES ($1, $2, $3, 'none', false, false, '[]'::jsonb, NOW())
                     """,
                     list_id,
                     issue_id,
