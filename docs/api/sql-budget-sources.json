@@ -480,14 +480,17 @@
       "method": "POST",
       "path": "/api/v2/roll/dice-command",
       "sql_budget": {
-        "application_statements": 12,
+        "application_statements": 6,
         "transaction_control_statements": 2,
-        "total_statements": 14,
+        "total_statements": 8,
         "grows_with_data": false,
-        "basis": "approximate worst-case standalone dice mutation; refine via parity harness",
-        "max_statements": 14,
+        "basis": "measured authenticated manual-die command: 6 top-level application statements, one write transaction (2 controls), and two checkout probes; the event-owner trigger adds 1 nested statement; fixed across 5 and 200 threads",
+        "max_statements": 10,
+        "max_nested_statements": 1,
         "proof_reference": "native/roll-service/src/dice_api.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_roll_commands_n1.py",
+        "runtime_overhead_statements": 2
       }
     },
     {
