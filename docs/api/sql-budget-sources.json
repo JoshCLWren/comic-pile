@@ -216,7 +216,8 @@
         "grows_with_data": false,
         "max_statements": 7,
         "proof_reference": "native/roll-service/src/dependencies.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_delete_dependency_n1.py"
       }
     },
     {
@@ -246,7 +247,8 @@
         "grows_with_data": false,
         "max_statements": 16,
         "proof_reference": "native/roll-service/src/issue_mutation.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_delete_issue_n1.py"
       }
     },
     {
@@ -275,7 +277,8 @@
         "grows_with_data": false,
         "max_statements": 1,
         "proof_reference": "native/roll-service/src/comicvine_issue.rs",
-        "measurement_status": "pending-fixture"
+        "measurement_status": "measured",
+        "measured_test_reference": "native/roll-service/parity/test_http_comicvine_issue_n1.py"
       }
     },
     {
