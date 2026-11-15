@@ -161,7 +161,7 @@ If you edit files and run tests but stop before pushing, you have **not complete
 
 Run only targeted tests locally: select the test files or cases covering the changed behavior,
 including focused regression tests for bugs and focused Chromium tests for browser behavior.
-Leave full backend/frontend suites and aggregate coverage gates to CI. Do not run bare `pytest`,
+Leave full backend/frontend suites to CI. Python coverage thresholds are retired during the Rust cutover; frontend and Rust gates remain authoritative. Do not run bare `pytest`,
 `make test`, `make pytest`, `pnpm test`, or `pnpm run test:coverage` locally unless Josh explicitly
 requests a full local run. A CI failure calls for targeted local reproduction and repair, not a
 full local suite rerun.
@@ -405,7 +405,7 @@ make verify-e2e
 
 ### API Tests
 
-API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Maintain 94% coverage threshold.
+API tests use async PostgreSQL test databases. Tests in `tests/` directory, files: `test_*.py`, functions: `test_*`. Use `@pytest.mark.asyncio` for async tests. Test both success and error paths. Frontend coverage remains gated in CI; legacy Python product tests are no longer part of required CI during the Rust cutover.
 
 **Key Fixtures (from `tests/conftest.py`)**:
 ```python

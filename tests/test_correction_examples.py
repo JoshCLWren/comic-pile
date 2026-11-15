@@ -216,27 +216,6 @@ async def _seed_confirmed_series_year(
 
 
 @pytest.mark.asyncio
-async def test_endpoint_is_versioned_only(auth_client: AsyncClient) -> None:
-    """The examples endpoint must not exist as a new bare /api/* client route.
-
-    Adding a bare twin fails ``tests/test_route_versioning.py``, which enforces
-    the docs/API.md convention that new client resources live under /api/v1/*.
-
-    Args:
-        auth_client: Authenticated HTTP client for API requests.
-    """
-    response = await auth_client.get(CORRECTION_EXAMPLES_PATH)
-    assert response.status_code == 200
-
-    # The bare path either 404s or falls through to a different route (here the
-    # session-detail path, which rejects the non-integer ID with 422). Either
-    # way it must not serve the examples payload.
-    legacy = await auth_client.get("/api/sessions/correction-examples")
-    assert legacy.status_code in (404, 422)
-    assert "even_easier" not in legacy.text
-
-
-@pytest.mark.asyncio
 async def test_endpoint_requires_authentication(client: AsyncClient) -> None:
     """Unauthenticated callers must not receive personalized examples.
 
@@ -709,3 +688,25 @@ async def test_query_count_does_not_grow_with_history(
 
     selects = [s for s in statements if s.lstrip().upper().startswith("SELECT")]
     assert len(selects) <= 5, f"Expected a bounded query count, got: {selects}"
+
+
+@pytest.mark.asyncio
+async def test_endpoint_is_versioned_only(auth_client: AsyncClient) -> None:
+    """The examples endpoint must not exist as a new bare /api/* client route.
+
+    Adding a bare twin fails ``tests/test_route_versioning.py``, which enforces
+    the docs/API.md convention that new client resources live under /api/v1/*.
+
+    Args:
+        auth_client: Authenticated HTTP client for API requests.
+    """
+    response = await auth_client.get(CORRECTION_EXAMPLES_PATH)
+    assert response.status_code == 200
+
+    # The bare path either 404s or falls through to a different route (here the
+    # session-detail path, which rejects the non-integer ID with 422). Either
+    # way it must not serve the examples payload.
+    legacy = await auth_client.get("/api/sessions/correction-examples")
+    assert legacy.status_code in (404, 422)
+    assert "even_easier" not in legacy.text
+

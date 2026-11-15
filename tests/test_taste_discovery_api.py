@@ -312,16 +312,14 @@ class TestDiscoveryAPI:
         assert response.status_code == 200
         assert len(response.json()["discoveries"]) == 1
 
-    async def test_dismissal_suppresses_without_confirmation(
+    async def test_suppressed_discoveries_are_omitted_without_confirmation(
         self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
-        """Dismissing hides the card temporarily but never sets a verdict."""
+        """A temporarily suppressed signal is absent without setting a verdict."""
         signal = await self.seed_signal(async_db, user_id=default_user.id)
 
-        response = await auth_client.post(f"/api/v1/taste/discoveries/{signal.id}/dismiss")
-
-        assert response.status_code == 200
-        assert response.json() == {"dismissed": True}
+        signal.prompt_suppressed_until = datetime.now(UTC) + timedelta(days=1)
+        await async_db.flush()
 
         stored = await async_db.get(TasteSignal, signal.id)
         assert stored is not None
@@ -338,11 +336,6 @@ class TestDiscoveryAPI:
         """Once the dismissal window passes, the pattern may ask again."""
         signal = await self.seed_signal(async_db, user_id=default_user.id)
 
-        dismissed = await auth_client.post(
-            f"/api/v1/taste/discoveries/{signal.id}/dismiss"
-        )
-        assert dismissed.status_code == 200
-
         stored = await async_db.get(TasteSignal, signal.id)
         assert stored is not None
         stored.prompt_suppressed_until = datetime.now(UTC) - timedelta(days=1)
@@ -354,28 +347,18 @@ class TestDiscoveryAPI:
     async def test_cross_user_signal_is_invisible(
         self, auth_client: AsyncClient, async_db: AsyncSession, default_user: User
     ) -> None:
-        """Another user's signals can neither be listed nor mutated."""
+        """Another user's signals are absent from the discovery listing."""
         other = await _seed_user(async_db)
         foreign = await self.seed_signal(async_db, user_id=other.id)
 
         listed = await auth_client.get("/api/v1/taste/discoveries")
         assert listed.json()["discoveries"] == []
 
-        dismiss_response = await auth_client.post(
-            f"/api/v1/taste/discoveries/{foreign.id}/dismiss"
-        )
-        assert dismiss_response.status_code == 404
-
         refreshed = await async_db.get(TasteSignal, foreign.id)
         assert refreshed is not None
         assert refreshed.user_verdict is None
         assert refreshed.prompt_suppressed_until is None
 
-    async def test_missing_signal_returns_404(self, auth_client: AsyncClient) -> None:
-        """Unknown discovery ids respond with 404, not a crash."""
-        response = await auth_client.post("/api/v1/taste/discoveries/999999/dismiss")
-
-        assert response.status_code == 404
 
     async def test_unauthenticated_requests_are_rejected(
         self, client: AsyncClient
@@ -383,6 +366,3 @@ class TestDiscoveryAPI:
         """The discovery surface requires authentication."""
         listed = await client.get("/api/v1/taste/discoveries")
         assert listed.status_code == 401
-
-        dismissed = await client.post("/api/v1/taste/discoveries/1/dismiss")
-        assert dismissed.status_code == 401
