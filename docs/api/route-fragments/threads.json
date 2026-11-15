@@ -237,8 +237,11 @@
       "bucket": "v1_operations",
       "method": "GET",
       "path": "/api/v1/threads/{thread_id}/issues",
-      "dest": "/api/index.py",
-      "src": "^/api/v1/threads/[^/]+/issues$"
+      "dest": "/api/native_roll.rs",
+      "src": "^/api/v1/threads/[^/]+/issues$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4832
     },
     {
       "bucket": "v1_operations",

@@ -3302,6 +3302,88 @@
         ]
       }
     },
+    "/api/v1/threads/{thread_id}/issues": {
+      "get": {
+        "tags": [
+          "issues"
+        ],
+        "summary": "Documentation-only operation for the mounted thread issue list read.",
+        "description": "List one owner-scoped thread's issues with optional unread/read filter and {position},{id} cursor pagination. Wire parity with Python IssueListResponse: issues ordered by position, total_count reflects the filter, page_size echoes the request (default 50), next_page_token appears only when more pages exist.",
+        "operationId": "list_thread_issues_documentation",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Owned thread identifier",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Optional exact status filter: unread or read",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "description": "Page size, 1-100 (default 50)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page_token",
+            "in": "query",
+            "description": "position,id continuation cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated issue list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadIssueListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page_token format"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "404": {
+            "description": "Thread not found"
+          },
+          "422": {
+            "description": "Invalid status or page_size"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/users/me/preferences": {
       "get": {
         "tags": [
@@ -9757,6 +9839,41 @@
           "thread_id": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ThreadIssueListResponse": {
+        "type": "object",
+        "description": "Wire parity with Python `IssueListResponse` (`app/schemas/issue.py`).",
+        "required": [
+          "issues",
+          "total_count",
+          "page_size"
+        ],
+        "properties": {
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IssueDetailResponse"
+            },
+            "description": "One page of the thread's issues in canonical `position` order."
+          },
+          "next_page_token": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`{position},{id}` cursor when another page exists."
+          },
+          "page_size": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Echo of the requested page size (50 when omitted)."
+          },
+          "total_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total issues in the thread, optionally filtered by `status`."
           }
         }
       },
