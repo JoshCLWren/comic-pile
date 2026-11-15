@@ -63,7 +63,9 @@ def _free(source: str, item: Mapping[str, Any]) -> bool:
             and _zero(pricing.get("completion"))
         )
     if source == "vercel-ai-gateway":
-        return _zero(pricing.get("input")) and _zero(pricing.get("output"))
+        return (pricing.get("varies_by_provider") is not True
+                and _zero(pricing.get("input"))
+                and _zero(pricing.get("output")))
     return False
 
 
