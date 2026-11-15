@@ -192,8 +192,15 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert "run" in needs_set
     assert collector_job["if"] == "${{ always() }}"
     assert collector_job["permissions"]["actions"] == "read"
-    assert collector_job["permissions"]["contents"] == "read"
-    assert collector_job["permissions"]["pull-requests"] == "read"
+    # The separate trusted collector can now publish recovery drafts and retire
+    # incorporated refs. Its checkout remains main and never executes model code.
+    assert collector_job["permissions"]["contents"] == "write"
+    assert collector_job["permissions"]["pull-requests"] == "write"
+    checkout = next(step for step in collector_job["steps"]
+                    if step.get("uses", "").startswith("actions/checkout@"))
+    assert checkout["with"]["ref"] == "main"
+    assert checkout["with"]["persist-credentials"] is False
+    assert "factory_checkpoint_handoff.py" in collector
     if "ATTEMPT_COMMENT_ID:" in collector:
         assert "model_health_snapshot" in needs_set
         assert collector_job["permissions"]["issues"] == "write"

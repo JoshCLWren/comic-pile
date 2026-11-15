@@ -91,9 +91,9 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       actions: read
-      pull-requests: read
+      pull-requests: write
       issues: write
     steps:
       - uses: actions/checkout@v7
@@ -167,6 +167,16 @@ jobs:
               exit 1
             }
           fi
+          # Authoritative remote-ref/PR enrichment distinguishes saved recovery
+          # from validated PR delivery. Never convert a failing worker into success.
+          checkpoint_args=(--repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID"
+            --cleanup --outcome "$RUNNER_TEMP/worker-outcome.json")
+          if [[ -n "$delivery_pr" ]]; then
+            checkpoint_args+=(--delivered-pr "$delivery_pr")
+          fi
+          python3 .github/scripts/factory_checkpoint_handoff.py "${checkpoint_args[@]}" || {
+            echo "::warning::Recovery publication failed; independent checkpoint reconciliation will retry"
+          }
           # Worker identity comes from the trusted dispatch input, *not* from
           # any untrusted text in a model-generated log.
           jq --arg worker "$INPUT_WORKER" '.worker = $worker' \
@@ -194,6 +204,8 @@ jobs:
           classification="$(jq -r '.outcome_class // "unknown_failure"' "$RUNNER_TEMP/worker-outcome-attested.json")"
           delivered="$(jq -r '.delivery_outcome // "none"' "$RUNNER_TEMP/worker-outcome-attested.json")"
           pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          saved="$(jq -r '.checkpoint_saved // false' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          recovery_pr="$(jq -r '.recovery_pr // empty' "$RUNNER_TEMP/worker-outcome-attested.json")"
           if [[ "$delivered" == persisted ]]; then
             verdict="code_delivered"
             message="Verified PR #$pr was handed off; agent outcome: $classification"
@@ -205,7 +217,11 @@ jobs:
             message="Work completed without a verified PR handoff (for example review)"
           else
             verdict="failed"
-            message="No code delivered; worker failed: $classification"
+            if [[ "$saved" == true ]]; then
+              message="Code saved to recovery; PR delivery incomplete; worker failed: $classification (recovery PR: ${recovery_pr:-publication pending})"
+            else
+              message="No verified saved code or PR delivery; worker failed: $classification"
+            fi
           fi
           {
             echo "### Factory outcome: $verdict"
@@ -213,6 +229,7 @@ jobs:
             echo "$message"
             echo
             printf 'Neon terminal classification: `%s`\n' "$classification"
+            printf 'Checkpoint saved: `%s`; recovery PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
           } >> "$GITHUB_STEP_SUMMARY"
           # Publish the same final verdict to the existing registry marker.
           # Use Neon-discovered ID, never re-page all historical comments.
