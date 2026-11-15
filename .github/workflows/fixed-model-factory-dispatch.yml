@@ -295,14 +295,8 @@ jobs:
             echo "Main $sha has $failing failed product CI run(s) out of $total - drain will pause merges"
             echo "failing=$failing" >> "$GITHUB_OUTPUT"
             echo "main_red=true" >> "$GITHUB_OUTPUT"
-            # Ensure main-breakage P0 exists (best-effort, deduplicated by main-health-gate)
-            names="$(jq -r '.failing_names' <<< "$health")"
-            open_issue="$(gh issue list --state open --limit 100 --label "main-breakage" --json number --jq '.[0].number // empty' 2>/dev/null || true)"
-            if [[ -z "$open_issue" ]]; then
-              gh api "repos/${GITHUB_REPOSITORY}/labels/main-breakage" >/dev/null 2>&1 || gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" -f name="main-breakage" -f color="B60205" -f description="Main is red - factory blocked until base is green" >/dev/null 2>&1 || true
-              echo "No open main-breakage; main-health-gate will open one shortly (fallback create)"
-              gh issue create --title "Main is red at ${sha:0:12} - factory blocked" --body "Main ${sha} has ${failing} failing check(s): ${names}. Dispatcher detected red main. Fix main CI before factory merges. <!-- comic-pile-main-health-gate:v1 -->" --label "user-reported" --label "bug" --label "priority:P0" --label "factory" --label "factory:unowned" --label "ralph-status:pending" --label "main-breakage" >/dev/null 2>&1 || true
-            fi
+            # Signal only: do not manufacture an issue for a failing CI run.
+            # Existing CI check/run evidence and main_red=true gate merges.
           else
             echo "Main $sha is green (total=$total failing=$failing)"
             echo "main_red=false" >> "$GITHUB_OUTPUT"
