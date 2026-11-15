@@ -302,7 +302,7 @@ def test_worker_56_dots_preview_retirement_keeps_identity(validate) -> None:
     assert "56" not in {row["worker"] for row in rows}
     assert 56 in lock["retired_workers"]
     assert 56 not in lock["expected_workers"]
-    assert "dots-studio/dots-3-note-preview:free" not in lock["retired_models"]
+    assert "dots-studio/dots-3-note-preview:free" in lock["retired_models"]
     assert any(
         row["source"] == "openrouter-free"
         and row["worker"] == "128"

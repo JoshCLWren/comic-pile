@@ -148,6 +148,13 @@ def main(argv: list[str] | None = None) -> int:
             if not isinstance(models, list) or not all(isinstance(x, str) for x in models):
                 raise CatalogUnavailableError("Neon model exclusions are invalid")
             excluded = set(models)
+        # The durable retirement lock is authoritative even when the model
+        # later reappears in the provider's live inventory. Neon exclusions
+        # add temporary health/cooldown restrictions independently.
+        from factory_roster import load_roster_lock
+
+        retired = load_roster_lock()["retired_models"]
+        excluded.update(retired)
         model = choose_model(args.source, args.worker, catalog, excluded)
     except (CatalogUnavailableError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(f"factory catalog: {exc}", file=sys.stderr)

@@ -120,3 +120,19 @@ def test_workflow_uses_real_catalog_before_open_code_execution() -> None:
     assert '--exclusions-file "$exclusions_file"' in selection
     assert "selected-from-published-zero-price-catalog" in selection
     assert "required cost" not in selection  # No inference-token probes.
+
+
+def test_cli_does_not_resurrect_a_permanently_retired_model(tmp_path: Path) -> None:
+    retired = "dots-studio/dots-3-note-preview:free"
+    live = "example/eligible-model:free"
+    fixture = tmp_path / "live-provider.json"
+    fixture.write_text(json.dumps({"data": [
+        model(retired, "0", "0"), model(live, "0", "0"),
+    ]}), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--source", "openrouter-free",
+         "--worker", "128", "--catalog-json", str(fixture)],
+        text=True, capture_output=True, check=True,
+    )
+    assert json.loads(result.stdout)["model"] == live
+

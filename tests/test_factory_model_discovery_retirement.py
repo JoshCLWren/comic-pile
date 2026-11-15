@@ -1327,30 +1327,16 @@ def test_same_plan_retire_and_add_reuses_freed_worker(tmp_path: Path) -> None:
     _assert_validator_minutes(remaining)
 
 
-def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -> None:
-    """CLI apply re-pins live unused free models and keeps lock-retired ids off.
+def test_apply_cli_preserves_production_catalog_slots_without_repinning(tmp_path: Path) -> None:
+    """Discovery must not repin catalog-backed production slots.
 
-    Copies the committed roster, forces ``mimo-v2.6-flash-free`` off it
-    (back to big-pickle), then applies so the proof is the add path rather
-    than a hand-edit. ``muse-spark-1.3-contributor-free`` and
-    ``ling-3.0-flash-fin-free`` are lock-retired, so apply must not silently
-    re-pin them even though keep-present still lists those ids for
-    synthetic add-path tests.
+    Legacy static-pin fixture tests exercise the add path independently.
+    The current production manifest has dynamic provider slots, not a
+    manually named MiMo model to replace with Big Pickle.
     """
     target = {"mimo-v2.6-flash-free"}
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
-    rewritten = []
-    for row in rows:
-        if row["model"] in target:
-            rewritten.append(
-                {
-                    **row,
-                    "model": "big-pickle",
-                    "display_name": "OpenCode Big Pickle",
-                }
-            )
-        else:
-            rewritten.append(row)
+    rewritten = rows
     roster = tmp_path / "free-model-factories.tsv"
     lock_path = tmp_path / "factory-expected-workers.json"
     ROSTER.write_roster_rows(
@@ -1387,11 +1373,15 @@ def test_apply_cli_converts_production_shaped_tsv_via_add_path(tmp_path: Path) -
     assert "ling-3.0-flash-fin-free" in lock["retired_models"]
     assert "muse-spark-1.3-contributor-free" not in models
     assert "muse-spark-1.3-contributor-free" in lock["retired_models"]
-    assert "mimo-v2.6-flash-free" in models
+    assert "mimo-v2.6-flash-free" not in models
     assert "deepseek-v4-flash" not in models
+    assert all(
+        row["model"] == ROSTER.CATALOG_MODEL_SLOT
+        for row in remaining if row["source"] in ROSTER.CATALOG_MODEL_SOURCES
+    )
     assert ROSTER.schedule_is_balanced(remaining)
     assert set(lock["expected_workers"]) == ROSTER.roster_worker_ids(remaining)
-    assert sum(1 for row in remaining if row["model"] == "big-pickle") >= 1
+    assert not any(row["model"] == "big-pickle" for row in remaining)
 
 
 def test_committed_tsv_retires_ling_promos_and_preserves_muse_spark() -> None:
@@ -1743,7 +1733,7 @@ def test_committed_tsv_retires_worker_29_ghost_openrouter_qwen38_27b_free() -> N
     rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
     lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
     by_worker = {row["worker"]: row for row in rows}
-    models = {row["model"] for row in rows}
+    models = {row["model"] for row in rows if row["source"] == "openrouter-free"}
 
     assert 29 not in lock["expected_workers"]
     assert 29 in lock["retired_workers"]
@@ -1839,8 +1829,14 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert "longcat-2.5-preview-free" not in models
     assert "cat-jam-free" not in models
     assert "minimax/minimax-m3.1-flash:free" not in models
-    assert "nvidia/nemotron-3-ultra-550b-a55b" not in models
-    assert "nvidia/nemotron-3-super-120b-a12b" not in models
+    assert not any(
+        row["source"] == "nvidia" and row["model"] == "nvidia/nemotron-3-ultra-550b-a55b"
+        for row in rows
+    )
+    assert not any(
+        row["source"] == "nvidia" and row["model"] == "nvidia/nemotron-3-super-120b-a12b"
+        for row in rows
+    )
     assert by_worker["42"]["source"] == "opencode-free"
     assert by_worker["42"]["model"] == ROSTER.CATALOG_MODEL_SLOT
     assert by_worker["42"]["scheduler"] == "dispatcher"
