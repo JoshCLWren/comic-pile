@@ -181,9 +181,24 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert "model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}" in snapshot
     assert "FACTORY_STATE_DSN_FILE" not in snapshot
     assert "factory-state-cache" in collector
-    assert "needs: run" in collector
-    assert "if: ${{ always() }}" in collector
-    assert "actions: read" in collector
+    # The collector always waits for the worker. After #5137 it also needs
+    # the trusted Neon snapshot to use the existing attempt comment ID.
+    # Check the dependency graph, not a YAML spelling that changed from a
+    # scalar to a list when that second dependency was introduced.
+    entry_jobs = yaml.safe_load(entry)["jobs"]
+    collector_job = entry_jobs["persist_outcome"]
+    needs = collector_job["needs"]
+    needs_set = {needs} if isinstance(needs, str) else set(needs)
+    assert "run" in needs_set
+    assert collector_job["if"] == "${{ always() }}"
+    assert collector_job["permissions"]["actions"] == "read"
+    assert collector_job["permissions"]["contents"] == "read"
+    assert collector_job["permissions"]["pull-requests"] == "read"
+    if "ATTEMPT_COMMENT_ID:" in collector:
+        assert "model_health_snapshot" in needs_set
+        assert collector_job["permissions"]["issues"] == "write"
+        assert "needs.model_health_snapshot.outputs.attempt_id" in collector
+        assert "issues/comments/$ATTEMPT_COMMENT_ID" in collector
     assert "run / factory" in collector
 
 
