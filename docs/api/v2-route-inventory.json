@@ -2206,15 +2206,15 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/browse",
         "runtime": "python-fastapi",
-        "status": "live transitional Python with callers",
+        "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/browse",
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
@@ -2248,15 +2248,15 @@
         "verified_against": "vercel.json"
       },
       {
+        "method": "GET",
+        "path": "/api/v1/issue-identity/cbl-sources/folders",
         "runtime": "python-fastapi",
-        "status": "live transitional Python with callers",
+        "status": "transitional",
         "owning_issue": null,
         "consumers": [
           "frontend/src/services/api-cbl-sources.ts",
           "frontend/src/services/api-reading-graph.ts"
         ],
-        "method": "GET",
-        "path": "/api/v1/issue-identity/cbl-sources/folders",
         "ingress_destination": "/api/index.py",
         "burndown_status": "live transitional Python with callers",
         "verified_against": "vercel.json"
