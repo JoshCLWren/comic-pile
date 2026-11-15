@@ -20,7 +20,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.auth import verify_password
 from app.models import User
 
-from auth_budget_controls import extra_query_fails_budget, per_row_queries_fail_budget
+from auth_budget_controls import (
+    extra_query_fails_budget,
+    grow_accounts,
+    per_row_queries_fail_budget,
+)
 from route_harness import (
     assert_declared_budget,
     cargo_example_path,
@@ -48,20 +52,6 @@ def _token_pair_is_real(body: dict[str, object]) -> str:
     assert claims["sub"].endswith("-registered"), claims
     assert claims["type"] == "access", claims
     return access
-
-
-async def _grow_accounts(url: str, prefix: str, start: int, total: int) -> None:
-    """Add peer accounts until the fixture holds ``total`` rows."""
-    raw = await asyncpg.connect(url)
-    try:
-        for index in range(start, total):
-            await raw.execute(
-                "INSERT INTO users (username, email) VALUES ($1, $2)",
-                f"{prefix}_peer{index}",
-                f"{prefix}_peer{index}@example.invalid",
-            )
-    finally:
-        await raw.close()
 
 
 @pytest.mark.asyncio
@@ -120,7 +110,7 @@ async def test_register_statements_do_not_grow_with_account_count() -> None:
         assert claims["sub"] == small_username, claims
 
         # Large fixture: 200 existing accounts, then a second registration.
-        await _grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
+        await grow_accounts(url, prefix, SMALL_ACCOUNTS, LARGE_ACCOUNTS)
         large_username = f"{prefix}-registered-large"
         env["RUST_ROLL_TEST_BODY"] = (
             f'{{"username":"{large_username}",'
