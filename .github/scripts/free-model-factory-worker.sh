@@ -352,98 +352,32 @@ read_trusted_completion_decision() {
 }
 
 select_controller_assignment() {
-  local -a prs=() issues=()
-  local pr_json issue_json pr_numbers issue_numbers canonical_pr_json canonical_pr
-  local pr branch linked_issue issue pr_stage
-
-  if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
-    log "unable to query controller-leased PRs for ${OWNER}"
-    return 3
+  local assignment="${FACTORY_ASSIGNMENT:-}" target
+  [[ -n "$assignment" ]] || { log 'dispatcher assignment input is required'; return 3; }
+  if ! jq -e --arg worker "$WORKER" '
+    .worker == $worker and (.kind == "issue" or .kind == "pr")
+    and (.number | type == "number" and . > 0 and floor == .)
+  ' <<< "$assignment" >/dev/null; then
+    log 'invalid dispatcher assignment'; return 3
   fi
-  if ! pr_numbers="$(jq -r '.[] | select(([.labels[].name] | index("factory:ready")) == null) | .number' <<< "$pr_json")"; then
-    log "unable to parse controller-leased PRs for ${OWNER}"
-    return 3
+  MODE="$(jq -r '.kind' <<< "$assignment")"
+  NUMBER="$(jq -r '.number' <<< "$assignment")"
+  target="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}")" || return 3
+  if ! jq -e --arg owner "$OWNER" '.state == "open" and ([.labels[].name] | index($owner) != null)' <<< "$target" >/dev/null; then
+    log 'assigned target ownership changed'; return 3
   fi
-  mapfile -t prs < <(printf '%s' "$pr_numbers")
-
-  if (( ${#prs[@]} > 1 )); then
-    log "controller invariant failed: ${OWNER} owns multiple open PRs (${prs[*]})"
-    return 2
-  fi
-
-  if ! issue_json="$(gh issue list --state open --limit 300 --label "$OWNER" --json number)"; then
-    log "unable to query controller-leased issues for ${OWNER}"
-    return 3
-  fi
-  if ! issue_numbers="$(jq -r '.[].number' <<< "$issue_json")"; then
-    log "unable to parse controller-leased issues for ${OWNER}"
-    return 3
-  fi
-  mapfile -t issues < <(printf '%s' "$issue_numbers")
-
-  if (( ${#prs[@]} == 1 )); then
-    pr="${prs[0]}"
-    if ! branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"; then
-      log "unable to resolve branch for controller-leased PR #${pr}"
-      return 3
+  if [[ "$MODE" == pr ]]; then
+    target="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}")" || return 3
+    if ! jq -e --arg head "$(jq -r '.head' <<< "$assignment")" '.head.sha == $head' <<< "$target" >/dev/null; then
+      log 'assigned PR head moved'; return 3
     fi
-    if [[ -z "$branch" ]]; then
-      log "controller-leased PR #${pr} returned an empty branch"
-      return 3
-    fi
-    if ! linked_issue="$(linked_issue_from_pr "$pr")"; then
-      log "unable to resolve linked issue for controller-leased PR #${pr}"
-      return 3
-    fi
-    pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:building" or . == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
-    if [[ -z "$pr_stage" ]]; then
-      log "controller-leased PR #${pr} has no supported completion stage"
-      return 3
-    fi
-
-    for issue in "${issues[@]:-}"; do
-      [[ -n "$issue" ]] || continue
-      if [[ -z "$linked_issue" || "$issue" != "$linked_issue" ]]; then
-        log "controller invariant failed: ${OWNER} owns PR #${pr} plus unrelated issue #${issue}"
-        return 2
-      fi
-    done
-
-    MODE='pr'
-    NUMBER="$pr"
-    BRANCH="$branch"
-    ASSIGNED_PR_STAGE="$pr_stage"
-    read_trusted_completion_decision "$pr" "$WORKER"
-    return 0
-  fi
-
-  if (( ${#issues[@]} == 1 )); then
-    issue="${issues[0]}"
-    if ! canonical_pr_json="$(gh pr list --state open --limit 500 --json number,headRefName)"; then
-      log "unable to verify canonical PR identity for controller-leased issue #${issue}"
-      return 3
-    fi
-    if ! canonical_pr="$(jq -r --arg issue "$issue" '[.[] | select((.headRefName // "") | test("^factory/[0-9]+-" + $issue + "-")) | .number] | first // empty' <<< "$canonical_pr_json")"; then
-      log "unable to parse canonical PR identity for controller-leased issue #${issue}"
-      return 3
-    fi
-    if [[ -n "$canonical_pr" ]]; then
-      log "controller invariant failed: ${OWNER} owns orphaned issue lease #${issue} while canonical open PR #${canonical_pr} exists"
-      return 2
-    fi
-
-    MODE='issue'
-    NUMBER="$issue"
+    BRANCH="$(jq -r '.head.ref' <<< "$target")"
+    ASSIGNED_PR_STAGE="$(jq -r '.stage' <<< "$assignment")"
+    read_trusted_completion_decision "$NUMBER" "$WORKER"
+  else
     BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-    return 0
   fi
-
-  if (( ${#issues[@]} > 1 )); then
-    log "controller invariant failed: ${OWNER} owns multiple open issues (${issues[*]})"
-    return 2
-  fi
-
-  return 1
+  return 0
 }
 
 ensure_owner_label
@@ -553,6 +487,11 @@ elif (( fork_route != 0 && fork_route != 1 )); then
 fi
 if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
   checkout_target "$MODE" "$NUMBER" "$BRANCH"
+  if [[ "$MODE" == pr && "$(git rev-parse HEAD)" != "$(jq -r '.head' <<< "$FACTORY_ASSIGNMENT")" ]]; then
+    log 'assigned PR moved during checkout; refusing stale execution'
+    record_terminal_outcome control_plane_failure 'assigned PR head moved during checkout'
+    exit 2
+  fi
   start_work_checkpoint
 fi
 

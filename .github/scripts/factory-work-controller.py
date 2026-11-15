@@ -1680,6 +1680,52 @@ def log_completion_result(
     )
 
 
+def assignment_context(candidate: Candidate, worker: str) -> dict[str, object]:
+    """Export a small, fenced assignment after a successful dispatcher claim."""
+    claim = worker_claim(REPO, worker, active_only=True)
+    if claim is None or candidate.number not in claim[1]:
+        raise RuntimeError('Claim disappeared before assignment handoff')
+    context: dict[str, object] = {
+        'kind': candidate.kind, 'number': candidate.number,
+        'worker': worker, 'claim_id': claim[0],
+        'stage': candidate.stage or 'factory:building',
+        'linked_issue': candidate.linked_issue,
+        'head': '', 'branch': '',
+    }
+    if candidate.kind == 'pr':
+        live = live_pr_state(candidate.number)
+        context['stage'] = stage_of(labels_of(live))
+        context['head'] = live['head']['sha']
+        context['branch'] = live['head']['ref']
+    return context
+
+
+def validate_assignment(worker: str, raw: str) -> dict[str, object]:
+    """Verify dispatcher context against the live claim and exact GitHub target."""
+    if len(raw.encode()) > 4096:
+        raise ValueError('Assignment exceeds bounded input size')
+    context = json.loads(raw)
+    if not isinstance(context, dict) or context.get('worker') != worker:
+        raise ValueError('Assignment worker mismatch')
+    kind, number = context.get('kind'), context.get('number')
+    if kind not in ('issue', 'pr') or type(number) is not int or number <= 0:
+        raise ValueError('Invalid assignment target')
+    claim = worker_claim(REPO, worker, active_only=True)
+    if claim is None or claim[0] != context.get('claim_id') or number not in claim[1]:
+        raise ValueError('Assignment claim expired or was replaced')
+    target = target_json(number)
+    if target.get('state') != 'open' or owner_of(labels_of(target)) != f'factory:{worker}':
+        raise ValueError('Assignment target is no longer owned')
+    if kind == 'pr':
+        live = live_pr_state(number)
+        if live['head']['sha'] != context.get('head') or live['head']['ref'] != context.get('branch'):
+            raise ValueError('Assignment PR head moved')
+        candidate = Candidate('pr', number, 3, 0, '', stage=str(context.get('stage') or ''))
+        if not candidate_is_live_executable(candidate):
+            raise ValueError('Assignment PR is waiting or no longer executable')
+    return context
+
+
 def inspect_assignment(worker: str) -> dict[str, Any]:
     """Return the current controller assignment for one fixed-model worker.
 
@@ -1726,7 +1772,7 @@ def record_claim_released(number: int, worker: str, kind: str, reason: str) -> N
     run_gh(['issue', 'comment', str(number), '--repo', REPO, '--body', marker])
 
 
-def release_worker(worker: str, reason: str = 'controller-release', *, details=None) -> list[int]:
+def release_worker(worker: str, reason: str = 'controller-release', *, details=None, expected_claim: str = '') -> list[int]:
     """Release an exiting worker's exact Neon claim, never a later assignment.
 
     Trusted pre/post-session cleanup uses the original transactional claim as
@@ -1743,6 +1789,17 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
         if trusted_exit:
             raise
         original_claim = None
+
+    if trusted_exit and original_claim is not None and not expected_claim:
+        if details is not None:
+            details.update({'status': 'missing_claim', 'released': []})
+        return []
+    if trusted_exit and expected_claim and (
+        original_claim is None or original_claim[0] != expected_claim
+    ):
+        if details is not None:
+            details.update({'status': 'stale_completion', 'released': []})
+        return []
 
     released: list[int] = []
     if trusted_exit:
@@ -2226,7 +2283,8 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
         )
         try:
             run_gh(['workflow', 'run', 'free-model-factory-entry.yml', '--repo', REPO,
-                    '--ref', 'main', '-f', f'worker={worker}'])
+                    '--ref', 'main', '-f', f'worker={worker}',
+                    '-f', 'assignment=' + json.dumps(assignment_context(candidate, worker))])
         except RuntimeError:
             # A timed-out POST can already have queued the worker. Keep its lease
             # so another manual request cannot start duplicate work.
@@ -2259,11 +2317,14 @@ def main() -> int:
     target_parser.add_argument('--action', required=True, choices=(
         'advance', 'implement', 'merge-conflict', 'ci-repair', 'review-findings', 'review',
     ))
+    validate_parser = subparsers.add_parser('validate-assignment')
+    validate_parser.add_argument('--worker', required=True)
     inspect_parser = subparsers.add_parser('inspect')
     inspect_parser.add_argument('--worker', required=True)
     release_parser = subparsers.add_parser('release')
     release_parser.add_argument('--worker', required=True)
     release_parser.add_argument('--reason', default='controller-release')
+    release_parser.add_argument('--claim-id', default='')
     recovery_parser = subparsers.add_parser('conflict-recovery')
     recovery_parser.add_argument('--worker', required=True)
     explain_parser = subparsers.add_parser('explain')
@@ -2292,10 +2353,13 @@ def main() -> int:
         if candidate is None:
             print(json.dumps({'kind': 'none'}))
             return 0
-        print(json.dumps({'kind': candidate.kind, 'number': candidate.number, 'lane': candidate.lane, 'priority': candidate.priority, 'linked_issue': candidate.linked_issue, 'conflicted': candidate.conflicted}))
+        print(json.dumps(assignment_context(candidate, args.worker)))
         return 0
     if args.command == 'dispatch-target':
         print(json.dumps(dispatch_target(args.kind, args.number, args.action)))
+        return 0
+    if args.command == 'validate-assignment':
+        print(json.dumps(validate_assignment(args.worker, sys.stdin.read())))
         return 0
     if args.command == 'inspect':
         print(json.dumps(inspect_assignment(args.worker)))
@@ -2315,10 +2379,10 @@ def main() -> int:
         print(json.dumps(signal_roster_mode(), sort_keys=True))
         return 0
     outcome = {}
-    released = release_worker(args.worker, reason=args.reason, details=outcome)
+    released = release_worker(args.worker, reason=args.reason, details=outcome, expected_claim=args.claim_id)
     print(json.dumps(outcome if outcome else {'released': released}))
     # A live, actionable claim must never make a cleanup job green.
-    return 1 if outcome.get('status') in ('failed', 'deferred') else 0
+    return 1 if outcome.get('status') in ('failed', 'deferred', 'missing_claim') else 0
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -4,6 +4,10 @@ run-name: Factory ${{ inputs.worker }} · fixed-model entry
 on:
   workflow_dispatch:
     inputs:
+      assignment:
+        description: Bounded dispatcher assignment with target, exact head and claim token
+        required: true
+        type: string
       worker:
         description: Active fixed-model Factory number from the roster
         required: true
@@ -22,6 +26,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: read
+      pull-requests: read
+      checks: read
     outputs:
       exclusions: ${{ steps.export.outputs.exclusions }}
       heartbeat_id: ${{ steps.export.outputs.heartbeat_id }}
@@ -40,9 +47,12 @@ jobs:
         shell: bash
         env:
           INPUT_WORKER: ${{ inputs.worker }}
+          INPUT_ASSIGNMENT: ${{ inputs.assignment }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || exit 1
+          printf '%s' "$INPUT_ASSIGNMENT" | python3 .github/scripts/factory-work-controller.py validate-assignment --worker "$INPUT_WORKER" >/dev/null
           snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$INPUT_WORKER")"
           jq -e 'type == "object"' <<< "$snapshot" >/dev/null
           echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
@@ -54,6 +64,7 @@ jobs:
     uses: ./.github/workflows/free-model-factory-run.yml
     with:
       worker: ${{ inputs.worker }}
+      assignment: ${{ inputs.assignment }}
       model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
       heartbeat_comment_id: ${{ needs.model_health_snapshot.outputs.heartbeat_id }}
       attempt_comment_id: ${{ needs.model_health_snapshot.outputs.attempt_id }}

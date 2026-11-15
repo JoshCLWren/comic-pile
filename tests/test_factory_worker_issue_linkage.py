@@ -63,16 +63,19 @@ def test_assignment_accepts_local_pr_and_its_controller_leased_issue() -> None:
     script += "\n" + shell_function(SCRIPTS / "free-model-factory-worker.sh", "select_controller_assignment")
     script += '''
 OWNER=factory:54
+WORKER=54
+GITHUB_REPOSITORY=owner/repo
+FACTORY_ASSIGNMENT='{"worker":"54","kind":"pr","number":3314,"stage":"factory:review","head":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","linked_issue":3271}'
 log() { printf '%s\\n' "$*" >&2; }
+read_trusted_completion_decision() { :; }
 gh() {
-  if [[ "$1 $2" == 'pr list' ]]; then
-    printf '%s' '[{"number":3314,"labels":[{"name":"factory:review"}]}]'
-  elif [[ "$1 $2" == 'issue list' ]]; then
-    printf '%s' '[{"number":3271}]'
-  elif [[ "$*" == *'--json headRefName --jq'* ]]; then
-    printf '%s' 'fix/3271-durable-review-migration-handoff'
+  if [[ "$*" == 'api repos/owner/repo/issues/3314' ]]; then
+    printf '%s' '{"state":"open","labels":[{"name":"factory:54"}]}'
+  elif [[ "$*" == 'api repos/owner/repo/pulls/3314' ]]; then
+    printf '%s' '{"head":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","ref":"fix/3271-durable-review-migration-handoff"}}'
   else
-    printf '%s' '{"headRefName":"fix/3271-durable-review-migration-handoff","body":"Closes #3271.","title":"repair"}'
+    echo 'unexpected discovery call' >&2
+    return 1
   fi
 }
 select_controller_assignment || exit "$?"

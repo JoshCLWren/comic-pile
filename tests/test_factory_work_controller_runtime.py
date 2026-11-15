@@ -1076,12 +1076,10 @@ def test_worker_accepts_in_progress_pr_handoff_from_controller() -> None:
         REPO_ROOT / ".github/scripts/free-model-factory-worker.sh"
     ).read_text(encoding="utf-8")
 
-    assert (
-        '. == "factory:building" or . == "factory:review" '
-        'or . == "factory:changes-requested"'
-    ) in worker
-    assert "ASSIGNED_PR_STAGE" in worker
+    assert "ASSIGNED_PR_STAGE=" in worker
     assert "repair-no-change-ready-handoff" in worker
+    assert 'pr list' not in worker[worker.index('select_controller_assignment() {'):worker.index('ensure_owner_label\n', worker.index('select_controller_assignment() {'))]
+
 
 
 def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence(

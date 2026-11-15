@@ -3,6 +3,10 @@ name: Fixed free-model factory runner
 on:
   workflow_call:
     inputs:
+      assignment:
+        description: Bounded dispatcher assignment with target, exact head and claim token
+        required: true
+        type: string
       worker:
         description: Durable factory executor slot
         required: true
@@ -20,6 +24,9 @@ on:
         required: false
         type: string
     secrets:
+      NEON_API_KEY:
+        description: Restricted connection resolution in trusted cleanup jobs only
+        required: false
       OPENCODE_API_KEY:
         required: false
       OPENCODE_ZEN_API_KEY:
@@ -831,6 +838,7 @@ jobs:
         if: steps.lane.outputs.configured == 'true'
         env:
           FACTORY_OMNIROUTE_ENABLED: ${{ vars.FACTORY_OMNIROUTE_ENABLED || 'off' }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
           FACTORY_WORKER: ${{ steps.lane.outputs.worker }}
           FACTORY_SOURCE: ${{ steps.executor.outputs.source || steps.lane.outputs.source }}
           FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}
@@ -1044,6 +1052,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
         run: |
           set -Eeuo pipefail
           [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
@@ -1055,8 +1064,9 @@ jobs:
             echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
+          claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
-            --worker "$FACTORY_WORKER" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
+            --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "pre-session-abort-run-${GITHUB_RUN_ID}"
 
   release_post_session_lease:
     needs: factory
@@ -1085,6 +1095,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FACTORY_WORKER: ${{ inputs.worker }}
+          FACTORY_ASSIGNMENT: ${{ inputs.assignment }}
         run: |
           set -Eeuo pipefail
           [[ "$FACTORY_WORKER" =~ ^[1-9][0-9]{0,2}$ ]] || {
@@ -1095,6 +1106,7 @@ jobs:
             echo 'Neon factory lease connection missing; refusing split release' >&2
             exit 1
           }
+          claim_id="$(jq -er '.claim_id | select(type == "string" and length > 0)' <<< "$FACTORY_ASSIGNMENT")"
           python3 .github/scripts/factory-work-controller.py release \
-            --worker "$FACTORY_WORKER" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
+            --worker "$FACTORY_WORKER" --claim-id "$claim_id" --reason "post-session-exit-run-${GITHUB_RUN_ID}"
 

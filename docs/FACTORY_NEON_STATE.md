@@ -388,3 +388,35 @@ completion, and seeds the Fibonacci streak without double-counting the
 current run. Model-level first updates are serialized with a transaction-scoped
 advisory lock; run IDs fence stale completion updates. A healthy model session
 or persisted delivery clears the shared breaker. The roster remains unchanged.
+
+## Actions assignment handoff (migration in progress)
+
+The dispatcher now sends a bounded JSON `assignment` workflow input containing
+worker, target kind/number, stage, linked issue, branch, exact PR SHA, and the
+original transactional claim UUID. It is forwarded directly through Entry to
+the reusable runner; no artifact or global queue snapshot is transferred.
+Entry verifies the live, unexpired Neon claim and authoritative GitHub target
+before allowing model execution. The worker reads only its target, checks the
+expected SHA before and after checkout, and preserves normal checkpoint/PR
+publication behavior. Every dispatcher entrypoint supplies this input.
+
+Trusted cleanup receives the original UUID from the workflow input. A delayed
+completion cannot discover and release a newer UUID. Pre-migration cleanup
+without a token fails closed for a live claim; existing lease expiration and
+liveness recovery reclaim it. Controller deployments no longer cancel healthy
+older Entry runs or scan historical registry comments to identify those runs.
+
+This is the first migration boundary, **not completion**. Generic GET caching,
+issue/PR projections, registry snapshots, check projections and repeated
+completion demand discovery still need removal after consumers migrate.
+Transactional leases, provider reservations and retry/cooldown state remain.
+
+Baseline inspection on 2026-11-15 (before migration, cumulative statistics):
+`factory_state_kv` allocated 174,710,784 bytes, with approximately 537 live
+rows. Grouped payload sizes were 12,351,733 bytes for generic GET caches,
+989,729 bytes for repository discovery/registry snapshots, 928,150 bytes for
+issue/PR projections, 2,577 bytes for leases, and 7,494 bytes for worker/model/
+provider backoff. Physical allocation includes indexes and dead tuples and is
+not active payload size. `factory_state_events` had 13,813 rows and allocated
+3,973,120 bytes. `pg_stat_statements` is unavailable, so these observations do
+not establish per-cycle query counts or achieved savings.
