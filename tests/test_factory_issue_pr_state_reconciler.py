@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -89,8 +90,7 @@ def test_pr_history_uses_supported_pagination_and_compacts_before_caching() -> N
     """gh rejects --slurp combined with --jq; project per page, then reassemble."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     script = workflow[workflow.index("Reconcile linked issue from trusted canonical PR history"):]
-    assert "--paginate --slurp \\n                --jq" not in script
-    assert "--paginate --slurp \\n            --jq" not in script
+    assert not re.search(r"--paginate\s+--slurp\s*\\\s*--jq", script)
     projection = "--jq '[.[] | {number, head: {ref: .head.ref}, state, merged_at}]'"
     assert script.count(projection) == 2
     assert script.count(" | jq -cs '.'") == 2
