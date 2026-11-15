@@ -465,6 +465,7 @@ async def measure_route(
     fixture: str,
 ) -> RouteMeasurement:
     """Measure one invocation: snapshot counters, run, snapshot, print, return."""
+    await reset_statement_stats()
     xacts_before, blocks_before, statements_before = await db_counters(engine)
     breakdown_before = await db_statement_breakdown(engine)
     nested_before = await db_nested_statements(engine)
