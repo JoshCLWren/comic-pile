@@ -8,7 +8,6 @@ use axum::{extract::State, Json};
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio_postgres::Row;
 use utoipa::ToSchema;
 
 const STATUS_SQL: &str = "SELECT rps.id, rps.plan_id, rps.thread_id, \
