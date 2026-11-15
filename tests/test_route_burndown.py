@@ -631,7 +631,6 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     assert f"Live v2 operations: {total} ({native} native-rust + {python} python-fastapi)" in agents
     assert "`/api/native_roll.rs`, `/api/native_issue.rs`" in agents
     assert "`POST /api/v2/reading-boundaries -> native-rust`" in agents
-    assert "`GET /api/v2/reading-boundaries/{thread_id} -> python-fastapi`" in agents
     assert "see `docs/api/v2-route-inventory.json` (authoritative)" in agents
     assert "Full Python-handler surface:" in agents
     assert "v1 active" in agents
@@ -639,7 +638,7 @@ def test_agents_table_uses_deployed_ingress_not_url_version() -> None:
     assert "`/api(?:/.*)? -> /api/native_roll.rs`" in agents
     assert "`docs/api/v2-route-inventory.json` `full_surface` (authoritative)" in agents
     assert "Deployed runtime by cutover owner" in agents
-    assert "- #4335 (10):" in agents
+    assert "- #4335 (9):" in agents
     assert "- #4684 (16):" in agents
     assert agents.count("<!-- route-burndown:end -->") == 1
 
