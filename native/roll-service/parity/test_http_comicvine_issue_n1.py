@@ -17,7 +17,13 @@ from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.models import Issue, Thread, User
-from route_harness import cargo_example_path, assert_declared_budget, db_counters, run_rust_example
+from route_harness import (
+    assert_declared_budget,
+    cargo_example_path,
+    db_counters,
+    db_nested_statements,
+    run_rust_example,
+)
 
 SECRET = "synthetic-native-comicvine-issue-secret"
 EXAMPLE = cargo_example_path("http_comicvine_issue")
@@ -97,6 +103,7 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
             "RUST_ROLL_TEST_TOKEN": token,
             "RUST_ROLL_TEST_ISSUE_ID": str(issue_id),
         }
+        n_before = await db_nested_statements(engine)
         _, _, s_before = await db_counters(engine)
         small_response, _, _, _ = await run_rust_example(BINARY, env)
         assert small_response.get("status") == 200, small_response
@@ -108,8 +115,12 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
         assert small_body.get("metadata_status") == "refresh_pending", small_body
         assert "intelligence" not in small_body, small_body
         _, _, s_after = await db_counters(engine)
+        n_after = await db_nested_statements(engine)
         small_delta = (
             (s_after - s_before) if s_before is not None and s_after is not None else None
+        )
+        small_nested = (
+            (n_after - n_before) if n_before is not None and n_after is not None else None
         )
 
         # Grow to 200 issues
@@ -149,6 +160,7 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
 
         env["RUST_ROLL_TEST_ISSUE_ID"] = str(new_issue_id)
 
+        n_before2 = await db_nested_statements(engine)
         _, _, s_before2 = await db_counters(engine)
         large_response, _, _, _ = await run_rust_example(BINARY, env)
         assert large_response.get("status") == 200, large_response
@@ -158,14 +170,32 @@ async def test_comicvine_issue_statements_do_not_grow_with_library_size() -> Non
         assert large_body.get("metadata_status") == "refresh_pending", large_body
         assert "intelligence" not in large_body, large_body
         _, _, s_after2 = await db_counters(engine)
+        n_after2 = await db_nested_statements(engine)
         large_delta = (
             (s_after2 - s_before2)
             if s_before2 is not None and s_after2 is not None
             else None
         )
+        large_nested = (
+            (n_after2 - n_before2) if n_before2 is not None and n_after2 is not None else None
+        )
 
-        print(f"small_delta={small_delta} large_delta={large_delta}", flush=True)
+        print(
+            f"small_delta={small_delta} large_delta={large_delta} "
+            f"small_nested={small_nested} large_nested={large_nested}",
+            flush=True,
+        )
         assert small_delta is not None and large_delta is not None, "pg_stat_statements is required"
+        # The read idempotently enqueues a refresh row; nested trigger statements
+        # are measured separately from the declared application budget and must
+        # not grow with library size.
+        assert small_nested is not None and large_nested is not None, (
+            "pg_stat_statements track=all is required for nested trigger statements"
+        )
+        assert large_nested <= small_nested + 2, (
+            f"nested trigger statements grew with library size: "
+            f"{small_nested} -> {large_nested}"
+        )
         assert_declared_budget("GET", "/api/v2/issues/{issue_id}/comicvine", small_delta, large_delta)
         assert large_delta <= small_delta + 2, (
             f"statement count grew with library size: {small_delta} -> {large_delta}"
