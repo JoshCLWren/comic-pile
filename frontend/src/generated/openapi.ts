@@ -27,6 +27,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** OpenAPI documentation for the legacy metrics endpoints. */
+        get: operations["get_metrics_documentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ping": {
         parameters: {
             query?: never;
@@ -2533,11 +2550,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Metrics
-         * @description Return simple performance metrics.
-         */
-        get: operations["metrics_api_v1_metrics_get"];
+        /** OpenAPI documentation for the versioned metrics alias. */
+        get: operations["get_v1_metrics_documentation"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13991,6 +14005,12 @@ export interface components {
             /** Volume Id */
             volume_id: number;
         };
+        StartupMetricsResponse: {
+            /** Format: double */
+            startup_duration?: number | null;
+            /** Format: double */
+            startup_time?: number | null;
+        };
         /** @description A provider story arc with bounded related issues and a correct total. */
         StoryArc: {
             /** Format: int32 */
@@ -14930,6 +14950,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_metrics_documentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Simple application startup metrics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartupMetricsResponse"];
                 };
             };
         };
@@ -18304,7 +18344,7 @@ export interface operations {
             };
         };
     };
-    metrics_api_v1_metrics_get: {
+    get_v1_metrics_documentation: {
         parameters: {
             query?: never;
             header?: never;
@@ -18313,15 +18353,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Simple application startup metrics */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: number | null;
-                    };
+                    "application/json": components["schemas"]["StartupMetricsResponse"];
                 };
             };
         };

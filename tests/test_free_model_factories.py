@@ -55,8 +55,8 @@ def test_second_kilo_lane_shares_free_route_and_offsets_schedule() -> None:
     lock = json.loads(Path('.github/factory-expected-workers.json').read_text())
     assert 98 in lock['expected_workers'] and 98 not in lock['retired_workers']
     workflow = Path('.github/workflows/free-model-factory-run.yml').read_text()
-    smoke = workflow.split('- name: Smoke Kilo Auto Free through Kilo CLI')[1].split('\n      - name:')[0]
-    assert smoke.index("grep -q '^provider_quota'") < smoke.index("if grep -q 'KILO_AUTO_FREE_OK'")
+    assert 'Smoke Kilo Auto Free through Kilo CLI' not in workflow
+    assert 'Run continuous fixed-model factory session' in workflow
 
 
 def test_current_free_openrouter_coding_candidates_replace_retired_inkling_workers() -> None:

@@ -43,21 +43,22 @@ def test_worker_emits_only_canonical_terminal_outcomes() -> None:
     text = _worker_text()
 
     assert (
-        'success|no_work|work_failure|provider_failure|provider_throttle|provider_quota|model_unavailable|model_retired_410|'
+        'success|no_work|work_failure|agent_timeout|provider_failure|provider_throttle|provider_quota|model_unavailable|model_retired_410|'
         'model_policy_violation|environment_failure|control_plane_failure|unknown_failure'
     ) in text
     assert 'TERMINAL_OUTCOME_FILE="${RUNNER_TEMP:-/tmp}/factory-discovery-outcome"' in text
 
 
-def test_timed_provider_session_is_provider_failure_after_smoke() -> None:
-    """A pinned provider/model session timeout must not collapse to unknown_failure."""
+def test_local_agent_deadline_is_not_a_provider_failure() -> None:
+    """The wrapper-enforced 124 deadline cannot poison shared Neon provider health."""
     text = _worker_text()
 
-    assert 'status == 124 || status == 137 || status == 143' in text
+    assert 'if (( status == 124 )); then' in text
     assert (
-        'record_terminal_outcome provider_failure '
-        '"pinned provider/model session timed out or was interrupted after smoke succeeded'
+        'record_terminal_outcome agent_timeout '
+        '"trusted local execution deadline expired (agent exit 124)"'
     ) in text
+    assert 'elif (( status == 137 || status == 143 )); then' in text
 
 def test_kilo_run_agent_does_not_reenable_errexit_before_returning_status() -> None:
     """Kilo exit 124 must reach the outer retry/classification loop."""
@@ -76,6 +77,8 @@ def test_throttle_and_model_missing_remain_distinct() -> None:
 
     assert 'record_terminal_outcome provider_throttle' in text
     assert 'record_terminal_outcome model_unavailable' in text
+    assert 'record_terminal_outcome model_retired_410' in text
+    assert "NVIDIA permanently retired model: %s" in text
     assert 'HTTP[^0-9]*404' in text
     assert 'HTTP[^0-9]*410' in text
 

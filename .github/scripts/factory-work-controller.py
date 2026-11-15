@@ -29,7 +29,7 @@ from factory_quota_pause import describe as describe_quota_pause, is_paused as q
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_state_cache import cached_json
-from factory_state_projection import projected_json, reconcile_snapshot
+from factory_state_projection import projected_json, reconcile_snapshot, refresh_trusted_label_write
 from factory_state_ledger import acquire_lease, release_lease, renew_verified_workers, worker_claim
 REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 GH_TIMEOUT_SECONDS = env_positive_int("FACTORY_GH_TIMEOUT_SECONDS", 120)
@@ -93,7 +93,7 @@ def list_issues() -> list[dict[str, Any]]:
         reconcile_snapshot(REPO, "issue", issues, started)
         return issues
 
-    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=45)
+    return cached_json(f"{REPO}:open-issues", fetch_issues, ttl_seconds=450)
 
 
 def list_prs() -> list[dict[str, Any]]:
@@ -111,7 +111,7 @@ def list_prs() -> list[dict[str, Any]]:
         reconcile_snapshot(REPO, "pr", prs, started)
         return prs
 
-    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=45)
+    return cached_json(f"{REPO}:open-prs", fetch_prs, ttl_seconds=450)
 
 
 def rotisserie_issue_intake(issues: list[dict[str, Any]], prs: list[dict[str, Any]]) -> set[int] | None:
@@ -248,6 +248,22 @@ def last_github_update_epoch(item: dict[str, Any], *, now_epoch: int) -> int | N
     return epoch if 0 < epoch <= now_epoch else None
 
 
+def refresh_projection_after_label_change(number: int, target: dict[str, Any]) -> None:
+    """Refresh the specific authoritative target, never use Neon to authorize a label PUT."""
+    if not os.environ.get("FACTORY_STATE_DSN_FILE"):
+        return
+    try:
+        refresh_trusted_label_write(REPO, number, is_pr="pull_request" in target)
+    except Exception as exc:
+        # A completed GitHub release must still discharge its transactional
+        # Neon lease; the 30-minute full-snapshot expiry repairs missed writes.
+        print(
+            f"[factory-controller] target #{number} projection refresh deferred "
+            f"({type(exc).__name__}); GitHub labels remain authoritative",
+            file=sys.stderr,
+        )
+
+
 def replace_factory_labels(
     number: int,
     owner: str,
@@ -327,6 +343,7 @@ def replace_factory_labels(
         labels.append('ralph-status:pending')
     
     run_gh(['api', '--method', 'PUT', f'repos/{REPO}/issues/{number}/labels', '--input', '-'], input_json={'labels': sorted(set(labels))})
+    refresh_projection_after_label_change(number, target)
     return True
 
 
@@ -707,7 +724,10 @@ def latest_lease_activity_epoch(number: int) -> int | None:
 def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
     """Read retry history, sharing only a refreshed snapshot within a dispatch pass."""
     def fetch_pages(since_epoch: int) -> tuple[list[dict[str, object]], int]:
-        since = datetime.fromtimestamp(since_epoch, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
+        # Round *down* to share the same Neon GET key across near-simultaneous
+        # dispatchers. The extra comments are a safe superset; retry-window
+        # filtering still uses the original now_epoch.
+        since = datetime.fromtimestamp(since_epoch - since_epoch % 60, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
         pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
         if (
             not isinstance(pages, list) or not pages
@@ -844,13 +864,23 @@ def active_fixed_workers() -> ActiveWorkerResult:
     numeric_unresolved = {value for value in unresolved_run_ids if value.isdigit()}
     if numeric_unresolved:
         try:
-            pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
-        except RuntimeError:
+            if os.environ.get('FACTORY_STATE_DSN_FILE'):
+                # Reuse the incremental, shared Neon registry rather than
+                # independently re-paginating ~2,000 heartbeat comments.
+                from factory_completion_controller import registry_comments
+                comments = registry_comments()
+            else:
+                pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
+                if not isinstance(pages, list):
+                    return ActiveWorkerResult(workers, unresolved_run_ids)
+                comments = flatten_pages(pages)
+        except Exception as exc:
+            print(f'[factory-controller] registry read unavailable ({type(exc).__name__}); preserving unresolved run fence', file=sys.stderr)
             return ActiveWorkerResult(workers, unresolved_run_ids)
-        if not isinstance(pages, list):
+        if not isinstance(comments, list):
             return ActiveWorkerResult(workers, unresolved_run_ids)
-        for comment in flatten_pages(pages):
-            if not comment_is_trusted(comment):
+        for comment in comments:
+            if not isinstance(comment, dict) or not comment_is_trusted(comment):
                 continue
             body = str(comment.get('body') or '')
             run_match = re.search(r'(?m)^Run:\s*(\d+)\s*$', body)
@@ -1297,6 +1327,7 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     *,
     target: tuple[str, int] | None = None,
     requested_action: str = 'advance',
+    batch_reconciled: bool = False,
 ) -> Candidate | None:
     """Assign the highest-ranked executable work to one fixed-model worker.
 
@@ -1332,7 +1363,10 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
             file=sys.stderr,
         )
         return None
-    if target is None:
+    # Trusted dispatcher batches run these two full-repository reconciliations
+    # once before iterating workers. Standalone/manual assignment still checks
+    # them here. Every actual claim remains live-verified in assign_candidate.
+    if target is None and not batch_reconciled:
         reconcile_stale_leases()
         reconcile_contradictory_labels()
     issues = list_issues()
@@ -1684,8 +1718,11 @@ def release_worker(worker: str, reason: str = 'controller-release', *, details=N
                         and label['name'] != 'factory:unowned'
                     }
                     if active_owners != {owner}:
-                        # The old labels were already removed, or a different
-                        # owner now has this target. Never touch that owner.
+                        # Model-side releases can precede trusted cleanup and
+                        # lack a webhook. Refresh only truly unowned targets.
+                        if not active_owners:
+                            refresh_projection_after_label_change(number, current)
+                        # Never overwrite ownership assigned to a newer worker.
                         already_released.append(number)
                         continue
                     if worker_claim(REPO, worker) != original_claim:
@@ -2171,6 +2208,8 @@ def main() -> int:
     assign_parser = subparsers.add_parser('assign')
     assign_parser.add_argument('--worker', required=True)
     assign_parser.add_argument('--kinds', nargs='*', default=None)
+    assign_parser.add_argument('--batch-reconciled', action='store_true',
+        help='Global reconciliation already succeeded once in the trusted dispatch batch')
     target_parser = subparsers.add_parser('dispatch-target')
     target_parser.add_argument('--kind', required=True, choices=('issue', 'pr'))
     target_parser.add_argument('--number', required=True, type=int)
@@ -2202,7 +2241,11 @@ def main() -> int:
         print(json.dumps(check_stale_prs(dry_run=args.dry_run)))
         return 0
     if args.command == 'assign':
-        candidate = assign(args.worker, kinds=tuple(args.kinds) if args.kinds else None)
+        candidate = assign(
+            args.worker,
+            kinds=tuple(args.kinds) if args.kinds else None,
+            batch_reconciled=args.batch_reconciled,
+        )
         if candidate is None:
             print(json.dumps({'kind': 'none'}))
             return 0

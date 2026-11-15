@@ -31,6 +31,8 @@ class FakeConnection:
         self.metrics = metrics
 
     async def fetch(self, statement, *args):
+        if "FROM public.factory_state_kv" in statement:
+            return []
         if "FROM public.factory_model_health" in statement:
             return self.models
         if "FROM public.factory_provider_budget" in statement:
@@ -89,6 +91,25 @@ def test_expired_model_cooldown_is_eligible_for_a_new_probe():
         kept, denied = run(operations._eligibility(db, REPO, ["41"]))
     assert kept == ["41"]
     assert not denied
+
+
+def test_provider_streak_is_not_reset_by_capacity_reservations():
+    import inspect
+    source = inspect.getsource(operations.project_runtime)
+    assert 'factory-provider-backoff-v1:' in source
+    assert 'delay_seconds' in source
+    assert 'observed_at' in source
+    assert 'SELECT last_outcome,updated_at,cooldown_until' not in source
+
+
+def test_provider_exponential_backoff_doubles_and_caps():
+    base = operations.exponential_provider_delay
+    assert base("provider_throttle", None, 0, float("inf")) == 1800
+    assert base("provider_throttle", "provider_throttle", 1800, 1800) == 3600
+    assert base("provider_throttle", "provider_throttle", 3600, 3600) == 7200
+    assert base("provider_failure", "provider_throttle", 9000, 5) == 14400
+    assert base("provider_throttle", "provider_throttle", 14400, 13 * 3600) == 1800
+    assert base("provider_throttle", "success", 14400, 60) == 1800
 
 
 def test_provider_cooldown_affects_its_account_not_every_source():
@@ -178,3 +199,59 @@ def test_exact_head_checks_are_advisory_not_merge_authorization():
     assert "neon-api-key: \\${{" not in workflow
     assert "pull_request_target:" not in workflow
     assert "gh pr merge" not in workflow
+
+
+def test_runtime_410_is_sticky_in_neon_projection():
+    import inspect
+    source = inspect.getsource(operations.project_runtime)
+    assert 'classification == "model_retired_410"' in source
+    assert 'status, until = "retired", None' in source
+
+
+def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
+    import inspect
+    source = inspect.getsource(operations._export_model_exclusions)
+    assert "WHERE repo=$1" in source
+    assert "cooldown_until>now()" in source
+    assert "retired" in source
+    assert "export-model-exclusions" in inspect.getsource(operations.main)
+
+
+def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
+    class SnapshotDB:
+        async def fetch(self, statement, *args):
+            assert args == (REPO,)
+            return [{"source": "nvidia", "model": "gone"}]
+
+        async def fetchval(self, statement, *args):
+            assert args == (REPO + ":registry-comments",)
+            marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-111 -->"
+            attempt = "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-111 -->"
+            return [
+                {"id": 123, "body": marker + "\nWorker: 111",
+                 "author_association": "CONTRIBUTOR",
+                 "performed_via_github_app": {"slug": "github-actions"}},
+                {"id": 124, "body": attempt + "\nWorker: 111",
+                 "author_association": "CONTRIBUTOR",
+                 "performed_via_github_app": {"slug": "github-actions"}},
+                {"id": 999, "body": marker + "\nForged",
+                 "author_association": "NONE",
+                 "performed_via_github_app": {"slug": "other-untrusted-app"}},
+            ]
+
+    with patch.object(operations, "_roster", return_value={
+        "111": ("opencode-free", "glm-5.3-flash-free"),
+    }):
+        snapshot = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
+    assert snapshot["nvidia"] == ["gone"]
+    assert snapshot["__heartbeat_id"] == ["123"]
+    assert snapshot["__attempt_id"] == ["124"]
+
+
+def test_intermediate_model_failures_use_terminal_runtime_idempotency():
+    import inspect
+    text = inspect.getsource(operations.project_runtime)
+    assert "for failed_model in set(model_failures)" in text
+    assert "factory_runtime_event_keys" in text
+    assert "factory_model_health.status!=\'retired\'" in text
+    assert "last_run_id <= EXCLUDED.last_run_id" in text

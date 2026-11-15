@@ -16,10 +16,12 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "success",
         "no_work",
         "work_failure",
+        "agent_timeout",
         "provider_failure",
         "provider_throttle",
         "provider_quota",
         "model_unavailable",
+        "model_retired_410",
         "model_policy_violation",
         "environment_failure",
         "control_plane_failure",
@@ -46,10 +48,12 @@ QUOTA_RE = re.compile(
     re.I,
 )
 RATE_LIMIT_RE = re.compile(
-    r"(?:^|[^0-9.])429(?!\d)|too many requests|rate.?limit|\bquota\b|throttl|"
+    r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+429\b|"
+    r"\b429 too many requests\b|too many requests|rate.?limit|\bquota\b|throttl|"
     r"(?:at|out of|no|insufficient|exceeded)\s+capacity|"
     r"capacity\s+(?:exceeded|exhausted|unavailable)|"
-    r"(?:http(?: status)?|status(?: code)?)[ :]+413\b|(?:^|[^0-9.])413(?!\d)|"
+    r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+413\b|"
+    r"\b413 request (?:too )?large\b|"
     r"request too large|tokens per minute|\btpm\b",
     re.I,
 )
@@ -71,6 +75,18 @@ SESSION_TIMEOUT_RE = re.compile(
     r"exit status 124|process completed with exit code 124",
     re.I,
 )
+# Trust the actual work-session exit as the model proof. No separate prompt.
+WORK_SESSION_OK_RE = re.compile(
+    r"\[factory:(?P<worker>\d+)\](?:\[[^\]\n]+\])*\s+"
+    r"agent exit status 0 for (?P<kind>issue|pr) #(?P<number>\d+)\b", re.I,
+)
+NO_ASSIGNMENT_RE = re.compile(
+    r"\[factory:\d+\].*no control-plane assignment is leased to this worker", re.I,
+)
+AGENT_TIMEOUT_RE = re.compile(
+    r"\[factory:\d+\](?:\[[^\]\n]+\])*\s+agent exit status 124 for (?:issue|pr) #\d+\b",
+    re.I,
+)
 NVIDIA_PROBE_FAILED_RE = re.compile(r"pinned nvidia model probe failed", re.I)
 CANCEL_RE = re.compile(
     r"operation was canceled|operation was cancelled|cancellation requested|job was canceled|job was cancelled",
@@ -81,7 +97,9 @@ PROCESS_FAILURE_RE = re.compile(
     re.I,
 )
 PROVIDER_RE = re.compile(
-    r"provider error|service unavailable|bad gateway|gateway timeout|502|503|504|"
+    r"provider error|service unavailable|bad gateway|gateway timeout|"
+    r"(?:http(?: status)?|status(?: code)?)[\s:=]+(?:502|503|504)\b|"
+    r"\b(?:502 bad gateway|503 service unavailable|504 gateway timeout)\b|"
     r"econnreset|connection reset|model probe failed|failed the opencode compatibility probe",
     re.I,
 )
@@ -108,8 +126,10 @@ CONTROL_PLANE_RE = re.compile(
 )
 WORK_FAILURE_RE = re.compile(
     r"(?:tests?|checks?|lint|coverage|mechanical (?:merge )?gate) (?:failed|failing|failure)|"
-    r"actionable (?:review )?findings|semantic blockers remain",
-    re.I,
+    r"actionable (?:review )?findings|semantic blockers remain|"
+    r'^\d{4}-\d{2}-\d{2}T\S+Z \{"head": "[a-f0-9]{40}", '
+    r'"producer": "\d+", "status": "implementation-evidence-required"\}',
+    re.I | re.M,
 )
 ENVIRONMENT_RE = re.compile(
     r"checkout failed|failed to (?:checkout|install)|no space left on device|"
@@ -129,6 +149,37 @@ PRODUCTIVE_SIGNALS = (
 )
 
 
+
+def _delivered_pr(log: str, worker: str, target: dict[str, str]) -> str:
+    """Find an actual wrapper PR delivery followed by the lease handoff."""
+    number = target["number"]
+    if not worker or not number:
+        return ""
+    prefix = rf"\[factory:{re.escape(worker)}\](?:\[[^\]\n]+\])*\s+"
+    if target["kind"] == "issue":
+        pattern = prefix + r"opened/updated PR #(?P<pr>\d+) for issue #(?P<issue>\d+)"
+        for match in re.finditer(pattern, log):
+            if match["issue"] != number:
+                continue
+            tail = log[match.end():]
+            released_issue = re.search(
+                prefix + rf"released issue #{number} to factory:unowned\b", tail
+            )
+            released_pr = re.search(
+                prefix + rf"released pr #{match['pr']} to factory:unowned\b", tail
+            )
+            if released_issue and released_pr and released_issue.start() < released_pr.start():
+                return match["pr"]
+    elif target["kind"] == "pr":
+        pattern = prefix + r"pushed repairs to PR #(?P<pr>\d+); handing it to the merge controller"
+        for match in re.finditer(pattern, log):
+            if match["pr"] != number:
+                continue
+            tail = log[match.end():]
+            if re.search(prefix + rf"released pr #{number} to factory:unowned\b", tail):
+                return number
+    return ""
+
 @dataclass(frozen=True)
 class Result:
     """Structured classification of a fixed-model factory run."""
@@ -143,6 +194,8 @@ class Result:
     selected_kind: str = ""
     selected_number: str = ""
     persisted_work: bool = False
+    delivery_outcome: str = "none"
+    delivery_pr: str = ""
     outcome: str = "NOT YET PROVEN"
     outcome_class: str = "unknown_failure"
     detail: str = "factory job did not expose enough runtime evidence"
@@ -176,21 +229,38 @@ def _backing_unavailable_for_intent(log: str, selected_model: str) -> bool:
 
 
 def _runtime_evidence(log: str) -> str:
-    """Exclude GitHub's echoed shell source and unrelated diagnostic text.
+    """Keep executed runner diagnostics, not echoed commands or agent telemetry.
 
-    Actions prints each run-script command in cyan *before* it executes it.
-    Those lines contain both sides of conditionals, including quota errors
-    that never happened. Git checkout output and model tool reads can likewise
-    contain branch/file names with words such as 'quota' or '429'. Neither is
-    evidence of a provider failure.
+    Opaque IDs in OpenCode structured events can contain `413` or `429`,
+    while tool output can quote unrelated quota documentation. Neither proves
+    the model provider returned a rate limit. Only a structured error's
+    message (not its metadata) counts as error evidence.
     """
     evidence = []
     for line in log.splitlines():
         if "\x1b[36;1m" in line:
             continue
         payload = re.sub(r"^\d{4}-\d{2}-\d{2}T\S+Z\s+", "", line).lstrip()
-        if payload.startswith(("* [new branch]", "remotes/origin/", '{"type":"tool_use"')):
+        if payload.startswith(("* [new branch]", "remotes/origin/")):
             continue
+        if payload.startswith("{"):
+            try:
+                event = json.loads(payload)
+            except ValueError:
+                # A truncated OpenCode trace is untrusted, not a provider
+                # response. Real sessions can emit enormous partial tool JSON.
+                continue
+            else:
+                if isinstance(event, dict) and isinstance(event.get("type"), str):
+                    if event["type"] == "error":
+                        detail = event.get("error") or event.get("message") or ""
+                        if isinstance(detail, dict):
+                            detail = detail.get("message") or ""
+                        if isinstance(detail, str) and detail.strip():
+                            evidence.append(detail)
+                    # The remainder is agent text, tool reads, timing and
+                    # session metadata, not provider response evidence.
+                    continue
         evidence.append(line)
     return "\n".join(evidence)
 
@@ -211,10 +281,19 @@ def classify(log: str) -> Result:
 
     values = lock.groupdict()
     configured = values["configured"].lower() == "true"
-    exact_proven = "FIXED_MODEL_OPENCODE_OK" in log
     target_matches = list(TARGET_RE.finditer(log))
     target = target_matches[-1].groupdict() if target_matches else {"kind": "", "number": ""}
+    work_session = WORK_SESSION_OK_RE.search(log)
+    exact_proven = (
+        "FIXED_MODEL_OPENCODE_OK" in log  # historical jobs
+        or bool(
+            work_session and work_session["worker"] == values["worker"]
+            and work_session["kind"] == target["kind"]
+            and work_session["number"] == target["number"]
+        )
+    )
     persisted = any(signal in log for signal in PRODUCTIVE_SIGNALS)
+    delivered_pr = _delivered_pr(log, values['worker'], target) if persisted else ''
 
     common = {
         "worker": values["worker"],
@@ -227,6 +306,8 @@ def classify(log: str) -> Result:
         "selected_kind": target["kind"],
         "selected_number": target["number"],
         "persisted_work": persisted,
+        "delivery_outcome": "persisted" if delivered_pr else "none",
+        "delivery_pr": delivered_pr,
     }
 
     if not configured:
@@ -236,17 +317,50 @@ def classify(log: str) -> Result:
             detail="lane was not configured, so the pinned model was never invoked",
         )
 
+    if NO_ASSIGNMENT_RE.search(log):
+        return Result(
+            **common,
+            outcome="HEALTHY / IDLE",
+            outcome_class="no_work",
+            detail="no assignment was leased; model inference was skipped",
+        )
+
+    # An actual assigned NVIDIA invocation returned HTTP 410. No extra probe.
+    if values["source"] == "nvidia" and re.search(
+        r"(?m)^(?:\d{4}-\d{2}-\d{2}T\S+Z\s+)?NVIDIA permanently retired model: "
+        + re.escape(values["model"]) + r"\s*$",
+        log,
+    ):
+        return Result(
+            **common, outcome="MODEL RETIRED", outcome_class="model_retired_410",
+            detail="trusted assigned NVIDIA worker received permanent HTTP 410",
+        )
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
     if QUOTA_RE.search(log) or (
         values["source"] in {"z-ai", "kilo-auto"}
-        and re.search(r"(?<![0-9.])429(?!\d)|too many requests", log, re.I)
+        and re.search(
+            r"(?:http(?: status)?|status(?: code)?|error(?: code)?)[\s:=]+429\b|"
+            r"\b429 too many requests\b|too many requests",
+            log,
+            re.I,
+        )
     ):
         return Result(
             **common,
             outcome="PROVIDER QUOTA",
             outcome_class="provider_quota",
             detail="runtime evidence shows the provider account quota or budget is exhausted",
+        )
+
+    # A trusted local deadline is not a provider rate limit, even when
+    # review prose or source code mentions quotas.
+    if AGENT_TIMEOUT_RE.search(log):
+        return Result(
+            **common,
+            outcome="AGENT DEADLINE",
+            outcome_class="agent_timeout",
+            detail="the trusted worker's agent deadline expired; delivery classified separately",
         )
 
     if RATE_LIMIT_RE.search(log):
@@ -409,6 +523,97 @@ class ClassifierTests(unittest.TestCase):
         "runtime=omniroute/oc/big-pickle minute=:15 scheduler=slot-15 configured=true\n"
     )
 
+
+    def test_timed_out_agent_delivers_code_when_wrapper_releases_both_leases(self) -> None:
+        """Worker 82's Nov 14 code survived a local agent timeout."""
+        log = (
+            "Factory 82 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:55 scheduler=dispatcher configured=true\n"
+            "FIXED_MODEL_OPENCODE_OK\n"
+            "[factory:82] checked out issue #4839 on factory/82-4839-z-ai\n"
+            "[factory:82] agent exit status 124 for issue #4839\n"
+            "[factory:82] opened/updated PR #5129 for issue #4839\n"
+            "[factory:82] released issue #4839 to factory:unowned at factory:building (pr-opened-handoff)\n"
+            "[factory:82] released pr #5129 to factory:unowned at factory:review (pr-opened-handoff)\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "agent_timeout")
+        self.assertTrue(result.persisted_work)
+        self.assertEqual(result.delivery_outcome, "persisted")
+        self.assertEqual(result.delivery_pr, "5129")
+        incomplete = classify(log.replace(
+            "released pr #5129 to factory:unowned", "failed to release pr #5129"
+        ))
+        self.assertEqual(incomplete.outcome_class, "agent_timeout")
+        self.assertEqual(incomplete.delivery_outcome, "none")
+
+    def test_work_session_without_smoke_proves_model_and_delivery(self) -> None:
+        log = (
+            "Factory 82 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:55 scheduler=dispatcher configured=true\n"
+            "[factory:82] checked out issue #4839 on branch\n"
+            "[factory:82] agent exit status 0 for issue #4839\n"
+            "[factory:82] opened/updated PR #5129 for issue #4839\n"
+            "[factory:82] released issue #4839 to factory:unowned\n"
+            "[factory:82] released pr #5129 to factory:unowned\n"
+        )
+        result = classify(log)
+        self.assertTrue(result.exact_model_proven)
+        self.assertEqual(result.outcome_class, "success")
+        self.assertEqual(result.delivery_outcome, "persisted")
+
+    def test_no_assignment_is_idle_and_never_proves_model(self) -> None:
+        log = (
+            "Factory 46 locked: source=kilo-auto model=kilo-auto/free "
+            "runtime=kilo/kilo-auto/free minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:46] no control-plane assignment is leased to this worker; "
+            "exiting without repo-wide selection\n"
+        )
+        result = classify(log)
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.outcome_class, "no_work")
+
+    def test_real_nvidia_410_retires_without_probe(self) -> None:
+        log = (
+            "Factory 11 locked: source=nvidia model=stepfun-ai/step-3.7-flash "
+            "runtime=nvidia/stepfun-ai/step-3.7-flash minute=:15 "
+            "scheduler=dispatcher configured=true\n"
+            "[factory:11] checked out issue #4839 on factory/11-4839-nvidia\n"
+            "[factory:11] agent exit status 1 for issue #4839\n"
+            "HTTP 410 Gone\n"
+            "NVIDIA permanently retired model: stepfun-ai/step-3.7-flash\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "model_retired_410")
+        self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.delivery_outcome, "none")
+    def test_timeout_without_push_does_not_count_as_delivery(self) -> None:
+        log = (
+            "Factory 105 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:105] checked out pr #5123 on branch\n"
+            "[factory:105] agent exit status 124 for pr #5123\n"
+            "[factory:105] released pr #5123 to factory:unowned at factory:changes-requested\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "agent_timeout")
+        self.assertFalse(result.persisted_work)
+        self.assertEqual(result.delivery_outcome, "none")
+
+    def test_repair_delivery_requires_handoff_after_push(self) -> None:
+        log = (
+            "Factory 98 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:98] checked out pr #5122 on branch\n"
+            "[factory:98] pushed repairs to PR #5122; handing it to the merge controller as factory:review\n"
+        )
+        self.assertEqual(classify(log).delivery_outcome, "none")
+        complete = log + (
+            "[factory:98] released pr #5122 to factory:unowned at factory:review (repairs-pushed-handoff)\n"
+        )
+        self.assertEqual(classify(complete).delivery_pr, "5122")
+
     def assert_canonical(self, result: Result) -> None:
         """Assert one emitted class belongs to the durable factory contract."""
         self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
@@ -433,12 +638,108 @@ class ClassifierTests(unittest.TestCase):
         self.assertEqual(result.outcome_class, "success")
         self.assertTrue(result.persisted_work)
 
+    def test_git_commit_sha_429_does_not_pause_zai_or_kilo(self) -> None:
+        """Live Z-AI run 43617062837 logged a commit hash ending in 429."""
+        for source in ("z-ai", "kilo-auto"):
+            log = self.BASE.replace("source=omniroute-opencode", f"source={source}")
+            log += (
+                "FIXED_MODEL_OPENCODE_OK\n"
+                "2026-11-14T16:45:56.5705392Z 9cd7bc429 improve workflow\n"
+                "[factory:54] repair attempt for PR #5060 produced no persisted change\n"
+            )
+            with self.subTest(source=source):
+                self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_git_commit_sha_413_does_not_fake_http_throttle(self) -> None:
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "2026-11-14T16:45:56.5705392Z abcdef413 improve workflow\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_explicit_http_429_retains_free_provider_quota_policy(self) -> None:
+        log = (
+            self.BASE.replace("source=omniroute-opencode", "source=z-ai")
+            + "FIXED_MODEL_OPENCODE_OK\nHTTP 429 Too Many Requests\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_quota")
+
+    def test_explicit_account_daily_limit_remains_provider_quota(self) -> None:
+        log = self.BASE + "FIXED_MODEL_OPENCODE_OK\n"
+        log += "Rate limit exceeded: free-models-per-day-high-balance\n"
+        self.assertEqual(classify(log).outcome_class, "provider_quota")
+
+    def test_kilo_session_ids_cannot_fake_provider_throttle(self) -> None:
+        """Real Kilo step IDs containing 413 must not cool a healthy provider."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\n"
+            + '2026-11-14T16:29:02.8233288Z {"type":"step_start","part":{"id":"prt_1dae413e2001"}}\n'
+            + '2026-11-14T16:29:03.0000000Z {"type":"step_finish","part":{"id":"prt_429example"}}\n'
+            + '2026-11-14T16:29:04.0000000Z {"type":"tool_use","part":{"output":"quota and capacity examples in docs"}}\n'
+            + "[factory:46] repair attempt for PR #5055 produced no persisted change\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.persisted_work)
+
+    def test_truncated_tool_json_cannot_cool_a_provider(self) -> None:
+        """Incomplete tool JSON mentioning quota is not executed provider evidence."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "[factory:46] checked out pr #5055 on factory/86-4737-nvidia\n"
+            + '2026-11-14T16:27:40.7993231Z {"type":"tool_use","part":'
+              '{"output":"quota, capacity, HTTP 429, and budget tests"'
+            + "\n[factory:46] repair attempt for PR #5055 produced no persisted change\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "no_work")
+        self.assertFalse(result.persisted_work)
+
+    def test_structured_provider_error_still_triggers_throttle(self) -> None:
+        """A real structured error remains provider evidence after filtering."""
+        log = self.BASE + (
+            '2026-11-14T16:30:02.0000000Z '
+            '{"type":"error","error":{"message":"HTTP 429 Too Many Requests"}}\n'
+        )
+        self.assertEqual(classify(log).outcome_class, "provider_throttle")
+
     def test_real_quota_error_still_classifies_after_command_filtering(self) -> None:
         log = self.BASE + (
             "2026-11-13T15:14:37.049Z \x1b[36;1m echo 'quota exhausted'\x1b[0m\n"
             "2026-11-13T15:14:39.001Z Error: API budget exhausted.\n"
         )
         self.assertEqual(classify(log).outcome_class, "provider_quota")
+
+    def test_unrelated_numeric_ids_do_not_fake_provider_http_503(self) -> None:
+        """An unrelated Actions comment/session ID is not a provider outage."""
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "2026-11-14T16:43:18.8168504Z   FACTORY_HEARTBEAT_COMMENT_ID: 5030123456\n"
+            + "2026-11-14T16:43:18.8168504Z   FACTORY_ATTEMPT_COMMENT_ID: 5029876543\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "no_work")
+
+    def test_real_http_503_remains_provider_failure(self) -> None:
+        """Explicit HTTP error codes remain authoritative provider evidence."""
+        log = self.BASE + "FIXED_MODEL_OPENCODE_OK\nHTTP 503\n"
+        self.assertEqual(classify(log).outcome_class, "provider_failure")
+
+    def test_controller_implementation_evidence_rejection_is_work_failure(self) -> None:
+        """A trusted controller rejection is not a provider failure."""
+        head = "0" * 40
+        log = (
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + f'2026-11-14T16:45:27.0752116Z {{"head": "{head}", '
+              '"producer": "98", "status": "implementation-evidence-required"}\n'
+            + "2026-11-14T16:45:27.1710943Z assignment complete\n"
+        )
+        self.assertEqual(classify(log).outcome_class, "work_failure")
 
     def test_productive(self) -> None:
         """Productive runs with proof token and persisted work are healthy."""
@@ -638,6 +939,25 @@ class ClassifierTests(unittest.TestCase):
         """Explicit provider/model policy evidence uses the model-scoped class."""
         result = classify(self.BASE + "provider rejected request: content policy violation\n")
         self.assertEqual(result.outcome_class, "model_policy_violation")
+
+    def test_wrapper_deadline_does_not_poison_provider_health(self) -> None:
+        """A local 124 beats incidental rate-limit text in agent logs."""
+        result = classify(
+            self.BASE
+            + "FIXED_MODEL_OPENCODE_OK\n"
+            + "Review docs discuss rate limit and quota decisions\n"
+            + "[factory:32][source:omniroute-opencode][model:oc/big-pickle] "
+              "agent exit status 124 for issue #4822\n"
+        )
+        self.assertEqual(result.outcome_class, "agent_timeout")
+
+    def test_explicit_daily_account_quota_still_wins_over_local_deadline(self) -> None:
+        result = classify(
+            self.BASE
+            + "Rate limit exceeded: free-models-per-day-high-balance.\n"
+            + "[factory:32] agent exit status 124 for issue #4822\n"
+        )
+        self.assertEqual(result.outcome_class, "provider_quota")
 
     def test_timeout_after_proof_is_provider_failure(self) -> None:
         """A provider timeout after proof is a canonical provider failure."""

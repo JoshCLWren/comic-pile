@@ -9,6 +9,27 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/api/metrics": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "OpenAPI documentation for the legacy metrics endpoints.",
+        "operationId": "get_metrics_documentation",
+        "responses": {
+          "200": {
+            "description": "Simple application startup metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartupMetricsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/catalog/series-mappings/commit": {
       "post": {
         "tags": [
@@ -737,6 +758,27 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "OpenAPI documentation for the versioned metrics alias.",
+        "operationId": "get_v1_metrics_documentation",
+        "responses": {
+          "200": {
+            "description": "Simple application startup metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartupMetricsResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/releases/": {
@@ -7512,6 +7554,25 @@
               "null"
             ],
             "format": "int32"
+          }
+        }
+      },
+      "StartupMetricsResponse": {
+        "type": "object",
+        "properties": {
+          "startup_duration": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
+          },
+          "startup_time": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "format": "double"
           }
         }
       },

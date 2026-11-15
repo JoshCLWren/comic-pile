@@ -18,6 +18,11 @@ NOW = 2_000_000_000
 HEAD = "a" * 40
 
 
+def _minute_floor(epoch: int) -> int:
+    """Mirror the dispatcher's shared-cache key rounding for a ``since`` boundary."""
+    return epoch - epoch % 60
+
+
 def _load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None and spec.loader is not None
@@ -50,7 +55,11 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
               for row in range(100)] for page in range(15)]
     pages[0][:2] = [_attempt(1, NOW - 10), _attempt(2, NOW - 9)]
     forged = {**_attempt(2001, NOW + 5), "performed_via_github_app": {"slug": "worker-app"}}
-    responses = [pages, [[forged], [_attempt(1501, NOW + 5)]], [[{"id": 1501, "body": "withdrawn"}]]]
+    responses = [
+        pages,
+        [[forged], [_attempt(1501, NOW + 5), _attempt(1502, NOW + 5)]],
+        [[{"id": 1501, "body": "withdrawn"}]],
+    ]
     since_values: list[int] = []
     page_reads: list[int] = []
 
@@ -95,7 +104,14 @@ def test_multiple_assignments_read_fifteen_history_pages_once_and_honor_new_atte
     monkeypatch.setattr(CONTROLLER.time, "time", lambda: NOW + 20)
     assert CONTROLLER.assign("53").number == 2264
     assert page_reads == [15, 2, 1]
-    assert since_values == [NOW - 86400, NOW - 1, NOW + 9]
+    # The controller rounds each cached since boundary down to the minute so
+    # near-simultaneous dispatchers share one GitHub request key. The superset
+    # is safe because retry-window filtering still uses the original now_epoch.
+    assert since_values == [
+        _minute_floor(NOW - 86400),
+        _minute_floor(NOW - 1),
+        _minute_floor(NOW + 9),
+    ]
     assert not responses
     logs = capsys.readouterr().err
     assert "source=full pages_read=15" in logs
@@ -122,6 +138,23 @@ def test_new_pass_and_non_cached_callers_read_full_history(
     CONTROLLER.recent_factory_comments(NOW)
     assert len(calls) == 4
     assert len(set(calls)) == 1
+
+
+
+def test_recent_comment_history_since_uses_minute_floor_for_shared_cache_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nearby dispatches share the same URL without excluding needed comments."""
+    requests: list[str] = []
+    monkeypatch.delenv("FACTORY_ATTEMPT_HISTORY_CACHE", raising=False)
+    def github(args: list[str]) -> object:
+        requests.append(args[-1])
+        return [[_attempt(1, NOW - 10)]]
+    monkeypatch.setattr(CONTROLLER, "gh_json", github)
+    CONTROLLER.recent_factory_comments(NOW)
+    CONTROLLER.recent_factory_comments(NOW + 10)
+    assert requests[0] == requests[1]
+    assert "since=" in requests[0]
 
 
 def test_delta_failure_never_returns_stale_history_or_advances_watermark(
@@ -188,7 +221,7 @@ def test_unusable_snapshots_refresh_from_authoritative_full_history(
     monkeypatch.setattr(CONTROLLER, "gh_json", github)
     assert [row["id"] for row in CONTROLLER.recent_factory_comments(NOW)] == [2]
     since = parse_qs(urlsplit(urls[0]).query)["since"][0]
-    assert datetime.fromisoformat(since).timestamp() == NOW - 86400
+    assert datetime.fromisoformat(since).timestamp() == _minute_floor(NOW - 86400)
 
 
 @pytest.mark.parametrize("pages", [[], {}, [{"id": 1}], [[None]]])

@@ -332,8 +332,8 @@ def test_actionable_pr_stage_is_live_executable(
 @pytest.mark.parametrize(
     ("attempts", "expect_assigned"),
     [
-        (2, True),
-        (3, False),
+        (-1, True),
+        (0, False),
     ],
 )
 def test_assign_respects_pr_no_diff_retry_budget(
@@ -344,6 +344,7 @@ def test_assign_respects_pr_no_diff_retry_budget(
     expect_assigned: bool,
 ) -> None:
     """PR retry exhaustion suppresses assignment without rewriting truthful stages."""
+    attempts += controller.FACTORY_NO_DIFF_RETRY_LIMIT
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     pr = {
@@ -614,6 +615,36 @@ def test_active_fixed_workers_fails_closed_when_live_run_identity_is_unknown(
     workers, unresolved = controller.active_fixed_workers()
     assert workers == set()
     assert unresolved == {"99"}
+
+
+
+def test_active_unknown_run_uses_shared_neon_registry_without_full_scan(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resolve unknown run identities from the existing incremental registry."""
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/factory-state")
+    registry_calls: list[bool] = []
+    monkeypatch.setitem(
+        sys.modules,
+        "factory_completion_controller",
+        types.SimpleNamespace(registry_comments=lambda: registry_calls.append(True) or [
+            # GitHub comment bodies contain real newlines, not escaped ``\n`` text.
+            {"id": 1, "body": "Run: 99\nWorker: opencode-free-model-factory-13\n"}
+        ]),
+    )
+    monkeypatch.setattr(controller, "comment_is_trusted", lambda _: True)
+    def github(args: list[str], **kwargs: object) -> object:
+        endpoint = args[-1]
+        if "issues/1093/comments" in endpoint:
+            pytest.fail("Neon-connected worker liveness must not rescan full registry")
+        if "free-model-factory-entry.yml" in endpoint and "status=queued" in endpoint:
+            return [{"workflow_runs": [{"id": 99, "display_title": "Unknown fixed factory"}]}]
+        return [{"workflow_runs": []}]
+    monkeypatch.setattr(controller, "gh_json", github)
+    workers, unresolved = controller.active_fixed_workers()
+    assert workers == {13}
+    assert unresolved == set()
+    assert registry_calls == [True]
 
 
 def test_busy_fixed_worker_is_not_given_a_second_assignment(
@@ -1090,7 +1121,9 @@ def test_issue_assignment_rechecks_dependency_at_mutation_boundary(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An advisory cached issue cannot be claimed if a fresh blocker appeared."""
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     issue = controller.Candidate("issue", 4737, 0, 0, "2026-11-14T00:00:00Z")
+    monkeypatch.setattr(controller, "dispatcher_identity_verified", lambda: True)
     lookups = []
     lease_writes = []
     monkeypatch.setattr(controller, "target_still_unowned", lambda number: True)
@@ -1112,3 +1145,86 @@ def test_live_blocker_lookup_explicitly_bypasses_neon_cache(
     assert controller.issue_has_open_blocker(4737, live=True) is True
     assert calls[0][0] == "api" and len(calls[0]) == 2
     assert calls[1][:3] == ["api", "--header", "Cache-Control: no-cache"]
+
+
+def test_batch_assignment_omits_redundant_reconciliation(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only the trusted reconciled batch skips global sweeps; manual calls keep them."""
+    sweeps: list[str] = []
+    monkeypatch.setattr(controller, "quota_pause_for", lambda _worker: None)
+    monkeypatch.setattr(controller, "runtime_quota_block_reason", lambda _worker: None)
+    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: False)
+    monkeypatch.setattr(controller, "budget_block_reason", lambda _worker: None)
+    monkeypatch.setattr(controller, "omniroute_free_entry_capacity", lambda: {"remaining": 1})
+    monkeypatch.setattr(controller, "reconcile_stale_leases", lambda: sweeps.append("stale"))
+    monkeypatch.setattr(controller, "reconcile_contradictory_labels", lambda: sweeps.append("labels"))
+    monkeypatch.setattr(controller, "list_issues", lambda: [])
+    monkeypatch.setattr(controller, "list_prs", lambda: [])
+    monkeypatch.setattr(controller, "load_no_diff_attempt_records", lambda: [])
+    monkeypatch.setattr(controller, "build_candidates", lambda *a, **kw: [])
+    monkeypatch.setattr(controller, "rotisserie_issue_intake", lambda *a: None)
+    monkeypatch.setattr(controller, "resolve_review_head_contributors", lambda c, p: c)
+    monkeypatch.setattr(controller, "order_candidates_for_worker", lambda c, w: c)
+    monkeypatch.delenv("FACTORY_JEV_RANKING_FILE", raising=False)
+
+    assert controller.assign("13", batch_reconciled=True) is None
+    assert sweeps == []
+    assert controller.assign("13") is None
+    assert sweeps == ["stale", "labels"]
+
+
+def test_release_label_write_updates_exact_neon_projection(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Releasing a PR synchronizes its GitHub-authoritative owner to Neon."""
+    events: list[str] = []
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/dsn")
+    monkeypatch.setattr(
+        controller, "target_json",
+        lambda number: {
+            "number": number, "state": "open",
+            "pull_request": {"url": "github"},
+            "labels": [
+                {"name": "factory"}, {"name": "factory:54"},
+                {"name": "factory:changes-requested"},
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        controller, "run_gh",
+        lambda *_args, **_kwargs: events.append("github-write") or "[]",
+    )
+    monkeypatch.setattr(
+        controller, "refresh_trusted_label_write",
+        lambda repo, number, *, is_pr: events.append(
+            f"neon:{repo}:{number}:{is_pr}"
+        ) or True,
+    )
+    assert controller.replace_factory_labels(5060, "factory:unowned") is True
+    assert events == ["github-write", "neon:JoshCLWren/comic-pile:5060:True"]
+
+
+def test_failed_projection_refresh_does_not_undo_github_release(
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Projection failure must not strand a successful GitHub label release."""
+    events: list[str] = []
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/dsn")
+    monkeypatch.setattr(
+        controller, "target_json",
+        lambda number: {
+            "number": number, "state": "open",
+            "labels": [{"name": "factory"}, {"name": "factory:54"}],
+        },
+    )
+    monkeypatch.setattr(
+        controller, "run_gh",
+        lambda *_args, **_kwargs: events.append("github-write") or "[]",
+    )
+    def unavailable(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("Neon unavailable")
+
+    monkeypatch.setattr(controller, "refresh_trusted_label_write", unavailable)
+    assert controller.replace_factory_labels(4843, "factory:unowned") is True
+    assert events == ["github-write"]

@@ -31,9 +31,9 @@ Never add the composite action to workflows that execute model-generated code.
 
 | Cache key suffix | TTL | Refresh source |
 |---|---:|---|
-| `open-issues` | 45 seconds | GitHub `issue list` |
-| `open-prs` | 45 seconds | GitHub `pr list` |
-| `registry-comments` | 120 seconds | Issue #1093 comments, incremental by updated timestamp |
+| `open-issues` | 7 minutes 30 seconds | GitHub `issue list` |
+| `open-prs` | 7 minutes 30 seconds | GitHub `pr list` |
+| `registry-comments` | 6 minutes | Issue #1093 comments, incremental by updated timestamp |
 
 The first heartbeat load visits historical pages once. Subsequent refreshes use
 GitHub's `since` query with a one-minute overlap, merging changes by immutable
@@ -43,7 +43,7 @@ comments, so operational policy should avoid deleting registry history.
 
 A shared Neon refresh lease (75 seconds) prevents most simultaneous jobs from
 re-fetching the same source. A cache hit consumes **zero** GitHub REST requests.
-Concurrent readers wait up to three seconds for the refreshing job. On a
+Cold-cache readers wait up to 15 seconds for the refreshing job; a bounded expired discovery result may be shared while an active refresh lease is held. On a
 database failure or prolonged lock contention, the original live GitHub read
 remains available. There is no grant of authority from stale data.
 
@@ -105,7 +105,7 @@ ensuring equal-timestamp deliveries cannot reorder authoritative state.
 
 Once bootstrapped, the dispatcher reads projected open issues and PRs from Neon
 instead of repeatedly running broad GitHub lists. A full GitHub discovery
-snapshot rechecks each kind every **30 minutes** when the dispatcher next
+snapshot rechecks each kind every **60 minutes** when the dispatcher next
 needs the data, repairing missing webhooks, stale labels, and missed closures.
 Snapshot writes use a transaction lock shared with webhook writes, timestamp
 ordering, and a full-snapshot watermark to avoid overwriting newer events.
@@ -162,12 +162,14 @@ issue/PR reconciler additionally reads the projected PR inventory before
 scanning live GitHub.
 
 - **Issue/PR discovery:** Use the webhook-fed Neon projection while its
-  reconciliation watermark is less than 30 minutes old. Missing or older
+  reconciliation watermark is less than 60 minutes old. Missing or older
   projections fall back to GitHub, never to an empty inventory.
 - **Shared safe GET lists:** The centralized cache covers explicit
-  non-authoritative REST discovery lists. Open issue/PR lists are fresh
-  for at most 45 seconds; recent repository comments for 60 seconds;
-  registry comments for 90 seconds; all-PR history lists for 120 seconds.
+  non-authoritative REST discovery lists. Open issue/PR fallback lists are cached for 7 minutes 30 seconds;
+  recent repository comments for 10 minutes; raw registry comments for
+  15 minutes; all-PR history lists for 20 minutes. Individual issue/PR
+  comments are cached for 30 minutes and issue dependency discovery for
+  60 minutes. The shared incremental registry has a separate 6-minute TTL.
   Expired or absent data is fetched once under the existing 75-second Neon
   refresh lease and published for concurrent readers. A Neon outage
   uses the live GitHub path.
@@ -188,7 +190,7 @@ scanning live GitHub.
 ## Remaining API work
 
 Issue/PR events now update individual Neon projections and a live listing
-reconciles drift every 30 minutes. Exact-head checks and merge verification
+reconciles drift every 60 minutes. Exact-head checks and merge verification
 remain live GitHub operations. Those actions must remain live at the
 authoritative mutation boundary. Other workflow-specific full scans should be
 measured separately instead of assuming this cache fixes the entire quota.
@@ -277,3 +279,13 @@ A DB outage must not turn missing data into healthy evidence. New claims still
 require the existing transactional Neon lease and GitHub ownership check.
 The read-only projections have bounded fallbacks, but neither missing cache
 nor a late webhook is grounds to merge.
+
+## Work as smoke
+
+The fixed-model runner no longer spends inference requests on standalone model
+smoke prompts, NVIDIA chat probes, Kilo smokes, or tool-canary prompts. Trusted
+catalog checks, existing Neon model exclusions, and the zero-price Pixel Canary
+catalog guard remain. Only a real leased coding/review mission invokes an LLM.
+A successful real-session exit proves the selected model, and an unassigned
+worker is recorded as idle without provider inference. Delivery still requires
+verified PR persistence and lease handoff, independent of model execution.

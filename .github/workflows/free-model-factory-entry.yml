@@ -17,10 +17,46 @@ permissions:
   checks: read
 
 jobs:
+  model_health_snapshot:
+    name: Read Neon model exclusions (trusted)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      exclusions: ${{ steps.export.outputs.exclusions }}
+      heartbeat_id: ${{ steps.export.outputs.heartbeat_id }}
+      attempt_id: ${{ steps.export.outputs.attempt_id }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+      - name: Export bounded model decision snapshot
+        id: export
+        shell: bash
+        env:
+          INPUT_WORKER: ${{ inputs.worker }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || exit 1
+          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$INPUT_WORKER")"
+          jq -e 'type == "object"' <<< "$snapshot" >/dev/null
+          echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
+          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
+          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
+
   run:
+    needs: model_health_snapshot
     uses: ./.github/workflows/free-model-factory-run.yml
     with:
       worker: ${{ inputs.worker }}
+      model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
+      heartbeat_comment_id: ${{ needs.model_health_snapshot.outputs.heartbeat_id }}
+      attempt_comment_id: ${{ needs.model_health_snapshot.outputs.attempt_id }}
     secrets: inherit
 
   # The preceding job owns the entire worker lease and its release. A
@@ -51,12 +87,14 @@ jobs:
   # The reusable model job does not receive Neon secrets.
   persist_outcome:
     name: Persist trusted worker outcome in Neon
-    needs: run
+    needs: [run, model_health_snapshot]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
+      pull-requests: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -74,6 +112,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_WORKER: ${{ inputs.worker }}
+          ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}
         run: |
           set -Eeuo pipefail
           [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || {
@@ -95,6 +134,21 @@ jobs:
           python3 .github/scripts/classify-fixed-model-run.py \
             --log "$RUNNER_TEMP/factory-entry.log" \
             > "$RUNNER_TEMP/worker-outcome.json"
+          # Code handoff is distinct from agent exit. Only potential successful
+          # deliveries get a targeted authoritative GitHub verification.
+          delivery_pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/worker-outcome.json")"
+          if [[ -n "$delivery_pr" ]]; then
+            [[ "$delivery_pr" =~ ^[1-9][0-9]*$ ]] || exit 1
+            delivery="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr")"
+            jq -e --arg repo "$GITHUB_REPOSITORY" --argjson number "$delivery_pr" '
+              .number == $number and .head.repo.full_name == $repo and
+              (.state == "open" or .merged == true) and
+              (.head.sha | test("^[0-9a-f]{40}$"))
+            ' <<< "$delivery" >/dev/null || {
+              echo "::error::Unable to verify persisted PR #$delivery_pr in this repository"
+              exit 1
+            }
+          fi
           # Worker identity comes from the trusted dispatch input, *not* from
           # any untrusted text in a model-generated log.
           jq --arg worker "$INPUT_WORKER" '.worker = $worker' \
@@ -104,3 +158,53 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
             --file "$RUNNER_TEMP/worker-outcome-attested.json" \
             --log "$RUNNER_TEMP/factory-entry.log"
+          # The trusted classifier, not the wrapper job's shell exit, owns
+          # the Entry run's final meaning. Persist first, then fail visibly
+          # when the coding attempt really failed. Idle is not delivery.
+          classification="$(jq -r '.outcome_class // "unknown_failure"' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          delivered="$(jq -r '.delivery_outcome // "none"' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          if [[ "$delivered" == persisted ]]; then
+            verdict="code_delivered"
+            message="Verified PR #$pr was handed off; agent outcome: $classification"
+          elif [[ "$classification" == no_work ]]; then
+            verdict="idle"
+            message="No code delivered; worker had no useful work to persist"
+          elif [[ "$classification" == success ]]; then
+            verdict="work_completed"
+            message="Work completed without a verified PR handoff (for example review)"
+          else
+            verdict="failed"
+            message="No code delivered; worker failed: $classification"
+          fi
+          {
+            echo "### Factory outcome: $verdict"
+            echo
+            echo "$message"
+            echo
+            echo "Neon terminal classification: `$classification`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Publish the same final verdict to the existing registry marker.
+          # Use Neon-discovered ID, never re-page all historical comments.
+          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${INPUT_WORKER} -->"
+          if [[ "${ATTEMPT_COMMENT_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+            existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" --jq .body 2>/dev/null || true)"
+            if [[ "$existing" == *"$marker"* ]]; then
+              existing_run="$(sed -n 's/^Run: //p' <<< "$existing" | tail -1)"
+              existing_run="${existing_run##*/}"
+              if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
+                echo "[factory-outcome] preserved newer attempt marker from run $existing_run"
+              else
+                stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nOutcome: %s\nAgent outcome: %s\nAttempt outcome: %s\nVerified delivery: %s\nDelivered PR: %s\nUpdated: %s\nRun: %s' \
+                  "$marker" "$INPUT_WORKER" "$verdict" "$classification" "$classification" "$delivered" "${pr:-none}" "$stamp" "$GITHUB_RUN_ID")"
+                gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" \
+                  -f body="$body" >/dev/null || echo "::warning::Registry status update failed; Neon remains authoritative"
+              fi
+            fi
+          fi
+          echo "[factory-outcome] $verdict: $message"
+          if [[ "$verdict" == failed ]]; then
+            echo "::error::$message"
+            exit 1
+          fi

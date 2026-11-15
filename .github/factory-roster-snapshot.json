@@ -122,14 +122,6 @@
       "display_name": "OpenCode Nemotron 3.5 Super Vl Free"
     },
     {
-      "worker": "77",
-      "source": "nvidia",
-      "model": "qwen2.5-coder-7b",
-      "minute": "45",
-      "scheduler": "dispatcher",
-      "display_name": "Local Reviewer 77 Qwen Coder"
-    },
-    {
       "worker": "80",
       "source": "nvidia",
       "model": "z-ai/glm-5.3-flash",
@@ -160,14 +152,6 @@
       "minute": "5",
       "scheduler": "dispatcher",
       "display_name": "OrcaRouter GLM 5.3 Flash Free"
-    },
-    {
-      "worker": "96",
-      "source": "openrouter-free",
-      "model": "stealth/crouton-alpha",
-      "minute": "45",
-      "scheduler": "dispatcher",
-      "display_name": "OpenRouter Crouton Alpha Free"
     },
     {
       "worker": "97",
@@ -202,14 +186,6 @@
       "display_name": "OpenRouter Flint Free"
     },
     {
-      "worker": "101",
-      "source": "openrouter-free",
-      "model": "xingchen-agi/xing4.0-29b-a4b:free",
-      "minute": "10",
-      "scheduler": "dispatcher",
-      "display_name": "OpenRouter Xing4.0 29B Free"
-    },
-    {
       "worker": "102",
       "source": "openrouter-free",
       "model": "nvidia/nemotron-3.5-super-vl:free",
@@ -224,14 +200,6 @@
       "minute": "20",
       "scheduler": "dispatcher",
       "display_name": "NVIDIA MiniMax M3.1 Flash"
-    },
-    {
-      "worker": "104",
-      "source": "nvidia",
-      "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
-      "minute": "25",
-      "scheduler": "dispatcher",
-      "display_name": "NVIDIA Nemotron 3.5 Super VL"
     },
     {
       "worker": "105",
@@ -250,14 +218,6 @@
       "display_name": "NVIDIA DeepSeek V4.1 Flash"
     },
     {
-      "worker": "107",
-      "source": "nvidia",
-      "model": "google/diffusiongemma-26b-a4b-it",
-      "minute": "40",
-      "scheduler": "dispatcher",
-      "display_name": "NVIDIA DiffusionGemma 26B"
-    },
-    {
       "worker": "108",
       "source": "openrouter-free",
       "model": "thinkingmachines/inkling-2-small:free",
@@ -272,14 +232,6 @@
       "minute": "30",
       "scheduler": "dispatcher",
       "display_name": "OpenRouter ERNIE 5.5 Flash Preview Free"
-    },
-    {
-      "worker": "110",
-      "source": "openrouter-free",
-      "model": "inclusionai/ling-3.2-flash:free",
-      "minute": "55",
-      "scheduler": "dispatcher",
-      "display_name": "OpenRouter Ling 3.2 Flash Free"
     },
     {
       "worker": "111",
@@ -325,7 +277,7 @@
       "worker": "116",
       "source": "opencode-free",
       "model": "longcat-2.5-free",
-      "minute": "20",
+      "minute": "45",
       "scheduler": "dispatcher",
       "display_name": "OpenCode LongCat 2.5 Free"
     },
@@ -341,7 +293,7 @@
       "worker": "118",
       "source": "requesty",
       "model": "nvidia/nemotron-3.5-lightning-30b-a3b",
-      "minute": "30",
+      "minute": "45",
       "scheduler": "dispatcher",
       "display_name": "Requesty Nemotron 3.5 Lightning Free"
     },
@@ -349,7 +301,7 @@
       "worker": "119",
       "source": "cloudflare-workers-ai",
       "model": "@cf/zai-org/glm-4.7-flash",
-      "minute": "35",
+      "minute": "55",
       "scheduler": "dispatcher",
       "display_name": "Cloudflare GLM 4.7 Flash Free"
     },
@@ -378,26 +330,20 @@
     64,
     65,
     75,
-    77,
     80,
     82,
     86,
     91,
-    96,
     97,
     98,
     99,
     100,
-    101,
     102,
     103,
-    104,
     105,
     106,
-    107,
     108,
     109,
-    110,
     111,
     112,
     113,
@@ -445,6 +391,7 @@
     73,
     74,
     76,
+    77,
     78,
     79,
     81,
@@ -458,7 +405,12 @@
     92,
     93,
     94,
-    95
+    95,
+    96,
+    101,
+    104,
+    107,
+    110
   ],
   "retired_models": [
     "apodex/apodex-1.1-mini:free",
@@ -469,9 +421,11 @@
     "dots-studio/dots-3-note-preview:free",
     "exo-free",
     "fledge-alpha-free",
+    "google/diffusiongemma-26b-a4b-it",
     "hy3-free",
     "inclusionai/ling-3.0-flash-fin:free",
     "inclusionai/ling-3.0-flash-vl:free",
+    "inclusionai/ling-3.2-flash:free",
     "jev-1.13-free",
     "laguna-s-2.1-free",
     "ling-3.0-flash-fin-free",
@@ -492,12 +446,15 @@
     "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-ultra-550b-a55b",
     "nvidia/nemotron-3.5-lightning-30b-a3b",
+    "nvidia/nemotron-3.5-super-vl-120b-a12b",
     "nvidia/nvidia-nemotron-nano-9b-v2",
     "openrouter/free",
     "poolside/laguna-s-2.1:free",
     "poolside/laguna-xs-2.1:free",
     "qwen/qwen3.8-27b:free",
+    "qwen2.5-coder-7b",
     "space-bunny-free",
+    "stealth/crouton-alpha",
     "stealth/pixel-canary",
     "stealth/union-alpha",
     "step-5-preview-free",
@@ -506,6 +463,7 @@
     "thinkingmachines/inkling-small:free",
     "thinkingmachines/inkling:free",
     "union-alpha",
+    "xingchen-agi/xing4.0-29b-a4b:free",
     "z-ai/glm-5.3"
   ]
 }

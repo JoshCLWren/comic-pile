@@ -16,6 +16,7 @@ async fn run() -> Result<(), &'static str> {
     // Production panic hooks otherwise print sensitive payloads before catch_unwind.
     #[cfg(not(test))]
     comicpile_roll_service::install_sanitized_panic_hook();
+    comicpile_roll_service::metrics::record_startup_start();
     let config = Config::from_env().map_err(|error| error.0)?;
     let bind = config.bind;
     tracing_subscriber::fmt()
@@ -37,6 +38,7 @@ async fn run() -> Result<(), &'static str> {
         );
         "listener bind failed"
     })?;
+    comicpile_roll_service::metrics::mark_startup_complete();
     tracing::info!(address = %bind, "native Roll listener started");
     serve(listener, router(state.clone()), state, shutdown_signal()).await
 }

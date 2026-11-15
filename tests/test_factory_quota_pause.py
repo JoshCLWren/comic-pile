@@ -239,6 +239,17 @@ def test_monthly_quota_uses_next_utc_month(provider: str, observed: str, reset: 
     assert qp.quota_reset_epoch('z-ai', timestamp) == timestamp + 1800
 
 
+@pytest.mark.parametrize('observed,reset', [
+    ('2026-11-14T19:08:00Z', '2026-11-15T00:00:00Z'),
+    ('2026-12-31T23:59:59Z', '2027-01-01T00:00:00Z'),
+    ('2028-02-29T00:00:00Z', '2028-03-01T00:00:00Z'),
+])
+def test_openrouter_daily_quota_resets_at_utc_midnight(observed: str, reset: str) -> None:
+    observed_epoch = int(datetime.fromisoformat(observed.replace('Z', '+00:00')).timestamp())
+    expected_epoch = int(datetime.fromisoformat(reset.replace('Z', '+00:00')).timestamp())
+    assert qp.quota_reset_epoch('openrouter-free', observed_epoch) == expected_epoch
+
+
 @pytest.mark.parametrize('runtime,message', [
     ('mistral/codestral-latest', 'Error: API budget exhausted.'),
     ('ollama-cloud/nemotron-3-nano:30b', 'You have reached your monthly usage limit'),
@@ -254,3 +265,24 @@ def test_monthly_smoke_produces_durable_quota_outcome(
     target = tmp_path / 'outcome'
     assert module.record_smoke_failure(message, runtime, target)
     assert target.read_text().startswith('provider_quota\t')
+
+
+@pytest.mark.parametrize("source", ["z-ai", "kilo-auto"])
+def test_free_provider_commit_sha_429_cannot_cause_quota_pause(source: str) -> None:
+    """Actual Z-AI history: commit 9cd7bc429 is not an HTTP 429 response."""
+    spec = importlib.util.spec_from_file_location(
+        f"classify_commit_hash_{source.replace('-', '_')}",
+        SCRIPTS / "classify-fixed-model-run.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    log = (
+        f"Factory 54 locked: source={source} model=free runtime={source}/free "
+        "minute=:50 scheduler=dispatcher configured=true\n"
+        "FIXED_MODEL_OPENCODE_OK\n"
+        "2026-11-14T16:45:56.5705392Z 9cd7bc429 improve workflow\n"
+        "[factory:54] repair attempt for PR #5060 produced no persisted change\n"
+    )
+    assert module.classify(log).outcome_class == "no_work"

@@ -258,14 +258,17 @@ def _nvidia_410_zombie_rows() -> list[dict[str, str]]:
     return rows
 
 
-def test_retirement_marker_matches_probe_and_health_selector() -> None:
-    """Planner, probe, and health selector share the same 410 marker string."""
+def test_retirement_marker_matches_real_work_and_health_selector() -> None:
+    """The real NVIDIA worker and discovery preserve the same sticky marker."""
     health = (SCRIPTS / "factory_candidate_health.py").read_text(encoding="utf-8")
     runner = (
         ROOT / ".github" / "workflows" / "free-model-factory-run.yml"
     ).read_text(encoding="utf-8")
     assert f'RETIREMENT_MARKER = "{RETIRE.RETIREMENT_MARKER}"' in health
     assert f"retirement_marker='{RETIRE.RETIREMENT_MARKER}'" in runner
+    worker = (SCRIPTS / "free-model-factory-worker.sh").read_text(encoding="utf-8")
+    assert "NVIDIA permanently retired model: %s" in worker
+    assert 'if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]' in runner
 
 
 def test_nvidia_410_comments_extract_bare_model_ids() -> None:
@@ -1548,9 +1551,7 @@ def test_committed_tsv_discovery_apply_does_not_grow_first_pickle(
     assert 76 in lock["retired_workers"]
     assert "fledge-alpha-free" in lock["retired_models"]
     assert "fledge-alpha-free" not in {row["model"] for row in remaining}
-    assert by_worker["77"]["source"] == "nvidia"
-    assert by_worker["77"]["model"] == "qwen2.5-coder-7b"
-    assert 77 in lock["expected_workers"]
+    _assert_committed_pin(by_worker, lock, "77", source="nvidia", model="qwen2.5-coder-7b")
     assert "moonshotai/kimi-k3" in lock["retired_models"]
     _assert_committed_pin(by_worker, lock, "78", source="nvidia", model="z-ai/glm-5.3")
     assert "79" not in by_worker
@@ -1845,14 +1846,19 @@ def test_committed_tsv_retires_ghost_workers_49_58_63_73_83_94() -> None:
     assert by_worker["46"]["source"] == "kilo-auto"
     assert by_worker["46"]["model"] == "kilo-auto/free"
     assert by_worker["46"]["scheduler"] == "dispatcher"
-    # Worker 95 stays retired, but its model is live again at 0/0 and is
-    # now pinned as worker 104 (owner-authorized 2026-11-08). The
-    # permanently-retired seal is lifted for the model, not the worker.
+    # Worker 95 stays permanently retired. Worker 104 may be active or
+    # durably retired; _assert_committed_pin proves either allowed live
+    # membership or allowed-source worker+model durable retirement.
     assert "95" not in by_worker
     assert 95 not in lock["expected_workers"]
     assert 95 in lock["retired_workers"]
-    assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
-    assert by_worker["104"]["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    committed_104_pin = _assert_committed_pin(
+        by_worker, lock, "104", source="nvidia",
+        model="nvidia/nemotron-3.5-super-vl-120b-a12b",
+    )
+    if committed_104_pin is not None:
+        assert committed_104_pin["model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+        assert "nvidia/nemotron-3.5-super-vl-120b-a12b" not in lock["retired_models"]
     assert ROSTER.schedule_is_balanced(rows)
     assert sum(1 for row in rows if row["model"] == "big-pickle") == 0
 
@@ -1913,3 +1919,34 @@ def test_protected_openai_compat_pins_are_not_catalog_retired() -> None:
     assert "not enumerated" in by_model["glm-4.5-flash"].reason
     assert "not enumerated" in by_model["nemotron-3-nano:30b"].reason
     assert "not enumerated" in by_model["kilo-auto/free"].reason
+
+
+def test_committed_tsv_catalog_sync_retirements_are_locked() -> None:
+    """The #5100 catalog sync retired its catalog-absent pins consistently.
+
+    Workers 77, 96, 101, 104, 107 and 110 disappeared from the committed
+    roster in the same commit that sealed their models in
+    ``factory-expected-workers.json``. This guard keeps the TSV, the lock
+    and the retired-model seal in sync so the fast-merged retirement cannot
+    silently regress (#5113).
+    """
+    rows = ROSTER.load_roster_rows(ROOT / ".github" / "free-model-factories.tsv")
+    lock = ROSTER.load_roster_lock(ROOT / ".github" / "factory-expected-workers.json")
+    by_worker = {row["worker"]: row for row in rows}
+    models = {row["model"] for row in rows}
+
+    retired_cohort = {
+        "77": "qwen2.5-coder-7b",
+        "96": "stealth/crouton-alpha",
+        "101": "xingchen-agi/xing4.0-29b-a4b:free",
+        "104": "nvidia/nemotron-3.5-super-vl-120b-a12b",
+        "107": "google/diffusiongemma-26b-a4b-it",
+        "110": "inclusionai/ling-3.2-flash:free",
+    }
+    for worker, model in retired_cohort.items():
+        assert worker not in by_worker, worker
+        assert int(worker) not in lock["expected_workers"], worker
+        assert int(worker) in lock["retired_workers"], worker
+        assert model in lock["retired_models"], model
+        assert model not in models, model
+    assert ROSTER.schedule_is_balanced(rows)

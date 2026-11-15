@@ -194,6 +194,7 @@ def test_all_candidates_unavailable_and_later_success(tmp_path: Path) -> None:
     "log,expected",
     [
         ("Error: Model unavailable: opencode/ll-alpha-free", True),
+        ("\x1b[91mError: \x1b[0mModel unavailable: opencode/ll-alpha-free", True),
         ("Error: Model unavailable: opencode/another-free", False),
         ("HTTP 429 rate limit", False),
         ("timeout after 180 seconds", False),
@@ -216,6 +217,7 @@ def test_exact_smoke_failure_classification(tmp_path: Path, log: str, expected: 
     "log,runtime,expected",
     [
         ("Error: Model crouton-alpha-free has been deprecated.", "opencode/crouton-alpha-free", True),
+        ("\x1b[91m\x1b[1mError: \x1b[0mModel crouton-alpha-free has been deprecated.", "opencode/crouton-alpha-free", True),
         ("Error: Model opencode/crouton-alpha-free has been deprecated.", "opencode/crouton-alpha-free", True),
         ("Model vendor/alpha:free has been deprecated", "openrouter/vendor/alpha:free", True),
         ("Model some-other-free has been deprecated", "opencode/crouton-alpha-free", False),
@@ -360,3 +362,14 @@ def test_openrouter_free_disallows_unverified_discount_names() -> None:
         ]
     })
     assert selector.free_models(raw, provider="openrouter-free") == ["vendor/price-zero"]
+
+
+def test_neon_exclusions_take_precedence_over_live_free_catalog(tmp_path: Path) -> None:
+    raw = catalog(("big-pickle", 0, 0), ("ll-alpha-free", 0, 0))
+    exclusions = tmp_path / "exclusions.json"
+    exclusions.write_text(json.dumps({"opencode-free": ["big-pickle"]}))
+    selected = selector.select_model(raw, 41, 0, roster(tmp_path), exclusions_path=exclusions)
+    assert selected["model"] == "ll-alpha-free"
+    exclusions.write_text(json.dumps({"opencode-free": ["big-pickle", "ll-alpha-free"]}))
+    with pytest.raises(ValueError, match="unavailable or in cooldown"):
+        selector.select_model(raw, 41, 0, roster(tmp_path), exclusions_path=exclusions)

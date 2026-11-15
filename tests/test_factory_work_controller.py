@@ -384,7 +384,7 @@ def test_urgent_defects_bypass_wip_but_not_review_backlog_saturation(
             "factory:review" if index < 2 else "factory:building",
             created=f"2026-08-20T12:00:{index:02d}Z",
         )
-        for index in range(5)
+        for index in range(controller.FACTORY_PR_WIP_LIMIT)
     ]
     wip_candidates = controller.build_candidates([ordinary, urgent], wip)
 
@@ -638,7 +638,11 @@ def test_assign_candidate_refuses_second_active_lease(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """assign_candidate must refuse when the worker already holds an active lease."""
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda _n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "synthetic-lease")
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda w: w == "99")
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "test-lease")
     monkeypatch.setattr(controller, "target_still_unowned", lambda n: True)
     monkeypatch.setattr(controller, "replace_factory_labels", lambda *a, **k: None)
     monkeypatch.setattr(controller, "target_owned_by", lambda num, owner: True)
@@ -1655,6 +1659,8 @@ def test_assign_candidate_forwards_jev_source_to_the_issue_lease(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The controller must pass issue-selection provenance into the lease write."""
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda _n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "synthetic-lease")
     candidate = controller.Candidate(
         "issue", 35301, 3, 2, "2026-10-30T12:00:00Z"
     )
@@ -1662,6 +1668,8 @@ def test_assign_candidate_forwards_jev_source_to_the_issue_lease(
     monkeypatch.setattr(controller, "target_still_unowned", lambda _n: True)
     monkeypatch.setattr(controller, "target_owned_by", lambda _n, _o: True)
     monkeypatch.setattr(controller, "worker_has_active_lease", lambda _w: False)
+    monkeypatch.setattr(controller, "issue_has_open_blocker", lambda _n, *, live=False: False)
+    monkeypatch.setattr(controller, "acquire_lease", lambda *_args: "test-lease")
     monkeypatch.setattr(
         controller, "replace_factory_labels", lambda *_a, **_k: None
     )
@@ -2012,7 +2020,9 @@ def test_reconcile_expires_inactive_fixed_lease_without_marker_but_not_active_ru
     """An inactive fixed owner is bounded by last update; live runs still win."""
     now = 2_000_000_000
     item = {
-        **_local_lease_item(4450, now - 3600, "factory:building"),
+        **_local_lease_item(
+            4450, now - controller.FIXED_LEASE_TTL_SECONDS - 1, "factory:building"
+        ),
         "labels": [
             {"name": "factory"},
             {"name": "factory:62"},

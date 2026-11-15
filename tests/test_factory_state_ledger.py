@@ -96,6 +96,76 @@ def test_terminal_classification_is_idempotency_keyed_by_run(monkeypatch):
     assert records[0]["persisted_work"] is True
 
 
+def test_idle_is_not_a_successful_delivery_or_failed_worker(monkeypatch):
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "12347", {
+        "worker": "42", "outcome_class": "no_work",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_idle"
+    assert records[0]["delivery_outcome"] == "none"
+
+
+
+def test_timed_out_agent_with_verified_delivery_is_completed(monkeypatch):
+    """Worker 82: a real code handoff is not erased by its agent timeout."""
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "43639844249", {
+        "worker": "82", "outcome_class": "agent_timeout",
+        "persisted_work": True, "delivery_outcome": "persisted",
+        "delivery_pr": "5129", "selected_kind": "issue", "selected_number": "4839",
+    })
+    assert records[0]["event_type"] == "worker_completed"
+    assert records[0]["outcome_class"] == "agent_timeout"
+    assert records[0]["delivery_outcome"] == "persisted"
+    assert records[0]["delivery_pr"] == "5129"
+
+
+def test_timed_out_agent_without_delivery_stays_failed(monkeypatch):
+    """Worker 105: lease cleanup alone is not a successful code delivery."""
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "43640000000", {
+        "worker": "105", "outcome_class": "agent_timeout",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_failed"
+    assert records[0]["delivery_outcome"] == "none"
+
+
+def test_full_session_budget_without_agent_fifty_minute_cap():
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
+    assert int(workflow["env"]["FACTORY_BUDGET_SECONDS"]) == 6000
+    assert workflow["jobs"]["factory"]["timeout-minutes"] == 120
+    for name in (
+        "free-model-factory-worker.sh",
+        "free-model-factory-worker-primitives.sh",
+        "omniroute-factory-worker.sh",
+        "nvidia-factory-worker.sh",
+    ):
+        assert "agent_timeout > 3000" not in (root / ".github/scripts" / name).read_text()
+    main = (root / ".github/scripts/free-model-factory-worker.sh").read_text()
+    assert "available - 240 - FAST_CHECK_RESERVE_SECONDS" in main
+
+
+def test_trusted_collector_verifies_code_handoff_before_persistence():
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    assert 'delivery_pr="$(jq -r' in entry
+    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert "pull-requests: read" in entry
+    assert 'ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}' in entry
+    assert 'Verified delivery: %s' in entry
+    assert 'existing_run > GITHUB_RUN_ID' in entry
+    observer = (root / ".github/workflows/fixed-model-runtime-observer.yml").read_text()
+    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in observer
+    assert "pull-requests: read" in observer
+    assert "Verified delivery: %s" in observer
+
+
 def test_only_trusted_collectors_and_observer_use_ledger():
     root = Path(__file__).resolve().parents[1]
     controller = (root / ".github/scripts/factory-work-controller.py").read_text()
@@ -113,7 +183,7 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "NEON_API_KEY" not in str(model_job)
     assert any(step.get("uses") == "./.github/actions/factory-state-cache"
                for step in trusted_cleanup["steps"])
-    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
+    assert "model_health_snapshot:" in entry
     assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
@@ -142,7 +212,7 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     assert "source_run_id" not in drain
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
-    assert "factory-state-cache" not in entry.split("  persist_outcome:", 1)[0]
+    assert "model_health_snapshot:" in entry
     reusable = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
     assert "factory-state-cache" not in str(reusable["jobs"]["factory"])
     assert "NEON_API_KEY" not in str(reusable["jobs"]["factory"])
@@ -272,7 +342,7 @@ def test_worker_46_explicit_agent_timeout_is_not_unknown_failure():
         "on the pinned model; refusing to switch models\n"
     )
     refined = ledger.refine_trusted_smoke_timeout(outcome, log)
-    assert refined["outcome_class"] == "provider_failure"
+    assert refined["outcome_class"] == "agent_timeout"
     assert refined["source"] == "kilo-auto"
     assert refined["persisted_work"] is False
     assert ledger.refine_trusted_smoke_timeout(
@@ -283,11 +353,83 @@ def test_worker_46_explicit_agent_timeout_is_not_unknown_failure():
     )["outcome_class"] == "unknown_failure"
 
 
-def test_generic_agent_timeout_without_transient_marker_remains_unknown():
+def test_local_agent_timeout_does_not_require_provider_interruption_claim():
     outcome = {
         "worker": "46", "source": "kilo-auto", "model": "kilo-auto/free",
         "outcome_class": "unknown_failure", "exact_model_proven": False,
         "persisted_work": False,
     }
     log = "2026-11-14T14:06:47Z [factory:46] agent exit status 124 for pr #5053\n"
-    assert ledger.refine_trusted_smoke_timeout(outcome, log) == outcome
+    assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "agent_timeout"
+
+
+def test_trusted_deadline_overrides_incidental_provider_throttle_and_controller_text():
+    outcome = {
+        "worker": "82", "source": "z-ai", "model": "glm-4.7-flash",
+        "outcome_class": "provider_throttle", "exact_model_proven": True,
+        "persisted_work": False,
+    }
+    log = (
+        "2026-11-14T18:47:11Z [factory:82][source:z-ai][model:glm-4.7-flash] "
+        "agent exit status 124 for issue #4841\n"
+    )
+    assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "agent_timeout"
+    quota = {**outcome, "outcome_class": "provider_quota"}
+    assert ledger.refine_trusted_smoke_timeout(quota, log) == quota
+
+
+def test_trusted_ansi_deprecated_smoke_attributes_actual_rotated_selector():
+    """Worker 111 selected GLM, then tried deprecated Crouton at run 43610131794."""
+    outcome = {
+        "worker": "111", "source": "opencode-free", "model": "glm-5.3-flash-free",
+        "outcome_class": "unknown_failure", "exact_model_proven": False,
+        "persisted_work": False,
+    }
+    log = (
+        "2026-11-14T15:26:50Z ##[group]Run set -Eeuo pipefail\n"
+        "2026-11-14T15:26:52Z Smoke candidate: opencode/crouton-alpha-free\n"
+        "2026-11-14T15:26:53Z \x1b[91m\x1b[1mError: \x1b[0mModel crouton-alpha-free has been deprecated.\n"
+        "2026-11-14T15:26:53Z ##[error]Process completed with exit code 1.\n"
+    )
+    refined = ledger.refine_trusted_smoke_timeout(outcome, log)
+    assert refined["outcome_class"] == "model_unavailable"
+    assert refined["model"] == "crouton-alpha-free"
+    assert ledger.refine_trusted_smoke_timeout({**outcome, "persisted_work": True}, log) == {
+        **outcome, "persisted_work": True,
+    }
+    assert ledger.refine_trusted_smoke_timeout(outcome, log.replace(
+        "crouton-alpha-free has been deprecated", "unrelated-free has been deprecated",
+    )) == outcome
+
+
+def test_trusted_nvidia_410_records_sticky_retirement():
+    outcome = {
+        "source": "nvidia", "model": "retired-model", "outcome_class": "model_unavailable",
+        "exact_model_proven": False, "persisted_work": False,
+    }
+    log = "2026-11-14T15:10:23Z NVIDIA permanently retired model: retired-model\n"
+    assert ledger.refine_trusted_smoke_timeout(outcome, log)["outcome_class"] == "model_retired_410"
+    assert ledger.refine_trusted_smoke_timeout(
+        {**outcome, "model": "unrelated-model"}, log,
+    )["outcome_class"] == "model_unavailable"
+
+
+def test_successful_dynamic_rotation_persists_failed_models_and_real_final_model():
+    outcome = {
+        "worker": "111", "source": "opencode-free", "model": "glm-5.3-flash-free",
+        "exact_model_proven": True, "persisted_work": True, "outcome_class": "success",
+    }
+    log = (
+        "2026-11-14T15:26:50Z ##[group]Run set -Eeuo pipefail\n"
+        "2026-11-14T15:26:52Z Smoke candidate: opencode/crouton-alpha-free\n"
+        "2026-11-14T15:26:53Z \x1b[91mError: \x1b[0mModel crouton-alpha-free has been deprecated.\n"
+        "2026-11-14T15:26:55Z Smoke candidate: opencode/big-pickle\n"
+        "2026-11-14T15:26:56Z Dynamic free-model smoke succeeded: opencode/big-pickle\n"
+    )
+    refined = ledger.refine_trusted_dynamic_models(outcome, log)
+    assert refined["model"] == "big-pickle"
+    assert refined["model_failures"] == ["crouton-alpha-free"]
+    assert ledger.refine_trusted_dynamic_models(outcome,
+        log.replace("crouton-alpha-free has been deprecated", "other-free has been deprecated"),
+    ).get("model_failures") is None
+    assert ledger.refine_trusted_dynamic_models({**outcome, "source": "nvidia"}, log) == {**outcome, "source": "nvidia"}

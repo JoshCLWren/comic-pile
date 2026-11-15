@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from factory_state_cache import _dsn
+from factory_work_policy import FIXED_LEASE_TTL_SECONDS
 
 WORKER_RE = re.compile(r"^[0-9]+$")
 HEARTBEAT_RE = re.compile(r"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-(\d+) -->")
@@ -84,7 +85,7 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
         await conn.close()
 
 
-def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = 900) -> str | None:
+def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = FIXED_LEASE_TTL_SECONDS) -> str | None:
     """Return claim UUID on success, None on conflict, '' without Neon.
 
     In trusted Actions with a configured DSN, connection failures are fatal:
@@ -214,23 +215,23 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                         token = payload[0]["claim_id"]
                         await conn.execute(
                             """UPDATE public.factory_provider_reservation
-                               SET expires_at=now()+interval '15 minutes'
-                               WHERE claim_id=$1::uuid""", token,
+                               SET expires_at=greatest(expires_at,now()+$2::int * interval '1 second')
+                               WHERE claim_id=$1::uuid""", token, FIXED_LEASE_TTL_SECONDS,
                         )
                         await conn.execute(
                             """UPDATE public.factory_state_kv SET
-                                 expires_at=now() + interval '15 minutes',
+                                 expires_at=greatest(expires_at,now()+$3::int * interval '1 second'),
                                  updated_at=now()
                                WHERE cache_key=$1 AND payload->0->>'claim_id'=$2""",
-                            worker_key, token,
+                            worker_key, token, FIXED_LEASE_TTL_SECONDS,
                         )
                         await conn.execute(
                             """UPDATE public.factory_state_kv SET
-                                 expires_at=now() + interval '15 minutes',
+                                 expires_at=greatest(expires_at,now()+$3::int * interval '1 second'),
                                  updated_at=now()
                                WHERE cache_key LIKE $1
                                  AND payload->0->>'claim_id'=$2""",
-                            f"{LEASE_PREFIX}{repo}:target:%", token,
+                            f"{LEASE_PREFIX}{repo}:target:%", token, FIXED_LEASE_TTL_SECONDS,
                         )
         return inserted
     finally:
@@ -263,16 +264,16 @@ async def _renew_verified(repo: str, workers: list[str]) -> int:
                 token = payload[0]["claim_id"]
                 await conn.execute(
                     """UPDATE public.factory_provider_reservation
-                       SET expires_at=now()+interval '15 minutes'
-                       WHERE claim_id=$1::uuid""", token)
+                       SET expires_at=greatest(expires_at,now()+$2::int * interval '1 second')
+                       WHERE claim_id=$1::uuid""", token, FIXED_LEASE_TTL_SECONDS)
                 await conn.execute(
                     """UPDATE public.factory_state_kv
-                       SET expires_at=now() + interval '15 minutes',
+                       SET expires_at=greatest(expires_at,now()+$4::int * interval '1 second'),
                            updated_at=now()
                        WHERE expires_at>now()
                          AND payload->0->>'claim_id'=$1
                          AND (cache_key=$2 OR cache_key LIKE $3)""",
-                    token, worker_key, f"{LEASE_PREFIX}{repo}:target:%",
+                    token, worker_key, f"{LEASE_PREFIX}{repo}:target:%", FIXED_LEASE_TTL_SECONDS,
                 )
                 renewed += 1
         return renewed
@@ -381,6 +382,53 @@ def record_heartbeat_comments(repo: str, changes: list[dict[str, Any]]) -> int:
 
 
 
+def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
+    """Persist *all* exact free-model smoke failures, even after a later success.
+
+    Only timestamped output of the executed Actions smoke step qualifies.
+    The model runner cannot create privileged Neon records itself.
+    """
+    if (outcome.get("source") != "opencode-free"
+            or outcome.get("persisted_work") not in (True, False)):
+        return outcome
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+    failures: set[str] = set()
+    successful = ""
+    for step in re.split(r"##\[group\]Run ", clean):
+        # The smoke command is a bounded pre-work invocation. Do not inspect
+        # arbitrary later model-agent output for retirement evidence.
+        if "Smoke candidate: opencode/" not in step:
+            continue
+        matches = list(re.finditer(
+            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w./:-]+)\s*$",
+            step,
+        ))
+        for i, match in enumerate(matches):
+            model = match.group(1)
+            fragment = step[match.end(): matches[i+1].start() if i+1 < len(matches) else len(step)]
+            if re.search(
+                rf"\bModel (?:opencode/)?{re.escape(model)} has been deprecated\b",
+                fragment, re.IGNORECASE,
+            ) or re.search(
+                rf"\bModel unavailable: opencode/{re.escape(model)}\b",
+                fragment, re.IGNORECASE,
+            ):
+                failures.add(model)
+        success = re.findall(
+            r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Dynamic free-model smoke succeeded: opencode/([\w./:-]+)\s*$",
+            step,
+        )
+        if success:
+            successful = success[-1]
+    if not failures and not successful:
+        return outcome
+    refined = dict(outcome)
+    if failures:
+        refined["model_failures"] = sorted(failures)[:5]
+    if successful and outcome.get("exact_model_proven") is True:
+        refined["model"] = successful
+    return refined
+
 def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
     """Attribute a 180-second pinned-model smoke timeout to the provider.
 
@@ -389,8 +437,26 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
     pre-proof, and nonproductive. No model fault is inferred from shell source
     alone or from the runner's subsequent cleanup.
     """
+    worker = re.escape(str(outcome.get("worker") or ""))
+    # A wrapper-enforced execution deadline must not cool down the provider.
+    # Other evidence can be present merely because the agent inspected files.
+    if (worker and outcome.get("persisted_work") is not True
+            and outcome.get("outcome_class") not in {
+                "provider_quota", "model_unavailable", "model_retired_410",
+                "model_policy_violation",
+            } and re.search(
+                rf"(?m)^\d{{4}}-\d{{2}}-\d{{2}}T\S+Z \[factory:{worker}\].*"
+                r"agent exit status 124 for (?:issue|pr) #\d+\b",
+                job_log,
+            )):
+        return {
+            **outcome,
+            "outcome": "AGENT DEADLINE",
+            "outcome_class": "agent_timeout",
+            "detail": "trusted worker hit its local execution deadline; no provider failure inferred",
+        }
     if (
-        outcome.get("outcome_class") != "unknown_failure"
+        outcome.get("outcome_class") not in ({"unknown_failure", "model_unavailable"} if outcome.get("source") == "nvidia" else {"unknown_failure"})
         or outcome.get("exact_model_proven") is True
         or outcome.get("persisted_work") is True
         or not outcome.get("model") or not outcome.get("source")
@@ -412,23 +478,51 @@ def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[
                 "outcome_class": "provider_failure",
                 "detail": "pinned OpenCode model exceeded its 180-second smoke deadline",
             }
-    # A worker can prove its model, run for the full execution budget, and
-    # still leave no persisted work. The controller already records explicit
-    # transient provider/runtime interruption at agent timeout; the generic
-    # outcome classifier missed this production worker 46 signature.
-    worker = re.escape(str(outcome.get("worker") or ""))
-    if worker and re.search(
-        rf"\[factory:{worker}\].*agent exit status 124\b", job_log
-    ) and re.search(
-        rf"\[factory:{worker}\].*transient provider/runtime interruption on the pinned model",
-        job_log,
-    ):
-        return {
-            **outcome,
-            "outcome": "PROVIDER FAILURE",
-            "outcome_class": "provider_failure",
-            "detail": "pinned model session reached its time budget after a transient provider/runtime interruption",
-        }
+    # A dynamic runner can rotate away from its originally selected model.
+    # Recover the *executed* final smoke selector only from timestamped runner
+    # output in the failing Actions smoke step, never echoed shell source.
+    if outcome.get("source") == "opencode-free":
+        clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+        for step in re.split(r"##\[group\]Run ", clean):
+            if not re.search(r"##\[error\]Process completed with exit code 1\b", step):
+                continue
+            candidates = re.findall(
+                r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z Smoke candidate: opencode/([\w./:-]+)\s*$",
+                step,
+            )
+            if not candidates:
+                continue
+            attempted = candidates[-1]
+            if re.search(
+                rf"\bModel (?:opencode/)?{re.escape(attempted)} has been deprecated\b",
+                step, re.IGNORECASE,
+            ) or re.search(
+                rf"\bModel unavailable: opencode/{re.escape(attempted)}\b",
+                step, re.IGNORECASE,
+            ):
+                return {
+                    **outcome,
+                    "model": attempted,
+                    "outcome": "MODEL MISSING",
+                    "outcome_class": "model_unavailable",
+                    "detail": "actual final OpenCode smoke selector is unavailable or deprecated",
+                }
+    # A trusted NVIDIA 410 has an irreversible provider meaning. Preserve its
+    # retirement in Neon, rather than retrying a known-gone model after 6h.
+    if (outcome.get("source") == "nvidia"
+            and outcome.get("outcome_class") in {"unknown_failure", "model_unavailable"}
+            and outcome.get("model")):
+        model = re.escape(str(outcome["model"]))
+        if re.search(
+            rf"(?m)^\d{{4}}-\d{{2}}-\d{{2}}T\S+Z NVIDIA permanently retired model: {model}\s*$",
+            re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log),
+        ):
+            return {
+                **outcome,
+                "outcome": "MODEL RETIRED",
+                "outcome_class": "model_retired_410",
+                "detail": "trusted NVIDIA probe returned HTTP 410 for the exact pinned model",
+            }
     return outcome
 
 
@@ -437,7 +531,12 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
     if not WORKER_RE.fullmatch(worker) or not run_id.isdecimal():
         raise ValueError("invalid trusted runtime outcome identity")
     status = str(outcome.get("outcome_class") or "unknown_failure")
-    event_type = "worker_completed" if status in {"success", "no_work"} else "worker_failed"
+    # Execution can time out despite a verified code push and successful PR handoff.
+    delivered = (outcome.get("delivery_outcome") == "persisted"
+                 and outcome.get("persisted_work") is True
+                 and str(outcome.get("delivery_pr") or "").isdecimal())
+    event_type = ("worker_completed" if status == "success" or delivered
+                  else "worker_idle" if status == "no_work" else "worker_failed")
     inserted = record_events(repo, [{
         "event_type": event_type,
         "event_id": f"runtime:{run_id}",
@@ -447,9 +546,12 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
         "model": outcome.get("model"),
         "exact_model_proven": outcome.get("exact_model_proven") is True,
         "outcome_class": status,
+        "delivery_outcome": "persisted" if delivered else "none",
+        "delivery_pr": outcome.get("delivery_pr") if delivered else None,
         "selected_kind": outcome.get("selected_kind"),
         "selected_number": outcome.get("selected_number"),
         "persisted_work": bool(outcome.get("persisted_work")),
+        "model_failures": outcome.get("model_failures") or [],
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }])
     # Separate projection key is idempotent across both trusted outcome writers.
@@ -473,7 +575,9 @@ def main() -> int:
             outcome = json.load(stream)
         if args.log:
             with open(args.log, encoding="utf-8", errors="replace") as stream:
-                outcome = refine_trusted_smoke_timeout(outcome, stream.read())
+                job_log = stream.read()
+                outcome = refine_trusted_dynamic_models(outcome, job_log)
+                outcome = refine_trusted_smoke_timeout(outcome, job_log)
         result = record_runtime_outcome(args.repo, args.run_id, outcome)
         print(f"[factory-ledger] recorded {result} terminal worker event(s)")
     return 0

@@ -60,6 +60,29 @@ def test_contended_refresh_observes_winners_snapshot_without_calling_github(monk
     assert cache.cached_json("issues", lambda _: pytest.fail("fresh winner must prevent duplicate calls")) == [{"number": 4}]
 
 
+
+
+def test_contended_refresh_serves_only_bounded_recent_shared_snapshot(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    monkeypatch.setattr(cache, "_read", lambda _: ([{"number": 43}], False))
+    monkeypatch.setattr(cache, "_claim", lambda *_: False)
+    calls = []
+    monkeypatch.setattr(cache, "_recent_contended", lambda key, grace: calls.append((key, grace)) or [{"number": 43}])
+    monkeypatch.setattr(cache.time, "sleep", lambda _: pytest.fail("stale shared discovery should not wait"))
+    result = cache.cached_json("issues", lambda _: pytest.fail("contended refresh must not stampede GitHub"), ttl_seconds=45)
+    assert result == [{"number": 43}]
+    assert calls == [("issues", 45)]
+
+
+def test_contended_cache_does_not_trust_stale_record_without_refresh_owner(monkeypatch, tmp_path):
+    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
+    reads = iter([([{"number": 43}], False), ([{"number": 44}], True)])
+    monkeypatch.setattr(cache, "_read", lambda _: next(reads))
+    monkeypatch.setattr(cache, "_claim", lambda *_: False)
+    monkeypatch.setattr(cache, "_recent_contended", lambda *_: None)
+    monkeypatch.setattr(cache.time, "sleep", lambda _: None)
+    assert cache.cached_json("issues", lambda _: pytest.fail("winner's fresh data should be used")) == [{"number": 44}]
+
 def test_database_unavailable_uses_original_github_loader(monkeypatch, tmp_path):
     monkeypatch.setenv("FACTORY_STATE_DSN_FILE", str(tmp_path / "connection"))
     def unavailable(_):
@@ -150,16 +173,32 @@ def test_workflows_inject_database_only_into_trusted_jobs():
             for step in trusted_job["steps"]
         )
 
-    # The Entry owns two isolated runner jobs: its reusable model runner and a
-    # trusted post-run collector. Permit Neon only in the latter job.
+    # The trusted Entry snapshot job reads Neon; the reusable worker never does.
     entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
-    executor, collector = entry.split("\n  persist_outcome:", 1)
-    assert "factory-state-cache" not in executor
-    assert "FACTORY_STATE_DSN_FILE" not in executor
+    snapshot, collector = entry.split("\n  persist_outcome:", 1)
+    assert "model_health_snapshot:" in snapshot
+    assert "factory-state-cache" in snapshot
+    assert "model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}" in snapshot
+    assert "FACTORY_STATE_DSN_FILE" not in snapshot
     assert "factory-state-cache" in collector
-    assert "needs: run" in collector
-    assert "if: ${{ always() }}" in collector
-    assert "actions: read" in collector
+    # The collector always waits for the worker. After #5137 it also needs
+    # the trusted Neon snapshot to use the existing attempt comment ID.
+    # Check the dependency graph, not a YAML spelling that changed from a
+    # scalar to a list when that second dependency was introduced.
+    entry_jobs = yaml.safe_load(entry)["jobs"]
+    collector_job = entry_jobs["persist_outcome"]
+    needs = collector_job["needs"]
+    needs_set = {needs} if isinstance(needs, str) else set(needs)
+    assert "run" in needs_set
+    assert collector_job["if"] == "${{ always() }}"
+    assert collector_job["permissions"]["actions"] == "read"
+    assert collector_job["permissions"]["contents"] == "read"
+    assert collector_job["permissions"]["pull-requests"] == "read"
+    if "ATTEMPT_COMMENT_ID:" in collector:
+        assert "model_health_snapshot" in needs_set
+        assert collector_job["permissions"]["issues"] == "write"
+        assert "needs.model_health_snapshot.outputs.attempt_id" in collector
+        assert "issues/comments/$ATTEMPT_COMMENT_ID" in collector
     assert "run / factory" in collector
 
 

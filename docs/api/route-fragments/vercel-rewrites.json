@@ -10,8 +10,8 @@
     "custom-cbl",
     "demo",
     "dependencies",
-    "identity-inbox",
     "issues",
+    "metrics",
     "preferences",
     "reading-mode",
     "reading-orders",
@@ -40,6 +40,13 @@
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/metrics$",
+      "methods": [
+        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },
@@ -140,55 +147,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/identity\\-inbox$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/identity\\-inbox/[^/]+$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/identity\\-inbox/[^/]+/confirm$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/identity\\-inbox/[^/]+/defer$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/identity\\-inbox/[^/]+/reject$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/identity\\-inbox/[^/]+/skip$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/identity\\-inbox/search/issues$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v1/issues/[0-9]+$",
       "methods": [
         "GET"
@@ -204,6 +162,13 @@
     },
     {
       "src": "^/api/v1/issues/[0-9]+/dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/metrics$",
       "methods": [
         "GET"
       ],
@@ -1139,22 +1104,6 @@
     },
     {
       "src": "^/api/v1/threads:getBlockingInfo$",
-      "methods": [
-        "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-orders/$",
-      "methods": [
-        "GET",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v1/reading\\-orders/[^/]+/items$",
       "methods": [
         "POST",
         "OPTIONS"

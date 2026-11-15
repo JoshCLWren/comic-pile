@@ -76,12 +76,15 @@ def test_discovery_keeps_dynamic_opencode_workers_without_roster_churn() -> None
 
 
 def test_discovery_consumes_nvidia_410_markers_from_issue_1093() -> None:
-    """Discovery fetches the same #1093 comments the NVIDIA probe uses."""
+    """Discovery consumes sticky HTTP 410 evidence from actual NVIDIA work."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     runner = FACTORY_RUN.read_text(encoding="utf-8")
 
     assert "issues/1093/comments" in workflow
     assert "--retirement-comments" in workflow
     assert "factory-model-retired-410:v1" in workflow
-    assert "retirement_marker='<!-- factory-model-retired-410:v1 -->'" in runner
+    report = runner.split("      - name: Report terminal heartbeat", 1)[1]
+    assert 'if [[ "$SOURCE" == nvidia && "$attempt_outcome" == model_retired_410 ]]' in report
+    assert "retirement_marker='<!-- factory-model-retired-410:v1 -->'" in report
+    assert "Confirmed HTTP 410 during actual assigned work" in report
     assert 'gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' in runner

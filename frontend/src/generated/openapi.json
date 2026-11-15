@@ -19290,6 +19290,25 @@
         "title": "SourceSyncFailure",
         "type": "object"
       },
+      "StartupMetricsResponse": {
+        "properties": {
+          "startup_duration": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "startup_time": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "StoryArc": {
         "description": "A provider story arc with bounded related issues and a correct total.",
         "properties": {
@@ -21300,6 +21319,27 @@
           }
         },
         "summary": "Serve Root"
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "operationId": "get_metrics_documentation",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartupMetricsResponse"
+                }
+              }
+            },
+            "description": "Simple application startup metrics"
+          }
+        },
+        "summary": "OpenAPI documentation for the legacy metrics endpoints.",
+        "tags": [
+          "metrics"
+        ]
       }
     },
     "/api/ping": {
@@ -26895,32 +26935,20 @@
     },
     "/api/v1/metrics": {
       "get": {
-        "description": "Return simple performance metrics.",
-        "operationId": "metrics_api_v1_metrics_get",
+        "operationId": "get_v1_metrics_documentation",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": {
-                    "anyOf": [
-                      {
-                        "type": "number"
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
-                  "title": "Response Metrics Api V1 Metrics Get",
-                  "type": "object"
+                  "$ref": "#/components/schemas/StartupMetricsResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Simple application startup metrics"
           }
         },
-        "summary": "Metrics",
+        "summary": "OpenAPI documentation for the versioned metrics alias.",
         "tags": [
           "metrics"
         ]

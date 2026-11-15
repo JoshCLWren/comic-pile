@@ -30,6 +30,7 @@ MODEL_DEPRECATED_RE = re.compile(
     r"\bModel\s+(?P<model>[A-Za-z0-9][\w./:-]*)\s+has\s+been\s+deprecated\b",
     re.IGNORECASE,
 )
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
@@ -103,6 +104,8 @@ def unavailable_models(
 
 def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Path) -> bool:
     """Persist recognizable OpenCode smoke errors for the registry reporter."""
+    # OpenCode colorizes errors; ANSI sequences can hide word boundaries.
+    log_content = ANSI_ESCAPE_RE.sub("", log_content)
     if runtime_model.startswith(("mistral/", "ollama-cloud/")) and re.search(
         r"budget[ _]exhausted|billing_api_budget_exhausted|monthly usage limit|"
         r"reached your [a-z ]*usage limit", log_content, re.I,
@@ -157,6 +160,7 @@ def select_model(
     rotation: int,
     roster_path: Path,
     comments_path: Path | None = None,
+    exclusions_path: Path | None = None,
     *,
     now_epoch: int | None = None,
     attempted: set[str] | None = None,
@@ -179,6 +183,15 @@ def select_model(
             now_epoch=int(time.time()) if now_epoch is None else now_epoch,
             provider=provider,
         )
+    if exclusions_path is not None:
+        # Supplied by the trusted Entry job. Workers never receive the DSN.
+        snapshot = json.loads(exclusions_path.read_text(encoding="utf-8"))
+        if not isinstance(snapshot, dict) or any(
+            not isinstance(values, list) or not all(isinstance(v, str) for v in values)
+            for values in snapshot.values()
+        ):
+            raise ValueError("invalid trusted Neon model exclusions")
+        excluded.update(snapshot.get(provider, []))
     available_models = [model for model in models if model not in excluded and model not in (attempted or set())]
     if not available_models:
         raise ValueError(f"All {len(models)} candidates are unavailable or in cooldown")
@@ -201,6 +214,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--catalog", type=Path)
     parser.add_argument("--comments", type=Path)
+    parser.add_argument("--exclusions-file", type=Path)
     parser.add_argument("--smoke-log", type=Path)
     parser.add_argument("--runtime-model")
     parser.add_argument("--outcome-file", type=Path)
@@ -227,6 +241,7 @@ def main() -> None:
         args.rotation,
         args.roster,
         args.comments,
+        exclusions_path=args.exclusions_file,
         attempted=set(args.attempted),
         provider=args.provider,
     )

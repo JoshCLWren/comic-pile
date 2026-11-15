@@ -186,6 +186,8 @@ export interface GetLegacyDependencyRequest {
 
 export type GetLegacyDependencyResponse = components['schemas']['NativeDependencyResponse']
 
+export type GetMetricsResponse = components['schemas']['StartupMetricsResponse']
+
 export interface GetQueueEntryRequest {
   path: {
     thread_id: number
@@ -217,6 +219,8 @@ export interface GetThreadIssueDependenciesRequest {
 }
 
 export type GetThreadIssueDependenciesResponse = components['schemas']['NativeThreadIssueDependenciesResponse']
+
+export type GetV1MetricsResponse = components['schemas']['StartupMetricsResponse']
 
 export interface InitializeSessionRequest {
   body: components['schemas']['InitializeSessionRequest']
@@ -499,10 +503,12 @@ export interface NativeV2Client {
   forgotPassword(args: ForgotPasswordRequest): Promise<ForgotPasswordResponse>
   get(args: GetRequest): Promise<GetResponse>
   getLegacyDependency(args: GetLegacyDependencyRequest): Promise<GetLegacyDependencyResponse>
+  getMetrics(): Promise<GetMetricsResponse>
   getQueueEntry(args: GetQueueEntryRequest): Promise<GetQueueEntryResponse>
   getReadingList(args: GetReadingListRequest): Promise<GetReadingListResponse>
   getThreadDependencies(args: GetThreadDependenciesRequest): Promise<GetThreadDependenciesResponse>
   getThreadIssueDependencies(args: GetThreadIssueDependenciesRequest): Promise<GetThreadIssueDependenciesResponse>
+  getV1Metrics(): Promise<GetV1MetricsResponse>
   initializeSession(args: InitializeSessionRequest): Promise<InitializeSessionResponse>
   issueCards(args: IssueCardsRequest): Promise<IssueCardsResponse>
   issueIntelligenceDocs(args: IssueIntelligenceDocsRequest): Promise<IssueIntelligenceDocsResponse>
@@ -670,6 +676,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
         `/v1/dependencies/${encodeURIComponent(String(args.path.dependency_id))}`,
       )
     },
+    getMetrics() {
+      return client.get<GetMetricsResponse>("/metrics")
+    },
     getQueueEntry(args: GetQueueEntryRequest) {
       return client.get<GetQueueEntryResponse>(
         `/v2/queue-entries/${encodeURIComponent(String(args.path.thread_id))}`,
@@ -689,6 +698,9 @@ export function createNativeV2Client(client: HttpClient): NativeV2Client {
       return client.get<GetThreadIssueDependenciesResponse>(
         `/v1/threads/${encodeURIComponent(String(args.path.thread_id))}/issue-dependencies`,
       )
+    },
+    getV1Metrics() {
+      return client.get<GetV1MetricsResponse>("/v1/metrics")
     },
     initializeSession(args: InitializeSessionRequest) {
       return client.post<InitializeSessionResponse, InitializeSessionRequest['body']>(

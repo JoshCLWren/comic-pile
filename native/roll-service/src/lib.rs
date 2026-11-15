@@ -25,6 +25,7 @@ pub mod issue_mutation;
 pub mod issue_read;
 pub mod issue_service;
 pub mod legacy_dependencies;
+pub mod metrics;
 pub mod openapi;
 pub mod option_inputs;
 pub mod preferences;
@@ -498,6 +499,8 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/roll/bootstrap", get(bootstrap::bootstrap_v2))
         .route("/api/v2/demo-roll", get(demo::read_demo_roll))
+        .route("/api/metrics", get(metrics::get_metrics))
+        .route("/api/v1/metrics", get(metrics::get_metrics))
         .route("/api/v2/roll/die-state", get(roll_resources::die_state))
         .route(
             "/api/v2/roll/eligible-issue-ids",

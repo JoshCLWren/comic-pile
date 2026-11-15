@@ -10,8 +10,8 @@ const schema = JSON.parse(readFileSync(schemaPath, 'utf-8')) as {
 
 // Bare `/api` domain routes are legacy compatibility aliases served only until
 // their versioned replacements are adopted. The generated client surface must reference none
-// of them; `/api/ping` is the single documented exemption.
-const EXEMPT_BARE_PATHS = new Set(['/api/ping'])
+// of them except ping and the same-path native startup metrics contract (#4854).
+const EXEMPT_BARE_PATHS = new Set(['/api/ping', '/api/metrics'])
 
 function isBareDomainPath(path: string): boolean {
   return path.startsWith('/api/') && !EXEMPT_BARE_PATHS.has(path) && !path.startsWith('/api/v1/') && !path.startsWith('/api/v2/')
@@ -30,5 +30,7 @@ describe('generated OpenAPI client surface', () => {
 
     expect(paths.some((path) => path.startsWith('/api/v1/'))).toBe(true)
     expect(paths).toContain('/api/ping')
+    expect(paths).toContain('/api/metrics')
+    expect(paths).toContain('/api/v1/metrics')
   })
 })
