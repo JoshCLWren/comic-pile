@@ -882,12 +882,13 @@ pub async fn adopt_reading_order(
 
     if !duplicates.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(ApiError::Conflict(serde_json::json!({
+        let detail = serde_json::json!({
             "code": "duplicate_thread",
             "reading_order_id": order_id,
             "duplicate_thread_ids": duplicates,
             "message": "Reading order contains duplicate threads; deduplicate before adoption."
-        })));
+        });
+        return Err(ApiError::Conflict(detail.to_string()));
     }
 
     // Check thread ownership for nodes
@@ -1126,8 +1127,8 @@ pub struct ReadingPlanDependencyLinkRequest {
     tag = "continuity-plans",
     operation_id = "continuity_plans_link_dependency",
     params((
-        ("plan_id"=i32, Path, description = "Continuity plan identifier"),
-        ("dependency_id"=i32, Path, description = "Dependency identifier")
+        ("plan_id" = i32, Path, description = "Continuity plan identifier"),
+        ("dependency_id" = i32, Path, description = "Dependency identifier")
     )),
     request_body = ReadingPlanDependencyLinkRequest,
     responses(
@@ -1408,16 +1409,18 @@ pub async fn confirm_plan_projection(
 
     if !duplicates.is_empty() {
         tx.rollback().await.map_err(db::query_error)?;
-        return Err(crate::ApiError::Conflict(serde_json::json!({
+        let node_id = thread_nodes.iter().find(|(_, t, _)| *t == duplicates[0]).map(|(_, _, n)| n.clone()).unwrap_or_default();
+        let detail = serde_json::json!({
             "code": "projection_conflicts",
             "conflicts": [{
                 "code": "duplicate_thread",
-                "node_id": thread_nodes.iter().find(|(_, t, _)| **t == duplicates[0]).map(|(_, _, n)| n.clone()).unwrap_or_default(),
+                "node_id": node_id,
                 "thread_id": duplicates[0],
                 "message": "Thread appears multiple times in the plan",
                 "existing_positions": []
             }]
-        })));
+        });
+        return Err(crate::ApiError::Conflict(detail.to_string()));
     }
 
     // Apply projection: delete existing items and insert new ones
@@ -1471,9 +1474,10 @@ pub async fn confirm_plan_projection(
             "added".to_string()
         };
 
+        let position = pos + 1;
         tx.execute(
             "INSERT INTO reading_order_items (reading_order_id, thread_id, position, issue_number) VALUES ($1, $2, $3, NULL)",
-            &[&payload.reading_order_id, thread_id, &(pos + 1)],
+            &[&payload.reading_order_id, thread_id, &position],
         )
         .await
         .map_err(db::query_error)?;
