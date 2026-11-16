@@ -37,6 +37,8 @@ on:
         required: false
       REQUESTY_API_KEY:
         required: false
+      POLLINATIONS_API_KEY:
+        required: false
       GEMINI_API_KEY:
         required: false
       GROQ_API_KEY:
@@ -152,6 +154,7 @@ jobs:
       MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
       ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}
       REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}
+      POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       AION_API_KEY: ${{ secrets.AION_API_KEY }}

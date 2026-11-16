@@ -529,6 +529,7 @@ jobs:
           FACTORY_HAS_MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY != '' }}
           FACTORY_HAS_ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY != '' }}
           FACTORY_HAS_REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY != '' }}
+          FACTORY_HAS_POLLINATIONS_API_KEY: ${{ secrets.POLLINATIONS_API_KEY != '' }}
           FACTORY_HAS_GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY != '' }}
           FACTORY_HAS_GROQ_API_KEY: ${{ secrets.GROQ_API_KEY != '' }}
           FACTORY_HAS_AION_API_KEY: ${{ secrets.AION_API_KEY != '' }}

@@ -36,6 +36,7 @@ PROVIDERS: Mapping[str, ProviderSpec] = {
     "mistral": ProviderSpec("mistral", "MISTRAL_API_KEY", "https://api.mistral.ai/v1", "Mistral Codestral"),
     "orcarouter": ProviderSpec("orcarouter", "ORCAROUTER_API_KEY", "https://api.orcarouter.ai/v1", "OrcaRouter free capacity"),
     "requesty": ProviderSpec("requesty", "REQUESTY_API_KEY", "https://router.requesty.ai/v1", "Requesty router"),
+    "pollinations": ProviderSpec("pollinations", "POLLINATIONS_API_KEY", "https://gen.pollinations.ai/v1", "Pollinations AI"),
     "gemini-free": ProviderSpec("google", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai", "Google Gemini API Free", headers=(("x-goog-api-client", "comic-pile-factory-oai/1.0"),)),
     "groq-free": ProviderSpec("groq", "GROQ_API_KEY", "https://api.groq.com/openai/v1", "GroqCloud Free"),
     "aion-free": ProviderSpec("aion", "AION_API_KEY", "https://api.aionlabs.ai/v1", "Aion Labs Daily Free Credit"),
