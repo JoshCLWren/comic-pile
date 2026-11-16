@@ -931,44 +931,6 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
         for key, scope in scopes.items():
             if key not in missing:
                 excluded[key] = [known[scope]]
-        if missing:
-            raw = await conn.fetchval(
-                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-                f"{repo}:registry-comments",
-            )
-            if isinstance(raw, str):
-                raw = json.loads(raw)
-            if isinstance(raw, list):
-                from factory_work_policy import comment_is_trusted
-                for key, scope in missing.items():
-                    marker_kind = "attempt-outcome" if key == "__attempt_id" else "heartbeat"
-                    marker = (f"<!-- factory-{marker_kind}:v1 "
-                              f"worker=opencode-free-model-factory-{worker} -->")
-                    matches = [
-                        item for item in raw
-                        if isinstance(item, dict) and comment_is_trusted(item)
-                        and str(item.get("body") or "").startswith(marker)
-                        and str(item.get("id") or "").isdecimal()
-                        and int(item["id"]) > 0
-                    ]
-                    if not matches:
-                        continue
-                    comment_id = str(max(int(item["id"]) for item in matches))
-                    # Store only the original GitHub ID. Never persist a
-                    # synthetic comment body or grant write authorization.
-                    await conn.execute(
-                        """INSERT INTO public.factory_reconciliation_cursor
-                             (repo,scope,checkpoint,checked_at)
-                           VALUES ($1,$2,$3,now())
-                           ON CONFLICT(repo,scope) DO UPDATE SET
-                             checkpoint=EXCLUDED.checkpoint, checked_at=now()
-                           WHERE factory_reconciliation_cursor.checkpoint IS NULL
-                              OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
-                              OR factory_reconciliation_cursor.checkpoint::bigint
-                                   < EXCLUDED.checkpoint::bigint""",
-                        repo, scope, comment_id,
-                    )
-                    excluded[key] = [comment_id]
     return excluded
 
 
@@ -1015,6 +977,120 @@ def export_candidate_health(repo: str) -> dict[str, Any]:
     return _run(_export_candidate_health, repo)
 
 
+async def _remember_verified_markers(
+    conn: Any, repo: str, entries: list[dict[str, str]],
+) -> int:
+    """Store GitHub IDs supplied only after independent trusted-author checks.
+
+    No body, executable command or synthesized comment is stored in Neon.
+    Newer created IDs supersede deleted/replaced IDs; stale observations
+    never overwrite a newer locator.
+    """
+    roster = _roster()
+    count = 0
+    for item in entries:
+        worker, kind, comment_id = (
+            str(item.get("worker") or ""), str(item.get("kind") or ""),
+            str(item.get("id") or ""),
+        )
+        if worker not in roster or kind not in {"heartbeat", "attempt"}:
+            continue
+        if not comment_id.isdecimal() or int(comment_id) <= 0:
+            continue
+        scope = f"registry-comment-id-v1:{kind}:worker:{worker}"
+        result = await conn.fetchval(
+            """INSERT INTO public.factory_reconciliation_cursor
+                 (repo,scope,checkpoint,checked_at)
+               VALUES($1,$2,$3,now())
+               ON CONFLICT(repo,scope) DO UPDATE SET
+                 checkpoint=EXCLUDED.checkpoint,checked_at=now()
+               WHERE factory_reconciliation_cursor.checkpoint IS NULL
+                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+
+    if not enabled():
+        raise RuntimeError("Neon is required for model health snapshot")
+    return _run(_export_model_exclusions, repo, worker)
+
+
+def main() -> int:
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
+    parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
+    parser.add_argument("--file",type=Path)
+    parser.add_argument("--scope")
+    parser.add_argument("--worker",default="")
+    parser.add_argument("--cursor",default="")
+    args=parser.parse_args()
+    if not REPO_RE.fullmatch(args.repo):
+        parser.error("invalid repo")
+    if args.command=="bootstrap":
+        if not enabled():
+            raise SystemExit("Neon is required for factory operations")
+        _run(lambda conn: conn.fetchval("SELECT 1"))
+        print("[factory-operations] schema ready")
+    elif args.command=="export-model-exclusions":
+        print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
+    elif args.command=="export-candidate-health":
+        print(json.dumps(export_candidate_health(args.repo),sort_keys=True,separators=(",",":")))
+    elif args.command=="filter":
+        workers=[str(w) for w in json.load(sys.stdin)]
+        kept,denied=filter_workers(args.repo,workers)
+        for reason in denied:
+            print(f"[factory-operations] {reason}",file=sys.stderr)
+        print(json.dumps(kept,separators=(",",":")))
+    elif args.command=="rank":
+        print(json.dumps(rank_workers(args.repo,[str(w) for w in json.load(sys.stdin)]),
+                         separators=(",",":")))
+    elif args.command=="sync-catalog":
+        if args.file is None:
+            parser.error("--file required")
+        print(json.dumps({"missing_models":sync_catalog(args.repo,json.loads(args.file.read_text()))}))
+    elif args.command=="sync-registry":
+        if args.file is None:
+            parser.error("--file required")
+        print(json.dumps({"backfilled":sync_registry(args.repo,json.loads(args.file.read_text()))}))
+    elif args.command=="stats":
+        print(json.dumps(_run(_stats,args.repo),default=str))
+    elif args.command=="ingest-check":
+        if args.file is None:
+            parser.error("--file required")
+        recorded=ingest_check(args.repo,json.loads(args.file.read_text()))
+        print(json.dumps({"recorded_review_failures":recorded}))
+    elif args.command=="checkpoint":
+        if not args.scope:
+            parser.error("--scope required")
+        checkpoint(args.repo,args.scope,args.cursor)
+    return 0
+
+
+if __name__=="__main__":
+    raise SystemExit(main())
+
+                  OR factory_reconciliation_cursor.checkpoint::bigint
+                       < EXCLUDED.checkpoint::bigint
+               RETURNING 1""",
+            repo, scope, comment_id,
+        )
+        count += bool(result)
+    return count
+
+
+def remember_verified_markers(repo: str, entries: list[dict[str, str]]) -> int:
+    if not enabled():
+        raise RuntimeError("marker coordination needs trusted Neon connection")
+    return _run(_remember_verified_markers, repo, entries)
+
+
+async def _registry_ingest_checkpoint(conn: Any, repo: str) -> str | None:
+    return await conn.fetchval(
+        """SELECT checkpoint FROM public.factory_reconciliation_cursor
+           WHERE repo=$1 AND scope='registry-event-ingest-v2'""", repo,
+    )
+
+
+def registry_ingest_checkpoint(repo: str) -> str | None:
+    return _run(_registry_ingest_checkpoint, repo) if enabled() else None
+
+
 def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
     if not enabled():
         raise RuntimeError("Neon is required for model health snapshot")
@@ -1036,18 +1112,6 @@ def main() -> int:
         if not enabled():
             raise SystemExit("Neon is required for factory operations")
         _run(lambda conn: conn.fetchval("SELECT 1"))
-        # One-time migration from trusted #1093 evidence. The checkpoint
-        # prevents rebuilding the entire model table on every dispatch.
-        async def needs_backfill(conn:Any,repo:str)->bool:
-            return await conn.fetchval(
-                "SELECT 1 FROM public.factory_reconciliation_cursor WHERE repo=$1 AND scope='registry-backfill-v1'",
-                repo) is None
-        if _run(needs_backfill,args.repo):
-            from factory_completion_controller import registry_comments
-            records=registry_comments()
-            n=sync_registry(args.repo,records)
-            checkpoint(args.repo,"registry-backfill-v1",datetime.now(timezone.utc).isoformat(),n)
-            print(f"[factory-operations] imported {n} trusted model records")
         print("[factory-operations] schema ready")
     elif args.command=="export-model-exclusions":
         print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
