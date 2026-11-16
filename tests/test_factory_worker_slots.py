@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).SLOTS.resolve().parents[1] / ".github/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".github/scripts"))
 SLOTS = importlib.import_module("factory_worker_slots")
 
 
