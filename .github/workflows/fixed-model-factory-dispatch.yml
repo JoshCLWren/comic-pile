@@ -658,7 +658,21 @@ jobs:
             ' "$manifest" | jq -Rsc 'split("\n") | map(select(length > 0))')"
           fi
 
-          [[ "$workers" != '[]' ]] || { echo 'Dispatcher resolved no workers' >&2; exit 1; }
+          if [[ "$workers" == '[]' ]]; then
+            # A nonempty roster can legitimately have zero executable workers:
+            # every free provider may be cooling, out of daily budget, or
+            # missing credentials. This is idle capacity, not a controller
+            # failure, and must not trigger an unnecessary successor chain.
+            if [[ "$EVENT_NAME" == schedule || ( "$EVENT_NAME" == workflow_dispatch && "$DISPATCH_MODE" == roster ) ]]; then
+              echo 'No executable workers in this roster tick; cooldowns, quota and credentials remain authoritative'
+              echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
+              echo "dispatch_failed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # An explicit smoke run should never have an empty provider roster.
+            echo 'Dispatcher resolved no workers for smoke run' >&2
+            exit 1
+          fi
 
           # Credential presence is evaluated before claiming any lease. The model
           # remains rostered and becomes eligible automatically if configured.
