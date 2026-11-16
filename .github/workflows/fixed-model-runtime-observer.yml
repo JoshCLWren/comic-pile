@@ -159,17 +159,17 @@ jobs:
             gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
               > "$RUNNER_TEMP/verified-attempt-marker.json"
             python3 - "$RUNNER_TEMP/verified-attempt-marker.json" <<'PYMARKER'
-import json
-import os
-import sys
-sys.path.insert(0, ".github/scripts")
-from factory_registry_ingest import marker_ids
-from factory_state_operations import remember_verified_markers
-with open(sys.argv[1], encoding="utf-8") as stream:
-    markers = [item for item in marker_ids([json.load(stream)]) if item["kind"] == "attempt"]
-if markers:
-    remember_verified_markers(os.environ["GITHUB_REPOSITORY"], markers)
-PYMARKER
+          import json
+          import os
+          import sys
+          sys.path.insert(0, ".github/scripts")
+          from factory_registry_ingest import marker_ids
+          from factory_state_operations import remember_verified_markers
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              markers = [item for item in marker_ids([json.load(stream)]) if item["kind"] == "attempt"]
+          if markers:
+              remember_verified_markers(os.environ["GITHUB_REPOSITORY"], markers)
+          PYMARKER
           fi
 
       - name: Persist classified worker completion in Neon
