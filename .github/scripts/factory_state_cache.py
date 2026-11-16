@@ -122,14 +122,14 @@ def _prune_obsolete_discovery(repo: str, batch_size: int = 200) -> int:
     row = _run(
         """WITH retired AS (
              SELECT cache_key FROM public.factory_state_kv
-             WHERE (cache_key LIKE $1 OR cache_key LIKE $2 OR cache_key=ANY($3::text[]))
+             WHERE (left(cache_key, length($1))=$1 OR left(cache_key, length($2))=$2 OR cache_key=ANY($3::text[]))
                AND (refresh_until IS NULL OR refresh_until<now())
              LIMIT $4
            ), removed AS (
              DELETE FROM public.factory_state_kv AS cache USING retired
              WHERE cache.cache_key=retired.cache_key RETURNING cache.cache_key
            ) SELECT count(*) AS deleted FROM removed""",
-        f'factory-github-get-v1:{repo}:%', f'factory-projection-v1:{repo}:%',
+        f'factory-github-get-v1:{repo}:', f'factory-projection-v1:{repo}:',
         [f'{repo}:open-issues', f'{repo}:open-prs'], batch_size, one=True,
     )
     return int(row['deleted'])
@@ -142,7 +142,7 @@ def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
     authorize their deletion. Only explicitly scoped historical observation
     events can expire; worker lifecycle and coordination histories stay intact.
     """
-    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\\w.-]+/[\\w.-]+', repo):
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
         raise ValueError('invalid cleanup scope or batch size')
     github_prefix = f'factory-github-get-v1:{repo}:'
     projection_prefix = f'factory-projection-v1:{repo}:'
