@@ -57,6 +57,7 @@ def validate() -> None:
     assert "slots='.github/scripts/factory_worker_slots.py'" in dispatch
     assert 'python3 "$slots" offer' in dispatch
     assert "factory_dispatch_credential_filter.py filter" in dispatch
+    assert "factory_source_budget.py filter" in dispatch
     assert 'assign --worker "$worker"' in dispatch
     assert dispatch.index("factory_dispatch_credential_filter.py filter") < dispatch.rindex(
         'dispatch_assigned_worker "$worker"'

@@ -606,6 +606,7 @@ jobs:
             # Credential, quota and health checks run before the dispatch cap.
             workers="$(python3 "$slots" offer --tick "${GITHUB_RUN_NUMBER:-0}" \
               | python3 .github/scripts/factory_dispatch_credential_filter.py filter \
+              | python3 .github/scripts/factory_source_budget.py filter \
               | python3 .github/scripts/factory_state_operations.py filter \
               | python3 .github/scripts/factory_state_operations.py rank \
               | jq -c --argjson cap "$max_per_tick" '.[:$cap]')"
@@ -635,6 +636,7 @@ jobs:
           # Credential presence is evaluated before claiming any lease. The model
           # remains rostered and becomes eligible automatically if configured.
           workers="$(python3 .github/scripts/factory_dispatch_credential_filter.py filter <<< "$workers")"
+          workers="$(python3 .github/scripts/factory_source_budget.py filter <<< "$workers")"
           if [[ "$workers" == '[]' ]]; then
             echo 'No configured workers in this batch; preserving the fleet without dispatch'
             echo "dispatched_count=0" >> "$GITHUB_OUTPUT"
