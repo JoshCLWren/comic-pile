@@ -12,7 +12,7 @@ const root = process.env.FCM_PACKAGE_DIR;
 if (!root) throw new Error('FCM_PACKAGE_DIR must reference the installed free-coding-models package');
 
 const moduleFromPackage = async (file) => import(pathToFileURL(join(root, file)).href);
-const { sources } = await moduleFromPackage('sources.js');
+const { sources, MODELS } = await moduleFromPackage('sources.js');
 const { ping } = await moduleFromPackage('src/core/ping.js');
 const { getApiKey } = await moduleFromPackage('src/core/config.js');
 
@@ -46,8 +46,10 @@ async function examine(provider, source) {
   if (!key) {
     return { provider, name: source.name || provider, status: 'NO_KEY', checked: 0, probes: [] };
   }
-  const candidates = (source.models || [])
-    .map((model) => Array.isArray(model) ? model[0] : null)
+  // MODELS is FCM's active catalog projection and excludes upstream-retired
+  // model tuples, unlike the raw per-provider source arrays.
+  const active = MODELS.filter((entry) => entry[5] === provider);
+  const candidates = active.map((entry) => entry[0])
     .filter((id) => typeof id === 'string' && id.length > 0)
     .slice(0, maxPerProvider);
   const probes = [];
@@ -66,7 +68,7 @@ async function examine(provider, source) {
     provider, name: source.name || provider,
     status: summarizedStatus(probes),
     checked: probes.length,
-    listed: source.models?.length || 0,
+    listed: active.length,
     probes,
   };
 }
