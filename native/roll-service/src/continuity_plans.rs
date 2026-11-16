@@ -1242,10 +1242,10 @@ pub async fn link_plan_dependency_edge(
     path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_unlink_dependency",
-    params((
+    params(
         ("plan_id" = i32, Path, description = "Continuity plan identifier"),
         ("dependency_id" = i32, Path, description = "Dependency identifier")
-    )),
+    ),
     responses(
         (status = 204, description = "Dependency unlinked"),
         (status = 401, description = "Not authenticated"),
@@ -1433,7 +1433,7 @@ pub async fn confirm_plan_projection(
     .map_err(db::query_error)?;
 
     // Get thread titles
-    let mut thread_titles = std::collections::HashMap::new();
+    let mut thread_titles: std::collections::HashMap<i32, String> = std::collections::HashMap::new();
     for (_, thread_id, _) in &thread_nodes {
         let title_row = tx
             .query_opt(
@@ -1443,7 +1443,7 @@ pub async fn confirm_plan_projection(
             .await
             .map_err(db::query_error)?;
         if let Some(row) = title_row {
-            thread_titles.insert(thread_id, row.get(0));
+            thread_titles.insert(*thread_id, row.get(0));
         }
     }
 
