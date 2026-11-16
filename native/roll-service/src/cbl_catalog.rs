@@ -517,9 +517,7 @@ pub async fn browse_cbl_source_catalog(
             )));
         }
 
-        let (response_folder, response_breadcrumbs, folders, scope) = if let Some(_) =
-            query_text.as_deref()
-        {
+        let (response_folder, response_breadcrumbs, folders, scope) = if query_text.is_some() {
             (
                 String::new(),
                 breadcrumbs(""),
