@@ -16,6 +16,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from factory_provider_registry import PROVIDERS
+
 
 
 @dataclass(frozen=True)
@@ -186,7 +188,6 @@ class RuntimeOnlyAdapter:
 
 # Credentials and published endpoints are integration metadata, not rosters.
 # Any new compatible provider registered there automatically gains discovery.
-from factory_provider_registry import PROVIDERS
 
 ADAPTERS: dict[str, ProviderAdapter] = {
     source: OpenAICompatibleAdapter(source, spec.provider)
