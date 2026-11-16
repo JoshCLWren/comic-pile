@@ -867,7 +867,7 @@ def main() -> int:
     # Embed the existing trusted snapshot and UI in the same published HTML.
     # No new per-refresh GitHub commits, static roster, or API credentials.
     payload = json.dumps(snapshot, ensure_ascii=True, separators=(",", ":"))
-    payload = payload.replace("<", r"\\u003c").replace(">", r"\\u003e").replace("&", r"\\u0026")
+    payload = payload.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
     css = (SCRIPTS / "factory_fleet_console.css").read_text(encoding="utf-8")
     js = (SCRIPTS / "factory_fleet_console.js").read_text(encoding="utf-8")
     page = render_dashboard(snapshot)
