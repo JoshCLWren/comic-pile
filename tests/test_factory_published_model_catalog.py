@@ -37,13 +37,14 @@ def test_published_price_does_not_block_candidate(catalog_module) -> None:
     catalog = {"data": [
         model("example/no-price"),
         model("example/paid", "0.01", "0.02"),
-        model("example/zero", "0", "0"),
+        model("example/zero:free", "0", "0"),
+        model("example/new:free", "0", "0"),
         {**model("example/no-tools"), "supported_parameters": []},
         {**model("example/no-chat"), "endpoints": ["/api/v1/messages"]},
         {"id": "example/metadata-unknown"},
     ]}
     assert catalog_module.catalog_model_ids("openrouter-free", catalog) == [
-        "example/metadata-unknown", "example/no-price", "example/paid", "example/zero",
+        "example/new:free", "example/zero:free",
     ]
 
 
@@ -63,12 +64,12 @@ def test_vercel_filters_modality_not_price(catalog_module) -> None:
 
 
 def test_selection_filters_cooldown_and_is_deterministic(catalog_module) -> None:
-    catalog = {"data": [model("example/a"), model("example/b"), model("example/c")]}
+    catalog = {"data": [model("example/a:free"), model("example/b:free"), model("example/c:free")]}
     first = catalog_module.choose_model("openrouter-free", "51", catalog)
     assert first == catalog_module.choose_model("openrouter-free", "51", catalog)
-    assert catalog_module.choose_model("openrouter-free", "51", catalog, {"example/a", "example/b"}) == "example/c"
+    assert catalog_module.choose_model("openrouter-free", "51", catalog, {"example/a:free", "example/b:free"}) == "example/c:free"
     with pytest.raises(catalog_module.PublishedCatalogUnavailableError):
-        catalog_module.choose_model("openrouter-free", "51", catalog, {"example/a", "example/b", "example/c"})
+        catalog_module.choose_model("openrouter-free", "51", catalog, {"example/a:free", "example/b:free", "example/c:free"})
 
 
 @pytest.mark.parametrize("catalog", [{}, {"data": {}}, {"data": None}])
@@ -79,15 +80,17 @@ def test_invalid_catalog_is_not_success(catalog_module, catalog: dict) -> None:
 
 def test_cli_accepts_fixture_with_published_price(tmp_path: Path) -> None:
     fixture = tmp_path / "upstream.json"
-    fixture.write_text(json.dumps({"data": [model("example/paid", "4", "2")]}))
+    fixture.write_text(json.dumps({"data": [
+        model("example/paid", "4", "2"), model("example/free:free", "0", "0")
+    ]}))
     out = subprocess.run(
         [sys.executable, str(SCRIPT), "--source", "openrouter-free", "--worker", "51",
          "--catalog-json", str(fixture)],
         capture_output=True, text=True, check=True,
     )
     assert json.loads(out.stdout) == {
-        "source": "openrouter-free", "model": "example/paid",
-        "runtime_model": "openrouter/example/paid", "catalog_listed": True,
+        "source": "openrouter-free", "model": "example/free:free",
+        "runtime_model": "openrouter/example/free:free", "catalog_listed": True,
     }
 
 
@@ -103,10 +106,10 @@ def test_execution_workflow_has_no_published_price_gate() -> None:
 
 def test_prior_retirement_is_not_permanent_ban(tmp_path: Path) -> None:
     fixture = tmp_path / "provider.json"
-    fixture.write_text(json.dumps({"data": [model("example/previously-failed")]}))
+    fixture.write_text(json.dumps({"data": [model("example/previously-failed:free")]}))
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--source", "openrouter-free",
          "--worker", "128", "--catalog-json", str(fixture)],
         text=True, capture_output=True, check=True,
     )
-    assert json.loads(result.stdout)["model"] == "example/previously-failed"
+    assert json.loads(result.stdout)["model"] == "example/previously-failed:free"
