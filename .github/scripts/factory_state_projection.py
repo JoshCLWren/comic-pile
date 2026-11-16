@@ -13,6 +13,8 @@ import sys
 from datetime import UTC, datetime
 from typing import Any
 
+from factory_state_metrics import connect as measured_connect
+
 from factory_state_cache import _dsn
 
 PREFIX = "factory-projection-v1:"
@@ -118,9 +120,8 @@ def normalize_event(event: dict[str, object]) -> tuple[str, int, dict[str, objec
 
 
 async def _read_projection(repo: str, kind: str) -> list[dict[str, Any]] | None:
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         marker = await conn.fetchval(
             """SELECT fetched_at > now() - $2::int * interval '1 second'
@@ -166,7 +167,6 @@ def projected_json(repo: str, kind: str) -> list[dict[str, object]] | None:
 
 
 async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: str) -> tuple[int, int]:
-    import asyncpg
 
     if not all(isinstance(item, dict) and isinstance(item.get("number"), int) for item in items):
         raise ValueError("invalid GitHub list snapshot")
@@ -182,7 +182,7 @@ async def _snapshot(repo: str, kind: str, items: list[dict[str, Any]], started: 
         "source_updated_at": str(item.get("updatedAt") or item.get("updated_at") or ""),
         "observed_at": now,
     } for item in items]
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=12)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=12)
     try:
         async with conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", prefix)
@@ -346,14 +346,13 @@ async def _ingest_event(
     source: str = "github-webhook",
 ) -> bool:
     """Serialize a one-target GitHub read and its Neon projection write."""
-    import asyncpg
 
     raw = event.get("pull_request") if "pull_request" in event else event.get("issue")
     if not isinstance(raw, dict) or type(raw.get("number")) is not int:
         return False
     kind = "pr" if "pull_request" in event else "issue"
     prefix = _prefix(repo, kind)
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=35)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=35)
     try:
         async with conn.transaction():
             # Move the live read *inside* the same advisory lock as the write.
@@ -419,10 +418,9 @@ async def _ingest_event(
 
 async def _bootstrap_kind(repo: str, kind: str) -> bool:
     """Initialize missing projection inventory once, under a shared DB lock."""
-    import asyncpg
 
     prefix = _prefix(repo, kind)
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=35)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=35)
     try:
         async with conn.transaction():
             # This separate lock serializes first-time full inventories across
