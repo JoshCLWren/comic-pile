@@ -94,10 +94,10 @@ def test_cli_accepts_fixture_with_published_price(tmp_path: Path) -> None:
 def test_execution_workflow_has_no_published_price_gate() -> None:
     workflow = RUNNER.read_text()
     selection = workflow.split("      - name: Select execution candidate at dispatch time", 1)[1]
-    assert selection.count("factory_published_model_catalog.py") == 2
-    assert "runtime_model=vercel/$model" in selection
-    assert "runtime_model=openrouter/$model" in selection
-    assert "selected-from-published-catalog" in selection
+    assert selection.count("factory_published_model_catalog.py") == 1
+    assert "factory_runtime_model_select.py" in selection
+    assert "factory_live_opencode.py" in selection
+    assert "selected-from-live-runtime-catalog" in selection
     assert "Require Vercel model to remain zero-price" not in workflow
 
 
