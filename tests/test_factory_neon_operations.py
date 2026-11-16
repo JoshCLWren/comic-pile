@@ -402,3 +402,20 @@ def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
     # Fresh attempts bootstrap from prior Neon terminal events, not GitHub.
     assert "await _recent_streak(conn, run_id, source, model)" in source
     assert "classification in WORKER_RETRY_CLASSES" in source
+
+def test_dynamic_slot_worker_backoff_persists_across_model_rotation():
+    now = datetime.now(UTC)
+    # Stored backoff from previous model "modelA"
+    backoffs = [{
+        "cache_key": f"factory-worker-backoff-v1:{REPO}:worker:99",
+        "payload": [{"source": "opencode-free", "model": "modelA",
+                     "streak": 3, "next_retry_at": (now + timedelta(minutes=10)).isoformat(),
+                     "suspended": False}],
+        "expires_at": now + timedelta(days=90),
+    }]
+    db = FakeConnection(backoffs=backoffs)
+    # Dynamic slot: roster says source only, model empty
+    with patch.object(operations, "_roster", return_value={"99": ("opencode-free", "")}):
+        kept, denied = run(operations._eligibility(db, REPO, ["99"]))
+    assert kept == []
+    assert any("Fibonacci retry deferred" in d for d in denied)

@@ -412,7 +412,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 old = {}
             prior_run = int(old.get("run_id") or 0)
             if prior_run <= run_id:
-                catalog_slot = roster[worker][1] == "@catalog"
+                catalog_slot = roster[worker][1] == "" or roster[worker][1] == "@catalog"
                 same_pin = old.get("source") == source and (
                     catalog_slot or old.get("model") == model
                 )
