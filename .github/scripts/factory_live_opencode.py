@@ -19,7 +19,6 @@ from factory_candidate_health import (
 )
 from factory_completion_controller import parse_time
 from factory_model_catalog import parse_opencode_models_text
-from factory_roster import load_roster_lock, load_roster_rows, opencode_model_is_free
 
 COOLDOWN_SECONDS = 6 * 60 * 60
 MODEL_UNAVAILABLE_RE = re.compile(
@@ -35,26 +34,12 @@ RUN_RE = re.compile(r"(?m)^Run: ([0-9]+)$")
 FREE_QUOTA_RE = re.compile(r"Free usage limit reached|FreeUsageLimitError", re.IGNORECASE)
 
 
-def free_models(raw_catalog: str, *, provider: str = "opencode-free") -> list[str]:
-    """Enumerate only zero-price candidates from the selected OpenCode provider."""
+def catalog_models(raw_catalog: str, *, provider: str = "opencode-free") -> list[str]:
+    """Enumerate current provider models without any name/price allowlist."""
     if provider not in {"opencode-free", "openrouter-free"}:
-        raise ValueError("unsupported free model provider")
+        raise ValueError("unsupported OpenCode catalog provider")
     catalog = parse_opencode_models_text(raw_catalog, provider.removesuffix("-free"))
-    retired = set(load_roster_lock()["retired_models"])
-    return sorted(
-        entry.model_id
-        for entry in catalog.entries
-        if entry.model_id not in retired
-        and not entry.cost_is_paid
-        and (
-            entry.cost_is_zero
-            or (
-                provider == "opencode-free"
-                and opencode_model_is_free(entry.model_id)
-            )
-            or (provider == "openrouter-free" and entry.model_id.endswith(":free"))
-        )
-    )
+    return sorted(entry.model_id for entry in catalog.entries)
 
 
 def unavailable_models(
@@ -158,7 +143,7 @@ def select_model(
     raw_catalog: str,
     worker: int,
     rotation: int,
-    roster_path: Path,
+    roster_path: Path | None = None,
     comments_path: Path | None = None,
     exclusions_path: Path | None = None,
     *,
@@ -166,13 +151,15 @@ def select_model(
     attempted: set[str] | None = None,
     provider: str = "opencode-free",
 ) -> dict[str, str | int]:
-    """Rotate all free models without assigning duplicate permanent pins.
+    """Rotate live models across stable worker identities without a model roster.
 
-    Consults trusted registry attempt comments and applies model cooldowns.
+    A catalog entry is a candidate, not proof of useful execution.
+    Trusted runtime failures and cooldowns remain authoritative.
     """
-    models = free_models(raw_catalog, provider=provider)
+    del roster_path  # Backward-compatible call signature during roster removal.
+    models = catalog_models(raw_catalog, provider=provider)
     if not models:
-        raise ValueError("OpenCode catalog has no provably free models")
+        raise ValueError("OpenCode catalog has no candidates")
 
     excluded = set()
     if comments_path is not None:
@@ -196,12 +183,9 @@ def select_model(
     if not available_models:
         raise ValueError(f"All {len(models)} candidates are unavailable or in cooldown")
 
-    rows = load_roster_rows(roster_path)
-    workers = sorted(int(row["worker"]) for row in rows if row["source"] == provider)
-    if worker not in workers:
-        raise ValueError(f"worker {worker} has no {provider} slot")
-
-    model = available_models[(workers.index(worker) + rotation) % len(available_models)]
+    if worker < 1:
+        raise ValueError("worker identity must be a positive integer")
+    model = available_models[(worker - 1 + rotation) % len(available_models)]
     return {
         "model": model,
         "runtime_model": f"{provider.removesuffix('-free')}/{model}",
@@ -222,7 +206,6 @@ def main() -> None:
     parser.add_argument("--rotation", type=int, default=0)
     parser.add_argument("--attempted", action="append", default=[])
     parser.add_argument("--provider", choices=("opencode-free", "openrouter-free"), default="opencode-free")
-    parser.add_argument("--roster", type=Path, default=Path(".github/free-model-factories.tsv"))
     args = parser.parse_args()
     if args.smoke_log is not None:
         if not args.runtime_model or args.outcome_file is None:
@@ -239,7 +222,6 @@ def main() -> None:
         args.catalog.read_text(encoding="utf-8"),
         args.worker,
         args.rotation,
-        args.roster,
         args.comments,
         exclusions_path=args.exclusions_file,
         attempted=set(args.attempted),
