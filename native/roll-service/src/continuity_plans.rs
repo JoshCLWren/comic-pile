@@ -2060,14 +2060,22 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
     let mut display = serde_json::Map::new();
     
     if let Some(m) = metadata_json {
-        if let Some(title) = m.get("name").or_else(|| m.get("title")) {
-            if let Some(s) = title.as_str() {
-                if !s.trim().is_empty() {
-                    display.insert("title".to_string(), serde_json::Value::String(s.trim().to_string()));
-                }
+        // Extract title - check both "name" and "title" keys
+        let title_str: Option<String> = m.get("name")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                m.get("title")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            });
+        if let Some(s) = title_str {
+            if !s.trim().is_empty() {
+                display.insert("title".to_string(), serde_json::Value::String(s.trim().to_string()));
             }
         }
         
+        // Extract publisher
         if let Some(publisher) = m.get("publisher") {
             if let Some(s) = publisher.as_str() {
                 if !s.trim().is_empty() {
@@ -2084,6 +2092,7 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
             }
         }
         
+        // Extract start_year
         if let Some(start_year) = m.get("start_year") {
             if let Some(y) = start_year.as_i64() {
                 display.insert("start_year".to_string(), serde_json::Value::Number(y.into()));
@@ -2094,14 +2103,25 @@ fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_j
             }
         }
         
-        if let Some(issue_count) = m.get("count_of_issues").or_else(|| m.get("issue_count")) {
-            if let Some(c) = issue_count.as_i64() {
-                display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
-            } else if let Some(s) = issue_count.as_str() {
-                if let Ok(c) = s.trim().parse::<i64>() {
-                    display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
-                }
-            }
+        // Extract issue_count - check both "count_of_issues" and "issue_count" keys
+        let issue_count = m.get("count_of_issues")
+            .and_then(|v| v.as_i64())
+            .or_else(|| {
+                m.get("count_of_issues")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| s.trim().parse::<i64>().ok())
+            })
+            .or_else(|| {
+                m.get("issue_count")
+                    .and_then(|v| v.as_i64())
+            })
+            .or_else(|| {
+                m.get("issue_count")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| s.trim().parse::<i64>().ok())
+            });
+        if let Some(c) = issue_count {
+            display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
         }
     }
     
