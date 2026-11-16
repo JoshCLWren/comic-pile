@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/workflows/fixed-model-factory-dispatch-recovery.yml'
       - '.github/scripts/factory_heartbeat_health.py'
+      - '.github/scripts/factory_runtime_view.py'
+      - '.github/scripts/factory_registry_ingest.py'
       - '.github/factory-expected-workers.json'
 
 permissions:
@@ -43,10 +45,13 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps([registry_comments()]))' \
-            > /tmp/factory-registry-comments.json
+          # Capture only changed, trusted marker observations. No 1.2MB cache.
+          python3 .github/scripts/factory_registry_ingest.py
+
+          python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_runtime_view import export_view; print(json.dumps(export_view(sys.argv[1])))' "$GITHUB_REPOSITORY" \
+            > /tmp/factory-runtime-view.json
           python3 .github/scripts/factory_heartbeat_health.py \
-            --comments /tmp/factory-registry-comments.json \
+            --view /tmp/factory-runtime-view.json \
             --output /tmp/factory-heartbeat-health.json \
             --summary "$GITHUB_STEP_SUMMARY"
 

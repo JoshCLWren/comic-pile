@@ -61,7 +61,7 @@ API calls and all individual targets/checks/reviews/mutations remain live.
 | `factory-github-get-v1:*` KV | Duplicated GitHub REST responses | Removed; bounded migration cleanup deletes rows |
 | `<repo>:open-issues`, `<repo>:open-prs` KV | Candidate discovery | Per-job memory; obsolete rows deleted |
 | `factory-projection-v1:*` KV | Duplicated issue/PR state and full-snapshot watermarks | Removed; targeted event inputs and hourly recovery replace synchronization |
-| `<repo>:registry-comments` KV | Fleet heartbeat/model compatibility and comment locators | Still consumed by registry readers, dashboard and worker preparation; must migrate before this cache can be deleted |
+| `<repo>:registry-comments` KV | Retired full registry snapshot | Replaced by compact lifecycle/model/provider records, targeted trusted GitHub marker checks, and bounded comment deltas. Remove the row after deployed workflow verification |
 | `factory-lease-v1:*` KV | Atomic worker and target exclusion | Retained; acquired together under a short transaction lock, renewed only after live run verification, released by original UUID |
 | Worker/model/provider backoff KV families | Fibonacci/exponential retry across independent runs | Retained; no model/provider credentials or source retirement on ordinary transient failures |
 | `factory_model_health` | Verified source/model failures, cooldowns, explicit 410 retirement | Retained coordination; prevents concurrent independent runs repeatedly probing broken routes |
@@ -128,7 +128,7 @@ deployment 43770738284. Completion #5219 (`4a670a4085`) used actual fast-merge r
 completed successfully with an actual terminal Entry run ID and woke dispatcher
 43771835176, whose run title carries that completion context.
 
-**The broader migration is unfinished:** registry cache consumers, legacy check-table cleanup,
+**The registry-snapshot migration:** after the production cutover, legacy check-table cleanup,
 redundant lifecycle observations, final bounded-retention policy/cleanup,
 complete live worker/continuation evidence and actual before/after per-cycle
 measurements remain. A green merge or a simulated handoff does not establish

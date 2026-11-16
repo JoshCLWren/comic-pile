@@ -104,32 +104,6 @@ def test_github_failure_releases_refresh_claim_and_propagates(monkeypatch, tmp_p
     assert len(releases) == 1
 
 
-def test_incremental_comments_fetches_since_latest_updated_timestamp():
-    existing = [
-        {"id": 1, "created_at": "2026-11-12T09:00:00Z", "updated_at": "2026-11-12T09:00:00Z", "body": "old"},
-        {"id": 2, "created_at": "2026-11-12T10:00:00Z", "updated_at": "2026-11-12T10:00:00Z", "body": "before"},
-    ]
-    calls = []
-    def since(value):
-        calls.append(value)
-        return [
-            {"id": 2, "created_at": "2026-11-12T10:00:00Z", "updated_at": "2026-11-12T11:00:00Z", "body": "edited"},
-            {"id": 3, "created_at": "2026-11-12T11:00:00Z", "updated_at": "2026-11-12T11:00:00Z", "body": "new"},
-        ]
-    result = cache.incremental_comments(existing, since)
-    assert calls == ["2026-11-12T09:59:00Z"]
-    assert [item["id"] for item in result] == [1, 2, 3]
-    assert result[1]["body"] == "edited"
-
-
-def test_first_registry_fill_uses_full_history_and_rejects_bad_events():
-    calls = []
-    assert cache.incremental_comments([], lambda since: calls.append(since) or [{"id": 1}]) == [{"id": 1}]
-    assert calls == [None]
-    with pytest.raises(ValueError, match="malformed issue comment"):
-        cache.incremental_comments([], lambda _: [{"body": "no id"}])
-
-
 def test_invalid_cache_ttl_fails_fast():
     with pytest.raises(ValueError, match="TTL"):
         cache.cached_json("issues", lambda _: [], ttl_seconds=0)
@@ -211,12 +185,12 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert "run / factory" in collector
 
 
-def test_recovery_watchdog_loads_paginated_compatible_neon_registry() -> None:
+def test_recovery_watchdog_uses_trusted_bounded_neon_runtime_view() -> None:
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/fixed-model-factory-dispatch-recovery.yml").read_text()
-    assert "from factory_completion_controller import registry_comments" in workflow
-    assert "json.dumps([registry_comments()])" in workflow
-    assert "issues/1093/comments?per_page=100" not in workflow
-    assert "factory_heartbeat_health.py" in workflow
+    assert "from factory_runtime_view import export_view" in workflow
+    assert "--view /tmp/factory-runtime-view.json" in workflow
+    assert "factory_registry_ingest.py" in workflow
+    assert "registry_comments()" not in workflow
     assert "uses: ./.github/actions/factory-state-cache" in workflow
 
 
@@ -399,60 +373,3 @@ def test_regular_status_job_prunes_only_in_trusted_controller():
     assert "factory_state_cache.py prune-obsolete" not in reconciliation
 
 
-def test_compacted_registry_retains_essential_evidence_without_old_history():
-    from datetime import UTC, datetime
-
-    def comment(id, updated, body, association="OWNER"):
-        return {
-            "id": id, "created_at": updated, "updated_at": updated,
-            "body": body, "author_association": association,
-        }
-
-    records = [
-        comment(1, "2026-10-01T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\nWorker: opencode-free-model-factory-7\nAttempt outcome: provider_failure\nUpdated: 2026-10-01T00:00:00Z"),
-        comment(2, "2026-10-02T00:00:00Z", "Source: kilo-auto\nModel: free/test\nAttempt outcome: model_unavailable\nUpdated: 2026-10-02T00:00:00Z"),
-        comment(3, "2026-10-03T00:00:00Z", "<!-- factory-model-retired-410:v1 -->\nSource: kilo-auto\nModel: free/test\nUpdated: 2026-10-03T00:00:00Z"),
-        comment(4, "2026-10-04T00:00:00Z", "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-7 -->\nWorker: opencode-free-model-factory-7\nAttempt outcome: success\nUpdated: 2026-10-04T00:00:00Z"),
-        comment(5, "2026-10-05T00:00:00Z", "Source: kilo-auto\nModel: free/test\nAttempt outcome: success\nUpdated: 2026-10-05T00:00:00Z"),
-        comment(6, "2026-11-14T23:00:00Z", "Run: 555\nWorker: opencode-free-model-factory-8"),
-        comment(7, "2026-10-06T00:00:00Z", "untrusted ancient filler", "NONE"),
-        comment(8, "2026-11-15T00:00:00Z", "untrusted fresh observation", "NONE"),
-        comment(9, "2026-10-07T00:00:00Z", "<!-- factory-completion-funnel:v1 -->\nUpdated: 2026-10-07T00:00:00Z"),
-    ]
-    compacted = cache.compact_registry_comments(
-        records,
-        trusted=lambda row: row.get("author_association") == "OWNER",
-        now=datetime(2026, 11, 15, 12, tzinfo=UTC),
-    )
-    assert {row["id"] for row in compacted} == {3, 4, 5, 6, 8, 9}
-    assert [row["id"] for row in compacted] == [3, 4, 5, 9, 6, 8]
-    # Preserve the freshest GitHub update so the incremental cursor never
-    # starts paging all the old registry comments again.
-    since = []
-    merged = cache.incremental_comments(compacted, lambda cursor: since.append(cursor) or [])
-    assert since == ["2026-11-14T23:59:00Z"]
-    assert merged == compacted
-
-
-def test_compacted_registry_has_bounded_growth_and_honors_edited_old_comment():
-    from datetime import UTC, datetime
-
-    now = datetime(2026, 11, 15, 12, tzinfo=UTC)
-    historic = [
-        {"id": i, "created_at": f"2026-10-{(i % 28) + 1:02d}T00:00:00Z",
-         "updated_at": f"2026-10-{(i % 28) + 1:02d}T00:00:00Z",
-         "body": "unrelated historical comment", "author_association": "OWNER"}
-        for i in range(1, 1001)
-    ]
-    fresh = {"id": 1001, "created_at": "2026-11-15T11:00:00Z",
-             "updated_at": "2026-11-15T11:00:00Z",
-             "body": "current", "author_association": "OWNER"}
-    slim = cache.compact_registry_comments(
-        [*historic, fresh], trusted=lambda _: True, now=now,
-    )
-    assert [item["id"] for item in slim] == [1001]
-    edited = {**historic[0], "updated_at": "2026-11-15T11:30:00Z",
-              "body": "edited historical observation"}
-    merged = cache.incremental_comments(slim, lambda _: [edited])
-    again = cache.compact_registry_comments(merged, trusted=lambda _: True, now=now)
-    assert {item["id"] for item in again} == {1, 1001}
