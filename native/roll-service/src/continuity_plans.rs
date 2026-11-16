@@ -1621,12 +1621,11 @@ pub async fn create_release_source(
     tx.commit().await.map_err(db::query_error)?;
 
     // Extract provider title from metadata
-    let provider_title = metadata_json
-        .and_then(|m| {
-            m.get("name").and_then(|v| v.as_str())
-                .or_else(|| m.get("title").and_then(|v| v.as_str()))
-        })
-        .map(|s| s.to_string());
+    let provider_title = metadata_json.as_ref().and_then(|m| {
+        let name_str = m.get("name").and_then(|v| v.as_str());
+        let title_str = m.get("title").and_then(|v| v.as_str());
+        name_str.or(title_str).map(|s| s.to_string())
+    });
 
     let response = ReleaseSourceResponse {
         id: source_id,
@@ -1706,12 +1705,11 @@ pub async fn list_release_sources(
         .iter()
         .map(|row| {
             let metadata_json: Option<serde_json::Value> = row.get(11);
-            let provider_title = metadata_json
-                .and_then(|m| {
-                    m.get("name").and_then(|v| v.as_str())
-                        .or_else(|| m.get("title").and_then(|v| v.as_str()))
-                })
-                .map(|s| s.to_string());
+            let provider_title = metadata_json.as_ref().and_then(|m| {
+                let name_str = m.get("name").and_then(|v| v.as_str());
+                let title_str = m.get("title").and_then(|v| v.as_str());
+                name_str.or(title_str).map(|s| s.to_string())
+            });
 
             ReleaseSourceResponse {
                 id: row.get(0),
@@ -1856,12 +1854,11 @@ pub async fn get_release_source(
         .ok_or_else(|| not_found(format!("Release source {source_id} not found")))?;
 
     let metadata_json: Option<serde_json::Value> = row.get(11);
-    let provider_title = metadata_json
-        .and_then(|m| {
-            m.get("name").and_then(|v| v.as_str())
-                .or_else(|| m.get("title").and_then(|v| v.as_str()))
-        })
-        .map(|s| s.to_string());
+    let provider_title = metadata_json.as_ref().and_then(|m| {
+        let name_str = m.get("name").and_then(|v| v.as_str());
+        let title_str = m.get("title").and_then(|v| v.as_str());
+        name_str.or(title_str).map(|s| s.to_string())
+    });
 
     let response = ReleaseSourceResponse {
         id: row.get(0),
@@ -1988,12 +1985,11 @@ pub async fn update_release_source(
         .map_err(db::query_error)?;
 
     let metadata_json: Option<serde_json::Value> = updated_row.get(11);
-    let provider_title = metadata_json
-        .and_then(|m| {
-            m.get("name").and_then(|v| v.as_str())
-                .or_else(|| m.get("title").and_then(|v| v.as_str()))
-        })
-        .map(|s| s.to_string());
+    let provider_title = metadata_json.as_ref().and_then(|m| {
+        let name_str = m.get("name").and_then(|v| v.as_str());
+        let title_str = m.get("title").and_then(|v| v.as_str());
+        name_str.or(title_str).map(|s| s.to_string())
+    });
 
     let response = ReleaseSourceResponse {
         id: updated_row.get(0),
