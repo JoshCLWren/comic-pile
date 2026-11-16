@@ -2011,29 +2011,25 @@ pub async fn save_overlap_decision(
         .await
         .map_err(db::query_error)?;
 
-    let decision_id: i32 = if let Some(row) = existing {
+    if let Some(row) = existing {
         let id: i32 = row.get(0);
         tx.execute(
-            "UPDATE custom_cbl_overlap_decisions SET updated_at = $5
+            "UPDATE custom_cbl_overlap_decisions SET updated_at = $2
              WHERE id = $1",
             &[&id, &now],
         )
         .await
         .map_err(db::query_error)?;
-        id
     } else {
-        let row = tx
-            .query_one(
-                "INSERT INTO custom_cbl_overlap_decisions
-                 (user_id, list_id, continuing_external_identity_id, waiting_external_identity_id, created_at, updated_at)
-                 VALUES ($1,$2,$3,$4,$5,$5)
-                 RETURNING id",
-                &[&user.id(), &list_id, continuing_identity_id, waiting_identity_id, &now],
-            )
-            .await
-            .map_err(db::query_error)?;
-        row.get(0)
-    };
+        tx.execute(
+            "INSERT INTO custom_cbl_overlap_decisions
+             (user_id, list_id, continuing_external_identity_id, waiting_external_identity_id, created_at, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$5)",
+            &[&user.id(), &list_id, continuing_identity_id, waiting_identity_id, &now],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
 
     // Advance version token
     let new_token = now_str.clone();
@@ -2095,15 +2091,14 @@ pub async fn delete_overlap_decision(
     guard_version(&current_token, params.expected_updated_at.as_deref())?;
 
     // Verify decision exists and belongs to this list
-    let decision = tx
-        .query_opt(
-            "SELECT id FROM custom_cbl_overlap_decisions
-             WHERE id = $1 AND list_id = $2 AND user_id = $3",
-            &[&decision_id, &list_id, &user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .ok_or_else(|| ApiError::NotFound(format!("Overlap decision {} not found", decision_id)))?;
+    tx.query_opt(
+        "SELECT id FROM custom_cbl_overlap_decisions
+         WHERE id = $1 AND list_id = $2 AND user_id = $3",
+        &[&decision_id, &list_id, &user.id()],
+    )
+    .await
+    .map_err(db::query_error)?
+    .ok_or_else(|| ApiError::NotFound(format!("Overlap decision {} not found", decision_id)))?;
 
     // Load all decisions for projection validation
     let all_decisions = load_overlap_decisions(&tx, user.id()).await?;
