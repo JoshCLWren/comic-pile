@@ -117,6 +117,10 @@ record_terminal_outcome() {
 
 record_agent_failure_outcome() {
   local status="$1" log_file="/tmp/opencode-factory-${WORKER}.log"
+  # Preserve trusted infrastructure failures through the final handoff.
+  if [[ -f "$TERMINAL_OUTCOME_FILE" ]] &&       grep -Eq '^control_plane_failure[[:space:]]' "$TERMINAL_OUTCOME_FILE"; then
+    return 0
+  fi
   # GNU timeout returns 124 when this worker's own deadline expires.
   # Reading source/docs mentioning quotas must not poison provider health.
   if (( status == 124 )); then
@@ -588,7 +592,20 @@ select_next_eligible_model() {
         return 1
       fi
     fi
+    # Persist one trusted transition bound to the unchanged assignment before
+    # the next real coding attempt. A failed write must stop the switch.
     stop_work_checkpoint
+    local transition_stamp transition_body
+    transition_stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    transition_body="$(printf '%s\nWorker: %s\nTarget: %s/%s\nExpected head: %s\nPrevious source: %s\nSource: %s\nModel: %s\nRuntime: %s\nUpdated: %s\nRun: %s' \
+      "<!-- factory-fleet-transition:v1 run=$GITHUB_RUN_ID -->" \
+      "$WORKER_ID" "$MODE" "$NUMBER" "${EXPECTED_HEAD:-}" \
+      "$SOURCE" "$next_source" "$next_model" "$next_runtime" "$transition_stamp" "$GITHUB_RUN_ID")"
+    if ! gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
+      -f body="$transition_body" >/dev/null; then
+      record_terminal_outcome control_plane_failure "failed durable fleet-transition provenance"
+      return 1
+    fi
     SOURCE="$next_source"
     MODEL="$next_model"
     RUNTIME_MODEL="$next_runtime"

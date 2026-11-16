@@ -602,3 +602,79 @@ def test_model_backoffs_are_in_trusted_catalog_exclusions():
     exclusions = run(operations._export_model_exclusions(db, REPO))
     assert exclusions["openrouter-free"] == ["vendor/failed:free"]
     assert "vendor/other:free" not in exclusions["openrouter-free"]
+
+
+def test_terminal_account_quota_not_treated_as_model_cooldown() -> None:
+    import inspect
+
+    body = inspect.getsource(operations.project_runtime)
+    assert "not terminal_account_scope and not delivered" in body
+    assert "for account_source, account_classification in sorted(account_failures.items())" in body
+    assert 'fibonacci_worker_delay(streak)' in body
+    assert 'if scope == "account":' in body
+
+
+def test_worker_provider_model_backoffs_remain_independent() -> None:
+    now = datetime.now(UTC)
+    future = now + timedelta(minutes=15)
+    model = "generated/model"
+    worker = "41"
+    row = {
+        "cache_key": f"factory-worker-backoff-v1:{REPO}:worker:{worker}",
+        "payload": [{"source": "nvidia", "model": model,
+                     "outcome": "provider_throttle", "streak": 3,
+                     "next_retry_at": future.isoformat()}],
+        "expires_at": future,
+    }
+    db = FakeConnection(backoffs=[row])
+    with patch.object(operations, "_roster", return_value={
+        worker: ("nvidia", "@catalog"),
+    }):
+        kept, rejected = run(operations._eligibility(db, REPO, [worker]))
+    assert kept == [worker]
+    assert not rejected
+
+
+def test_proven_account_cooldown_blocks_only_its_provider() -> None:
+    now = datetime.now(UTC)
+    future = now + timedelta(minutes=15)
+    row = {
+        "cache_key": f"factory-provider-backoff-v1:{REPO}:source:nvidia",
+        "payload": [{"source": "nvidia", "outcome": "provider_quota",
+                     "streak": 2, "delay_seconds": 600}],
+        "expires_at": future,
+    }
+    db = FakeConnection(backoffs=[row])
+    with patch.object(operations, "_roster", return_value={
+        "41": ("nvidia", "@catalog"),
+        "42": ("requesty", "@catalog"),
+    }):
+        kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
+    assert kept == ["42"]
+    assert len(rejected) == 1 and "nvidia" in rejected[0]
+
+
+def test_fleet_admission_does_not_double_book_capped_provider() -> None:
+    from unittest.mock import patch
+    import factory_source_budget
+
+    class CapacityConnection:
+        async def fetch(self, sql, *args):
+            assert "factory_provider_budget" in sql
+            return [
+                {"source": "requesty", "concurrency_limit": 1, "daily_limit": None,
+                 "cooldown_until": None, "quota_reset_at": None},
+                {"source": "nvidia", "concurrency_limit": None, "daily_limit": None,
+                 "cooldown_until": None, "quota_reset_at": None},
+            ]
+
+    with (
+        patch.object(operations, "_roster", return_value={"41": ("nvidia", "@catalog")}),
+        patch.object(factory_source_budget, "load_budgets", return_value={"cloudflare-workers-ai": 1}),
+    ):
+        allowed = run(operations._export_fleet_failover_sources(
+            CapacityConnection(), REPO, "41",
+        ))
+    assert "nvidia" in allowed
+    assert "requesty" not in allowed
+    assert "cloudflare-workers-ai" not in allowed
