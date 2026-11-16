@@ -941,7 +941,8 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
             if isinstance(raw, list):
                 from factory_work_policy import comment_is_trusted
                 for key, scope in missing.items():
-                    marker = (f"<!-- factory-{kinds[key]}:v1 "
+                    marker_kind = "attempt-outcome" if key == "__attempt_id" else "heartbeat"
+                    marker = (f"<!-- factory-{marker_kind}:v1 "
                               f"worker=opencode-free-model-factory-{worker} -->")
                     matches = [
                         item for item in raw
