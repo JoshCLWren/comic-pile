@@ -26,7 +26,9 @@ from app.models import Event, Issue, ReadingSession, Thread, User
 from route_harness import (
     SQL_BUDGET_SOURCES,
     StatementBreakdown,
+    assert_budget_rejects_extra_and_n_plus_one,
     assert_declared_budget,
+    assert_measured_budget_contract,
     assert_measured_statement_breakdown,
     assert_no_statement_growth,
     cargo_example_path,

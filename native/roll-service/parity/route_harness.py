@@ -27,6 +27,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, create_async_engine
@@ -162,6 +163,77 @@ def assert_measured_statement_breakdown(
         f"{method} {path} issued {measured.nested} nested trigger statements; "
         f"declared maximum is {nested_maximum}"
     )
+
+
+def assert_measured_budget_contract(
+    method: str,
+    path: str,
+    small: StatementBreakdown,
+    large: StatementBreakdown,
+) -> None:
+    """Assert that one measured route pair satisfies its declared budget.
+
+    The contract pins the absolute statement split, enforces the declared
+    maximum, and proves the statement count does not grow with data size.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+        small: Statement split measured with the small fixture.
+        large: Statement split measured with the large fixture.
+
+    Returns:
+        None; a mismatched measurement raises AssertionError.
+    """
+    assert_measured_statement_breakdown(method, path, small)
+    assert_measured_statement_breakdown(method, path, large)
+    assert_declared_budget(method, path, small.top_level, large.top_level)
+    assert_no_statement_growth(method, path, small.top_level, large.top_level)
+    assert small.nested == large.nested, (
+        f"{method} {path} nested statement count changed with data size: "
+        f"{small.nested} -> {large.nested}"
+    )
+
+
+def assert_budget_rejects_extra_and_n_plus_one(
+    method: str,
+    path: str,
+    small: StatementBreakdown,
+    large: StatementBreakdown,
+) -> None:
+    """Assert that an extra query and an N+1 burst both fail the budget test.
+
+    A route that issues one additional statement, or a per-row burst that only
+    appears for the large fixture, must be rejected by the same guards the
+    measured route pair is held to.
+
+    Args:
+        method: HTTP method of the declared operation.
+        path: Route path of the declared operation.
+        small: Statement split measured with the small fixture.
+        large: Statement split measured with the large fixture.
+
+    Returns:
+        None; a guard that tolerates the tampered split raises AssertionError.
+    """
+    extra_query = StatementBreakdown(
+        application=small.application + 1,
+        transaction_control=small.transaction_control,
+        runtime_overhead=small.runtime_overhead,
+        nested=small.nested,
+    )
+    with pytest.raises(AssertionError):
+        assert_measured_budget_contract(method, path, extra_query, large)
+    n_plus_one = StatementBreakdown(
+        application=large.application + 4,
+        transaction_control=large.transaction_control,
+        runtime_overhead=large.runtime_overhead,
+        nested=large.nested,
+    )
+    with pytest.raises(AssertionError):
+        assert_measured_budget_contract(method, path, small, n_plus_one)
+    with pytest.raises(AssertionError, match="grew with data size"):
+        assert_no_statement_growth(method, path, small.top_level, n_plus_one.top_level)
 
 
 @dataclass(frozen=True)
