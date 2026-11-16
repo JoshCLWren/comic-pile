@@ -8,7 +8,11 @@
 use crate::{
     auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection,
     reading_constraints::ValidatedReadingInputs, reading_eligibility,
-    reading_graph::cycle_conflict, ApiError, AppState,
+    reading_graph::cycle_conflict, reading_list::{
+        ReadingListBlockerExplanation, ReadingListDependency, ReadingListReader,
+        ReadingListReaderEntry,
+    },
+    ApiError, AppState,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -164,48 +168,6 @@ pub struct OverlapDecisionWrite {
     pub continuing_volume_id: String,
     pub waiting_volume_id: String,
     pub expected_updated_at: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct ReadingListReaderEntry {
-    pub id: i32,
-    pub position: i32,
-    pub issue_id: i32,
-    pub thread_id: i32,
-    pub series_name: String,
-    pub issue_number: String,
-    pub status: String,
-    pub is_checkpoint: bool,
-    pub gate: String,
-    pub skipped: bool,
-    pub checkpoint_target_issue_ids: Vec<i32>,
-    pub availability: String,
-    pub explanation: Option<ReadingListBlockerExplanation>,
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct ReadingListReader {
-    pub list_id: i32,
-    pub name: String,
-    pub mode: String,
-    pub execution_mode: String,
-    pub entries: Vec<ReadingListReaderEntry>,
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct ReadingListDependency {
-    pub thread_id: i32,
-    pub thread_title: String,
-    pub issue_number: String,
-    pub label: String,
-    pub issue_id: Option<i32>,
-}
-
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct ReadingListBlockerExplanation {
-    pub is_blocked: bool,
-    pub blocking_reasons: Vec<String>,
-    pub blocking_dependencies: Vec<ReadingListDependency>,
 }
 
 async fn lock_reader(tx: &Transaction<'_>, user_id: i32) -> Result<(), ApiError> {
