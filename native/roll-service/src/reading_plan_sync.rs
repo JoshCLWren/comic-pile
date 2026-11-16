@@ -1,12 +1,22 @@
 //! Same-path Rust cutover for the browser-called reading-plan-sync status
 //! operation (#4851, parent #4335).
+//!
+//! Preserves the Python `app/api/reading_plan_sync.py` wire contract at the
+//! same HTTP method and exact path:
+//!
+//! * `GET /api/v1/reading-plan-sync/status`
+//!
+//! `POST /api/v1/reading-plan-sync/sync` remains on the Python handler: its
+//! provider adoption pipeline is a separate, much larger port and must not be
+//! replaced by a placeholder that reports success without syncing anything.
+//! The native router therefore does not claim that path.
 
 #![forbid(unsafe_code)]
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
 use chrono::{DateTime, SecondsFormat, Utc};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 
 const STATUS_SQL: &str = "SELECT rps.id, rps.plan_id, rps.thread_id, \
@@ -33,52 +43,6 @@ pub struct SyncStatusResponse {
     pub total_sources: i64,
     pub enabled_sources: i64,
     pub sources: Vec<SyncStatusSource>,
-}
-
-/// Request schema for the sync operation.
-#[derive(Debug, Clone, Deserialize, utoipa::ToSchema)]
-pub struct SyncRequest {
-    pub as_of: String,
-    pub refresh: bool,
-}
-
-/// Response schema for the sync operation.
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct SyncResponse {
-    pub success: bool,
-    pub message: String,
-    pub result: SyncReport,
-}
-
-/// Report schema for the sync operation.
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct SyncReport {
-    pub total_sources: i64,
-    pub enabled_sources: i64,
-    pub checked_sources: i64,
-    pub successful_sources: i64,
-    pub failed_sources: i64,
-    pub issues_checked: i64,
-    pub created_issues: i64,
-    pub reused_issues: i64,
-    pub future_skips: i64,
-    pub unknown_date_skips: i64,
-    pub conflicts: i64,
-    pub issue_failures: i64,
-    pub excluded_sources: i64,
-    pub excluded_issues: i64,
-    pub skipped_sources: i64,
-    pub failures: Vec<SourceSyncFailure>,
-}
-
-/// Failure schema for the sync operation.
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
-pub struct SourceSyncFailure {
-    pub source_id: i32,
-    pub plan_id: i32,
-    pub thread_id: i32,
-    pub volume_id: String,
-    pub error: String,
 }
 
 /// Wire parity with Python `SyncStatusSource.last_synced_at`
@@ -127,90 +91,6 @@ pub async fn get_sync_status(
     }))
 }
 
-/// Serve `POST /api/v1/reading-plan-sync/sync`.
-pub async fn sync_released_issues(
-    State(state): State<Arc<AppState>>,
-    user: AuthenticatedUser,
-    Json(payload): Json<SyncRequest>,
-) -> Result<Json<SyncResponse>, ApiError> {
-    let connection = db::checkout(&state).await?;
-
-    // Parse the as_of date string
-    let _as_of = DateTime::parse_from_rfc3339(&payload.as_of)
-        .map_err(|_| ApiError::BadRequest("Invalid date format. Expected RFC 3339.".to_string()))?
-        .with_timezone(&Utc);
-
-    // Get all sources and enabled sources for the user
-    let all_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
-                           FROM reading_plan_release_sources rps
-                           JOIN continuity_plans cp ON cp.id = rps.plan_id
-                           JOIN external_identities ei ON ei.id = rps.external_identity_id
-                           WHERE cp.user_id = $1";
-
-    let all_sources_rows = connection
-        .query(all_sources_sql, &[&user.id()])
-        .await
-        .map_err(db::query_error)?;
-
-    let enabled_sources_sql = "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled, rps.last_synced_at
-                              FROM reading_plan_release_sources rps
-                              JOIN continuity_plans cp ON cp.id = rps.plan_id
-                              JOIN external_identities ei ON ei.id = rps.external_identity_id
-                              WHERE cp.user_id = $1 AND rps.enabled = true";
-
-    let enabled_sources_rows = connection
-        .query(enabled_sources_sql, &[&user.id()])
-        .await
-        .map_err(db::query_error)?;
-
-    let report = SyncReport {
-        total_sources: all_sources_rows.len() as i64,
-        enabled_sources: enabled_sources_rows.len() as i64,
-        checked_sources: 0,
-        successful_sources: 0,
-        failed_sources: 0,
-        issues_checked: 0,
-        created_issues: 0,
-        reused_issues: 0,
-        future_skips: 0,
-        unknown_date_skips: 0,
-        conflicts: 0,
-        issue_failures: 0,
-        excluded_sources: 0,
-        excluded_issues: 0,
-        skipped_sources: 0,
-        failures: vec![],
-    };
-
-    if enabled_sources_rows.is_empty() {
-        // No enabled sources, return empty report
-        return Ok(Json(SyncResponse {
-            success: true,
-            message: "No enabled sources to sync".to_string(),
-            result: report,
-        }));
-    }
-
-    // For now, return a successful response with placeholder data
-    // The full implementation would require:
-    // 1. Building a ComicVine client
-    // 2. Grouping sources by volume
-    // 3. Fetching issue rosters for each volume
-    // 4. Processing each issue against the boundary date
-    // 5. Adopting issues using the provider_issue_adoption service
-    // 6. Extending plans with adopted issues
-    // 7. Updating last_synced_at for successful sources
-
-    // TODO: Implement the full sync logic based on the Python implementation
-    // This requires additional services and repositories to be implemented in Rust
-
-    Ok(Json(SyncResponse {
-        success: true,
-        message: "Sync completed successfully".to_string(),
-        result: report,
-    }))
-}
-
 #[utoipa::path(
     get,
     path = "/api/v1/reading-plan-sync/status",
@@ -226,38 +106,10 @@ pub async fn sync_released_issues(
 #[allow(dead_code)]
 pub fn get_sync_status_documentation() {}
 
-/// Documentation-only operation for the sync handler.
-#[utoipa::path(
-    post,
-    path = "/api/v1/reading-plan-sync/sync",
-    tag = "reading-plan-sync",
-    operation_id = "reading_plan_sync_sync",
-    request_body = SyncRequest,
-    responses(
-        (status = 200, description = "Sync released issues for the caller's sources", body = SyncResponse),
-        (status = 401, description = "Not authenticated"),
-        (status = 422, description = "Request payload failed validation"),
-        (status = 503, description = "Database temporarily unavailable")
-    ),
-    security(("HTTPBearer" = []))
-)]
-#[allow(dead_code)]
-pub fn sync_released_issues_documentation() {}
-
 #[derive(utoipa::OpenApi)]
 #[openapi(
-    paths(
-        get_sync_status_documentation,
-        sync_released_issues_documentation
-    ),
-    components(schemas(
-        SyncStatusSource,
-        SyncStatusResponse,
-        SyncRequest,
-        SyncResponse,
-        SyncReport,
-        SourceSyncFailure
-    )),
+    paths(get_sync_status_documentation),
+    components(schemas(SyncStatusSource, SyncStatusResponse)),
     modifiers(&ReadingPlanSyncSecurityAddon)
 )]
 pub struct ReadingPlanSyncApi;

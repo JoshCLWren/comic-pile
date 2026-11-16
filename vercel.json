@@ -407,13 +407,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/reading-orders/[0-9]+/items$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "/api/v2/dependencies/",
       "methods": [
         "POST"
@@ -573,21 +566,7 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/reading-orders/[^/]+/items$",
-      "methods": [
-        "POST"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading-plan-sync/status$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/reading-plan-sync/sync$",
+      "src": "^/api/v1/reading-orders/[0-9]+/items$",
       "methods": [
         "POST"
       ],
@@ -1925,14 +1904,6 @@
       "src": "^/api/v1/undo/[^/]+/undo/[^/]+$",
       "methods": [
         "POST",
-        "OPTIONS"
-      ],
-      "dest": "/api/index.py"
-    },
-    {
-      "src": "^/api/v2/reading\\-boundaries/[^/]+$",
-      "methods": [
-        "GET",
         "OPTIONS"
       ],
       "dest": "/api/index.py"

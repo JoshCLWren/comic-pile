@@ -27,11 +27,7 @@ PUBLIC_CATALOGS: dict[str, str] = {
 }
 
 
-<<<<<<< HEAD
-class CatalogUnavailableError(RuntimeError):
-=======
 class PublishedCatalogUnavailableError(RuntimeError):
->>>>>>> origin/main
     """A provider catalog cannot prove an eligible route."""
 
 
@@ -65,11 +61,7 @@ def free_model_ids(source: str, catalog: Mapping[str, Any]) -> list[str]:
         raise ValueError(f"source does not expose verified zero-price catalog: {source}")
     rows = catalog.get("data")
     if not isinstance(rows, list):
-<<<<<<< HEAD
-        raise CatalogUnavailableError("published model catalog has no data list")
-=======
         raise PublishedCatalogUnavailableError("published model catalog has no data list")
->>>>>>> origin/main
     return sorted({
         row["id"]
         for row in rows
@@ -88,11 +80,7 @@ def choose_model(
         if model not in (exclusions or set())
     ]
     if not candidates:
-<<<<<<< HEAD
-        raise CatalogUnavailableError(f"{source}: no verified zero-price models available")
-=======
         raise PublishedCatalogUnavailableError(f"{source}: no verified zero-price models available")
->>>>>>> origin/main
     # Deterministic across runs, independent of manually curated roster pins.
     seed = hashlib.sha256(f"{source}:{worker}".encode()).digest()
     return candidates[int.from_bytes(seed[:8], "big") % len(candidates)]
@@ -109,20 +97,6 @@ def published_catalog(source: str, *, timeout: float = 20) -> dict[str, Any]:
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
-<<<<<<< HEAD
-                raise CatalogUnavailableError(f"{source}: model catalog HTTP {response.status}")
-            raw = response.read(5_000_001)
-    except (OSError, urllib.error.URLError) as exc:
-        raise CatalogUnavailableError(f"{source}: model catalog unavailable") from exc
-    if len(raw) > 5_000_000:
-        raise CatalogUnavailableError(f"{source}: model catalog exceeded size limit")
-    try:
-        catalog = json.loads(raw)
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise CatalogUnavailableError(f"{source}: invalid published catalog JSON") from exc
-    if not isinstance(catalog, dict):
-        raise CatalogUnavailableError(f"{source}: catalog must be a JSON object")
-=======
                 raise PublishedCatalogUnavailableError(f"{source}: model catalog HTTP {response.status}")
             raw = response.read(5_000_001)
     except (OSError, urllib.error.URLError) as exc:
@@ -135,7 +109,6 @@ def published_catalog(source: str, *, timeout: float = 20) -> dict[str, Any]:
         raise PublishedCatalogUnavailableError(f"{source}: invalid published catalog JSON") from exc
     if not isinstance(catalog, dict):
         raise PublishedCatalogUnavailableError(f"{source}: catalog must be a JSON object")
->>>>>>> origin/main
     return catalog
 
 
@@ -152,24 +125,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.catalog_json else published_catalog(args.source)
         )
         if not isinstance(catalog, dict):
-<<<<<<< HEAD
-            raise CatalogUnavailableError("catalog must be an object")
-=======
             raise PublishedCatalogUnavailableError("catalog must be an object")
->>>>>>> origin/main
         excluded: set[str] = set()
         if args.exclusions_file and args.exclusions_file.is_file():
             raw = json.loads(args.exclusions_file.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-<<<<<<< HEAD
-                raise CatalogUnavailableError("Neon model exclusions are invalid")
-            models = raw.get(args.source, [])
-            if not isinstance(models, list) or not all(isinstance(x, str) for x in models):
-                raise CatalogUnavailableError("Neon model exclusions are invalid")
-            excluded = set(models)
-        model = choose_model(args.source, args.worker, catalog, excluded)
-    except (CatalogUnavailableError, ValueError, OSError, json.JSONDecodeError) as exc:
-=======
                 raise PublishedCatalogUnavailableError("Neon model exclusions are invalid")
             models = raw.get(args.source, [])
             if not isinstance(models, list) or not all(isinstance(x, str) for x in models):
@@ -177,7 +137,6 @@ def main(argv: list[str] | None = None) -> int:
             excluded = set(models)
         model = choose_model(args.source, args.worker, catalog, excluded)
     except (PublishedCatalogUnavailableError, ValueError, OSError, json.JSONDecodeError) as exc:
->>>>>>> origin/main
         print(f"factory catalog: {exc}", file=sys.stderr)
         return 1
     print(json.dumps({"source": args.source, "model": model, "catalog_verified": True}))

@@ -21,7 +21,7 @@ http = "1.1"
 bcrypt = "0.17"
 axum = "0.8"
 base64 = "0.22"
-chrono = { version = "0.4", features = ["serde"] }
+chrono = "0.4"
 chrono-tz = "0.10"
 deadpool-postgres = "0.14"
 jsonwebtoken = { version = "9", default-features = false }
