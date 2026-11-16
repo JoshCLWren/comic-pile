@@ -179,27 +179,39 @@ MODEL_RETRY_CLASSES = frozenset({
 })
 
 
-def validate_intermediate_model_failures(raw: Any, source: str) -> list[tuple[str, str]]:
-    """Normalize trusted per-attempt outcomes; preserve legacy smoke evidence."""
+def validate_intermediate_model_failures(
+    raw: Any, source: str,
+) -> list[tuple[str, str, str, str]]:
+    """Normalize only attested exact (source, model, outcome, scope) events."""
+    from factory_provider_candidates import ADAPTERS
+
     if not raw:
         return []
     if not isinstance(raw, list) or len(raw) > 1000:
         raise ValueError("invalid trusted intermediate model failures")
     accepted = MODEL_RETRY_CLASSES | {"model_retired_410"}
-    seen: dict[str, str] = {}
+    seen: dict[tuple[str, str], tuple[str, str]] = {}
     for entry in raw:
         if isinstance(entry, str) and source == "opencode-free":
-            model, classification = entry, "model_unavailable"
+            failure_source, model, classification, scope = source, entry, "model_unavailable", "model"
         elif isinstance(entry, dict):
+            failure_source = entry.get("source", source)
             model, classification = entry.get("model"), entry.get("outcome")
+            scope = entry.get("scope", "model")
         else:
             raise ValueError("invalid trusted intermediate model failure entry")
-        if (not isinstance(model, str)
+        if (not isinstance(failure_source, str) or failure_source not in ADAPTERS
+                or not isinstance(model, str)
                 or not re.fullmatch(r"[\w./:-]{1,180}", model)
-                or classification not in accepted):
+                or classification not in accepted
+                or scope not in {"account", "model"}
+                or (scope == "account" and classification not in {"provider_quota", "provider_failure"})):
             raise ValueError("invalid trusted intermediate model failure identity")
-        seen[model] = classification
-    return sorted(seen.items())
+        seen[(failure_source, model)] = (classification, scope)
+    return [
+        (s, model, *seen[(s, model)]) for s, model in sorted(seen)
+    ]
+
 
 
 def attributable_model_failure(classification: str, proven: bool) -> bool:
