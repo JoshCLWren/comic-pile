@@ -31,6 +31,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node --check scripts/fcm-provider-health.mjs
           npm install --prefix "$RUNNER_TEMP/fcm" --no-save --ignore-scripts --no-audit --no-fund free-coding-models@0.6.1
       - name: Probe configured providers using FCM
         shell: bash
@@ -40,7 +41,6 @@ jobs:
           FCM_REPORT_PATH: ${{ runner.temp }}/fcm-provider-report.json
           FREE_CODING_MODELS_TELEMETRY: '0'
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          AION_API_KEY: ${{ secrets.AION_API_KEY }}
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           GOOGLE_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -57,7 +57,6 @@ jobs:
           SCALEWAY_API_KEY: ${{ secrets.SCALEWAY_API_KEY }}
           SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
           AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
-          Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}
         run: node scripts/fcm-provider-health.mjs
       - name: Upload credential diagnostic report
         if: always()
