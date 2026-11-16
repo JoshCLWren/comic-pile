@@ -25,6 +25,8 @@ def test_observer_uses_compact_verified_marker_ids_and_cold_start_fallback() -> 
     assert '.__attempt_id[0]' in publisher
     assert 'from factory_registry_ingest import marker_ids' in publisher
     assert 'remember_verified_markers' in publisher
-    assert 'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' in publisher
+    assert 'gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100"' not in publisher
+    assert "Unable to verify attempt marker; leaving trusted Neon completion intact" in publisher
+    assert "HTTP 404" in publisher
     assert 'from factory_completion_controller import registry_comments' not in publisher
     assert "Newer attempt evidence from run" in publisher
