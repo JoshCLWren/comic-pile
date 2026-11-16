@@ -8,6 +8,9 @@ on:
       - '.github/scripts/factory_published_model_catalog.py'
       - '.github/scripts/factory_live_opencode.py'
       - '.github/scripts/factory_runtime_model_select.py'
+      - '.github/scripts/factory_model_failover.py'
+      - '.github/scripts/free-model-factory-worker.sh'
+      - '.github/scripts/factory_dynamic_outcome.py'
       - '.github/scripts/factory_kilo_catalog.py'
       - '.github/scripts/factory_worker_slots.py'
       - '.github/scripts/factory_dispatch_credential_filter.py'
@@ -21,6 +24,7 @@ on:
       - 'tests/test_factory_provider_candidates.py'
       - 'tests/test_factory_worker_slots.py'
       - 'tests/test_factory_runtime_model_select.py'
+      - 'tests/test_factory_model_failover.py'
       - 'tests/test_factory_kilo_catalog.py'
   workflow_dispatch:
 
@@ -47,6 +51,7 @@ jobs:
             tests/test_factory_provider_candidates.py \
             tests/test_factory_worker_slots.py \
             tests/test_factory_runtime_model_select.py \
+            tests/test_factory_model_failover.py \
             tests/test_factory_kilo_catalog.py \
             tests/test_factory_neon_operations.py \
             tests/test_factory_full_completion_controller.py \
