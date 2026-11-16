@@ -40,8 +40,11 @@
       "bucket": "v1_operations",
       "method": "DELETE",
       "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
@@ -51,8 +54,11 @@
       "bucket": "v1_operations",
       "method": "POST",
       "path": "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
-      "dest": "/api/index.py",
+      "dest": "/api/native_roll.rs",
       "src": "^/api/v1/continuity\\-plans/[^/]+/dependencies/[^/]+$",
+      "runtime": "native-rust",
+      "status": "target",
+      "owning_issue": 4838,
       "consumers": [
         "frontend/src/services/api-continuity-plans.ts",
         "frontend/src/services/api-reading-orders.ts"
