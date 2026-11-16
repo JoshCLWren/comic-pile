@@ -972,6 +972,49 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
     return excluded
 
 
+async def _export_candidate_health(conn: Any, repo: str) -> dict[str, Any]:
+    """Compact trusted execution evidence, passed to the unprivileged runner.
+
+    No secrets, leases or comment bodies cross the Actions job boundary.
+    This is advisory candidate ranking, never authorization to dispatch.
+    """
+    models = await conn.fetch(
+        """SELECT source, model, status, last_outcome, cooldown_until,
+                  updated_at FROM public.factory_model_health WHERE repo=$1""",
+        repo,
+    )
+    providers = await conn.fetch(
+        """SELECT source, last_outcome, cooldown_until, quota_reset_at,
+                  updated_at FROM public.factory_provider_budget WHERE repo=$1""",
+        repo,
+    )
+    def seconds(value: Any) -> int | None:
+        return int(value.timestamp()) if value is not None else None
+    return {
+        "models": [
+            {"source": row["source"], "model": row["model"],
+             "status": row["status"], "outcome": row["last_outcome"],
+             "updated": seconds(row["updated_at"]),
+             "until": seconds(row["cooldown_until"])}
+            for row in models
+        ],
+        "providers": [
+            {"source": row["source"], "outcome": row["last_outcome"],
+             "updated": seconds(row["updated_at"]),
+             "until": max(
+                 seconds(row["cooldown_until"]) or 0,
+                 seconds(row["quota_reset_at"]) or 0)}
+            for row in providers
+        ],
+    }
+
+
+def export_candidate_health(repo: str) -> dict[str, Any]:
+    if not enabled():
+        raise RuntimeError("Neon health unavailable; cannot prove executable candidates")
+    return _run(_export_candidate_health, repo)
+
+
 def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
     if not enabled():
         raise RuntimeError("Neon is required for model health snapshot")
@@ -980,7 +1023,7 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
 
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
@@ -1008,6 +1051,8 @@ def main() -> int:
         print("[factory-operations] schema ready")
     elif args.command=="export-model-exclusions":
         print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
+    elif args.command=="export-candidate-health":
+        print(json.dumps(export_candidate_health(args.repo),sort_keys=True,separators=(",",":")))
     elif args.command=="filter":
         workers=[str(w) for w in json.load(sys.stdin)]
         kept,denied=filter_workers(args.repo,workers)

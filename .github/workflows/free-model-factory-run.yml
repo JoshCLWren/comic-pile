@@ -89,6 +89,7 @@ jobs:
       exclusions: ${{ steps.prepare.outputs.exclusions }}
       heartbeat_id: ${{ steps.prepare.outputs.heartbeat_id }}
       attempt_id: ${{ steps.prepare.outputs.attempt_id }}
+      candidate_health: ${{ steps.prepare.outputs.candidate_health }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -116,6 +117,9 @@ jobs:
           snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$FACTORY_WORKER")"
           jq -e 'type == "object"' <<< "$snapshot" >/dev/null
           echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
+          candidate_health="$(python3 .github/scripts/factory_state_operations.py export-candidate-health --repo "$GITHUB_REPOSITORY")"
+          jq -e '.models | type == "array"' <<< "$candidate_health" >/dev/null
+          echo "candidate_health=$candidate_health" >> "$GITHUB_OUTPUT"
           echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
           echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
 
@@ -128,6 +132,7 @@ jobs:
       worker_session_started: ${{ steps.worker_session.outputs.started }}
     env:
       FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}
+      FACTORY_CANDIDATE_HEALTH: ${{ needs.validate_assignment.outputs.candidate_health }}
       FACTORY_HEARTBEAT_COMMENT_ID: ${{ needs.validate_assignment.outputs.heartbeat_id }}
       FACTORY_ATTEMPT_COMMENT_ID: ${{ needs.validate_assignment.outputs.attempt_id }}
       # Workflow token handles GitHub API, labels, comments, and backlog-zero
@@ -582,16 +587,14 @@ jobs:
           comments_file="$RUNNER_TEMP/factory-attempt-comments.json"
           jq -cn --argjson candidates "$catalog_candidates" \
             '{candidates: $candidates}' > "$discovery_file"
-          if ! gh api --paginate --slurp \
-            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-            > "$comments_file"; then
-            printf 'control_plane_failure\tFactory health evidence could not be read\n' > "$discovery_outcome"
-            exit 1
-          fi
-
+          # The trusted preparation job already sent a compact durable
+          # model/provider health projection. Do not enumerate registry history.
+          printf '[]\n' > "$comments_file"
+          health_file="$RUNNER_TEMP/factory-candidate-health.json"
+          printf '%s\n' "$FACTORY_CANDIDATE_HEALTH" > "$health_file"
           selection="$(python3 .github/scripts/factory_candidate_health.py \
             --discovery "$discovery_file" --comments "$comments_file" \
-            --worker "$WORKER")"
+            --durable-health "$health_file" --worker "$WORKER")"
           source="$(jq -r '.selected.provider // empty' <<< "$selection")"
           model="$(jq -r '.selected.model // empty' <<< "$selection")"
           runtime_model="$(jq -r '.selected.runtime_model // empty' <<< "$selection")"
