@@ -117,7 +117,7 @@ jobs:
           # Write ANSI-colored logs to a local file, never to a terminal.
           retry_gh_api "$RUNNER_TEMP/factory-entry.log" --allow-escape-sequences \
             "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"
-          python3 .github/scripts/classify-fixed-model-run.py \
+          python3 .github/scripts/factory_dynamic_outcome.py \
             --log "$RUNNER_TEMP/factory-entry.log" \
             > "$RUNNER_TEMP/worker-outcome.json"
           # Code handoff is distinct from agent exit. Only potential successful
