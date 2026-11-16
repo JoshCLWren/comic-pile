@@ -109,8 +109,10 @@ def exercise_reconcile(
 
     def api(arguments: list[str]) -> object:
         calls.append(arguments)
-        if arguments[:2] == ["api", "--paginate"]:
-            return [{"workflow_runs": [run]}]
+        if arguments and arguments[0] == "api" and "actions/workflows/deploy-production.yml/runs" in arguments[-1]:
+            assert "--paginate" not in arguments
+            assert "per_page=20" in arguments[-1]
+            return {"workflow_runs": [run]}
         if arguments[:2] == ["issue", "list"]:
             return incidents
         return {}
@@ -284,3 +286,19 @@ def test_revision_is_published_before_preflight_dependencies() -> None:
     assert "deployment-attempt-${{ github.run_attempt }}" in preflight
     assert 'run_attempt: $run_attempt' in preflight
     assert "steps.revision.outputs.deploy_sha" in preflight
+
+
+
+def test_missing_deploy_job_evidence_does_not_crash_or_claim_success(
+    recovery: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rate-limited job lookup cannot fake a deploy or close its incident."""
+    run = failed_run()
+    run["conclusion"] = "success"
+    run.pop("jobs")
+    assert not recovery.successful_smokes(run)
+    calls = exercise_reconcile(
+        recovery, monkeypatch, run, [{"number": 8, "body": recovery.MARKER}]
+    )
+    assert not any("PATCH" in call or "state=closed" in call for call in calls)
+    assert not any("POST" in call for call in calls)
