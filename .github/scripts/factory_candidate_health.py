@@ -334,7 +334,6 @@ def rank_candidates(
 ) -> tuple[RankedCandidate, ...]:
     """Annotate discovered candidates with combined provider/model health."""
     evidence = dict(evidence_override) if evidence_override is not None else latest_attempt_evidence(comments)
-    attempts = tuple(evidence.values())
     ranked: list[RankedCandidate] = []
     for candidate in candidates:
         provider = str(candidate.get("provider") or "")
@@ -472,8 +471,6 @@ def select_candidate(
 
     states = {candidate.health_state for candidate in ranked}
     evidence = dict(evidence_override) if evidence_override is not None else latest_attempt_evidence(comment_list)
-    attempts = tuple(evidence.values())
-    providers = {candidate.provider for candidate in ranked}
     cooling_outcomes = {
         item.outcome
         for candidate in ranked
