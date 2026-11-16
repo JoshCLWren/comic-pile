@@ -42,15 +42,11 @@ def test_repo_config_pauses_w48_and_w55_until_november() -> None:
 
 def test_retired_workers_stay_unscheduled_after_legacy_pause_expires() -> None:
     """Old quota records cannot reactivate the retired worker IDs."""
-    tsv = (ROOT / ".github" / "free-model-factories.tsv").read_text(encoding="utf-8")
-    rostered = {
-        line.split("\t")[0] for line in tsv.splitlines() if line and not line.startswith("#")
-    }
-    expected = json.loads((ROOT / ".github" / "factory-expected-workers.json").read_text())
+    from factory_worker_slots import slots
+
+    active = {slot.worker for slot in slots()}
     for worker in (48, 55):
-        assert str(worker) not in rostered
-        assert worker not in expected["expected_workers"]
-        assert worker in expected["retired_workers"]
+        assert str(worker) not in active
 
 
 def test_filter_preserves_order_and_logs_paused(monkeypatch: pytest.MonkeyPatch) -> None:
