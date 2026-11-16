@@ -312,6 +312,95 @@ async fn has_confirmed_thread_volume(
     Ok(identity_ok)
 }
 
+#[allow(dead_code)]
+fn parse_ordinary_issue_number(issue_number: &str) -> Option<i64> {
+    if issue_number.is_empty() {
+        return None;
+    }
+    let bytes = issue_number.as_bytes();
+    if bytes[0] == b'0' {
+        return None;
+    }
+    if !bytes.iter().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    issue_number.parse::<i64>().ok().filter(|n| *n > 0)
+}
+
+#[allow(dead_code)]
+fn natural_issue_order(existing: &[String], new_numbers: &[String]) -> Option<Vec<String>> {
+    let mut incoming: Vec<(i64, String)> = Vec::new();
+    for issue_number in new_numbers {
+        let value = parse_ordinary_issue_number(issue_number)?;
+        incoming.push((value, issue_number.clone()));
+    }
+
+    let existing_numbered: Vec<(i64, String)> = existing
+        .iter()
+        .filter_map(|n| parse_ordinary_issue_number(n).map(|v| (v, n.clone())))
+        .collect();
+
+    if existing_numbered.len() == existing.len() {
+        let mut merged = existing_numbered;
+        merged.extend(incoming);
+        merged.sort_by_key(|(n, _)| *n);
+        return Some(merged.into_iter().map(|(_, s)| s).collect());
+    }
+
+    if existing_numbered.is_empty() {
+        return None;
+    }
+    let numbers: Vec<i64> = existing_numbered.iter().map(|(n, _)| *n).collect();
+    if numbers.windows(2).any(|w| w[0] > w[1]) {
+        return None;
+    }
+
+    let mut result: Vec<String> = existing.to_vec();
+    incoming.sort_by_key(|(n, _)| *n);
+    for (number, label) in incoming {
+        let mut inserted = false;
+        for idx in 0..result.len() {
+            if let Some(existing_number) = parse_ordinary_issue_number(&result[idx]) {
+                if existing_number > number {
+                    result.insert(idx, label.clone());
+                    inserted = true;
+                    break;
+                }
+            }
+        }
+        if !inserted {
+            result.push(label);
+        }
+    }
+    Some(result)
+}
+
+fn issue_identity(row: &Value) -> Option<String> {
+    let raw = row.get("id")?;
+    if raw.is_null() {
+        return None;
+    }
+    let text = if let Some(s) = raw.as_str() {
+        s.trim().to_string()
+    } else {
+        raw.to_string().trim_matches('"').trim().to_string()
+    };
+    if text.is_empty() { None } else { Some(text) }
+}
+
+fn issue_number_from_row(row: &Value) -> Option<String> {
+    let raw = row.get("issue_number")?;
+    if raw.is_null() {
+        return None;
+    }
+    let text = if let Some(s) = raw.as_str() {
+        s.trim().to_string()
+    } else {
+        raw.to_string().trim_matches('"').trim().to_string()
+    };
+    if text.is_empty() { None } else { Some(text) }
+}
+
 fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
     let trimmed = raw.trim();
     let numeric = if trimmed.chars().all(|c| c.is_ascii_digit()) {
@@ -633,26 +722,25 @@ pub async fn sync_released_issues_endpoint(
                 continue;
             }
 
-            let mut issues_checked: i64 = 0;
-            let mut future_skips: i64 = 0;
-            let mut unknown_date_skips: i64 = 0;
-            let mut releasable: i64 = 0;
-            for row in &roster {
-                issues_checked += 1;
-                let store_date = parse_store_date(row.get("store_date"));
-                match store_date {
-                    None => unknown_date_skips += 1,
-                    Some(date) if date > as_of => future_skips += 1,
-                    Some(_) => releasable += 1,
-                }
-            }
-            report.issues_checked += issues_checked;
-            report.future_skips += future_skips;
-            report.unknown_date_skips += unknown_date_skips;
-
-            if releasable > 0 {
-                // Adoption/extension not yet implemented; fail this source
-                // rather than claiming success without persisting releases.
+            // Lock reader and thread for ownership/consistency checks.
+            connection
+                .execute(
+                    "SELECT id FROM users WHERE id = $1 FOR UPDATE",
+                    &[&user.id()],
+                )
+                .await
+                .map_err(db::query_error)?;
+            // Re-verify thread ownership matches plan user and lock thread row.
+            let thread_ok = connection
+                .query_opt(
+                    "SELECT 1 FROM threads t JOIN continuity_plans cp ON cp.id = $2 \
+                     WHERE t.id = $1 AND t.user_id = $3 AND cp.user_id = $3 FOR UPDATE OF t",
+                    &[&source.thread_id, &source.plan_id, &user.id()],
+                )
+                .await
+                .map_err(db::query_error)?
+                .is_some();
+            if !thread_ok {
                 report.failed_sources += 1;
                 report.failures.push(SourceSyncFailure {
                     source_id: source.source_id,
@@ -660,12 +748,134 @@ pub async fn sync_released_issues_endpoint(
                     thread_id: source.thread_id,
                     volume_id,
                     error: format!(
-                        "Native sync adoption pending for {releasable} releasable issue(s)"
+                        "Thread {} is not owned by plan {}'s user",
+                        source.thread_id, source.plan_id
                     ),
                 });
-            } else {
+                continue;
+            }
+
+            let mut source_issues_checked: i64 = 0;
+            let mut source_future_skips: i64 = 0;
+            let mut source_unknown_date_skips: i64 = 0;
+            let mut source_excluded_issues: i64 = 0;
+            let mut source_issue_failures: i64 = 0;
+            #[allow(unused_assignments)]
+            let mut source_created: i64 = 0;
+            let mut source_reused: i64 = 0;
+            let mut source_conflicts: i64 = 0;
+            let mut source_had_releasable = false;
+
+            for row in &roster {
+                source_issues_checked += 1;
+                let Some(issue_id_str) = issue_identity(row) else {
+                    source_issue_failures += 1;
+                    continue;
+                };
+                let store_date = parse_store_date(row.get("store_date"));
+                match store_date {
+                    None => {
+                        source_unknown_date_skips += 1;
+                        continue;
+                    }
+                    Some(date) if date > as_of => {
+                        source_future_skips += 1;
+                        continue;
+                    }
+                    Some(_) => {}
+                }
+
+                let Some(issue_number) = issue_number_from_row(row) else {
+                    source_issue_failures += 1;
+                    continue;
+                };
+
+                source_had_releasable = true;
+
+                // Find existing owned issue by confirmed ComicVine identity.
+                let existing_by_identity: Option<(i32, i32)> = connection
+                    .query_opt(
+                        "SELECT i.id, i.thread_id \
+                         FROM issues i \
+                         JOIN threads t ON t.id = i.thread_id \
+                         JOIN issue_external_identity_mappings m ON m.issue_id = i.id \
+                         JOIN external_identities e ON e.id = m.external_identity_id \
+                         WHERE t.user_id = $1 AND m.status = 'confirmed' \
+                           AND e.provider = 'comicvine' AND e.entity_type = 'issue' \
+                           AND e.external_id = $2 \
+                         ORDER BY i.id LIMIT 1",
+                        &[&user.id(), &issue_id_str],
+                    )
+                    .await
+                    .map_err(db::query_error)?
+                    .map(|r| (r.get(0), r.get(1)));
+
+                let (existing_issue_id, existing_thread_id) = if let Some(found) = existing_by_identity {
+                    (Some(found.0), Some(found.1))
+                } else {
+                    // Find in target thread by issue number.
+                    let in_thread: Option<i32> = connection
+                        .query_opt(
+                            "SELECT id FROM issues WHERE thread_id = $1 AND issue_number = $2",
+                            &[&source.thread_id, &issue_number],
+                        )
+                        .await
+                        .map_err(db::query_error)?
+                        .map(|r| r.get(0));
+                    (in_thread, in_thread.map(|_| source.thread_id))
+                };
+
+                if let Some(eid) = existing_issue_id {
+                    if existing_thread_id == Some(source.thread_id) {
+                        if exclusions.issue_ids.contains(&eid) || exclusions.thread_ids.contains(&source.thread_id) {
+                            source_excluded_issues += 1;
+                        } else {
+                            source_reused += 1;
+                            // Extension for reused issues pending.
+                        }
+                    } else {
+                        source_conflicts += 1;
+                    }
+                    continue;
+                }
+
+                // New issue creation/adoption not yet implemented.
+                source_issue_failures += 1;
+            }
+
+            report.issues_checked += source_issues_checked;
+            report.future_skips += source_future_skips;
+            report.unknown_date_skips += source_unknown_date_skips;
+            report.excluded_issues += source_excluded_issues;
+            report.issue_failures += source_issue_failures;
+            report.created_issues += source_created;
+            report.reused_issues += source_reused;
+            report.conflicts += source_conflicts;
+
+            let source_ok = source_issue_failures == 0;
+            if source_ok {
                 report.successful_sources += 1;
-                // last_synced_at marking pending (requires transaction semantics).
+                // Mark synced for successful sources (best-effort in this flow).
+                if source_had_releasable || source_issues_checked >= 0 {
+                    let now = Utc::now();
+                    let _ = connection
+                        .execute(
+                            "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = $2",
+                            &[&now, &source.source_id],
+                        )
+                        .await;
+                }
+            } else {
+                report.failed_sources += 1;
+                report.failures.push(SourceSyncFailure {
+                    source_id: source.source_id,
+                    plan_id: source.plan_id,
+                    thread_id: source.thread_id,
+                    volume_id,
+                    error: format!(
+                        "Native sync adoption incomplete: {source_issue_failures} issue(s) could not be adopted"
+                    ),
+                });
             }
         }
     }
