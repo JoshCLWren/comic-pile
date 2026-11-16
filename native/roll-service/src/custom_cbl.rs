@@ -1460,7 +1460,7 @@ pub async fn apply_custom_cbl(
     // Load the continuity plan
     let plan_row = tx
         .query_opt(
-            "SELECT id, user_id, name, lanes_json, nodes_json, compiled_rules_json, ordering_mode, created_at::text, updated_at::text
+            "SELECT id, user_id, name, lanes_json, nodes_json, ordering_mode, created_at, updated_at
              FROM continuity_plans WHERE id=$1 AND user_id=$2 FOR UPDATE",
             &[&plan_id, &user.id()],
         )
