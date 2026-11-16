@@ -16,6 +16,10 @@ DEPLOY_JOB_NAME = "Migrate Neon and deploy exact main SHA"
 RED_CONCLUSIONS = frozenset({"failure", "timed_out", "startup_failure"})
 
 
+class GitHubQuotaDeferred(RuntimeError):
+    """GitHub cannot provide trustworthy evidence until its API quota resets."""
+
+
 def fetch_run_jobs(run_id: int, *, repository: str) -> list[Mapping[str, object]] | None:
     """Fetch jobs for a completed deployment run."""
     try:
@@ -50,7 +54,9 @@ def latest_attempted_deploy_run(
             if jobs is not None:
                 run["jobs"] = jobs
         if jobs is None:
-            return run
+            # Without job evidence we cannot prove this run attempted deploy.
+            # Preserve existing incidents and retry on the next scheduled pass.
+            return None
         if any(job.get("name") == DEPLOY_JOB_NAME for job in mappings(jobs)):
             return run
     return None
@@ -64,9 +70,17 @@ SMOKES = frozenset(
 
 def gh_json(arguments: list[str]) -> object:
     """Read GitHub JSON, raising on API errors rather than inventing state."""
-    result = subprocess.run(
-        ["gh", *arguments], check=True, capture_output=True, text=True, timeout=120
-    )
+    try:
+        result = subprocess.run(
+            ["gh", *arguments], check=True, capture_output=True, text=True, timeout=120
+        )
+    except subprocess.CalledProcessError as exc:
+        message = f"{exc.stderr or ''}\n{exc.stdout or ''}".lower()
+        if any(marker in message for marker in (
+            "rate limit exceeded", "secondary rate limit", "abuse detection"
+        )):
+            raise GitHubQuotaDeferred("GitHub API quota exhausted") from None
+        raise
     return json.loads(result.stdout)
 
 
@@ -356,7 +370,12 @@ def main() -> None:
     """Reconcile using the repository selected by the trusted workflow."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.parse_args()
-    reconcile(os.environ["GITHUB_REPOSITORY"])
+    try:
+        reconcile(os.environ["GITHUB_REPOSITORY"])
+    except GitHubQuotaDeferred:
+        # No issue mutation or deployment-success assertion without evidence.
+        # The 15-minute scheduled recovery will retry after quota reset.
+        print("Production recovery deferred: GitHub API rate limited; existing incidents unchanged")
 
 
 if __name__ == "__main__":
