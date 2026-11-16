@@ -55,6 +55,7 @@ pub mod session_history;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
+pub mod custom_cbl;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
