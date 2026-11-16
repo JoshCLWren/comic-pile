@@ -70,7 +70,7 @@ API calls and all individual targets/checks/reviews/mutations remain live.
 | `factory_pr_stage_retry` | Exact-head/stage retry not-before | Retained coordination; a new SHA is immediately eligible |
 | `factory_worker_metrics` | Bounded source/model delivery ranking counters | Retained operational dependency; execution failure remains distinct from persisted code delivery |
 | `factory_runtime_event_keys` | Idempotence across independent terminal collectors | Retained coordination; duplicate completion must not double-count/reset breakers |
-| `factory_check_projection` | Advisory CI/review observations | Still produced by check ingestion; unnecessary projection removal remains outstanding |
+| `factory_check_projection` | Advisory CI/review observations | Production writer retired; CI/review completions directly wake exact-head PR scheduling, legacy table requires one-time cleanup |
 | `factory_reconciliation_cursor` | Backfill and coalesced wakeups | Existing consumers remain; remove obsolete scopes after consumers migrate |
 | `factory_state_events` | Lifecycle/retry history plus old discovery observations | Runtime history still has consumers; duplicated/obsolete observations and bounded retention cleanup remain outstanding |
 
@@ -85,6 +85,23 @@ retired GET/target/open-inventory keys, skips an active old refresh lock, and
 processes at most 1,000 records per invocation. It cannot delete lease, backoff,
 registry or provider state. This cleanup is not a replacement cache. Physical
 Postgres allocation can remain until ordinary vacuum reclaims dead storage.
+
+## CI and review completion routing
+
+The check-completion workflow sends an explicit `pr:<number>` wakeup only for
+an open, non-draft PR on its current exact head. It never uses an advisory
+database snapshot to authorize a merge. Ordinary CI/guard/review success and
+failure events do **no Neon lookup or write**. A failed trusted review transports
+only its exact head and workflow-run ID into the retained
+`factory_pr_stage_retry` table, idempotently, so a broken reviewer does not
+immediately spin. The lightweight event job still verifies live GitHub PR
+state before dispatch. This replaces the old per-check projection writer and
+its additional coalesced-database wakeup.
+
+The old `factory_check_projection` relation is no longer created by fresh
+schema initialization or consumed by factory readers. Its historical rows
+remain physically present until the separately verified retention migration
+removes them.
 
 ## Measurements and scope status
 
@@ -111,7 +128,7 @@ deployment 43770738284. Completion #5219 (`4a670a4085`) used actual fast-merge r
 completed successfully with an actual terminal Entry run ID and woke dispatcher
 43771835176, whose run title carries that completion context.
 
-**The broader migration is unfinished:** registry/check cache consumers,
+**The broader migration is unfinished:** registry cache consumers, legacy check-table cleanup,
 redundant lifecycle observations, final bounded-retention policy/cleanup,
 complete live worker/continuation evidence and actual before/after per-cycle
 measurements remain. A green merge or a simulated handoff does not establish

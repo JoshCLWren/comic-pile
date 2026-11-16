@@ -28,7 +28,6 @@ SCHEMA = [
   "CREATE TABLE IF NOT EXISTS public.factory_provider_reservation (\n claim_id uuid PRIMARY KEY, repo text NOT NULL, worker text NOT NULL,\n source text NOT NULL, expires_at timestamptz NOT NULL)",
   "CREATE INDEX IF NOT EXISTS idx_factory_provider_reservation_active ON public.factory_provider_reservation(repo,source,expires_at)",
   "CREATE TABLE IF NOT EXISTS public.factory_pr_stage_retry (\n repo text NOT NULL, pr_number bigint NOT NULL, head_sha text NOT NULL, stage text NOT NULL,\n attempts integer NOT NULL DEFAULT 0, outcome text NOT NULL,\n retry_after timestamptz, last_run_id bigint NOT NULL DEFAULT 0,\n updated_at timestamptz NOT NULL DEFAULT now(),\n PRIMARY KEY (repo,pr_number,head_sha,stage))",
-  "CREATE TABLE IF NOT EXISTS public.factory_check_projection (\n repo text NOT NULL, pr_number bigint NOT NULL, head_sha text NOT NULL,\n check_name text NOT NULL, conclusion text NOT NULL, run_id bigint NOT NULL,\n observed_at timestamptz NOT NULL,\n PRIMARY KEY (repo,pr_number,head_sha,check_name))",
   "CREATE TABLE IF NOT EXISTS public.factory_worker_metrics (\n repo text NOT NULL, worker text NOT NULL, source text NOT NULL, model text NOT NULL,\n attempts bigint NOT NULL DEFAULT 0, productive bigint NOT NULL DEFAULT 0,\n completed bigint NOT NULL DEFAULT 0, failures bigint NOT NULL DEFAULT 0,\n last_run_id bigint NOT NULL DEFAULT 0, updated_at timestamptz NOT NULL DEFAULT now(),\n PRIMARY KEY (repo,worker,source,model))",
   "CREATE TABLE IF NOT EXISTS public.factory_runtime_event_keys (\n repo text NOT NULL, run_id bigint NOT NULL, PRIMARY KEY (repo,run_id))",
   "CREATE TABLE IF NOT EXISTS public.factory_reconciliation_cursor (\n repo text NOT NULL, scope text NOT NULL,\n checkpoint text, checked_at timestamptz NOT NULL DEFAULT now(),\n changed_count bigint NOT NULL DEFAULT 0,\n PRIMARY KEY (repo,scope))"
@@ -685,52 +684,50 @@ def cooling_prs(repo: str, heads: dict[int,tuple[str,str]]) -> set[int]:
     return _run(_cooling_prs,repo,heads) if enabled() and heads else set()
 
 
-async def _ingest_check(conn: Any, repo: str, event: dict[str,Any]) -> int:
-    run=event.get("workflow_run") or {}
-    sha=str(run.get("head_sha") or "")
-    if not HEAD_RE.fullmatch(sha) or run.get("status")!="completed":
+async def _ingest_check(conn: Any, repo: str, event: dict[str, Any]) -> int:
+    """Record only failed-review cooldowns, never an advisory check snapshot."""
+    run = event.get("workflow_run") or {}
+    sha = str(run.get("head_sha") or "")
+    name = str(run.get("name") or "")
+    try:
+        number = int(run.get("id") or 0)
+    except (TypeError, ValueError):
         return 0
-    name=str(run.get("name") or "")[:160]
-    conclusion=str(run.get("conclusion") or "unknown")[:60]
-    number=int(run.get("id") or 0)
-    observed=datetime.now(timezone.utc)
-    count=0
+    if (
+        not HEAD_RE.fullmatch(sha)
+        or run.get("status") != "completed"
+        or run.get("conclusion") != "failure"
+        or name not in {"PR-Agent Advisory Review", "Local Ollama Review"}
+        or number <= 0
+    ):
+        return 0
+
+    recorded = 0
     for pr in run.get("pull_requests") or []:
-        pr_num=pr.get("number") if isinstance(pr,dict) else None
-        if not isinstance(pr_num,int) or pr_num<=0:
+        pr_num = pr.get("number") if isinstance(pr, dict) else None
+        if not isinstance(pr_num, int) or isinstance(pr_num, bool) or pr_num <= 0:
             continue
         changed = await conn.fetchval(
-            """INSERT INTO public.factory_check_projection
-                 (repo,pr_number,head_sha,check_name,conclusion,run_id,observed_at)
-               VALUES($1,$2,$3,$4,$5,$6,$7)
-               ON CONFLICT(repo,pr_number,head_sha,check_name) DO UPDATE SET
-                 conclusion=EXCLUDED.conclusion,run_id=EXCLUDED.run_id,observed_at=EXCLUDED.observed_at
-               WHERE factory_check_projection.run_id<EXCLUDED.run_id
-                     OR (factory_check_projection.run_id=EXCLUDED.run_id
-                         AND factory_check_projection.conclusion IS DISTINCT FROM EXCLUDED.conclusion)
+            """INSERT INTO public.factory_pr_stage_retry
+                 (repo,pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id)
+               VALUES($1,$2,$3,'factory:review',1,'review_transport_failure',
+                      now()+interval '5 minutes',$4)
+               ON CONFLICT(repo,pr_number,head_sha,stage) DO UPDATE SET
+                 attempts=factory_pr_stage_retry.attempts+1,
+                 outcome=EXCLUDED.outcome,retry_after=EXCLUDED.retry_after,
+                 last_run_id=EXCLUDED.last_run_id,updated_at=now()
+               WHERE factory_pr_stage_retry.last_run_id<EXCLUDED.last_run_id
                RETURNING 1""",
-            repo,pr_num,sha,name,conclusion,number,observed)
-        if changed and name in {"PR-Agent Advisory Review","Local Ollama Review"} and conclusion=="failure":
-            await conn.execute(
-                """INSERT INTO public.factory_pr_stage_retry
-                     (repo,pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id)
-                   VALUES($1,$2,$3,'factory:review',1,'review_transport_failure',
-                          now()+interval '5 minutes',$4)
-                   ON CONFLICT(repo,pr_number,head_sha,stage) DO UPDATE SET
-                     attempts=factory_pr_stage_retry.attempts+1,
-                     outcome=EXCLUDED.outcome,retry_after=EXCLUDED.retry_after,
-                     last_run_id=EXCLUDED.last_run_id,updated_at=now()
-                   WHERE factory_pr_stage_retry.last_run_id<EXCLUDED.last_run_id""",
-                repo,pr_num,sha,number)
-        if changed:
-            count+=1
-    return count
+            repo, pr_num, sha, number,
+        )
+        recorded += bool(changed)
+    return recorded
 
 
-def ingest_check(repo: str, event: dict[str,Any]) -> int:
+def ingest_check(repo: str, event: dict[str, Any]) -> int:
     if not enabled():
-        raise RuntimeError("check projection ingestion requires restricted Neon connection")
-    return _run(_ingest_check,repo,event)
+        raise RuntimeError("review cooldown ingestion requires restricted Neon connection")
+    return _run(_ingest_check, repo, event)
 
 
 async def _checkpoint(conn: Any, repo: str, scope: str, cursor: str, changes: int) -> None:
@@ -993,9 +990,8 @@ def main() -> int:
     elif args.command=="ingest-check":
         if args.file is None:
             parser.error("--file required")
-        changed=ingest_check(args.repo,json.loads(args.file.read_text()))
-        wake=claim_wakeup(args.repo,"ci-review-wakeup",120) if changed else False
-        print(json.dumps({"projected":changed,"wake":wake}))
+        recorded=ingest_check(args.repo,json.loads(args.file.read_text()))
+        print(json.dumps({"recorded_review_failures":recorded}))
     elif args.command=="checkpoint":
         if not args.scope:
             parser.error("--scope required")
