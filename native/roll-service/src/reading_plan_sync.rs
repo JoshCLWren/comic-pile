@@ -782,6 +782,106 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
     Ok(rows)
 }
 
+
+async fn extend_source_plan_with_issue(
+    tx: &tokio_postgres::Transaction<'_>,
+    user_id: i32,
+    plan_id: i32,
+    thread_id: i32,
+    source_id: i32,
+    external_identity_id: i32,
+    issue_id: i32,
+) -> Result<(), ApiError> {
+    // Minimal parity for release-sync extension: append to the source plan's
+    // unread tail when the issue is an adopted, non-excluded member of the
+    // confirmed source thread. Full sibling-plan and membership-rebuild parity
+    // remains pending.
+    let row = tx
+        .query_opt(
+            "SELECT cp.nodes_json \
+             FROM continuity_plans cp \
+             JOIN reading_plan_release_sources rps ON rps.plan_id = cp.id \
+             WHERE cp.id = $1 AND cp.user_id = $2 AND rps.id = $3 \
+               AND rps.thread_id = $4 AND rps.enabled = TRUE",
+            &[&plan_id, &user_id, &source_id, &thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let Some(plan_row) = row else { return Ok(()); };
+
+    let confirmed = tx
+        .query_opt(
+            "SELECT 1 FROM thread_external_series_mappings \
+             WHERE thread_id = $1 AND external_identity_id = $2 AND status = 'confirmed' LIMIT 1",
+            &[&thread_id, &external_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    if !confirmed {
+        return Ok(());
+    }
+
+    // Skip if already a member.
+    let exists = tx
+        .query_opt(
+            "SELECT 1 FROM reading_plan_issues WHERE plan_id = $1 AND issue_id = $2 LIMIT 1",
+            &[&plan_id, &issue_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+    if exists {
+        return Ok(());
+    }
+
+    let nodes_json: Value = plan_row.try_get::<_, Value>(0).unwrap_or(Value::Array(Vec::new()));
+    let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
+    let mut max_pos: i64 = -1;
+    let mut already_in_json = false;
+    for node in &nodes {
+        if let Some(pos) = node.get("position").and_then(Value::as_i64) {
+            if pos > max_pos { max_pos = pos; }
+        }
+        if node.get("node_type").and_then(Value::as_str) == Some("issue")
+            && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
+        {
+            already_in_json = true;
+        }
+    }
+    if !already_in_json {
+        let new_node = serde_json::json!({
+            "id": format!("release-{issue_id}"),
+            "node_type": "issue",
+            "ref_id": issue_id,
+            "lane_id": "unread-tail",
+            "position": (max_pos + 1) as i32,
+            "label": Value::Null,
+            "is_checkpoint": false
+        });
+        nodes.push(new_node);
+        tx.execute(
+            "UPDATE continuity_plans SET nodes_json = $1::jsonb, updated_at = NOW() WHERE id = $2",
+            &[&Value::Array(nodes.clone()), &plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    // Insert minimal membership row; occurrence_id/display_position align with appended node.
+    tx.execute(
+        "INSERT INTO reading_plan_issues \
+         (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
+         VALUES ($1, $2, $3, 'unread-tail', $4, NULL, NULL, NULL, FALSE, NULL) \
+         ON CONFLICT (plan_id, issue_id) DO NOTHING",
+        &[&plan_id, &format!("release-{issue_id}"), &issue_id, &((max_pos + 1) as i32)],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    Ok(())
+}
+
 type SourceTxOutcome = Result<(bool, i64, i64, i64, i64, i64, i64, i64, i64, i64, bool), ApiError>;
 
 pub async fn sync_released_issues_endpoint(
@@ -1053,6 +1153,7 @@ pub async fn sync_released_issues_endpoint(
                 }
                 let mut to_create: Vec<ReleasableIssue> = Vec::new();
                 let mut releasable_existing: Vec<(i32, bool)> = Vec::new(); // (issue_id, excluded)
+                let mut adopted_for_extension: Vec<i32> = Vec::new();
 
                 for row in &roster {
                     source_issues_checked += 1;
@@ -1115,8 +1216,8 @@ pub async fn sync_released_issues_endpoint(
                                 source_excluded_issues += 1;
                             } else {
                                 source_reused += 1;
+                                adopted_for_extension.push(eid);
                             }
-                            // Ensure/link identity for in-thread issue when found by number without confirmed mapping.
                             if existing_by_identity.is_none() {
                                 let ext_url = external_url_from_row(row, &issue_id_str);
                                 let metadata = issue_metadata_from_row(row);
@@ -1138,7 +1239,6 @@ pub async fn sync_released_issues_endpoint(
                     let created = create_issues_in_natural_order_tx(&tx, source.thread_id, &new_numbers).await?;
                     source_created += created.len() as i64;
                     created_any = !created.is_empty();
-                    // Map created issue numbers back to releasable rows (by number).
                     let mut by_number: HashMap<String, &ReleasableIssue> = HashMap::new();
                     for item in &to_create {
                         by_number.entry(item.issue_number.clone()).or_insert(item);
@@ -1149,15 +1249,29 @@ pub async fn sync_released_issues_endpoint(
                             let metadata = issue_metadata_from_row(&item.row);
                             let identity_id = upsert_external_issue_identity(&tx, &item.cv_issue_id, ext_url.as_deref(), &metadata).await?;
                             ensure_confirmed_issue_mapping(&tx, *issue_id, identity_id).await?;
+                            adopted_for_extension.push(*issue_id);
                         }
                     }
-                    // Newly created issues in target thread are releasable/adopted (unless thread excluded, already handled).
-                    // Plan extension for created/reused issues is still pending full parity.
+                }
+
+                if !adopted_for_extension.is_empty() {
+                    // Best-effort minimal plan extension for this source's plan.
+                    for issue_id in &adopted_for_extension {
+                        extend_source_plan_with_issue(
+                            &tx,
+                            user.id(),
+                            source.plan_id,
+                            source.thread_id,
+                            source.source_id,
+                            source.external_identity_id,
+                            *issue_id,
+                        )
+                        .await?;
+                    }
                 }
 
                 if created_any || source_reused > 0 {
                     recalculate_thread_tracking(&tx, source.thread_id, user.id(), created_any).await?;
-                    // Best-effort: blocked status refresh parity is not fully implemented in native path yet.
                 }
 
                 if source_issue_failures == 0 {
