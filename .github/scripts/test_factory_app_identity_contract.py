@@ -216,17 +216,24 @@ class ExpectedWorkersContractTest(unittest.TestCase):
     def test_dynamic_worker_slots_are_derivable_without_static_roster(self) -> None:
         """Dynamic provider slots must be derivable without committed roster files."""
         self.assertFalse((REPO / ".github" / "factory-expected-workers.json").is_file())
+        module_name = "factory_worker_slots"
+        previous = sys.modules.get(module_name)
         sys.path.insert(0, str(SCRIPTS))
         try:
             spec = importlib.util.spec_from_file_location(
-                "factory_worker_slots",
+                module_name,
                 SCRIPTS / "factory_worker_slots.py",
             )
             assert spec and spec.loader
             module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
             spec.loader.exec_module(module)
             derived = module.slots()
         finally:
+            if previous is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous
             if str(SCRIPTS) in sys.path:
                 sys.path.remove(str(SCRIPTS))
         self.assertGreater(len(derived), 0)

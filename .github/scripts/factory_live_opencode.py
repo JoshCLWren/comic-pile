@@ -91,26 +91,29 @@ def record_smoke_failure(log_content: str, runtime_model: str, outcome_file: Pat
     """Persist recognizable OpenCode smoke errors for the registry reporter."""
     # OpenCode colorizes errors; ANSI sequences can hide word boundaries.
     log_content = ANSI_ESCAPE_RE.sub("", log_content)
-    if runtime_model.startswith(("mistral/", "ollama-cloud/")) and re.search(
-        r"budget[ _]exhausted|billing_api_budget_exhausted|monthly usage limit|"
-        r"reached your [a-z ]*usage limit", log_content, re.I,
+    if re.search(
+        r"budget[ _]exhausted|billing_api_budget_exhausted|payment required|HTTP[^0-9]*402|"
+        r"(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|"
+        r"insufficient[ _](credits|balance|quota)|exceeded your current quota|"
+        r"quota[ _](exceeded|exhausted)|free-models-per-day|"
+        r"rate limit exceeded: free-models-per-day",
+        log_content,
+        re.I,
     ):
         outcome_file.write_text(
-            f"provider_quota\tMonthly free provider quota exhausted for {runtime_model}\n",
+            f"provider_quota\tProvider account quota or budget exhausted for {runtime_model}\n",
             encoding="utf-8",
         )
         return True
-    if runtime_model.startswith(("z-ai/", "kilo/")) and re.search(
-        r"(?<![0-9.])429(?!\d)|too many requests", log_content, re.I
+    if re.search(
+        r"(?<![0-9.])(429|413)(?!\d)|too many requests|request too large|rate.?limit|"
+        r"\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|"
+        r"(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b",
+        log_content,
+        re.I,
     ):
         outcome_file.write_text(
-            f"provider_quota\tFree provider account rate limit for {runtime_model}\n",
-            encoding="utf-8",
-        )
-        return True
-    if runtime_model.startswith("opencode/") and FREE_QUOTA_RE.search(log_content):
-        outcome_file.write_text(
-            f"provider_quota\tOpenCode free quota exhausted for {runtime_model}\n",
+            f"provider_throttle\tProvider throttled or rate-limited {runtime_model}\n",
             encoding="utf-8",
         )
         return True

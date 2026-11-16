@@ -176,10 +176,10 @@ def test_scheduled_batch_filters_pauses_before_offer_cap() -> None:
 @pytest.mark.parametrize("source,runtime", [("z-ai", "z-ai/glm-4.5-flash"),
                                               ("kilo-auto", "kilo/kilo-auto/free")])
 @pytest.mark.parametrize("message", ["HTTP 429 Too Many Requests", "status code: 429"])
-def test_free_429_is_quota_in_smoke_log_and_classifier(
+def test_bare_429_is_throttle_in_smoke_log_and_classifier(
     tmp_path: Path, message: str, source: str, runtime: str,
 ) -> None:
-    """Free Z.AI rate limits pause capacity rather than imply a missing model."""
+    """Plain 429/rate-limit responses are transient throttles, not quota exhaustion."""
     modules = {}
     sys.path.insert(0, str(SCRIPTS))
     try:
@@ -200,15 +200,15 @@ def test_free_429_is_quota_in_smoke_log_and_classifier(
         f"Factory 97 locked: source={source} model=free runtime={runtime} "
         "minute=:50 scheduler=dispatcher configured=true\n" + message
     )
-    assert modules["quota_classifier"].classify(log).outcome_class == "provider_quota"
+    assert modules["quota_classifier"].classify(log).outcome_class == "provider_throttle"
     target = tmp_path / 'outcome'
     assert modules["quota_smoke"].record_smoke_failure(message, runtime, target)
-    assert target.read_text().startswith('provider_quota\t')
+    assert target.read_text().startswith('provider_throttle\t')
 
 
 @pytest.mark.parametrize("source", ["z-ai", "kilo-auto"])
-def test_free_session_429_records_quota(tmp_path: Path, source: str) -> None:
-    """Execute the session classifier to prove a 429 produces durable quota evidence."""
+def test_bare_session_429_records_throttle(tmp_path: Path, source: str) -> None:
+    """Plain 429 responses produce transient throttle evidence, not quota pause."""
     import subprocess
 
     script = (SCRIPTS / 'free-model-factory-worker.sh').read_text()
@@ -226,7 +226,7 @@ def test_free_session_429_records_quota(tmp_path: Path, source: str) -> None:
             capture_output=True, text=True, check=False,
         )
         assert result.returncode == 0, result.stderr
-        assert outcome.read_text().startswith('provider_quota\t')
+        assert outcome.read_text().startswith('provider_throttle\t')
     finally:
         log.unlink(missing_ok=True)
 
