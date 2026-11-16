@@ -4,6 +4,10 @@ run-name: Factory ${{ inputs.worker }} · fixed-model entry
 on:
   workflow_dispatch:
     inputs:
+      assignment:
+        description: Bounded dispatcher assignment with target, exact head and claim token
+        required: true
+        type: string
       worker:
         description: Active fixed-model Factory number from the roster
         required: true
@@ -17,53 +21,18 @@ permissions:
   checks: read
 
 jobs:
-  model_health_snapshot:
-    name: Read Neon model exclusions (trusted)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      exclusions: ${{ steps.export.outputs.exclusions }}
-      heartbeat_id: ${{ steps.export.outputs.heartbeat_id }}
-      attempt_id: ${{ steps.export.outputs.attempt_id }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: ./.github/actions/factory-state-cache
-        with:
-          neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
-      - name: Export bounded model decision snapshot
-        id: export
-        shell: bash
-        env:
-          INPUT_WORKER: ${{ inputs.worker }}
-        run: |
-          set -Eeuo pipefail
-          [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || exit 1
-          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$INPUT_WORKER")"
-          jq -e 'type == "object"' <<< "$snapshot" >/dev/null
-          echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
-          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-
   run:
-    needs: model_health_snapshot
     uses: ./.github/workflows/free-model-factory-run.yml
     with:
       worker: ${{ inputs.worker }}
-      model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
-      heartbeat_comment_id: ${{ needs.model_health_snapshot.outputs.heartbeat_id }}
-      attempt_comment_id: ${{ needs.model_health_snapshot.outputs.attempt_id }}
+      assignment: ${{ inputs.assignment }}
     secrets: inherit
 
   # The preceding job owns the entire worker lease and its release. A
   # completion wakeup is therefore a signal only, never an assignment.
   signal_completion:
-    name: Wake completion drain after worker exits
-    needs: run
+    name: Wake completion drain after trusted outcome persistence
+    needs: [run, persist_outcome]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -79,7 +48,7 @@ jobs:
           # reliably delivered. Explicit workflow_dispatch is supported and
           # the drain's concurrency group coalesces bursts of completions.
           gh workflow run factory-completion-drain.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main
+            --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id="$GITHUB_RUN_ID"
 
   # Persist the terminal outcome in this trusted, *separate* runner after the
   # model execution job exits. The capacity drain can remain blocked behind
@@ -87,7 +56,7 @@ jobs:
   # The reusable model job does not receive Neon secrets.
   persist_outcome:
     name: Persist trusted worker outcome in Neon
-    needs: [run, model_health_snapshot]
+    needs: run
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -112,7 +81,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_WORKER: ${{ inputs.worker }}
-          ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}
+          ATTEMPT_COMMENT_ID: ${{ needs.run.outputs.attempt_comment_id }}
         run: |
           set -Eeuo pipefail
           # Retry only transient GitHub responses. Every retry overwrites its

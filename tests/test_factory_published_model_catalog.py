@@ -78,7 +78,7 @@ def test_selection_filters_neon_exclusions_and_is_deterministic(catalog_module) 
     assert first == catalog_module.choose_model("openrouter-free", "51", catalog)
     excluded = {"vendor/a:free", "vendor/b:free"}
     assert catalog_module.choose_model("openrouter-free", "51", catalog, excluded) == "vendor/c:free"
-    with pytest.raises(catalog_module.CatalogUnavailableError):
+    with pytest.raises(catalog_module.PublishedCatalogUnavailableError):
         catalog_module.choose_model(
             "openrouter-free", "51", catalog,
             {"vendor/a:free", "vendor/b:free", "vendor/c:free"},
@@ -87,7 +87,7 @@ def test_selection_filters_neon_exclusions_and_is_deterministic(catalog_module) 
 
 @pytest.mark.parametrize("catalog", [{}, {"data": {}}, {"data": None}])
 def test_invalid_catalog_is_not_success(catalog_module, catalog: dict) -> None:
-    with pytest.raises(catalog_module.CatalogUnavailableError):
+    with pytest.raises(catalog_module.PublishedCatalogUnavailableError):
         catalog_module.free_model_ids("openrouter-free", catalog)
 
 

@@ -20,8 +20,9 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
+
+from route_harness import cargo_example_path
 
 import pytest
 from jose import jwt
@@ -31,10 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from app.models import Event, ReadingSession, RevokedToken, Thread, User
 
 SECRET = "synthetic-native-analytics-secret"
-EXAMPLE = (
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_analytics_metrics"
-)
+EXAMPLE = cargo_example_path("http_analytics_metrics")
 
 
 def _token(username: str, *, jti: str, password_epoch: int | None = None) -> str:

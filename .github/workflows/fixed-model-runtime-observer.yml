@@ -124,20 +124,39 @@ jobs:
             echo "Verified delivery: \`$delivery_state\`"
             echo "PR: \`${delivery_pr:-none}\`"
           } >> "$GITHUB_STEP_SUMMARY"
-          # The shared snapshot usually has the worker's existing durable
-          # marker. Avoid paginating every historical comment on each completed
-          # worker run. A missing cached marker MUST be verified against live
-          # history before a new comment is created, preventing duplicates.
-          comment_id="$(python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps(registry_comments()))' \
-            | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
-          if [[ -z "$comment_id" ]]; then
-            echo "No cached attempt marker for Factory ${WORKER}; verifying live history before creating one"
-            comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | jq -r --arg marker "$marker" '[.[] | select(.body | contains($marker)) | .id] | last // empty')"
+          # Trusted Neon stores a compact advisory ID. Verify its actual GitHub
+          # author/marker before a mutation; no shared comment body cache.
+          locators="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions \
+            --repo "$GITHUB_REPOSITORY" --worker "$WORKER")"
+          comment_id="$(jq -r '.__attempt_id[0] // empty' <<< "$locators")"
+          current=''
+          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
+            if current="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" 2>"$RUNNER_TEMP/factory-attempt-locator-error")"; then
+              :
+            elif grep -Eq 'HTTP 404' "$RUNNER_TEMP/factory-attempt-locator-error"; then
+              comment_id=''
+              current=''
+            else
+              # A transient auth/quota error cannot establish that a marker
+              # is absent. Do not create a duplicate or scan full history.
+              echo '::error::Unable to verify attempt marker; leaving trusted Neon completion intact'
+              exit 1
+            fi
+          else
+            comment_id=''
+          fi
+          # A missing/invalid compact locator gets a fresh canonical marker;
+          # trusted verification below seeds its new ID in Neon.
+          # Real validation follows: author, canonical worker and marker kind.
+          verified="$(python3 -c 'import json,sys; sys.path.insert(0,".github/scripts"); from factory_registry_ingest import marker_ids; print(any(m["worker"]==sys.argv[1] and m["kind"]=="attempt" and m["id"]==sys.argv[2] for m in marker_ids([json.load(sys.stdin)])))' \
+            "$WORKER" "$comment_id" <<< "$current" 2>/dev/null || true)"
+          if [[ "$verified" != True ]]; then
+            comment_id=''
+            current=''
           fi
           existing_run=''
           if [[ -n "$comment_id" ]]; then
-            existing_run="$(gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" --jq '.body' \
+            existing_run="$(jq -r '.body // ""' <<< "$current" \
               | sed -n 's/^Run: //p' | tail -1)"
           fi
           if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > RUN_ID )); then
@@ -145,7 +164,24 @@ jobs:
           elif [[ -n "$comment_id" ]]; then
             gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" -f body="$body" >/dev/null
           else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body" >/dev/null
+            created="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/1093/comments" -f body="$body")"
+            comment_id="$(jq -er '.id' <<< "$created")"
+          fi
+          if [[ "$comment_id" =~ ^[1-9][0-9]*$ ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${comment_id}" \
+              > "$RUNNER_TEMP/verified-attempt-marker.json"
+            python3 - "$RUNNER_TEMP/verified-attempt-marker.json" <<'PYMARKER'
+          import json
+          import os
+          import sys
+          sys.path.insert(0, ".github/scripts")
+          from factory_registry_ingest import marker_ids
+          from factory_state_operations import remember_verified_markers
+          with open(sys.argv[1], encoding="utf-8") as stream:
+              markers = [item for item in marker_ids([json.load(stream)]) if item["kind"] == "attempt"]
+          if markers:
+              remember_verified_markers(os.environ["GITHUB_REPOSITORY"], markers)
+          PYMARKER
           fi
 
       - name: Persist classified worker completion in Neon

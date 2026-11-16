@@ -74,11 +74,11 @@ def test_post_session_cleanup_executes_token_bound_release(tmp_path: Path) -> No
     result = subprocess.run(
         ["bash", "-c", release["run"]], cwd=tmp_path,
         env={**os.environ, "FACTORY_WORKER": "45", "GITHUB_RUN_ID": "43455638659",
-             "FACTORY_STATE_DSN_FILE": str(dsn)},
+             "FACTORY_STATE_DSN_FILE": str(dsn), "FACTORY_ASSIGNMENT": '{"claim_id":"test-claim"}'},
         capture_output=True, text=True, check=True,
     )
     assert json.loads(result.stdout) == [
-        "release", "--worker", "45", "--reason",
+        "release", "--worker", "45", "--claim-id", "test-claim", "--reason",
         "post-session-exit-run-43455638659",
     ]
 
@@ -108,6 +108,7 @@ def test_cleanup_uses_a_fresh_trusted_runner_and_workflow_token() -> None:
     assert release["env"] == {
         "GH_TOKEN": "${{ github.token }}",
         "FACTORY_WORKER": "${{ inputs.worker }}",
+        "FACTORY_ASSIGNMENT": "${{ inputs.assignment }}",
     }
     assert cleanup["permissions"] == {
         # PR-target label replacement returns 403 with pull-requests:read,
@@ -134,11 +135,11 @@ def test_cleanup_calls_existing_controller_with_run_provenance(
     result = subprocess.run(
         ["bash", "-c", release["run"]], cwd=tmp_path,
         env={**os.environ, "FACTORY_WORKER": worker, "GITHUB_RUN_ID": "41323597249",
-             "FACTORY_STATE_DSN_FILE": str(dsn)},
+             "FACTORY_STATE_DSN_FILE": str(dsn), "FACTORY_ASSIGNMENT": '{"claim_id":"test-claim"}'},
         capture_output=True, text=True, check=True,
     )
     assert json.loads(result.stdout) == [
-        "release", "--worker", worker, "--reason", "pre-session-abort-run-41323597249",
+        "release", "--worker", worker, "--claim-id", "test-claim", "--reason", "pre-session-abort-run-41323597249",
     ]
 
 
@@ -196,7 +197,7 @@ def _load_controller_release(helpers: dict[str, object]):
         "OWNER_RE": __import__("re").compile(r"^factory:(?:unowned|[0-9]+)$"),
         "json": json,
         "release_lease": lambda *args: False,
-        "refresh_projection_after_label_change": lambda *_args: None,
+        "refresh_discovery_after_label_change": lambda *_args: None,
         **helpers,
     }
     exec(compile(module, "<factory-controller-release>", "exec"), namespace)
@@ -240,10 +241,10 @@ def test_trusted_cleanup_retry_clears_original_claim_when_labels_already_release
     release = _load_controller_release({
         "worker_claim": lambda repo, worker: ("old-claim-token", [4833, 5015]),
         "release_lease": lambda *args: releases.append(args) or True,
-        "refresh_projection_after_label_change":
+        "refresh_discovery_after_label_change":
             lambda number, target: refreshed.append(number),
     })
-    assert release("45", "pre-session-abort-run-43450421076") == []
+    assert release("45", "pre-session-abort-run-43450421076", expected_claim="old-claim-token") == []
     assert refreshed == [4833, 5015]
     assert releases == [
         ("owner/repo", "45", "old-claim-token", "pre-session-abort-run-43450421076")
@@ -280,7 +281,7 @@ def test_trusted_exit_releases_every_original_target_without_projection_scan() -
         "list_prs": lambda: (_ for _ in ()).throw(AssertionError("unexpected inventory scan")),
     })
     summary = {}
-    assert release("20", "pre-session-abort-run-43603288148", details=summary) == [4737, 5055]
+    assert release("20", "pre-session-abort-run-43603288148", expected_claim="claim-20", details=summary) == [4737, 5055]
     assert summary["status"] == "released" and summary["claim_released"]
     assert released == [("owner/repo", "20", "claim-20", "pre-session-abort-run-43603288148")]
     assert events == [(4737, "issue"), (5055, "pr")]
@@ -315,7 +316,7 @@ def test_trusted_exit_does_not_clear_reassigned_claim() -> None:
         "release_lease": lambda *a: leases.append(a),
     })
     summary = {}
-    assert release("21", "pre-session-abort-run-43604078425", details=summary) == []
+    assert release("21", "pre-session-abort-run-43604078425", expected_claim="old", details=summary) == []
     assert summary["status"] == "deferred"
     assert summary["deferred"] == [5055]
     assert not writes and not leases
@@ -328,6 +329,6 @@ def test_trusted_exit_reports_live_github_errors_instead_of_silent_success() -> 
         "release_lease": lambda *_: (_ for _ in ()).throw(AssertionError("must not release")),
     })
     summary = {}
-    assert release("21", "post-session-exit-run-43604078425", details=summary) == []
+    assert release("21", "post-session-exit-run-43604078425", expected_claim="claim", details=summary) == []
     assert summary["status"] == "failed"
     assert summary["failed"] == ["5055:RuntimeError"]

@@ -139,7 +139,7 @@ def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> N
     assert "/issues/1093/comments?per_page=100" not in live
     assert '--exclusions-file "$exclusions_file"' in live
     assert 'printf \'[]\\n\' > "$comments_file"' in live
-    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}' in workflow
+    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}' in workflow
     assert 'jq -e \'type == "object" and all(.[]; type == "array")\'' in selector
 
 

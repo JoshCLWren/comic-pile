@@ -47,9 +47,9 @@ jobs:
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Check Vercel Rust function formatting
-        run: cargo fmt --manifest-path Cargo.toml -- --check
+      - name: Check workspace Rust formatting
+        run: cargo fmt --all -- --check
       - name: Compile the native Vercel Rust function
-        run: cargo check --locked --manifest-path Cargo.toml --all-targets
+        run: cargo check --locked -p comicpile-vercel-native --all-targets
       - name: Run native function tests
-        run: cargo test --locked --manifest-path Cargo.toml --all-targets
+        run: cargo test --locked -p comicpile-vercel-native --all-targets

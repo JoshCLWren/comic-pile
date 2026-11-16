@@ -276,10 +276,12 @@ def retire_pr(number: int, *, now_epoch: int) -> dict[str, Any]:
 
 def main() -> int:
     now_epoch = int(time.time())
-    rows = pages_to_rows(gh_json([
+    from factory_discovery import discovered_pull_requests
+
+    rows = discovered_pull_requests(REPO, lambda: pages_to_rows(gh_json([
         "api", "--paginate", "--slurp",
         f"repos/{REPO}/pulls?state=open&per_page=100",
-    ]))
+    ])))
     results = []
     for row in rows:
         labels = labels_of(row)

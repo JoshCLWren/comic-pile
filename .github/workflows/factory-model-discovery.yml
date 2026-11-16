@@ -73,20 +73,22 @@ jobs:
           # V1 'provider/options' JSON is intentionally not written.
           echo 'OpenCode 2 provider environment ready'
 
-      - name: Fetch NVIDIA 410 retirement markers
+      - name: Configure trusted Neon model health
+        uses: ./.github/actions/factory-state-cache
+        with:
+          neon-api-key: ${{ secrets.NEON_API_KEY }}
+          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
+
+      - name: Read durable NVIDIA 410 retirement records
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/factory-model-discovery"
-          comments="$RUNNER_TEMP/factory-model-discovery/issue-1093-comments.json"
-          if ! gh api --paginate \
-            "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-            > "$comments"; then
-            echo '::error::Could not read #1093 factory-model-retired-410:v1 markers'
-            exit 1
-          fi
+          python3 .github/scripts/factory_state_operations.py export-candidate-health \
+            --repo "$GITHUB_REPOSITORY" > "$RUNNER_TEMP/factory-model-discovery/model-health.json"
+          jq -e '[.models[] | select(.source == "nvidia" and .status == "retired") | .model]' \
+            "$RUNNER_TEMP/factory-model-discovery/model-health.json" \
+            > "$RUNNER_TEMP/factory-model-discovery/retired-models.json"
 
       - name: Discover catalogs and plan retirements
         id: plan
@@ -101,12 +103,12 @@ jobs:
           set -Eeuo pipefail
           mkdir -p "$RUNNER_TEMP/factory-model-discovery"
           report="$RUNNER_TEMP/factory-model-discovery/report.json"
-          comments="$RUNNER_TEMP/factory-model-discovery/issue-1093-comments.json"
+          retired="$RUNNER_TEMP/factory-model-discovery/retired-models.json"
           args=(
             python3 .github/scripts/factory_model_retirement.py plan
             --report "$report"
             --github-output "$GITHUB_OUTPUT"
-            --retirement-comments "$comments"
+            --retired-models-json "$retired"
             --dynamic-opencode-free
             --no-add-unused-free
           )
@@ -193,11 +195,11 @@ jobs:
           fi
           git checkout -B "$branch"
           report="$RUNNER_TEMP/factory-model-discovery/report.json"
-          comments="$RUNNER_TEMP/factory-model-discovery/issue-1093-comments.json"
+          retired="$RUNNER_TEMP/factory-model-discovery/retired-models.json"
           args=(
             python3 .github/scripts/factory_model_retirement.py apply
             --report "$report"
-            --retirement-comments "$comments"
+            --retired-models-json "$retired"
             --dynamic-opencode-free
             --no-add-unused-free
           )

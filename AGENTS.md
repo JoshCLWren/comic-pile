@@ -200,6 +200,12 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `pnpm` (frontend)
 
+## Database query efficiency (owner rule, November 15, 2026)
+
+Write efficient PostgreSQL queries by construction. No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, bounded batch requests, indexed filters, predictable pagination, and one coherent transaction where required. Do not materialize whole libraries or introduce screen-level request waterfalls. Preserve ownership checks, authorization, idempotency, locking, and correct snapshot semantics rather than chasing an arbitrary number of statements. If a real slow query or performance regression is demonstrated, profile the actual workload and fix it with a focused test.
+
+**The blanket per-route SQL-budget program is canceled by the owner.** Never require numeric statement ceilings, a `sql_budget` entry, `pg_stat_statements` proof for every endpoint, small/large fixture quotas, or SQL-budget coverage tickets as a prerequisite for a Rust migration. Do not revive, split, or recreate #4737, #4988, or #5146–#5151 without explicit owner direction. Existing focused regressions for known query failures remain valuable; do not strip legitimate performance safeguards outside this discontinued program.
+
 ## CRITICAL: Async PostgreSQL Only in Application Code
 
 **Application code must use asyncpg (async PostgreSQL) ONLY. Never use synchronous database drivers in `app/` or `comic_pile/`.**

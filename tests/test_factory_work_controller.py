@@ -1704,6 +1704,7 @@ def test_assign_candidate_rejects_a_stale_head_before_writing_labels(
             "labels": [{"name": "factory"}, {"name": "factory:ci"}],
         },
     )
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     written: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,

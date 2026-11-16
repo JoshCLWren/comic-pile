@@ -6,6 +6,13 @@ rust-version = "1.88"
 publish = false
 build = "build.rs"
 
+# Single Cargo workspace and root Cargo.lock for the deployed Vercel ingress and
+# the native roll-service tests. The service remains a path dependency of the
+# root package, so both resolve the exact same locked graph.
+[workspace]
+members = ["native/roll-service"]
+resolver = "2"
+
 [dependencies]
 http-body = "1"
 axum = "0.8"
