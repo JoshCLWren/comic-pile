@@ -161,9 +161,6 @@ async def api_get_series_issues(
     )
 
 
-
-
-
 @router.get(
     "/issues/{issue_id}/identity",
     response_model=IssueIdentityResponse,
