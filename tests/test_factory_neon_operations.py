@@ -652,3 +652,29 @@ def test_proven_account_cooldown_blocks_only_its_provider() -> None:
         kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
     assert kept == ["42"]
     assert len(rejected) == 1 and "nvidia" in rejected[0]
+
+
+def test_fleet_admission_does_not_double_book_capped_provider() -> None:
+    from unittest.mock import patch
+    import factory_source_budget
+
+    class CapacityConnection:
+        async def fetch(self, sql, *args):
+            assert "factory_provider_budget" in sql
+            return [
+                {"source": "requesty", "concurrency_limit": 1, "daily_limit": None,
+                 "cooldown_until": None, "quota_reset_at": None},
+                {"source": "nvidia", "concurrency_limit": None, "daily_limit": None,
+                 "cooldown_until": None, "quota_reset_at": None},
+            ]
+
+    with (
+        patch.object(operations, "_roster", return_value={"41": ("nvidia", "@catalog")}),
+        patch.object(factory_source_budget, "load_budgets", return_value={"cloudflare-workers-ai": 1}),
+    ):
+        allowed = run(operations._export_fleet_failover_sources(
+            CapacityConnection(), REPO, "41",
+        ))
+    assert "nvidia" in allowed
+    assert "requesty" not in allowed
+    assert "cloudflare-workers-ai" not in allowed
