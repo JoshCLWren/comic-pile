@@ -260,16 +260,14 @@ def _model_state(
             return "cooling"
         return "degraded"
     if item.outcome in PROVIDER_FAILURE_OUTCOMES:
-        if provider in MODEL_SCOPED_PROVIDERS:
-            cooldown = (
-                RATE_LIMIT_COOLDOWN_SECONDS
-                if item.outcome in {"provider_throttle", "provider_quota", "provider_unavailable", "provider_throttled"}
-                else FAILURE_COOLDOWN_SECONDS
-            )
-            if now_epoch < item.updated + cooldown:
-                return "cooling"
-            return "degraded"
-        return "unknown"
+        cooldown = (
+            RATE_LIMIT_COOLDOWN_SECONDS
+            if item.outcome in {"provider_throttle", "provider_quota", "provider_unavailable", "provider_throttled"}
+            else FAILURE_COOLDOWN_SECONDS
+        )
+        if now_epoch < item.updated + cooldown:
+            return "cooling"
+        return "degraded"
     return "unknown"
 
 
@@ -350,31 +348,9 @@ def rank_candidates(
             ranked.append(native)
             continue
 
-        provider_state = (
-            "unknown"
-            if provider in MODEL_SCOPED_PROVIDERS
-            else _provider_state(provider, attempts, now_epoch=now_epoch)
-        )
-        model_state = _model_state(
-            provider,
-            model,
-            evidence,
-            now_epoch=now_epoch,
-        )
-        if model_state == "unavailable":
-            state = "unavailable"
-        elif provider_state == "cooling" or model_state == "cooling":
-            state = "cooling"
-        elif model_state == "healthy" and provider_state in {
-            "healthy",
-            "degraded",
-            "unknown",
-        }:
-            state = "healthy" if provider_state != "degraded" else "degraded"
-        elif model_state == "degraded" or provider_state == "degraded":
-            state = "degraded"
-        else:
-            state = "unknown"
+        # A provider failure report is not evidence against unrelated
+        # model IDs on that provider. Only exact source/model health counts.
+        state = _model_state(provider, model, evidence, now_epoch=now_epoch)
         ranked.append(
             RankedCandidate(
                 provider=provider,
@@ -498,10 +474,6 @@ def select_candidate(
     evidence = dict(evidence_override) if evidence_override is not None else latest_attempt_evidence(comment_list)
     attempts = tuple(evidence.values())
     providers = {candidate.provider for candidate in ranked}
-    provider_cooling = any(
-        _provider_state(provider, attempts, now_epoch=now_epoch) == "cooling"
-        for provider in providers
-    )
     cooling_outcomes = {
         item.outcome
         for candidate in ranked
@@ -509,16 +481,15 @@ def select_candidate(
         for item in [evidence.get((candidate.provider, candidate.model))]
         if item is not None
     }
-    if provider_cooling:
-        if "provider_quota" in cooling_outcomes:
-            failure = "provider_quota"
-            detail = "provider quota exhaustion evidence is cooling all discovered candidates"
-        elif "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
-            failure = "provider_throttle"
-            detail = "provider throttle evidence is cooling all discovered candidates"
-        else:
-            failure = "provider_failure"
-            detail = "provider failure evidence is cooling all discovered candidates"
+    if "provider_quota" in cooling_outcomes:
+        failure = "provider_quota"
+        detail = "source/model quota evidence remains cooling"
+    elif "provider_throttle" in cooling_outcomes or "provider_throttled" in cooling_outcomes:
+        failure = "provider_throttle"
+        detail = "source/model throttle evidence remains cooling"
+    elif "provider_failure" in cooling_outcomes or "provider_unavailable" in cooling_outcomes:
+        failure = "provider_failure"
+        detail = "source/model failure evidence remains cooling"
     elif "unknown_failure" in cooling_outcomes:
         failure = "unknown_failure"
         detail = "unknown candidate failures are still cooling"
