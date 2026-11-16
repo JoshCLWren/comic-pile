@@ -758,7 +758,7 @@ async fn validate_projection(
         }
     }
 
-    ValidatedReadingInputs::new(inputs, &names)
+    ValidatedReadingInputs::new(inputs.clone(), &names)
         .map_err(|error| cycle_conflict(error, &inputs))?;
     Ok(())
 }
@@ -1975,11 +1975,11 @@ pub async fn save_overlap_decision(
         .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
     let advanced_token: String = updated_row.get(0);
 
-    tx.commit().await.map_err(db::query_error)?;
-
-    // Build response
+    // Load decisions for response before committing
     let decisions = load_list_overlap_decisions(&tx, user.id(), list_id).await?;
     let candidates = load_thread_volume_candidates(&tx, user.id()).await?;
+
+    tx.commit().await.map_err(db::query_error)?;
 
     Ok(Json(OverlapDecisionSetResponse {
         list_id,
@@ -2068,11 +2068,11 @@ pub async fn delete_overlap_decision(
         .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
     let advanced_token: String = updated_row.get(0);
 
-    tx.commit().await.map_err(db::query_error)?;
-
-    // Build response
+    // Load decisions for response before committing
     let decisions = load_list_overlap_decisions(&tx, user.id(), list_id).await?;
     let candidates = load_thread_volume_candidates(&tx, user.id()).await?;
+
+    tx.commit().await.map_err(db::query_error)?;
 
     Ok(Json(OverlapDecisionSetResponse {
         list_id,
