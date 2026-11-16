@@ -385,8 +385,28 @@ ensure_owner_label
 stage_trusted_guard
 stage_trusted_checkpoint_helper
 stage_trusted_kilo_helper
+
+# Keep all selection and configuration code on the trusted main snapshot.
+# The agent may check out/edit a PR branch before a fallback is needed.
+stage_trusted_model_failover() {
+  FACTORY_TRUSTED_FAILOVER_DIR="$(mktemp -d "$RUNNER_TEMP/factory-model-failover.XXXXXXXX")"
+  local filename
+  for filename in \
+    factory_model_failover.py factory_live_opencode.py factory_candidate_health.py \
+    factory_completion_controller.py factory_work_policy.py factory_review_policy.py \
+    factory_provider_candidates.py factory_provider_registry.py \
+    factory_runtime_model_select.py factory_published_model_catalog.py \
+    factory_kilo_catalog.py; do
+    cp ".github/scripts/$filename" "$FACTORY_TRUSTED_FAILOVER_DIR/$filename"
+  done
+  cp scripts/factory_eligibility.py "$FACTORY_TRUSTED_FAILOVER_DIR/factory_eligibility.py"
+  cp .github/scripts/wait-opencode-model.sh "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh"
+  export FACTORY_TRUSTED_FAILOVER_DIR
+}
+
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
+stage_trusted_model_failover
 
 # Issue snapshots are the normal work PR; repairs advance the assigned PR atomically.
 # A separate Git index avoids interfering with an agent editing files.
