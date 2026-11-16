@@ -438,11 +438,23 @@ def collect_snapshot() -> dict[str, Any]:
     opened_day = github_search_total(completion, f"is:pr created:>={day}")
     merged_day = github_search_total(completion, f"is:pr is:merged merged:>={day}")
 
-    comments = completion.registry_comments()
-    policy = completion.load_policy()
-    trusted = [comment for comment in comments if policy.comment_is_trusted(comment)]
-    attempts, heartbeats = latest_worker_records(trusted)
-    heartbeat_report = heartbeat_monitor.heartbeat_health(trusted, roster, now=datetime.now(timezone.utc))
+    view, _health = completion.durable_factory_state()
+    attempts = view["attempts"]
+    heartbeats = view["heartbeats"]
+    heartbeat_report = heartbeat_monitor.heartbeat_health_from_view(
+        view, roster, now=datetime.now(timezone.utc),
+    )
+    # The funnel is one anchored, trusted GitHub comment, never a registry scan.
+    funnel: dict[str, str] = {}
+    try:
+        anchor = completion.gh_json([
+            "api", f"repos/{REPO}/issues/comments/{full.TELEMETRY_COMMENT_ID}"
+        ])
+        if isinstance(anchor, Mapping) and completion.load_policy().comment_is_trusted(anchor):
+            if str(anchor.get("issue_url") or "").endswith("/issues/1093"):
+                funnel = latest_completion_funnel([anchor])
+    except (RuntimeError, ValueError, OSError):
+        pass
     credits = merge_credit(recently_merged_prs(completion))
     worker_rows = build_worker_rows(
         manifest_rows,
@@ -509,7 +521,7 @@ def collect_snapshot() -> dict[str, Any]:
             "merged_day": merged_day,
             "net_day": opened_day - merged_day,
         },
-        "funnel": latest_completion_funnel(trusted),
+        "funnel": funnel,
         "workers": worker_rows,
         "productive_workers_week": sum(int(row["merged_week"]) > 0 for row in worker_rows),
         "merged_week": sum(int(row["merged_week"]) for row in worker_rows),

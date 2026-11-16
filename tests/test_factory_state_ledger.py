@@ -160,7 +160,7 @@ def test_trusted_collector_verifies_code_handoff_before_persistence():
     assert '.head.repo.full_name == $repo' in entry
     assert "pull-requests: write" in entry
     assert "factory_checkpoint_handoff.py" in entry
-    assert 'ATTEMPT_COMMENT_ID: ${{ needs.model_health_snapshot.outputs.attempt_id }}' in entry
+    assert 'ATTEMPT_COMMENT_ID: ${{ needs.run.outputs.attempt_comment_id }}' in entry
     assert 'Verified delivery: %s' in entry
     assert 'existing_run > GITHUB_RUN_ID' in entry
     observer = (root / ".github/workflows/fixed-model-runtime-observer.yml").read_text()
@@ -186,7 +186,7 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "NEON_API_KEY" not in str(model_job)
     assert any(step.get("uses") == "./.github/actions/factory-state-cache"
                for step in trusted_cleanup["steps"])
-    assert "model_health_snapshot:" in entry
+    assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()
     assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
@@ -212,10 +212,11 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     assert "factory_state_ledger.py runtime-outcome" in entry
     assert "gh workflow run factory-completion-drain.yml" in entry
     assert "persist_outcome:" not in drain
-    assert "source_run_id" not in drain
+    assert "source_run_id" in drain
+    assert "factory-state-cache" not in drain
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
-    assert "model_health_snapshot:" in entry
+    assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()
     reusable = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
     assert "factory-state-cache" not in str(reusable["jobs"]["factory"])
     assert "NEON_API_KEY" not in str(reusable["jobs"]["factory"])

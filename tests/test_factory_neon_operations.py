@@ -22,17 +22,19 @@ REPO = "JoshCLWren/comic-pile"
 
 
 class FakeConnection:
-    def __init__(self, *, models=(), budgets=(), reservations=(), events=(), retries=(), metrics=()):
+    def __init__(self, *, models=(), budgets=(), reservations=(), events=(), retries=(), metrics=(), backoffs=(), model_backoffs=()):
         self.models = models
         self.budgets = budgets
         self.reservations = reservations
         self.events = events
         self.retries = retries
         self.metrics = metrics
+        self.backoffs = backoffs
+        self.model_backoffs = model_backoffs
 
     async def fetch(self, statement, *args):
         if "FROM public.factory_state_kv" in statement:
-            return []
+            return self.model_backoffs if "factory-model-backoff-v1" in str(args) else self.backoffs
         if "FROM public.factory_model_health" in statement:
             return self.models
         if "FROM public.factory_provider_budget" in statement:
@@ -57,11 +59,12 @@ def test_schema_contains_all_separate_operational_relations():
     for relation in (
         "factory_model_health", "factory_provider_budget",
         "factory_provider_reservation", "factory_pr_stage_retry",
-        "factory_check_projection", "factory_worker_metrics",
+        "factory_worker_metrics",
         "factory_runtime_event_keys", "factory_reconciliation_cursor",
     ):
         assert relation in ddl
     assert all("DROP TABLE" not in statement for statement in operations.SCHEMA)
+    assert "factory_check_projection" not in ddl
 
 
 def test_missing_model_is_suppressed_but_unrelated_provider_is_available():
@@ -195,6 +198,8 @@ def test_model_scoped_provider_route_never_cools_unrelated_routes():
 def test_exact_head_checks_are_advisory_not_merge_authorization():
     workflow = (ROOT / ".github/workflows/factory-check-projection.yml").read_text()
     assert "factory_state_operations.py ingest-check" in workflow
+    assert "gh workflow run fixed-model-factory-dispatch.yml" in workflow
+    assert "factory_check_projection" not in workflow
     assert "neon-api-key: ${{ secrets.NEON_API_KEY }}" in workflow
     assert "neon-api-key: \\${{" not in workflow
     assert "pull_request_target:" not in workflow
@@ -217,35 +222,49 @@ def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
     assert "export-model-exclusions" in inspect.getsource(operations.main)
 
 
-def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
+def test_missing_marker_id_never_reads_obsolete_body_cache():
     class SnapshotDB:
         async def fetch(self, statement, *args):
-            assert args == (REPO,)
+            if "factory_reconciliation_cursor" in statement:
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
-            assert args == (REPO + ":registry-comments",)
-            marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-111 -->"
-            attempt = "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-111 -->"
-            return [
-                {"id": 123, "body": marker + "\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 124, "body": attempt + "\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 999, "body": marker + "\nForged",
-                 "author_association": "NONE",
-                 "performed_via_github_app": {"slug": "other-untrusted-app"}},
-            ]
+            raise AssertionError("no retired registry body read")
+
+        async def execute(self, statement, *args):
+            raise AssertionError("missing IDs do not create unverifiable locators")
 
     with patch.object(operations, "_roster", return_value={
         "111": ("opencode-free", "glm-5.3-flash-free"),
     }):
-        snapshot = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
-    assert snapshot["nvidia"] == ["gone"]
-    assert snapshot["__heartbeat_id"] == ["123"]
-    assert snapshot["__attempt_id"] == ["124"]
+        record = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
+    assert record == {"nvidia": ["gone"]}
+
+
+def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
+    class IdOnlyDB:
+        async def fetch(self, statement, *args):
+            if "factory_reconciliation_cursor" in statement:
+                return [
+                    {"scope": "registry-comment-id-v1:heartbeat:worker:111",
+                     "checkpoint": "123"},
+                    {"scope": "registry-comment-id-v1:attempt:worker:111",
+                     "checkpoint": "124"},
+                ]
+            return []
+
+        async def fetchval(self, statement, *args):
+            raise AssertionError("registry body must not be read for existing IDs")
+
+        async def execute(self, statement, *args):
+            raise AssertionError("existing ID lookup must not write")
+
+    with patch.object(operations, "_roster", return_value={
+        "111": ("opencode-free", "glm-5.3-flash-free"),
+    }):
+        result = run(operations._export_model_exclusions(IdOnlyDB(), REPO, "111"))
+    assert result == {"__heartbeat_id": ["123"], "__attempt_id": ["124"]}
 
 
 def test_intermediate_model_failures_use_terminal_runtime_idempotency():
@@ -255,3 +274,131 @@ def test_intermediate_model_failures_use_terminal_runtime_idempotency():
     assert "factory_runtime_event_keys" in text
     assert "factory_model_health.status!=\'retired\'" in text
     assert "last_run_id <= EXCLUDED.last_run_id" in text
+
+
+def test_fibonacci_retry_progresses_and_caps():
+    fib = operations.fibonacci_worker_delay
+    assert [fib(i) for i in range(1, 8)] == [300, 300, 600, 900, 1500, 2400, 3900]
+    assert fib(20) == 86400
+    assert operations.WORKER_SUSPEND_AFTER == 14
+
+
+def test_retry_time_and_retained_streak_are_independent_of_ttl():
+    now = datetime.now(UTC)
+    retry = now + timedelta(minutes=5)
+    record = {
+        "payload": [{"source": "vercel-ai-gateway", "model": "reflection/beam-free",
+                     "streak": 7, "next_retry_at": retry.isoformat(),
+                     "suspended": False}],
+        "expires_at": now + timedelta(days=90),
+    }
+    assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "reflection/beam-free", now)
+    assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "reflection/beam-free",
+                                            retry + timedelta(seconds=1)) is None
+    assert operations.worker_backoff_reason(record, "vercel-ai-gateway", "new-pin", now) is None
+
+
+def test_suspended_worker_is_excluded_but_other_models_stay_eligible():
+    db = FakeConnection(backoffs=[{
+        "cache_key": f"factory-worker-backoff-v1:{REPO}:worker:139",
+        "payload": [{"source": "vercel-ai-gateway", "model": "reflection/beam-free",
+                     "streak": 14, "suspended": True, "next_retry_at": None}],
+        "expires_at": datetime.now(UTC) + timedelta(days=90),
+    }])
+    with patch.object(operations, "_roster", return_value={
+        "139": ("vercel-ai-gateway", "reflection/beam-free"),
+        "41": ("kilo-auto", "kilo-auto/free"),
+    }):
+        kept, denied = run(operations._eligibility(db, REPO, ["139", "41"]))
+    assert kept == ["41"] and any("suspended" in reason for reason in denied)
+
+
+def test_missing_credentials_are_not_inference_failures():
+    # The upstream pre-lease gate rejects missing credentials entirely.
+    # A runner in flight during cutover still reports this separately.
+    assert "unconfigured" not in operations.WORKER_RETRY_CLASSES
+    assert "unknown_failure" in operations.WORKER_RETRY_CLASSES
+    assert "agent_timeout" in operations.WORKER_RETRY_CLASSES
+
+
+def test_all_actionable_model_failures_use_fibonacci_without_credential_penalty():
+    # Every real inference failure class must count; credential, checkout,
+    # and controller failures belong to the worker, not an unrelated model.
+    for name in ("provider_failure", "provider_throttle", "provider_quota",
+                 "model_unavailable", "model_policy_violation", "agent_timeout"):
+        assert operations.attributable_model_failure(name, False), name
+    for name in ("work_failure", "unknown_failure"):
+        assert operations.attributable_model_failure(name, True), name
+        assert not operations.attributable_model_failure(name, False)
+    for name in ("environment_failure", "control_plane_failure", "unconfigured", "no_work"):
+        assert not operations.attributable_model_failure(name, True), name
+    assert "work_failure" in operations.WORKER_RETRY_CLASSES
+
+
+def test_history_seeds_failed_source_model_without_double_counting_current_run():
+    def event(kind: str, run_id: int, outcome: str, *, proven=False):
+        return {"event_type": kind, "detail": {
+            "source": "kilo-auto", "model": "kilo-auto/free",
+            "run_id": str(run_id), "outcome_class": outcome,
+            "exact_model_proven": proven,
+        }}
+    old = [
+        event("worker_failed", 50, "work_failure", proven=True),
+        event("worker_failed", 49, "provider_throttle"),
+        event("worker_failed", 48, "unknown_failure"),  # Old pre-session abort
+        event("worker_failed", 47, "agent_timeout"),
+        event("worker_completed", 46, "success", proven=True),
+        event("worker_failed", 45, "work_failure", proven=True),
+    ]
+    # A current terminal event already in Neon must never count twice.
+    rows = [event("worker_failed", 51, "work_failure", proven=True), *old]
+    assert operations.historical_failure_streak(rows, 51, "kilo-auto", "kilo-auto/free", model_only=True) == 3
+    assert operations.historical_failure_streak(rows, 51, "kilo-auto", "kilo-auto/free", model_only=False) == 3
+    assert operations.historical_failure_streak(rows, 51, "z-ai", "x", model_only=True) == 0
+
+
+def test_completed_delivery_resets_shared_streak_across_workers():
+    def event(kind: str, run_id: int, outcome: str, *, delivered=False, proven=True):
+        return {"event_type": kind, "detail": {
+            "source": "kilo-auto", "model": "kilo-auto/free",
+            "run_id": str(run_id), "outcome_class": outcome,
+            "exact_model_proven": proven, "persisted_work": delivered,
+        }}
+    # This can come from either worker 46 or 98: shared source/model is key.
+    rows = [event("worker_failed", 71, "work_failure"),
+            event("worker_completed", 70, "unknown_failure", delivered=True),
+            event("worker_failed", 69, "work_failure")]
+    assert operations.historical_failure_streak(rows, 72, "kilo-auto", "kilo-auto/free", model_only=True) == 1
+
+
+def test_shared_model_fibonacci_backoff_blocks_both_workers_not_other_models():
+    now = datetime.now(UTC)
+    model_state = [{
+        "cache_key": f"factory-model-backoff-v1:{REPO}:source:kilo-auto:model:kilo-auto/free",
+        "payload": [{"source": "kilo-auto", "model": "kilo-auto/free",
+                     "streak": 5, "next_retry_at": (now + timedelta(minutes=25)).isoformat(),
+                     "suspended": False}],
+        "expires_at": now + timedelta(days=90),
+    }]
+    db = FakeConnection(model_backoffs=model_state)
+    with patch.object(operations, "_roster", return_value={
+        "46": ("kilo-auto", "kilo-auto/free"),
+        "98": ("kilo-auto", "kilo-auto/free"),
+        "41": ("opencode-free", "other-free"),
+    }):
+        kept, denied = run(operations._eligibility(db, REPO, ["46", "98", "41"]))
+    assert kept == ["41"]
+    assert len(denied) == 2
+    assert all("source/model" in item for item in denied)
+
+
+def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
+    import inspect
+    source = inspect.getsource(operations.project_runtime)
+    assert "pg_advisory_xact_lock" in source
+    assert "prior_model_run <= run_id" in source
+    assert "model_key, run_id" in source
+    assert "factory-model-backoff-v1:" in source
+    # Fresh attempts bootstrap from prior Neon terminal events, not GitHub.
+    assert "await _recent_streak(conn, run_id, source, model)" in source
+    assert "classification in WORKER_RETRY_CLASSES" in source

@@ -25,6 +25,8 @@ from app.models.external_identity import (
     IssueExternalIdentityMapping,
 )
 
+from route_harness import cargo_example_path
+
 SECRET = "synthetic-native-issue-card-secret"
 
 
@@ -36,7 +38,7 @@ def _iso_ms(value: datetime) -> str:
 
 async def _run_example(env: dict[str, str]) -> dict[str, object]:
     proc = await asyncio.create_subprocess_exec(
-        "native/roll-service/target/debug/examples/http_issue_cards",
+        str(cargo_example_path("http_issue_cards")),
         env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

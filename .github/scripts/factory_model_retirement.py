@@ -711,6 +711,8 @@ def _build_parser() -> argparse.ArgumentParser:
             "lists them."
         ),
     )
+    parser.add_argument("--retired-models-json", type=Path,
+                        help="Trusted Neon model health export of retired NVIDIA IDs")
     parser.add_argument("--opencode-bin", default="")
     parser.add_argument(
         "--require-cli",
@@ -790,7 +792,13 @@ def run(argv: Sequence[str] | None = None) -> int:
         return 2
 
     try:
-        retired_410 = load_nvidia_410_models(args.retirement_comments)
+        if args.retired_models_json is not None:
+            records = json.loads(args.retired_models_json.read_text())
+            if not isinstance(records, list) or any(not isinstance(v, str) for v in records):
+                raise ValueError("invalid trusted retired-models JSON")
+            retired_410 = set(records)
+        else:
+            retired_410 = load_nvidia_410_models(args.retirement_comments)
     except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
         print(f"ERROR: cannot read retirement comments: {exc}", file=sys.stderr)
         return 2

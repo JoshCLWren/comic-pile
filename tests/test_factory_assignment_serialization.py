@@ -77,8 +77,6 @@ def test_all_factory_assignment_writers_share_one_concurrency_group() -> None:
     """No assignment-capable workflow may mutate leases outside the shared lock."""
     writers = {
         "fixed-model-factory-dispatch.yml": 'python3 "$controller" assign --worker "$worker"',
-        "fixed-model-factory-capacity-refill.yml": 'python3 "$controller" assign --worker "$worker"',
-        "factory-completion-drain.yml": "factory_full_completion_controller.py",
     }
 
     for filename, assignment_marker in writers.items():
@@ -89,21 +87,13 @@ def test_all_factory_assignment_writers_share_one_concurrency_group() -> None:
         )
 
 
-def test_incident_writer_groups_are_not_independent() -> None:
-    """The two writer groups implicated in incident #2727 must stay retired."""
-    import re
-
-    completion = (WORKFLOWS / "factory-completion-drain.yml").read_text(encoding="utf-8")
-    refill = (WORKFLOWS / "fixed-model-factory-capacity-refill.yml").read_text(
-        encoding="utf-8"
-    )
-
-    # Ensure the retired independent writer group is not used as an exact group value
-    assert not re.search(r'(?m)^\s*group:\s*factory-completion-drain\s*$', completion)
-    assert "group: fixed-model-capacity-refill-${{ github.event.workflow_run.id || github.run_id }}" not in refill
-    # Sanity: the shared serialization group must still be present in both.
-    assert _job_group(_load_workflow("factory-completion-drain.yml")) == ASSIGNMENT_GROUP
-    assert _job_group(_load_workflow("fixed-model-factory-capacity-refill.yml")) == ASSIGNMENT_GROUP
+def test_completion_signal_has_no_assignment_authority_or_writer_lock() -> None:
+    """Signals cannot revive the incident's second assignment authority."""
+    completion = (WORKFLOWS / "factory-completion-drain.yml").read_text()
+    assert " assign --worker " not in completion
+    assert " release --worker " not in completion
+    assert _job_group(_load_workflow("factory-completion-drain.yml")) == ""
+    assert not (WORKFLOWS / "fixed-model-factory-capacity-refill.yml").exists()
 
 
 def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> None:
@@ -112,8 +102,6 @@ def test_all_shared_assignment_workflows_preserve_pending_reconciliation() -> No
     # dispatcher and completion work arrived in the same shared group.
     writers = (
         "fixed-model-factory-dispatch.yml",
-        "fixed-model-factory-capacity-refill.yml",
-        "factory-completion-drain.yml",
         "factory-migration-lane-release.yml",
         "free-model-factory-dispatch.yml",
     )

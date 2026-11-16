@@ -718,13 +718,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/v1/taste/discoveries$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/v1/taste/discoveries/[0-9]+/dismiss$",
       "methods": [
         "POST"
@@ -747,6 +740,13 @@
     },
     {
       "src": "^/api/v1/threads/[^/]+/issue\\-dependencies$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
         "GET"
       ],
@@ -1308,6 +1308,14 @@
       "dest": "/api/index.py"
     },
     {
+      "src": "^/api/v1/taste/discoveries$",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "dest": "/api/index.py"
+    },
+    {
       "src": "^/api/v1/threads/$",
       "methods": [
         "POST",
@@ -1351,7 +1359,6 @@
     {
       "src": "^/api/v1/threads/[^/]+/issues$",
       "methods": [
-        "GET",
         "POST",
         "OPTIONS"
       ],

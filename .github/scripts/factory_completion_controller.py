@@ -138,6 +138,7 @@ def _catalog_worker_health(
     candidates: Iterable[Mapping[str, str]],
     *,
     now_epoch: int,
+    evidence_override: Mapping[tuple[str, str], Any] | None = None,
 ) -> dict[str, tuple[str, int]]:
     """Project shared catalog candidate health onto capability worker slots."""
     scripts = Path(__file__).resolve().parent
@@ -182,6 +183,7 @@ def _catalog_worker_health(
         discovered,
         comments,
         now_epoch=now_epoch,
+        evidence_override=evidence_override,
     )
     priority = {
         "native_route": 0,
@@ -513,34 +515,36 @@ def load_policy() -> Any:
     return policy
 
 
-def registry_comments() -> list[dict[str, Any]]:
-    """Use one Neon registry snapshot, paging GitHub only for changed comments."""
-    scripts = str(Path(__file__).resolve().parent)
-    if scripts not in sys.path:
-        sys.path.insert(0, scripts)
-    from factory_state_cache import cached_json, incremental_comments
+def durable_factory_state(*, now_epoch: int | None = None) -> tuple[dict[str, Any], dict[str, tuple[str, int]]]:
+    """Read repository-scoped trusted events and model health, no comment cache."""
+    from factory_runtime_view import export_view
+    from factory_candidate_health import durable_attempt_evidence
 
-    def fetch_since(since: str | None) -> list[dict[str, Any]]:
-        endpoint = f"repos/{REPO}/issues/1093/comments?per_page=100"
-        if since:
-            from urllib.parse import quote
-            endpoint += f"&since={quote(since, safe='')}"
-        pages = gh_json(["api", "--paginate", "--slurp", endpoint])
-        changes = flatten_pages(pages)
-        # The trusted completion collector turns edited heartbeat comments into
-        # deduplicated lifecycle events. Worker/model jobs receive no DSN.
-        try:
-            from factory_state_ledger import record_heartbeat_comments
-            record_heartbeat_comments(REPO, changes)
-        except Exception as exc:
-            print(f"[factory-completion] Neon heartbeat ingestion deferred ({type(exc).__name__})", file=sys.stderr)
-        return changes
+    view = export_view(REPO)
+    now_epoch = int(time.time()) if now_epoch is None else now_epoch
+    health: dict[str, tuple[str, int]] = {}
+    for worker, attempt in (view.get("attempts") or {}).items():
+        updated = parse_time(attempt.get("updated"))
+        if updated is not None:
+            health[str(worker)] = (str(attempt.get("attempt outcome") or ""), updated)
 
-    return cached_json(
-        f"{REPO}:registry-comments",
-        lambda previous: incremental_comments(previous, fetch_since),
-        ttl_seconds=360,
+    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
+    candidates = load_manifest_candidates(manifest)
+    evidence = durable_attempt_evidence(view["health"], now_epoch=now_epoch)
+    # Project provider-level catalog evidence to all capability slots exactly
+    # as the historical registry path did. A model failure on one dynamic
+    # catalog choice must not disable other healthy models in that provider.
+    provider_health = _catalog_worker_health(
+        [], candidates, now_epoch=now_epoch, evidence_override=evidence,
     )
+    for worker, state in provider_health.items():
+        prior = health.get(worker)
+        # A recent classified worker failure remains authoritative until
+        # its cooldown elapses, even if other provider candidates are healthy.
+        if prior and now_epoch < prior[1] + cooldown_seconds(prior[0]):
+            continue
+        health[worker] = state
+    return view, health
 
 
 def owned_worker_ids(items: Iterable[Mapping[str, Any]]) -> set[str]:
@@ -601,8 +605,7 @@ def signal_completion_mode(*, now_epoch: int | None = None) -> dict[str, object]
     workers = load_manifest_workers(manifest)
     owned = owned_worker_ids([*issues, *prs])
     try:
-        comments = registry_comments()
-        health = latest_worker_health(comments, trusted=policy.comment_is_trusted)
+        _view, health = durable_factory_state(now_epoch=now_epoch)
     except RuntimeError as exc:
         print(
             f"[factory-completion] heartbeat health unavailable; "

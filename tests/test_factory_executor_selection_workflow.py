@@ -15,21 +15,14 @@ def _dispatch_selector(workflow: str) -> str:
 
 
 def test_multi_provider_entry_is_restored_while_omniroute_stays_dark() -> None:
-    """Incident restore: nvidia/opencode/openrouter/kilo run; OmniRoute does not."""
+    """Native lanes remain executable; compatible providers use the registry."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = _dispatch_selector(workflow)
 
-    assert "nvidia)" in workflow
-    assert "opencode-free)" in workflow
-    assert "openrouter-free)" in workflow
+    assert "factory_provider_registry.py resolve" in workflow
+    assert "opencode-free|openrouter-free)" in workflow
     assert "factory_live_opencode.py" in selector
     assert "kilo-auto)" in workflow
-    assert "z-ai|ollama-cloud|mistral|orcarouter|requesty)" in workflow
-    assert "vercel-ai-gateway)" in workflow
-    assert (
-        "nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)"
-        in workflow
-    )
     assert "omniroute-disabled-incident" in workflow
     assert "FACTORY_OMNIROUTE_ENABLED" in workflow
     assert "factory_provider_candidates.py" in selector
@@ -50,38 +43,32 @@ def test_omniroute_catalog_discovery_requires_explicit_enable() -> None:
 
 
 def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
-    """Z.AI and Ollama Cloud lanes write OmniRoute-shaped openai-compat config."""
+    """A single registry configures all compatible provider endpoints."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    registry = (ROOT / ".github" / "scripts" / "factory_provider_registry.py").read_text(encoding="utf-8")
 
     assert "Configure OpenAI-compatible factory provider" in workflow
-    assert "https://api.z.ai/api/paas/v4" in workflow
-    assert "https://ollama.com/v1" in workflow
-    assert "https://api.mistral.ai/v1" in workflow
-    assert "https://api.orcarouter.ai/v1" in workflow
-    assert "https://router.requesty.ai/v1" in workflow
-    assert "https://ai-gateway.vercel.sh/v1" in workflow
+    assert "factory_provider_registry.py config" in workflow
+    assert "modelID" in registry
     assert "Require Vercel model to remain zero-price" in workflow
-    assert "Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}" in workflow
-    assert "OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}" in workflow
-    assert "MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}" in workflow
-    assert 'package: "@opencode/ai/providers/openai-compatible"' in workflow
+    for key in ("Z_AI_API_KEY", "OLLAMA_API_KEY", "MISTRAL_API_KEY", "ORCAROUTER_API_KEY", "REQUESTY_API_KEY"):
+        assert f"{key}: ${{{{ secrets.{key} }}}}" in workflow
 
 
 def test_new_free_api_sources_use_real_provider_models_and_credentials() -> None:
-    """Each new provider has an authenticated OpenAI-compatible runtime route."""
+    """New source identities and keys live in the registry, not shell cases."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    for source, secret, url in (
-        ("gemini-free", "GEMINI_API_KEY", "https://generativelanguage.googleapis.com/v1beta/openai"),
-        ("groq-free", "GROQ_API_KEY", "https://api.groq.com/openai/v1"),
-        ("aion-free", "AION_API_KEY", "https://api.aionlabs.ai/v1"),
-        ("cohere-eval", "COHERE_API_KEY", "https://api.cohere.ai/compatibility/v1"),
-        ("typhoon-free", "TYPHOON_API_KEY", "https://api.opentyphoon.ai/v1"),
+    registry = (ROOT / ".github" / "scripts" / "factory_provider_registry.py").read_text(encoding="utf-8")
+    for source, secret in (
+        ("gemini-free", "GEMINI_API_KEY"),
+        ("groq-free", "GROQ_API_KEY"),
+        ("aion-free", "AION_API_KEY"),
+        ("cohere-eval", "COHERE_API_KEY"),
+        ("typhoon-free", "TYPHOON_API_KEY"),
     ):
-        assert source in workflow
+        assert f'"{source}": ProviderSpec(' in registry
+        assert f'"{secret}"' in registry
         assert f"{secret}: ${{{{ secrets.{secret} }}}}" in workflow
-        assert f"missing-{secret}" in workflow
-        assert url in workflow
-    assert "comic-pile-factory-oai/1.0" in workflow
     assert "Require Vercel model to remain zero-price" in workflow
 
 
@@ -152,7 +139,7 @@ def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> N
     assert "/issues/1093/comments?per_page=100" not in live
     assert '--exclusions-file "$exclusions_file"' in live
     assert 'printf \'[]\\n\' > "$comments_file"' in live
-    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}' in workflow
+    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}' in workflow
     assert 'jq -e \'type == "object" and all(.[]; type == "array")\'' in selector
 
 

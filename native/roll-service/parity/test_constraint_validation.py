@@ -4,7 +4,7 @@ import json
 import random
 import subprocess
 from dataclasses import asdict
-from pathlib import Path
+from route_harness import cargo_example_path
 
 from app.services.reading_list_cycle_validator import ReadingCycleError, validate_reading_constraints
 from app.services.reading_list_evaluator import (
@@ -12,7 +12,7 @@ from app.services.reading_list_evaluator import (
     ReadingThread, SeriesOverlapDecision,
 )
 
-RUNNER = Path(__file__).resolve().parents[1] / "target/debug/examples/constraint_validation"
+RUNNER = cargo_example_path("constraint_validation")
 READER_ID = 937
 
 

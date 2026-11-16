@@ -109,6 +109,58 @@ def heartbeat_health(
     }
 
 
+def heartbeat_health_from_view(
+    view: Mapping[str, object], roster: Mapping[str, object], *,
+    now: datetime, stale_seconds: int = STALE_SECONDS,
+) -> dict[str, object]:
+    """Read trustworthy repo-scoped lifecycle projections, not comment bodies."""
+    expected = {str(worker) for worker in roster.get("expected_workers", [])}
+    excluded = {str(worker) for worker in [
+        *roster.get("retired_workers", []), *roster.get("paused_workers", [])
+    ]}
+    heartbeats = view.get("heartbeats") or {}
+    attempts = view.get("attempts") or {}
+    workers: list[dict[str, object]] = []
+    ages: list[int] = []
+    for worker in sorted(expected - excluded, key=int):
+        heartbeat = heartbeats.get(worker, {})
+        attempt = attempts.get(worker, {})
+        updated = timestamp(str(heartbeat.get("updated") or ""))
+        if updated is not None and updated > now:
+            updated = None
+        age = int((now - updated).total_seconds()) if updated else None
+        if age is not None:
+            ages.append(age)
+        outcome = str(attempt.get("attempt outcome") or "")
+        detail = str(attempt.get("detail") or "")
+        quota = outcome in {"provider_throttle", "provider_quota", "provider_throttled"}
+        if re.search(r"(?i)(weekly|week).*(quota|limit)|(quota|limit).*(weekly|week)", detail):
+            quota = True
+        workers.append({
+            "worker": worker,
+            "identity": f"opencode-free-model-factory-{worker}",
+            "freshness": ("missing" if age is None else
+                          "stale" if age >= stale_seconds else "fresh"),
+            "age_seconds": age,
+            "updated": str(heartbeat.get("updated") or "") if updated else "",
+            "run": str(heartbeat.get("run") or ""),
+            "outcome": str(heartbeat.get("outcome") or ""),
+            "attempt_outcome": outcome,
+            "attempt_updated": str(attempt.get("updated") or ""),
+            "attempt_run": str(attempt.get("run") or ""),
+            "runtime_status": "quota-limited" if quota else outcome or "unknown",
+            "detail": detail,
+        })
+    return {
+        "checked_at": now.isoformat().replace("+00:00", "Z"),
+        "stale_seconds": stale_seconds,
+        "workers": workers,
+        "affected_workers": [row["worker"] for row in workers if row["freshness"] != "fresh"],
+        "newest_active_age_seconds": min(ages) if ages else None,
+        "recovery_policy": "fleet-wide dispatcher recovery only; no per-worker stale retries",
+    }
+
+
 def markdown_report(report: Mapping[str, object]) -> str:
     """Render freshness and observed runtime outcomes as separate diagnostics."""
     lines = [
@@ -133,18 +185,26 @@ def main() -> int:
     from factory_work_policy import comment_is_trusted
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--comments", type=Path, required=True)
+    parser.add_argument("--comments", type=Path)
+    parser.add_argument("--view", type=Path)
     parser.add_argument("--roster", type=Path, default=Path(".github/factory-expected-workers.json"))
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path)
     args = parser.parse_args()
-    pages = json.loads(args.comments.read_text())
-    comments = [comment for page in pages for comment in page]
-    report = heartbeat_health(
-        [comment for comment in comments if comment_is_trusted(comment)],
-        json.loads(args.roster.read_text()),
-        now=datetime.now(UTC),
-    )
+    if (args.comments is None) == (args.view is None):
+        parser.error("provide exactly one of --comments or --view")
+    if args.view:
+        report = heartbeat_health_from_view(
+            json.loads(args.view.read_text()),
+            json.loads(args.roster.read_text()), now=datetime.now(UTC),
+        )
+    else:
+        pages = json.loads(args.comments.read_text())
+        comments = [comment for page in pages for comment in page]
+        report = heartbeat_health(
+            [comment for comment in comments if comment_is_trusted(comment)],
+            json.loads(args.roster.read_text()), now=datetime.now(UTC),
+        )
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     diagnostics = markdown_report(report)
     print(diagnostics)

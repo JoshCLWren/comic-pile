@@ -29,6 +29,7 @@ use utoipa::OpenApi;
     crate::issue_read::get_issue_dependencies_documentation,
     crate::threads::get_thread_detail_documentation,
     crate::threads::get_bare_thread_detail_documentation,
+    crate::taste_discoveries::list_documentation,
     crate::taste_discoveries::dismiss_documentation,
     crate::creators::list_creators_documentation,
     crate::creators::get_summaries_documentation,
@@ -134,6 +135,23 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn discovery_listing_publishes_its_mounted_response_contract() {
+        let document = serde_json::to_value(same_path_openapi()).expect("serializable contract");
+        let operation = &document["paths"]["/api/v1/taste/discoveries"]["get"];
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/TasteDiscoveryListResponse"
+        );
+        let response = &document["components"]["schemas"]["TasteDiscoveryListResponse"];
+        assert_eq!(response["properties"]["discoveries"]["type"], "array");
+        assert_eq!(response["properties"]["generated_at"]["type"], "string");
+        assert!(operation["responses"]["422"].is_object());
+        let limit = &operation["parameters"][0]["schema"];
+        assert_eq!(limit["minimum"], 1);
+        assert_eq!(limit["maximum"], 3);
+    }
 
     #[test]
     fn checked_in_contract_is_current() {

@@ -75,4 +75,4 @@ jobs:
             exit 0
           fi
           gh workflow run fixed-model-factory-dispatch.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main -f mode=roster
+            --repo "$GITHUB_REPOSITORY" --ref main -f target="pr:$PR_NUMBER" -f action=advance
