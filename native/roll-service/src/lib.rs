@@ -12,6 +12,7 @@ pub mod comicvine_resolution;
 pub mod config;
 pub mod continuity_rules;
 pub mod creators;
+pub mod custom_cbl;
 pub mod db;
 pub mod demo;
 pub mod dependencies;
@@ -55,7 +56,6 @@ pub mod session_history;
 pub mod tags;
 pub mod taste_discoveries;
 pub mod threads;
-pub mod custom_cbl;
 
 /// Test scaffolding shared by unit and integration tests.
 ///
@@ -598,10 +598,16 @@ pub fn router(state: Arc<AppState>) -> Router {
         // Custom CBL (Reading List) endpoints on /api/v1/custom-cbls paths
         .route("/api/v1/custom-cbls", get(list_custom_cbls))
         .route("/api/v1/custom-cbls", post(create_custom_cbl))
-        .route("/api/v1/custom-cbls/issue-search", get(search_custom_cbl_issues))
+        .route(
+            "/api/v1/custom-cbls/issue-search",
+            get(search_custom_cbl_issues),
+        )
         .route("/api/v1/custom-cbls/{list_id}", get(get_custom_cbl))
         .route("/api/v1/custom-cbls/{list_id}", put(update_custom_cbl))
-        .route("/api/v1/custom-cbls/{list_id}/export", get(export_custom_cbl))
+        .route(
+            "/api/v1/custom-cbls/{list_id}/export",
+            get(export_custom_cbl),
+        )
         .route("/api/v1/custom-cbls/{list_id}/reader", get(read_custom_cbl))
         .route(
             "/api/v1/custom-cbls/{list_id}/reading-plans/{plan_id}:apply",

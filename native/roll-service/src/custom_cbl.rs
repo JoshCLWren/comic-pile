@@ -6,14 +6,9 @@
 //! response shapes expected by existing clients.
 
 use crate::{
-    auth::AuthenticatedUser,
-    db,
-    option_inputs,
-    reading_blocker_projection,
-    reading_constraints::ValidatedReadingInputs,
-    reading_eligibility,
-    reading_graph::cycle_conflict,
-    ApiError, AppState,
+    auth::AuthenticatedUser, db, option_inputs, reading_blocker_projection,
+    reading_constraints::ValidatedReadingInputs, reading_eligibility,
+    reading_graph::cycle_conflict, ApiError, AppState,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -841,9 +836,16 @@ pub async fn list_custom_cbls(
         .map_err(db::query_error)?;
     Ok(Json(
         rows.iter()
-            .map(|row| list_item_from_row((
-                row.get(0), row.get(1), row.get(2), row.get(3), row.get(4), row.get(5)
-            )))
+            .map(|row| {
+                list_item_from_row((
+                    row.get(0),
+                    row.get(1),
+                    row.get(2),
+                    row.get(3),
+                    row.get(4),
+                    row.get(5),
+                ))
+            })
             .collect(),
     ))
 }
@@ -974,7 +976,7 @@ pub async fn search_custom_cbl_issues(
         "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status
          FROM issues i
          JOIN threads t ON t.id=i.thread_id
-         WHERE t.user_id=$1"
+         WHERE t.user_id=$1",
     );
     let pattern;
     let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user_id];
@@ -988,7 +990,10 @@ pub async fn search_custom_cbl_issues(
     query.push_str(&(params_vec.len() + 1).to_string());
     params_vec.push(&params.limit);
 
-    let rows = conn.query(&query, &params_vec).await.map_err(db::query_error)?;
+    let rows = conn
+        .query(&query, &params_vec)
+        .await
+        .map_err(db::query_error)?;
     Ok(Json(
         rows.iter()
             .map(|row| CustomCBLIssueSearchResult {
@@ -1025,7 +1030,13 @@ pub async fn get_custom_cbl(
         return Err(ApiError::NotFound("Reading List not found".to_string()));
     };
     let entries = load_entries_conn(&conn, list_id).await?;
-    Ok(Json(response_from_row(row, user.id(), entries, Vec::new(), Vec::new())))
+    Ok(Json(response_from_row(
+        row,
+        user.id(),
+        entries,
+        Vec::new(),
+        Vec::new(),
+    )))
 }
 
 async fn load_entries_conn(
@@ -1260,7 +1271,14 @@ pub async fn update_custom_cbl(
         String::new(),
         entries.len() as i32,
     );
-    let mut json = serde_json::to_value(&response_from_row(list_row, user.id(), entries, changes, warnings)).map_err(|e| {
+    let mut json = serde_json::to_value(&response_from_row(
+        list_row,
+        user.id(),
+        entries,
+        changes,
+        warnings,
+    ))
+    .map_err(|e| {
         tracing::debug!(
             error_kind = crate::error_kind(&e),
             "preserved underlying error before mapping"
@@ -1307,7 +1325,10 @@ pub async fn export_custom_cbl(
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/xml")
-        .header("Content-Disposition", format!("attachment; filename=\"custom-cbl-{}.cbl\"", list_id))
+        .header(
+            "Content-Disposition",
+            format!("attachment; filename=\"custom-cbl-{}.cbl\"", list_id),
+        )
         .body(axum::body::Body::from(xml))
         .unwrap())
 }
@@ -1498,10 +1519,13 @@ pub async fn apply_custom_cbl(
     // Load CBL entries
     let entries = load_entries(&tx, list_id).await?;
     if entries.is_empty() {
-        return Err(ApiError::Unprocessable(json!({
-            "code": "custom_cbl_empty",
-            "message": "Custom CBL has no issues"
-        }).to_string()));
+        return Err(ApiError::Unprocessable(
+            json!({
+                "code": "custom_cbl_empty",
+                "message": "Custom CBL has no issues"
+            })
+            .to_string(),
+        ));
     }
 
     // Parse plan data
@@ -1528,11 +1552,13 @@ pub async fn apply_custom_cbl(
     }
 
     // Determine target lane
-    let lanes: Vec<serde_json::Value> = serde_json::from_value(lanes_json.clone()).unwrap_or_default();
+    let lanes: Vec<serde_json::Value> =
+        serde_json::from_value(lanes_json.clone()).unwrap_or_default();
     let target_lane_id = if let Some(lane_id) = request.lane_id {
         lane_id
     } else if !lanes.is_empty() {
-        lanes.iter()
+        lanes
+            .iter()
             .min_by_key(|l| l.get("order").and_then(|v| v.as_i64()).unwrap_or(0))
             .and_then(|l| l.get("id").and_then(|v| v.as_str()))
             .unwrap_or("custom-cbl")
@@ -1542,15 +1568,22 @@ pub async fn apply_custom_cbl(
     };
 
     // Verify lane exists
-    if !lanes.iter().any(|l| l.get("id").and_then(|v| v.as_str()) == Some(&target_lane_id)) {
-        return Err(ApiError::Unprocessable(json!({
-            "code": "custom_cbl_lane_not_found",
-            "lane_id": target_lane_id
-        }).to_string()));
+    if !lanes
+        .iter()
+        .any(|l| l.get("id").and_then(|v| v.as_str()) == Some(&target_lane_id))
+    {
+        return Err(ApiError::Unprocessable(
+            json!({
+                "code": "custom_cbl_lane_not_found",
+                "lane_id": target_lane_id
+            })
+            .to_string(),
+        ));
     }
 
     // Parse nodes
-    let mut nodes: Vec<serde_json::Value> = serde_json::from_value(nodes_json.clone()).unwrap_or_default();
+    let mut nodes: Vec<serde_json::Value> =
+        serde_json::from_value(nodes_json.clone()).unwrap_or_default();
 
     // Load all owned issue IDs for validation
     let owned_issues: BTreeSet<i32> = {
@@ -1578,8 +1611,13 @@ pub async fn apply_custom_cbl(
                 if let Some(paths) = node.get_mut("source_paths").and_then(|v| v.as_array_mut()) {
                     paths.retain(|p| p.as_str() != Some(&source_path));
                 }
-                if let Some(placements) = node.get_mut("source_cbl_placements").and_then(|v| v.as_array_mut()) {
-                    placements.retain(|p| p.get("source_path").and_then(|v| v.as_str()) != Some(&source_path));
+                if let Some(placements) = node
+                    .get_mut("source_cbl_placements")
+                    .and_then(|v| v.as_array_mut())
+                {
+                    placements.retain(|p| {
+                        p.get("source_path").and_then(|v| v.as_str()) != Some(&source_path)
+                    });
                 }
                 if let Some(explanation) = node.get("source_explanation").and_then(|v| v.as_str()) {
                     if explanation.starts_with("Added from custom CBL '") {
@@ -1598,10 +1636,13 @@ pub async fn apply_custom_cbl(
             let lane_id = node.get("lane_id").and_then(|v| v.as_str()).unwrap_or("");
             if source_issue_set.contains(&ref_id) && lane_id == target_lane_id {
                 if existing_by_issue.contains_key(&ref_id) {
-                    return Err(ApiError::Unprocessable(json!({
-                        "code": "custom_cbl_duplicate_plan_issue",
-                        "issue_id": ref_id
-                    }).to_string()));
+                    return Err(ApiError::Unprocessable(
+                        json!({
+                            "code": "custom_cbl_duplicate_plan_issue",
+                            "issue_id": ref_id
+                        })
+                        .to_string(),
+                    ));
                 }
                 existing_by_issue.insert(ref_id, idx);
             }
@@ -1617,7 +1658,8 @@ pub async fn apply_custom_cbl(
         if let Some(&existing_idx) = existing_by_issue.get(&entry.issue_id) {
             let node = &mut nodes[existing_idx];
             node["is_checkpoint"] = serde_json::json!(entry.is_checkpoint);
-            node["checkpoint_target_ref_ids"] = serde_json::json!(entry.checkpoint_target_issue_ids);
+            node["checkpoint_target_ref_ids"] =
+                serde_json::json!(entry.checkpoint_target_issue_ids);
             skipped_existing_issue_ids.push(entry.issue_id);
             ordered_source_nodes.push(node.clone());
         } else {
@@ -1675,7 +1717,10 @@ pub async fn apply_custom_cbl(
             }
         })
         .collect();
-    let anchor_index = source_indexes.into_iter().min().unwrap_or(target_nodes.len());
+    let anchor_index = source_indexes
+        .into_iter()
+        .min()
+        .unwrap_or(target_nodes.len());
     let target_without_source: Vec<serde_json::Value> = target_nodes
         .into_iter()
         .filter(|node| {
@@ -1728,7 +1773,10 @@ pub async fn apply_custom_cbl(
         let list_id: i32 = row.get(0);
         let continuing = format!("{}:{}", row.get::<_, String>(1), row.get::<_, String>(2));
         let waiting = format!("{}:{}", row.get::<_, String>(3), row.get::<_, String>(4));
-        if let (Some(c), Some(w)) = (normalized_volume_key(&continuing), normalized_volume_key(&waiting)) {
+        if let (Some(c), Some(w)) = (
+            normalized_volume_key(&continuing),
+            normalized_volume_key(&waiting),
+        ) {
             overlap_decisions.entry(list_id).or_default().push((c, w));
         }
     }
@@ -1750,8 +1798,10 @@ pub async fn apply_custom_cbl(
         .map_err(|error| cycle_conflict(error, &inputs))?;
 
     // Update plan
-    let new_lanes_json = serde_json::to_value(&lanes).map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
-    let new_nodes_json = serde_json::to_value(&new_nodes).map_err(|_| ApiError::Internal("nodes serialization failed".into()))?;
+    let new_lanes_json = serde_json::to_value(&lanes)
+        .map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
+    let new_nodes_json = serde_json::to_value(&new_nodes)
+        .map_err(|_| ApiError::Internal("nodes serialization failed".into()))?;
 
     // Recompile rules (simplified - in production would call proper rule compiler)
     let new_compiled_rules_json = compiled_rules_json; // Keep existing for now
@@ -1760,7 +1810,13 @@ pub async fn apply_custom_cbl(
         "UPDATE continuity_plans
          SET lanes_json = $3, nodes_json = $4, compiled_rules_json = $5, updated_at = NOW()
          WHERE id = $1 AND user_id = $2",
-        &[&plan_id, &user.id(), &new_lanes_json, &new_nodes_json, &new_compiled_rules_json],
+        &[
+            &plan_id,
+            &user.id(),
+            &new_lanes_json,
+            &new_nodes_json,
+            &new_compiled_rules_json,
+        ],
     )
     .await
     .map_err(db::query_error)?;
@@ -1858,36 +1914,56 @@ pub async fn save_overlap_decision(
     guard_version(&current_token, request.expected_updated_at.as_deref())?;
 
     // Validate volume keys
-    let continuing_key = normalized_volume_key(&request.continuing_volume_id)
-        .ok_or_else(|| ApiError::Unprocessable(json!({
-            "code": "reading_overlap_invalid_volume",
-            "message": "An overlap decision must name two exact Comic Vine volumes"
-        }).to_string()))?;
-    let waiting_key = normalized_volume_key(&request.waiting_volume_id)
-        .ok_or_else(|| ApiError::Unprocessable(json!({
-            "code": "reading_overlap_invalid_volume",
-            "message": "An overlap decision must name two exact Comic Vine volumes"
-        }).to_string()))?;
+    let continuing_key = normalized_volume_key(&request.continuing_volume_id).ok_or_else(|| {
+        ApiError::Unprocessable(
+            json!({
+                "code": "reading_overlap_invalid_volume",
+                "message": "An overlap decision must name two exact Comic Vine volumes"
+            })
+            .to_string(),
+        )
+    })?;
+    let waiting_key = normalized_volume_key(&request.waiting_volume_id).ok_or_else(|| {
+        ApiError::Unprocessable(
+            json!({
+                "code": "reading_overlap_invalid_volume",
+                "message": "An overlap decision must name two exact Comic Vine volumes"
+            })
+            .to_string(),
+        )
+    })?;
 
     if continuing_key == waiting_key {
-        return Err(ApiError::Unprocessable(json!({
-            "code": "reading_overlap_same_volume",
-            "message": "An overlap decision must name two distinct volumes"
-        }).to_string()));
+        return Err(ApiError::Unprocessable(
+            json!({
+                "code": "reading_overlap_same_volume",
+                "message": "An overlap decision must name two distinct volumes"
+            })
+            .to_string(),
+        ));
     }
 
     // Resolve identity IDs
-    let resolved = resolve_volume_identity_ids(&tx, &[continuing_key.clone(), waiting_key.clone()]).await?;
-    let continuing_identity_id = resolved.get(&continuing_key)
-        .ok_or_else(|| ApiError::Unprocessable(json!({
-            "code": "reading_overlap_unknown_volume",
-            "message": "An overlap decision must name two known Comic Vine volumes"
-        }).to_string()))?;
-    let waiting_identity_id = resolved.get(&waiting_key)
-        .ok_or_else(|| ApiError::Unprocessable(json!({
-            "code": "reading_overlap_unknown_volume",
-            "message": "An overlap decision must name two known Comic Vine volumes"
-        }).to_string()))?;
+    let resolved =
+        resolve_volume_identity_ids(&tx, &[continuing_key.clone(), waiting_key.clone()]).await?;
+    let continuing_identity_id = resolved.get(&continuing_key).ok_or_else(|| {
+        ApiError::Unprocessable(
+            json!({
+                "code": "reading_overlap_unknown_volume",
+                "message": "An overlap decision must name two known Comic Vine volumes"
+            })
+            .to_string(),
+        )
+    })?;
+    let waiting_identity_id = resolved.get(&waiting_key).ok_or_else(|| {
+        ApiError::Unprocessable(
+            json!({
+                "code": "reading_overlap_unknown_volume",
+                "message": "An overlap decision must name two known Comic Vine volumes"
+            })
+            .to_string(),
+        )
+    })?;
 
     // Load all decisions for projection validation
     let all_decisions = load_overlap_decisions(&tx, user.id()).await?;
@@ -1895,15 +1971,18 @@ pub async fn save_overlap_decision(
         std::collections::HashMap::new();
     for d in &all_decisions {
         if d.list_id != list_id {
-            projected.entry(d.list_id).or_default().push((
-                d.continuing_volume_id.clone(),
-                d.waiting_volume_id.clone(),
-            ));
+            projected
+                .entry(d.list_id)
+                .or_default()
+                .push((d.continuing_volume_id.clone(), d.waiting_volume_id.clone()));
         }
     }
     // Add the new decision, superseding opposite direction
     let list_decisions = projected.entry(list_id).or_default();
-    list_decisions.retain(|(c, w)| !((c == &continuing_key && w == &waiting_key) || (c == &waiting_key && w == &continuing_key)));
+    list_decisions.retain(|(c, w)| {
+        !((c == &continuing_key && w == &waiting_key)
+            || (c == &waiting_key && w == &continuing_key))
+    });
     list_decisions.push((continuing_key.clone(), waiting_key.clone()));
 
     validate_projection(&tx, &user, &projected).await?;
@@ -1918,7 +1997,12 @@ pub async fn save_overlap_decision(
          WHERE list_id = $1 AND user_id = $2
            AND continuing_external_identity_id = $3
            AND waiting_external_identity_id = $4",
-        &[&list_id, &user.id(), waiting_identity_id, continuing_identity_id],
+        &[
+            &list_id,
+            &user.id(),
+            waiting_identity_id,
+            continuing_identity_id,
+        ],
     )
     .await
     .map_err(db::query_error)?;
@@ -1930,7 +2014,12 @@ pub async fn save_overlap_decision(
              WHERE list_id = $1 AND user_id = $2
                AND continuing_external_identity_id = $3
                AND waiting_external_identity_id = $4",
-            &[&list_id, &user.id(), continuing_identity_id, waiting_identity_id],
+            &[
+                &list_id,
+                &user.id(),
+                continuing_identity_id,
+                waiting_identity_id,
+            ],
         )
         .await
         .map_err(db::query_error)?;
@@ -2035,10 +2124,10 @@ pub async fn delete_overlap_decision(
         std::collections::HashMap::new();
     for d in &all_decisions {
         if d.id != decision_id {
-            projected.entry(d.list_id).or_default().push((
-                d.continuing_volume_id.clone(),
-                d.waiting_volume_id.clone(),
-            ));
+            projected
+                .entry(d.list_id)
+                .or_default()
+                .push((d.continuing_volume_id.clone(), d.waiting_volume_id.clone()));
         }
     }
 
@@ -2093,8 +2182,14 @@ mod tests {
 
     #[test]
     fn normalized_volume_key_accepts_comicvine_ids() {
-        assert_eq!(normalized_volume_key("comicvine:12345"), Some("comicvine:12345".to_string()));
-        assert_eq!(normalized_volume_key("comicvine:0"), Some("comicvine:0".to_string()));
+        assert_eq!(
+            normalized_volume_key("comicvine:12345"),
+            Some("comicvine:12345".to_string())
+        );
+        assert_eq!(
+            normalized_volume_key("comicvine:0"),
+            Some("comicvine:0".to_string())
+        );
         assert_eq!(normalized_volume_key("comicvine:abc"), None);
         assert_eq!(normalized_volume_key("marvel:12345"), None);
         assert_eq!(normalized_volume_key("comicvine:"), None);
