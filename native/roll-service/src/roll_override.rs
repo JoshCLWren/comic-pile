@@ -41,7 +41,7 @@ pub struct RollOverrideRequest {
 
 /// Response body: the Python `RollResponse` projection for a manual pick.
 #[derive(Debug, Serialize, utoipa::ToSchema)]
-pub struct RollOverrideResponse {
+pub struct RollResponse {
     pub thread_id: i32,
     pub title: String,
     pub format: String,
@@ -393,8 +393,8 @@ fn response(
     snoozed_count: i32,
     issue_id: Option<i32>,
     issue_number: Option<String>,
-) -> RollOverrideResponse {
-    RollOverrideResponse {
+) -> RollResponse {
+    RollResponse {
         thread_id: thread.id,
         title: thread.title.clone(),
         format: normalize_format_value(&thread.format),
@@ -421,7 +421,7 @@ pub async fn override_roll(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(request): Json<RollOverrideRequest>,
-) -> Result<Json<RollOverrideResponse>, ApiError> {
+) -> Result<Json<RollResponse>, ApiError> {
     let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     // Read-only Option E snapshot before the write connection so this request
     // never nests two pool checkouts.
@@ -593,7 +593,7 @@ pub async fn override_roll(
     tag = "roll",
     request_body = RollOverrideRequest,
     responses(
-        (status = 200, description = "Manually selected thread", body = RollOverrideResponse),
+        (status = 200, description = "Manually selected thread", body = RollResponse),
         (status = 400, description = "Thread is skipped or on snooze backoff"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread was not found for this reader"),
@@ -611,7 +611,7 @@ pub fn override_roll_documentation() {}
     tag = "roll",
     request_body = RollOverrideRequest,
     responses(
-        (status = 200, description = "Manually selected thread", body = RollOverrideResponse),
+        (status = 200, description = "Manually selected thread", body = RollResponse),
         (status = 400, description = "Thread is skipped or on snooze backoff"),
         (status = 401, description = "Not authenticated"),
         (status = 404, description = "Thread was not found for this reader"),
