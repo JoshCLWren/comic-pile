@@ -304,7 +304,12 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     source, _ = roster[worker]
     reported_source = str(outcome.get("source") or "")
     if reported_source and reported_source != source:
-        raise ValueError("runtime source disagrees with the trusted roster")
+        if outcome.get("trusted_source_switch") is not True:
+            raise ValueError("runtime source changed without trusted worker transition")
+        from factory_provider_candidates import ADAPTERS
+        if reported_source not in ADAPTERS:
+            raise ValueError("runtime source is not an integrated provider")
+        source = reported_source
     # Pre-session failures cannot attest a provider/model. Track the worker
     # event without attributing faults to an arbitrary configured model.
     attributed = bool(reported_source and outcome.get("model"))
@@ -323,6 +328,15 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     # A trusted job-log collector can attest multiple attempted free models.
     # This evidence belongs to this same idempotent runtime transaction.
     model_failures = validate_intermediate_model_failures(outcome.get("model_failures"), source)
+    terminal_account_scope = any(
+        failure_source == source and failure_model == model and scope == "account"
+        for failure_source, failure_model, _, scope in model_failures
+    )
+    account_failures = {
+        failure_source: failure_outcome
+        for failure_source, _, failure_outcome, scope in model_failures
+        if scope == "account"
+    }
     async with conn.transaction():
         inserted = await conn.fetchval(
             """INSERT INTO public.factory_runtime_event_keys(repo,run_id)
@@ -352,7 +366,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
             status, until = "healthy", None
         else:
             status, until = "unknown", None
-        if attributed and (classification in MODEL_COOLDOWNS or (model_scoped_transient(source, classification)) or proven):
+        if attributed and not terminal_account_scope and (classification in MODEL_COOLDOWNS or model_scoped_transient(source, classification) or proven):
             await conn.execute(
                 """INSERT INTO public.factory_model_health
                      (repo,source,model,status,last_outcome,cooldown_until,last_verified_at,last_run_id)
