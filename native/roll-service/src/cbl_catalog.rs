@@ -127,7 +127,9 @@ pub async fn list_cbl_source_folders(
 
     // A non-root folder with no active subfolders and no direct lists does not exist.
     if !folder.is_empty() && folders.is_empty() && direct_count == 0 {
-        return Err(ApiError::NotFound(format!("CBL folder not found: {folder}")));
+        return Err(ApiError::NotFound(format!(
+            "CBL folder not found: {folder}"
+        )));
     }
 
     Ok(Json(CBLFolderListingResponse {
