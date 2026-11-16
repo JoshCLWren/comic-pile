@@ -346,6 +346,8 @@ def test_assign_respects_pr_no_diff_retry_budget(
     expect_assigned: bool,
 ) -> None:
     """PR retry exhaustion suppresses assignment without rewriting truthful stages."""
+    # Exercise the selected PR/lease branch, not the Actions identity gate.
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     attempts += controller.FACTORY_NO_DIFF_RETRY_LIMIT
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -421,6 +423,8 @@ def test_assign_skips_a_head_the_requesting_worker_contributed_to(
     so selection itself has to route that head to another eligible worker
     instead of burning factory 59's lease on a guaranteed refusal.
     """
+    # Exercise the selected PR/lease branch, not the Actions identity gate.
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     head = "cccccccccccccccccccccccccccccccccccccccc"
     pr = {
@@ -476,6 +480,8 @@ def test_assign_wakes_exhausted_pr_after_new_head(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Exact-head retry accounting must not suppress a later push."""
+    # Exercise the selected PR/lease branch, not the Actions identity gate.
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
     old_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     new_head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
@@ -651,6 +657,8 @@ def test_active_fixed_workers_paginates_all_active_run_states(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Verify active fixed workers paginates all active run states."""
+    # Exercise the selected PR/lease branch, not the Actions identity gate.
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     calls: list[list[str]] = []
     workflows = ("free-model-factory-entry.yml", "factory-fork-execution.yml")
     responses = {

@@ -399,6 +399,7 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
         ],
     }
     full = SimpleNamespace(
+        TELEMETRY_COMMENT_ID=5396686993,
         current_demand=lambda _controller: (demand, capacity),
         completion_worker_target=lambda _demand: 1,
     )
