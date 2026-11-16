@@ -261,3 +261,70 @@ def test_worker_fails_over_on_fast_unclassified_failure_without_releasing() -> N
     assert '-z "$(git status --porcelain)"' in clause
     assert "agent_status != 124" in clause
     assert "failure_class=provider_failure" in clause
+
+
+def test_proven_model_is_preferred_but_never_overrides_cooldown() -> None:
+    from factory_model_failover import select_next
+
+    names = [f"generated/candidate-{i}" for i in range(6)]
+    catalog = _catalog(*names)
+    proven = {("nvidia", names[4]), ("nvidia", names[5])}
+    for worker in ("1", "2", "3", "4"):
+        picked = select_next("nvidia", worker, set(), {}, catalog_json=catalog, proven=proven)
+        assert picked["model"] in {names[4], names[5]}
+    # A cooled proven model stays excluded; the other proven one is chosen.
+    cooled = select_next(
+        "nvidia", "1", set(), {"nvidia": [names[4]]}, catalog_json=catalog, proven=proven,
+    )
+    assert cooled["model"] == names[5]
+    # Once every proven model is attempted, unproven ones remain eligible.
+    rest = select_next(
+        "nvidia", "1", {names[4], names[5]}, {}, catalog_json=catalog, proven=proven,
+    )
+    assert rest["model"] in set(names[:4])
+    with pytest.raises(ExhaustedCandidatesError):
+        select_next("nvidia", "1", {names[4], names[5]}, {}, catalog_json=catalog,
+                    proven=proven, proven_only=True)
+
+
+def test_fleet_prefers_proven_model_on_another_provider() -> None:
+    from factory_model_failover import select_next_fleet
+
+    catalogs = {"nvidia": _catalog("generated/a", "generated/b"),
+                "pollinations": _catalog("generated/c")}
+    picked = select_next_fleet(
+        "9", "nvidia", set(), set(), {}, catalogs, set(catalogs),
+        proven={("pollinations", "generated/c")},
+    )
+    assert (picked["source"], picked["model"]) == ("pollinations", "generated/c")
+    # Without proven evidence the original provider still goes first.
+    plain = select_next_fleet("9", "nvidia", set(), set(), {}, catalogs, set(catalogs), proven=set())
+    assert plain["source"] == "nvidia"
+
+
+def test_failover_into_opencode_reports_source() -> None:
+    """Regression: OpenCode selections lacked .source, crashing in-lease failover."""
+    from factory_model_failover import select_next_fleet
+
+    catalog = json.dumps({"models": [{"id": "generated-free"}]})
+    picked = select_next_fleet(
+        "9", "nvidia", set(), set(), {}, {"opencode-free": catalog}, {"opencode-free"},
+        proven=set(),
+    )
+    assert picked["source"] == "opencode-free"
+    assert picked["model"] == "generated-free"
+
+
+def test_proven_models_reads_only_real_work_outcomes() -> None:
+    from factory_model_failover import proven_models
+
+    snapshot = json.dumps({"models": [
+        {"source": "nvidia", "model": "a", "status": "healthy", "outcome": "success"},
+        {"source": "nvidia", "model": "b", "status": "healthy", "outcome": "work_failure"},
+        {"source": "nvidia", "model": "c", "status": "cooling", "outcome": "provider_throttle"},
+        {"source": "nvidia", "model": "d", "status": "retired", "outcome": "success"},
+        {"source": "nvidia", "model": "e", "status": "healthy", "outcome": "no_work"},
+    ]})
+    assert proven_models(snapshot) == {("nvidia", "a"), ("nvidia", "b")}
+    assert proven_models("not json") == set()
+    assert proven_models("") == set()

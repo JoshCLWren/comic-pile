@@ -24,6 +24,65 @@ class ExhaustedCandidatesError(ValueError):
     """The provider has no eligible model that has not been attempted."""
 
 
+# Last outcomes proving the exact model did real coding work on an
+# assignment (it ran tools and produced or validated changes). A clean
+# success, edits that failed checks, or a full-budget session all qualify.
+PROVEN_OUTCOMES = frozenset({"success", "work_failure", "agent_timeout"})
+
+
+def proven_models(health_json: str | None = None) -> set[tuple[str, str]]:
+    """Read the trusted Neon health snapshot handed to every runner.
+
+    Advisory only: it orders already-eligible candidates and can never make
+    a cooled, attempted or unlisted model selectable.
+    """
+    raw = os.environ.get("FACTORY_CANDIDATE_HEALTH", "") if health_json is None else health_json
+    try:
+        snapshot = json.loads(raw) if raw else {}
+    except ValueError:
+        return set()
+    rows = snapshot.get("models") if isinstance(snapshot, dict) else None
+    if not isinstance(rows, list):
+        return set()
+    return {
+        (row["source"], row["model"])
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("source"), str) and isinstance(row.get("model"), str)
+        and row.get("outcome") in PROVEN_OUTCOMES
+        and row.get("status") not in {"retired", "unavailable"}
+    }
+
+
+def _catalog_ids(
+    source: str, catalog_text: str | None, catalog_json: Mapping[str, Any] | None,
+) -> tuple[set[str], Mapping[str, Any] | None]:
+    """Return every published model id for one provider snapshot."""
+    if source == "opencode-free":
+        from factory_live_opencode import catalog_models
+
+        if catalog_text is None:
+            raise ValueError("trusted OpenCode catalog snapshot missing")
+        return set(catalog_models(catalog_text, provider=source)), catalog_json
+    if source == "kilo-auto":
+        from factory_kilo_catalog import discover_models
+
+        if catalog_text is None:
+            raise ValueError("trusted Kilo catalog snapshot missing")
+        return set(discover_models(catalog_text)), catalog_json
+    if source == "openrouter-free":
+        from factory_published_model_catalog import catalog_model_ids, published_catalog
+
+        catalog = catalog_json if catalog_json is not None else published_catalog(source)
+        return set(catalog_model_ids(source, catalog)), catalog
+    from factory_provider_candidates import discover
+    from factory_runtime_model_select import provider_catalog
+
+    catalog = catalog_json if catalog_json is not None else provider_catalog(source, os.environ)
+    ids = {candidate.model for candidate in discover(source, json.dumps(catalog)).candidates}
+    return ids, catalog
+
+
 def select_next(
     source: str,
     worker: str,
@@ -33,49 +92,50 @@ def select_next(
     catalog_text: str | None = None,
     catalog_json: Mapping[str, Any] | None = None,
     rotation: int = 0,
+    proven: set[tuple[str, str]] | None = None,
+    proven_only: bool = False,
 ) -> dict[str, Any]:
-    """Discover and choose an unattempted exact model on this provider."""
-    excluded = set(exclusions.get(source, ())) | attempted
-    if source == "opencode-free":
-        from factory_live_opencode import catalog_models, select_model
+    """Choose an unattempted, uncooled model on this provider.
 
-        if catalog_text is None:
-            raise ValueError("trusted OpenCode catalog snapshot missing")
-        if not (set(catalog_models(catalog_text, provider=source)) - excluded):
-            raise ExhaustedCandidatesError("no eligible unattempted OpenCode models")
-        return select_model(
-            catalog_text, int(worker), rotation,
+    Models with proven coding outcomes are preferred; with none eligible the
+    choice is unchanged. proven_only raises when no proven model is eligible.
+    """
+    excluded = set(exclusions.get(source, ())) | attempted
+    ids, catalog_json = _catalog_ids(source, catalog_text, catalog_json)
+    available = ids - excluded
+    if not available:
+        raise ExhaustedCandidatesError(f"no eligible unattempted {source} models")
+    preferred = {
+        model for provider, model in (proven_models() if proven is None else proven)
+        if provider == source
+    } & available
+    if proven_only and not preferred:
+        raise ExhaustedCandidatesError(f"no eligible proven {source} models")
+    if preferred:
+        # Narrow the existing selector's choice to proven models only.
+        excluded |= available - preferred
+    if source == "opencode-free":
+        from factory_live_opencode import select_model
+
+        selected = select_model(
+            catalog_text or "", int(worker), rotation,
             attempted=excluded, provider=source,
         )
-    if source == "kilo-auto":
-        from factory_kilo_catalog import choose, discover_models
+    elif source == "kilo-auto":
+        from factory_kilo_catalog import choose
 
-        if catalog_text is None:
-            raise ValueError("trusted Kilo catalog snapshot missing")
-        if not (set(discover_models(catalog_text)) - excluded):
-            raise ExhaustedCandidatesError("no eligible unattempted Kilo models")
-        return choose(catalog_text, worker, excluded)
-    if source == "openrouter-free":
-        from factory_published_model_catalog import (
-            catalog_model_ids,
-            choose_model,
-            published_catalog,
-        )
+        selected = choose(catalog_text or "", worker, excluded)
+    elif source == "openrouter-free":
+        from factory_published_model_catalog import choose_model
 
-        catalog = catalog_json if catalog_json is not None else published_catalog(source)
-        if not (set(catalog_model_ids(source, catalog)) - excluded):
-            raise ExhaustedCandidatesError("no eligible unattempted OpenRouter free models")
-        model = choose_model(source, worker, catalog, excluded)
-        return {"source": source, "model": model, "runtime_model": f"openrouter/{model}"}
+        model = choose_model(source, worker, catalog_json, excluded)
+        selected = {"model": model, "runtime_model": f"openrouter/{model}"}
+    else:
+        from factory_runtime_model_select import select
 
-    from factory_provider_candidates import discover
-    from factory_runtime_model_select import provider_catalog, select
-
-    catalog = catalog_json if catalog_json is not None else provider_catalog(source, os.environ)
-    if not any(candidate.model not in excluded
-               for candidate in discover(source, json.dumps(catalog)).candidates):
-        raise ExhaustedCandidatesError(f"no eligible unattempted {source} models")
-    return select(source, worker, catalog, {source: sorted(excluded)})
+        selected = select(source, worker, catalog_json or {}, {source: sorted(excluded)})
+    # Every caller reads .source; the OpenCode selector only reports provider.
+    return {**selected, "source": source}
 
 
 
@@ -89,6 +149,7 @@ def select_next_fleet(
     eligible_sources: set[str],
     *,
     rotation: int = 0,
+    proven: set[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Select the next provider/model from canonical catalogs, not one source.
 
@@ -100,21 +161,25 @@ def select_next_fleet(
     if original_source in sources:
         sources.remove(original_source)
         sources.insert(0, original_source)
-    for source in sources:
-        catalog = catalogs[source]
-        excluded = {model for provider, model in attempted if provider == source}
-        try:
-            candidate = select_next(
-                source, worker, excluded, exclusions,
-                catalog_text=catalog if isinstance(catalog, str) else None,
-                catalog_json=catalog if isinstance(catalog, Mapping) else None,
-                rotation=rotation,
-            )
-        except ExhaustedCandidatesError:
-            continue
-        if (candidate["source"], candidate["model"]) in attempted:
-            raise ValueError("selector returned an attempted canonical pair")
-        return candidate
+    proven_pairs = proven_models() if proven is None else proven
+    # First pass: a proven model on any eligible provider beats an unproven
+    # model on the original provider. Second pass: today's order.
+    for proven_only in (True, False):
+        for source in sources:
+            catalog = catalogs[source]
+            excluded = {model for provider, model in attempted if provider == source}
+            try:
+                candidate = select_next(
+                    source, worker, excluded, exclusions,
+                    catalog_text=catalog if isinstance(catalog, str) else None,
+                    catalog_json=catalog if isinstance(catalog, Mapping) else None,
+                    rotation=rotation, proven=proven_pairs, proven_only=proven_only,
+                )
+            except ExhaustedCandidatesError:
+                continue
+            if (candidate["source"], candidate["model"]) in attempted:
+                raise ValueError("selector returned an attempted canonical pair")
+            return candidate
     raise ExhaustedCandidatesError("no eligible provider/model combination remains")
 
 
@@ -201,6 +266,8 @@ def main() -> int:
     parser.add_argument("--catalog-cache", type=Path, help="trusted per-run catalog snapshot")
     parser.add_argument("--attempted", action="append", default=[])
     parser.add_argument("--rotation", type=int, default=0)
+    parser.add_argument("--proven-only", action="store_true",
+                        help="succeed only with a model whose last outcome proved real work")
     args = parser.parse_args()
     try:
         if not args.worker.isdecimal() or int(args.worker) < 1:
@@ -235,7 +302,7 @@ def main() -> int:
             selected = select_next(
                 args.source, args.worker, set(args.attempted), exclusions,
                 catalog_text=catalog_text, catalog_json=catalog_json,
-                rotation=args.rotation,
+                rotation=args.rotation, proven_only=args.proven_only,
             )
         else:
             sources = json.loads(args.eligible_sources_file.read_text(encoding="utf-8"))

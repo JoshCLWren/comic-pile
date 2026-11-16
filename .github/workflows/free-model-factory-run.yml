@@ -416,6 +416,21 @@ jobs:
 
           selected_source="$(jq -r '.source // empty' <<< "$selection")"
           selected_source="${selected_source:-$SOURCE}"
+          # Prefer an eligible model whose last real outcome proved coding
+          # work on this lane's provider. Advisory: any failure keeps the
+          # lane's own pick, and cooled models stay excluded either way.
+          if [[ "$selected_source" == "$SOURCE" ]]; then
+            proven_args=(--source "$SOURCE" --worker "$WORKER" --proven-only
+              --rotation "${GITHUB_RUN_NUMBER:-0}" --exclusions-file "$exclusions_file")
+            case "$SOURCE" in
+              opencode-free|kilo-auto) proven_args+=(--catalog-file "${catalog:-/nonexistent}") ;;
+              *) proven_args+=(--catalog-cache "$RUNNER_TEMP/factory-proven-catalog.json") ;;
+            esac
+            if proven="$(python3 .github/scripts/factory_model_failover.py "${proven_args[@]}" 2>/dev/null)"; then
+              selection="$proven"
+              echo "Factory $WORKER prefers proven $(jq -r '.model' <<< "$selection") on $SOURCE"
+            fi
+          fi
           model="$(jq -er '.model' <<< "$selection")"
           runtime_model="$(jq -er '.runtime_model' <<< "$selection")"
           configure_adapter="$(python3 - "$selected_source" <<'PY'
