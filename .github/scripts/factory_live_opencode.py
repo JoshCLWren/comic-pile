@@ -39,7 +39,10 @@ def catalog_models(raw_catalog: str, *, provider: str = "opencode-free") -> list
     if provider not in {"opencode-free", "openrouter-free"}:
         raise ValueError("unsupported OpenCode catalog provider")
     catalog = parse_opencode_models_text(raw_catalog, provider.removesuffix("-free"))
-    return sorted(entry.model_id for entry in catalog.entries)
+    return sorted(
+        entry.model_id for entry in catalog.entries
+        if provider != "openrouter-free" or entry.model_id.endswith(":free")
+    )
 
 
 def unavailable_models(

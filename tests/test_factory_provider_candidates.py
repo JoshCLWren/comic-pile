@@ -34,19 +34,22 @@ def test_all_compatible_registry_providers_have_catalog_adapters() -> None:
         assert [item.model for item in result.candidates] == ["example/new-upstream-model"]
 
 
-def test_price_and_free_suffix_do_not_control_discovery() -> None:
+def test_openrouter_free_adapter_requires_published_free_endpoint() -> None:
     catalog = json.dumps({"data": [
         {"id": "example/paid", "pricing": {"prompt": "4", "completion": "1"}},
         {"id": "example/unpriced"},
-        {"id": "example/no-tools", "supported_parameters": []},
-        {"id": "example/image", "type": "image"},
-        {"id": "example/free", "pricing": {"prompt": "0", "completion": "0"}},
+        {"id": "example/no-tools:free", "supported_parameters": []},
+        {"id": "example/image:free", "type": "image"},
+        {"id": "example/free:free", "pricing": {"prompt": "0", "completion": "0"}},
     ]})
     result = CANDIDATES.discover("openrouter-free", catalog)
-    assert [item.model for item in result.candidates] == [
-        "example/free", "example/paid", "example/unpriced",
-    ]
-    assert all(item.runtime_model.startswith("openrouter/") for item in result.candidates)
+    assert [item.model for item in result.candidates] == ["example/free:free"]
+    assert result.candidates[0].runtime_model == "openrouter/example/free:free"
+    # Other providers are not affected by the OpenRouter free endpoint policy.
+    generic = CANDIDATES.discover("requesty", catalog)
+    assert {item.model for item in generic.candidates} == {
+        "example/free:free", "example/paid", "example/unpriced",
+    }
 
 
 def test_opencode_uses_live_selector_as_published() -> None:

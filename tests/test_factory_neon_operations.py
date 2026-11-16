@@ -115,22 +115,24 @@ def test_provider_exponential_backoff_doubles_and_caps():
     assert base("provider_throttle", "success", 14400, 60) == 1800
 
 
-def test_provider_cooldown_affects_its_account_not_every_source():
+def test_legacy_provider_quota_does_not_suppress_other_models_or_sources():
     future = datetime.now(UTC) + timedelta(minutes=20)
-    db = FakeConnection(budgets=[{
-        "source": "nvidia", "cooldown_until": future, "last_outcome": "provider_quota",
-        "concurrency_limit": None, "daily_limit": None,
-        "usage_day": datetime.now(UTC).date(), "daily_used": 0,
-    }])
+    db = FakeConnection(
+        models=[{"source": "nvidia", "model": "nvidia/a",
+                 "status": "cooling", "cooldown_until": future}],
+        budgets=[{"source": "nvidia", "cooldown_until": future,
+                  "last_outcome": "provider_quota", "concurrency_limit": None,
+                  "daily_limit": None, "usage_day": datetime.now(UTC).date(),
+                  "daily_used": 0}],
+    )
     with patch.object(operations, "_roster", return_value={
         "41": ("nvidia", "nvidia/a"),
         "42": ("nvidia", "nvidia/b"),
         "43": ("opencode-free", "oc/big-pickle"),
     }):
         kept, denied = run(operations._eligibility(db, REPO, ["41", "42", "43"]))
-    assert kept == ["43"]
-    assert len(denied) == 2
-
+    assert kept == ["42", "43"]
+    assert len(denied) == 1 and "nvidia/a" in denied[0]
 
 
 def test_model_failure_budget_does_not_cool_other_models_of_provider():
@@ -245,6 +247,8 @@ def test_missing_marker_id_never_reads_obsolete_body_cache():
         async def fetch(self, statement, *args):
             if "factory_reconciliation_cursor" in statement:
                 return []
+            if "factory_state_kv" in statement:
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
@@ -345,8 +349,8 @@ def test_one_model_failure_does_not_cool_an_entire_provider():
         for outcome in ("provider_failure", "provider_throttle"):
             assert operations.model_scoped_transient(source, outcome)
             assert not operations.provider_scoped_transient(source, outcome)
-        assert operations.provider_scoped_transient(source, "provider_quota")
-        assert not operations.model_scoped_transient(source, "provider_quota")
+        assert not operations.provider_scoped_transient(source, "provider_quota")
+        assert operations.model_scoped_transient(source, "provider_quota")
     for source in operations.MODEL_SCOPED_SOURCES:
         assert operations.model_scoped_transient(source, "provider_quota")
         assert not operations.provider_scoped_transient(source, "provider_quota")
@@ -564,3 +568,30 @@ def test_dynamic_slot_worker_backoff_persists_across_model_rotation(monkeypatch)
     kept, denied = run(operations._eligibility(db, REPO, [worker]))
     assert kept == []
     assert any("Fibonacci retry deferred" in d for d in denied)
+
+def test_catalog_slot_model_failure_does_not_suppress_other_models():
+    future = datetime.now(UTC) + timedelta(minutes=20)
+    db = FakeConnection(backoffs=[{
+        "cache_key": "worker",
+        "payload": [{"source": "openrouter-free", "model": "vendor/paid",
+                     "outcome": "provider_quota", "streak": 3,
+                     "next_retry_at": future.isoformat()}],
+        "expires_at": future,
+    }])
+    with patch.object(operations, "_roster", return_value={
+        "501": ("openrouter-free", ""),
+    }):
+        kept, denied = run(operations._eligibility(db, REPO, ["501"]))
+    assert kept == ["501"] and not denied
+
+
+def test_model_backoffs_are_in_trusted_catalog_exclusions():
+    future = datetime.now(UTC) + timedelta(minutes=20)
+    db = FakeConnection(model_backoffs=[{
+        "payload": [{"source": "openrouter-free", "model": "vendor/failed:free",
+                     "outcome": "provider_throttle", "streak": 3,
+                     "next_retry_at": future.isoformat()}],
+    }])
+    exclusions = run(operations._export_model_exclusions(db, REPO))
+    assert exclusions["openrouter-free"] == ["vendor/failed:free"]
+    assert "vendor/other:free" not in exclusions["openrouter-free"]

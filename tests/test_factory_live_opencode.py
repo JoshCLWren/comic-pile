@@ -255,17 +255,19 @@ def test_non_recovery_outcomes_do_not_clear_active_cooldown(outcome: str) -> Non
         )
 
 
-def test_openrouter_selector_accepts_paid_and_unpriced_models() -> None:
+def test_openrouter_selector_requires_published_free_endpoint() -> None:
     raw = json.dumps({"models": [
         {"id": "openrouter/example/unpriced"},
         {"id": "openrouter/example/paid", "cost": {"input": 2, "output": 3}},
+        {"id": "openrouter/example/available:free", "cost": {"input": 0, "output": 0}},
+        {"id": "openrouter/example/second:free"},
         {"id": "opencode/another-source"},
     ]})
     assert selector.catalog_models(raw, provider="openrouter-free") == [
-        "example/paid", "example/unpriced",
+        "example/available:free", "example/second:free",
     ]
     selected = {selector.select_model(raw, 52, turn, provider="openrouter-free")["model"] for turn in range(2)}
-    assert selected == {"example/paid", "example/unpriced"}
+    assert selected == {"example/available:free", "example/second:free"}
 
 
 def test_model_unavailability_cooldown_is_provider_scoped(tmp_path: Path) -> None:
@@ -285,14 +287,15 @@ def test_model_unavailability_cooldown_is_provider_scoped(tmp_path: Path) -> Non
     ) == set()
 
 
-def test_catalog_does_not_infer_price_from_model_name() -> None:
+def test_openrouter_suffix_is_endpoint_contract_not_price_inference() -> None:
     raw = json.dumps({"models": [
         {"id": "openrouter/example/unknown"},
         {"id": "openrouter/example/price-zero", "cost": {"input": 0, "output": 0}},
         {"id": "openrouter/example/paid-free-label", "cost": {"input": 1, "output": 0}},
+        {"id": "openrouter/example/free-route:free", "cost": {"input": 0, "output": 0}},
     ]})
     assert selector.catalog_models(raw, provider="openrouter-free") == [
-        "example/paid-free-label", "example/price-zero", "example/unknown",
+        "example/free-route:free",
     ]
 
 

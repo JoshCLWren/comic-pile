@@ -2,7 +2,8 @@
 """Discover model candidates from provider-published catalogs.
 
 Published catalog presence is not proof of successful execution.
-Pricing may be observed, but never prevents an execution attempt.
+Published pricing does not gate other providers. The openrouter-free lane
+selects only OpenRouter's provider-designated :free endpoints.
 """
 
 from __future__ import annotations
@@ -38,6 +39,11 @@ def _executable_candidate(source: str, item: Mapping[str, Any]) -> bool:
     model = item.get("id")
     if not isinstance(model, str) or not model or any(ch.isspace() for ch in model):
         return False
+    # OpenRouter identifies no-credit endpoints with :free.
+    # A zero-priced regular endpoint is not necessarily free-key callable.
+    # This is a provider endpoint contract, not a curated model roster.
+    if source == "openrouter-free" and not model.endswith(":free"):
+        return False
     supported = item.get("supported_parameters")
     if isinstance(supported, list) and "tools" not in supported:
         return False
@@ -51,7 +57,7 @@ def _executable_candidate(source: str, item: Mapping[str, Any]) -> bool:
 
 
 def catalog_model_ids(source: str, catalog: Mapping[str, Any]) -> list[str]:
-    """Return published model IDs unchanged, without a price restriction."""
+    """Return live IDs; OpenRouter's free lane uses only :free endpoints."""
     if source not in PUBLIC_CATALOGS:
         raise ValueError(f"source has no published model catalog: {source}")
     rows = catalog.get("data")
