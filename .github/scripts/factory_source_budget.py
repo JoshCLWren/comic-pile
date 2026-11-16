@@ -22,9 +22,8 @@ from pathlib import Path
 
 GITHUB_DIR = Path(__file__).resolve().parents[1]
 BUDGETS_PATH = GITHUB_DIR / "factory-source-budgets.json"
-MANIFEST_PATH = GITHUB_DIR / "free-model-factories.tsv"
 ENTRY_TITLE_RE = re.compile(r"^Factory (?P<worker>\d+) · fixed-model entry$")
-PROTECTED_WORKERS = frozenset({46})
+PROTECTED_WORKERS: frozenset[int] = frozenset()
 # Cloudflare Workers Free hard-stops daily neuron usage. Enforce a conservative
 # source cap here so this factory-only guard remains on the fast-merge allowlist.
 HARD_FREE_SOURCE_DISPATCH_CAPS = {"cloudflare-workers-ai": 1}
@@ -47,14 +46,19 @@ def load_budgets(path: Path | str = BUDGETS_PATH) -> dict[str, int]:
     return {**caps, **HARD_FREE_SOURCE_DISPATCH_CAPS}
 
 
-def worker_sources(path: Path | str = MANIFEST_PATH) -> dict[str, str]:
-    """Map worker id to roster source from the fixed-model manifest."""
+def worker_sources(path: Path | str | None = None) -> dict[str, str]:
+    """Derive provider identity from registered slots, never production model pins.
+
+    An explicit fixture path remains supported for isolated historical parsers.
+    """
+    if path is None:
+        from factory_worker_slots import slots
+
+        return {slot.worker: slot.source for slot in slots()}
     mapping: dict[str, str] = {}
     for raw in Path(path).read_text(encoding="utf-8").splitlines():
-        if not raw.strip() or raw.startswith("#"):
-            continue
         fields = raw.split("\t")
-        if len(fields) >= 2 and fields[0].strip().isdigit():
+        if len(fields) >= 2 and fields[0].strip().isdecimal():
             mapping[fields[0].strip()] = fields[1].strip()
     return mapping
 

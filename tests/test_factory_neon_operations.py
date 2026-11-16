@@ -115,21 +115,41 @@ def test_provider_exponential_backoff_doubles_and_caps():
     assert base("provider_throttle", "success", 14400, 60) == 1800
 
 
-def test_provider_cooldown_affects_its_account_not_every_source():
+def test_legacy_provider_quota_does_not_suppress_other_models_or_sources():
     future = datetime.now(UTC) + timedelta(minutes=20)
-    db = FakeConnection(budgets=[{
-        "source": "nvidia", "cooldown_until": future,
-        "concurrency_limit": None, "daily_limit": None,
-        "usage_day": datetime.now(UTC).date(), "daily_used": 0,
-    }])
+    db = FakeConnection(
+        models=[{"source": "nvidia", "model": "nvidia/a",
+                 "status": "cooling", "cooldown_until": future}],
+        budgets=[{"source": "nvidia", "cooldown_until": future,
+                  "last_outcome": "provider_quota", "concurrency_limit": None,
+                  "daily_limit": None, "usage_day": datetime.now(UTC).date(),
+                  "daily_used": 0}],
+    )
     with patch.object(operations, "_roster", return_value={
         "41": ("nvidia", "nvidia/a"),
         "42": ("nvidia", "nvidia/b"),
         "43": ("opencode-free", "oc/big-pickle"),
     }):
         kept, denied = run(operations._eligibility(db, REPO, ["41", "42", "43"]))
-    assert kept == ["43"]
-    assert len(denied) == 2
+    assert kept == ["42", "43"]
+    assert len(denied) == 1 and "nvidia/a" in denied[0]
+
+
+def test_model_failure_budget_does_not_cool_other_models_of_provider():
+    future = datetime.now(UTC) + timedelta(minutes=20)
+    for outcome in ("provider_failure", "provider_throttle"):
+        db = FakeConnection(budgets=[{
+            "source": "nvidia", "cooldown_until": future,
+            "last_outcome": outcome,
+            "concurrency_limit": None, "daily_limit": None,
+            "usage_day": datetime.now(UTC).date(), "daily_used": 0,
+        }])
+        with patch.object(operations, "_roster", return_value={
+            "41": ("nvidia", "synthetic/failed"),
+            "42": ("nvidia", "synthetic/other"),
+        }):
+            kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
+        assert kept == ["41", "42"] and not rejected
 
 
 def test_provider_concurrency_limit_does_not_invent_unconfigured_caps():
@@ -227,6 +247,8 @@ def test_missing_marker_id_never_reads_obsolete_body_cache():
         async def fetch(self, statement, *args):
             if "factory_reconciliation_cursor" in statement:
                 return []
+            if "factory_state_kv" in statement:
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
@@ -269,10 +291,17 @@ def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
 
 def test_intermediate_model_failures_use_terminal_runtime_idempotency():
     import inspect
+
+    failures = [
+        {"model": f"generated/model-{index}", "outcome": outcome}
+        for index, outcome in enumerate(("provider_quota", "provider_throttle", "model_unavailable"))
+    ]
+    assert operations.validate_intermediate_model_failures(
+        failures, "openrouter-free"
+    ) == [(item["model"], item["outcome"]) for item in failures]
     text = inspect.getsource(operations.project_runtime)
-    assert "for failed_model in set(model_failures)" in text
     assert "factory_runtime_event_keys" in text
-    assert "factory_model_health.status!=\'retired\'" in text
+    assert "factory_model_health.status" in text
     assert "last_run_id <= EXCLUDED.last_run_id" in text
 
 
@@ -319,6 +348,21 @@ def test_missing_credentials_are_not_inference_failures():
     assert "unconfigured" not in operations.WORKER_RETRY_CLASSES
     assert "unknown_failure" in operations.WORKER_RETRY_CLASSES
     assert "agent_timeout" in operations.WORKER_RETRY_CLASSES
+
+
+def test_one_model_failure_does_not_cool_an_entire_provider():
+    """Catalog model failures leave independent models on the same provider usable."""
+    for source in ("vercel-ai-gateway", "ollama-cloud", "mistral", "pollinations"):
+        for outcome in ("provider_failure", "provider_throttle"):
+            assert operations.model_scoped_transient(source, outcome)
+            assert not operations.provider_scoped_transient(source, outcome)
+        assert not operations.provider_scoped_transient(source, "provider_quota")
+        assert operations.model_scoped_transient(source, "provider_quota")
+    for source in operations.MODEL_SCOPED_SOURCES:
+        assert operations.model_scoped_transient(source, "provider_quota")
+        assert not operations.provider_scoped_transient(source, "provider_quota")
+    for outcome in ("model_unavailable", "model_policy_violation", "unknown_failure"):
+        assert not operations.provider_scoped_transient("mistral", outcome)
 
 
 def test_all_actionable_model_failures_use_fibonacci_without_credential_penalty():
@@ -402,3 +446,159 @@ def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
     # Fresh attempts bootstrap from prior Neon terminal events, not GitHub.
     assert "await _recent_streak(conn, run_id, source, model)" in source
     assert "classification in WORKER_RETRY_CLASSES" in source
+
+def test_dynamic_slot_worker_backoff_persists_across_model_rotation(monkeypatch):
+    """project_runtime must accumulate worker streak across discovered models."""
+    import json
+
+    class RuntimeConn:
+        def __init__(self):
+            self.kv = {}
+            self.runtime_keys = set()
+
+        def transaction(self):
+            class Tx:
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, exc_type, exc, tb):
+                    return False
+
+            return Tx()
+
+        async def execute(self, query, *args):
+            if "INSERT INTO public.factory_runtime_event_keys" in query:
+                repo, run_id = args[0], int(args[1])
+                if (repo, run_id) in self.runtime_keys:
+                    return "INSERT 0 0"
+                self.runtime_keys.add((repo, run_id))
+                return "INSERT 0 1"
+            if "INSERT INTO public.factory_state_kv" in query:
+                key = args[0]
+                payload = args[1]
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
+                self.kv[key] = payload
+                return "INSERT 0 1"
+            if "DELETE FROM public.factory_state_kv" in query:
+                self.kv.pop(args[0], None)
+                return "DELETE 1"
+            return "OK"
+
+        async def fetchval(self, query, *args):
+            if "INSERT INTO public.factory_runtime_event_keys" in query:
+                repo, run_id = args[0], int(args[1])
+                if (repo, run_id) in self.runtime_keys:
+                    return None
+                self.runtime_keys.add((repo, run_id))
+                return run_id
+            if "pg_advisory_xact_lock" in query:
+                return None
+            if "FROM public.factory_state_kv" in query:
+                return None
+            return None
+
+        async def fetchrow(self, query, *args):
+            if "FROM public.factory_state_kv" in query:
+                payload = self.kv.get(args[0])
+                return {"payload": payload} if payload is not None else None
+            return None
+
+        async def fetch(self, query, *args):
+            return []
+
+    monkeypatch.setenv("FACTORY_SLOTS_PER_PROVIDER", "1")
+    monkeypatch.delenv("FACTORY_SLOT_PROVIDER_SOURCES", raising=False)
+    roster = operations._roster()  # actual provider-derived projection
+    worker, pair = next(
+        item for item in sorted(roster.items()) if item[1][0] == "openrouter-free"
+    )
+    source, model_slot = pair
+    assert model_slot == ""
+
+    conn = RuntimeConn()
+    worker_key = f"factory-worker-backoff-v1:{REPO}:worker:{worker}"
+
+    async def fail(run_id: int, model: str):
+        return await operations.project_runtime(
+            conn, REPO, run_id,
+            {
+                "worker": worker, "source": source, "model": model,
+                "outcome_class": "provider_failure", "exact_model_proven": True,
+                "persisted_work": False, "configured": True,
+            },
+        )
+
+    assert run(fail(1001, "sample/a")) is True
+    first = conn.kv[worker_key]
+    assert first[0]["streak"] == 1
+    assert run(fail(1002, "sample/b")) is True
+    second = conn.kv[worker_key]
+    assert second[0]["streak"] == 2
+    assert second[0]["next_retry_at"] > first[0]["next_retry_at"]
+    assert run(fail(1003, "sample/c")) is True
+    third = conn.kv[worker_key]
+    assert third[0]["streak"] == 3
+    assert third[0]["next_retry_at"] > second[0]["next_retry_at"]
+
+    model_keys = sorted(
+        k for k in conn.kv
+        if k.startswith(f"factory-model-backoff-v1:{REPO}:source:{source}:model:")
+    )
+    assert model_keys == [
+        f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/a",
+        f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/b",
+        f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/c",
+    ]
+    assert [conn.kv[k][0]["streak"] for k in model_keys] == [1, 1, 1]
+
+    assert run(operations.project_runtime(
+        conn, REPO, 1004,
+        {
+            "worker": worker, "source": source, "model": "sample/c",
+            "outcome_class": "success", "exact_model_proven": True,
+            "persisted_work": False, "configured": True,
+        },
+    )) is True
+    assert worker_key not in conn.kv
+    assert f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/c" not in conn.kv
+    assert f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/a" in conn.kv
+    assert f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/b" in conn.kv
+
+    db = FakeConnection(backoffs=[{
+        "cache_key": worker_key,
+        "payload": [{"source": source, "model": "sample/d",
+                     "streak": 3, "next_retry_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
+                     "suspended": False}],
+        "expires_at": datetime.now(UTC) + timedelta(days=90),
+    }])
+    kept, denied = run(operations._eligibility(db, REPO, [worker]))
+    assert kept == []
+    assert any("Fibonacci retry deferred" in d for d in denied)
+
+def test_catalog_slot_model_failure_does_not_suppress_other_models():
+    future = datetime.now(UTC) + timedelta(minutes=20)
+    db = FakeConnection(backoffs=[{
+        "cache_key": "worker",
+        "payload": [{"source": "openrouter-free", "model": "vendor/paid",
+                     "outcome": "provider_quota", "streak": 3,
+                     "next_retry_at": future.isoformat()}],
+        "expires_at": future,
+    }])
+    with patch.object(operations, "_roster", return_value={
+        "501": ("openrouter-free", ""),
+    }):
+        kept, denied = run(operations._eligibility(db, REPO, ["501"]))
+    assert kept == ["501"] and not denied
+
+
+def test_model_backoffs_are_in_trusted_catalog_exclusions():
+    future = datetime.now(UTC) + timedelta(minutes=20)
+    db = FakeConnection(model_backoffs=[{
+        "payload": [{"source": "openrouter-free", "model": "vendor/failed:free",
+                     "outcome": "provider_throttle", "streak": 3,
+                     "next_retry_at": future.isoformat()}],
+    }])
+    exclusions = run(operations._export_model_exclusions(db, REPO))
+    assert exclusions["openrouter-free"] == ["vendor/failed:free"]
+    assert "vendor/other:free" not in exclusions["openrouter-free"]

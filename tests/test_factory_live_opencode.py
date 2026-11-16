@@ -25,75 +25,28 @@ def catalog(*entries: tuple[str, int, int]) -> str:
     )
 
 
-def roster(tmp_path: Path) -> Path:
-    file = tmp_path / "factory.tsv"
-    file.write_text(
-        "# worker\tsource\tmodel\tminute\tscheduler\tdisplay_name\n"
-        "41\topencode-free\told-free\t5\tdispatcher\tOld\n"
-        "42\topencode-free\tother-free\t10\tdispatcher\tOther\n"
-        "50\tnvidia\tsome-model\t15\tdispatcher\tNVIDIA\n",
-        encoding="utf-8",
-    )
-    return file
+def test_catalog_models_ignore_pricing_and_name_conventions() -> None:
+    raw = catalog(("example-a", 0, 0), ("example-premium", 2, 3))
+    assert selector.catalog_models(raw) == ["example-a", "example-premium"]
 
 
-def test_big_pickle_is_one_pool_candidate_not_many_fixed_workers(tmp_path: Path) -> None:
-    raw = catalog(("big-pickle", 0, 0), ("model-a-free", 0, 0))
-    assert selector.free_models(raw) == ["big-pickle", "model-a-free"]
-    assert selector.select_model(raw, 41, 0, roster(tmp_path))["model"] == "big-pickle"
-    assert selector.select_model(raw, 42, 0, roster(tmp_path))["model"] == "model-a-free"
+def test_new_catalog_models_rotate_without_roster() -> None:
+    raw = catalog(("example-a", 0, 0), ("example-b", 2, 3), ("example-c", 0, 0))
+    selected = {selector.select_model(raw, 41, turn)["model"] for turn in range(3)}
+    assert selected == {"example-a", "example-b", "example-c"}
 
 
-def test_new_catalog_models_rotate_without_roster_pr(tmp_path: Path) -> None:
-    raw = catalog(
-        ("big-pickle", 0, 0),
-        ("beam-free", 0, 0),
-        ("model-cost-only", 0, 0),
-    )
-    selected = {
-        selector.select_model(raw, 41, turn, roster(tmp_path))["model"] for turn in range(3)
-    }
-    assert selected == set(selector.free_models(raw))
+def test_worker_identity_not_bound_to_model_list() -> None:
+    raw = catalog(("example-a", 0, 0), ("example-b", 0, 0))
+    first = selector.select_model(raw, 41, 0)
+    second = selector.select_model(raw, 41, 0)
+    assert first == second
+    assert first["candidate_count"] == 2
 
 
-def test_crouton_alpha_joins_dynamic_opencode_free_rotation(tmp_path: Path) -> None:
-    """The new stealth Zen free model uses existing slots, not a fixed worker."""
-    raw = catalog(
-        ("big-pickle", 0, 0),
-        ("crouton-alpha-free", 0, 0),
-        ("premium-free", 1, 1),
-    )
-    assert selector.free_models(raw) == ["big-pickle", "crouton-alpha-free"]
-    selected = {
-        selector.select_model(raw, 41, turn, roster(tmp_path))["runtime_model"]
-        for turn in range(2)
-    }
-    assert selected == {"opencode/big-pickle", "opencode/crouton-alpha-free"}
-
-
-def test_paid_names_do_not_bypass_free_cost_policy() -> None:
-    raw = catalog(
-        ("premium-free", 0, 1),
-        ("paid", 1, 1),
-        ("eligible-by-cost", 0, 0),
-        ("big-pickle", 0, 0),
-    )
-    assert selector.free_models(raw) == ["big-pickle", "eligible-by-cost"]
-
-
-def test_retired_models_are_not_reselected_from_a_live_catalog(tmp_path: Path) -> None:
-    """Permanent retirement overrides even a still-free provider catalog entry."""
-    raw = catalog(("deepseek-v4.1-flash-free", 0, 0), ("big-pickle", 0, 0))
-    assert selector.free_models(raw) == ["big-pickle"]
-    for turn in range(3):
-        assert selector.select_model(raw, 41, turn, roster(tmp_path))["model"] == "big-pickle"
-
-
-def test_empty_catalog_and_non_opencode_worker_fail_closed(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="no provably free"):
-        selector.select_model(catalog(("paid", 1, 1)), 41, 0, roster(tmp_path))
-    with pytest.raises(ValueError, match="no opencode-free slot"):
-        selector.select_model(catalog(("big-pickle", 0, 0)), 50, 0, roster(tmp_path))
+def test_empty_catalog_fails_without_model_guess() -> None:
+    with pytest.raises(ValueError, match="no candidates"):
+        selector.select_model(catalog(), 41, 0)
 
 
 def attempt(model: str, updated: str, outcome: str = "model_unavailable") -> dict[str, object]:
@@ -115,9 +68,9 @@ def test_registry_cooldown_expires_and_is_scoped_to_model(tmp_path: Path) -> Non
     from datetime import UTC, datetime
 
     now = int(datetime(2026, 10, 17, 7, 0, 5, tzinfo=UTC).timestamp())
-    raw = catalog(("ll-alpha-free", 0, 0), ("big-pickle", 0, 0), ("paid", 1, 1))
+    raw = catalog(("ll-alpha-free", 0, 0), ("big-pickle", 0, 0))
     selected = {
-        selector.select_model(raw, 41, turn, roster(tmp_path), comments, now_epoch=now)["model"]
+        selector.select_model(raw, 41, turn, None, comments, now_epoch=now)["model"]
         for turn in range(4)
     }
     assert selected == {"big-pickle"}
@@ -126,7 +79,7 @@ def test_registry_cooldown_expires_and_is_scoped_to_model(tmp_path: Path) -> Non
             raw,
             41,
             turn,
-            roster(tmp_path),
+            None,
             comments,
             now_epoch=now + selector.COOLDOWN_SECONDS,
         )["model"]
@@ -178,14 +131,14 @@ def test_all_candidates_unavailable_and_later_success(tmp_path: Path) -> None:
     comments = tmp_path / "comments.json"
     failure = attempt("big-pickle", "2026-10-17T07:00:05Z")
     comments.write_text(json.dumps([failure]))
-    raw = catalog(("big-pickle", 0, 0), ("paid", 1, 1))
+    raw = catalog(("big-pickle", 0, 0))
     with pytest.raises(ValueError, match="All 1 candidates"):
-        selector.select_model(raw, 41, 0, roster(tmp_path), comments, now_epoch=now)
+        selector.select_model(raw, 41, 0, None, comments, now_epoch=now)
     comments.write_text(
         json.dumps([failure, attempt("big-pickle", "2026-10-17T07:00:06Z", "success")])
     )
     assert (
-        selector.select_model(raw, 41, 0, roster(tmp_path), comments, now_epoch=now + 1)["model"]
+        selector.select_model(raw, 41, 0, None, comments, now_epoch=now + 1)["model"]
         == "big-pickle"
     )
 
@@ -264,8 +217,6 @@ def test_cli_consults_registry_evidence(tmp_path: Path) -> None:
             "42",
             "--rotation",
             "0",
-            "--roster",
-            str(roster(tmp_path)),
         ],
         capture_output=True,
         text=True,
@@ -304,35 +255,19 @@ def test_non_recovery_outcomes_do_not_clear_active_cooldown(outcome: str) -> Non
         )
 
 
-def test_openrouter_free_selector_rotates_only_proven_zero_cost_models(tmp_path: Path) -> None:
-    """A broken OpenRouter lane may try another verified free model, never paid."""
-    roster_path = roster(tmp_path)
-    with roster_path.open("a", encoding="utf-8") as out:
-        out.write("52\topenrouter-free\tvendor/missing:free\t10\tdispatcher\tOpenRouter\n")
-    raw = json.dumps({
-        "models": [
-            {"id": "openrouter/vendor/missing:free"},
-            {"id": "openrouter/vendor/available:free"},
-            {"id": "openrouter/vendor/expensive", "cost": {"input": 0.01, "output": 0.01}},
-            {"id": "opencode/big-pickle"},
-        ]
-    })
-    assert selector.free_models(raw, provider="openrouter-free") == [
-        "vendor/available:free",
-        "vendor/missing:free",
+def test_openrouter_selector_requires_published_free_endpoint() -> None:
+    raw = json.dumps({"models": [
+        {"id": "openrouter/example/unpriced"},
+        {"id": "openrouter/example/paid", "cost": {"input": 2, "output": 3}},
+        {"id": "openrouter/example/available:free", "cost": {"input": 0, "output": 0}},
+        {"id": "openrouter/example/second:free"},
+        {"id": "opencode/another-source"},
+    ]})
+    assert selector.catalog_models(raw, provider="openrouter-free") == [
+        "example/available:free", "example/second:free",
     ]
-    selected = selector.select_model(
-        raw, 52, 0, roster_path, attempted={"vendor/missing:free"},
-        provider="openrouter-free",
-    )
-    assert selected["model"] == "vendor/available:free"
-    assert selected["runtime_model"] == "openrouter/vendor/available:free"
-    with pytest.raises(ValueError, match="All 2 candidates"):
-        selector.select_model(
-            raw, 52, 0, roster_path,
-            attempted={"vendor/missing:free", "vendor/available:free"},
-            provider="openrouter-free",
-        )
+    selected = {selector.select_model(raw, 52, turn, provider="openrouter-free")["model"] for turn in range(2)}
+    assert selected == {"example/available:free", "example/second:free"}
 
 
 def test_model_unavailability_cooldown_is_provider_scoped(tmp_path: Path) -> None:
@@ -352,24 +287,24 @@ def test_model_unavailability_cooldown_is_provider_scoped(tmp_path: Path) -> Non
     ) == set()
 
 
-def test_openrouter_free_disallows_unverified_discount_names() -> None:
-    """Only provider-defined :free or metadata-proven zero-cost routes are used."""
-    raw = json.dumps({
-        "models": [
-            {"id": "openrouter/vendor/unknown-free"},
-            {"id": "openrouter/vendor/price-zero", "cost": {"input": 0, "output": 0}},
-            {"id": "openrouter/vendor/paid:free", "cost": {"input": 1, "output": 0}},
-        ]
-    })
-    assert selector.free_models(raw, provider="openrouter-free") == ["vendor/price-zero"]
+def test_openrouter_suffix_is_endpoint_contract_not_price_inference() -> None:
+    raw = json.dumps({"models": [
+        {"id": "openrouter/example/unknown"},
+        {"id": "openrouter/example/price-zero", "cost": {"input": 0, "output": 0}},
+        {"id": "openrouter/example/paid-free-label", "cost": {"input": 1, "output": 0}},
+        {"id": "openrouter/example/free-route:free", "cost": {"input": 0, "output": 0}},
+    ]})
+    assert selector.catalog_models(raw, provider="openrouter-free") == [
+        "example/free-route:free",
+    ]
 
 
 def test_neon_exclusions_take_precedence_over_live_free_catalog(tmp_path: Path) -> None:
     raw = catalog(("big-pickle", 0, 0), ("ll-alpha-free", 0, 0))
     exclusions = tmp_path / "exclusions.json"
     exclusions.write_text(json.dumps({"opencode-free": ["big-pickle"]}))
-    selected = selector.select_model(raw, 41, 0, roster(tmp_path), exclusions_path=exclusions)
+    selected = selector.select_model(raw, 41, 0, None, exclusions_path=exclusions)
     assert selected["model"] == "ll-alpha-free"
     exclusions.write_text(json.dumps({"opencode-free": ["big-pickle", "ll-alpha-free"]}))
     with pytest.raises(ValueError, match="unavailable or in cooldown"):
-        selector.select_model(raw, 41, 0, roster(tmp_path), exclusions_path=exclusions)
+        selector.select_model(raw, 41, 0, None, exclusions_path=exclusions)

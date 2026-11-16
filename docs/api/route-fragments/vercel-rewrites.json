@@ -15,6 +15,7 @@
     "preferences",
     "reading-mode",
     "reading-orders",
+    "reading-plan-sync",
     "releases",
     "sessions",
     "tags",
@@ -183,6 +184,20 @@
     },
     {
       "src": "^/api/v1/reading-orders/[0-9]+/items$",
+      "methods": [
+        "POST"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-plan-sync/status$",
+      "methods": [
+        "GET"
+      ],
+      "dest": "/api/native_roll.rs"
+    },
+    {
+      "src": "^/api/v1/reading-plan-sync/sync$",
       "methods": [
         "POST"
       ],

@@ -260,6 +260,7 @@ def test_route_fragments_are_loaded_in_filename_order() -> None:
         "preferences",
         "reading-mode",
         "reading-orders",
+        "reading-plan-sync",
         "releases",
         "sessions",
         "tags",

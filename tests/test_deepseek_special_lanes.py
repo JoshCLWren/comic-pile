@@ -1,29 +1,30 @@
-"""Regression checks for retirement of the failed DeepSeek Free experiment."""
+"""Retired experiment worker pins cannot become active dynamic provider slots."""
 
-import json
+from __future__ import annotations
+
+import importlib
+import sys
 from pathlib import Path
 
-
-def test_deepseek_experimental_worker_slots_are_retired() -> None:
-    """None of the special pinned slots can enter the dispatcher roster."""
-    roster = Path(".github/free-model-factories.tsv").read_text()
-    lock = json.loads(Path(".github/factory-expected-workers.json").read_text())
-    retired = {74, 87, 88, 89, 90}
-    active = {int(line.split("\t", 1)[0]) for line in roster.splitlines()
-              if line and not line.startswith("#")}
-    assert retired.isdisjoint(active)
-    assert retired.isdisjoint(lock["expected_workers"])
-    assert retired.issubset(lock["retired_workers"])
-    assert "deepseek-v4.1-flash-free" in lock["retired_models"]
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / ".github/scripts"))
+SLOTS = importlib.import_module("factory_worker_slots")
 
 
-def test_deepseek_comparison_is_manual_only() -> None:
-    """No scheduled or PR-triggered probes run for the retired experiment."""
-    comparison = Path(".github/workflows/deepseek-free-auth-comparison.yml").read_text()
-    assert "  workflow_dispatch:" in comparison
-    assert "  schedule:" not in comparison
-    assert "  pull_request:" not in comparison
-    smoke = Path(".github/workflows/opencode-deepseek-free-smoke.yml").read_text()
-    assert "  workflow_dispatch:" in smoke
-    assert "  schedule:" not in smoke
-    assert "  pull_request:" not in smoke
+def test_provider_slots_do_not_pin_retired_experiment_models() -> None:
+    """Provider-derived slots must not preserve retired experiment model pins."""
+    dynamic = SLOTS.slots({"FACTORY_SLOTS_PER_PROVIDER": "2"})
+    assert dynamic
+    assert all("model" not in slot.as_record() for slot in dynamic)
+    assert all(int(slot.worker) > 1_000_000_000 for slot in dynamic)
+
+
+def test_old_manual_comparison_does_not_schedule_a_model_worker() -> None:
+    """Manual comparison workflows must not register scheduled factory workers."""
+    for filename in (
+        "deepseek-free-auth-comparison.yml",
+        "opencode-deepseek-free-smoke.yml",
+    ):
+        workflow = (ROOT / ".github/workflows" / filename).read_text()
+        assert "  schedule:" not in workflow
+        assert "  pull_request:" not in workflow

@@ -109,8 +109,10 @@ def exercise_reconcile(
 
     def api(arguments: list[str]) -> object:
         calls.append(arguments)
-        if arguments[:2] == ["api", "--paginate"]:
-            return [{"workflow_runs": [run]}]
+        if arguments and arguments[0] == "api" and "actions/workflows/deploy-production.yml/runs" in arguments[-1]:
+            assert "--paginate" not in arguments
+            assert "per_page=20" in arguments[-1]
+            return {"workflow_runs": [run]}
         if arguments[:2] == ["issue", "list"]:
             return incidents
         return {}
@@ -284,3 +286,68 @@ def test_revision_is_published_before_preflight_dependencies() -> None:
     assert "deployment-attempt-${{ github.run_attempt }}" in preflight
     assert 'run_attempt: $run_attempt' in preflight
     assert "steps.revision.outputs.deploy_sha" in preflight
+
+
+
+def test_missing_deploy_job_evidence_does_not_crash_or_claim_success(
+    recovery: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Rate-limited job lookup cannot fake a deploy or close its incident."""
+    run = failed_run()
+    run["conclusion"] = "success"
+    run.pop("jobs")
+    assert not recovery.successful_smokes(run)
+    calls = exercise_reconcile(
+        recovery, monkeypatch, run, [{"number": 8, "body": recovery.MARKER}]
+    )
+    assert not any("PATCH" in call or "state=closed" in call for call in calls)
+    assert not any("POST" in call for call in calls)
+
+
+
+def test_rate_limited_gh_api_defers_without_masking_other_403(
+    recovery: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only a true GitHub quota rejection is a retryable no-op."""
+    def failing_api(message: str):
+        def run(*args: object, **kwargs: object) -> object:
+            raise subprocess.CalledProcessError(1, ["gh", "api"], stderr=message)
+        return run
+
+    monkeypatch.setattr(
+        recovery.subprocess, "run",
+        failing_api("HTTP 403: API rate limit exceeded for installation"),
+    )
+    with pytest.raises(recovery.GitHubQuotaDeferredError):
+        recovery.gh_json(["api", "repos/example/repo/actions/runs"])
+
+    monkeypatch.setattr(
+        recovery.subprocess, "run",
+        failing_api("HTTP 403: Resource not accessible by integration"),
+    )
+    with pytest.raises(subprocess.CalledProcessError):
+        recovery.gh_json(["api", "repos/example/repo/actions/runs"])
+
+
+def test_quota_deferred_main_does_not_mutate_incidents(
+    recovery: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The existing 15-minute watchdog retries, without fake production success."""
+    def deferred(_: str) -> None:
+        raise recovery.GitHubQuotaDeferredError("GitHub API quota exhausted")
+    monkeypatch.setattr(recovery, "reconcile", deferred)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "example/repo")
+    monkeypatch.setattr("sys.argv", ["factory_deploy_recovery.py"])
+    recovery.main()
+    assert "deferred" in capsys.readouterr().out
+
+
+def test_unverifiable_deploy_job_list_cannot_invent_attempt(
+    recovery: ModuleType
+) -> None:
+    """Rate-limited job history must not create a speculative repair issue."""
+    run = failed_run()
+    run.pop("jobs")
+    assert recovery.latest_attempted_deploy_run(
+        {"workflow_runs": [run]}, jobs_loader=lambda _: None,
+    ) is None

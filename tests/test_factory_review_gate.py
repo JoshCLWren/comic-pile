@@ -2612,30 +2612,23 @@ def test_trusted_review_controller_stages_roster_and_pinned_tsv(worker_script: s
     """All worker paths stage code and roster from main before checkout."""
     script = (SCRIPTS / worker_script).read_text(encoding="utf-8")
     stage = script.split("stage_trusted_review_controller() {", 1)[1].split("\n}", 1)[0]
-    assert 'cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"' in stage
-    assert 'cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"' in stage
+    assert 'cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"' in stage
+    assert 'cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"' in stage
+    assert 'cp .github/free-model-factories.tsv' not in stage
 
 
-def test_roster_model_lookup_ignores_untrusted_pr_checkout(
+def test_model_author_marker_uses_invoked_runtime_model_not_branch_inventory(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The staged controller must not trust a model mapping from the PR branch."""
+    """An untrusted PR cannot rewrite the selected model's trusted provenance."""
     controller = load_review_controller()
-    trusted = tmp_path / "staged-controller"
-    trusted.mkdir()
-    (trusted / "free-model-factories.tsv").write_text(
-        "54\tz-ai\tglm-4.5-flash\t0\tactive\tFactory 54\n",
-        encoding="utf-8",
+    monkeypatch.setenv("FACTORY_RUNTIME_MODEL", "synthetic-provider/executed-model")
+    monkeypatch.chdir(tmp_path)
+    assert controller.roster_model_for_worker("non-pinned-worker") == (
+        "synthetic-provider/executed-model"
     )
-    untrusted = tmp_path / "pr-checkout"
-    (untrusted / ".github").mkdir(parents=True)
-    (untrusted / ".github" / "free-model-factories.tsv").write_text(
-        "54\tz-ai\timpersonated-model\t0\tactive\tUntrusted\n",
-        encoding="utf-8",
-    )
-    monkeypatch.chdir(untrusted)
-    monkeypatch.setattr(controller, "__file__", str(trusted / "factory-review-controller.py"))
-    assert controller.roster_model_for_worker("54") == "glm-4.5-flash"
+    monkeypatch.delenv("FACTORY_RUNTIME_MODEL")
+    assert controller.roster_model_for_worker("non-pinned-worker") is None
 
 
 def test_model_trailer_models_reports_distinct_trailers() -> None:

@@ -123,18 +123,16 @@ record_agent_failure_outcome() {
     record_terminal_outcome agent_timeout "trusted local execution deadline expired (agent exit 124)"
     return
   fi
-  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
-  elif [[ ( "$SOURCE" == z-ai || "$SOURCE" == kilo-auto ) && -f "$log_file" ]] && grep -Eqi '(^|[^0-9.])429([^0-9]|$)|too many requests' "$log_file"; then
-    record_terminal_outcome provider_quota "Free provider account rate limit requires quota backoff (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi '(^|[^0-9A-Za-z_])(429|413)([^0-9]|$)|too many requests|request too large|rate.?limit|\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
     if [[ "$SOURCE" == nvidia ]]; then
       printf 'NVIDIA permanently retired model: %s\n' "$MODEL"
     fi
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|free tier users do not have access to this model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
     record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
@@ -187,8 +185,8 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_implementation_delivery.py "$trusted_dir/factory_implementation_delivery.py"
   cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
   # Bind model provenance to a trusted main checkout snapshot, not PR data.
-  cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
-  cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+  cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
+  cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   cp .github/scripts/factory_fork_control.py "$trusted_dir/factory_fork_control.py"
   TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"
@@ -387,8 +385,28 @@ ensure_owner_label
 stage_trusted_guard
 stage_trusted_checkpoint_helper
 stage_trusted_kilo_helper
+
+# Keep all selection and configuration code on the trusted main snapshot.
+# The agent may check out/edit a PR branch before a fallback is needed.
+stage_trusted_model_failover() {
+  FACTORY_TRUSTED_FAILOVER_DIR="$(mktemp -d "$RUNNER_TEMP/factory-model-failover.XXXXXXXX")"
+  local filename
+  for filename in \
+    factory_model_failover.py factory_live_opencode.py factory_candidate_health.py \
+    factory_completion_controller.py factory_work_policy.py factory_review_policy.py \
+    factory_provider_candidates.py factory_provider_registry.py \
+    factory_runtime_model_select.py factory_published_model_catalog.py \
+    factory_kilo_catalog.py; do
+    cp ".github/scripts/$filename" "$FACTORY_TRUSTED_FAILOVER_DIR/$filename"
+  done
+  cp scripts/factory_eligibility.py "$FACTORY_TRUSTED_FAILOVER_DIR/factory_eligibility.py"
+  cp .github/scripts/wait-opencode-model.sh "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh"
+  export FACTORY_TRUSTED_FAILOVER_DIR
+}
+
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
+stage_trusted_model_failover
 
 # Issue snapshots are the normal work PR; repairs advance the assigned PR atomically.
 # A separate Git index avoids interfering with an agent editing files.
@@ -509,10 +527,93 @@ if (( agent_timeout < 300 )); then
   exit 1
 fi
 
+# Fail over only inside this provider and this lease. Each discovered model is
+# attempted at most once; persistent failures are recorded by the trusted shell,
+# never inferred from model-authored text or a successful process exit.
+attempted_models=()
+record_model_failover_failure() {
+  local failed_model="$1" classification="$2" stamp body
+  stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  body="$(printf '%s\nWorker: %s\nModel: %s\nSource: %s\nOutcome: failure\nAttempt outcome: %s\nUpdated: %s\nRun: %s' \
+    "<!-- factory-model-failover:v1 run=$GITHUB_RUN_ID -->" \
+    "$WORKER_ID" "$failed_model" "$SOURCE" "$classification" "$stamp" "$GITHUB_RUN_ID")"
+  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
+    -f body="$body" >/dev/null
+  log "FACTORY_TRUSTED_FAILOVER: source=$SOURCE model=$failed_model outcome=$classification"
+}
+
+select_next_eligible_model() {
+  local next_json next_model next_runtime state candidate_status
+  local -a select_args=(--source "$SOURCE" --worker "$WORKER" \
+    --rotation "$GITHUB_RUN_NUMBER" \
+    --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
+    --catalog-cache "$RUNNER_TEMP/factory-failover-catalog.json")
+  local prior
+  for prior in "${attempted_models[@]}"; do
+    select_args+=(--attempted "$prior")
+  done
+  case "$SOURCE" in
+    opencode-free)
+      select_args+=(--catalog-file "$RUNNER_TEMP/factory-opencode-free-catalog") ;;
+    kilo-auto)
+      select_args+=(--catalog-file "$RUNNER_TEMP/factory-kilo-catalog") ;;
+  esac
+  while :; do
+    (( $(remaining) > 540 )) || return 1
+    if ! next_json="$(python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_model_failover.py" \
+      "${select_args[@]}")"; then
+      log "No further eligible models in $SOURCE; retaining the failed attempt's outcome"
+      return 1
+    fi
+    next_model="$(jq -er '.model' <<< "$next_json")" || return 1
+    next_runtime="$(jq -er '.runtime_model' <<< "$next_json")" || return 1
+    attempted_models+=("$next_model")
+    select_args+=(--attempted "$next_model")
+    if [[ "$SOURCE" != opencode-free && "$SOURCE" != openrouter-free && \
+          "$SOURCE" != kilo-auto ]]; then
+      # OpenCode-compatible custom providers declare one exact model at a time.
+      # Merge the newly published model into the existing runtime configuration.
+      local config_file="$HOME/.config/opencode/opencode.json"
+      local candidate_config="$RUNNER_TEMP/factory-failover-config.json"
+      if ! python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_provider_registry.py" \
+          config --source "$SOURCE" --model "$next_model" > "$candidate_config"; then
+        log "Cannot configure discovered $SOURCE/$next_model; stopping failover"
+        return 1
+      fi
+      jq -s '.[0] * .[1]' "$config_file" "$candidate_config" > "$candidate_config.merged" || return 1
+      mv "$candidate_config.merged" "$config_file"
+      chmod 600 "$config_file"
+    fi
+    if [[ "$SOURCE" != kilo-auto ]]; then
+      candidate_status=0
+      bash "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh" "$next_runtime" || candidate_status=$?
+      if (( candidate_status == 3 )); then
+        log "Discovered $next_runtime absent from executable OpenCode catalog, trying the next candidate"
+        record_model_failover_failure "$next_model" model_unavailable || return 1
+        continue
+      fi
+      if (( candidate_status != 0 )); then
+        record_terminal_outcome control_plane_failure "OpenCode catalog unreadable during model failover"
+        return 1
+      fi
+    fi
+    # The checkpoint process captures model provenance when started. Restart
+    # it before inference so saved code is attributed to the model that wrote it.
+    stop_work_checkpoint
+    MODEL="$next_model"
+    RUNTIME_MODEL="$next_runtime"
+    DISPLAY="$SOURCE · $MODEL"
+    start_work_checkpoint
+    log "Failing model excluded; attempting $SOURCE/$MODEL on the existing lease"
+    return 0
+  done
+}
+
 agent_attempt=1
 agent_status=0
 transient_failure=0
 while :; do
+  log "FACTORY_EXECUTION_CANDIDATE: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
   set +e
   run_agent "$MODE" "$NUMBER" "$agent_timeout"
   agent_status=$?
@@ -520,8 +621,36 @@ while :; do
   log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
 
   if (( agent_status == 0 )); then
+    # Earlier failed candidates must never poison the terminal outcome.
+    rm -f "$TERMINAL_OUTCOME_FILE"
     transient_failure=0
     break
+  fi
+  # The actual inference failed. For model-scoped provider failures, advance
+  # through *all* discovered eligible models, not the same pinned model twice.
+  # Never reassign a claimed issue/PR or discard changes already checkpointed.
+  record_agent_failure_outcome "$agent_status"
+  failure_class="$(cut -f1 "$TERMINAL_OUTCOME_FILE")"
+  if [[ "$SOURCE" != omniroute-free && "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
+    case "$failure_class" in
+      provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
+        if [[ -z "$(git status --porcelain)" ]] && (( $(remaining) > 540 )); then
+          attempted_models+=("$MODEL")
+          if ! record_model_failover_failure "$MODEL" "$failure_class"; then
+            record_terminal_outcome control_plane_failure "failed to record exact model failure before failover"
+            break
+          fi
+          if select_next_eligible_model; then
+            agent_attempt=1
+            available="$(remaining)"
+            agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
+            (( agent_timeout >= 300 )) || break
+            continue
+          fi
+        fi
+        break
+        ;;
+    esac
   fi
   if ! is_transient_agent_failure "$agent_status"; then
     transient_failure=0
@@ -529,7 +658,7 @@ while :; do
   fi
 
   transient_failure=1
-  log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
+  log 'Non-attributable transient interruption; bounded retry of this model only'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 540 )) || break
