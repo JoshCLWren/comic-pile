@@ -6,8 +6,6 @@ native v2 operations. The route generator overlays these entries onto
 edited in a PR. A budget records the maximum combined application and
 transaction-control statements and whether that maximum grows with input data.
 The `basis` text explains the reviewed handler call path.
-`runtime_overhead_statements` records measured pool checkout probes separately
-from handler statements; `max_statements` includes that overhead.
 
 `tests/test_v2_sql_budget_inventory.py` checks source-to-generated parity,
 budget arithmetic, explicit DB-free exemptions, and the inventory gap set.
