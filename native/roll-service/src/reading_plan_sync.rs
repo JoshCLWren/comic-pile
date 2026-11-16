@@ -760,7 +760,7 @@ pub async fn sync_released_issues_endpoint(
             let mut source_unknown_date_skips: i64 = 0;
             let mut source_excluded_issues: i64 = 0;
             let mut source_issue_failures: i64 = 0;
-            #[allow(unused_assignments)]
+            #[allow(unused_mut, unused_assignments)]
             let mut source_created: i64 = 0;
             let mut source_reused: i64 = 0;
             let mut source_conflicts: i64 = 0;
