@@ -1140,30 +1140,46 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
     )
 
 
-@pytest.mark.parametrize("worker", ["54", "82", "97"])
 def test_shared_provider_quota_uses_trusted_neon_projection(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str,
+    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Source-level quota is enforced for every pin without comments."""
+    """Provider cooldown applies to every dynamic slot for the same source."""
     import importlib
+
+    slots = importlib.import_module("factory_worker_slots")
     operations = importlib.import_module("factory_state_operations")
+    provider_workers = [
+        item.worker for item in slots.slots()
+        if item.source == "z-ai"
+    ]
+    assert len(provider_workers) > 1
     monkeypatch.setattr(operations, "enabled", lambda: True)
-    monkeypatch.setattr(operations, "filter_workers",
-                        lambda _repo, _workers: ([], ["provider z-ai cooling"]))
-    assert "cooling" in controller.runtime_quota_block_reason(worker)
-    monkeypatch.setattr(operations, "filter_workers",
-                        lambda _repo, workers: (workers, []))
-    assert controller.runtime_quota_block_reason(worker) is None
+    monkeypatch.setattr(
+        operations, "filter_workers",
+        lambda _repo, _workers: ([], ["provider z-ai cooling"]),
+    )
+    for worker in provider_workers[:3]:
+        assert "cooling" in (controller.runtime_quota_block_reason(worker) or "")
+    monkeypatch.setattr(
+        operations, "filter_workers",
+        lambda _repo, workers: (workers, []),
+    )
+    for worker in provider_workers[:3]:
+        assert controller.runtime_quota_block_reason(worker) is None
 
 
 def test_provider_health_database_outage_fails_closed(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import importlib
+
+    slots = importlib.import_module("factory_worker_slots")
     operations = importlib.import_module("factory_state_operations")
+    z_ai = next(item.worker for item in slots.slots() if item.source == "z-ai")
+    nvidia = next(item.worker for item in slots.slots() if item.source == "nvidia")
     monkeypatch.setattr(operations, "enabled", lambda: False)
-    assert "deferred" in controller.runtime_quota_block_reason("97")
-    assert controller.runtime_quota_block_reason("20") is None
+    assert "deferred" in (controller.runtime_quota_block_reason(z_ai) or "")
+    assert controller.runtime_quota_block_reason(nvidia) is None
 
 
 def test_issue_assignment_rechecks_dependency_at_mutation_boundary(
