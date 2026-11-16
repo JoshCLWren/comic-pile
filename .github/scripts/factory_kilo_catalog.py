@@ -19,7 +19,7 @@ def discover_models(catalog_text: str) -> list[str]:
         if "/" not in selector or any(char.isspace() for char in selector):
             continue
         provider, model = selector.split("/", 1)
-        if not provider or not model:
+        if provider != "kilo-auto" or not model:
             continue
         found.add(selector)
     return sorted(found)
