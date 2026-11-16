@@ -30,9 +30,30 @@ _COOLING = re.compile(
     r"factory catalog: [^\n]+: catalog contained no eligible candidates outside cooldown", re.I
 )
 _ACCOUNT_CREDITS = re.compile(
-    r"add usage credits or subscribe|api key budget limit exceeded|insufficient balance or no resource package|please recharge", re.I
+    r"add usage credits or subscribe|api key budget (?:limit )?exceeded|insufficient balance or no resource package|please recharge", re.I
 )
-_MODEL_ACCESS = re.compile(r"free tier users do not have access to this model", re.I)
+_MODEL_ACCESS = re.compile(
+    r"free tier users do not have access to this model|"
+    # NVIDIA lists catalog entries (embedding, CLIP, safety, translation
+    # NIMs) whose chat function is absent for this account.
+    r"function id \S+ version \S+: specified function .*not found",
+    re.I,
+)
+# GitHub Actions echoes each step's `env:`/`with:` block as indented
+# `NAME: value` lines. They carry trusted history snapshots such as
+# FACTORY_CANDIDATE_HEALTH whose stored outcome strings ("provider_throttle",
+# "quota") describe earlier runs, never this run's provider response.
+_STEP_METADATA = re.compile(
+    r"^(?:\d{4}-\d{2}-\d{2}T\S+Z )?"
+    r"(?:  +[A-Za-z_][A-Za-z0-9_-]*: [^\n]*|(?:env|with|shell):(?: [^\n]*)?)$"
+)
+
+
+def strip_step_metadata(log: str) -> str:
+    """Drop echoed step metadata lines before any evidence matching."""
+    return "\n".join(
+        line for line in log.splitlines() if not _STEP_METADATA.match(line)
+    ) + ("\n" if log.endswith("\n") else "")
 
 
 def _canonical() -> Any:
@@ -47,6 +68,9 @@ def _canonical() -> Any:
 
 def classify(log: str) -> dict[str, Any]:
     canonical = _canonical()
+    # The runtime model is recovered from the raw log; evidence never is.
+    runtime_env = re.search(r"(?m)^.*\bFACTORY_RUNTIME_MODEL:\s*(\S+)", log)
+    log = strip_step_metadata(log)
     # The old marker still exists for historical and explicitly pinned jobs.
     if canonical.LOCK_RE.search(log):
         return asdict(canonical.classify(log))
@@ -81,7 +105,7 @@ def classify(log: str) -> dict[str, Any]:
     source = model_event["source"]
     runtime_match = re.search(r"FACTORY_EXECUTION_CANDIDATE: source=\S+ model=\S+ runtime=(\S+)", execution_log)
     if runtime_match is None:
-        runtime_match = re.search(r"(?m)^.*\bFACTORY_RUNTIME_MODEL:\s*(\S+)", log)
+        runtime_match = runtime_env
     runtime = runtime_match[1] if runtime_match else f"{source}/{model}"
     lock = (
         f"Factory {worker} locked: source={source} model={model} "

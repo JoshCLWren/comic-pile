@@ -5,6 +5,7 @@ No external connections. Production Neon evidence is verified separately.
 from __future__ import annotations
 
 import asyncio
+import json
 import importlib.util
 import sys
 from datetime import UTC, datetime, timedelta
@@ -447,65 +448,67 @@ def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
     assert "await _recent_streak(conn, run_id, source, model)" in source
     assert "classification in WORKER_RETRY_CLASSES" in source
 
+class RuntimeConn:
+    """In-memory runtime projection connection recording KV writes."""
+
+    def __init__(self):
+        self.kv = {}
+        self.runtime_keys = set()
+
+    def transaction(self):
+        class Tx:
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        return Tx()
+
+    async def execute(self, query, *args):
+        if "INSERT INTO public.factory_runtime_event_keys" in query:
+            repo, run_id = args[0], int(args[1])
+            if (repo, run_id) in self.runtime_keys:
+                return "INSERT 0 0"
+            self.runtime_keys.add((repo, run_id))
+            return "INSERT 0 1"
+        if "INSERT INTO public.factory_state_kv" in query:
+            key = args[0]
+            payload = args[1]
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            self.kv[key] = payload
+            return "INSERT 0 1"
+        if "DELETE FROM public.factory_state_kv" in query:
+            self.kv.pop(args[0], None)
+            return "DELETE 1"
+        return "OK"
+
+    async def fetchval(self, query, *args):
+        if "INSERT INTO public.factory_runtime_event_keys" in query:
+            repo, run_id = args[0], int(args[1])
+            if (repo, run_id) in self.runtime_keys:
+                return None
+            self.runtime_keys.add((repo, run_id))
+            return run_id
+        if "pg_advisory_xact_lock" in query:
+            return None
+        if "FROM public.factory_state_kv" in query:
+            return None
+        return None
+
+    async def fetchrow(self, query, *args):
+        if "FROM public.factory_state_kv" in query:
+            payload = self.kv.get(args[0])
+            return {"payload": payload} if payload is not None else None
+        return None
+
+    async def fetch(self, query, *args):
+        return []
+
+
 def test_dynamic_slot_worker_backoff_persists_across_model_rotation(monkeypatch):
     """project_runtime must accumulate worker streak across discovered models."""
-    import json
-
-    class RuntimeConn:
-        def __init__(self):
-            self.kv = {}
-            self.runtime_keys = set()
-
-        def transaction(self):
-            class Tx:
-                async def __aenter__(self):
-                    return self
-
-                async def __aexit__(self, exc_type, exc, tb):
-                    return False
-
-            return Tx()
-
-        async def execute(self, query, *args):
-            if "INSERT INTO public.factory_runtime_event_keys" in query:
-                repo, run_id = args[0], int(args[1])
-                if (repo, run_id) in self.runtime_keys:
-                    return "INSERT 0 0"
-                self.runtime_keys.add((repo, run_id))
-                return "INSERT 0 1"
-            if "INSERT INTO public.factory_state_kv" in query:
-                key = args[0]
-                payload = args[1]
-                if isinstance(payload, str):
-                    payload = json.loads(payload)
-                self.kv[key] = payload
-                return "INSERT 0 1"
-            if "DELETE FROM public.factory_state_kv" in query:
-                self.kv.pop(args[0], None)
-                return "DELETE 1"
-            return "OK"
-
-        async def fetchval(self, query, *args):
-            if "INSERT INTO public.factory_runtime_event_keys" in query:
-                repo, run_id = args[0], int(args[1])
-                if (repo, run_id) in self.runtime_keys:
-                    return None
-                self.runtime_keys.add((repo, run_id))
-                return run_id
-            if "pg_advisory_xact_lock" in query:
-                return None
-            if "FROM public.factory_state_kv" in query:
-                return None
-            return None
-
-        async def fetchrow(self, query, *args):
-            if "FROM public.factory_state_kv" in query:
-                payload = self.kv.get(args[0])
-                return {"payload": payload} if payload is not None else None
-            return None
-
-        async def fetch(self, query, *args):
-            return []
 
     monkeypatch.setenv("FACTORY_SLOTS_PER_PROVIDER", "1")
     monkeypatch.delenv("FACTORY_SLOT_PROVIDER_SOURCES", raising=False)
@@ -678,3 +681,56 @@ def test_fleet_admission_does_not_double_book_capped_provider() -> None:
     assert "nvidia" in allowed
     assert "requesty" not in allowed
     assert "cloudflare-workers-ai" not in allowed
+
+
+def test_account_backoff_records_account_class_and_grows_fibonacci(monkeypatch):
+    """A Z.AI-style account refusal must block its provider across dispatches.
+
+    The terminal candidate of the same run may be a different provider with a
+    different class. The account record must keep the proven account class so
+    dispatcher eligibility honours it, and its streak must grow.
+    """
+    monkeypatch.setenv("FACTORY_SLOTS_PER_PROVIDER", "1")
+    monkeypatch.delenv("FACTORY_SLOT_PROVIDER_SOURCES", raising=False)
+    roster = operations._roster()
+    worker, (terminal_source, _) = sorted(roster.items())[0]
+    from factory_provider_candidates import ADAPTERS
+
+    account_source = next(s for s in sorted(ADAPTERS) if s != terminal_source)
+    conn = RuntimeConn()
+    key = f"factory-provider-backoff-v1:{REPO}:source:{account_source}"
+
+    def outcome(run_id: int) -> dict:
+        return {
+            "worker": worker, "source": terminal_source, "model": f"generated/terminal-{run_id}",
+            "outcome_class": "provider_throttle", "exact_model_proven": True,
+            "persisted_work": False, "configured": True,
+            "model_failures": [{
+                "source": account_source, "model": f"generated/account-{run_id}",
+                "outcome": "provider_quota", "scope": "account",
+            }],
+        }
+
+    assert run(operations.project_runtime(conn, REPO, 2001, outcome(2001))) is True
+    first = conn.kv[key][0]
+    assert first["outcome"] == "provider_quota"
+    assert first["streak"] == 1
+    assert run(operations.project_runtime(conn, REPO, 2002, outcome(2002))) is True
+    second = conn.kv[key][0]
+    assert second["streak"] == 2
+    assert run(operations.project_runtime(conn, REPO, 2003, outcome(2003))) is True
+    third = conn.kv[key][0]
+    assert third["streak"] == 3
+    assert third["delay_seconds"] > second["delay_seconds"]
+
+    # The persisted record is exactly what dispatcher eligibility consumes.
+    db = FakeConnection(backoffs=[{
+        "cache_key": key, "payload": conn.kv[key],
+        "expires_at": datetime.now(UTC) + timedelta(hours=1),
+    }])
+    with patch.object(operations, "_roster", return_value={
+        "41": (account_source, "@catalog"), "42": (terminal_source, "@catalog"),
+    }):
+        kept, rejected = run(operations._eligibility(db, REPO, ["41", "42"]))
+    assert kept == ["42"]
+    assert any(account_source in reason for reason in rejected)

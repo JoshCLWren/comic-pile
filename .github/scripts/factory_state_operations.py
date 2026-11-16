@@ -408,8 +408,13 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                          payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
                          expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
                     backoff_key, json.dumps([{
-                        "run_id": run_id, "outcome": classification,
-                        "delay_seconds": delay, "observed_at": observed.isoformat()
+                        # Eligibility honours only account-scoped outcomes, so
+                        # record the proven account class, not this run's
+                        # terminal class (which may belong to a later model).
+                        # The streak must persist for Fibonacci growth.
+                        "run_id": run_id, "outcome": account_classification,
+                        "streak": streak, "delay_seconds": delay,
+                        "observed_at": observed.isoformat(),
                     }]), until)
             await conn.execute(
                 """INSERT INTO public.factory_provider_budget

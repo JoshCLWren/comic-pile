@@ -144,3 +144,56 @@ def test_zai_account_refusal_is_account_quota() -> None:
         session("z-ai", "Error: Insufficient balance or no resource package. Please recharge.")
     )
     assert result["outcome_class"] == "provider_quota"
+
+
+def _stamped(text: str) -> str:
+    return "\n".join(f"2026-01-01T00:00:00.0000000Z {line}" for line in text.splitlines()) + "\n"
+
+
+def test_actions_step_env_health_snapshot_is_not_runtime_evidence() -> None:
+    """Echoed step env (stored history) must not classify this run as throttled.
+
+    Every worker step echoes FACTORY_CANDIDATE_HEALTH, whose prior outcomes
+    contain "provider_throttle"/"quota". A run that never reached inference
+    (assignment stage changed) must not inherit those strings.
+    """
+    worker, source, model = "10001", "pollinations", "synthetic/vl-model"
+    log = _stamped(
+        f"Factory {worker} assigned dynamic provider slot: source={source} configured=true\n"
+        "env:\n"
+        '  FACTORY_CANDIDATE_HEALTH: {"models":[{"model":"x","outcome":"provider_throttle",'
+        '"source":"nvidia"},{"model":"y","outcome":"provider_quota","source":"z-ai"}]}\n'
+        "  FACTORY_RATE_LIMIT_NOTE: quota and rate limit history\n"
+        "shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}\n"
+        f"[factory:{worker}][source:{source}][model:{model}] assigned PR stage changed\n"
+        "##[error]Process completed with exit code 3.\n"
+    )
+    result = module.classify(log)
+    assert result["source"] == source
+    assert result["outcome_class"] not in {"provider_throttle", "provider_quota"}
+
+
+def test_real_throttle_after_env_dump_is_still_detected() -> None:
+    log = _stamped(session("nvidia", "Error: HTTP 429 Too Many Requests"))
+    log = log.replace(
+        "  FACTORY_RUNTIME_MODEL", "  FACTORY_CANDIDATE_HEALTH: {}\n2026-01-01T00:00:00.0000000Z   FACTORY_RUNTIME_MODEL", 1,
+    )
+    assert module.classify(log)["outcome_class"] == "provider_throttle"
+
+
+def test_vercel_api_key_budget_exceeded_is_account_quota() -> None:
+    result = module.classify(session(
+        "vercel-ai-gateway",
+        "Error: API key budget exceeded. Current spend: $1.02, limit: $1.00. "
+        "Team owners can edit this budget in AI Gateway Budgets & Spend",
+    ))
+    assert result["outcome_class"] == "provider_quota"
+
+
+def test_nvidia_missing_function_is_model_unavailable() -> None:
+    result = module.classify(session(
+        "nvidia",
+        "Error: Function id '00000000-0000-0000-0000-000000000000' version 'null': "
+        "Specified function in account 'generated' is not found",
+    ))
+    assert result["outcome_class"] == "model_unavailable"

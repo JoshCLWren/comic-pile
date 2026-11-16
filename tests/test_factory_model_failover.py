@@ -200,3 +200,64 @@ def test_fleet_cannot_choose_unadmitted_provider_even_with_catalog() -> None:
             "77", "nvidia", {("nvidia", "generated/candidate")},
             set(), {}, {"nvidia": catalog, "requesty": catalog}, {"nvidia"},
         )
+
+
+def test_dispatch_fallback_skips_cooling_lane_and_is_attested() -> None:
+    """A lane whose catalog is fully cooling selects another fleet provider.
+
+    The dispatch step echoes the same trusted transition marker as an
+    in-lease switch, so the outcome projector accepts the new final source.
+    """
+    from factory_model_failover import select_next_fleet
+    from factory_state_ledger import refine_trusted_failover_models
+
+    names = [f"generated/candidate-{i}" for i in range(3)]
+    catalogs = {"nvidia": _catalog(names[0]), "pollinations": _catalog(*names[1:])}
+    selected = select_next_fleet(
+        "9001", "nvidia", set(), {"nvidia"}, {"nvidia": [names[0]]},
+        catalogs, set(catalogs),
+    )
+    assert selected["source"] == "pollinations"
+    marker = (
+        f"2026-01-01T00:00:00.0000000Z [factory:9001][source:{selected['source']}]"
+        f"[model:{selected['model']}] FACTORY_FLEET_TRANSITION: "
+        f"source={selected['source']} model={selected['model']} "
+        f"runtime={selected['runtime_model']} target=dispatch\n"
+    )
+    refined = refine_trusted_failover_models(
+        {"worker": "9001", "source": selected["source"], "model": selected["model"]},
+        marker,
+    )
+    assert refined["trusted_source_switch"] is True
+
+
+def test_dispatch_selection_falls_back_across_fleet_in_workflow() -> None:
+    workflow = (ROOT / ".github/workflows/free-model-factory-run.yml").read_text()
+    step = workflow.split("- name: Select execution candidate at dispatch time", 1)[1]
+    step = step.split("- name:", 1)[0]
+    assert "fleet_fallback()" in step
+    assert '--blocked-provider "$SOURCE"' in step
+    assert "FACTORY_FLEET_TRANSITION: source=$selected_source" in step
+    assert 'echo "source=$selected_source"' in step
+    # Every lane-specific failure path now falls back instead of exiting.
+    assert step.count("fleet_fallback '") >= 5
+    assert "steps.executor.outputs.configure_adapter" in workflow
+
+
+def test_worker_fails_over_on_fast_unclassified_failure_without_releasing() -> None:
+    """A candidate that dies before doing work advances within the same lease.
+
+    Production evidence: NVIDIA non-chat catalog entries fail in seconds with
+    errors no narrower class matched; the worker then released the lease
+    instead of trying the next eligible pair.
+    """
+    worker = (ROOT / ".github/scripts/free-model-factory-worker.sh").read_text()
+    loop = worker.split('log "FACTORY_EXECUTION_CANDIDATE:', 1)[1]
+    fast = loop.index('[[ "$failure_class" == unknown_failure ]]')
+    failover = loop.index("provider_quota|provider_throttle|provider_failure|")
+    assert fast < failover
+    clause = loop[fast:failover]
+    assert "attempt_elapsed < FAST_FAILOVER_SECONDS" in clause
+    assert '-z "$(git status --porcelain)"' in clause
+    assert "agent_status != 124" in clause
+    assert "failure_class=provider_failure" in clause

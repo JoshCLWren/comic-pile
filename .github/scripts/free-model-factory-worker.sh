@@ -127,7 +127,7 @@ record_agent_failure_outcome() {
     record_terminal_outcome agent_timeout "trusted local execution deadline expired (agent exit 124)"
     return
   fi
-  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|api key budget (limit )?exceeded|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day|add usage credits or subscribe|account (credits|balance) (depleted|exhausted)' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi '(^|[^0-9A-Za-z_])(429|413)([^0-9]|$)|too many requests|request too large|rate.?limit|\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
@@ -136,7 +136,7 @@ record_agent_failure_outcome() {
       printf 'NVIDIA permanently retired model: %s\n' "$MODEL"
     fi
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|free tier users do not have access to this model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|free tier users do not have access to this model|HTTP[^0-9]*404|404 Not Found|function id [^ ]+ version [^ ]+: specified function [^\n]*not found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^\n]*(policy|guard)[^\n]*(blocked|rejected|denied)|model[^\n]*(blocked|rejected|denied)[^\n]*(policy|guard)' "$log_file"; then
     record_terminal_outcome model_policy_violation "pinned model was rejected by provider/model policy (agent exit ${status})"
@@ -536,7 +536,7 @@ ORIGINAL_SOURCE="$SOURCE"
 attempted_pairs=()
 blocked_providers=()
 account_wide_failure() {
-  grep -Eqi 'insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget limit exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package' \
+  grep -Eqi 'insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget (limit )?exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package' \
     "/tmp/opencode-factory-$WORKER.log"
 }
 record_model_failover_failure() {
@@ -619,13 +619,16 @@ select_next_eligible_model() {
 agent_attempt=1
 agent_status=0
 transient_failure=0
+FAST_FAILOVER_SECONDS="${FACTORY_FAST_FAILOVER_SECONDS:-180}"
 while :; do
   log "FACTORY_EXECUTION_CANDIDATE: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
   : > "/tmp/opencode-factory-${WORKER}.log"
+  attempt_started_at="$SECONDS"
   set +e
   run_agent "$MODE" "$NUMBER" "$agent_timeout"
   agent_status=$?
   set -e
+  attempt_elapsed=$((SECONDS - attempt_started_at))
   log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
 
   if (( agent_status == 0 )); then
@@ -639,6 +642,15 @@ while :; do
   # Never reassign a claimed issue/PR or discard changes already checkpointed.
   record_agent_failure_outcome "$agent_status"
   failure_class="$(cut -f1 "$TERMINAL_OUTCOME_FILE")"
+  # An agent that exits non-zero within the first minutes, edits nothing and
+  # leaves no narrower evidence never started real work: the candidate's
+  # inference call failed. Treat it as a model-scoped provider failure so the
+  # same lease advances to the next eligible pair instead of being released.
+  if [[ "$failure_class" == unknown_failure ]] && (( attempt_elapsed < FAST_FAILOVER_SECONDS )) \
+    && [[ -z "$(git status --porcelain)" ]] && (( agent_status != 124 )); then
+    record_terminal_outcome provider_failure "candidate exited ${agent_status} after ${attempt_elapsed}s without edits or narrower evidence"
+    failure_class=provider_failure
+  fi
   if [[ "$SOURCE" != omniroute-free && "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
     case "$failure_class" in
       provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
