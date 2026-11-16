@@ -968,6 +968,7 @@ pub async fn search_custom_cbl_issues(
     Query(params): Query<CustomCBLSearchParams>,
 ) -> Result<Json<Vec<CustomCBLIssueSearchResult>>, ApiError> {
     let conn = db::checkout(&state).await?;
+    let user_id = user.id();
     let normalized = params.q.trim();
     let mut query = String::from(
         "SELECT i.id, i.thread_id, t.title, i.issue_number, i.status
@@ -976,7 +977,7 @@ pub async fn search_custom_cbl_issues(
          WHERE t.user_id=$1"
     );
     let pattern;
-    let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user.id()];
+    let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user_id];
     if !normalized.is_empty() {
         query.push_str(" AND (t.title ILIKE $2 OR i.issue_number ILIKE $2 OR (t.title || ' #' || i.issue_number) ILIKE $2)");
         pattern = format!("%{}%", normalized);
