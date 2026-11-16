@@ -106,6 +106,7 @@ pub struct CustomCBLWrite {
     pub name: String,
     pub description: Option<String>,
     pub mode: Option<String>,
+    #[serde(default)]
     pub issue_ids: Vec<i32>,
     #[serde(default)]
     pub entry_intents: Option<BTreeMap<i32, CustomCBLEntryIntent>>,
@@ -481,11 +482,62 @@ fn export_custom_cbl_xml(name: &str, entries: &[CustomCBLEntryResponse]) -> Stri
 
 fn normalized_volume_key(key: &str) -> Option<String> {
     if let Some(rest) = key.strip_prefix("comicvine:") {
-        if rest.chars().all(|c| c.is_ascii_digit()) && !rest.is_empty() {
+        if rest.is_empty() {
+            return None;
+        }
+        if let Some(numeric) = rest.strip_prefix("4050-").or(Some(rest)) {
+            if numeric.chars().all(|c| c.is_ascii_digit()) && !numeric.is_empty() {
+                let trimmed = numeric.trim_start_matches('0');
+                return Some(format!(
+                    "comicvine:{}",
+                    if trimmed.is_empty() { "0" } else { trimmed }
+                ));
+            }
+        }
+        if rest
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+        {
             return Some(format!("comicvine:{}", rest));
         }
     }
     None
+}
+
+fn volume_external_id_variants(key: &str) -> Vec<String> {
+    let Some(normalized) = normalized_volume_key(key) else {
+        return Vec::new();
+    };
+    let rest = normalized.strip_prefix("comicvine:").unwrap_or_default();
+    let mut variants = vec![rest.to_string()];
+    if rest.chars().all(|c| c.is_ascii_digit()) {
+        variants.push(format!("4050-{rest}"));
+    }
+    variants.sort();
+    variants.dedup();
+    variants
+}
+
+fn timestamp_token_to_utc(value: &str) -> Option<chrono::DateTime<chrono::Utc>> {
+    if let Ok(parsed) = chrono::DateTime::parse_from_rfc3339(value) {
+        return Some(parsed.with_timezone(&chrono::Utc));
+    }
+    let mut normalized = value.trim().replacen(' ', "T", 1);
+    if normalized.len() >= 3 {
+        let suffix = &normalized[normalized.len() - 3..];
+        if (suffix.starts_with('+') || suffix.starts_with('-'))
+            && suffix[1..].chars().all(|c| c.is_ascii_digit())
+        {
+            normalized.push_str(":00");
+        }
+    }
+    chrono::DateTime::parse_from_rfc3339(&normalized)
+        .map(|parsed| parsed.with_timezone(&chrono::Utc))
+        .ok()
+}
+
+fn structured_unprocessable(detail: serde_json::Value) -> ApiError {
+    ApiError::Unprocessable(detail.to_string())
 }
 
 async fn load_overlap_decisions(
