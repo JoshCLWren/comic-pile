@@ -209,36 +209,67 @@ fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
     None
 }
 
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct EnabledSourceRow {
+    source_id: i32,
+    plan_id: i32,
+    thread_id: i32,
+    external_identity_id: i32,
+    provider_volume_id: String,
+}
+
+fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
+    let trimmed = raw.trim();
+    let numeric = if trimmed.chars().all(|c| c.is_ascii_digit()) {
+        trimmed
+    } else if trimmed.contains('-') && trimmed.rsplit('-').next().is_some_and(|s| !s.is_empty()) {
+        trimmed.rsplit('-').next().unwrap_or(trimmed)
+    } else {
+        trimmed
+    };
+    numeric.parse::<i32>().map_err(|_| {
+        format!("Release source {source_id} has a non-numeric ComicVine volume id: {raw:?}")
+    })
+}
+
 pub async fn sync_released_issues_endpoint(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Json(payload): Json<SyncRequest>,
 ) -> Result<Json<SyncResponse>, ApiError> {
-    let _as_of = parse_as_of(&payload.as_of)?;
+    let as_of = parse_as_of(&payload.as_of)?;
     let _refresh = payload.refresh;
-    // Minimal parity scaffold: report counts for the user's sources. Full
-    // ComicVine roster fetch/adoption parity is implemented incrementally.
     let connection = db::checkout(&state).await?;
-    let total_sources: i64 = connection
-        .query_one(
-            "SELECT COUNT(*) FROM reading_plan_release_sources rps \
+
+    let all_rows = connection
+        .query(
+            "SELECT rps.id, rps.plan_id, rps.thread_id, rps.external_identity_id, ei.external_id, rps.enabled \
+             FROM reading_plan_release_sources rps \
              JOIN continuity_plans cp ON cp.id = rps.plan_id \
-             WHERE cp.user_id = $1",
+             JOIN external_identities ei ON ei.id = rps.external_identity_id \
+             WHERE cp.user_id = $1 \
+             ORDER BY rps.created_at",
             &[&user.id()],
         )
         .await
-        .map_err(db::query_error)?
-        .get(0);
-    let enabled_sources: i64 = connection
-        .query_one(
-            "SELECT COUNT(*) FROM reading_plan_release_sources rps \
-             JOIN continuity_plans cp ON cp.id = rps.plan_id \
-             WHERE cp.user_id = $1 AND rps.enabled = true",
-            &[&user.id()],
-        )
-        .await
-        .map_err(db::query_error)?
-        .get(0);
+        .map_err(db::query_error)?;
+    let total_sources = all_rows.len() as i64;
+
+    let mut enabled_rows = Vec::new();
+    for row in &all_rows {
+        let enabled: bool = row.get(5);
+        if enabled {
+            enabled_rows.push(EnabledSourceRow {
+                source_id: row.get(0),
+                plan_id: row.get(1),
+                thread_id: row.get(2),
+                external_identity_id: row.get(3),
+                provider_volume_id: row.get(4),
+            });
+        }
+    }
+    let enabled_sources = enabled_rows.len() as i64;
 
     if enabled_sources == 0 {
         let report = SyncReport {
@@ -266,6 +297,52 @@ pub async fn sync_released_issues_endpoint(
         }));
     }
 
+    // Match Python: missing API key fails all enabled sources with the
+    // client-construction error message.
+    let api_key = std::env::var("COMICVINE_API_KEY")
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    if api_key.is_none() {
+        let error = "COMICVINE_API_KEY is required".to_string();
+        let mut failures = Vec::with_capacity(enabled_rows.len());
+        for source in &enabled_rows {
+            let volume_id = parse_volume_id(&source.provider_volume_id, source.source_id)
+                .unwrap_or(-1);
+            failures.push(SourceSyncFailure {
+                source_id: source.source_id,
+                plan_id: source.plan_id,
+                thread_id: source.thread_id,
+                volume_id,
+                error: error.clone(),
+            });
+        }
+        let report = SyncReport {
+            total_sources,
+            enabled_sources,
+            checked_sources: 0,
+            successful_sources: 0,
+            failed_sources: enabled_sources,
+            issues_checked: 0,
+            created_issues: 0,
+            reused_issues: 0,
+            future_skips: 0,
+            unknown_date_skips: 0,
+            conflicts: 0,
+            issue_failures: 0,
+            excluded_sources: 0,
+            excluded_issues: 0,
+            skipped_sources: 0,
+            failures,
+        };
+        return Ok(Json(SyncResponse {
+            success: false,
+            message: report_message(&report),
+            result: report,
+        }));
+    }
+
+    let _ = as_of;
     Err(ApiError::ServiceUnavailable(
         "reading-plan-sync POST native implementation in progress".to_string(),
     ))
