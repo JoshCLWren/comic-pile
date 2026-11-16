@@ -74,6 +74,46 @@ def select_next(
     return select(source, worker, catalog, {source: sorted(excluded)})
 
 
+
+def select_next_fleet(
+    worker: str,
+    original_source: str,
+    attempted: set[tuple[str, str]],
+    blocked_providers: set[str],
+    exclusions: Mapping[str, list[str]],
+    catalogs: Mapping[str, Mapping[str, Any] | str],
+    eligible_sources: set[str],
+    *,
+    rotation: int = 0,
+) -> dict[str, Any]:
+    """Select the next provider/model from canonical catalogs, not one source.
+
+    A provider/account breaker skips every model at that source; model-only
+    failures exclude precisely one canonical pair. The eligible_sources set
+    is the trusted controller's admission projection, not a model roster.
+    """
+    sources = sorted(eligible_sources & set(catalogs) - blocked_providers)
+    if original_source in sources:
+        sources.remove(original_source)
+        sources.insert(0, original_source)
+    for source in sources:
+        catalog = catalogs[source]
+        excluded = {model for provider, model in attempted if provider == source}
+        try:
+            candidate = select_next(
+                source, worker, excluded, exclusions,
+                catalog_text=catalog if isinstance(catalog, str) else None,
+                catalog_json=catalog if isinstance(catalog, Mapping) else None,
+                rotation=rotation,
+            )
+        except ExhaustedCandidatesError:
+            continue
+        if (candidate["source"], candidate["model"]) in attempted:
+            raise ValueError("selector returned an attempted canonical pair")
+        return candidate
+    raise ExhaustedCandidatesError("no eligible provider/model combination remains")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", required=True)
