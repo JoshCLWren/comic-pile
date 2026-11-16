@@ -25,7 +25,7 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FA
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
-from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
+from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_discovery import canonical_target, discover, update_labels

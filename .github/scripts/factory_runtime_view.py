@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 from factory_state_operations import _run, _export_candidate_health
 
 EVENT_TYPES = ("worker_started", "worker_heartbeat", "worker_outcome_signal",
