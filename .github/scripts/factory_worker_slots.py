@@ -49,7 +49,7 @@ def sources() -> tuple[str, ...]:
 def slot_count(env: Mapping[str, str] | None = None) -> int:
     """Provider concurrency capacity controls slots, not the model catalog size."""
     values = os.environ if env is None else env
-    raw = values.get("FACTORY_SLOTS_PER_PROVIDER", values.get("MAX_WORKERS_PER_TICK", "12"))
+    raw = values.get("FACTORY_SLOTS_PER_PROVIDER", "12")
     try:
         slots = int(raw)
     except (TypeError, ValueError) as exc:
