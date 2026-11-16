@@ -613,6 +613,7 @@ def record_runtime_outcome(repo: str, run_id: str, outcome: dict[str, Any]) -> i
         "selected_number": outcome.get("selected_number"),
         "persisted_work": bool(outcome.get("persisted_work")),
         "model_failures": outcome.get("model_failures") or [],
+        "trusted_source_switch": outcome.get("trusted_source_switch") is True,
         "observed_at": datetime.now(timezone.utc).isoformat(),
     }])
     # Separate projection key is idempotent across both trusted outcome writers.
