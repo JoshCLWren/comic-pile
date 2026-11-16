@@ -350,6 +350,8 @@ def test_assign_respects_pr_no_diff_retry_budget(
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     attempts += controller.FACTORY_NO_DIFF_RETRY_LIMIT
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    # Live CI is covered separately; these are deterministic retry/selection tests.
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     pr = {
         "number": 2122,
@@ -426,6 +428,8 @@ def test_assign_skips_a_head_the_requesting_worker_contributed_to(
     # Exercise the selected PR/lease branch, not the Actions identity gate.
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    # Live CI is covered separately; these are deterministic retry/selection tests.
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     head = "cccccccccccccccccccccccccccccccccccccccc"
     pr = {
         "number": 3073,
@@ -483,6 +487,8 @@ def test_assign_wakes_exhausted_pr_after_new_head(
     # Exercise the selected PR/lease branch, not the Actions identity gate.
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.setenv("FACTORY_OMNIROUTE_ENABLED", "on")
+    # Live CI is covered separately; these are deterministic retry/selection tests.
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     old_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     new_head = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
     pr = {
@@ -630,6 +636,7 @@ def test_ci_pending_never_acquires_worker_lease(
 def test_ci_starting_during_lease_releases_reservation_before_mutations(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     candidate = controller.Candidate(
         "pr", 1404, 3, 2, "2026-11-15T12:00:00Z", stage="factory:review",
     )
