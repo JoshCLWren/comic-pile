@@ -123,11 +123,9 @@ record_agent_failure_outcome() {
     record_terminal_outcome agent_timeout "trusted local execution deadline expired (agent exit 124)"
     return
   fi
-  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)' "$log_file"; then
+  if [[ -f "$log_file" ]] && grep -Eqi 'budget[ _]exhausted|payment required|HTTP[^0-9]*402|(monthly|daily|weekly|free) usage limit|reached your [a-z ]*usage limit|insufficient[ _](credits|balance|quota)|exceeded your current quota|quota[ _](exceeded|exhausted)|free-models-per-day|rate limit exceeded: free-models-per-day' "$log_file"; then
     record_terminal_outcome provider_quota "pinned provider/model account quota or budget is exhausted (agent exit ${status})"
-  elif [[ ( "$SOURCE" == z-ai || "$SOURCE" == kilo-auto ) && -f "$log_file" ]] && grep -Eqi '(^|[^0-9.])429([^0-9]|$)|too many requests' "$log_file"; then
-    record_terminal_outcome provider_quota "Free provider account rate limit requires quota backoff (agent exit ${status})"
-  elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
+  elif [[ -f "$log_file" ]] && grep -Eqi '(^|[^0-9A-Za-z_])(429|413)([^0-9]|$)|too many requests|request too large|rate.?limit|\bquota\b|throttl|capacity[^\n]*(exceeded|exhausted|unavailable)|(exceeded|exhausted|unavailable)[^\n]*capacity|tokens per minute|\btpm\b' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
     if [[ "$SOURCE" == nvidia ]]; then
@@ -187,8 +185,8 @@ stage_trusted_review_controller() {
   cp .github/scripts/factory_implementation_delivery.py "$trusted_dir/factory_implementation_delivery.py"
   cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
   # Bind model provenance to a trusted main checkout snapshot, not PR data.
-  cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
-  cp .github/free-model-factories.tsv "$trusted_dir/free-model-factories.tsv"
+  cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
+  cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
   cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"
   cp .github/scripts/factory_fork_control.py "$trusted_dir/factory_fork_control.py"
   TRUSTED_FORK_CONTROL="$trusted_dir/factory_fork_control.py"

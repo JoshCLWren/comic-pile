@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Resolve executable model IDs from a provider-published catalog, not TSV hints.
+"""Discover model candidates from provider-published catalogs.
 
-No inference is used for discovery. Unknown pricing, a failed catalog read, or
-absence of an eligible free model never authorizes paid fallback.
+Published catalog presence is not proof of successful execution.
+Pricing may be observed, but never prevents an execution attempt.
 """
 
 from __future__ import annotations
@@ -14,13 +14,10 @@ import sys
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
-from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
-# The following sources publish authoritative zero-price model metadata.
-# Other sources require a provider-specific free-tier contract before being
-# switched to catalog selection. Never infer "free" from a model's name.
+# These provider endpoints are integration metadata, not a model inventory.
 PUBLIC_CATALOGS: dict[str, str] = {
     "openrouter-free": "https://openrouter.ai/api/v1/models",
     "vercel-ai-gateway": "https://ai-gateway.vercel.sh/v1/models",
@@ -28,44 +25,41 @@ PUBLIC_CATALOGS: dict[str, str] = {
 
 
 class PublishedCatalogUnavailableError(RuntimeError):
-    """A provider catalog cannot prove an eligible route."""
+    """A provider catalog cannot supply a usable candidate."""
 
 
-def _zero(raw: Any) -> bool:
-    try:
-        return raw is not None and Decimal(str(raw)) == 0
-    except (InvalidOperation, ValueError, TypeError):
-        return False
 
+def _executable_candidate(source: str, item: Mapping[str, Any]) -> bool:
+    """Catalog presence creates an execution candidate, not proven callability.
 
-def _free(source: str, item: Mapping[str, Any]) -> bool:
+    Known incompatible modalities are excluded. Missing optional capability
+    metadata and published prices never block a real execution attempt.
+    """
     model = item.get("id")
     if not isinstance(model, str) or not model or any(ch.isspace() for ch in model):
         return False
-    pricing = item.get("pricing")
-    if not isinstance(pricing, Mapping):
+    supported = item.get("supported_parameters")
+    if isinstance(supported, list) and "tools" not in supported:
         return False
-    if source == "openrouter-free":
-        return (
-            model.endswith(":free")
-            and _zero(pricing.get("prompt"))
-            and _zero(pricing.get("completion"))
-        )
-    if source == "vercel-ai-gateway":
-        return _zero(pricing.get("input")) and _zero(pricing.get("output"))
-    return False
+    if source == "vercel-ai-gateway" and item.get("type") not in (None, "language"):
+        return False
+    endpoints = item.get("endpoints")
+    if (source == "openrouter-free" and isinstance(endpoints, list) and endpoints
+            and "/api/v1/chat/completions" not in endpoints):
+        return False
+    return True
 
 
-def free_model_ids(source: str, catalog: Mapping[str, Any]) -> list[str]:
+def catalog_model_ids(source: str, catalog: Mapping[str, Any]) -> list[str]:
+    """Return published model IDs unchanged, without a price restriction."""
     if source not in PUBLIC_CATALOGS:
-        raise ValueError(f"source does not expose verified zero-price catalog: {source}")
+        raise ValueError(f"source has no published model catalog: {source}")
     rows = catalog.get("data")
     if not isinstance(rows, list):
         raise PublishedCatalogUnavailableError("published model catalog has no data list")
     return sorted({
-        row["id"]
-        for row in rows
-        if isinstance(row, Mapping) and _free(source, row)
+        row["id"] for row in rows
+        if isinstance(row, Mapping) and _executable_candidate(source, row)
     })
 
 
@@ -76,11 +70,11 @@ def choose_model(
     if not worker.isdecimal():
         raise ValueError("worker must be a numeric slot ID")
     candidates = [
-        model for model in free_model_ids(source, catalog)
+        model for model in catalog_model_ids(source, catalog)
         if model not in (exclusions or set())
     ]
     if not candidates:
-        raise PublishedCatalogUnavailableError(f"{source}: no verified zero-price models available")
+        raise PublishedCatalogUnavailableError(f"{source}: no eligible catalog candidates available")
     # Deterministic across runs, independent of manually curated roster pins.
     seed = hashlib.sha256(f"{source}:{worker}".encode()).digest()
     return candidates[int.from_bytes(seed[:8], "big") % len(candidates)]
@@ -89,7 +83,7 @@ def choose_model(
 def published_catalog(source: str, *, timeout: float = 20) -> dict[str, Any]:
     url = PUBLIC_CATALOGS.get(source)
     if url is None:
-        raise ValueError(f"no published free catalog contract for {source}")
+        raise ValueError(f"no published catalog contract for {source}")
     request = urllib.request.Request(
         url,
         headers={"Accept": "application/json", "User-Agent": "ComicPile-factory-catalog/1"},
@@ -139,7 +133,15 @@ def main(argv: list[str] | None = None) -> int:
     except (PublishedCatalogUnavailableError, ValueError, OSError, json.JSONDecodeError) as exc:
         print(f"factory catalog: {exc}", file=sys.stderr)
         return 1
-    print(json.dumps({"source": args.source, "model": model, "catalog_verified": True}))
+    from factory_provider_registry import PROVIDERS
+
+    spec = PROVIDERS.get(args.source)
+    runtime_provider = spec.provider if spec else args.source.removesuffix("-free")
+    print(json.dumps({
+        "source": args.source, "model": model,
+        "runtime_model": f"{runtime_provider}/{model}",
+        "catalog_listed": True,
+    }))
     return 0
 
 

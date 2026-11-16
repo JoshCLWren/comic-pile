@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - '.github/scripts/generate_factory_status_dashboard.py'
+      - '.github/scripts/factory_state_cache.py'
       - '.github/scripts/factory_delivery_funnel.py'
       - '.github/scripts/probe_opencode_free_roster.py'
       - '.github/scripts/factory_capacity_policy.py'
@@ -79,6 +80,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PYTHONPATH: .github/scripts
+          # The dashboard asks for the same inventory during demand and
+          # rendering. Share it within this trusted job, not in Neon.
+          FACTORY_DISCOVERY_DIR: ${{ runner.temp }}/factory-discovery
           OMNIROUTE_API_KEY: ${{ secrets.OMNIROUTE_API_KEY }}
           OMNIROUTE_MANAGEMENT_API_KEY: ${{ secrets.OMNIROUTE_MANAGEMENT_API_KEY }}
           OMNIROUTE_BASE_URL: ${{ vars.OMNIROUTE_BASE_URL }}

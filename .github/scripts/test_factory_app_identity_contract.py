@@ -211,28 +211,39 @@ class Worker48BootstrapContractTest(unittest.TestCase):
 
 
 class ExpectedWorkersContractTest(unittest.TestCase):
-    """Contract: one App per active durable worker from factory-expected-workers.json."""
+    """Provider-derived worker slots replace the static expected-worker roster."""
 
-    def test_factory_expected_workers_json_exists_and_is_valid(self) -> None:
-        path = REPO / ".github" / "factory-expected-workers.json"
-        self.assertTrue(path.is_file(), f"{path} must exist")
-        data = json.loads(path.read_text())
-        self.assertIn("expected_workers", data)
-        self.assertIn("retired_workers", data)
-        self.assertIn("schema_version", data)
-        # All expected workers must be integers
-        for w in data["expected_workers"]:
-            self.assertIsInstance(w, int)
-        # Retired workers must be integers
-        for w in data["retired_workers"]:
-            self.assertIsInstance(w, int)
+    def test_dynamic_worker_slots_are_derivable_without_static_roster(self) -> None:
+        """Dynamic provider slots must be derivable without committed roster files."""
+        self.assertFalse((REPO / ".github" / "factory-expected-workers.json").is_file())
+        module_name = "factory_worker_slots"
+        previous = sys.modules.get(module_name)
+        sys.path.insert(0, str(SCRIPTS))
+        try:
+            spec = importlib.util.spec_from_file_location(
+                module_name,
+                SCRIPTS / "factory_worker_slots.py",
+            )
+            assert spec and spec.loader
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+            derived = module.slots()
+        finally:
+            if previous is None:
+                sys.modules.pop(module_name, None)
+            else:
+                sys.modules[module_name] = previous
+            if str(SCRIPTS) in sys.path:
+                sys.path.remove(str(SCRIPTS))
+        self.assertGreater(len(derived), 0)
+        self.assertEqual(len({slot.worker for slot in derived}), len(derived))
 
-    def test_retired_worker_48_keeps_identity_without_active_scheduling(self) -> None:
-        """App identity history is retained after the worker leaves the roster."""
-        path = REPO / ".github" / "factory-expected-workers.json"
-        data = json.loads(path.read_text())
-        self.assertNotIn(48, data["expected_workers"])
-        self.assertIn(48, data["retired_workers"])
+    def test_worker_48_keeps_app_identity_without_static_expected_worker_file(self) -> None:
+        """Worker 48's durable App identity persists independently of slot rosters."""
+        mapping = json.loads((REPO / ".github/factory-worker-github-apps.json").read_text())
+        self.assertIn("48", mapping["workers"])
+        self.assertEqual(mapping["workers"]["48"]["app_login"], "mark-cordova[bot]")
 
 
 if __name__ == "__main__":

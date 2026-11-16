@@ -224,3 +224,15 @@ jobs:
             echo "::error::$message"
             exit 1
           fi
+
+      # The signed-in Actions run, not Neon, owns this durable handoff record.
+      # A failed agent remains failed; this artifact never upgrades the verdict.
+      - name: Preserve attested worker outcome artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: factory-worker-outcome-${{ github.run_id }}
+          path: ${{ runner.temp }}/worker-outcome-attested.json
+          if-no-files-found: warn
+          retention-days: 30
+

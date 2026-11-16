@@ -47,13 +47,10 @@ def enabled() -> bool:
 
 
 def _roster() -> dict[str, tuple[str, str]]:
-    path = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    result: dict[str, tuple[str, str]] = {}
-    for row in path.read_text(encoding="utf-8").splitlines():
-        fields = row.split("\t")
-        if len(fields) >= 3 and fields[0].isdigit():
-            result[fields[0]] = (fields[1], fields[2])
-    return result
+    """Resolve current provider-derived worker identities, not a pin roster."""
+    from factory_worker_slots import slots
+
+    return {item.worker: (item.source, "") for item in slots()}
 
 
 async def ensure_schema(conn: Any) -> None:
@@ -139,8 +136,12 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
     state = payload[0] if isinstance(payload, list) and payload else {}
     if not isinstance(state, dict):
         return None
-    # Changing the pin unblocks its lane without deleting history.
-    if state.get("source") and (state["source"], state.get("model")) != (source, model):
+    # A catalog-backed slot can execute a different published model each
+    # session. Do not erase its worker-level Fibonacci backoff simply because
+    # the TSV no longer contains a permanently pinned model ID.
+    if state.get("source") and state["source"] != source:
+        return None
+    if model and model != "@catalog" and state.get("model") != model:
         return None
     if state.get("suspended") is True:
         return "suspended after repeated failures (new pin or TTL will reenable)"
@@ -171,7 +172,8 @@ def attributable_model_failure(classification: str, proven: bool) -> bool:
 
 
 def historical_failure_streak(
-    rows: list[Any], run_id: int, source: str, model: str, *, model_only: bool,
+    rows: list[Any], run_id: int, source: str, model: str, *,
+    model_only: bool, model_independent: bool = False,
 ) -> int:
     """Recover a consecutive streak from trusted terminal Neon events.
 
@@ -189,10 +191,10 @@ def historical_failure_streak(
         previous_run = int(detail.get("run_id") or 0)
         if previous_run == 0 or previous_run >= run_id:
             continue
-        if detail.get("source") != source or detail.get("model") != model:
-            # The worker was repinned. Its older model should not carry a
-            # failure streak into this pin, even if it used the same model
-            # before the intervening assignment.
+        if (detail.get("source") != source or
+                (detail.get("model") != model and not model_independent)):
+            # Fixed pins reset their streak when repinned. Catalog-backed
+            # slots retain worker streak across real upstream model rotation.
             if not model_only:
                 break
             continue
@@ -217,7 +219,7 @@ def historical_failure_streak(
 
 async def _recent_streak(
     conn: Any, run_id: int, source: str, model: str, *,
-    worker: str | None = None,
+    worker: str | None = None, model_independent: bool = False,
 ) -> int:
     """Only query history once, while a new durable retry row is initialized."""
     if worker is None:
@@ -239,6 +241,7 @@ async def _recent_streak(
         )
     return historical_failure_streak(
         rows, run_id, source, model, model_only=worker is None,
+        model_independent=model_independent,
     )
 
 
@@ -409,9 +412,15 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                 old = {}
             prior_run = int(old.get("run_id") or 0)
             if prior_run <= run_id:
-                same_pin = old.get("source") == source and old.get("model") == model
+                catalog_slot = roster[worker][1] == "" or roster[worker][1] == "@catalog"
+                same_pin = old.get("source") == source and (
+                    catalog_slot or old.get("model") == model
+                )
                 streak = (int(old.get("streak") or 0) if same_pin else
-                          await _recent_streak(conn, run_id, source, model, worker=worker)) + 1
+                          await _recent_streak(
+                              conn, run_id, source, model, worker=worker,
+                              model_independent=catalog_slot,
+                          )) + 1
                 suspended = streak >= WORKER_SUSPEND_AFTER
                 retry_at = (
                     None if suspended else
@@ -904,32 +913,127 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
     excluded: dict[str, list[str]] = {}
     for row in rows:
         excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
-    # Registry comment identifiers are advisory and do not authorize writes.
-    # A model worker verifies the exact marker live before PATCH. Old/empty
-    # snapshots fall back to GitHub discovery rather than guessing IDs.
+    # Comment locators are compact, verified GitHub IDs, not a body cache.
+    # Read durable coordination first. The legacy registry body is consulted
+    # only once when a trusted marker has not yet been migrated.
     if worker:
         if not worker.isdecimal() or worker not in _roster():
             raise ValueError("invalid trusted worker for registry ID lookup")
-        raw = await conn.fetchval(
-            "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-            f"{repo}:registry-comments",
+        kinds = {"__heartbeat_id": "heartbeat", "__attempt_id": "attempt"}
+        scopes = {
+            key: f"registry-comment-id-v1:{kind}:worker:{worker}"
+            for key, kind in kinds.items()
+        }
+        recorded = await conn.fetch(
+            """SELECT scope,checkpoint FROM public.factory_reconciliation_cursor
+                WHERE repo=$1 AND scope=ANY($2::text[])""",
+            repo, list(scopes.values()),
         )
-        if isinstance(raw, str):
-            raw = json.loads(raw)
-        if isinstance(raw, list):
-            from factory_work_policy import comment_is_trusted
-            markers = {
-                "__heartbeat_id": f"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-{worker} -->",
-                "__attempt_id": f"<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-{worker} -->",
-            }
-            for key, marker in markers.items():
-                matches = [item for item in raw
-                           if isinstance(item, dict) and comment_is_trusted(item)
-                           and str(item.get("body") or "").startswith(marker)
-                           and str(item.get("id") or "").isdecimal()]
-                if matches:
-                    excluded[key] = [str(max(int(item["id"]) for item in matches))]
+        known = {
+            str(row["scope"]): str(row["checkpoint"] or "")
+            for row in recorded
+        }
+        missing = {
+            key: scope for key, scope in scopes.items()
+            if not known.get(scope, "").isdecimal() or int(known[scope]) <= 0
+        }
+        for key, scope in scopes.items():
+            if key not in missing:
+                excluded[key] = [known[scope]]
     return excluded
+
+
+async def _export_candidate_health(conn: Any, repo: str) -> dict[str, Any]:
+    """Compact trusted execution evidence, passed to the unprivileged runner.
+
+    No secrets, leases or comment bodies cross the Actions job boundary.
+    This is advisory candidate ranking, never authorization to dispatch.
+    """
+    models = await conn.fetch(
+        """SELECT source, model, status, last_outcome, cooldown_until,
+                  updated_at FROM public.factory_model_health WHERE repo=$1""",
+        repo,
+    )
+    providers = await conn.fetch(
+        """SELECT source, last_outcome, cooldown_until, quota_reset_at,
+                  updated_at FROM public.factory_provider_budget WHERE repo=$1""",
+        repo,
+    )
+    def seconds(value: Any) -> int | None:
+        return int(value.timestamp()) if value is not None else None
+    return {
+        "models": [
+            {"source": row["source"], "model": row["model"],
+             "status": row["status"], "outcome": row["last_outcome"],
+             "updated": seconds(row["updated_at"]),
+             "until": seconds(row["cooldown_until"])}
+            for row in models
+        ],
+        "providers": [
+            {"source": row["source"], "outcome": row["last_outcome"],
+             "updated": seconds(row["updated_at"]),
+             "until": max(
+                 seconds(row["cooldown_until"]) or 0,
+                 seconds(row["quota_reset_at"]) or 0)}
+            for row in providers
+        ],
+    }
+
+
+def export_candidate_health(repo: str) -> dict[str, Any]:
+    if not enabled():
+        raise RuntimeError("Neon health unavailable; cannot prove executable candidates")
+    return _run(_export_candidate_health, repo)
+
+
+async def _remember_verified_markers(
+    conn: Any, repo: str, entries: list[dict[str, str]],
+) -> int:
+    """Persist only trusted, canonical registry comment IDs in scoped cursors."""
+    roster = _roster()
+    count = 0
+    for item in entries:
+        worker, kind, comment_id = (
+            str(item.get("worker") or ""), str(item.get("kind") or ""),
+            str(item.get("id") or ""),
+        )
+        if worker not in roster or kind not in {"heartbeat", "attempt"}:
+            continue
+        if not comment_id.isdecimal() or int(comment_id) <= 0:
+            continue
+        scope = f"registry-comment-id-v1:{kind}:worker:{worker}"
+        result = await conn.fetchval(
+            """INSERT INTO public.factory_reconciliation_cursor
+                 (repo,scope,checkpoint,checked_at)
+               VALUES($1,$2,$3,now())
+               ON CONFLICT(repo,scope) DO UPDATE SET
+                 checkpoint=EXCLUDED.checkpoint,checked_at=now()
+               WHERE factory_reconciliation_cursor.checkpoint IS NULL
+                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
+                  OR factory_reconciliation_cursor.checkpoint::bigint
+                       < EXCLUDED.checkpoint::bigint
+               RETURNING 1""",
+            repo, scope, comment_id,
+        )
+        count += bool(result)
+    return count
+
+
+def remember_verified_markers(repo: str, entries: list[dict[str, str]]) -> int:
+    if not enabled():
+        raise RuntimeError("marker coordination needs trusted Neon connection")
+    return _run(_remember_verified_markers, repo, entries)
+
+
+async def _registry_ingest_checkpoint(conn: Any, repo: str) -> str | None:
+    return await conn.fetchval(
+        """SELECT checkpoint FROM public.factory_reconciliation_cursor
+           WHERE repo=$1 AND scope='registry-event-ingest-v2'""", repo,
+    )
+
+
+def registry_ingest_checkpoint(repo: str) -> str | None:
+    return _run(_registry_ingest_checkpoint, repo) if enabled() else None
 
 
 def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
@@ -940,7 +1044,7 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
 
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
@@ -953,21 +1057,11 @@ def main() -> int:
         if not enabled():
             raise SystemExit("Neon is required for factory operations")
         _run(lambda conn: conn.fetchval("SELECT 1"))
-        # One-time migration from trusted #1093 evidence. The checkpoint
-        # prevents rebuilding the entire model table on every dispatch.
-        async def needs_backfill(conn:Any,repo:str)->bool:
-            return await conn.fetchval(
-                "SELECT 1 FROM public.factory_reconciliation_cursor WHERE repo=$1 AND scope='registry-backfill-v1'",
-                repo) is None
-        if _run(needs_backfill,args.repo):
-            from factory_completion_controller import registry_comments
-            records=registry_comments()
-            n=sync_registry(args.repo,records)
-            checkpoint(args.repo,"registry-backfill-v1",datetime.now(timezone.utc).isoformat(),n)
-            print(f"[factory-operations] imported {n} trusted model records")
         print("[factory-operations] schema ready")
     elif args.command=="export-model-exclusions":
         print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
+    elif args.command=="export-candidate-health":
+        print(json.dumps(export_candidate_health(args.repo),sort_keys=True,separators=(",",":")))
     elif args.command=="filter":
         workers=[str(w) for w in json.load(sys.stdin)]
         kept,denied=filter_workers(args.repo,workers)

@@ -1,7 +1,6 @@
-"""Bounded registry evidence cache and scoped factory history cleanup.
+"""Scoped factory state caching and historical cleanup.
 
 GitHub remains authoritative for claims, reviews, checks, and merges.
-The remaining snapshot is registry evidence, not a queue or merge authority.
 The database is isolated in factory_state with a scoped role.
 """
 from __future__ import annotations
@@ -14,7 +13,7 @@ import sys
 import time
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -181,7 +180,7 @@ def _prune_retired_check_projection(repo: str, batch_size: int = 250) -> int:
     The production writer was removed in #5226. Retention is deliberately
     repository-fenced and bounded; never touch exact-head retry coordination.
     """
-    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\\w.-]+/[\\w.-]+', repo):
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
         raise ValueError('invalid cleanup scope or batch size')
     row = _run(
         """WITH retired AS (
@@ -313,115 +312,6 @@ def cached_json(
         label = "extended unchanged" if unchanged else "refreshed"
         print(f"[factory-state] {label} {key}: {len(result)} records", file=sys.stderr)
     return result
-
-
-def incremental_comments(
-    previous: list[dict[str, Any]],
-    fetch_since: Callable[[str | None], list[dict[str, Any]]],
-) -> list[dict[str, Any]]:
-    """Fetch changed issue comments since the latest timestamp, deduped by ID.
-
-    Initial fill is a full scan exactly once. Edits to older comments are
-    included by GitHub's updated_at filter. The minute overlap accounts for
-    second-precision timestamps and concurrent updates.
-    """
-    latest = None
-    for comment in previous:
-        stamp = comment.get("updated_at") or comment.get("created_at")
-        if not isinstance(stamp, str):
-            continue
-        try:
-            candidate = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if latest is None or candidate > latest:
-            latest = candidate
-    since = None
-    if latest is not None:
-        from datetime import timedelta
-        since = (latest - timedelta(minutes=1)).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    changes = fetch_since(since)
-    if not isinstance(changes, list):
-        raise ValueError("GitHub returned a non-list comment page")
-    by_id = {comment["id"]: comment for comment in previous if isinstance(comment, dict) and "id" in comment}
-    for comment in changes:
-        if not isinstance(comment, dict) or "id" not in comment:
-            raise ValueError("GitHub returned a malformed issue comment")
-        by_id[comment["id"]] = comment
-    return sorted(by_id.values(), key=lambda comment: (comment.get("created_at") or "", comment["id"]))
-
-
-
-def compact_registry_comments(
-    comments: list[dict[str, Any]],
-    *,
-    trusted: Callable[[dict[str, Any]], bool],
-    now: datetime | None = None,
-) -> list[dict[str, Any]]:
-    """Keep the evidence consumers need, not the entire historical issue thread.
-
-    Registry readers need recent run mappings, the latest observation per worker,
-    the latest evidence per provider/model, sticky model retirements, and the
-    latest completion funnel. Older historical comments remain on GitHub.
-    Preserve GitHub metadata verbatim so trust checks run at every consumer.
-    """
-    now = datetime.now(timezone.utc) if now is None else now
-    recent_cutoff = now - timedelta(hours=48)
-    retained: dict[int, dict[str, Any]] = {}
-    newest: dict[tuple[str, ...], tuple[datetime, dict[str, Any]]] = {}
-
-    def timestamp(value: Any) -> datetime | None:
-        if not isinstance(value, str):
-            return None
-        try:
-            result = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-        except ValueError:
-            return None
-        return result.astimezone(timezone.utc) if result.tzinfo else None
-
-    def keep_latest(key: tuple[str, ...], updated: datetime, comment: dict[str, Any]) -> None:
-        old = newest.get(key)
-        if old is None or updated >= old[0]:
-            newest[key] = (updated, comment)
-
-    for comment in comments:
-        if not isinstance(comment, dict) or not isinstance(comment.get("id"), int):
-            continue
-        metadata_time = timestamp(comment.get("updated_at")) or timestamp(comment.get("created_at"))
-        if metadata_time is not None:
-            keep_latest(("cursor",), metadata_time, comment)
-            if metadata_time >= recent_cutoff:
-                retained[comment["id"]] = comment
-        if not trusted(comment):
-            continue
-
-        body = str(comment.get("body") or "")
-        observed_match = re.search(r"(?m)^Updated:\s*(\S+)\s*$", body)
-        observed = (timestamp(observed_match.group(1)) if observed_match else None) or metadata_time
-        if observed is None:
-            continue
-        worker = re.search(r"(?m)^Worker:\s*opencode-free-model-factory-(\d+)\s*$", body)
-        if worker:
-            kind = ("heartbeat" if "<!-- factory-heartbeat:v1" in body
-                    else "attempt" if "<!-- factory-attempt-outcome:v1" in body
-                    else "legacy")
-            keep_latest(("worker", worker.group(1), kind), observed, comment)
-
-        source = re.search(r"(?m)^Source:\s*(\S+)\s*$", body)
-        model = re.search(r"(?m)^Model:\s*(\S+)\s*$", body)
-        if source and model and (
-            "Attempt outcome:" in body or "<!-- factory-model-retired-410:v1 -->" in body
-        ):
-            # A retirement remains sticky even when later attempts are published.
-            kind = "retired" if "<!-- factory-model-retired-410:v1 -->" in body else "attempt"
-            keep_latest(("model", source.group(1), model.group(1), kind), observed, comment)
-        if "<!-- factory-completion-funnel:v1 -->" in body:
-            keep_latest(("funnel",), observed, comment)
-
-    for _updated, comment in newest.values():
-        retained[comment["id"]] = comment
-    return sorted(retained.values(), key=lambda row: (str(row.get("created_at") or ""), row["id"]))
 
 
 def main(argv: list[str]) -> int:

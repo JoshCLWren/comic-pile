@@ -25,7 +25,7 @@ from factory_work_policy import (BLOCKED_LABELS, FACTORY_NO_DIFF_RETRY_LIMIT, FA
 from factory_jev_shadow import apply_completion_ranking, apply_jev_ranking
 from stale_pr_decay import StalePRGuard, list_factory_prs
 from factory_review_policy import recorded_pr_contributors, trusted_comment_bodies
-from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for, quota_reset_epoch
+from factory_quota_pause import describe as describe_quota_pause, is_paused as quota_pause_for
 from factory_source_budget import budget_block_reason, worker_sources
 from factory_attempt_history import read_comment_history
 from factory_discovery import canonical_target, discover, update_labels
@@ -749,14 +749,19 @@ def latest_lease_activity_epoch(number: int) -> int | None:
     return latest
 
 
-def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
-    """Read retry history, sharing only a refreshed snapshot within a dispatch pass."""
+def recent_factory_comments(
+    now_epoch: int, *, target_pr: int | None = None,
+) -> list[dict[str, Any]]:
+    """Read retry history; a targeted PR only needs its own comments."""
+    if target_pr is not None and target_pr <= 0:
+        raise ValueError("target_pr must be a positive PR number")
     def fetch_pages(since_epoch: int) -> tuple[list[dict[str, object]], int]:
         # Round *down* to share the same Neon GET key across near-simultaneous
         # dispatchers. The extra comments are a safe superset; retry-window
         # filtering still uses the original now_epoch.
         since = datetime.fromtimestamp(since_epoch - since_epoch % 60, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
-        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
+        path = f'issues/{target_pr}/comments' if target_pr is not None else 'issues/comments'
+        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/{path}?since={since}&per_page=100'])
         if (
             not isinstance(pages, list) or not pages
             or not all(isinstance(page, list) for page in pages)
@@ -768,14 +773,21 @@ def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
     cache = os.environ.get('FACTORY_ATTEMPT_HISTORY_CACHE', '')
     return read_comment_history(
         now_epoch=now_epoch, reset_seconds=FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
-        scope=REPO, cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
+        scope=f'{REPO}:pr:{target_pr}' if target_pr is not None else REPO,
+        cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
     )
 
 
-def load_no_diff_attempt_records(now_epoch: int | None=None) -> list[NoDiffAttempt]:
-    """Load durable no-diff attempts still inside the rolling retry window."""
+def load_no_diff_attempt_records(
+    now_epoch: int | None = None, *, target_pr: int | None = None,
+) -> list[NoDiffAttempt]:
+    """Load durable retry history; isolate a targeted PR's own records."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    return parse_no_diff_attempts_from_comments(recent_factory_comments(now_epoch), now_epoch=now_epoch)
+    comments = recent_factory_comments(now_epoch, target_pr=target_pr)
+    attempts = parse_no_diff_attempts_from_comments(comments, now_epoch=now_epoch)
+    if target_pr is not None:
+        return [attempt for attempt in attempts if attempt.kind == 'pr' and attempt.number == target_pr]
+    return attempts
 
 
 def load_no_diff_attempts(now_epoch: int | None=None) -> dict[int, int]:
@@ -892,30 +904,14 @@ def active_fixed_workers() -> ActiveWorkerResult:
     numeric_unresolved = {value for value in unresolved_run_ids if value.isdigit()}
     if numeric_unresolved:
         try:
-            if os.environ.get('FACTORY_STATE_DSN_FILE'):
-                # Reuse the incremental, shared Neon registry rather than
-                # independently re-paginating ~2,000 heartbeat comments.
-                from factory_completion_controller import registry_comments
-                comments = registry_comments()
-            else:
-                pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/1093/comments?per_page=100'])
-                if not isinstance(pages, list):
-                    return ActiveWorkerResult(workers, unresolved_run_ids)
-                comments = flatten_pages(pages)
+            from factory_runtime_view import run_workers
+            matches = run_workers(REPO, sorted(numeric_unresolved))
+            for run_id, worker in matches.items():
+                if run_id in numeric_unresolved and worker.isdecimal() and is_authorized_fixed_worker(worker):
+                    workers.add(int(worker))
+                    unresolved_run_ids.discard(run_id)
         except Exception as exc:
-            print(f'[factory-controller] registry read unavailable ({type(exc).__name__}); preserving unresolved run fence', file=sys.stderr)
-            return ActiveWorkerResult(workers, unresolved_run_ids)
-        if not isinstance(comments, list):
-            return ActiveWorkerResult(workers, unresolved_run_ids)
-        for comment in comments:
-            if not isinstance(comment, dict) or not comment_is_trusted(comment):
-                continue
-            body = str(comment.get('body') or '')
-            run_match = re.search(r'(?m)^Run:\s*(\d+)\s*$', body)
-            worker_match = re.search(r'(?m)^Worker:\s*opencode-free-model-factory-(\d+)\s*$', body)
-            if run_match and worker_match and (run_match.group(1) in numeric_unresolved):
-                workers.add(int(worker_match.group(1)))
-                unresolved_run_ids.discard(run_match.group(1))
+            print(f'[factory-controller] run-to-worker evidence unavailable ({type(exc).__name__}); preserving unresolved run fence', file=sys.stderr)
     now_epoch = int(time.time())
     for run_id, run in unresolved_runs.items():
         if run_id not in unresolved_run_ids:
@@ -1327,20 +1323,8 @@ def runtime_quota_block_reason(worker: str) -> str | None:
             return None if allowed else "; ".join(blocked)
     except Exception as exc:
         print(f"[factory-controller] Neon health unavailable: {type(exc).__name__}", file=sys.stderr)
-    from factory_completion_controller import (
-        latest_worker_health, registry_comments,
-    )
-
-    now = int(time.time())
-    health = latest_worker_health(
-        registry_comments(), trusted=comment_is_trusted, candidates=[], now_epoch=now,
-    )
-    for peer, (outcome, updated) in health.items():
-        until = quota_reset_epoch(source, updated)
-        if sources.get(peer) == source and outcome == 'provider_quota' and updated <= now < until:
-            reset = datetime.fromtimestamp(until, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-            return f'Factory {worker} paused until {reset}: provider_quota on shared {source} account'
-    return None
+    # Provider status is mandatory; an outage is not permission to spend.
+    return f"Factory {worker} deferred: shared provider health unavailable"
 
 
 def is_authorized_fixed_worker(worker: str) -> bool:
@@ -1380,6 +1364,24 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     if runtime_pause is not None:
         print(f'[factory-controller] {runtime_pause}; skipping dispatch', file=sys.stderr)
         return None
+    try:
+        sources = worker_sources()
+        source = sources.get(str(worker), "")
+        from factory_dispatch_credential_filter import ANONYMOUS, TRUTHY, source_requirements
+        needs = source_requirements(source)
+        if source not in ANONYMOUS and needs is not None:
+            env = dict(os.environ)
+            if not all(env.get(key, "").lower() in TRUTHY for key in needs):
+                print(f'[factory-controller] Factory {worker} missing provider credentials; skipping dispatch', file=sys.stderr)
+                return None
+        elif source and source not in ANONYMOUS and needs is None:
+            # Unknown non-anonymous source: cannot prove credentials/configuration.
+            print(f'[factory-controller] Factory {worker} has unknown provider configuration; skipping dispatch', file=sys.stderr)
+            return None
+    except Exception as exc:
+        # Never lease an unproven worker when credential eligibility cannot be evaluated.
+        print(f'[factory-controller] credential eligibility unavailable for Factory {worker} ({type(exc).__name__}); skipping dispatch', file=sys.stderr)
+        return None
     if worker_has_active_lease(worker):
         print(f'[factory-controller] Factory {worker} already has an active lease; skipping dispatch', file=sys.stderr)
         return None
@@ -1404,7 +1406,13 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     issues = list_issues()
     prs = list_prs()
     try:
-        attempt_records: list[NoDiffAttempt] | None = load_no_diff_attempt_records()
+        # Targeted PR wakeups require only that PR's retry evidence.
+        # A full roster pass still needs the whole issue/PR retry window.
+        attempt_records: list[NoDiffAttempt] | None = (
+            load_no_diff_attempt_records(target_pr=target[1])
+            if target is not None and target[0] == 'pr'
+            else load_no_diff_attempt_records()
+        )
     except RuntimeError as exc:
         attempt_records = None
         print(f'[factory-controller] no-diff retry history unavailable; holding fresh issue intake: {exc}', file=sys.stderr)
@@ -2242,30 +2250,46 @@ def check_stale_prs(dry_run: bool = False) -> dict[str, Any]:
 
 
 def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
-    """Allocate one worker to the selected target through the normal lease policy."""
+    """Allocate one worker to the selected target through the normal lease policy.
+
+    Targets that are currently ineligible or waiting on checks are deferred, not
+    treated as fatal dispatcher errors. This keeps CI-aware/manual dispatch from
+    crashing when the selected PR is simply not actionable yet.
+    """
     from factory_completion_controller import (
         capacity_report,
-        latest_worker_health,
+        durable_factory_state,
         load_manifest_candidates,
-        registry_comments,
     )
 
     if number <= 0:
         raise ValueError('Select a positive issue or PR number.')
-    health = latest_worker_health(registry_comments(), trusted=comment_is_trusted)
-    manifest = Path(__file__).resolve().parents[1] / 'free-model-factories.tsv'
-    capacity = capacity_report(load_manifest_candidates(manifest), health, now_epoch=int(time.time()))
+    _view, health = durable_factory_state()
+    capacity = capacity_report(load_manifest_candidates(), health, now_epoch=int(time.time()))
     workers = cast(list[dict[str, str]], capacity['executable_candidates'])
     preferred_role = 'starter' if kind == 'issue' else (
         'finisher' if action in {'review-findings', 'ci-repair'} else ''
     )
     from factory_work_policy import worker_delivery_role
 
+    last_defer_reason: str | None = None
     for worker in sorted(
         {row['worker'] for row in workers},
         key=lambda worker: (worker_delivery_role(worker) != preferred_role, int(worker)),
     ):
-        candidate = assign(worker, target=(kind, number), requested_action=action)
+        try:
+            candidate = assign(worker, target=(kind, number), requested_action=action)
+        except RuntimeError as exc:
+            reason = str(exc)
+            if (
+                'blocked or still waiting on checks' in reason
+                or 'No eligible work on this target' in reason
+                or 'Requested action is unavailable' in reason
+                or 'not currently executable' in reason.lower()
+            ):
+                last_defer_reason = reason
+                break
+            raise
         if candidate is None:
             continue
         selected = (
@@ -2281,11 +2305,32 @@ def dispatch_target(kind: str, number: int, action: str) -> dict[str, object]:
             # so another manual request cannot start duplicate work.
             raise RuntimeError('Could not confirm worker dispatch. Check Actions before retrying.') from None
         return {
-            'action': selected if action == 'advance' else action,
             'kind': candidate.kind,
             'number': candidate.number,
+            'action': selected if action == 'advance' else action,
+            'status': 'dispatched',
+            'worker': worker,
         }
-    raise RuntimeError('No eligible action or available independent worker. Check current stage, leases, and factory capacity.')
+    if last_defer_reason is not None:
+        print(f'[factory-controller] deferring {kind}:{number}: {last_defer_reason}', file=sys.stderr)
+        return {
+            'kind': kind,
+            'number': number,
+            'action': action,
+            'status': 'deferred',
+            'reason': last_defer_reason,
+        }
+    print(
+        f'[factory-controller] deferring {kind}:{number}: no eligible action or available independent worker',
+        file=sys.stderr,
+    )
+    return {
+        'kind': kind,
+        'number': number,
+        'action': action,
+        'status': 'deferred',
+        'reason': 'No eligible action or available independent worker. Check current stage, leases, and factory capacity.',
+    }
 
 
 

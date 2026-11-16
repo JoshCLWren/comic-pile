@@ -106,15 +106,10 @@ def current_demand(controller, *, now_epoch: int | None = None) -> tuple[FleetDe
         )
 
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
-    candidates = controller.load_manifest_candidates(manifest)
+    candidates = controller.load_manifest_candidates()
     owned = controller.owned_worker_ids([*issues, *prs])
     try:
-        comments = controller.registry_comments()
-        health = controller.latest_worker_health(
-            comments,
-            trusted=policy.comment_is_trusted,
-        )
+        _view, health = controller.durable_factory_state(now_epoch=now_epoch)
     except RuntimeError as exc:
         print(
             f"[factory-completion] capacity evidence unavailable; failing closed: {exc}",

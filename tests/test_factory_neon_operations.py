@@ -222,35 +222,49 @@ def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
     assert "export-model-exclusions" in inspect.getsource(operations.main)
 
 
-def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
+def test_missing_marker_id_never_reads_obsolete_body_cache():
     class SnapshotDB:
         async def fetch(self, statement, *args):
-            assert args == (REPO,)
+            if "factory_reconciliation_cursor" in statement:
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
-            assert args == (REPO + ":registry-comments",)
-            marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-111 -->"
-            attempt = "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-111 -->"
-            return [
-                {"id": 123, "body": marker + "\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 124, "body": attempt + "\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 999, "body": marker + "\nForged",
-                 "author_association": "NONE",
-                 "performed_via_github_app": {"slug": "other-untrusted-app"}},
-            ]
+            raise AssertionError("no retired registry body read")
+
+        async def execute(self, statement, *args):
+            raise AssertionError("missing IDs do not create unverifiable locators")
 
     with patch.object(operations, "_roster", return_value={
         "111": ("opencode-free", "glm-5.3-flash-free"),
     }):
-        snapshot = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
-    assert snapshot["nvidia"] == ["gone"]
-    assert snapshot["__heartbeat_id"] == ["123"]
-    assert snapshot["__attempt_id"] == ["124"]
+        record = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
+    assert record == {"nvidia": ["gone"]}
+
+
+def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
+    class IdOnlyDB:
+        async def fetch(self, statement, *args):
+            if "factory_reconciliation_cursor" in statement:
+                return [
+                    {"scope": "registry-comment-id-v1:heartbeat:worker:111",
+                     "checkpoint": "123"},
+                    {"scope": "registry-comment-id-v1:attempt:worker:111",
+                     "checkpoint": "124"},
+                ]
+            return []
+
+        async def fetchval(self, statement, *args):
+            raise AssertionError("registry body must not be read for existing IDs")
+
+        async def execute(self, statement, *args):
+            raise AssertionError("existing ID lookup must not write")
+
+    with patch.object(operations, "_roster", return_value={
+        "111": ("opencode-free", "glm-5.3-flash-free"),
+    }):
+        result = run(operations._export_model_exclusions(IdOnlyDB(), REPO, "111"))
+    assert result == {"__heartbeat_id": ["123"], "__attempt_id": ["124"]}
 
 
 def test_intermediate_model_failures_use_terminal_runtime_idempotency():
@@ -388,3 +402,132 @@ def test_retry_updates_are_fenced_and_read_only_from_dispatcher():
     # Fresh attempts bootstrap from prior Neon terminal events, not GitHub.
     assert "await _recent_streak(conn, run_id, source, model)" in source
     assert "classification in WORKER_RETRY_CLASSES" in source
+
+def test_dynamic_slot_worker_backoff_persists_across_model_rotation(monkeypatch):
+    """project_runtime must accumulate worker streak across discovered models."""
+    import json
+
+    class RuntimeConn:
+        def __init__(self):
+            self.kv = {}
+            self.runtime_keys = set()
+
+        def transaction(self):
+            class Tx:
+                async def __aenter__(self):
+                    return self
+
+                async def __aexit__(self, exc_type, exc, tb):
+                    return False
+
+            return Tx()
+
+        async def execute(self, query, *args):
+            if "INSERT INTO public.factory_runtime_event_keys" in query:
+                repo, run_id = args[0], int(args[1])
+                if (repo, run_id) in self.runtime_keys:
+                    return "INSERT 0 0"
+                self.runtime_keys.add((repo, run_id))
+                return "INSERT 0 1"
+            if "INSERT INTO public.factory_state_kv" in query:
+                key = args[0]
+                payload = args[1]
+                if isinstance(payload, str):
+                    payload = json.loads(payload)
+                self.kv[key] = payload
+                return "INSERT 0 1"
+            if "DELETE FROM public.factory_state_kv" in query:
+                self.kv.pop(args[0], None)
+                return "DELETE 1"
+            return "OK"
+
+        async def fetchval(self, query, *args):
+            if "INSERT INTO public.factory_runtime_event_keys" in query:
+                repo, run_id = args[0], int(args[1])
+                if (repo, run_id) in self.runtime_keys:
+                    return None
+                self.runtime_keys.add((repo, run_id))
+                return run_id
+            if "pg_advisory_xact_lock" in query:
+                return None
+            if "FROM public.factory_state_kv" in query:
+                return None
+            return None
+
+        async def fetchrow(self, query, *args):
+            if "FROM public.factory_state_kv" in query:
+                payload = self.kv.get(args[0])
+                return {"payload": payload} if payload is not None else None
+            return None
+
+        async def fetch(self, query, *args):
+            return []
+
+    monkeypatch.setenv("FACTORY_SLOTS_PER_PROVIDER", "1")
+    monkeypatch.delenv("FACTORY_SLOT_PROVIDER_SOURCES", raising=False)
+    roster = operations._roster()  # actual provider-derived projection
+    worker, pair = next(
+        item for item in sorted(roster.items()) if item[1][0] == "openrouter-free"
+    )
+    source, model_slot = pair
+    assert model_slot == ""
+
+    conn = RuntimeConn()
+    worker_key = f"factory-worker-backoff-v1:{REPO}:worker:{worker}"
+
+    async def fail(run_id: int, model: str):
+        return await operations.project_runtime(
+            conn, REPO, run_id,
+            {
+                "worker": worker, "source": source, "model": model,
+                "outcome_class": "provider_failure", "exact_model_proven": True,
+                "persisted_work": False, "configured": True,
+            },
+        )
+
+    assert run(fail(1001, "sample/a")) is True
+    first = conn.kv[worker_key]
+    assert first[0]["streak"] == 1
+    assert run(fail(1002, "sample/b")) is True
+    second = conn.kv[worker_key]
+    assert second[0]["streak"] == 2
+    assert second[0]["next_retry_at"] > first[0]["next_retry_at"]
+    assert run(fail(1003, "sample/c")) is True
+    third = conn.kv[worker_key]
+    assert third[0]["streak"] == 3
+    assert third[0]["next_retry_at"] > second[0]["next_retry_at"]
+
+    model_keys = sorted(
+        k for k in conn.kv
+        if k.startswith(f"factory-model-backoff-v1:{REPO}:source:{source}:model:")
+    )
+    assert model_keys == [
+        f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/a",
+        f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/b",
+        f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/c",
+    ]
+    assert [conn.kv[k][0]["streak"] for k in model_keys] == [1, 1, 1]
+
+    assert run(operations.project_runtime(
+        conn, REPO, 1004,
+        {
+            "worker": worker, "source": source, "model": "sample/c",
+            "outcome_class": "success", "exact_model_proven": True,
+            "persisted_work": False, "configured": True,
+        },
+    )) is True
+    assert worker_key not in conn.kv
+    assert f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/c" not in conn.kv
+    assert f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/a" in conn.kv
+    assert f"factory-model-backoff-v1:{REPO}:source:{source}:model:sample/b" in conn.kv
+
+    db = FakeConnection(backoffs=[{
+        "cache_key": worker_key,
+        "payload": [{"source": source, "model": "sample/d",
+                     "streak": 3, "next_retry_at": (datetime.now(UTC) + timedelta(minutes=10)).isoformat(),
+                     "suspended": False}],
+        "expires_at": datetime.now(UTC) + timedelta(days=90),
+    }])
+    kept, denied = run(operations._eligibility(db, REPO, [worker]))
+    assert kept == []
+    assert any("Fibonacci retry deferred" in d for d in denied)

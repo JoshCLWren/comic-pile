@@ -62,6 +62,7 @@ const {
   MERGE_CONFLICT_LABEL,
   mergeConflictState,
   derivedLabelsFor,
+  EXPECTED_WORKER_IDS,
 } = reconcile._test;
 
 function contextFor(eventName, payload) {
@@ -188,20 +189,21 @@ test('head-contributor markers resolve roster workers above the old ceiling', ()
 
 test('legacy model-specific label metadata is normalized', async () => {
   const updates = [];
+  const dynamicWorker = String([...EXPECTED_WORKER_IDS][0]);
   const github = githubFor({
     extraDefinitions: [{
-      name: 'factory:75',
+      name: `factory:${dynamicWorker}`,
       color: '5319e7',
-      description: 'Fixed-model Factory 75: legacy model-specific description',
+      description: `Fixed-model Factory ${dynamicWorker}: legacy model-specific description`,
     }],
     updateLabel: async input => updates.push(input),
   });
 
   await reconcile({ github, context: contextFor('workflow_dispatch', {}) });
 
-  const update = updates.find(candidate => candidate.name === 'factory:75');
+  const update = updates.find(candidate => candidate.name === `factory:${dynamicWorker}`);
   assert.ok(update);
-  assert.equal(update.description, 'Current next-action owner is ComicPile Factory 75');
+  assert.equal(update.description, `Current next-action owner is ComicPile Factory ${dynamicWorker}`);
 });
 
 test('label reconciliation replaces both groups with one atomic call', async () => {
@@ -616,6 +618,7 @@ test('PR progress comments preserve an advanced review stage and local owner', a
 
 test('fixed-model progress comments use the durable fixed owner', async () => {
   const calls = [];
+  const dynamicWorker = String([...EXPECTED_WORKER_IDS][0]);
   const github = githubFor({
     labels: ['factory', 'factory:building', 'factory:unowned'],
     setLabels: async input => calls.push(input),
@@ -627,12 +630,12 @@ test('fixed-model progress comments use the durable fixed owner', async () => {
       comment: {
         author_association: 'OWNER',
         user: { login: 'JoshCLWren' },
-        body: '<!-- comic-pile-factory-implement-progress-v3:issue-1089:opencode-free-model-factory-75:123 -->',
+        body: `<!-- comic-pile-factory-implement-progress-v3:issue-1089:opencode-free-model-factory-${dynamicWorker}:123 -->`,
       },
     }),
   });
   assert.equal(calls.length, 1);
-  assert.ok(calls[0].labels.includes('factory:75'));
+  assert.ok(calls[0].labels.includes(`factory:${dynamicWorker}`));
   assert.ok(!calls[0].labels.includes('factory:unowned'));
 });
 
@@ -1334,13 +1337,14 @@ test('enroll review-verdict scan ignores a worker App pass/verdict marker', asyn
 });
 
 test('pull_request_target owner lookup ignores a worker App claim marker', async () => {
+  const dynamicWorker = String([...EXPECTED_WORKER_IDS][0]);
   const pullRequest = {
     number: 100,
     state: 'open',
     draft: false,
     body: 'Refs #3131',
     head: {
-      ref: 'factory/75-3131-opencode-free-identity',
+      ref: `factory/${dynamicWorker}-3131-opencode-free-identity`,
       sha: 'c'.repeat(40),
       repo: { full_name: 'JoshCLWren/comic-pile' },
     },
@@ -1349,7 +1353,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     created_at: '2026-01-01T00:00:00Z',
     author_association: 'OWNER',
     user: { login: 'mark-cordova[bot]' },
-    body: '<!-- comic-pile-factory-implement-claim-v3:issue-3131:opencode-free-model-factory-75:1 -->',
+    body: `<!-- comic-pile-factory-implement-claim-v3:issue-3131:opencode-free-model-factory-${dynamicWorker}:1 -->`,
     performed_via_github_app: { slug: 'mark-cordova' },
   };
   const workerCalls = [];
@@ -1389,7 +1393,7 @@ test('pull_request_target owner lookup ignores a worker App claim marker', async
     }),
   });
   assert.equal(actionsCalls.length, 1);
-  assert.ok(actionsCalls[0].labels.includes('factory:75'));
+  assert.ok(actionsCalls[0].labels.includes(`factory:${dynamicWorker}`));
 });
 
 test('pull_request_review trust: github-actions[bot] is trusted, worker App is not', () => {

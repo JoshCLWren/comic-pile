@@ -169,6 +169,7 @@ venv = ".venv"
 
 [tool.ty.environment]
 python-version = "3.14"
+extra-paths = [".github/scripts"]
 
 [tool.ty.src]
 include = ["app", "comic_pile", "tests"]
