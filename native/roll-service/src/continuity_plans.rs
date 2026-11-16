@@ -922,48 +922,36 @@ pub async fn adopt_reading_order(
     let lane_id = payload.lane_id.unwrap_or_else(|| "adopted".to_string());
     let lane_name = payload.lane_name.unwrap_or_else(|| "Adopted".to_string());
 
-    // Build nodes
-    let mut nodes = Vec::new();
-    for (idx, thread_id) in thread_ids.iter().enumerate() {
-        nodes.push(ContinuityPlanNode {
-            id: format!("ro-{}", order_id * 1000 + thread_id),
-            node_type: "thread".to_string(),
-            ref_id: *thread_id,
-            lane_id: lane_id.clone(),
-            position: idx as i32,
-            label: None,
-            source_role: None,
-            source_confidence: None,
-            source_explanation: None,
-            source_paths: None,
-            source_cbl_placements: None,
-            source_story_arc_ids: None,
-            source_target_story_arc_id: None,
-            reader_role: None,
-            reader_optional: None,
-            is_checkpoint: false,
-            checkpoint_target_ref_id: None,
-            checkpoint_target_ref_ids: Vec::new(),
-            convergence_gate: Vec::new(),
-        });
-    }
-
-    // Insert continuity plan membership first
-    for (idx, node) in nodes.iter().enumerate() {
-        tx.execute(
-            "INSERT INTO reading_plan_issues (plan_id, issue_id, display_position, node_id) VALUES ($1, $2, $3, $4)",
-            &[&0, &node.ref_id, &(idx as i32), &node.id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
-
+    // Create the plan first to get the plan_id
     let lanes_json = serde_json::to_string(&serde_json::json!([{
         "id": lane_id,
         "name": lane_name,
         "order": 0
     ]])).unwrap();
-    let nodes_json = serde_json::to_string(&serde_json::to_value(&nodes)).unwrap();
+    let nodes_json = serde_json::to_string(&serde_json::json!([
+        {
+            "id": format!("ro-{}", order_id * 1000 + thread_id),
+            "node_type": "thread",
+            "ref_id": thread_id,
+            "lane_id": lane_id,
+            "position": idx,
+            "label": null,
+            "source_role": null,
+            "source_confidence": null,
+            "source_explanation": null,
+            "source_paths": null,
+            "source_cbl_placements": null,
+            "source_story_arc_ids": null,
+            "source_target_story_arc_id": null,
+            "reader_role": null,
+            "reader_optional": null,
+            "is_checkpoint": false,
+            "checkpoint_target_ref_id": null,
+            "checkpoint_target_ref_ids": [],
+            "convergence_gate": []
+        }
+        for idx, thread_id in thread_ids.iter().enumerate()
+    ]))).unwrap();
 
     let row = tx
         .query_one(
@@ -978,14 +966,6 @@ pub async fn adopt_reading_order(
         .map_err(db::query_error)?;
 
     let plan_id: i32 = row.get(0);
-
-    // Update the membership to have the correct plan_id
-    tx.execute(
-        "UPDATE reading_plan_issues SET plan_id = $1 WHERE node_id LIKE $2",
-        &[&plan_id, &format!("ro-{}-%", order_id)],
-    )
-    .await
-    .map_err(db::query_error)?;
 
     // Mark as adopted from reading order
     tx.execute(
