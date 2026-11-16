@@ -116,6 +116,9 @@ class OpenAICompatibleAdapter:
                 continue
             if configured is not None and model not in configured:
                 continue
+            # OpenRouter's free-account endpoint type, not a static model list.
+            if self.provider == "openrouter-free" and not model.endswith(":free"):
+                continue
             supported = item.get("supported_parameters")
             if isinstance(supported, list) and "tools" not in supported:
                 continue
