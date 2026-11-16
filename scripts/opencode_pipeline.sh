@@ -1019,10 +1019,10 @@ cmd_ci_check() {
 
             log_info "#$issue — PR #$pr_number found, checking CI status"
 
-            # Check CI — collect failing checks (exclude CodeRabbit which is advisory)
+            # Check CI — collect failing checks
             local failing_checks
             failing_checks=$(gh pr checks "$pr_number" 2>/dev/null \
-                | grep -v -iE "pass|skip|pending|neutral|CodeRabbit" \
+                | grep -v -iE "pass|skip|pending|neutral" \
                 | grep -v "^$" || true)
 
             if [[ -z "$failing_checks" ]]; then
