@@ -11270,6 +11270,71 @@
         },
         "type": "object"
       },
+      "NativeSyncStatusResponse": {
+        "properties": {
+          "enabled_sources": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/NativeSyncStatusSource"
+            },
+            "type": "array"
+          },
+          "total_sources": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "sources"
+        ],
+        "type": "object"
+      },
+      "NativeSyncStatusSource": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "reading_plan_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "thread_id": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "reading_plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "type": "object"
+      },
       "NearMatch": {
         "properties": {
           "color": {
@@ -26523,18 +26588,23 @@
     },
     "/api/v1/reading-plan-sync/status": {
       "get": {
-        "description": "Report persisted sync state for the caller's release sources.",
-        "operationId": "get_sync_status_api_v1_reading_plan_sync_status_get",
+        "operationId": "reading_plan_sync_status",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SyncStatusResponse"
+                  "$ref": "#/components/schemas/NativeSyncStatusResponse"
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "Sync state for every release source owned by the caller"
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
           }
         },
         "security": [
@@ -26542,9 +26612,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Sync Status",
         "tags": [
-          "reading-plan-sync",
           "reading-plan-sync"
         ]
       }

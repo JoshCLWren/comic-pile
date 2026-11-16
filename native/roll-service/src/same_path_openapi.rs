@@ -72,6 +72,7 @@ pub fn same_path_openapi() -> utoipa::openapi::OpenApi {
         .merge_from(crate::preferences::PreferencesApi::openapi())
         .merge_from(crate::bug_reports::BugReportsApi::openapi())
         .merge_from(crate::reading_orders::ReadingOrdersApi::openapi())
+        .merge_from(crate::reading_plan_sync::ReadingPlanSyncApi::openapi())
         .merge_from(crate::session_detail::SessionDetailApi::openapi())
         .merge_from(crate::threads::ThreadsApi::openapi());
 
@@ -142,5 +143,20 @@ mod tests {
             .to_pretty_json()
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
+    }
+
+    #[test]
+    fn same_path_contract_claims_reading_plan_sync_status() {
+        let document = same_path_openapi();
+        let item = document
+            .paths
+            .paths
+            .get("/api/v1/reading-plan-sync/status")
+            .expect("native reading-plan-sync status operation in same-path contract");
+        let operation = item.get.as_ref().expect("GET status operation");
+        assert_eq!(
+            operation.operation_id.as_deref(),
+            Some("reading_plan_sync_status")
+        );
     }
 }

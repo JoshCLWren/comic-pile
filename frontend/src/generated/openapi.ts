@@ -2735,11 +2735,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Sync Status
-         * @description Report persisted sync state for the caller's release sources.
-         */
-        get: operations["get_sync_status_api_v1_reading_plan_sync_status_get"];
+        get: operations["reading_plan_sync_status"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10092,6 +10088,26 @@ export interface components {
             mode_version?: string | null;
             predicted_intent?: string | null;
             source?: string | null;
+        };
+        NativeSyncStatusResponse: {
+            /** Format: int64 */
+            enabled_sources: number;
+            sources: components["schemas"]["NativeSyncStatusSource"][];
+            /** Format: int64 */
+            total_sources: number;
+        };
+        NativeSyncStatusSource: {
+            enabled: boolean;
+            /** Format: int32 */
+            external_identity_id: number;
+            /** Format: int32 */
+            id: number;
+            last_synced_at?: string | null;
+            provider_volume_id: string;
+            /** Format: int32 */
+            reading_plan_id: number;
+            /** Format: int32 */
+            thread_id: number;
         };
         NearMatch: {
             color: string;
@@ -17602,7 +17618,7 @@ export interface operations {
             };
         };
     };
-    get_sync_status_api_v1_reading_plan_sync_status_get: {
+    reading_plan_sync_status: {
         parameters: {
             query?: never;
             header?: never;
@@ -17611,14 +17627,28 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Sync state for every release source owned by the caller */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncStatusResponse"];
+                    "application/json": components["schemas"]["NativeSyncStatusResponse"];
                 };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -2133,6 +2133,37 @@
         ]
       }
     },
+    "/api/v1/reading-plan-sync/status": {
+      "get": {
+        "tags": [
+          "reading-plan-sync"
+        ],
+        "operationId": "reading_plan_sync_status",
+        "responses": {
+          "200": {
+            "description": "Sync state for every release source owned by the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated"
+          },
+          "503": {
+            "description": "Database temporarily unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/releases/": {
       "get": {
         "tags": [
@@ -9422,6 +9453,71 @@
               "integer",
               "null"
             ],
+            "format": "int32"
+          }
+        }
+      },
+      "SyncStatusResponse": {
+        "type": "object",
+        "required": [
+          "total_sources",
+          "enabled_sources",
+          "sources"
+        ],
+        "properties": {
+          "enabled_sources": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SyncStatusSource"
+            }
+          },
+          "total_sources": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "SyncStatusSource": {
+        "type": "object",
+        "required": [
+          "id",
+          "reading_plan_id",
+          "thread_id",
+          "external_identity_id",
+          "provider_volume_id",
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "external_identity_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "last_synced_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "provider_volume_id": {
+            "type": "string"
+          },
+          "reading_plan_id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "thread_id": {
+            "type": "integer",
             "format": "int32"
           }
         }

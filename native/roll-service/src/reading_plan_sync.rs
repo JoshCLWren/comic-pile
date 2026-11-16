@@ -10,6 +10,24 @@
 //! provider adoption pipeline is a separate, much larger port and must not be
 //! replaced by a placeholder that reports success without syncing anything.
 //! The native router therefore does not claim that path.
+//!
+//! The status operation is merged into the generated native same-path OpenAPI
+//! contract (`same_path_openapi.rs`), so the checked-in contract and the
+//! frontend generated client describe the native handler alongside the
+//! still-Python sync operation.
+//!
+//! The sync POST port is deliberately deferred to a dedicated factory session
+//! (PR #5139 review, 2026-11-16). A faithful port must reproduce the shared
+//! ComicVine client's request-ledger pacing (180 requests/hour across all
+//! processes), throttle cooldown, and response disk cache — all load-bearing
+//! for the Python cron path that keeps running after cutover — plus the
+//! savepoint-retry external-identity upsert, the reader/thread/source lock
+//! chain with post-fetch staleness reload, the deferred position unique
+//! constraint, plan membership rebuild, and Pydantic-exact wire rendering. A
+//! port that skipped any of those would diverge from Python semantics or
+//! exhaust the shared provider budget, which is worse than the current
+//! shadowed state. `reading_plan_sync_service.py` remains the executable
+//! specification for that port.
 
 #![forbid(unsafe_code)]
 
