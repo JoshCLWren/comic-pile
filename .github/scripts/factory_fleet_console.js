@@ -46,7 +46,7 @@
       const id=provider+"\0"+model;map.set(id,{...(map.get(id)||{}),provider,model,...fields}); };
     for(const m of candidate.models||[])add(m.source,m.model,{health:m.status,outcome:m.outcome,until:m.until,updated:m.updated,evidence:"trusted health projection"});
     for(const m of data.opencode_free_roster?.models||[]) {
-      const provider=m.connection||"opencode-free", id=provider+"\0"+m.model_id;
+      const provider=m.connection||"", id=provider+"\0"+m.model_id;
       if(!map.has(id))add(provider,m.model_id,{health:m.status,outcome:m.detail,evidence:"observed attempt, not catalog proof"});
     }
     for(const w of workers)if(w.runtime_source&&w.runtime_model){
