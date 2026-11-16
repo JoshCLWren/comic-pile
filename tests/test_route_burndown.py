@@ -205,10 +205,12 @@ def test_full_surface_matches_deployed_ingress() -> None:
     )
     for item in shadowed_v1:
         assert item.get("ingress_destination") == "/api/native_roll.rs"
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/v1/bug-reports/"
-        and item.get("burndown_status") == "shadowed by Rust"
+    # The bug-report twins were cut over to same-path native Rust (#4852) and
+    # their Python handler was retired (#5162), so the v1 bug-reports path is
+    # excluded from the Python inventory surface entirely; native ingress is
+    # pinned by test_bug_reports_fragment_routes_both_twins_to_native_rust.
+    assert not any(
+        str(item.get("path", "")).startswith("/api/v1/bug-reports")
         for item in v1_ops
     )
     assert any(
@@ -293,10 +295,10 @@ def test_full_surface_matches_deployed_ingress() -> None:
         and item.get("burndown_status") == "shadowed by Rust"
         for item in unversioned_ops
     )
-    assert any(
-        item.get("method") == "POST"
-        and item.get("path") == "/api/bug-reports/"
-        and item.get("burndown_status") == "shadowed by Rust"
+    # Same retirement as the v1 twin: POST /api/bug-reports/ is native-only
+    # (#4852, #5162) and no longer part of the Python inventory surface.
+    assert not any(
+        str(item.get("path", "")).startswith("/api/bug-reports")
         for item in unversioned_ops
     )
     assert any(
