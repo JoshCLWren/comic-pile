@@ -128,8 +128,7 @@ async fn fetch_target(
         )
         .await
         .map_err(db::query_error)?;
-    Ok(row
-        .map(|row| -> Result<TargetRow, ApiError> {
+    row.map(|row| -> Result<TargetRow, ApiError> {
             Ok(TargetRow {
                 issue_id: row.try_get(0).map_err(db::query_error)?,
                 issue_number: row.try_get(1).map_err(db::query_error)?,
@@ -139,7 +138,7 @@ async fn fetch_target(
                 thread_status: row.try_get(5).map_err(db::query_error)?,
             })
         })
-        .transpose()?)
+        .transpose()
 }
 
 /// Read the pending pointer under the session lock.
@@ -536,7 +535,7 @@ mod tests {
             .unwrap();
         assert_eq!(session.get::<_, Option<i32>>(0), Some(20));
         assert_eq!(session.get::<_, Option<i32>>(1), Some(200));
-        assert_eq!(session.get::<_, bool>(2), true);
+        assert!(session.get::<_, bool>(2));
         let snoozed: serde_json::Value = session.get(3);
         assert_eq!(snoozed, serde_json::json!([]));
 

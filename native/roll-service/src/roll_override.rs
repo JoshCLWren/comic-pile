@@ -209,8 +209,7 @@ async fn fetch_thread_for_update(
         )
         .await
         .map_err(db::query_error)?;
-    Ok(row
-        .map(|row| -> Result<OverrideThread, ApiError> {
+    row.map(|row| -> Result<OverrideThread, ApiError> {
             Ok(OverrideThread {
                 id: row.try_get(0).map_err(db::query_error)?,
                 title: row.try_get(1).map_err(db::query_error)?,
@@ -221,7 +220,7 @@ async fn fetch_thread_for_update(
                 is_blocked: row.try_get(6).map_err(db::query_error)?,
             })
         })
-        .transpose()?)
+        .transpose()
 }
 
 /// Read the session row the Python handler locks for the manual pick.
@@ -281,15 +280,14 @@ async fn fetch_latest_session_event(
         )
         .await
         .map_err(db::query_error)?;
-    Ok(row
-        .map(|row| -> Result<LatestEvent, ApiError> {
+    row.map(|row| -> Result<LatestEvent, ApiError> {
             Ok(LatestEvent {
                 event_type: row.try_get(0).map_err(db::query_error)?,
                 selection_method: row.try_get(1).map_err(db::query_error)?,
                 selected_thread_id: row.try_get(2).map_err(db::query_error)?,
             })
         })
-        .transpose()?)
+        .transpose()
 }
 
 /// Text-first cast helper: `context` binds as text, so `$n::text::json` keeps
@@ -867,8 +865,8 @@ mod tests {
         assert_eq!(context.get::<_, String>(3), "balanced");
         assert_eq!(context.get::<_, String>(4), "manual_override");
         assert_eq!(context.get::<_, f64>(5), 1.0);
-        assert_eq!(context.get::<_, bool>(6), false);
-        assert_eq!(context.get::<_, bool>(7), true);
+        assert!(!context.get::<_, bool>(6));
+        assert!(context.get::<_, bool>(7));
 
         let session = client
             .query_one(
@@ -879,7 +877,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(session.get::<_, Option<i32>>(0), Some(10));
-        assert_eq!(session.get::<_, bool>(1), true);
+        assert!(session.get::<_, bool>(1));
     }
 
     #[tokio::test]
