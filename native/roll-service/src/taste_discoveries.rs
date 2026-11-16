@@ -293,19 +293,20 @@ fn build_discovery_prompt(signal: &RankedSignal) -> String {
     )
 }
 
+fn validation_failed() -> ApiError {
+    ApiError::Unprocessable("Validation failed".to_string())
+}
+
 /// `GET /api/v1/taste/discoveries` — ranked prompt-eligible discoveries.
 pub async fn list_taste_discoveries(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     query: Result<Query<TasteDiscoveryQuery>, QueryRejection>,
 ) -> Result<Json<TasteDiscoveryListResponse>, ApiError> {
-    let Query(query) =
-        query.map_err(|_| ApiError::Unprocessable("limit must be between 1 and 3".to_string()))?;
+    let Query(query) = query.map_err(|_| validation_failed())?;
     let limit = query.limit.unwrap_or(MAX_ACTIVE_DISCOVERIES);
     if !(1..=MAX_ACTIVE_DISCOVERIES).contains(&limit) {
-        return Err(ApiError::Unprocessable(
-            "limit must be between 1 and 3".to_string(),
-        ));
+        return Err(validation_failed());
     }
 
     let now = Utc::now();
@@ -745,6 +746,7 @@ mod tests {
             .await
             .expect_err("out-of-range limit must 422");
             assert_eq!(error.status(), StatusCode::UNPROCESSABLE_ENTITY);
+            assert_eq!(error.detail(), "Validation failed");
         }
     }
 
@@ -885,6 +887,7 @@ mod tests {
         let app = router(state);
 
         let response = app
+            .clone()
             .oneshot(
                 Request::builder()
                     .method("GET")
@@ -899,6 +902,22 @@ mod tests {
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(payload, json!({"detail": "limit must be between 1 and 3"}));
+        assert_eq!(payload, json!({"detail": "Validation failed"}));
+
+        let out_of_range = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/taste/discoveries?limit=0")
+                    .header(header::AUTHORIZATION, format!("Bearer {token}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(out_of_range.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = to_bytes(out_of_range.into_body(), usize::MAX).await.unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(payload, json!({"detail": "Validation failed"}));
     }
 }
