@@ -103,13 +103,13 @@ fn is_supported_node_type(node_type: &str) -> bool {
 }
 
 /// The selected issue and its owning thread, scoped to the reader.
-struct TargetRow {
-    issue_id: i32,
-    issue_number: String,
-    issue_status: String,
-    thread_id: i32,
-    thread_title: String,
-    thread_status: String,
+pub(crate) struct TargetRow {
+    pub(crate) issue_id: i32,
+    pub(crate) issue_number: String,
+    pub(crate) issue_status: String,
+    pub(crate) thread_id: i32,
+    pub(crate) thread_title: String,
+    pub(crate) thread_status: String,
 }
 
 /// Read the selected prerequisite only after the session lock is held.
@@ -308,61 +308,21 @@ async fn switch(
 
     // Clear only the durable session snooze for the newly selected series; the
     // original blocked roll and its audit trail stay intact.
+    let had_snooze_row = snoozed.is_some();
     let mut snoozed_ids = snoozed.clone().unwrap_or_default();
-    if snoozed_ids.contains(&target.thread_id) {
-        snoozed_ids.retain(|thread_id| *thread_id != target.thread_id);
-        tx.execute(
-            "UPDATE sessions SET snoozed_thread_ids = $1::text::json
-             WHERE id = $2 AND user_id = $3",
-            &[
-                &serde_json::to_string(&snoozed_ids)
-                    .map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
-                &active.session.id,
-                &user.id(),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    }
+    snoozed_ids.retain(|thread_id| *thread_id != target.thread_id);
 
     let die = current_die(&tx, user).await?;
-    tx.execute(
-        "INSERT INTO events
-           (type,user_id,session_id,selected_thread_id,issue_id,issue_number,
-            die,result,selection_method,timestamp)
-         VALUES ('roll',$1,$2,$3,$4,$5,$6,0,'dependency_recovery',NOW())",
-        &[
-            &user.id(),
-            &active.session.id,
-            &target.thread_id,
-            &target.issue_id,
-            &target.issue_number,
-            &die,
-        ],
+    persist_switch_prerequisite(
+        &tx,
+        user,
+        active.session.id,
+        &target,
+        die,
+        &snoozed_ids,
+        had_snooze_row,
     )
-    .await
-    .map_err(db::query_error)?;
-
-    let updated = tx
-        .execute(
-            "UPDATE sessions
-             SET pending_thread_id=$1,pending_issue_id=$2,pending_thread_updated_at=NOW()
-             WHERE id=$3 AND user_id=$4",
-            &[
-                &target.thread_id,
-                &target.issue_id,
-                &active.session.id,
-                &user.id(),
-            ],
-        )
-        .await
-        .map_err(db::query_error)?;
-    if updated != 1 {
-        tx.rollback().await.map_err(db::query_error)?;
-        return Err(SwitchError::Api(ApiError::Conflict(
-            "Reading session changed; try again".to_string(),
-        )));
-    }
+    .await?;
 
     tx.commit().await.map_err(db::query_error)?;
     pending.release();
@@ -375,6 +335,67 @@ async fn switch(
         target_issue_number: target.issue_number,
         changed: true,
     })
+}
+
+/// Persist the accepted prerequisite: the `dependency_recovery` roll event,
+/// the optional session-snooze cleanup, and the session pointer move. Extracted
+/// so the real write path can be exercised against disposable PostgreSQL.
+pub(crate) async fn persist_switch_prerequisite(
+    tx: &tokio_postgres::Transaction<'_>,
+    user: AuthenticatedUser,
+    session_id: i32,
+    target: &TargetRow,
+    die: i32,
+    snoozed_ids: &[i32],
+    had_snooze_row: bool,
+) -> Result<(), ApiError> {
+    tx.execute(
+        "INSERT INTO events
+           (type,user_id,session_id,selected_thread_id,issue_id,issue_number,
+            die,result,selection_method,timestamp)
+         VALUES ('roll',$1,$2,$3,$4,$5,$6,0,'dependency_recovery',NOW())",
+        &[
+            &user.id(),
+            &session_id,
+            &target.thread_id,
+            &target.issue_id,
+            &target.issue_number,
+            &die,
+        ],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    if had_snooze_row {
+        tx.execute(
+            "UPDATE sessions SET snoozed_thread_ids = $1::text::json
+             WHERE id = $2 AND user_id = $3",
+            &[
+                &serde_json::to_string(snoozed_ids)
+                    .map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
+                &session_id,
+                &user.id(),
+            ],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+
+    let updated = tx
+        .execute(
+            "UPDATE sessions
+             SET pending_thread_id=$1,pending_issue_id=$2,pending_thread_updated_at=NOW()
+             WHERE id=$3 AND user_id=$4",
+            &[&target.thread_id, &target.issue_id, &session_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+    if updated != 1 {
+        return Err(ApiError::Conflict(
+            "Reading session changed; try again".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Documentation-only operation for the mounted v1 prerequisite switch.
