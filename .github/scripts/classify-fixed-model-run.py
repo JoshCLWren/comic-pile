@@ -43,7 +43,8 @@ QUOTA_RE = re.compile(
     r"(?:monthly|daily|weekly|free) usage limit(?: reached)?|"
     r"reached your [a-z ]*usage limit|"
     r"insufficient[ _](?:credits|balance|quota)|exceeded your current quota|"
-    r"quota[ _](?:exceeded|exhausted)|free-models-per-day-high-balance|"
+    r"quota[ _](?:exceeded|exhausted)|api key budget limit exceeded|"
+    r"free-models-per-day-high-balance|"
     r"rate limit exceeded: free-models-per-day[^\\s]*",
     re.I,
 )
