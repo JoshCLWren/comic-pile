@@ -498,6 +498,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn fetch_pending_reads_the_canonical_json_snooze_column() {
+        // Regression: the canonical Alembic schema types `snoozed_thread_ids`
+        // as `json` (#4850). A direct `try_get::<Option<Vec<i32>>>` on that
+        // column is a client-side type mismatch that mapped to a 500 for every
+        // authenticated prerequisite switch.
+        let _admin = crate::test_support::required_test_admin_url();
+        let (mut client, _db) = seeded(
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      snoozed_thread_ids)
+                 VALUES (1, 1, NOW(), 6, 10, '[20]'::json);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id)
+                 VALUES (2, 1, NOW(), 6, NULL);"#,
+        )
+        .await;
+        let tx = client.transaction().await.unwrap();
+        let (pending, snoozed) = fetch_pending(&tx, 1, 1).await.expect("canonical pending read");
+        assert_eq!(pending, Some(10));
+        assert_eq!(snoozed, Some(vec![20]));
+        let (pending, snoozed) = fetch_pending(&tx, 2, 1).await.expect("plain pending read");
+        tx.rollback().await.unwrap();
+        assert_eq!(pending, None);
+        assert_eq!(snoozed, None);
+    }
+
+    #[tokio::test]
     async fn persist_switch_prerequisite_moves_the_session_and_logs_a_roll() {
         let _admin = crate::test_support::required_test_admin_url();
         let (mut client, _db) = seeded(
