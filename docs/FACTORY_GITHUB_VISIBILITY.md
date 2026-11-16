@@ -8,7 +8,7 @@ Every active factory-owned issue or pull request carries the `factory` label.
 
 Exactly one owner label identifies the worker responsible for the next action:
 
-- `factory:<worker-number>` for active fixed-model workers listed in `.github/factory-expected-workers.json`;
+- `factory:<worker-number>` for active provider slots derived by `.github/scripts/factory_worker_slots.py`;
 - `factory:1` through `factory:5` are historical disabled ChatGPT schedules;
 - `factory:local` for the local OpenCode factory;
 - `factory:unowned` when no worker currently owns the next action.
@@ -155,7 +155,7 @@ This section states the durable App identity contract that every active factory 
 
 ### One App per active durable worker
 
-The canonical roster of active durable workers is `.github/factory-expected-workers.json` (`expected_workers` array). Each active worker gets exactly one GitHub App identity. Retired workers (`retired_workers`) keep their persisted mapping but never receive new credentials.
+The active worker identities are derived from the provider/slot registry, without a committed expected-worker JSON. Existing App identities remain persisted independently; absent or retired provider slots must not receive new credentials.
 
 The provenance key is the **worker number** (e.g., `48`). All mapping, bootstrap, and credential logic keys off this number.
 
