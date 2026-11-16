@@ -11,7 +11,7 @@ import argparse
 import hashlib
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Mapping
 
 from factory_provider_registry import PROVIDERS
