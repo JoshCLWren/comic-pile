@@ -720,25 +720,21 @@ def test_active_fixed_workers_fails_closed_when_live_run_identity_is_unknown(
 
 
 
-def test_active_unknown_run_uses_shared_neon_registry_without_full_scan(
+def test_active_unknown_run_uses_repo_scoped_neon_run_id_lookup(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Resolve unknown run identities from the existing incremental registry."""
-    monkeypatch.setenv("FACTORY_STATE_DSN_FILE", "/trusted/factory-state")
-    registry_calls: list[bool] = []
+    """One targeted event lookup resolves a live run without registry history."""
+    requests: list[list[str]] = []
     monkeypatch.setitem(
-        sys.modules,
-        "factory_completion_controller",
-        types.SimpleNamespace(registry_comments=lambda: registry_calls.append(True) or [
-            # GitHub comment bodies contain real newlines, not escaped ``\n`` text.
-            {"id": 1, "body": "Run: 99\nWorker: opencode-free-model-factory-13\n"}
-        ]),
+        sys.modules, "factory_runtime_view",
+        types.SimpleNamespace(run_workers=lambda repo, ids: (
+            requests.append(ids) or {"99": "13"}
+        )),
     )
-    monkeypatch.setattr(controller, "comment_is_trusted", lambda _: True)
     def github(args: list[str], **kwargs: object) -> object:
         endpoint = args[-1]
         if "issues/1093/comments" in endpoint:
-            pytest.fail("Neon-connected worker liveness must not rescan full registry")
+            pytest.fail("worker liveness must never read the full registry")
         if "free-model-factory-entry.yml" in endpoint and "status=queued" in endpoint:
             return [{"workflow_runs": [{"id": 99, "display_title": "Unknown fixed factory"}]}]
         return [{"workflow_runs": []}]
@@ -746,7 +742,7 @@ def test_active_unknown_run_uses_shared_neon_registry_without_full_scan(
     workers, unresolved = controller.active_fixed_workers()
     assert workers == {13}
     assert unresolved == set()
-    assert registry_calls == [True]
+    assert requests == [["99"]]
 
 
 def test_busy_fixed_worker_is_not_given_a_second_assignment(
@@ -1130,91 +1126,27 @@ def test_manual_advance_selects_only_linked_pr_and_preserves_review_independence
 
 
 @pytest.mark.parametrize("worker", ["54", "82", "97"])
-def test_z_ai_quota_pauses_shared_account_and_auto_resumes(
+def test_shared_provider_quota_uses_trusted_neon_projection(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str,
 ) -> None:
-    """A trusted 429 stops assignment for the shared account, then expires."""
-    completion = __import__("factory_completion_controller")
-
-    comments = [{
-        "author_association": "OWNER",
-        "body": (
-            "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-97 -->\n"
-            "Worker: opencode-free-model-factory-97\nAttempt outcome: provider_quota\n"
-            "Updated: 2026-11-07T00:00:00Z\n"
-        ),
-    }]
-    updated = completion.parse_time("2026-11-07T00:00:00Z")
-    assert updated is not None
-    monkeypatch.setattr(completion, "registry_comments", lambda: comments)
-    monkeypatch.setattr(controller.time, "time", lambda: updated + 1)
-    assert "paused until" in controller.runtime_quota_block_reason(worker)
-    monkeypatch.setattr(controller, "worker_has_active_lease", lambda _worker: pytest.fail(
-        "a quota pause must stop assignment before lease/capacity work"
-    ))
-    assert controller.assign(worker) is None
-    monkeypatch.setattr(controller.time, "time", lambda: updated + 1800)
+    """Source-level quota is enforced for every pin without comments."""
+    import factory_state_operations as operations
+    monkeypatch.setattr(operations, "enabled", lambda: True)
+    monkeypatch.setattr(operations, "filter_workers",
+                        lambda _repo, _workers: ([], ["provider z-ai cooling"]))
+    assert "cooling" in controller.runtime_quota_block_reason(worker)
+    monkeypatch.setattr(operations, "filter_workers",
+                        lambda _repo, workers: (workers, []))
     assert controller.runtime_quota_block_reason(worker) is None
 
 
-def test_runtime_quota_ignores_untrusted_and_other_providers(
+def test_provider_health_database_outage_fails_closed(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """External prose cannot pause the fleet; other providers are unaffected."""
-    completion = __import__("factory_completion_controller")
-
-    monkeypatch.setattr(completion, "registry_comments", lambda: [{
-        "author_association": "NONE",
-        "body": "Worker: opencode-free-model-factory-97\nAttempt outcome: provider_quota\n"
-                "Updated: 2026-11-07T00:00:00Z\n",
-    }])
-    updated = completion.parse_time("2026-11-07T00:00:00Z")
-    assert updated is not None
-    monkeypatch.setattr(controller.time, "time", lambda: updated + 1)
-    assert controller.runtime_quota_block_reason("97") is None
+    import factory_state_operations as operations
+    monkeypatch.setattr(operations, "enabled", lambda: False)
+    assert "deferred" in controller.runtime_quota_block_reason("97")
     assert controller.runtime_quota_block_reason("20") is None
-
-
-@pytest.mark.parametrize("worker", ["46", "98"])
-def test_kilo_quota_pauses_both_existing_free_routes(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str,
-) -> None:
-    """The second lane never gets a second account or bypasses shared quota."""
-    completion = __import__('factory_completion_controller')
-    monkeypatch.setattr(completion, 'registry_comments', lambda: [{
-        'author_association': 'OWNER',
-        'body': 'Worker: opencode-free-model-factory-98\nAttempt outcome: provider_quota\n'
-                'Updated: 2026-11-07T00:00:00Z\n',
-    }])
-    updated = completion.parse_time('2026-11-07T00:00:00Z')
-    assert updated is not None
-    monkeypatch.setattr(controller.time, 'time', lambda: updated + 1)
-    assert 'kilo-auto account' in controller.runtime_quota_block_reason(worker)
-    assert controller.runtime_quota_block_reason('97') is None
-    monkeypatch.setattr(controller.time, 'time', lambda: updated + 1800)
-    assert controller.runtime_quota_block_reason(worker) is None
-
-
-@pytest.mark.parametrize('source', ['mistral', 'ollama-cloud'])
-def test_monthly_quota_blocks_assignment_until_calendar_reset(
-    controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, source: str,
-) -> None:
-    """A future restored lane pauses through the month without reusing retired IDs."""
-    completion = __import__('factory_completion_controller')
-    monkeypatch.setattr(controller, 'worker_sources', lambda: {'99': source})
-    monkeypatch.setattr(completion, 'registry_comments', lambda: [{
-        'author_association': 'OWNER',
-        'body': 'Worker: opencode-free-model-factory-99\nAttempt outcome: provider_quota\n'
-                'Updated: 2026-11-04T04:35:40Z\n',
-    }])
-    observed = completion.parse_time('2026-11-04T04:35:40Z')
-    reset = completion.parse_time('2026-12-01T00:00:00Z')
-    assert observed is not None and reset is not None
-    monkeypatch.setattr(controller.time, 'time', lambda: observed + 86400)
-    assert '2026-12-01T00:00:00Z' in controller.runtime_quota_block_reason('99')
-    monkeypatch.setattr(controller.time, 'time', lambda: reset)
-    assert controller.runtime_quota_block_reason('99') is None
-
 
 
 def test_issue_assignment_rechecks_dependency_at_mutation_boundary(

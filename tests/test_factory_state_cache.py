@@ -211,12 +211,12 @@ def test_workflows_inject_database_only_into_trusted_jobs():
     assert "run / factory" in collector
 
 
-def test_recovery_watchdog_loads_paginated_compatible_neon_registry() -> None:
+def test_recovery_watchdog_uses_trusted_bounded_neon_runtime_view() -> None:
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/fixed-model-factory-dispatch-recovery.yml").read_text()
-    assert "from factory_completion_controller import registry_comments" in workflow
-    assert "json.dumps([registry_comments()])" in workflow
-    assert "issues/1093/comments?per_page=100" not in workflow
-    assert "factory_heartbeat_health.py" in workflow
+    assert "from factory_runtime_view import export_view" in workflow
+    assert "--view /tmp/factory-runtime-view.json" in workflow
+    assert "factory_registry_ingest.py" in workflow
+    assert "registry_comments()" not in workflow
     assert "uses: ./.github/actions/factory-state-cache" in workflow
 
 

@@ -222,57 +222,24 @@ def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
     assert "export-model-exclusions" in inspect.getsource(operations.main)
 
 
-def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
+def test_missing_marker_id_never_reads_obsolete_body_cache():
     class SnapshotDB:
-        def __init__(self):
-            self.cursors = {}
-            self.body_reads = 0
-
         async def fetch(self, statement, *args):
             if "factory_reconciliation_cursor" in statement:
-                assert args == (REPO, [
-                    "registry-comment-id-v1:heartbeat:worker:111",
-                    "registry-comment-id-v1:attempt:worker:111",
-                ])
-                return [{"scope": scope, "checkpoint": checkpoint}
-                        for scope, checkpoint in self.cursors.items()]
-            assert args == (REPO,)
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
-            assert args == (REPO + ":registry-comments",)
-            self.body_reads += 1
-            marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-111 -->"
-            attempt = "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-111 -->"
-            return [
-                {"id": 123, "body": marker + "\\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 124, "body": attempt + "\\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 999, "body": marker + "\\nForged",
-                 "author_association": "NONE",
-                 "performed_via_github_app": {"slug": "other-untrusted-app"}},
-            ]
+            raise AssertionError("no retired registry body read")
 
         async def execute(self, statement, *args):
-            assert "INSERT INTO public.factory_reconciliation_cursor" in statement
-            assert args[0] == REPO
-            self.cursors[args[1]] = args[2]
+            raise AssertionError("missing IDs do not create unverifiable locators")
 
-    db = SnapshotDB()
     with patch.object(operations, "_roster", return_value={
         "111": ("opencode-free", "glm-5.3-flash-free"),
     }):
-        first = run(operations._export_model_exclusions(db, REPO, "111"))
-        second = run(operations._export_model_exclusions(db, REPO, "111"))
-    assert first["nvidia"] == ["gone"]
-    assert first["__heartbeat_id"] == second["__heartbeat_id"] == ["123"]
-    assert first["__attempt_id"] == second["__attempt_id"] == ["124"]
-    # Only initial one-time trusted backfill reads the 1.2 MB body snapshot.
-    assert db.body_reads == 1
-    assert len(db.cursors) == 2
+        record = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
+    assert record == {"nvidia": ["gone"]}
 
 
 def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
