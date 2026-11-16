@@ -2753,14 +2753,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Sync Released Issues Endpoint
-         * @description Sync the caller's followed ComicVine volumes and adopt released issues.
-         *
-         *     Only the authenticated user's release sources are evaluated. An issue is
-         *     adopted only when ComicVine reports a ``store_date`` on or before ``as_of``.
-         */
-        post: operations["sync_released_issues_endpoint_api_v1_reading_plan_sync_sync_post"];
+        post: operations["reading_plan_sync"];
         delete?: never;
         options?: never;
         head?: never;
@@ -10088,6 +10081,60 @@ export interface components {
             mode_version?: string | null;
             predicted_intent?: string | null;
             source?: string | null;
+        };
+        NativeSourceSyncFailure: {
+            error: string;
+            /** Format: int32 */
+            plan_id: number;
+            /** Format: int32 */
+            source_id: number;
+            /** Format: int32 */
+            thread_id: number;
+            /** Format: int32 */
+            volume_id: number;
+        };
+        NativeSyncReport: {
+            /** Format: int64 */
+            checked_sources: number;
+            /** Format: int64 */
+            conflicts: number;
+            /** Format: int64 */
+            created_issues: number;
+            /** Format: int64 */
+            enabled_sources: number;
+            /** Format: int64 */
+            excluded_issues?: number;
+            /** Format: int64 */
+            excluded_sources?: number;
+            /** Format: int64 */
+            failed_sources: number;
+            failures: components["schemas"]["NativeSourceSyncFailure"][];
+            /** Format: int64 */
+            future_skips: number;
+            /** Format: int64 */
+            issue_failures: number;
+            /** Format: int64 */
+            issues_checked: number;
+            /** Format: int64 */
+            reused_issues: number;
+            /** Format: int64 */
+            skipped_sources?: number;
+            /** Format: int64 */
+            successful_sources: number;
+            /** Format: int64 */
+            total_sources: number;
+            /** Format: int64 */
+            unknown_date_skips: number;
+        };
+        NativeSyncRequest: {
+            /** Format: date-time */
+            as_of: string;
+            refresh?: boolean;
+        };
+        NativeSyncResponse: {
+            message: string;
+            result: components["schemas"]["NativeSyncReport"];
+            success: boolean;
         };
         NativeSyncStatusResponse: {
             /** Format: int64 */
@@ -17652,7 +17699,7 @@ export interface operations {
             };
         };
     };
-    sync_released_issues_endpoint_api_v1_reading_plan_sync_sync_post: {
+    reading_plan_sync: {
         parameters: {
             query?: never;
             header?: never;
@@ -17661,27 +17708,39 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SyncRequest"];
+                "application/json": components["schemas"]["NativeSyncRequest"];
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description User-triggered sync report */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SyncResponse"];
+                    "application/json": components["schemas"]["NativeSyncResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
