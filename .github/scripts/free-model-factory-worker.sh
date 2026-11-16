@@ -539,6 +539,7 @@ record_model_failover_failure() {
     "$WORKER_ID" "$failed_model" "$SOURCE" "$classification" "$stamp" "$GITHUB_RUN_ID")"
   gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
     -f body="$body" >/dev/null
+  log "FACTORY_TRUSTED_FAILOVER: source=$SOURCE model=$failed_model outcome=$classification"
 }
 
 select_next_eligible_model() {
