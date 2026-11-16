@@ -931,20 +931,20 @@ pub async fn adopt_reading_order(
             "ref_id": thread_id,
             "lane_id": lane_id,
             "position": idx,
-            "label": null as Option<&str>,
-            "source_role": null as Option<&str>,
-            "source_confidence": null as Option<&str>,
-            "source_explanation": null as Option<&str>,
-            "source_paths": null as Option<Vec<&str>>,
-            "source_cbl_placements": null as Option<Vec<serde_json::Value>>,
-            "source_story_arc_ids": null as Option<Vec<String>>,
-            "source_target_story_arc_id": null as Option<&str>,
-            "reader_role": null as Option<&str>,
-            "reader_optional": null as Option<bool>,
+            "label": null,
+            "source_role": null,
+            "source_confidence": null,
+            "source_explanation": null,
+            "source_paths": null,
+            "source_cbl_placements": null,
+            "source_story_arc_ids": null,
+            "source_target_story_arc_id": null,
+            "reader_role": null,
+            "reader_optional": null,
             "is_checkpoint": false,
-            "checkpoint_target_ref_id": null as Option<i32>,
-            "checkpoint_target_ref_ids": Vec::<i32>::new(),
-            "convergence_gate": Vec::<serde_json::Value>::new()
+            "checkpoint_target_ref_id": null,
+            "checkpoint_target_ref_ids": [],
+            "convergence_gate": []
         }));
     }
 
@@ -1123,10 +1123,10 @@ pub struct ReadingPlanDependencyLinkRequest {
     path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_link_dependency",
-    params([
+    params((
         ("plan_id" = i32, Path, description = "Continuity plan identifier"),
         ("dependency_id" = i32, Path, description = "Dependency identifier")
-    ]),
+    )),
     request_body = ReadingPlanDependencyLinkRequest,
     responses(
         (status = 201, description = "Linked dependency", body = ReadingPlanDependencyLink),
@@ -1238,10 +1238,10 @@ pub async fn link_plan_dependency_edge(
     path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_unlink_dependency",
-    params([
+    params((
         ("plan_id" = i32, Path, description = "Continuity plan identifier"),
         ("dependency_id" = i32, Path, description = "Dependency identifier")
-    ]),
+    )),
     responses(
         (status = 204, description = "Dependency unlinked"),
         (status = 401, description = "Not authenticated"),
