@@ -1,4 +1,5 @@
-"""Behavioral tests for the single source of truth for OpenCode provider IDs."""
+"""Provider integrations carry endpoints, not lists of permitted model IDs."""
+
 from __future__ import annotations
 
 import importlib.util
@@ -20,61 +21,53 @@ def registry():
     return module
 
 
-def test_every_compatible_provider_round_trips_published_model_id(registry):
-    """Selector is canonical provider plus unmodified upstream model ID."""
+def test_every_provider_preserves_discovered_id(registry):
     for source, provider in registry.PROVIDERS.items():
-        model = "upstream/model-v1"
+        model = "synthetic-upstream/model-v1"
         env = {provider.credential: "secret", **dict.fromkeys(provider.additional_credentials, "account")}
         resolution = registry.resolve(source, model, env)
         assert resolution["runtime_model"] == f"{provider.provider}/{model}"
         assert resolution["configured"]
         assert resolution["branch_suffix"] == source
-        if provider.needs_registration(model):
-            config = registry.compatible_config(source, model, env)["providers"][provider.provider]
-            assert config["models"][model]["modelID"] == model
-            assert "secret" not in str(config)
-            assert config["env"] == [provider.credential]
-        else:
-            with pytest.raises(ValueError):
-                registry.compatible_config(source, model, env)
+        assert resolution["configure_adapter"]
+        config = registry.compatible_config(source, model, env)["providers"][provider.provider]
+        assert config["models"][model]["modelID"] == model
+        assert "secret" not in str(config)
+        assert config["env"] == [provider.credential]
 
 
-def test_nvidia_published_vendor_prefix_survives(registry):
+def test_vendor_qualified_model_id_is_not_renamed(registry):
     env = {"NVIDIA_API_KEY": "secret"}
-    model = "nvidia/nemotron-3.5-bolt-e4b"
-    assert registry.resolve("nvidia", model, env)["runtime_model"] == "nvidia/nvidia/nemotron-3.5-bolt-e4b"
+    model = "synthetic-vendor/submodel"
+    assert registry.resolve("nvidia", model, env)["runtime_model"] == f"nvidia/{model}"
     assert registry.compatible_config("nvidia", model, env)["providers"]["nvidia"]["models"][model]["modelID"] == model
-    assert not registry.resolve("nvidia", "openai/gpt-oss-20b", env)["configure_adapter"]
+    assert registry.resolve("nvidia", model, env)["configure_adapter"]
 
 
-def test_missing_credentials_and_unknown_sources_fail_closed(registry):
-    assert registry.resolve("groq-free", "openai/gpt-oss-120b", {})["reason"] == "missing-GROQ_API_KEY"
+def test_missing_credentials_and_unknown_sources(registry):
+    synthetic = "synthetic-model"
+    assert registry.resolve("groq-free", synthetic, {})["reason"] == "missing-GROQ_API_KEY"
     with pytest.raises(ValueError):
-        registry.compatible_config("groq-free", "openai/gpt-oss-120b", {})
-    assert not registry.resolve("cloudflare-workers-ai", "@cf/openai/gpt-oss-20b", {"CLOUDFLARE_API_TOKEN": "secret"})["configured"]
+        registry.compatible_config("groq-free", synthetic, {})
+    assert not registry.resolve("cloudflare-workers-ai", synthetic, {"CLOUDFLARE_API_TOKEN": "secret"})["configured"]
     with pytest.raises(ValueError):
-        registry.resolve("fake-provider", "model", {})
+        registry.resolve("nonexistent-provider", synthetic, {})
     for bad_model in ("", "bad\nmodel", "/missing-model"):
         with pytest.raises(ValueError):
             registry.resolve("groq-free", bad_model, {})
 
 
-def test_roster_provider_sources_are_registered(registry):
-    """Every fixed-model provider-backed worker must have an executable spec."""
-    rows = Path(".github/free-model-factories.tsv").read_text().splitlines()
-    native_sources = {"opencode-free", "openrouter-free", "kilo-auto", "omniroute-free"}
-    for row in rows:
-        if not row or row.startswith("#"):
-            continue
-        worker, source, model, *_ = row.split("\t")
-        if source not in native_sources:
-            spec = registry.get_spec(source, model)
-            assert registry.resolve(source, model, {})["runtime_model"] == f"{spec.provider}/{model}", worker
+def test_registry_is_integration_metadata_not_model_allowlist(registry):
+    assert registry.PROVIDERS
+    for source, provider in registry.PROVIDERS.items():
+        assert source
+        assert provider.endpoint.startswith("https://")
+        assert provider.credential.endswith("_KEY") or provider.credential.endswith("_TOKEN")
+        assert not hasattr(provider, "explicit_models")
 
 
-def test_workflow_consumes_registry_instead_of_reimplementing_it():
+def test_workflow_consumes_registry():
     runner = Path(".github/workflows/free-model-factory-run.yml").read_text()
     assert "factory_provider_registry.py resolve" in runner
     assert "factory_provider_registry.py config" in runner
-    assert "provider_id=" not in runner
     assert "base_url='https://" not in runner

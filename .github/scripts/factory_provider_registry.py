@@ -22,19 +22,14 @@ class ProviderSpec:
     endpoint: str
     name: str
     additional_credentials: tuple[str, ...] = ()
-    # None means every pinned model needs explicit compatible registration.
-    # A set means only these upstream models are missing from the CLI catalog.
-    explicit_models: frozenset[str] | None = None
     headers: tuple[tuple[str, str], ...] = ()
 
-    def needs_registration(self, model: str) -> bool:
-        return self.explicit_models is None or model in self.explicit_models
 
 
 # Provider IDs, credential names, and endpoints belong here, not in workflows.
 # This is declarative integration metadata, not a model-name guesser.
 PROVIDERS: Mapping[str, ProviderSpec] = {
-    "nvidia": ProviderSpec("nvidia", "NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1", "NVIDIA published API models", explicit_models=frozenset({"mistralai/mistral-large-4-1t-a52b", "nvidia/nemotron-3.5-bolt-e4b"})),
+    "nvidia": ProviderSpec("nvidia", "NVIDIA_API_KEY", "https://integrate.api.nvidia.com/v1", "NVIDIA published API models"),
     "z-ai": ProviderSpec("z-ai", "Z_AI_API_KEY", "https://api.z.ai/api/paas/v4", "Z.AI free capacity"),
     "ollama-cloud": ProviderSpec("ollama-cloud", "OLLAMA_API_KEY", "https://ollama.com/v1", "Ollama Cloud free capacity"),
     "vercel-ai-gateway": ProviderSpec("vercel", "AI_GATEWAY_API_KEY", "https://ai-gateway.vercel.sh/v1", "Vercel AI Gateway free capacity"),
@@ -72,14 +67,12 @@ def resolve(source: str, model: str, env: Mapping[str, str]) -> dict[str, object
         "branch_suffix": source,
         "configured": not missing,
         "reason": "configured" if not missing else f"missing-{missing[0]}",
-        "configure_adapter": spec.needs_registration(model),
+        "configure_adapter": True,
     }
 
 
 def compatible_config(source: str, model: str, env: Mapping[str, str]) -> dict[str, object]:
     spec = get_spec(source, model)
-    if not spec.needs_registration(model):
-        raise ValueError(f"model uses the native OpenCode catalog: {source}/{model}")
     missing = missing_credentials(spec, env)
     if missing:
         raise ValueError(f"missing provider configuration: {missing[0]}")
