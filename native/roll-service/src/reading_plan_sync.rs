@@ -17,16 +17,10 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
-use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
-use http_body_util::{BodyExt, Empty};
-use hyper::{Request, Uri};
-use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::net::TcpStream;
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SyncRequest {
@@ -184,6 +178,7 @@ fn parse_as_of(value: &str) -> Result<DateTime<Utc>, ApiError> {
     ))
 }
 
+#[allow(dead_code)]
 fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
     let value = value?;
     if value.is_null() {
