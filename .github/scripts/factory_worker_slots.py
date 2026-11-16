@@ -103,12 +103,14 @@ def offer(tick: int, env: Mapping[str, str] | None = None) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("list", "resolve", "offer"))
+    parser.add_argument("command", choices=("list", "resolve", "offer", "sources"))
     parser.add_argument("--worker")
     parser.add_argument("--tick", type=int, default=0)
     args = parser.parse_args()
     try:
-        if args.command == "list":
+        if args.command == "sources":
+            value = list(sources())
+        elif args.command == "list":
             value = [item.as_record() for item in slots()]
         elif args.command == "resolve":
             if not args.worker:
