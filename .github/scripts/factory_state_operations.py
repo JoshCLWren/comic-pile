@@ -1215,6 +1215,54 @@ def registry_ingest_checkpoint(repo: str) -> str | None:
     return _run(_registry_ingest_checkpoint, repo) if enabled() else None
 
 
+
+async def _export_fleet_failover_sources(conn: Any, repo: str, worker: str) -> list[str]:
+    """Admit sources that cannot bypass a configured provider capacity limit.
+
+    The assigned source already owns capacity under the target's exclusive
+    claim. Other sources without concurrency/daily limits may be used without
+    taking a second reservation. Capped sources require an atomic transfer
+    before they can become candidates, so they are excluded here.
+    """
+    from factory_provider_registry import PROVIDERS
+    from factory_source_budget import load_budgets
+
+    roster = _roster()
+    if worker not in roster:
+        raise ValueError("unknown leased worker")
+    assigned = roster[worker][0]
+    now = datetime.now(timezone.utc)
+    budgets = {
+        r["source"]: r for r in await conn.fetch(
+            "SELECT source,concurrency_limit,daily_limit,cooldown_until,quota_reset_at "
+            "FROM public.factory_provider_budget WHERE repo=$1", repo,
+        )
+    }
+    caps = load_budgets()
+    sources = set(PROVIDERS) | {"opencode-free", "openrouter-free", "kilo-auto"}
+    selected = {assigned}
+    for source in sources - {assigned}:
+        budget = budgets.get(source)
+        if source in caps:
+            continue
+        if budget is not None:
+            if budget["concurrency_limit"] is not None or budget["daily_limit"] is not None:
+                continue
+            if (budget["cooldown_until"] and budget["cooldown_until"] > now) or (
+                budget["quota_reset_at"] and budget["quota_reset_at"] > now
+            ):
+                continue
+        selected.add(source)
+    return sorted(selected)
+
+
+def export_fleet_failover_sources(repo: str, worker: str) -> list[str]:
+    if not enabled():
+        raise RuntimeError("Neon capacity read required for fleet failover")
+    return _run(_export_fleet_failover_sources, repo, worker)
+
+
+
 def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
     if not enabled():
         raise RuntimeError("Neon is required for model health snapshot")
@@ -1223,7 +1271,7 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
 
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health","export-fleet-failover-sources"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
@@ -1237,6 +1285,8 @@ def main() -> int:
             raise SystemExit("Neon is required for factory operations")
         _run(lambda conn: conn.fetchval("SELECT 1"))
         print("[factory-operations] schema ready")
+    elif args.command=="export-fleet-failover-sources":
+        print(json.dumps(export_fleet_failover_sources(args.repo,args.worker),separators=(",",":")))
     elif args.command=="export-model-exclusions":
         print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
     elif args.command=="export-candidate-health":
