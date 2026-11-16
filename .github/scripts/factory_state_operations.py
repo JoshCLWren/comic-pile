@@ -38,19 +38,19 @@ HEAD_RE = re.compile(r"^[a-f0-9]{40}$")
 TRANSIENT = {"provider_failure": 900, "provider_throttle": 1800, "provider_quota": 1800}
 MODEL_COOLDOWNS = {"model_unavailable": 21600, "model_policy_violation": 21600,
                    "model_retired_410": 21600}
-# One failing model does not make its provider unhealthy. Only confirmed
-# account-level quota is provider-wide; OmniRoute routes have independent quotas.
+# A failing model must never cool another model on the same platform.
+# Keep the old OmniRoute constant for compatibility with existing tests.
 MODEL_SCOPED_SOURCES = {"omniroute-free", "omniroute-opencode"}
 
 
 def model_scoped_transient(source: str, outcome: str) -> bool:
-    return outcome in {"provider_failure", "provider_throttle"} or (
-        outcome == "provider_quota" and source in MODEL_SCOPED_SOURCES
-    )
+    return outcome in TRANSIENT
 
 
 def provider_scoped_transient(source: str, outcome: str) -> bool:
-    return outcome in TRANSIENT and not model_scoped_transient(source, outcome)
+    # Compatibility for legacy reconciliation callers; quota, throttle and
+    # failures are always tracked by their exact (source, model) identity.
+    return False
 
 
 def enabled() -> bool:
@@ -151,6 +151,10 @@ def worker_backoff_reason(record: Any, source: str, model: str, now: datetime) -
     # session. Do not erase its worker-level Fibonacci backoff simply because
     # the TSV no longer contains a permanently pinned model ID.
     if state.get("source") and state["source"] != source:
+        return None
+    # Dynamic slots are not permanently assigned to a model. A known model
+    # failure must not suppress the entire slot's alternate model capacity.
+    if not model and state.get("outcome") in MODEL_RETRY_CLASSES:
         return None
     if model and model != "@catalog" and state.get("model") != model:
         return None
@@ -594,8 +598,6 @@ async def _eligibility(conn: Any, repo: str, workers: list[str]) -> tuple[list[s
         elif m and (m["status"]=="retired" or (m["status"] in {"unavailable","cooling"}
                     and m["cooldown_until"] and m["cooldown_until"]>now)):
             rejected.append(f"{worker}: model {model} {m['status']}")
-        elif b and b.get("last_outcome")=="provider_quota" and b["cooldown_until"] and b["cooldown_until"]>now:
-            rejected.append(f"{worker}: provider {source} cooling")
         elif b and b["concurrency_limit"] is not None and counts.get(source,0)>=b["concurrency_limit"]:
             rejected.append(f"{worker}: provider {source} full")
         elif b and b["daily_limit"] is not None and b["usage_day"]==now.date() and b["daily_used"]>=b["daily_limit"]:
@@ -924,6 +926,31 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
     excluded: dict[str, list[str]] = {}
     for row in rows:
         excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
+    # Durable source/model Fibonacci backoffs outlive the shorter model
+    # health cooldowns. Export them as candidate exclusions for catalog slots.
+    backoffs = await conn.fetch(
+        """SELECT payload FROM public.factory_state_kv
+           WHERE cache_key LIKE $1""",
+        f"factory-model-backoff-v1:{repo}:source:%"
+    )
+    now = datetime.now(timezone.utc)
+    for row in backoffs:
+        record = row["payload"]
+        if isinstance(record, str):
+            record = json.loads(record)
+        state = record[0] if isinstance(record, list) and record else {}
+        if not isinstance(state, dict):
+            continue
+        source, model = state.get("source"), state.get("model")
+        if not isinstance(source, str) or not isinstance(model, str) or not model:
+            continue
+        try:
+            retry_at = datetime.fromisoformat(str(state.get("next_retry_at")))
+        except (ValueError, TypeError):
+            retry_at = None
+        if state.get("suspended") is True or (retry_at is not None and retry_at > now):
+            if model not in excluded.setdefault(source, []):
+                excluded[source].append(model)
     # Comment locators are compact, verified GitHub IDs, not a body cache.
     # Read durable coordination first. The legacy registry body is consulted
     # only once when a trusted marker has not yet been migrated.
