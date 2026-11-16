@@ -89,15 +89,37 @@ def compatible_config(source: str, model: str, env: Mapping[str, str]) -> dict[s
     }}}
 
 
+def credential_status(source: str, env: Mapping[str, str]) -> dict[str, object]:
+    """Expose capability without requiring a checked-in model ID."""
+    spec = PROVIDERS.get(source)
+    if spec is None:
+        raise ValueError(f"unknown factory source: {source}")
+    missing = missing_credentials(spec, env)
+    return {
+        "configured": not missing,
+        "reason": "configured" if not missing else f"missing-{missing[0]}",
+        "branch_suffix": source,
+        "configure_adapter": True,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("resolve", "config"))
+    parser.add_argument("command", choices=("resolve", "config", "credentials"))
     parser.add_argument("--source", required=True)
-    parser.add_argument("--model", required=True)
+    parser.add_argument("--model")
     args = parser.parse_args()
     try:
-        result = (resolve(args.source, args.model, os.environ) if args.command == "resolve"
-                  else compatible_config(args.source, args.model, os.environ))
+        if args.command == "credentials":
+            result = credential_status(args.source, os.environ)
+        else:
+            if not args.model:
+                parser.error("this command requires --model")
+            result = (
+                resolve(args.source, args.model, os.environ)
+                if args.command == "resolve"
+                else compatible_config(args.source, args.model, os.environ)
+            )
     except ValueError as exc:
         parser.error(str(exc))
     print(json.dumps(result, separators=(",", ":"), sort_keys=True))
