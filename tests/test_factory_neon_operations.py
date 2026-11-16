@@ -298,7 +298,7 @@ def test_intermediate_model_failures_use_terminal_runtime_idempotency():
     ]
     assert operations.validate_intermediate_model_failures(
         failures, "openrouter-free"
-    ) == [(item["model"], item["outcome"]) for item in failures]
+    ) == [("openrouter-free", item["model"], item["outcome"], "model") for item in failures]
     text = inspect.getsource(operations.project_runtime)
     assert "factory_runtime_event_keys" in text
     assert "factory_model_health.status" in text
