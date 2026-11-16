@@ -1,7 +1,7 @@
 {
   "family": "reading-plan-sync",
   "owned_path_patterns": [
-    "^/api/v1/reading-plan-sync(?:/.*)?$"
+    "^/api/v1/reading-plan-sync/status$"
   ],
   "defaults": {
     "runtime": "native-rust",
