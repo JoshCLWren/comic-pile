@@ -381,3 +381,14 @@ def test_regular_status_job_prunes_only_in_trusted_controller():
     assert "factory_state_cache.py prune-obsolete" not in reconciliation
 
 
+
+
+def test_factory_dashboard_reuses_one_run_local_inventory():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/factory-status-pages.yml").read_text()
+    dashboard = workflow.split("      - name: Generate factory dashboard", 1)[1].split("      - name: Publish live dashboard snapshot", 1)[0]
+    assert "FACTORY_DISCOVERY_DIR: ${{ runner.temp }}/factory-discovery" in dashboard
+    assert "python3 .github/scripts/generate_factory_status_dashboard.py" in dashboard
+    # Run-local discovery prevents duplicate all-issues/all-PRs enumerations
+    # within one render. It does not grant cross-run authority.
+    assert "FACTORY_DISCOVERY_DIR" not in workflow.split("      - name: Configure shared Neon factory discovery cache", 1)[0]
