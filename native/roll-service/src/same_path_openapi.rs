@@ -144,4 +144,13 @@ mod tests {
             .expect("serializable contract");
         assert_eq!(expected.trim_end(), generated.trim_end());
     }
+
+    #[test]
+    fn dump_generated_openapi_to_tmp() {
+        let generated = same_path_openapi()
+            .to_pretty_json()
+            .expect("serializable contract");
+        std::fs::write("/tmp/generated_same_path_openapi.json", generated.trim_end())
+            .expect("write tmp openapi");
+    }
 }
