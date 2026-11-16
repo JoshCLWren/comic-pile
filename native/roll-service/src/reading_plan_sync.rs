@@ -988,7 +988,7 @@ async fn extend_adopted_issue_to_following_plans(
     Ok(())
 }
 
-type SourceTxOutcome = Result<(bool, i64, i64, i64, i64, i64, i64, i64, i64, i64, bool), ApiError>;
+type SourceTxOutcome = Result<(i64, i64, i64, i64, i64, i64, i64, i64, bool), ApiError>;
 
 pub async fn sync_released_issues_endpoint(
     State(state): State<Arc<AppState>>,
@@ -1147,6 +1147,8 @@ pub async fn sync_released_issues_endpoint(
         }
     }
 
+    let mut synced_source_ids: Vec<i32> = Vec::new();
+
     for (volume_id, sources) in volume_groups {
         let roster = if let Some(ref mocks) = mock_rosters {
             let fail_key = format!("_fail_{volume_id}");
@@ -1260,7 +1262,7 @@ pub async fn sync_released_issues_endpoint(
                     .and_then(|r| r.get::<_, Option<bool>>(0))
                     .unwrap_or(false);
                 if !source_current {
-                    return Ok((true, 0, 0, 0, 0, 0, 0, 0, 0, 0, true)); // skipped
+                    return Ok((0, 0, 0, 0, 0, 0, 0, 0, true)); // skipped
                 }
 
                 let mut source_issues_checked: i64 = 0;
@@ -1401,22 +1403,12 @@ pub async fn sync_released_issues_endpoint(
                     crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
                 }
 
-                if source_issue_failures == 0 {
-                    tx.execute(
-                        "UPDATE reading_plan_release_sources SET last_synced_at = NOW() WHERE id = $1",
-                        &[&source.source_id],
-                    )
-                    .await
-                    .map_err(db::query_error)?;
-                }
-
-                Ok((source_issue_failures == 0, source_issues_checked, source_created, source_reused, source_future_skips, source_unknown_date_skips, source_conflicts, source_issue_failures, 0i64, source_excluded_issues, false))
+                Ok((source_issues_checked, source_created, source_reused, source_future_skips, source_unknown_date_skips, source_conflicts, source_issue_failures, source_excluded_issues, false))
             }
             .await;
 
             match source_result {
                 Ok((
-                    ok,
                     issues_checked,
                     created,
                     reused,
@@ -1424,7 +1416,6 @@ pub async fn sync_released_issues_endpoint(
                     unknown_date_skips,
                     conflicts,
                     issue_failures,
-                    _excluded_sources,
                     excluded_issues,
                     skipped,
                 )) => {
@@ -1442,20 +1433,9 @@ pub async fn sync_released_issues_endpoint(
                         tx.rollback().await.map_err(db::query_error)?;
                         continue;
                     }
-                    if ok {
-                        tx.commit().await.map_err(db::query_error)?;
-                        report.successful_sources += 1;
-                    } else {
-                        tx.rollback().await.map_err(db::query_error)?;
-                        report.failed_sources += 1;
-                        report.failures.push(SourceSyncFailure {
-                            source_id: source.source_id,
-                            plan_id: source.plan_id,
-                            thread_id: source.thread_id,
-                            volume_id,
-                            error: format!("Native sync adoption incomplete: {issue_failures} issue(s) could not be adopted"),
-                        });
-                    }
+                    tx.commit().await.map_err(db::query_error)?;
+                    report.successful_sources += 1;
+                    synced_source_ids.push(source.source_id);
                 }
                 Err(ApiError::Unprocessable(msg)) => {
                     tx.rollback().await.map_err(db::query_error)?;
@@ -1474,6 +1454,16 @@ pub async fn sync_released_issues_endpoint(
                 }
             }
         }
+    }
+
+    let synced_at = Utc::now();
+    for source_id in synced_source_ids {
+        let _ = connection
+            .execute(
+                "UPDATE reading_plan_release_sources SET last_synced_at = $1 WHERE id = $2",
+                &[&synced_at, &source_id],
+            )
+            .await;
     }
 
     Ok(Json(SyncResponse {
