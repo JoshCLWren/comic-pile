@@ -35,7 +35,7 @@ def test_price_does_not_exclude_candidates() -> None:
 
 
 def test_all_cooling_candidates_are_deferred() -> None:
-    with pytest.raises(SELECTOR.CandidateUnavailable):
+    with pytest.raises(SELECTOR.CandidateUnavailableError):
         SELECTOR.select(
             "nvidia", "1234", {"data": [{"id": "sample/model"}]},
             {"nvidia": ["sample/model"]},
@@ -43,5 +43,5 @@ def test_all_cooling_candidates_are_deferred() -> None:
 
 
 def test_malformed_catalog_does_not_invent_a_model() -> None:
-    with pytest.raises(SELECTOR.CandidateUnavailable):
+    with pytest.raises(SELECTOR.CandidateUnavailableError):
         SELECTOR.select("groq-free", "1234", {"data": {}})
