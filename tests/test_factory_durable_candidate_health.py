@@ -1,10 +1,11 @@
 """No registry pagination required for catalog candidate selection."""
 from __future__ import annotations
+import importlib
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / ".github/scripts"))
-import factory_candidate_health as health
+health = importlib.import_module("factory_candidate_health")
 
 
 def test_durable_healthy_route_is_executable_without_trusted_comment() -> None:
