@@ -3317,22 +3317,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Taste Discoveries
-         * @description Return ranked prompt-eligible discoveries for the reader.
-         *
-         *     Surfacing counts as prompting: returned signals record ``last_prompted_at``
-         *     so the canonical cooldown suppresses immediate re-prompting. Signals with
-         *     any explicit verdict are never included.
-         *
-         *     Args:
-         *         current_user: The authenticated reader.
-         *         db: Async database session.
-         *         limit: Bounded maximum number of discoveries to return.
-         *
-         *     Returns:
-         *         Ranked eligible discoveries with concise evidence context.
+         * Documentation-only operation for the mounted discovery listing.
+         * @description Return ranked prompt-eligible taste discoveries for the authenticated reader. Wire parity with Python GET /api/v1/taste/discoveries: applies evidence/confidence/affinity/diversity gates, the 14-day prompting cooldown, dismissal suppression and creator-role dedup, and records last_prompted_at for exactly the returned signals.
          */
-        get: operations["list_taste_discoveries_api_v1_taste_discoveries_get"];
+        get: operations["list_taste_discoveries"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10082,6 +10070,26 @@ export interface components {
             predicted_intent?: string | null;
             source?: string | null;
         };
+<<<<<<< ours
+        /** @description One prompt-eligible inferred taste pattern shown on Roll. */
+        NativeTasteDiscovery: {
+            display_name: string;
+            /** Format: int32 */
+            distinct_thread_count: number;
+            /** Format: int32 */
+            evidence_count: number;
+            external_key: string;
+            /** Format: int32 */
+            id: number;
+            prompt: string;
+            signal_type: string;
+        };
+        /** @description Ranked prompt-eligible discoveries for the authenticated reader. */
+        NativeTasteDiscoveryListResponse: {
+            discoveries: components["schemas"]["NativeTasteDiscovery"][];
+            /** Format: date-time */
+            generated_at: string;
+=======
         NativeSourceSyncFailure: {
             error: string;
             /** Format: int32 */
@@ -10155,6 +10163,7 @@ export interface components {
             reading_plan_id: number;
             /** Format: int32 */
             thread_id: number;
+>>>>>>> theirs
         };
         NearMatch: {
             color: string;
@@ -18628,10 +18637,10 @@ export interface operations {
             };
         };
     };
-    list_taste_discoveries_api_v1_taste_discoveries_get: {
+    list_taste_discoveries: {
         parameters: {
             query?: {
-                /** @description Maximum discoveries to return. */
+                /** @description Maximum discoveries to return (1-3, default 3). */
                 limit?: number;
             };
             header?: never;
@@ -18640,23 +18649,35 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Ranked discoveries */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TasteDiscoveryListResponse"];
+                    "application/json": components["schemas"]["NativeTasteDiscoveryListResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description limit is outside the allowed range */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                content?: never;
+            };
+            /** @description Database temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
                 };
+                content?: never;
             };
         };
     };
