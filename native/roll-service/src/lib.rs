@@ -10,6 +10,7 @@ pub mod comicvine_issue;
 pub mod comicvine_repair;
 pub mod comicvine_resolution;
 pub mod config;
+pub mod continuity_plans;
 pub mod continuity_rules;
 pub mod creators;
 pub mod db;
