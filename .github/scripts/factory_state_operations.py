@@ -179,6 +179,29 @@ MODEL_RETRY_CLASSES = frozenset({
 })
 
 
+def validate_intermediate_model_failures(raw: Any, source: str) -> list[tuple[str, str]]:
+    """Normalize trusted per-attempt outcomes; preserve legacy smoke evidence."""
+    if not raw:
+        return []
+    if not isinstance(raw, list) or len(raw) > 1000:
+        raise ValueError("invalid trusted intermediate model failures")
+    accepted = MODEL_RETRY_CLASSES | {"model_retired_410"}
+    seen: dict[str, str] = {}
+    for entry in raw:
+        if isinstance(entry, str) and source == "opencode-free":
+            model, classification = entry, "model_unavailable"
+        elif isinstance(entry, dict):
+            model, classification = entry.get("model"), entry.get("outcome")
+        else:
+            raise ValueError("invalid trusted intermediate model failure entry")
+        if (not isinstance(model, str)
+                or not re.fullmatch(r"[\w./:-]{1,180}", model)
+                or classification not in accepted):
+            raise ValueError("invalid trusted intermediate model failure identity")
+        seen[model] = classification
+    return sorted(seen.items())
+
+
 def attributable_model_failure(classification: str, proven: bool) -> bool:
     """Only blame the shared source/model when inference was attempted."""
     return classification in MODEL_RETRY_CLASSES or (
@@ -287,13 +310,7 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
     observed = datetime.now(timezone.utc)
     # A trusted job-log collector can attest multiple attempted free models.
     # This evidence belongs to this same idempotent runtime transaction.
-    model_failures = outcome.get("model_failures") or []
-    if model_failures and (source != "opencode-free" or not isinstance(model_failures, list)
-            or len(model_failures) > 5 or any(
-                not isinstance(m, str) or not re.fullmatch(r"[\w./:-]{1,180}", m)
-                for m in model_failures
-            )):
-        raise ValueError("invalid trusted intermediate model failures")
+    model_failures = validate_intermediate_model_failures(outcome.get("model_failures"), source)
     async with conn.transaction():
         inserted = await conn.fetchval(
             """INSERT INTO public.factory_runtime_event_keys(repo,run_id)
@@ -381,23 +398,71 @@ async def project_runtime(conn: Any, repo: str, run_id: int, outcome: dict[str, 
                      updated_at=now()
                    WHERE factory_provider_budget.last_run_id<=EXCLUDED.last_run_id""",
                 repo, source, until, until if classification=="provider_quota" else None, classification,run_id)
-        # Record each intermediate unavailable model even if the final smoke
-        # rotated successfully. The run_id uniqueness key above prevents
-        # duplicate or out-of-order application of this run.
-        for failed_model in set(model_failures):
+        # Record every failed candidate independently even if another model
+        # eventually completed the same leased task. No provider-wide breaker.
+        for failed_model, failed_outcome in model_failures:
+            failed_status = (
+                "retired" if failed_outcome == "model_retired_410"
+                else "unavailable" if failed_outcome in MODEL_COOLDOWNS
+                else "cooling"
+            )
+            failed_until = (
+                None if failed_status == "retired"
+                else observed + timedelta(seconds=MODEL_COOLDOWNS[failed_outcome])
+                if failed_outcome in MODEL_COOLDOWNS
+                else _provider_cooldown(source, failed_outcome, observed)
+            )
             await conn.execute(
                 """INSERT INTO public.factory_model_health
-                     (repo,source,model,status,last_outcome,cooldown_until,last_run_id)
-                   VALUES($1,$2,$3,'unavailable','model_unavailable',
-                          now()+interval '6 hours',$4)
+                   (repo,source,model,status,last_outcome,cooldown_until,last_run_id)
+                   VALUES($1,$2,$3,$4,$5,$6,$7)
                    ON CONFLICT(repo,source,model) DO UPDATE SET
                      status=EXCLUDED.status,last_outcome=EXCLUDED.last_outcome,
                      cooldown_until=EXCLUDED.cooldown_until,
                      last_run_id=EXCLUDED.last_run_id,updated_at=now()
-                   WHERE factory_model_health.status!='retired'
-                     AND factory_model_health.last_run_id <= EXCLUDED.last_run_id""",
-                repo, source, failed_model, run_id,
+                   WHERE factory_model_health.last_run_id <= EXCLUDED.last_run_id
+                     AND (factory_model_health.status!='retired'
+                          OR EXCLUDED.status='retired')""",
+                repo, source, failed_model, failed_status, failed_outcome,
+                failed_until, run_id,
             )
+            # Apply the same source/model Fibonacci persistence used by the
+            # terminal candidate. A later successful candidate cannot erase it.
+            failed_key = f"factory-model-backoff-v1:{repo}:source:{source}:model:{failed_model}"
+            await conn.fetchval(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", failed_key,
+            )
+            previous = await conn.fetchrow(
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1 FOR UPDATE",
+                failed_key,
+            )
+            prior_payload = previous["payload"] if previous else None
+            if isinstance(prior_payload, str):
+                prior_payload = json.loads(prior_payload)
+            prior_state = prior_payload[0] if isinstance(prior_payload, list) and prior_payload else {}
+            prior_run = int(prior_state.get("run_id") or 0) if isinstance(prior_state, dict) else 0
+            if prior_run <= run_id:
+                streak = (int(prior_state.get("streak") or 0) if previous
+                          else await _recent_streak(conn, run_id, source, failed_model)) + 1
+                suspended = streak >= WORKER_SUSPEND_AFTER
+                retry_at = (
+                    None if suspended else
+                    (observed + timedelta(seconds=fibonacci_worker_delay(streak))).isoformat()
+                )
+                await conn.execute(
+                    """INSERT INTO public.factory_state_kv
+                       (cache_key,payload,fetched_at,expires_at,updated_at)
+                       VALUES($1,$2::jsonb,now(),now()+interval '90 days',now())
+                       ON CONFLICT(cache_key) DO UPDATE SET
+                         payload=EXCLUDED.payload,fetched_at=EXCLUDED.fetched_at,
+                         expires_at=EXCLUDED.expires_at,updated_at=EXCLUDED.updated_at""",
+                    failed_key, json.dumps([{
+                        "source": source, "model": failed_model,
+                        "outcome": failed_outcome, "streak": streak,
+                        "run_id": run_id, "suspended": suspended,
+                        "next_retry_at": retry_at,
+                    }]),
+                )
         # Provider success clears a transient breaker only if no later breaker
         # was recorded. Another concurrent worker may still have hit a limit.
         if attributed and proven and classification not in TRANSIENT and classification != "no_work":

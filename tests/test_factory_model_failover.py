@@ -86,3 +86,51 @@ def test_excluded_models_never_appear_even_if_unattempted() -> None:
         catalog_json=catalog,
     )
     assert selection["model"] == "generated/c:free"
+
+def test_intermediate_model_outcomes_preserve_exact_failure_type() -> None:
+    from factory_state_operations import validate_intermediate_model_failures
+
+    failures = [
+        {"model": "test/generated-a", "outcome": "provider_quota"},
+        {"model": "test/generated-b", "outcome": "provider_throttle"},
+        {"model": "test/generated-c", "outcome": "model_unavailable"},
+    ]
+    assert validate_intermediate_model_failures(failures, "openrouter-free") == [
+        ("test/generated-a", "provider_quota"),
+        ("test/generated-b", "provider_throttle"),
+        ("test/generated-c", "model_unavailable"),
+    ]
+    with pytest.raises(ValueError):
+        validate_intermediate_model_failures(
+            [{"model": "test/generated-a", "outcome": "control_plane_failure"}],
+            "openrouter-free",
+        )
+
+
+def test_trusted_failover_log_preserves_all_failed_models() -> None:
+    from factory_state_ledger import refine_trusted_failover_models
+
+    worker = "123456"
+    source = "openrouter-free"
+    failures = [
+        ("test/generated-a:free", "provider_quota"),
+        ("test/generated-b:free", "provider_throttle"),
+    ]
+    lines = [
+        f"2026-11-16T19:00:0{i}Z [factory:{worker}][source:{source}]"
+        f"[model:{model}] FACTORY_TRUSTED_FAILOVER: "
+        f"source={source} model={model} outcome={kind}"
+        for i, (model, kind) in enumerate(failures)
+    ]
+    result = refine_trusted_failover_models(
+        {"worker": worker, "source": source, "model": "test/generated-c:free"},
+        "\n".join(lines),
+    )
+    assert result["model_failures"] == [
+        {"model": model, "outcome": kind} for model, kind in failures
+    ]
+    # A different provider cannot poison this source's candidate health.
+    wrong = lines[0].replace("[source:openrouter-free]", "[source:nvidia]")
+    assert "model_failures" not in refine_trusted_failover_models(
+        {"worker": worker, "source": source}, wrong,
+    )

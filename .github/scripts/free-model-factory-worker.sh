@@ -546,7 +546,8 @@ select_next_eligible_model() {
   local next_json next_model next_runtime state candidate_status
   local -a select_args=(--source "$SOURCE" --worker "$WORKER" \
     --rotation "$GITHUB_RUN_NUMBER" \
-    --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json")
+    --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
+    --catalog-cache "$RUNNER_TEMP/factory-failover-catalog.json")
   local prior
   for prior in "${attempted_models[@]}"; do
     select_args+=(--attempted "$prior")
@@ -558,6 +559,7 @@ select_next_eligible_model() {
       select_args+=(--catalog-file "$RUNNER_TEMP/factory-kilo-catalog") ;;
   esac
   while :; do
+    (( $(remaining) > 540 )) || return 1
     if ! next_json="$(python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_model_failover.py" \
       "${select_args[@]}")"; then
       log "No further eligible models in $SOURCE; retaining the failed attempt's outcome"
