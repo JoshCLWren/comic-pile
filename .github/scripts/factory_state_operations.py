@@ -980,12 +980,7 @@ def export_candidate_health(repo: str) -> dict[str, Any]:
 async def _remember_verified_markers(
     conn: Any, repo: str, entries: list[dict[str, str]],
 ) -> int:
-    """Store GitHub IDs supplied only after independent trusted-author checks.
-
-    No body, executable command or synthesized comment is stored in Neon.
-    Newer created IDs supersede deleted/replaced IDs; stale observations
-    never overwrite a newer locator.
-    """
+    """Persist only trusted, canonical registry comment IDs in scoped cursors."""
     roster = _roster()
     count = 0
     for item in entries:
@@ -1005,66 +1000,7 @@ async def _remember_verified_markers(
                ON CONFLICT(repo,scope) DO UPDATE SET
                  checkpoint=EXCLUDED.checkpoint,checked_at=now()
                WHERE factory_reconciliation_cursor.checkpoint IS NULL
-                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+
-    if not enabled():
-        raise RuntimeError("Neon is required for model health snapshot")
-    return _run(_export_model_exclusions, repo, worker)
-
-
-def main() -> int:
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
-    parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
-    parser.add_argument("--file",type=Path)
-    parser.add_argument("--scope")
-    parser.add_argument("--worker",default="")
-    parser.add_argument("--cursor",default="")
-    args=parser.parse_args()
-    if not REPO_RE.fullmatch(args.repo):
-        parser.error("invalid repo")
-    if args.command=="bootstrap":
-        if not enabled():
-            raise SystemExit("Neon is required for factory operations")
-        _run(lambda conn: conn.fetchval("SELECT 1"))
-        print("[factory-operations] schema ready")
-    elif args.command=="export-model-exclusions":
-        print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
-    elif args.command=="export-candidate-health":
-        print(json.dumps(export_candidate_health(args.repo),sort_keys=True,separators=(",",":")))
-    elif args.command=="filter":
-        workers=[str(w) for w in json.load(sys.stdin)]
-        kept,denied=filter_workers(args.repo,workers)
-        for reason in denied:
-            print(f"[factory-operations] {reason}",file=sys.stderr)
-        print(json.dumps(kept,separators=(",",":")))
-    elif args.command=="rank":
-        print(json.dumps(rank_workers(args.repo,[str(w) for w in json.load(sys.stdin)]),
-                         separators=(",",":")))
-    elif args.command=="sync-catalog":
-        if args.file is None:
-            parser.error("--file required")
-        print(json.dumps({"missing_models":sync_catalog(args.repo,json.loads(args.file.read_text()))}))
-    elif args.command=="sync-registry":
-        if args.file is None:
-            parser.error("--file required")
-        print(json.dumps({"backfilled":sync_registry(args.repo,json.loads(args.file.read_text()))}))
-    elif args.command=="stats":
-        print(json.dumps(_run(_stats,args.repo),default=str))
-    elif args.command=="ingest-check":
-        if args.file is None:
-            parser.error("--file required")
-        recorded=ingest_check(args.repo,json.loads(args.file.read_text()))
-        print(json.dumps({"recorded_review_failures":recorded}))
-    elif args.command=="checkpoint":
-        if not args.scope:
-            parser.error("--scope required")
-        checkpoint(args.repo,args.scope,args.cursor)
-    return 0
-
-
-if __name__=="__main__":
-    raise SystemExit(main())
-
+                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
                   OR factory_reconciliation_cursor.checkpoint::bigint
                        < EXCLUDED.checkpoint::bigint
                RETURNING 1""",
