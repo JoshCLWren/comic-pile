@@ -80,7 +80,7 @@ pub struct CustomCBLResponse {
     pub warnings: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CustomCBLPredecessorChange {
     pub issue_id: i32,
     pub issue_name: String,
@@ -141,6 +141,7 @@ pub struct CustomCBLApplyResponse {
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct OverlapDecisionItem {
     pub id: i32,
+    pub list_id: i32,
     pub continuing_volume_id: String,
     pub waiting_volume_id: String,
     pub created_at: String,
