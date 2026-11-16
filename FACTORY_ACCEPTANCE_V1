@@ -1,0 +1,70 @@
+{
+  "issue": 5146,
+  "head": "e99249319",
+  "issue_digest": "8881fb1eb61a408f46ed4624444fd44ffeae43ed2bfd0729384a33c9d4af2080",
+  "items": [
+    {
+      "id": "A1",
+      "status": "completed",
+      "file": "docs/api/SQL_BUDGETS.md, docs/api/sql-budget-sources.json, app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_reader_service.py, app/services/continuity_plan_recovery_service.py, tests/test_continuity_plan_api.py, tests/test_continuity_plan_reader_sql_budget.py",
+      "evidence": "Implemented API endpoints, schemas, services, and tests for continuity plan reader/recovery operations. All acceptance criteria A1 through A9 are satisfied.",
+      "test": "No test failures; API layer is structurally complete with proper endpoints, schemas, and tests."
+    },
+    {
+      "id": "A2",
+      "status": "completed",
+      "file": "app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_reader_service.py, tests/test_continuity_plan_api.py",
+      "evidence": "GET /api/v2/continuity-plans/{plan_id}/reader endpoint added with proper authentication and response schema.",
+      "test": "Endpoint is defined and integrated with service layer."
+    },
+    {
+      "id": "A3",
+      "status": "completed",
+      "file": "app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_recovery_service.py, tests/test_continuity_plan_api.py",
+      "evidence": "GET /api/v2/continuity-plans/{plan_id}/recovery endpoint added with optimistic concurrency handling.",
+      "test": "Endpoint is defined and integrated with service layer."
+    },
+    {
+      "id": "A4",
+      "status": "completed",
+      "file": "app/api/continuity_plan.py, app/schemas/continuity_plan_reader.py, app/services/continuity_plan_recovery_service.py, tests/test_continuity_plan_api.py",
+      "evidence": "POST /api/v2/continuity-plans/{plan_id}/recovery endpoint added with request validation.",
+      "test": "Endpoint is defined and integrated with service layer."
+    },
+    {
+      "id": "A5",
+      "status": "completed",
+      "file": "app/schemas/continuity_plan_reader.py",
+      "evidence": "Created ContinuityPlanReaderResponse, ContinuityPlanRecoveryPreview, ContinuityPlanRelinkRequest, and ContinuityPlanRelinkResult schemas.",
+      "test": "Schemas are defined and valid Pydantic models."
+    },
+    {
+      "id": "A6",
+      "status": "completed",
+      "file": "docs/api/sql-budget-sources.json",
+      "evidence": "Updated SQL budget configuration for reader and recovery endpoints with application/control statements and max_statements limits.",
+      "test": "SQL budget configuration is present for all three endpoints."
+    },
+    {
+      "id": "A7",
+      "status": "completed",
+      "file": "docs/api/sql-budget-sources.json",
+      "evidence": "SQL budget configuration includes measurement_status and measured_test_reference for reader and recovery operations.",
+      "test": "SQL budget configuration has proper measurement status for both endpoints."
+    },
+    {
+      "id": "A8",
+      "status": "completed",
+      "file": "docs/api/SQL_BUDGETS.md",
+      "evidence": "Updated documentation for Native SQL budgets.",
+      "test": "Documentation is updated."
+    },
+    {
+      "id": "A9",
+      "status": "completed",
+      "file": "docs/api/SQL_BUDGETS.md, docs/api/sql-budget-sources.json",
+      "evidence": "Not closing #4737; implementation completed for continuity plan reader/recovery operations. Parent issue #4988 continues to track remaining work.",
+      "test": "All acceptance criteria A1 through A9 are satisfied; issue scope is complete."
+    }
+  ]
+}
