@@ -10,7 +10,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / ".github/scripts"))
 
-from factory_model_failover import ExhaustedCandidates, select_next  # noqa: E402
+from factory_model_failover import ExhaustedCandidatesError, select_next  # noqa: E402
 
 
 def _catalog(*models: str) -> dict:
@@ -28,7 +28,7 @@ def test_openrouter_free_iterates_every_discovered_free_candidate() -> None:
         assert selected["runtime_model"] == f"openrouter/{model}"
         attempted.add(model)
     assert attempted == set(names)
-    with pytest.raises(ExhaustedCandidates):
+    with pytest.raises(ExhaustedCandidatesError):
         select_next("openrouter-free", "12345", attempted, {}, catalog_json=catalog)
 
 
@@ -43,7 +43,7 @@ def test_cooldown_is_exact_model_and_provider() -> None:
         assert selected["model"] != candidates[0]
         attempted.add(selected["model"])
     assert attempted == set(candidates[1:])
-    with pytest.raises(ExhaustedCandidates):
+    with pytest.raises(ExhaustedCandidatesError):
         select_next("nvidia", "567", attempted, excluded, catalog_json=catalog)
     # A source/model failure must not suppress the same model on another source.
     other = select_next("requesty", "567", set(), excluded, catalog_json=catalog)
@@ -61,7 +61,7 @@ def test_opencode_free_iterates_live_catalog_without_roster() -> None:
         assert selected["model"] in names
         assert selected["model"] not in attempted
         attempted.add(selected["model"])
-    with pytest.raises(ExhaustedCandidates):
+    with pytest.raises(ExhaustedCandidatesError):
         select_next("opencode-free", "41", attempted, {}, catalog_text=catalog)
 
 
@@ -74,7 +74,7 @@ def test_kilo_tries_all_published_cli_selectors() -> None:
         assert selected["model"] == selected["runtime_model"]
         assert selected["model"] not in attempted
         attempted.add(selected["model"])
-    with pytest.raises(ExhaustedCandidates):
+    with pytest.raises(ExhaustedCandidatesError):
         select_next("kilo-auto", "41", attempted, {}, catalog_text=catalog)
 
 
