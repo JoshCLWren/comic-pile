@@ -50,6 +50,7 @@ pub mod roll_override;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod roll_v1_openapi;
 pub mod roll_switch_prerequisite;
 pub mod same_path_openapi;
 mod session_bandwidth;
