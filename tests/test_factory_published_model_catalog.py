@@ -86,7 +86,7 @@ def test_cli_accepts_fixture_with_published_price(tmp_path: Path) -> None:
         capture_output=True, text=True, check=True,
     )
     assert json.loads(out.stdout) == {
-        "source": "openrouter-free", "model": "example/paid", "catalog_listed": True,
+        "source": "openrouter-free", "model": "example/paid",\n        "runtime_model": "openrouter/example/paid", "catalog_listed": True,
     }
 
 
