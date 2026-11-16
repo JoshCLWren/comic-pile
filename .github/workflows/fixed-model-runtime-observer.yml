@@ -137,8 +137,8 @@ jobs:
           fi
           if [[ -z "$comment_id" || -z "$current" ]]; then
             # Cold-start only, following a missing or invalidated locator.
-            comment_id="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
-              | jq -r --arg marker "$marker" '[.[] | select(.body | startswith($marker)) | .id] | last // empty')"
+            comment_id="$(gh api --paginate --slurp "repos/${GITHUB_REPOSITORY}/issues/1093/comments?per_page=100" \
+              | python3 .github/scripts/factory_registry_verify.py find --kind attempt --worker "$WORKER")"
             current=''
           fi
           if [[ -n "$comment_id" && -z "$current" ]]; then
