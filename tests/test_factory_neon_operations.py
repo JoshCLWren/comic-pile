@@ -247,6 +247,8 @@ def test_missing_marker_id_never_reads_obsolete_body_cache():
         async def fetch(self, statement, *args):
             if "factory_reconciliation_cursor" in statement:
                 return []
+            if "factory_state_kv" in statement:
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
