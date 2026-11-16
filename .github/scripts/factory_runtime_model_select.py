@@ -21,7 +21,7 @@ from factory_provider_candidates import ADAPTERS, discover
 from factory_provider_registry import PROVIDERS, missing_credentials
 
 
-class CandidateUnavailable(RuntimeError):
+class CandidateUnavailableError(RuntimeError):
     """No published model can currently be selected for an invocation."""
 
 
@@ -30,10 +30,10 @@ def provider_catalog(
 ) -> dict[str, Any]:
     spec = PROVIDERS.get(source)
     if spec is None:
-        raise CandidateUnavailable(f"no compatible provider integration for {source}")
+        raise CandidateUnavailableError(f"no compatible provider integration for {source}")
     missing = missing_credentials(spec, env)
     if missing:
-        raise CandidateUnavailable(f"missing provider credentials for {source}")
+        raise CandidateUnavailableError(f"missing provider credentials for {source}")
     endpoint = spec.endpoint
     if spec.additional_credentials:
         endpoint = endpoint.replace("{account_id}", env["CLOUDFLARE_ACCOUNT_ID"])
@@ -49,18 +49,18 @@ def provider_catalog(
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             if response.status != 200:
-                raise CandidateUnavailable(f"{source}: catalog HTTP {response.status}")
+                raise CandidateUnavailableError(f"{source}: catalog HTTP {response.status}")
             body = response.read(5_000_001)
     except (OSError, urllib.error.URLError) as exc:
-        raise CandidateUnavailable(f"{source}: catalog read failed") from exc
+        raise CandidateUnavailableError(f"{source}: catalog read failed") from exc
     if len(body) > 5_000_000:
-        raise CandidateUnavailable(f"{source}: catalog is too large")
+        raise CandidateUnavailableError(f"{source}: catalog is too large")
     try:
         value = json.loads(body)
     except (UnicodeDecodeError, ValueError) as exc:
-        raise CandidateUnavailable(f"{source}: invalid catalog JSON") from exc
+        raise CandidateUnavailableError(f"{source}: invalid catalog JSON") from exc
     if not isinstance(value, dict):
-        raise CandidateUnavailable(f"{source}: catalog must be an object")
+        raise CandidateUnavailableError(f"{source}: catalog must be an object")
     return value
 
 
@@ -76,7 +76,7 @@ def select(
         if candidate.model not in excluded
     ]
     if not candidates:
-        raise CandidateUnavailable(
+        raise CandidateUnavailableError(
             f"{source}: catalog contained no eligible candidates outside cooldown"
         )
     digest = hashlib.sha256(f"{source}:{worker}".encode()).digest()
@@ -101,13 +101,13 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if not args.worker.isdecimal():
-            raise CandidateUnavailable("invalid worker identity")
+            raise CandidateUnavailableError("invalid worker identity")
         raw = (
             json.loads(args.catalog_json.read_text(encoding="utf-8"))
             if args.catalog_json else provider_catalog(args.source, os.environ)
         )
         if not isinstance(raw, dict):
-            raise CandidateUnavailable("catalog is not a JSON object")
+            raise CandidateUnavailableError("catalog is not a JSON object")
         excluded: Mapping[str, list[str]] | None = None
         if args.exclusions_file is not None:
             value = json.loads(args.exclusions_file.read_text(encoding="utf-8"))
@@ -116,10 +116,10 @@ def main() -> int:
                 or not all(isinstance(item, str) for item in items)
                 for items in value.values()
             ):
-                raise CandidateUnavailable("invalid trusted model cooldown projection")
+                raise CandidateUnavailableError("invalid trusted model cooldown projection")
             excluded = value
         result = select(args.source, args.worker, raw, excluded)
-    except (CandidateUnavailable, OSError, ValueError) as exc:
+    except (CandidateUnavailableError, OSError, ValueError) as exc:
         print(f"factory catalog: {exc}", file=sys.stderr)
         return 1
     print(json.dumps(result, sort_keys=True))

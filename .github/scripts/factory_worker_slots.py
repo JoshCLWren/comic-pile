@@ -12,7 +12,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from typing import Mapping
+from collections.abc import Mapping
 
 from factory_provider_registry import PROVIDERS
 

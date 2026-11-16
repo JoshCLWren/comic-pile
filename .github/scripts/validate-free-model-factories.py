@@ -7,12 +7,9 @@ Execution availability is proved only by a real worker run, not this validator.
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
 from factory_dispatch_credential_filter import filter_workers, worker_sources
 from factory_provider_candidates import discover
 from factory_provider_registry import PROVIDERS
@@ -28,7 +25,7 @@ def validate() -> None:
     derived = slots({"FACTORY_SLOTS_PER_PROVIDER": "2"})
     assert len(derived) == capacity * len(source_names)
     assert len({item.worker for item in derived}) == len(derived)
-    assert set(item.source for item in derived) == set(source_names)
+    assert {item.source for item in derived} == set(source_names)
     assert all("model" not in item.as_record() for item in derived)
     assert all(resolve(item.worker, {"FACTORY_SLOTS_PER_PROVIDER": "2"}) == item for item in derived)
     synthetic = {"data": [
@@ -57,7 +54,8 @@ def validate() -> None:
     dispatch = (WORKFLOWS / "fixed-model-factory-dispatch.yml").read_text(encoding="utf-8")
     runner = (WORKFLOWS / "free-model-factory-run.yml").read_text(encoding="utf-8")
     entry = (WORKFLOWS / "free-model-factory-entry.yml").read_text(encoding="utf-8")
-    assert 'factory_worker_slots.py" offer' in dispatch
+    assert "slots='.github/scripts/factory_worker_slots.py'" in dispatch
+    assert 'python3 "$slots" offer' in dispatch
     assert "factory_dispatch_credential_filter.py filter" in dispatch
     assert 'assign --worker "$worker"' in dispatch
     assert dispatch.index("factory_dispatch_credential_filter.py filter") < dispatch.index(
