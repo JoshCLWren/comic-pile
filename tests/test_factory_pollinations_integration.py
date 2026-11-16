@@ -23,10 +23,20 @@ def test_pollinations_registry_and_secret_are_discovered():
     assert credential_status("pollinations", {"POLLINATIONS_API_KEY": "synthetic"})["configured"]
     config = compatible_config(
         "pollinations", "synthetic-publisher/model", {"POLLINATIONS_API_KEY": "test-token-value"}
-    )["providers"]["pollinations"]
-    assert config["models"]["synthetic-publisher/model"]["modelID"] == "synthetic-publisher/model"
-    assert config["settings"]["baseURL"] == "https://gen.pollinations.ai/v1"
-    assert "test-token-value" not in str(config)
+    )
+    providers = config["providers"]
+    assert isinstance(providers, dict)
+    pollinations = providers["pollinations"]
+    assert isinstance(pollinations, dict)
+    models = pollinations["models"]
+    assert isinstance(models, dict)
+    selected = models["synthetic-publisher/model"]
+    assert isinstance(selected, dict)
+    assert selected["modelID"] == "synthetic-publisher/model"
+    settings = pollinations["settings"]
+    assert isinstance(settings, dict)
+    assert settings["baseURL"] == "https://gen.pollinations.ai/v1"
+    assert "test-token-value" not in str(pollinations)
     assert any(slot.source == "pollinations" for slot in slots({"FACTORY_SLOTS_PER_PROVIDER": "1"}))
 
 
