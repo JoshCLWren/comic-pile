@@ -425,6 +425,39 @@ def refine_trusted_dynamic_models(outcome: dict[str, Any], job_log: str) -> dict
         refined["model"] = successful
     return refined
 
+def refine_trusted_failover_models(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
+    """Attach successful trusted per-candidate failure recordings to the Neon write.
+
+    An agent's exit is not evidence. The wrapper emits this entry only after
+    its GitHub bot successfully persisted the exact source/model failure.
+    """
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", job_log)
+    pattern = re.compile(
+        r"(?m)^\d{4}-\d{2}-\d{2}T\S+Z "
+        r"\[factory:(\d+)\]\[source:([^\]\n]+)\]\[model:[^\]\n]+\] "
+        r"FACTORY_TRUSTED_FAILOVER: source=(\S+) model=([\w./:-]{1,180}) "
+        r"outcome=([a-z_]+)\s*$"
+    )
+    source = str(outcome.get("source") or "")
+    worker = str(outcome.get("worker") or "")
+    accepted = {
+        "provider_failure", "provider_throttle", "provider_quota",
+        "model_unavailable", "model_retired_410", "model_policy_violation",
+    }
+    failures = list(outcome.get("model_failures") or [])
+    seen = {item if isinstance(item, str) else item.get("model")
+            for item in failures}
+    for match in pattern.finditer(clean):
+        log_worker, log_source, recorded_source, model, classification = match.groups()
+        if log_worker != worker or log_source != source or recorded_source != source:
+            continue
+        if classification not in accepted or model in seen:
+            continue
+        failures.append({"model": model, "outcome": classification})
+        seen.add(model)
+    return {**outcome, "model_failures": failures} if failures else outcome
+
+
 def refine_trusted_smoke_timeout(outcome: dict[str, Any], job_log: str) -> dict[str, Any]:
     """Attribute a 180-second pinned-model smoke timeout to the provider.
 
@@ -573,6 +606,7 @@ def main() -> int:
             with open(args.log, encoding="utf-8", errors="replace") as stream:
                 job_log = stream.read()
                 outcome = refine_trusted_dynamic_models(outcome, job_log)
+                outcome = refine_trusted_failover_models(outcome, job_log)
                 outcome = refine_trusted_smoke_timeout(outcome, job_log)
         result = record_runtime_outcome(args.repo, args.run_id, outcome)
         print(f"[factory-ledger] recorded {result} terminal worker event(s)")

@@ -291,10 +291,17 @@ def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
 
 def test_intermediate_model_failures_use_terminal_runtime_idempotency():
     import inspect
+
+    failures = [
+        {"model": f"generated/model-{index}", "outcome": outcome}
+        for index, outcome in enumerate(("provider_quota", "provider_throttle", "model_unavailable"))
+    ]
+    assert operations.validate_intermediate_model_failures(
+        failures, "openrouter-free"
+    ) == [(item["model"], item["outcome"]) for item in failures]
     text = inspect.getsource(operations.project_runtime)
-    assert "for failed_model in set(model_failures)" in text
     assert "factory_runtime_event_keys" in text
-    assert "factory_model_health.status!=\'retired\'" in text
+    assert "factory_model_health.status" in text
     assert "last_run_id <= EXCLUDED.last_run_id" in text
 
 

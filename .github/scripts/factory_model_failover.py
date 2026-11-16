@@ -80,6 +80,7 @@ def main() -> int:
     parser.add_argument("--exclusions-file", type=Path, required=True)
     parser.add_argument("--catalog-file", type=Path)
     parser.add_argument("--catalog-json", type=Path, help="offline catalog fixture")
+    parser.add_argument("--catalog-cache", type=Path, help="trusted per-run catalog snapshot")
     parser.add_argument("--attempted", action="append", default=[])
     parser.add_argument("--rotation", type=int, default=0)
     args = parser.parse_args()
@@ -99,6 +100,19 @@ def main() -> int:
             json.loads(args.catalog_json.read_text(encoding="utf-8"))
             if args.catalog_json else None
         )
+        # Fetch once per assignment. Each failed model then advances through the
+        # same authoritative published snapshot without hammering the provider.
+        if catalog_json is None and args.catalog_cache and args.catalog_cache.is_file():
+            catalog_json = json.loads(args.catalog_cache.read_text(encoding="utf-8"))
+        if (catalog_json is None and args.catalog_cache
+                and args.source not in {"opencode-free", "kilo-auto"}):
+            if args.source == "openrouter-free":
+                from factory_published_model_catalog import published_catalog
+                catalog_json = published_catalog(args.source)
+            else:
+                from factory_runtime_model_select import provider_catalog
+                catalog_json = provider_catalog(args.source, os.environ)
+            args.catalog_cache.write_text(json.dumps(catalog_json), encoding="utf-8")
         selected = select_next(
             args.source, args.worker, set(args.attempted), exclusions,
             catalog_text=catalog_text, catalog_json=catalog_json,
