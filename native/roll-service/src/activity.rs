@@ -40,7 +40,7 @@ struct ActivityRow {
     sort_key: i64,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
 struct ActivityItem {
     event_id: i32,
     #[serde(rename = "type")]
@@ -53,6 +53,15 @@ struct ActivityItem {
     thread_id: Option<i32>,
     thread_title: Option<String>,
     issue_number: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+pub struct ActivityResponse {
+    activities: Vec<ActivityItem>,
+    events: Vec<ActivityItem>,
+    items: Vec<ActivityItem>,
+    next_page_token: Option<String>,
+    next_cursor: Option<String>,
 }
 
 const DEFAULT_LIMIT: i64 = 50;
@@ -104,37 +113,13 @@ pub async fn list_activity(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
     Query(query): Query<ActivityQuery>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<Json<ActivityResponse>, ApiError> {
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let fetch_limit = (limit * FETCH_MULTIPLIER).max(limit + 10);
     let cursor_token = query.page_token.or(query.cursor);
     let cursor = cursor_token.as_deref().and_then(parse_cursor);
 
     let connection = db::checkout(&state).await?;
-
-    let mut sql = String::from(
-        "SELECT e.id, e.type, \
-         to_char(e.timestamp AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'), \
-         e.die, e.die_after, e.rating, e.issue_id, e.issue_number, \
-         COALESCE(e.thread_id, e.selected_thread_id) AS thread_id, \
-         t.title, e.context::text, \
-         (extract(epoch FROM e.timestamp) * 1000000)::bigint \
-         FROM events e \
-         LEFT JOIN threads t ON t.id = COALESCE(e.thread_id, e.selected_thread_id) \
-         WHERE e.user_id = $1",
-    );
-    let mut params: Vec<&(dyn tokio_postgres::types::ToSql + Sync)> = Vec::new();
-    params.push(&user.id() as &(dyn tokio_postgres::types::ToSql + Sync));
-    if let Some((ts, id)) = &cursor {
-        sql.push_str(
-            " AND (e.timestamp > $2::timestamptz OR (e.timestamp = $2::timestamptz AND e.id > $3))",
-        );
-        // placeholders handled below by binding; use positional params
-        let _ = (ts, id);
-    }
-    sql.push_str(" ORDER BY e.timestamp ASC, e.id ASC LIMIT $");
-    // We'll rebuild with proper bind count.
-    let _ = &sql;
 
     // Rebuild SQL cleanly with bind parameters.
     let mut sql = String::from(
@@ -150,8 +135,6 @@ pub async fn list_activity(
     );
 
     // Bind cursor values via owned strings to satisfy lifetimes.
-    let cursor_ts_owned: Option<String> = cursor.as_ref().map(|(ts, _)| ts.clone());
-    let cursor_id_owned: Option<i32> = cursor.as_ref().map(|(_, id)| *id);
 
     if cursor.is_some() {
         sql.push_str(
@@ -163,9 +146,7 @@ pub async fn list_activity(
     sql.push_str(&limit_placeholder.to_string());
 
     // Build bind slice dynamically.
-    let rows = if cursor.is_some() {
-        let ts = cursor_ts_owned.as_ref().unwrap();
-        let id = cursor_id_owned.unwrap();
+    let rows = if let Some((ts, id)) = &cursor {
         connection
             .query(&sql, &[&user.id(), &ts, &id, &fetch_limit])
             .await
@@ -209,11 +190,9 @@ pub async fn list_activity(
         .cloned()
         .collect::<Vec<_>>()
     {
-        let snoozed_thread = context_i64(&roll.context, "snoozed_thread_id");
-        if snoozed_thread.is_none() {
+        let Some(snoozed_thread) = context_i64(&roll.context, "snoozed_thread_id") else {
             continue;
-        }
-        let snoozed_thread = snoozed_thread.unwrap();
+        };
         for snooze in fetched.iter_mut() {
             if snooze.event_type != "snooze" {
                 continue;
@@ -238,20 +217,18 @@ pub async fn list_activity(
     });
 
     // Coalesce related issue-command/dice-command rate pairs into one display.
-    let cursor_source = fetched.last().cloned();
     let mut logical: Vec<ActivityRow> = Vec::new();
     for row in fetched {
-        if is_rate_like(&row.event_type)
-            && !logical.is_empty()
-            && is_rate_like(&logical.last().unwrap().event_type)
+        if let Some(prev) = logical
+            .last_mut()
+            .filter(|prev| is_rate_like(&row.event_type) && is_rate_like(&prev.event_type))
         {
-            let prev = logical.last().unwrap();
             let same_issue = prev.issue_id == row.issue_id && prev.issue_id.is_some();
             let same_rating = prev.rating == row.rating && prev.rating.is_some();
             let close =
                 (prev.timestamp_micros - row.timestamp_micros).abs() <= CAUSAL_WINDOW_MICROS;
             if same_issue && same_rating && close {
-                let mut merged = logical.pop().unwrap();
+                let merged = prev;
                 merged.die_before = merged.die_before.or(row.die_before);
                 merged.die_after = merged.die_after.or(row.die_after);
                 if merged.thread_id.is_none() {
@@ -270,7 +247,6 @@ pub async fn list_activity(
                 if row.event_id < merged.event_id {
                     merged.event_id = row.event_id;
                 }
-                logical.push(merged);
                 continue;
             }
         }
@@ -290,13 +266,13 @@ pub async fn list_activity(
     };
     let next_cursor = next_page_token.clone();
 
-    Ok(Json(json!({
-        "activities": items,
-        "events": items,
-        "items": items,
-        "next_page_token": next_page_token,
-        "next_cursor": next_cursor,
-    })))
+    Ok(Json(ActivityResponse {
+        activities: items.clone(),
+        events: items.clone(),
+        items,
+        next_page_token,
+        next_cursor,
+    }))
 }
 
 // OpenAPI declaration
@@ -308,7 +284,7 @@ pub async fn list_activity(
         ("limit" = Option<i64>, Query, description = "Maximum number of activity rows"),
         ("page_token" = Option<String>, Query, description = "Opaque continuation cursor")
     ),
-    responses((status = 200, description = "Owner-scoped activity history")),
+    responses((status = 200, description = "Owner-scoped activity history", body = ActivityResponse)),
     security(("HTTPBearer" = []))
 )]
 #[allow(dead_code)]
@@ -324,5 +300,41 @@ mod tests {
         let (ts, id) = parse_cursor(&token).expect("cursor");
         assert_eq!(ts, "2026-11-08T10:01:54.440000Z");
         assert_eq!(id, 42);
+    }
+
+    #[test]
+    fn activity_openapi_declares_json_response() {
+        let schema = serde_json::to_value(crate::openapi::canonical_openapi()).unwrap();
+        assert!(
+            schema["paths"]["/api/v2/activity"]["get"]["responses"]["200"]["content"]
+                ["application/json"]["schema"]
+                .is_object()
+        );
+    }
+
+    #[tokio::test]
+    async fn activity_routes_require_authentication_before_database_access() {
+        use crate::{config::Config, router, AppState};
+        use axum::{
+            body::Body,
+            http::{Request, StatusCode},
+        };
+        use tower::ServiceExt;
+
+        let config = Config::from_lookup(|name| match name {
+            "RUST_ROLL_DATABASE_URL" => Some("postgresql://localhost/unused".into()),
+            "RUST_ROLL_JWT_SECRET" => Some("synthetic-secret".into()),
+            _ => None,
+        })
+        .unwrap();
+        let app = router(Arc::new(AppState::new(config).unwrap()));
+        for path in ["/api/v2/activity"] {
+            let response = app
+                .clone()
+                .oneshot(Request::builder().uri(path).body(Body::empty()).unwrap())
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{path}");
+        }
     }
 }

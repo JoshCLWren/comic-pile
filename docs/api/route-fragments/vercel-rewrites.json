@@ -1,7 +1,6 @@
 {
   "generated_by": "scripts/generate_route_burndown.py",
   "source_fragments": [
-    "activity",
     "bug-reports",
     "catalog",
     "comicvine",
@@ -38,13 +37,6 @@
       "dest": "/api/native_roll.rs"
     },
     {
-      "src": "^/api/activity$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
       "src": "^/api/bug\\-reports/$",
       "methods": [
         "POST"
@@ -74,13 +66,6 @@
     },
     {
       "src": "^/api/threads/[0-9]+$",
-      "methods": [
-        "GET"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v1/activity$",
       "methods": [
         "GET"
       ],
@@ -409,13 +394,6 @@
       "src": "^/api/v1/users/me/taste\\-signals/[^/]+/[^/]+/verdict$",
       "methods": [
         "PUT"
-      ],
-      "dest": "/api/native_roll.rs"
-    },
-    {
-      "src": "^/api/v2/activity$",
-      "methods": [
-        "GET"
       ],
       "dest": "/api/native_roll.rs"
     },

@@ -1,34 +1,36 @@
-# Canonical OpenCode model IDs for the factory
+# Canonical OpenCode provider/model resolution
 
-Factory `source` keys identify rate budgets, Neon cooldowns and leases.
-They are not OpenCode provider IDs. Never construct an OpenCode selector
-from a free-tier accounting namespace.
+**One source of truth:** .github/scripts/factory_provider_registry.py is the
+typed registry of executable OpenCode provider IDs, credential environment
+variable names, compatible API endpoints, and adapter requirements. The
+factory TSV retains only the provider's *published upstream model ID* and the
+factory-specific budget/lease source key. Do not derive OpenCode provider IDs
+from factory source strings, and do not duplicate provider mappings in YAML.
 
-| Factory source | Canonical OpenCode provider | Published API endpoint |
-| --- | --- | --- |
-| gemini-free | google | generativelanguage.googleapis.com/v1beta/openai |
-| groq-free | groq | api.groq.com/openai/v1 |
-| vercel-ai-gateway | vercel | ai-gateway.vercel.sh/v1 |
-| cohere-eval | cohere | api.cohere.ai/compatibility/v1 |
-| aion-free | aion (custom compatible adapter) | api.aionlabs.ai/v1 |
-| typhoon-free | typhoon (custom compatible adapter) | api.opentyphoon.ai/v1 |
-| nvidia | nvidia | integrate.api.nvidia.com/v1 |
+At slot resolution, the registry emits the canonical OpenCode selector,
+credential eligibility, and whether an explicit compatible adapter is needed.
+At adapter configuration, the same registry emits the OpenCode JSON with
+modelID equal to the unmodified published upstream ID. No secret values are
+written to the config. The existing OpenCode catalog preflight then validates
+the exact selector before execution.
 
-OpenCode selectors take `provider/<entire upstream model ID>`; upstream
-model IDs can also contain slashes. Examples: `groq/openai/gpt-oss-120b`,
-`nvidia/mistralai/mistral-large-4-1t-a52b`, and
-`nvidia/nvidia/nemotron-3.5-bolt-e4b`.
+A slash inside an upstream model ID is not a second OpenCode provider:
+groq/openai/gpt-oss-120b and nvidia/nvidia/nemotron-3.5-bolt-e4b are
+correct selectors. NVIDIA's two newly published IDs are explicitly registered
+until they appear in the built-in OpenCode catalog. Existing NVIDIA models
+continue using the native catalog path.
 
-For configured compatible providers, explicitly set `modelID` to the exact
-published API model ID. NVIDIA's Mistral Large 4 and Nemotron Bolt endpoints
-are published, but absent from the current OpenCode models.dev listing.
-Register them explicitly before the CLI's exact-model preflight.
+Adding a provider means adding one ProviderSpec entry and the approved roster
+models; no new workflow case branch or per-provider configuration script.
+Free-tier policy and approved model sets remain in factory_roster.py, daily
+dispatch caps in factory-source-budgets.json, and live Vercel $0 verification
+in the runner. These are separate policy boundaries, not executable provider
+identity mappings.
 
-References:
+Sources:
+- https://opencode.ai/docs/providers/
 - https://opencode.ai/docs/models/
-- https://models.opencode.ai/providers/
 - https://build.nvidia.com/mistralai/mistral-large-4-1t-a52b
-- https://docs.api.nvidia.com/nim/reference/nvidia-nemotron-3_5-bolt-e4b-infer
 
-No credential was created or supplied here. Preserved: daily quota caps,
-source cooldowns, Vercel live $0 catalog guard, and exact runtime smoke.
+Account-level callability still requires a credential and real bounded
+inference; catalog resolution alone does not prove free quota or tool support.

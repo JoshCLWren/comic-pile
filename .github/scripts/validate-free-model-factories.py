@@ -189,12 +189,8 @@ def main() -> None:
     assert "'.github/scripts/kilo-auto-factory-run.sh'" in dispatcher
     for required in (
         'group: fixed-model-factory-dispatch',
-        'queued in_progress',
-        'gh run cancel "$run_id"',
-        'release_cancelled_worker_leases',
-        'factory:unowned',
-        'another worker already owns it',
-        'takeover observed',
+        '-f assignment="$assignment"',
+        'Existing sessions keep their pinned workflow',
         'python3 "$controller" reconcile',
         'python3 "$controller" capacity',
         'MAX_WORKERS_PER_TICK:-12',
@@ -217,6 +213,8 @@ def main() -> None:
     ):
         assert required in dispatcher, f'deployment/assignment fence missing: {required}'
 
+    assert 'gh run cancel' not in dispatcher, 'controller deploy must preserve live workers'
+
     entry = ENTRY.read_text(encoding='utf-8')
     assert 'workflow_dispatch:' in entry
     assert 'run-name: Factory ${{ inputs.worker }} · fixed-model entry' in entry
@@ -237,25 +235,18 @@ def main() -> None:
     assert 'ORCAROUTER_API_KEY: ${{ secrets.ORCAROUTER_API_KEY }}' in runner
     assert 'REQUESTY_API_KEY: ${{ secrets.REQUESTY_API_KEY }}' in runner
     assert 'AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}' in runner
-    assert 'nvidia)' in runner
     assert 'opencode-free|openrouter-free)' in runner
     assert 'kilo-auto)' in runner
-    assert 'z-ai|ollama-cloud|mistral|orcarouter|requesty)' in runner
-    assert 'vercel-ai-gateway)' in runner
-    assert 'nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)' in runner
     assert 'Configure OpenAI-compatible factory provider' in runner
-    assert 'https://api.z.ai/api/paas/v4' in runner
-    assert 'https://ollama.com/v1' in runner
-    assert 'https://api.mistral.ai/v1' in runner
-    assert 'https://api.orcarouter.ai/v1' in runner
-    assert 'https://router.requesty.ai/v1' in runner
-    assert 'https://ai-gateway.vercel.sh/v1' in runner
+    assert 'python3 .github/scripts/factory_provider_registry.py resolve' in runner
+    assert 'python3 .github/scripts/factory_provider_registry.py config' in runner
+    assert 'configure_adapter=$configure_adapter' in runner
+    assert Path('.github/scripts/factory_provider_registry.py').exists()
     assert 'Require Vercel model to remain zero-price' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
     assert 'selected-by-runtime-evidence' in runner
-    assert 'if [[ "$model" == nvidia/* ]]' in runner or "if [[ \"$model\" == nvidia/* ]]" in runner
     assert "source='omniroute-free'" not in runner
     assert 'auto/best-free' not in runner
     assert 'FACTORY_OMNIROUTE_CAPACITY_BRIDGE' not in runner
@@ -281,9 +272,9 @@ def main() -> None:
         'MISTRAL_API_KEY',
         'factory/model-retirement',
         'integrate.api.nvidia.com',
-        '--retirement-comments',
-        'issues/1093/comments',
-        'factory-model-retired-410:v1',
+        '--retired-models-json',
+        'export-candidate-health',
+        '.status == "retired"',
         '--no-add-unused-free',
         '--dynamic-opencode-free',
         '.github/free-model-factories.tsv',

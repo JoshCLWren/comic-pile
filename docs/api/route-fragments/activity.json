@@ -1,8 +1,6 @@
 {
   "family": "activity",
   "owned_path_patterns": [
-    "^/api/activity$",
-    "^/api/v1/activity$",
     "^/api/v2/activity$"
   ],
   "defaults": {
@@ -14,20 +12,6 @@
     ]
   },
   "operations": [
-    {
-      "bucket": "unversioned_operations",
-      "method": "GET",
-      "path": "/api/activity",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/activity$"
-    },
-    {
-      "bucket": "v1_operations",
-      "method": "GET",
-      "path": "/api/v1/activity",
-      "dest": "/api/native_roll.rs",
-      "src": "^/api/v1/activity$"
-    },
     {
       "bucket": "operations",
       "method": "GET",

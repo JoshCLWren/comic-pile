@@ -631,8 +631,6 @@ pub fn router(state: Arc<AppState>) -> Router {
         )
         .route("/api/v2/analytics/metrics", get(analytics::metrics))
         .route("/api/v2/activity", get(activity::list_activity))
-        .route("/api/v1/activity", get(activity::list_activity))
-        .route("/api/activity", get(activity::list_activity))
         .route("/api/v1/identity-inbox", get(identity_inbox::list_inbox))
         .route(
             "/api/v1/identity-inbox/search/issues",

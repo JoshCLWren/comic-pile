@@ -18,6 +18,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from factory_state_metrics import connect as measured_connect
+
 from factory_state_cache import _dsn
 
 SCHEMA = [
@@ -26,7 +28,6 @@ SCHEMA = [
   "CREATE TABLE IF NOT EXISTS public.factory_provider_reservation (\n claim_id uuid PRIMARY KEY, repo text NOT NULL, worker text NOT NULL,\n source text NOT NULL, expires_at timestamptz NOT NULL)",
   "CREATE INDEX IF NOT EXISTS idx_factory_provider_reservation_active ON public.factory_provider_reservation(repo,source,expires_at)",
   "CREATE TABLE IF NOT EXISTS public.factory_pr_stage_retry (\n repo text NOT NULL, pr_number bigint NOT NULL, head_sha text NOT NULL, stage text NOT NULL,\n attempts integer NOT NULL DEFAULT 0, outcome text NOT NULL,\n retry_after timestamptz, last_run_id bigint NOT NULL DEFAULT 0,\n updated_at timestamptz NOT NULL DEFAULT now(),\n PRIMARY KEY (repo,pr_number,head_sha,stage))",
-  "CREATE TABLE IF NOT EXISTS public.factory_check_projection (\n repo text NOT NULL, pr_number bigint NOT NULL, head_sha text NOT NULL,\n check_name text NOT NULL, conclusion text NOT NULL, run_id bigint NOT NULL,\n observed_at timestamptz NOT NULL,\n PRIMARY KEY (repo,pr_number,head_sha,check_name))",
   "CREATE TABLE IF NOT EXISTS public.factory_worker_metrics (\n repo text NOT NULL, worker text NOT NULL, source text NOT NULL, model text NOT NULL,\n attempts bigint NOT NULL DEFAULT 0, productive bigint NOT NULL DEFAULT 0,\n completed bigint NOT NULL DEFAULT 0, failures bigint NOT NULL DEFAULT 0,\n last_run_id bigint NOT NULL DEFAULT 0, updated_at timestamptz NOT NULL DEFAULT now(),\n PRIMARY KEY (repo,worker,source,model))",
   "CREATE TABLE IF NOT EXISTS public.factory_runtime_event_keys (\n repo text NOT NULL, run_id bigint NOT NULL, PRIMARY KEY (repo,run_id))",
   "CREATE TABLE IF NOT EXISTS public.factory_reconciliation_cursor (\n repo text NOT NULL, scope text NOT NULL,\n checkpoint text, checked_at timestamptz NOT NULL DEFAULT now(),\n changed_count bigint NOT NULL DEFAULT 0,\n PRIMARY KEY (repo,scope))"
@@ -64,8 +65,7 @@ async def ensure_schema(conn: Any) -> None:
 
 
 async def _connection() -> Any:
-    import asyncpg
-    return await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=15)
+    return await measured_connect(dsn=_dsn(), timeout=8, command_timeout=15)
 
 
 def _run(fn: Any, *args: Any) -> Any:
@@ -684,52 +684,50 @@ def cooling_prs(repo: str, heads: dict[int,tuple[str,str]]) -> set[int]:
     return _run(_cooling_prs,repo,heads) if enabled() and heads else set()
 
 
-async def _ingest_check(conn: Any, repo: str, event: dict[str,Any]) -> int:
-    run=event.get("workflow_run") or {}
-    sha=str(run.get("head_sha") or "")
-    if not HEAD_RE.fullmatch(sha) or run.get("status")!="completed":
+async def _ingest_check(conn: Any, repo: str, event: dict[str, Any]) -> int:
+    """Record only failed-review cooldowns, never an advisory check snapshot."""
+    run = event.get("workflow_run") or {}
+    sha = str(run.get("head_sha") or "")
+    name = str(run.get("name") or "")
+    try:
+        number = int(run.get("id") or 0)
+    except (TypeError, ValueError):
         return 0
-    name=str(run.get("name") or "")[:160]
-    conclusion=str(run.get("conclusion") or "unknown")[:60]
-    number=int(run.get("id") or 0)
-    observed=datetime.now(timezone.utc)
-    count=0
+    if (
+        not HEAD_RE.fullmatch(sha)
+        or run.get("status") != "completed"
+        or run.get("conclusion") != "failure"
+        or name not in {"PR-Agent Advisory Review", "Local Ollama Review"}
+        or number <= 0
+    ):
+        return 0
+
+    recorded = 0
     for pr in run.get("pull_requests") or []:
-        pr_num=pr.get("number") if isinstance(pr,dict) else None
-        if not isinstance(pr_num,int) or pr_num<=0:
+        pr_num = pr.get("number") if isinstance(pr, dict) else None
+        if not isinstance(pr_num, int) or isinstance(pr_num, bool) or pr_num <= 0:
             continue
         changed = await conn.fetchval(
-            """INSERT INTO public.factory_check_projection
-                 (repo,pr_number,head_sha,check_name,conclusion,run_id,observed_at)
-               VALUES($1,$2,$3,$4,$5,$6,$7)
-               ON CONFLICT(repo,pr_number,head_sha,check_name) DO UPDATE SET
-                 conclusion=EXCLUDED.conclusion,run_id=EXCLUDED.run_id,observed_at=EXCLUDED.observed_at
-               WHERE factory_check_projection.run_id<EXCLUDED.run_id
-                     OR (factory_check_projection.run_id=EXCLUDED.run_id
-                         AND factory_check_projection.conclusion IS DISTINCT FROM EXCLUDED.conclusion)
+            """INSERT INTO public.factory_pr_stage_retry
+                 (repo,pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id)
+               VALUES($1,$2,$3,'factory:review',1,'review_transport_failure',
+                      now()+interval '5 minutes',$4)
+               ON CONFLICT(repo,pr_number,head_sha,stage) DO UPDATE SET
+                 attempts=factory_pr_stage_retry.attempts+1,
+                 outcome=EXCLUDED.outcome,retry_after=EXCLUDED.retry_after,
+                 last_run_id=EXCLUDED.last_run_id,updated_at=now()
+               WHERE factory_pr_stage_retry.last_run_id<EXCLUDED.last_run_id
                RETURNING 1""",
-            repo,pr_num,sha,name,conclusion,number,observed)
-        if changed and name in {"PR-Agent Advisory Review","Local Ollama Review"} and conclusion=="failure":
-            await conn.execute(
-                """INSERT INTO public.factory_pr_stage_retry
-                     (repo,pr_number,head_sha,stage,attempts,outcome,retry_after,last_run_id)
-                   VALUES($1,$2,$3,'factory:review',1,'review_transport_failure',
-                          now()+interval '5 minutes',$4)
-                   ON CONFLICT(repo,pr_number,head_sha,stage) DO UPDATE SET
-                     attempts=factory_pr_stage_retry.attempts+1,
-                     outcome=EXCLUDED.outcome,retry_after=EXCLUDED.retry_after,
-                     last_run_id=EXCLUDED.last_run_id,updated_at=now()
-                   WHERE factory_pr_stage_retry.last_run_id<EXCLUDED.last_run_id""",
-                repo,pr_num,sha,number)
-        if changed:
-            count+=1
-    return count
+            repo, pr_num, sha, number,
+        )
+        recorded += bool(changed)
+    return recorded
 
 
-def ingest_check(repo: str, event: dict[str,Any]) -> int:
+def ingest_check(repo: str, event: dict[str, Any]) -> int:
     if not enabled():
-        raise RuntimeError("check projection ingestion requires restricted Neon connection")
-    return _run(_ingest_check,repo,event)
+        raise RuntimeError("review cooldown ingestion requires restricted Neon connection")
+    return _run(_ingest_check, repo, event)
 
 
 async def _checkpoint(conn: Any, repo: str, scope: str, cursor: str, changes: int) -> None:
@@ -906,32 +904,127 @@ async def _export_model_exclusions(conn: Any, repo: str, worker: str = "") -> di
     excluded: dict[str, list[str]] = {}
     for row in rows:
         excluded.setdefault(str(row["source"]), []).append(str(row["model"]))
-    # Registry comment identifiers are advisory and do not authorize writes.
-    # A model worker verifies the exact marker live before PATCH. Old/empty
-    # snapshots fall back to GitHub discovery rather than guessing IDs.
+    # Comment locators are compact, verified GitHub IDs, not a body cache.
+    # Read durable coordination first. The legacy registry body is consulted
+    # only once when a trusted marker has not yet been migrated.
     if worker:
         if not worker.isdecimal() or worker not in _roster():
             raise ValueError("invalid trusted worker for registry ID lookup")
-        raw = await conn.fetchval(
-            "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-            f"{repo}:registry-comments",
+        kinds = {"__heartbeat_id": "heartbeat", "__attempt_id": "attempt"}
+        scopes = {
+            key: f"registry-comment-id-v1:{kind}:worker:{worker}"
+            for key, kind in kinds.items()
+        }
+        recorded = await conn.fetch(
+            """SELECT scope,checkpoint FROM public.factory_reconciliation_cursor
+                WHERE repo=$1 AND scope=ANY($2::text[])""",
+            repo, list(scopes.values()),
         )
-        if isinstance(raw, str):
-            raw = json.loads(raw)
-        if isinstance(raw, list):
-            from factory_work_policy import comment_is_trusted
-            markers = {
-                "__heartbeat_id": f"<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-{worker} -->",
-                "__attempt_id": f"<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-{worker} -->",
-            }
-            for key, marker in markers.items():
-                matches = [item for item in raw
-                           if isinstance(item, dict) and comment_is_trusted(item)
-                           and str(item.get("body") or "").startswith(marker)
-                           and str(item.get("id") or "").isdecimal()]
-                if matches:
-                    excluded[key] = [str(max(int(item["id"]) for item in matches))]
+        known = {
+            str(row["scope"]): str(row["checkpoint"] or "")
+            for row in recorded
+        }
+        missing = {
+            key: scope for key, scope in scopes.items()
+            if not known.get(scope, "").isdecimal() or int(known[scope]) <= 0
+        }
+        for key, scope in scopes.items():
+            if key not in missing:
+                excluded[key] = [known[scope]]
     return excluded
+
+
+async def _export_candidate_health(conn: Any, repo: str) -> dict[str, Any]:
+    """Compact trusted execution evidence, passed to the unprivileged runner.
+
+    No secrets, leases or comment bodies cross the Actions job boundary.
+    This is advisory candidate ranking, never authorization to dispatch.
+    """
+    models = await conn.fetch(
+        """SELECT source, model, status, last_outcome, cooldown_until,
+                  updated_at FROM public.factory_model_health WHERE repo=$1""",
+        repo,
+    )
+    providers = await conn.fetch(
+        """SELECT source, last_outcome, cooldown_until, quota_reset_at,
+                  updated_at FROM public.factory_provider_budget WHERE repo=$1""",
+        repo,
+    )
+    def seconds(value: Any) -> int | None:
+        return int(value.timestamp()) if value is not None else None
+    return {
+        "models": [
+            {"source": row["source"], "model": row["model"],
+             "status": row["status"], "outcome": row["last_outcome"],
+             "updated": seconds(row["updated_at"]),
+             "until": seconds(row["cooldown_until"])}
+            for row in models
+        ],
+        "providers": [
+            {"source": row["source"], "outcome": row["last_outcome"],
+             "updated": seconds(row["updated_at"]),
+             "until": max(
+                 seconds(row["cooldown_until"]) or 0,
+                 seconds(row["quota_reset_at"]) or 0)}
+            for row in providers
+        ],
+    }
+
+
+def export_candidate_health(repo: str) -> dict[str, Any]:
+    if not enabled():
+        raise RuntimeError("Neon health unavailable; cannot prove executable candidates")
+    return _run(_export_candidate_health, repo)
+
+
+async def _remember_verified_markers(
+    conn: Any, repo: str, entries: list[dict[str, str]],
+) -> int:
+    """Persist only trusted, canonical registry comment IDs in scoped cursors."""
+    roster = _roster()
+    count = 0
+    for item in entries:
+        worker, kind, comment_id = (
+            str(item.get("worker") or ""), str(item.get("kind") or ""),
+            str(item.get("id") or ""),
+        )
+        if worker not in roster or kind not in {"heartbeat", "attempt"}:
+            continue
+        if not comment_id.isdecimal() or int(comment_id) <= 0:
+            continue
+        scope = f"registry-comment-id-v1:{kind}:worker:{worker}"
+        result = await conn.fetchval(
+            """INSERT INTO public.factory_reconciliation_cursor
+                 (repo,scope,checkpoint,checked_at)
+               VALUES($1,$2,$3,now())
+               ON CONFLICT(repo,scope) DO UPDATE SET
+                 checkpoint=EXCLUDED.checkpoint,checked_at=now()
+               WHERE factory_reconciliation_cursor.checkpoint IS NULL
+                  OR factory_reconciliation_cursor.checkpoint !~ '^[0-9]+$'
+                  OR factory_reconciliation_cursor.checkpoint::bigint
+                       < EXCLUDED.checkpoint::bigint
+               RETURNING 1""",
+            repo, scope, comment_id,
+        )
+        count += bool(result)
+    return count
+
+
+def remember_verified_markers(repo: str, entries: list[dict[str, str]]) -> int:
+    if not enabled():
+        raise RuntimeError("marker coordination needs trusted Neon connection")
+    return _run(_remember_verified_markers, repo, entries)
+
+
+async def _registry_ingest_checkpoint(conn: Any, repo: str) -> str | None:
+    return await conn.fetchval(
+        """SELECT checkpoint FROM public.factory_reconciliation_cursor
+           WHERE repo=$1 AND scope='registry-event-ingest-v2'""", repo,
+    )
+
+
+def registry_ingest_checkpoint(repo: str) -> str | None:
+    return _run(_registry_ingest_checkpoint, repo) if enabled() else None
 
 
 def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]:
@@ -942,7 +1035,7 @@ def export_model_exclusions(repo: str, worker: str = "") -> dict[str, list[str]]
 
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions"))
+    parser.add_argument("command",choices=("bootstrap","filter","rank","stats","ingest-check","checkpoint","sync-catalog","sync-registry","export-model-exclusions","export-candidate-health"))
     parser.add_argument("--repo",default=os.environ.get("GITHUB_REPOSITORY","JoshCLWren/comic-pile"))
     parser.add_argument("--file",type=Path)
     parser.add_argument("--scope")
@@ -955,21 +1048,11 @@ def main() -> int:
         if not enabled():
             raise SystemExit("Neon is required for factory operations")
         _run(lambda conn: conn.fetchval("SELECT 1"))
-        # One-time migration from trusted #1093 evidence. The checkpoint
-        # prevents rebuilding the entire model table on every dispatch.
-        async def needs_backfill(conn:Any,repo:str)->bool:
-            return await conn.fetchval(
-                "SELECT 1 FROM public.factory_reconciliation_cursor WHERE repo=$1 AND scope='registry-backfill-v1'",
-                repo) is None
-        if _run(needs_backfill,args.repo):
-            from factory_completion_controller import registry_comments
-            records=registry_comments()
-            n=sync_registry(args.repo,records)
-            checkpoint(args.repo,"registry-backfill-v1",datetime.now(timezone.utc).isoformat(),n)
-            print(f"[factory-operations] imported {n} trusted model records")
         print("[factory-operations] schema ready")
     elif args.command=="export-model-exclusions":
         print(json.dumps(export_model_exclusions(args.repo,args.worker),sort_keys=True,separators=(",",":")))
+    elif args.command=="export-candidate-health":
+        print(json.dumps(export_candidate_health(args.repo),sort_keys=True,separators=(",",":")))
     elif args.command=="filter":
         workers=[str(w) for w in json.load(sys.stdin)]
         kept,denied=filter_workers(args.repo,workers)
@@ -992,9 +1075,8 @@ def main() -> int:
     elif args.command=="ingest-check":
         if args.file is None:
             parser.error("--file required")
-        changed=ingest_check(args.repo,json.loads(args.file.read_text()))
-        wake=claim_wakeup(args.repo,"ci-review-wakeup",120) if changed else False
-        print(json.dumps({"projected":changed,"wake":wake}))
+        recorded=ingest_check(args.repo,json.loads(args.file.read_text()))
+        print(json.dumps({"recorded_review_failures":recorded}))
     elif args.command=="checkpoint":
         if not args.scope:
             parser.error("--scope required")

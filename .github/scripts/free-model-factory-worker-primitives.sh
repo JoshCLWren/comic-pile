@@ -186,6 +186,12 @@ release_target() {
 
 release_owned_targets() {
   local reason="$1" number stage
+  if [[ -n "${FACTORY_ASSIGNMENT:-}" ]]; then
+    # The separate trusted cleanup job holds the original claim UUID. Never
+    # discover or release another assignment through a worker-wide label scan.
+    log 'deferring general lease release to token-bound trusted cleanup'
+    return 0
+  fi
   if [[ "${FACTORY_RETAIN_LEASE_ON_EXIT:-0}" == '1' && "$reason" == 'session-end-handoff' ]]; then
     log 'retaining current lease because the bounded no-diff marker could not be persisted'
     return 0

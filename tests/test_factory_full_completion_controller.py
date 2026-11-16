@@ -212,11 +212,8 @@ def _assert_current_demand_caps():
         def owned_worker_ids(self, items):
             return set()
 
-        def registry_comments(self):
-            return []
-
-        def latest_worker_health(self, comments, trusted):
-            return {}
+        def durable_factory_state(self, now_epoch=None):
+            return {}, {}
 
         def capacity_report(self, candidates, health, now_epoch):
             return {"executable_slot_capacity": 10}
@@ -275,11 +272,8 @@ def _assert_current_demand_multi_provider():
         def owned_worker_ids(self, items):
             return set()
 
-        def registry_comments(self):
-            return []
-
-        def latest_worker_health(self, comments, trusted):
-            return {}
+        def durable_factory_state(self, now_epoch=None):
+            return {}, {}
 
         def capacity_report(self, candidates, health, now_epoch):
             return {"executable_slot_capacity": 10}
@@ -371,7 +365,7 @@ def test_zero_completion_demand_never_reads_registry_or_inflight_capacity():
     work.list_prs.return_value = []
     completion.load_controller.return_value = work
     completion.load_policy.return_value = MagicMock()
-    completion.registry_comments.side_effect = AssertionError("unnecessary health scan")
+    completion.durable_factory_state.side_effect = AssertionError("unnecessary health scan")
     completion.load_manifest_candidates.side_effect = AssertionError("unnecessary manifest")
     completion.owned_worker_ids.side_effect = AssertionError("unnecessary owners")
     work.in_flight_omniroute_free_entries.side_effect = AssertionError("unnecessary inflight scan")
@@ -383,6 +377,6 @@ def test_zero_completion_demand_never_reads_registry_or_inflight_capacity():
     assert capacity["capacity_scan_skipped"] is True
     assert capacity["executable_candidates"] == []
     assert full.signal_dispatch(completion, demand, capacity)["selected_workers"] == []
-    completion.registry_comments.assert_not_called()
+    completion.durable_factory_state.assert_not_called()
     completion.owned_worker_ids.assert_not_called()
     work.in_flight_omniroute_free_entries.assert_not_called()

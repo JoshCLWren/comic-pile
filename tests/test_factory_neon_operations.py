@@ -59,11 +59,12 @@ def test_schema_contains_all_separate_operational_relations():
     for relation in (
         "factory_model_health", "factory_provider_budget",
         "factory_provider_reservation", "factory_pr_stage_retry",
-        "factory_check_projection", "factory_worker_metrics",
+        "factory_worker_metrics",
         "factory_runtime_event_keys", "factory_reconciliation_cursor",
     ):
         assert relation in ddl
     assert all("DROP TABLE" not in statement for statement in operations.SCHEMA)
+    assert "factory_check_projection" not in ddl
 
 
 def test_missing_model_is_suppressed_but_unrelated_provider_is_available():
@@ -197,6 +198,8 @@ def test_model_scoped_provider_route_never_cools_unrelated_routes():
 def test_exact_head_checks_are_advisory_not_merge_authorization():
     workflow = (ROOT / ".github/workflows/factory-check-projection.yml").read_text()
     assert "factory_state_operations.py ingest-check" in workflow
+    assert "gh workflow run fixed-model-factory-dispatch.yml" in workflow
+    assert "factory_check_projection" not in workflow
     assert "neon-api-key: ${{ secrets.NEON_API_KEY }}" in workflow
     assert "neon-api-key: \\${{" not in workflow
     assert "pull_request_target:" not in workflow
@@ -219,35 +222,49 @@ def test_trusted_model_snapshot_is_scoped_and_bounded() -> None:
     assert "export-model-exclusions" in inspect.getsource(operations.main)
 
 
-def test_neon_registry_comment_ids_are_worker_scoped_and_trusted():
+def test_missing_marker_id_never_reads_obsolete_body_cache():
     class SnapshotDB:
         async def fetch(self, statement, *args):
-            assert args == (REPO,)
+            if "factory_reconciliation_cursor" in statement:
+                return []
             return [{"source": "nvidia", "model": "gone"}]
 
         async def fetchval(self, statement, *args):
-            assert args == (REPO + ":registry-comments",)
-            marker = "<!-- factory-heartbeat:v1 worker=opencode-free-model-factory-111 -->"
-            attempt = "<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-111 -->"
-            return [
-                {"id": 123, "body": marker + "\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 124, "body": attempt + "\nWorker: 111",
-                 "author_association": "CONTRIBUTOR",
-                 "performed_via_github_app": {"slug": "github-actions"}},
-                {"id": 999, "body": marker + "\nForged",
-                 "author_association": "NONE",
-                 "performed_via_github_app": {"slug": "other-untrusted-app"}},
-            ]
+            raise AssertionError("no retired registry body read")
+
+        async def execute(self, statement, *args):
+            raise AssertionError("missing IDs do not create unverifiable locators")
 
     with patch.object(operations, "_roster", return_value={
         "111": ("opencode-free", "glm-5.3-flash-free"),
     }):
-        snapshot = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
-    assert snapshot["nvidia"] == ["gone"]
-    assert snapshot["__heartbeat_id"] == ["123"]
-    assert snapshot["__attempt_id"] == ["124"]
+        record = run(operations._export_model_exclusions(SnapshotDB(), REPO, "111"))
+    assert record == {"nvidia": ["gone"]}
+
+
+def test_known_marker_id_skips_shared_registry_and_does_not_write(monkeypatch):
+    class IdOnlyDB:
+        async def fetch(self, statement, *args):
+            if "factory_reconciliation_cursor" in statement:
+                return [
+                    {"scope": "registry-comment-id-v1:heartbeat:worker:111",
+                     "checkpoint": "123"},
+                    {"scope": "registry-comment-id-v1:attempt:worker:111",
+                     "checkpoint": "124"},
+                ]
+            return []
+
+        async def fetchval(self, statement, *args):
+            raise AssertionError("registry body must not be read for existing IDs")
+
+        async def execute(self, statement, *args):
+            raise AssertionError("existing ID lookup must not write")
+
+    with patch.object(operations, "_roster", return_value={
+        "111": ("opencode-free", "glm-5.3-flash-free"),
+    }):
+        result = run(operations._export_model_exclusions(IdOnlyDB(), REPO, "111"))
+    assert result == {"__heartbeat_id": ["123"], "__attempt_id": ["124"]}
 
 
 def test_intermediate_model_failures_use_terminal_runtime_idempotency():

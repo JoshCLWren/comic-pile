@@ -6,28 +6,15 @@
     "generated_by": "scripts/generate_route_burndown.py",
     "issue": 4739,
     "ingress_source": "vercel.json",
-    "total_live_operations": 42,
-    "native_rust": 42,
+    "total_live_operations": 41,
+    "native_rust": 41,
     "python_fastapi": 0,
-    "native_rust_status": 42,
+    "native_rust_status": 41,
     "shadowed_by_rust": 0,
     "live_transitional_python_with_callers": 0,
     "unreferenced_or_orphaned": 0
   },
   "operations": [
-    {
-      "owning_issue": 4822,
-      "runtime": "native-rust",
-      "status": "target",
-      "consumers": [
-        "frontend/src/pages/HistoryPage.tsx"
-      ],
-      "method": "GET",
-      "path": "/api/v2/activity",
-      "ingress_destination": "/api/native_roll.rs",
-      "burndown_status": "native Rust",
-      "verified_against": "vercel.json"
-    },
     {
       "method": "GET",
       "path": "/api/v2/analytics/metrics",
@@ -1006,13 +993,13 @@
       "v1_shadowed_by_rust": 1,
       "v1_live_python": 117,
       "v1_orphaned": 7,
-      "unversioned_total": 21,
+      "unversioned_total": 20,
       "unversioned_shadowed_by_rust": 0,
       "unversioned_live_python": 17,
       "unversioned_orphaned": 2,
-      "total_python_surface": 148,
-      "total_shadowed_by_rust": 0,
-      "total_live_python": 135,
+      "total_python_surface": 146,
+      "total_shadowed_by_rust": 1,
+      "total_live_python": 134,
       "total_orphaned": 9
     },
     "catch_all": {
@@ -1020,19 +1007,6 @@
       "dest": "/api/native_roll.rs"
     },
     "v1_operations": [
-      {
-        "owning_issue": 4822,
-        "runtime": "native-rust",
-        "status": "target",
-        "consumers": [
-          "frontend/src/pages/HistoryPage.tsx"
-        ],
-        "method": "GET",
-        "path": "/api/v1/activity",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
       {
         "method": "GET",
         "path": "/api/v1/bootstrap-alias-metrics",
@@ -2868,19 +2842,6 @@
       }
     ],
     "unversioned_operations": [
-      {
-        "owning_issue": 4822,
-        "runtime": "native-rust",
-        "status": "target",
-        "consumers": [
-          "frontend/src/pages/HistoryPage.tsx"
-        ],
-        "method": "GET",
-        "path": "/api/activity",
-        "ingress_destination": "/api/native_roll.rs",
-        "burndown_status": "native Rust",
-        "verified_against": "vercel.json"
-      },
       {
         "owning_issue": 4854,
         "runtime": "native-rust",

@@ -27,10 +27,10 @@ from app.schemas.reading_boundary import (
 from app.services.errors import NotFoundError
 from app.services.reading_boundary_service import get_reading_boundary_explanations
 
-from route_harness import db_counters, run_rust_example
+from route_harness import cargo_example_path, db_counters, run_rust_example
 
 SECRET = "synthetic-native-reading-boundary-secret"
-BINARY = "native/roll-service/target/debug/examples/http_reading_boundaries"
+BINARY = str(cargo_example_path("http_reading_boundaries"))
 
 
 async def _run_example(env: dict[str, str]) -> tuple[dict[str, object], bytes, float, float]:

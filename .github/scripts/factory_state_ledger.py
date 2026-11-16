@@ -14,6 +14,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from factory_state_metrics import connect as measured_connect
+
 from factory_state_cache import _dsn
 from factory_work_policy import FIXED_LEASE_TTL_SECONDS
 
@@ -35,11 +37,10 @@ def _keys(repo: str, worker: str, numbers: list[int]) -> list[str]:
 
 
 async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str | None:
-    import asyncpg
 
     token = str(uuid.uuid4())
     keys = _keys(repo, worker, numbers)
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         async with conn.transaction():
             # A repository-level transaction lock makes worker and *all* linked
@@ -75,10 +76,10 @@ async def _acquire(repo: str, worker: str, numbers: list[int], ttl: int) -> str 
                    VALUES ('github-actions', 'worker_assigned', 'worker', $1,
                      jsonb_build_object('claim_id', $2::text, 'worker', $3::text,
                                         'targets', $4::jsonb, 'run_id', $5::text,
-                                        'source', $6::text))""",
+                                        'source', $6::text, 'repo', $7::text))""",
                 int(worker), token, worker, json.dumps(sorted(set(numbers))),
                 os.environ.get("GITHUB_RUN_ID", ""),
-                _roster()[worker][0],
+                _roster()[worker][0], repo,
             )
         return token
     finally:
@@ -103,9 +104,8 @@ def acquire_lease(repo: str, worker: str, numbers: list[int], ttl: int = FIXED_L
 
 
 async def _release(repo: str, worker: str, token: str, reason: str) -> bool:
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         async with conn.transaction():
             await conn.execute("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", LEASE_PREFIX + repo)
@@ -135,8 +135,8 @@ async def _release(repo: str, worker: str, token: str, reason: str) -> bool:
                    (source, event_type, subject_type, subject_number, detail)
                    VALUES ('github-actions', 'worker_released', 'worker', $1,
                      jsonb_build_object('claim_id',$2::text,'worker',$3::text,
-                                        'reason',$4::text,'targets',$5::jsonb))""",
-                int(worker), token, worker, reason, json.dumps(numbers),
+                                        'reason',$4::text,'targets',$5::jsonb,'repo',$6::text))""",
+                int(worker), token, worker, reason, json.dumps(numbers), repo,
             )
         return True
     finally:
@@ -155,8 +155,7 @@ def release_worker(repo: str, worker: str, reason: str) -> bool:
         return False
 
     async def _lookup() -> str | None:
-        import asyncpg
-        conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
         try:
             row = await conn.fetchrow(
                 "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
@@ -176,9 +175,8 @@ def release_worker(repo: str, worker: str, reason: str) -> bool:
 
 
 async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     inserted = 0
     try:
         async with conn.transaction():
@@ -196,7 +194,7 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
                     """INSERT INTO public.factory_state_events
                        (source,event_type,subject_type,subject_number,detail)
                        VALUES ('github-actions',$1,'worker',$2,$3::jsonb)""",
-                    entry["event_type"], int(entry["worker"]), json.dumps(entry),
+                    entry["event_type"], int(entry["worker"]), json.dumps({**entry, "repo": repo}),
                 )
                 inserted += 1
                 # 'running' is an initial status marker, not a periodic
@@ -241,9 +239,8 @@ async def _events(repo: str, entries: list[dict[str, Any]]) -> int:
 
 async def _renew_verified(repo: str, workers: list[str]) -> int:
     """Extend existing, unexpired reservations for verified running workers."""
-    import asyncpg
 
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=12)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=12)
     renewed = 0
     try:
         async with conn.transaction():
@@ -298,7 +295,7 @@ def renew_verified_workers(repo: str, workers: list[str]) -> int:
     return asyncio.run(_renew_verified(repo, workers))
 
 
-def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
+def worker_claim(repo: str, worker: str, *, active_only: bool = False) -> tuple[str, list[int]] | None:
     """Capture the existing claim before a controller mutates ownership labels.
 
     Args:
@@ -314,13 +311,12 @@ def worker_claim(repo: str, worker: str) -> tuple[str, list[int]] | None:
         return None
 
     async def _read() -> tuple[str, list[int]] | None:
-        import asyncpg
 
-        conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+        conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
         try:
             raw = await conn.fetchval(
-                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1",
-                _keys(repo, worker, [])[0],
+                "SELECT payload FROM public.factory_state_kv WHERE cache_key=$1 AND (NOT $2::boolean OR expires_at>now())",
+                _keys(repo, worker, [])[0], active_only,
             )
             if raw is None:
                 return None
