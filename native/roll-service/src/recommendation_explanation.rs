@@ -51,16 +51,26 @@ pub struct RecommendationExplanationPath {
 type ExplanationEntry = (&'static str, &'static str, Option<&'static str>);
 
 const BANDWIDTH_EXPLANATIONS: &[(&str, ExplanationEntry)] = &[
-    ("band_light", ("band_light", "Quick read", Some("~11-minute read"))),
+    (
+        "band_light",
+        ("band_light", "Quick read", Some("~11-minute read")),
+    ),
     ("band_balanced", ("band_balanced", "Medium read", None)),
     (
         "band_deep",
-        ("band_deep", "Deep read", Some("Settling in for an extended session")),
+        (
+            "band_deep",
+            "Deep read",
+            Some("Settling in for an extended session"),
+        ),
     ),
 ];
 
 const INTENT_EXPLANATIONS: &[(&str, ExplanationEntry)] = &[
-    ("intent_balanced", ("intent_balanced", "Balanced pick", None)),
+    (
+        "intent_balanced",
+        ("intent_balanced", "Balanced pick", None),
+    ),
     (
         "intent_momentum",
         ("intent_momentum", "Recent series momentum", None),
@@ -71,28 +81,41 @@ const INTENT_EXPLANATIONS: &[(&str, ExplanationEntry)] = &[
     ),
     (
         "intent_explore",
-        (
-            "intent_explore",
-            "Novel but connected to your tastes",
-            None,
-        ),
+        ("intent_explore", "Novel but connected to your tastes", None),
     ),
     (
         "intent_random",
-        ("intent_random", "No weighting applied", Some("Pure random selection")),
+        (
+            "intent_random",
+            "No weighting applied",
+            Some("Pure random selection"),
+        ),
     ),
 ];
 
 const SELECTION_EXPLANATIONS: &[(&str, ExplanationEntry)] = &[
-    ("random", ("random", "Pure random", Some("Weighting was bypassed"))),
-    ("override", ("override", "Manual pick", Some("Directly chosen"))),
+    (
+        "random",
+        ("random", "Pure random", Some("Weighting was bypassed")),
+    ),
+    (
+        "override",
+        ("override", "Manual pick", Some("Directly chosen")),
+    ),
 ];
 
 const TASTE_BANK_EXPLANATIONS: &[(&str, ExplanationEntry)] = &[
-    ("taste_high_affinity", ("taste_high_affinity", "Strong affinity", None)),
+    (
+        "taste_high_affinity",
+        ("taste_high_affinity", "Strong affinity", None),
+    ),
     (
         "taste_confirmed_creator",
-        ("taste_confirmed_creator", "Creator you confirmed you like", None),
+        (
+            "taste_confirmed_creator",
+            "Creator you confirmed you like",
+            None,
+        ),
     ),
     (
         "taste_confirmed_character",
@@ -263,7 +286,10 @@ pub fn project_recommendation_context(
     }
 
     if let Some(primary_score) = context.get("primary_score") {
-        if let Some(code) = primary_score.get("code").and_then(serde_json::Value::as_str) {
+        if let Some(code) = primary_score
+            .get("code")
+            .and_then(serde_json::Value::as_str)
+        {
             if !code.is_empty() {
                 if let Some(factor) = primary_score_factor(code) {
                     factors.push(factor);

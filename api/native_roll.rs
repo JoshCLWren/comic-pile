@@ -401,10 +401,7 @@ fn app() -> Router {
             "/api/roll/events/{event_id}/recommendation-explanation",
             get(native_dispatch),
         )
-        .route(
-            "/api/v1/roll/switch-prerequisite",
-            post(native_dispatch),
-        )
+        .route("/api/v1/roll/switch-prerequisite", post(native_dispatch))
         .route("/api/v1/users/me/preferences", get(native_dispatch))
         .route("/api/v1/users/me/preferences", patch(native_dispatch))
         .route("/api/v1/users/me/taste-signals", get(native_dispatch))

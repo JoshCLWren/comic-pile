@@ -15,18 +15,16 @@
 #![forbid(unsafe_code)]
 use crate::{
     auth::AuthenticatedUser,
-    db,
-    option_inputs,
+    db, option_inputs,
     reading_constraints::EligibleFrontier,
     reading_session::{self, SessionPolicy},
-    roll_exclusions,
-    ApiError, AppState,
+    roll_exclusions, ApiError, AppState,
 };
 use axum::{extract::State, Json};
+use chrono::Timelike;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::str::FromStr;
-use chrono::Timelike;
 use std::sync::Arc;
 use tokio_postgres::IsolationLevel;
 
@@ -231,7 +229,15 @@ async fn fetch_session_state(
     tx: &tokio_postgres::Transaction<'_>,
     session_id: i32,
     user_id: i32,
-) -> Result<(Option<i32>, Option<Vec<i32>>, Option<Vec<i32>>, Option<String>), ApiError> {
+) -> Result<
+    (
+        Option<i32>,
+        Option<Vec<i32>>,
+        Option<Vec<i32>>,
+        Option<String>,
+    ),
+    ApiError,
+> {
     let row = tx
         .query_opt(
             "SELECT pending_thread_id, snoozed_thread_ids, skipped_thread_ids, timezone
@@ -418,13 +424,7 @@ pub async fn override_roll(
     user: AuthenticatedUser,
     Json(request): Json<RollOverrideRequest>,
 ) -> Result<Json<RollOverrideResponse>, ApiError> {
-    let active = reading_session::bootstrap(
-        &state,
-        user,
-        None,
-        SessionPolicy::default(),
-    )
-    .await?;
+    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     // Read-only Option E snapshot before the write connection so this request
     // never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
@@ -458,9 +458,7 @@ pub async fn override_roll(
         Some(thread) => thread,
         None => {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(ApiError::NotFound(
-                "That series was not found".to_string(),
-            ));
+            return Err(ApiError::NotFound("That series was not found".to_string()));
         }
     };
 
@@ -757,10 +755,7 @@ mod tests {
     /// Seed the canonical schema and return a client plus the reset guard.
     async fn seeded(
         statements: &str,
-    ) -> (
-        tokio_postgres::Client,
-        tokio::sync::MutexGuard<'static, ()>,
-    ) {
+    ) -> (tokio_postgres::Client, tokio::sync::MutexGuard<'static, ()>) {
         let url = crate::test_support::database_url().await;
         let state = crate::test_support::test_state(2)
             .await
@@ -848,7 +843,10 @@ mod tests {
         assert_eq!(event.get::<_, i32>(6), 100);
         assert_eq!(event.get::<_, Option<String>>(7).as_deref(), Some("1"));
         assert_eq!(event.get::<_, String>(8), "override");
-        assert_eq!(event.get::<_, Option<String>>(9).as_deref(), Some("manual_override"));
+        assert_eq!(
+            event.get::<_, Option<String>>(9).as_deref(),
+            Some("manual_override")
+        );
         assert_eq!(
             event.get::<_, Option<String>>(10).as_deref(),
             Some("override")

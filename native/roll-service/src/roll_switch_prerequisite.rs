@@ -16,8 +16,7 @@
 use crate::{
     auth::AuthenticatedUser,
     bootstrap::{pending_roll_recovery, BootstrapRollRecovery},
-    db,
-    option_inputs,
+    db, option_inputs,
     reading_session::{self, SessionPolicy},
     ApiError, AppState,
 };
@@ -198,8 +197,7 @@ async fn switch(
 
     // Bootstrap resolves (and creates when needed) the authoritative session,
     // matching Python's get_or_create.
-    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default())
-        .await?;
+    let active = reading_session::bootstrap(&state, user, None, SessionPolicy::default()).await?;
     // Read-only Option E snapshot before the write connection so this request
     // never nests two pool checkouts.
     let validated = option_inputs::load_option_inputs_contained(&state, user).await?;
@@ -222,8 +220,7 @@ async fn switch(
         .await
         .map_err(db::query_error)?;
 
-    let (original_thread_id, snoozed) =
-        fetch_pending(&tx, active.session.id, user.id()).await?;
+    let (original_thread_id, snoozed) = fetch_pending(&tx, active.session.id, user.id()).await?;
     let original_thread_id = match original_thread_id {
         Some(thread_id) => thread_id,
         None => {
@@ -293,14 +290,10 @@ async fn switch(
             return Err(stale(None));
         }
     };
-    let allowed = recovery
-        .readable_prerequisites
-        .iter()
-        .any(|prerequisite| {
-            prerequisite.get("node_type").and_then(|v| v.as_str()) == Some("issue")
-                && prerequisite.get("node_id").and_then(|v| v.as_i64())
-                    == Some(target.issue_id as i64)
-        });
+    let allowed = recovery.readable_prerequisites.iter().any(|prerequisite| {
+        prerequisite.get("node_type").and_then(|v| v.as_str()) == Some("issue")
+            && prerequisite.get("node_id").and_then(|v| v.as_i64()) == Some(target.issue_id as i64)
+    });
     if !allowed {
         tx.rollback().await.map_err(db::query_error)?;
         return Err(stale(Some(recovery)));
@@ -470,5 +463,172 @@ mod tests {
         let error = stale(None);
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::CONFLICT);
+    }
+
+    /// Seed the canonical schema and return a client plus the reset guard.
+    async fn seeded(
+        statements: &str,
+    ) -> (tokio_postgres::Client, tokio::sync::MutexGuard<'static, ()>) {
+        let url = crate::test_support::database_url().await;
+        let state = crate::test_support::test_state(2)
+            .await
+            .expect("disposable PostgreSQL required");
+        let guard = crate::test_support::reset_for_test(&state).await;
+        let (client, connection) = tokio_postgres::connect(&url, tokio_postgres::NoTls)
+            .await
+            .expect("disposable Postgres");
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        client
+            .batch_execute(statements)
+            .await
+            .expect("seed canonical schema");
+        (client, guard)
+    }
+
+    fn target() -> TargetRow {
+        TargetRow {
+            issue_id: 200,
+            issue_number: "2".into(),
+            issue_status: "unread".into(),
+            thread_id: 20,
+            thread_title: "Second".into(),
+            thread_status: "active".into(),
+        }
+    }
+
+    #[tokio::test]
+    async fn persist_switch_prerequisite_moves_the_session_and_logs_a_roll() {
+        let _admin = crate::test_support::required_test_admin_url();
+        let (mut client, _db) = seeded(
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (10, 1, 'First', 'Comic', 1, 'active', 1),
+                        (20, 1, 'Second', 'Comic', 1, 'active', 2);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (100, 10, '1', 'unread', now(), 1),
+                        (200, 20, '2', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id,
+                      pending_issue_id, snoozed_thread_ids)
+                 VALUES (1, 1, NOW(), 6, 10, 100, '[20]'::json);"#,
+        )
+        .await;
+        let user = AuthenticatedUser::for_test(1);
+
+        let tx = client.transaction().await.unwrap();
+        persist_switch_prerequisite(&tx, user, 1, &target(), 6, &[], true)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        let session = client
+            .query_one(
+                "SELECT pending_thread_id,pending_issue_id,
+                        pending_thread_updated_at IS NOT NULL,snoozed_thread_ids
+                 FROM sessions WHERE id=1",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(session.get::<_, Option<i32>>(0), Some(20));
+        assert_eq!(session.get::<_, Option<i32>>(1), Some(200));
+        assert_eq!(session.get::<_, bool>(2), true);
+        let snoozed: serde_json::Value = session.get(3);
+        assert_eq!(snoozed, serde_json::json!([]));
+
+        let event = client
+            .query_one(
+                "SELECT type,user_id,session_id,selected_thread_id,issue_id,issue_number,
+                        die,result,selection_method
+                 FROM events WHERE type='roll'",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(event.get::<_, String>(0), "roll");
+        assert_eq!(event.get::<_, i32>(1), 1);
+        assert_eq!(event.get::<_, i32>(2), 1);
+        assert_eq!(event.get::<_, i32>(3), 20);
+        assert_eq!(event.get::<_, i32>(4), 200);
+        assert_eq!(event.get::<_, Option<String>>(5).as_deref(), Some("2"));
+        assert_eq!(event.get::<_, i32>(6), 6);
+        assert_eq!(event.get::<_, i32>(7), 0);
+        assert_eq!(event.get::<_, String>(8), "dependency_recovery");
+
+        // The original pending roll is preserved for audit.
+        let original = client
+            .query_one(
+                "SELECT count(*)::int FROM events WHERE selected_thread_id = 10",
+                &[],
+            )
+            .await
+            .unwrap();
+        assert_eq!(original.get::<_, i32>(0), 0);
+    }
+
+    #[tokio::test]
+    async fn persist_switch_prerequisite_keeps_a_missing_snooze_column_untouched() {
+        let _admin = crate::test_support::required_test_admin_url();
+        let (mut client, _db) = seeded(
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (20, 1, 'Second', 'Comic', 1, 'active', 1);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (200, 20, '2', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die, pending_thread_id, pending_issue_id)
+                 VALUES (1, 1, NOW(), 6, 10, 100);"#,
+        )
+        .await;
+        let user = AuthenticatedUser::for_test(1);
+
+        let tx = client.transaction().await.unwrap();
+        // No snooze row was read, so the durable snooze column stays NULL.
+        persist_switch_prerequisite(&tx, user, 1, &target(), 6, &[], false)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+        let snoozed = client
+            .query_one("SELECT snoozed_thread_ids FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap();
+        assert!(snoozed.get::<_, Option<serde_json::Value>>(0).is_none());
+    }
+
+    #[tokio::test]
+    async fn persist_switch_prerequisite_rejects_a_foreign_session() {
+        let _admin = crate::test_support::required_test_admin_url();
+        let (mut client, _db) = seeded(
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+                 INSERT INTO threads
+                     (id, user_id, title, format, issues_remaining, status, queue_position)
+                 VALUES (20, 1, 'Second', 'Comic', 1, 'active', 1);
+                 INSERT INTO issues
+                     (id, thread_id, issue_number, status, created_at, position)
+                 VALUES (200, 20, '2', 'unread', now(), 1);
+                 INSERT INTO sessions
+                     (id, user_id, started_at, start_die)
+                 VALUES (1, 1, NOW(), 6);"#,
+        )
+        .await;
+        let intruder = AuthenticatedUser::for_test(2);
+        let tx = client.transaction().await.unwrap();
+        let error = persist_switch_prerequisite(&tx, intruder, 1, &target(), 6, &[], false)
+            .await
+            .unwrap_err();
+        tx.commit().await.unwrap();
+        assert_eq!(error.status(), StatusCode::CONFLICT);
+        // The owner's session was never touched.
+        let pending = client
+            .query_one("SELECT pending_thread_id FROM sessions WHERE id=1", &[])
+            .await
+            .unwrap();
+        assert_eq!(pending.get::<_, Option<i32>>(0), None);
     }
 }
