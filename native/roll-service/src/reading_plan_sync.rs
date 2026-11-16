@@ -782,6 +782,119 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
     Ok(rows)
 }
 
+async fn rebuild_plan_issues_from_nodes_json(
+    tx: &tokio_postgres::Transaction<'_>,
+    plan_id: i32,
+) -> Result<(), ApiError> {
+    let row = tx
+        .query_opt(
+            "SELECT nodes_json FROM continuity_plans WHERE id = $1 FOR UPDATE",
+            &[&plan_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let Some(row) = row else {
+        return Ok(());
+    };
+    let nodes_json: Value = row
+        .try_get::<_, Value>(0)
+        .unwrap_or(Value::Array(Vec::new()));
+    let nodes = nodes_json.as_array().cloned().unwrap_or_default();
+
+    tx.execute(
+        "DELETE FROM reading_plan_issues WHERE plan_id = $1",
+        &[&plan_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    let mut seen_issue_ids: std::collections::HashSet<i32> = std::collections::HashSet::new();
+    for node in &nodes {
+        if node.get("node_type").and_then(Value::as_str) != Some("issue") {
+            continue;
+        }
+        let Some(ref_id) = node.get("ref_id").and_then(Value::as_i64) else {
+            continue;
+        };
+        let issue_id = i32::try_from(ref_id).unwrap_or(-1);
+        if issue_id <= 0 || !seen_issue_ids.insert(issue_id) {
+            continue;
+        }
+        let occurrence_id = node
+            .get("id")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| format!("release-{issue_id}"));
+        let lane_id = node
+            .get("lane_id")
+            .and_then(Value::as_str)
+            .unwrap_or("unread-tail")
+            .to_string();
+        let display_position = node.get("position").and_then(Value::as_i64).unwrap_or(0) as i32;
+        let label = node
+            .get("label")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
+        let reader_role = node
+            .get("reader_role")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string());
+        let reader_optional = node.get("reader_optional").and_then(Value::as_bool);
+        let is_checkpoint = node
+            .get("is_checkpoint")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        // Collect source metadata annotations similar to normalization service.
+        let mut meta = serde_json::Map::new();
+        if let Some(v) = node.get("source_role") {
+            if !v.is_null() {
+                meta.insert("source_role".into(), v.clone());
+            }
+        }
+        if let Some(v) = node.get("source_confidence") {
+            if !v.is_null() {
+                meta.insert("source_confidence".into(), v.clone());
+            }
+        }
+        if let Some(v) = node.get("source_explanation") {
+            if !v.is_null() {
+                meta.insert("source_explanation".into(), v.clone());
+            }
+        }
+        if let Some(v) = node.get("source_story_arc_ids") {
+            if !v.is_null() {
+                meta.insert("source_story_arc_ids".into(), v.clone());
+            }
+        }
+        if let Some(v) = node.get("source_target_story_arc_id") {
+            if !v.is_null() {
+                meta.insert("source_target_story_arc_id".into(), v.clone());
+            }
+        }
+        let source_metadata_json: Option<Value> = if meta.is_empty() {
+            None
+        } else {
+            Some(Value::Object(meta))
+        };
+
+        tx.execute(
+            "INSERT INTO reading_plan_issues \
+             (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb) \
+             ON CONFLICT (plan_id, occurrence_id) DO UPDATE SET \
+               issue_id = EXCLUDED.issue_id, lane_id = EXCLUDED.lane_id, display_position = EXCLUDED.display_position, \
+               label = EXCLUDED.label, reader_role = EXCLUDED.reader_role, reader_optional = EXCLUDED.reader_optional, \
+               is_checkpoint = EXCLUDED.is_checkpoint, source_metadata_json = EXCLUDED.source_metadata_json",
+            &[&plan_id, &occurrence_id, &issue_id, &lane_id, &display_position, &label, &reader_role, &reader_optional, &is_checkpoint, &source_metadata_json],
+        )
+        .await
+        .map_err(db::query_error)?;
+    }
+    Ok(())
+}
+
 async fn extend_adopted_issue_to_following_plans(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
@@ -836,7 +949,7 @@ async fn extend_adopted_issue_to_following_plans(
             .unwrap_or(Value::Array(Vec::new()));
         let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
         let mut max_pos: i64 = -1;
-        let mut existing_node: Option<(String, String, i32)> = None; // (occurrence_id, lane_id, position)
+        let mut already_in_json = false;
         for node in &nodes {
             if let Some(pos) = node.get("position").and_then(Value::as_i64) {
                 if pos > max_pos {
@@ -846,39 +959,10 @@ async fn extend_adopted_issue_to_following_plans(
             if node.get("node_type").and_then(Value::as_str) == Some("issue")
                 && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
             {
-                let occ = node
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .unwrap_or("")
-                    .to_string();
-                let lane = node
-                    .get("lane_id")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unread-tail")
-                    .to_string();
-                let pos = node
-                    .get("position")
-                    .and_then(Value::as_i64)
-                    .unwrap_or(max_pos + 1) as i32;
-                existing_node = Some((
-                    if occ.is_empty() {
-                        format!("release-{issue_id}")
-                    } else {
-                        occ
-                    },
-                    lane,
-                    pos,
-                ));
+                already_in_json = true;
             }
         }
-        let (occurrence_id, lane_id, display_position, changed_json) = if let Some((
-            occ,
-            lane,
-            pos,
-        )) = existing_node
-        {
-            (occ, lane, pos, false)
-        } else {
+        if !already_in_json {
             let new_pos = (max_pos + 1) as i32;
             nodes.push(serde_json::json!({
                 "id": format!("release-{issue_id}"),
@@ -895,23 +979,10 @@ async fn extend_adopted_issue_to_following_plans(
             )
             .await
             .map_err(db::query_error)?;
-            (
-                format!("release-{issue_id}"),
-                "unread-tail".to_string(),
-                new_pos,
-                true,
-            )
-        };
-        let _ = changed_json;
-        tx.execute(
-            "INSERT INTO reading_plan_issues \
-             (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
-             VALUES ($1, $2, $3, $4, $5, NULL, NULL, NULL, FALSE, NULL) \
-             ON CONFLICT (plan_id, issue_id) DO NOTHING",
-            &[&plan_id, &occurrence_id, &issue_id, &lane_id, &display_position],
-        )
-        .await
-        .map_err(db::query_error)?;
+        }
+        // Rebuild issue membership from plan nodes for closer parity with
+        // rebuild_plan_membership (source/placement rebuild still pending).
+        rebuild_plan_issues_from_nodes_json(tx, plan_id).await?;
     }
 
     Ok(())
