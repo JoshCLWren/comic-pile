@@ -72,10 +72,31 @@ def ingest(repo: str) -> tuple[int, int, int]:
     now = datetime.now(timezone.utc)
     since = since_timestamp(repo, now)
     endpoint = f"repos/{repo}/issues/1093/comments?per_page=100&since={quote(since, safe='')}"
-    response = subprocess.run(
-        ["gh", "api", "--paginate", "--slurp", endpoint],
-        check=True, capture_output=True, text=True, timeout=90,
-    )
+    try:
+        response = subprocess.run(
+            ["gh", "api", "--paginate", "--slurp", endpoint],
+            check=False, capture_output=True, text=True, timeout=90,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "GitHub registry delta request timed out; checkpoint unchanged"
+        ) from exc
+    if response.returncode:
+        # Never print untrusted stderr from a token-bearing subprocess.
+        message = response.stderr.lower()
+        if "rate limit exceeded for installation" in message:
+            reason = "installation API quota exhausted"
+        elif "rate limit" in message:
+            reason = "GitHub API rate limited"
+        elif "http 401" in message:
+            reason = "GitHub authentication rejected (HTTP 401)"
+        elif "http 403" in message:
+            reason = "GitHub authorization rejected (HTTP 403)"
+        else:
+            reason = f"gh api exited {response.returncode}"
+        raise RuntimeError(
+            f"GitHub registry delta request failed: {reason}; checkpoint unchanged"
+        )
     changes = flatten(json.loads(response.stdout))
     events = record_heartbeat_comments(repo, changes)
     ids = remember_verified_markers(repo, marker_ids(changes))

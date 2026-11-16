@@ -24,3 +24,27 @@ def test_stale_cursor_cannot_trigger_unbounded_history_scan(monkeypatch):
     monkeypatch.setattr(ingest, "registry_ingest_checkpoint",
                         lambda repo: (now - timedelta(days=12)).isoformat())
     assert ingest.since_timestamp("JoshCLWren/comic-pile", now).startswith("2026-11-16T01:00")
+
+def test_installation_quota_error_is_explicit_and_does_not_advance_cursor(monkeypatch):
+    import subprocess
+    import pytest
+    monkeypatch.setattr(ingest, "since_timestamp", lambda *_: "2026-11-16T02:00:00Z")
+    monkeypatch.setattr(ingest.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(
+        args[0], 1, "", "gh: API rate limit exceeded for installation (HTTP 403); secret=not-for-logs"
+    ))
+    monkeypatch.setattr(ingest, "checkpoint", lambda *_: pytest.fail("failed fetch must not advance checkpoint"))
+    with pytest.raises(RuntimeError, match="installation API quota exhausted; checkpoint unchanged") as error:
+        ingest.ingest("JoshCLWren/comic-pile")
+    assert "secret=not-for-logs" not in str(error.value)
+
+
+def test_timeout_does_not_advance_registry_checkpoint(monkeypatch):
+    import subprocess
+    import pytest
+    monkeypatch.setattr(ingest, "since_timestamp", lambda *_: "2026-11-16T02:00:00Z")
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], 90)
+    monkeypatch.setattr(ingest.subprocess, "run", timeout)
+    monkeypatch.setattr(ingest, "checkpoint", lambda *_: pytest.fail("timeout must not advance checkpoint"))
+    with pytest.raises(RuntimeError, match="timed out; checkpoint unchanged"):
+        ingest.ingest("JoshCLWren/comic-pile")
