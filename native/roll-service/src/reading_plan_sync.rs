@@ -836,7 +836,7 @@ async fn extend_adopted_issue_to_following_plans(
             .unwrap_or(Value::Array(Vec::new()));
         let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
         let mut max_pos: i64 = -1;
-        let mut already_in_json = false;
+        let mut existing_node: Option<(String, String, i32)> = None; // (occurrence_id, lane_id, position)
         for node in &nodes {
             if let Some(pos) = node.get("position").and_then(Value::as_i64) {
                 if pos > max_pos {
@@ -846,11 +846,16 @@ async fn extend_adopted_issue_to_following_plans(
             if node.get("node_type").and_then(Value::as_str) == Some("issue")
                 && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
             {
-                already_in_json = true;
+                let occ = node.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+                let lane = node.get("lane_id").and_then(Value::as_str).unwrap_or("unread-tail").to_string();
+                let pos = node.get("position").and_then(Value::as_i64).unwrap_or(max_pos + 1) as i32;
+                existing_node = Some((if occ.is_empty() { format!("release-{issue_id}") } else { occ }, lane, pos));
             }
         }
-        let new_pos = (max_pos + 1) as i32;
-        if !already_in_json {
+        let (occurrence_id, lane_id, display_position, changed_json) = if let Some((occ, lane, pos)) = existing_node {
+            (occ, lane, pos, false)
+        } else {
+            let new_pos = (max_pos + 1) as i32;
             nodes.push(serde_json::json!({
                 "id": format!("release-{issue_id}"),
                 "node_type": "issue",
@@ -866,13 +871,15 @@ async fn extend_adopted_issue_to_following_plans(
             )
             .await
             .map_err(db::query_error)?;
-        }
+            (format!("release-{issue_id}"), "unread-tail".to_string(), new_pos, true)
+        };
+        let _ = changed_json;
         tx.execute(
             "INSERT INTO reading_plan_issues \
              (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
-             VALUES ($1, $2, $3, 'unread-tail', $4, NULL, NULL, NULL, FALSE, NULL) \
+             VALUES ($1, $2, $3, $4, $5, NULL, NULL, NULL, FALSE, NULL) \
              ON CONFLICT (plan_id, issue_id) DO NOTHING",
-            &[&plan_id, &format!("release-{issue_id}"), &issue_id, &new_pos],
+            &[&plan_id, &occurrence_id, &issue_id, &lane_id, &display_position],
         )
         .await
         .map_err(db::query_error)?;
