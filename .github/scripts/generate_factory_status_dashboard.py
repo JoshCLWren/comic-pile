@@ -880,8 +880,8 @@ def main() -> int:
     # No new per-refresh GitHub commits, static roster, or API credentials.
     payload = json.dumps(snapshot, ensure_ascii=True, separators=(",", ":"))
     payload = payload.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
-    css = (SCRIPTS / "factory_fleet_console.css").read_text(encoding="utf-8")
-    js = (SCRIPTS / "factory_fleet_console.js").read_text(encoding="utf-8")
+    css = load_module("factory_fleet_style", SCRIPTS / "factory_fleet_style.py").STYLESHEET
+    js = (SCRIPTS / "factory_fleet_console.cjs").read_text(encoding="utf-8")
     page = render_dashboard(snapshot)
     page = page.replace("</head>", f"<style>{css}</style></head>", 1)
     page = page.replace("</body>", f'<script id="fleet-snapshot" type="application/json">{payload}</script><script>{js}</script></body>', 1)
