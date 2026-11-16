@@ -604,6 +604,7 @@ agent_status=0
 transient_failure=0
 while :; do
   log "FACTORY_EXECUTION_CANDIDATE: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
+  : > "/tmp/opencode-factory-${WORKER}.log"
   set +e
   run_agent "$MODE" "$NUMBER" "$agent_timeout"
   agent_status=$?
@@ -625,9 +626,14 @@ while :; do
     case "$failure_class" in
       provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
         if [[ -z "$(git status --porcelain)" ]] && (( $(remaining) > 540 )); then
-          attempted_models+=("$MODEL")
-          if ! record_model_failover_failure "$MODEL" "$failure_class"; then
-            record_terminal_outcome control_plane_failure "failed to record exact model failure before failover"
+          attempted_pairs+=("$(jq -nc --arg source "$SOURCE" --arg model "$MODEL" '[$source,$model]')")
+          failure_scope=model
+          if account_wide_failure; then
+            failure_scope=account
+            blocked_providers+=("$SOURCE")
+          fi
+          if ! record_model_failover_failure "$SOURCE" "$MODEL" "$failure_class" "$failure_scope"; then
+            record_terminal_outcome control_plane_failure "failed to persist exact attempt before failover"
             break
           fi
           if select_next_eligible_model; then
