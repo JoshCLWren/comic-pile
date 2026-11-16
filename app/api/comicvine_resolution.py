@@ -30,7 +30,6 @@ from app.schemas.comicvine_resolution import (
     MetadataCorrectionsResponse,
     MetadataRefreshResponse,
     ReplaceIdentityRequest,
-    SeriesImportStatusResponse,
 )
 from app.services.comicvine_resolution import (
     ImportTargetNotFoundError,
@@ -38,7 +37,6 @@ from app.services.comicvine_resolution import (
     apply_metadata_correction,
     get_comicvine_series_issues,
     get_issue_identity_state,
-    get_series_import_status,
     import_comicvine_issue,
     import_comicvine_series,
     list_metadata_corrections,
@@ -163,38 +161,7 @@ async def api_get_series_issues(
     )
 
 
-@router.get(
-    "/series/{comicvine_volume_id}/import-status",
-    response_model=SeriesImportStatusResponse,
-)
-async def api_get_series_import_status(
-    comicvine_volume_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> SeriesImportStatusResponse:
-    """Report whether this user already owns a thread for one ComicVine volume.
 
-    Importing a long series can outlive the client's request budget, so a
-    timeout does not prove the import failed (#3445). The client re-checks this
-    status before telling the user their add failed, which also keeps a retry
-    from becoming a duplicate: the server reports the series it already created
-    so the client can refresh the queue instead of importing it again.
-
-    Only the calling user's threads are inspected, so the answer can never leak
-    another user's queue.
-
-    Args:
-        comicvine_volume_id: ComicVine volume ID the client submitted.
-        current_user: Authenticated owner.
-        db: Async database session.
-
-    Returns:
-        SeriesImportStatusResponse describing the owned thread for that volume,
-        or a not-imported response when the user owns none.
-    """
-    return await get_series_import_status(
-        db, user_id=current_user.id, comicvine_volume_id=comicvine_volume_id
-    )
 
 
 @router.get(
