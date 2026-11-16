@@ -297,6 +297,13 @@ def durable_attempt_evidence(
             classification = "model_unavailable"
         elif status == "cooling":
             classification = outcome if outcome in PROVIDER_FAILURE_OUTCOMES | TRANSIENT_MODEL_OUTCOMES else "unknown_failure"
+            if until > now_epoch:
+                # Respect durable Fibonacci cooldowns longer than the historical
+                # fixed-duration classification used by this pure ranker.
+                seconds = (RATE_LIMIT_COOLDOWN_SECONDS if classification in {
+                    "provider_quota", "provider_throttle", "provider_throttled", "provider_unavailable"
+                } else FAILURE_COOLDOWN_SECONDS)
+                updated = max(updated, until - seconds + 1)
         elif status == "healthy":
             classification = "success"
         else:
@@ -311,8 +318,11 @@ def durable_attempt_evidence(
         updated = int(row.get("updated") or 0)
         outcome = str(row.get("outcome") or "")
         if source and until > now_epoch and updated > 0 and outcome in PROVIDER_FAILURE_OUTCOMES:
+            seconds = (RATE_LIMIT_COOLDOWN_SECONDS if outcome in {
+                "provider_quota", "provider_throttle", "provider_throttled", "provider_unavailable"
+            } else FAILURE_COOLDOWN_SECONDS)
             evidence[(source, "__provider_budget__")] = AttemptEvidence(
-                source, "__provider_budget__", outcome, updated,
+                source, "__provider_budget__", outcome, max(updated, until - seconds + 1),
             )
     return evidence
 

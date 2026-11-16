@@ -545,8 +545,14 @@ def durable_factory_state(*, now_epoch: int | None = None) -> tuple[dict[str, An
     }
     for candidate, ranked_item in zip(candidates, ranked):
         state = states.get(ranked_item.health_state)
+        worker = candidate["worker"]
+        prior = health.get(worker)
+        # A fresh trusted runtime failure must not be erased by an older
+        # model-success projection before its cooldown has actually elapsed.
+        if prior and now_epoch < prior[1] + cooldown_seconds(prior[0]):
+            continue
         if state is not None:
-            health[candidate["worker"]] = state
+            health[worker] = state
     return view, health
 
 
