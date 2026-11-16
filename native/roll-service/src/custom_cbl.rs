@@ -759,7 +759,7 @@ async fn validate_projection(
     }
 
     ValidatedReadingInputs::new(inputs, &names)
-        .map_err(|error| cycle_conflict(error, &names))?;
+        .map_err(|error| cycle_conflict(error, &inputs))?;
     Ok(())
 }
 
@@ -1746,7 +1746,7 @@ pub async fn apply_custom_cbl(
     }
 
     ValidatedReadingInputs::new(inputs, &list_names)
-        .map_err(|error| cycle_conflict(error, &list_names))?;
+        .map_err(|error| cycle_conflict(error, &inputs))?;
 
     // Update plan
     let new_lanes_json = serde_json::to_value(&lanes).map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
