@@ -1,4 +1,4 @@
-"""Retired CodeRabbit is neither a review gate nor a worker request trigger."""
+"""CodeRabbit reviews are requested but stay advisory for factory gates and prompts."""
 
 from __future__ import annotations
 
@@ -48,17 +48,25 @@ def test_retired_bot_rest_comments_do_not_require_graphql() -> None:
     assert gate(human, head=HEAD) is None
 
 
-def test_code_rabbit_request_step_is_absent() -> None:
-    workflow = RUNNER.read_text(encoding="utf-8")
-    assert "hourly_coderabbit_review.py" not in workflow
-    assert "Ask Jev for CodeRabbit review" not in workflow
+def test_merge_drain_requests_coderabbit_reviews_without_blocking_merges() -> None:
+    """Review requests run on the drain cadence; failures never block merges.
+
+    Requests were restored after #5209 removed them; findings remain advisory
+    for the factory merge gate (see the tests above).
+    """
+    drain = (ROOT / ".github/workflows/factory-ready-merge-drain.yml").read_text(encoding="utf-8")
+    step_name = "      - name: Ask Jev for CodeRabbit review on the existing drain cadence"
+    assert drain.count(step_name) == 1
+    step = drain.split(step_name, 1)[1].split("\n      - name:", 1)[0]
+    assert "continue-on-error: true" in step
+    assert 'python3 .github/scripts/hourly_coderabbit_review.py \\\n            --repo "$GITHUB_REPOSITORY"' in step
 
 
-def test_legacy_coderabbit_cli_is_inert_without_secrets() -> None:
+def test_coderabbit_request_cli_is_live_and_validates_repository() -> None:
     result = subprocess.run(
-        [sys.executable, str(LEGACY_REVIEW), "--repo", "JoshCLWren/comic-pile"],
+        [sys.executable, str(LEGACY_REVIEW), "--repo", "not a repo"],
         capture_output=True, text=True, check=False, timeout=10,
     )
-    assert result.returncode == 0
-    assert "retired" in result.stdout.lower()
-    assert "@coderabbitai review" not in result.stdout
+    assert result.returncode != 0
+    assert "invalid repository name" in result.stderr
+    assert "retired" not in (result.stdout + result.stderr).lower()
