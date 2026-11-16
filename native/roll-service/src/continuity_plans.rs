@@ -1495,3 +1495,615 @@ pub async fn confirm_plan_projection(
         total_positions: (added + updated + kept) as i32,
     }))
 }
+
+// ============================================================================
+// POST /api/v1/continuity-plans/release-sources/ - Create release source
+// ============================================================================
+
+#[utoipa::path(
+    post,
+    path = "/api/v1/continuity-plans/release-sources/",
+    tag = "reading-plan-release-sources",
+    operation_id = "release_sources_create",
+    request_body = ReleaseSourceCreate,
+    responses(
+        (status = 201, description = "Created release source", body = ReleaseSourceResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plan, thread, or provider identity not found"),
+        (status = 422, description = "Provider volume must be a confirmed mapping for the thread"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn create_release_source(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Json(payload): Json<ReleaseSourceCreate>,
+) -> Result<(StatusCode, Json<ReleaseSourceResponse>), ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Check plan ownership
+    let plan = tx
+        .query_opt(
+            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            &[&payload.plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Plan {} not found", payload.plan_id)))?;
+
+    // Check thread ownership
+    let thread = tx
+        .query_opt(
+            "SELECT id FROM threads WHERE id = $1 AND user_id = $2",
+            &[&payload.thread_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Thread {} not found", payload.thread_id)))?;
+
+    // Verify confirmed ComicVine series mapping
+    let mapping = tx
+        .query_opt(
+            r#"
+            SELECT ei.id, ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
+            FROM thread_external_series_mappings tesm
+            JOIN external_identities ei ON ei.id = tesm.external_identity_id
+            WHERE tesm.thread_id = $1
+              AND tesm.external_identity_id = $2
+              AND tesm.status = 'confirmed'
+              AND ei.provider = 'comicvine'
+              AND ei.entity_type = 'series'
+            "#,
+            &[&payload.thread_id, &payload.external_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| ApiError::Unprocessable("Provider volume must be a confirmed mapping for the thread".into()))?;
+
+    let identity_id: i32 = mapping.get(0);
+    let provider: String = mapping.get(1);
+    let entity_type: String = mapping.get(2);
+    let provider_volume_id: String = mapping.get(3);
+    let metadata_json: Option<serde_json::Value> = mapping.get(4);
+
+    // Check for existing release source (idempotent create)
+    let existing = tx
+        .query_opt(
+            "SELECT id FROM reading_plan_release_sources WHERE plan_id = $1 AND thread_id = $2 AND external_identity_id = $3",
+            &[&payload.plan_id, &payload.thread_id, &payload.external_identity_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let source_id: i32;
+    let created_at: String;
+    let updated_at: String;
+
+    if let Some(row) = existing {
+        source_id = row.get(0);
+        // Fetch the existing source details
+        let source_row = tx
+            .query_one(
+                "SELECT created_at::text, updated_at::text, last_synced_at::text, enabled FROM reading_plan_release_sources WHERE id = $1",
+                &[&source_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        created_at = source_row.get(0);
+        updated_at = source_row.get(1);
+        let _last_synced_at: Option<String> = source_row.get(2);
+        let _enabled: bool = source_row.get(3);
+    } else {
+        // Create new release source
+        let row = tx
+            .query_one(
+                r#"
+                INSERT INTO reading_plan_release_sources (plan_id, thread_id, external_identity_id, enabled, created_at, updated_at)
+                VALUES ($1, $2, $3, TRUE, NOW(), NOW())
+                RETURNING id, created_at::text, updated_at::text
+                "#,
+                &[&payload.plan_id, &payload.thread_id, &payload.external_identity_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        source_id = row.get(0);
+        created_at = row.get(1);
+        updated_at = row.get(2);
+    }
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Extract provider title from metadata
+    let provider_title = metadata_json
+        .and_then(|m| m.get("name").or_else(|| m.get("title")))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let response = ReleaseSourceResponse {
+        id: source_id,
+        plan_id: payload.plan_id,
+        thread_id: payload.thread_id,
+        external_identity_id: payload.external_identity_id,
+        provider,
+        provider_volume_id,
+        provider_title,
+        enabled: true,
+        last_synced_at: None,
+        created_at,
+        updated_at,
+    };
+
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+// ============================================================================
+// GET /api/v1/continuity-plans/{plan_id}/release-sources/ - List release sources
+// ============================================================================
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/continuity-plans/{plan_id}/release-sources/",
+    tag = "reading-plan-release-sources",
+    operation_id = "release_sources_list",
+    params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
+    responses(
+        (status = 200, description = "List of release sources", body = Vec<ReleaseSourceResponse>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plan not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn list_release_sources(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(plan_id): Path<i32>,
+) -> Result<Json<Vec<ReleaseSourceResponse>>, ApiError> {
+    let conn = db::checkout(&state).await?;
+
+    // Check plan ownership
+    let plan_owned = conn
+        .query_opt(
+            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+
+    if !plan_owned {
+        return Err(not_found(format!("Plan {plan_id} not found")));
+    }
+
+    // Get release sources with provider identity details
+    let rows = conn
+        .query(
+            r#"
+            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+                   rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
+                   ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
+            FROM reading_plan_release_sources rprs
+            JOIN external_identities ei ON ei.id = rprs.external_identity_id
+            JOIN continuity_plans cp ON cp.id = rprs.plan_id
+            WHERE rprs.plan_id = $1 AND cp.user_id = $2
+            ORDER BY rprs.created_at
+            "#,
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let sources: Vec<ReleaseSourceResponse> = rows
+        .iter()
+        .map(|row| {
+            let metadata_json: Option<serde_json::Value> = row.get(11);
+            let provider_title = metadata_json
+                .and_then(|m| m.get("name").or_else(|| m.get("title")))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            ReleaseSourceResponse {
+                id: row.get(0),
+                plan_id: row.get(1),
+                thread_id: row.get(2),
+                external_identity_id: row.get(3),
+                provider: row.get(8),
+                provider_volume_id: row.get(10),
+                provider_title,
+                enabled: row.get(4),
+                last_synced_at: row.get(5),
+                created_at: row.get(6),
+                updated_at: row.get(7),
+            }
+        })
+        .collect();
+
+    Ok(Json(sources))
+}
+
+// ============================================================================
+// GET /api/v1/continuity-plans/{plan_id}/release-sources/reader - List reader-facing release sources
+// ============================================================================
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/continuity-plans/{plan_id}/release-sources/reader",
+    tag = "reading-plan-release-sources",
+    operation_id = "release_sources_list_reader",
+    params(("plan_id" = i32, Path, description = "Continuity plan identifier")),
+    responses(
+        (status = 200, description = "List of reader-facing release sources", body = Vec<ReadingPlanReleaseSourceStatus>),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Plan not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn list_release_sources_for_reader(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(plan_id): Path<i32>,
+) -> Result<Json<Vec<ReadingPlanReleaseSourceStatus>>, ApiError> {
+    let conn = db::checkout(&state).await?;
+
+    // Check plan ownership
+    let plan_owned = conn
+        .query_opt(
+            "SELECT id FROM continuity_plans WHERE id = $1 AND user_id = $2",
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .is_some();
+
+    if !plan_owned {
+        return Err(not_found(format!("Plan {plan_id} not found")));
+    }
+
+    // Get release sources with provider identity details
+    let rows = conn
+        .query(
+            r#"
+            SELECT rprs.id, rprs.thread_id, rprs.external_identity_id,
+                   rprs.enabled, rprs.last_synced_at::text,
+                   ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
+            FROM reading_plan_release_sources rprs
+            JOIN external_identities ei ON ei.id = rprs.external_identity_id
+            JOIN continuity_plans cp ON cp.id = rprs.plan_id
+            WHERE rprs.plan_id = $1 AND cp.user_id = $2
+            ORDER BY rprs.created_at
+            "#,
+            &[&plan_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let sources: Vec<ReadingPlanReleaseSourceStatus> = rows
+        .iter()
+        .map(|row| {
+            let metadata_json: Option<serde_json::Value> = row.get(8);
+            let display = extract_provider_display(metadata_json);
+
+            ReadingPlanReleaseSourceStatus {
+                source_id: row.get(0),
+                thread_id: row.get(1),
+                external_identity_id: row.get(2),
+                provider_volume_id: row.get(7),
+                provider_title: display.get("title").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                provider_publisher: display.get("publisher").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                provider_start_year: display.get("start_year").and_then(|v| v.as_i64()).map(|v| v as i32),
+                provider_issue_count: display.get("issue_count").and_then(|v| v.as_i64()).map(|v| v as i32),
+                enabled: row.get(3),
+                last_synced_at: row.get(4),
+            }
+        })
+        .collect();
+
+    Ok(Json(sources))
+}
+
+// ============================================================================
+// GET /api/v1/continuity-plans/release-sources/{source_id} - Get release source
+// ============================================================================
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/continuity-plans/release-sources/{source_id}",
+    tag = "reading-plan-release-sources",
+    operation_id = "release_sources_get",
+    params(("source_id" = i32, Path, description = "Release source identifier")),
+    responses(
+        (status = 200, description = "Release source", body = ReleaseSourceResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Release source not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn get_release_source(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(source_id): Path<i32>,
+) -> Result<Json<ReleaseSourceResponse>, ApiError> {
+    let conn = db::checkout(&state).await?;
+
+    let row = conn
+        .query_opt(
+            r#"
+            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+                   rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
+                   ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
+            FROM reading_plan_release_sources rprs
+            JOIN external_identities ei ON ei.id = rprs.external_identity_id
+            JOIN continuity_plans cp ON cp.id = rprs.plan_id
+            WHERE rprs.id = $1 AND cp.user_id = $2
+            "#,
+            &[&source_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Release source {source_id} not found")))?;
+
+    let metadata_json: Option<serde_json::Value> = row.get(11);
+    let provider_title = metadata_json
+        .and_then(|m| m.get("name").or_else(|| m.get("title")))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let response = ReleaseSourceResponse {
+        id: row.get(0),
+        plan_id: row.get(1),
+        thread_id: row.get(2),
+        external_identity_id: row.get(3),
+        provider: row.get(8),
+        provider_volume_id: row.get(10),
+        provider_title,
+        enabled: row.get(4),
+        last_synced_at: row.get(5),
+        created_at: row.get(6),
+        updated_at: row.get(7),
+    };
+
+    Ok(Json(response))
+}
+
+// ============================================================================
+// PATCH /api/v1/continuity-plans/release-sources/{source_id} - Update release source
+// ============================================================================
+
+#[utoipa::path(
+    patch,
+    path = "/api/v1/continuity-plans/release-sources/{source_id}",
+    tag = "reading-plan-release-sources",
+    operation_id = "release_sources_update",
+    params(("source_id" = i32, Path, description = "Release source identifier")),
+    request_body = ReleaseSourceUpdate,
+    responses(
+        (status = 200, description = "Updated release source", body = ReleaseSourceResponse),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Release source not found"),
+        (status = 422, description = "Mapping no longer confirmed"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn update_release_source(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(source_id): Path<i32>,
+    Json(payload): Json<ReleaseSourceUpdate>,
+) -> Result<Json<ReleaseSourceResponse>, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Get the release source with ownership check
+    let source_row = tx
+        .query_opt(
+            r#"
+            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+                   rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
+                   ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
+            FROM reading_plan_release_sources rprs
+            JOIN external_identities ei ON ei.id = rprs.external_identity_id
+            JOIN continuity_plans cp ON cp.id = rprs.plan_id
+            WHERE rprs.id = $1 AND cp.user_id = $2
+            "#,
+            &[&source_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?
+        .ok_or_else(|| not_found(format!("Release source {source_id} not found")))?;
+
+    let thread_id: i32 = source_row.get(2);
+    let external_identity_id: i32 = source_row.get(3);
+    let currently_enabled: bool = source_row.get(4);
+
+    // If enabling, revalidate the mapping is still confirmed
+    if payload.enabled && !currently_enabled {
+        let mapping = tx
+            .query_opt(
+                r#"
+                SELECT 1
+                FROM thread_external_series_mappings tesm
+                JOIN external_identities ei ON ei.id = tesm.external_identity_id
+                WHERE tesm.thread_id = $1
+                  AND tesm.external_identity_id = $2
+                  AND tesm.status = 'confirmed'
+                  AND ei.provider = 'comicvine'
+                  AND ei.entity_type = 'series'
+                "#,
+                &[&thread_id, &external_identity_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+
+        if mapping.is_none() {
+            return Err(ApiError::Unprocessable("Mapping no longer confirmed".into()));
+        }
+    }
+
+    // Update the enabled status
+    tx.execute(
+        "UPDATE reading_plan_release_sources SET enabled = $1, updated_at = NOW() WHERE id = $2",
+        &[&payload.enabled, &source_id],
+    )
+    .await
+    .map_err(db::query_error)?;
+
+    tx.commit().await.map_err(db::query_error)?;
+
+    // Fetch updated row
+    let conn = db::checkout(&state).await?;
+    let updated_row = conn
+        .query_one(
+            r#"
+            SELECT rprs.id, rprs.plan_id, rprs.thread_id, rprs.external_identity_id,
+                   rprs.enabled, rprs.last_synced_at::text, rprs.created_at::text, rprs.updated_at::text,
+                   ei.provider, ei.entity_type, ei.external_id, ei.metadata_json
+            FROM reading_plan_release_sources rprs
+            JOIN external_identities ei ON ei.id = rprs.external_identity_id
+            JOIN continuity_plans cp ON cp.id = rprs.plan_id
+            WHERE rprs.id = $1 AND cp.user_id = $2
+            "#,
+            &[&source_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    let metadata_json: Option<serde_json::Value> = updated_row.get(11);
+    let provider_title = metadata_json
+        .and_then(|m| m.get("name").or_else(|| m.get("title")))
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let response = ReleaseSourceResponse {
+        id: updated_row.get(0),
+        plan_id: updated_row.get(1),
+        thread_id: updated_row.get(2),
+        external_identity_id: updated_row.get(3),
+        provider: updated_row.get(8),
+        provider_volume_id: updated_row.get(10),
+        provider_title,
+        enabled: updated_row.get(4),
+        last_synced_at: updated_row.get(5),
+        created_at: updated_row.get(6),
+        updated_at: updated_row.get(7),
+    };
+
+    Ok(Json(response))
+}
+
+// ============================================================================
+// DELETE /api/v1/continuity-plans/release-sources/{source_id} - Delete release source
+// ============================================================================
+
+#[utoipa::path(
+    delete,
+    path = "/api/v1/continuity-plans/release-sources/{source_id}",
+    tag = "reading-plan-release-sources",
+    operation_id = "release_sources_delete",
+    params(("source_id" = i32, Path, description = "Release source identifier")),
+    responses(
+        (status = 204, description = "Release source deleted"),
+        (status = 401, description = "Not authenticated"),
+        (status = 404, description = "Release source not found"),
+        (status = 503, description = "Database temporarily unavailable")
+    ),
+    security(("HTTPBearer" = []))
+)]
+pub async fn delete_release_source(
+    State(state): State<Arc<AppState>>,
+    user: AuthenticatedUser,
+    Path(source_id): Path<i32>,
+) -> Result<StatusCode, ApiError> {
+    let mut conn = db::checkout(&state).await?;
+    let tx = conn
+        .build_transaction()
+        .start()
+        .await
+        .map_err(db::query_error)?;
+
+    // Check ownership and delete
+    let deleted = tx
+        .execute(
+            r#"
+            DELETE FROM reading_plan_release_sources rprs
+            USING continuity_plans cp
+            WHERE rprs.id = $1 AND rprs.plan_id = cp.id AND cp.user_id = $2
+            "#,
+            &[&source_id, &user.id()],
+        )
+        .await
+        .map_err(db::query_error)?;
+
+    if deleted == 0 {
+        return Err(not_found(format!("Release source {source_id} not found")));
+    }
+
+    tx.commit().await.map_err(db::query_error)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// Helper function to extract provider display metadata
+fn extract_provider_display(metadata_json: Option<serde_json::Value>) -> serde_json::Value {
+    let mut display = serde_json::Map::new();
+    
+    if let Some(m) = metadata_json {
+        if let Some(title) = m.get("name").or_else(|| m.get("title")) {
+            if let Some(s) = title.as_str() {
+                if !s.trim().is_empty() {
+                    display.insert("title".to_string(), serde_json::Value::String(s.trim().to_string()));
+                }
+            }
+        }
+        
+        if let Some(publisher) = m.get("publisher") {
+            if let Some(s) = publisher.as_str() {
+                if !s.trim().is_empty() {
+                    display.insert("publisher".to_string(), serde_json::Value::String(s.trim().to_string()));
+                }
+            } else if let Some(obj) = publisher.as_object() {
+                if let Some(name) = obj.get("name") {
+                    if let Some(s) = name.as_str() {
+                        if !s.trim().is_empty() {
+                            display.insert("publisher".to_string(), serde_json::Value::String(s.trim().to_string()));
+                        }
+                    }
+                }
+            }
+        }
+        
+        if let Some(start_year) = m.get("start_year") {
+            if let Some(y) = start_year.as_i64() {
+                display.insert("start_year".to_string(), serde_json::Value::Number(y.into()));
+            } else if let Some(s) = start_year.as_str() {
+                if let Ok(y) = s.trim().parse::<i64>() {
+                    display.insert("start_year".to_string(), serde_json::Value::Number(y.into()));
+                }
+            }
+        }
+        
+        if let Some(issue_count) = m.get("count_of_issues").or_else(|| m.get("issue_count")) {
+            if let Some(c) = issue_count.as_i64() {
+                display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
+            } else if let Some(s) = issue_count.as_str() {
+                if let Ok(c) = s.trim().parse::<i64>() {
+                    display.insert("issue_count".to_string(), serde_json::Value::Number(c.into()));
+                }
+            }
+        }
+    }
+    
+    serde_json::Value::Object(display)
+}
