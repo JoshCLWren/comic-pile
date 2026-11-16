@@ -1701,7 +1701,7 @@ pub async fn apply_custom_cbl(
     new_nodes.extend(merged_target);
 
     // Graph preflight with new nodes
-    let inputs = option_inputs::load_inputs_in_transaction(&tx, user.clone()).await?;
+    let mut inputs = option_inputs::load_inputs_in_transaction(&tx, user.clone()).await?;
     let list_names: BTreeMap<i32, String> = inputs
         .lists
         .iter()
@@ -1732,8 +1732,21 @@ pub async fn apply_custom_cbl(
         }
     }
 
-    ValidatedReadingInputs::new_with_overlap_decisions(inputs.clone(), &list_names, overlap_decisions)
-        .map_err(|error| cycle_conflict(error, &inputs.lists.iter().map(|l| (l.list_id, l.name.clone())).collect()))?;
+    // Update overlap decisions in the loaded inputs
+    for list in &mut inputs.lists {
+        if let Some(decisions) = overlap_decisions.get(&list.list_id) {
+            list.overlap_decisions = decisions
+                .iter()
+                .map(|(c, w)| option_inputs::OverlapDecision {
+                    continuing_volume_id: c.clone(),
+                    waiting_volume_id: w.clone(),
+                })
+                .collect();
+        }
+    }
+
+    ValidatedReadingInputs::new(inputs, &list_names)
+        .map_err(|error| cycle_conflict(error, &list_names))?;
 
     // Update plan
     let new_lanes_json = serde_json::to_value(&lanes).map_err(|_| ApiError::Internal("lanes serialization failed".into()))?;
