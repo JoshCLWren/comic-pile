@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/workflows/fixed-model-factory-dispatch-recovery.yml'
       - '.github/scripts/factory_heartbeat_health.py'
+      - '.github/scripts/factory_runtime_view.py'
+      - '.github/scripts/factory_registry_ingest.py'
       - '.github/factory-expected-workers.json'
 
 permissions:
@@ -43,12 +45,37 @@ jobs:
         run: |
           set -Eeuo pipefail
 
-          python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_completion_controller import registry_comments; print(json.dumps([registry_comments()]))' \
-            > /tmp/factory-registry-comments.json
-          python3 .github/scripts/factory_heartbeat_health.py \
-            --comments /tmp/factory-registry-comments.json \
-            --output /tmp/factory-heartbeat-health.json \
-            --summary "$GITHUB_STEP_SUMMARY"
+          # Neon is already the durable, trusted runtime view. Do not spend
+          # a GitHub API request on every healthy 15-minute watchdog pass.
+          report="$RUNNER_TEMP/factory-heartbeat-report.md"
+          refresh_health() {
+            python3 -c 'import json, sys; sys.path.insert(0, ".github/scripts"); from factory_runtime_view import export_view; print(json.dumps(export_view(sys.argv[1])))' "$GITHUB_REPOSITORY" \
+              > /tmp/factory-runtime-view.json
+            python3 .github/scripts/factory_heartbeat_health.py \
+              --view /tmp/factory-runtime-view.json \
+              --output /tmp/factory-heartbeat-health.json \
+              --summary "$report"
+          }
+          : > "$report"
+          refresh_health
+          newest_age="$(jq -r '.newest_active_age_seconds // "missing"' /tmp/factory-heartbeat-health.json)"
+          if [[ "$newest_age" != missing ]] && (( newest_age < 1200 )); then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            echo 'An active factory heartbeat is fresh; no GitHub registry read or dispatcher recovery needed.'
+            exit 0
+          fi
+
+          # With no fresh heartbeat, reconcile bounded changed comments.
+          # If GitHub is unavailable, publish Neon diagnostics but do not
+          # authorize a new dispatcher from potentially incomplete evidence.
+          if ! python3 .github/scripts/factory_registry_ingest.py; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            echo '::warning::Registry delta unavailable; heartbeat diagnostics retained, dispatcher recovery deferred.'
+            exit 0
+          fi
+          : > "$report"
+          refresh_health
+          cat "$report" >> "$GITHUB_STEP_SUMMARY"
 
           # Per-worker freshness is diagnostic only. Preserve the existing
           # fleet-wide recovery gate; never launch a worker for its stale age.

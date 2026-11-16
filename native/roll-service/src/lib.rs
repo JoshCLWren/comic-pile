@@ -49,6 +49,7 @@ pub mod roll_offer;
 pub mod roll_pool;
 pub mod roll_reset;
 pub mod roll_resources;
+pub mod same_path_openapi;
 mod session_bandwidth;
 pub mod session_detail;
 pub mod session_history;
@@ -557,6 +558,10 @@ pub fn router(state: Arc<AppState>) -> Router {
             get(threads::get_thread_detail),
         )
         .route("/api/threads/{thread_id}", get(threads::get_thread_detail))
+        .route(
+            "/api/v1/threads/{thread_id}/issues",
+            get(issue_read::list_thread_issues),
+        )
         .route(
             "/api/v1/threads/completed/threads",
             get(threads::list_completed_threads),

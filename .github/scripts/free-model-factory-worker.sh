@@ -130,6 +130,9 @@ record_agent_failure_outcome() {
   elif [[ -f "$log_file" ]] && grep -Eqi '429|too many requests|rate.?limit|quota|throttl|capacity' "$log_file"; then
     record_terminal_outcome provider_throttle "pinned provider/model session was throttled (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'HTTP[^0-9]*410|410 Gone' "$log_file"; then
+    if [[ "$SOURCE" == nvidia ]]; then
+      printf 'NVIDIA permanently retired model: %s\n' "$MODEL"
+    fi
     record_terminal_outcome model_retired_410 "pinned model has been permanently retired by the provider (agent exit ${status})"
   elif [[ -f "$log_file" ]] && grep -Eqi 'model[^[:alnum:]]+(not found|unavailable|does not exist)|unknown model|invalid model|HTTP[^0-9]*404|404 Not Found' "$log_file"; then
     record_terminal_outcome model_unavailable "pinned model became unavailable during execution (agent exit ${status})"
@@ -195,6 +198,17 @@ stage_trusted_review_controller() {
   chmod +x "$trusted_dir/factory-review-controller.py"
   TRUSTED_REVIEW_CONTROLLER="$trusted_dir/factory-review-controller.py"
   export TRUSTED_REVIEW_CONTROLLER
+}
+
+# Pin the checkpoint writer to trusted main before loading arbitrary PR code.
+# The model may edit repository scripts but cannot replace this running helper.
+stage_trusted_checkpoint_helper() {
+  TRUSTED_WORK_CHECKPOINT="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-work-checkpoint.XXXXXXXX")"
+  cp .github/scripts/factory-work-checkpoint.sh "$TRUSTED_WORK_CHECKPOINT"
+  chmod +x "$TRUSTED_WORK_CHECKPOINT"
+  TRUSTED_CHECKPOINT_HANDOFF="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-checkpoint-handoff.XXXXXXXX.py")"
+  cp .github/scripts/factory_checkpoint_handoff.py "$TRUSTED_CHECKPOINT_HANDOFF"
+  export TRUSTED_CHECKPOINT_HANDOFF
 }
 
 # Keep the established OpenCode/NVIDIA implementation untouched. Kilo needs a
@@ -338,106 +352,96 @@ read_trusted_completion_decision() {
 }
 
 select_controller_assignment() {
-  local -a prs=() issues=()
-  local pr_json issue_json pr_numbers issue_numbers canonical_pr_json canonical_pr
-  local pr branch linked_issue issue pr_stage
-
-  if ! pr_json="$(gh pr list --state open --limit 200 --label "$OWNER" --json number,labels)"; then
-    log "unable to query controller-leased PRs for ${OWNER}"
-    return 3
+  local assignment="${FACTORY_ASSIGNMENT:-}" target
+  [[ -n "$assignment" ]] || { log 'dispatcher assignment input is required'; return 3; }
+  if ! jq -e --arg worker "$WORKER" '
+    .worker == $worker and (.kind == "issue" or .kind == "pr")
+    and (.number | type == "number" and . > 0 and floor == .)
+  ' <<< "$assignment" >/dev/null; then
+    log 'invalid dispatcher assignment'; return 3
   fi
-  if ! pr_numbers="$(jq -r '.[] | select(([.labels[].name] | index("factory:ready")) == null) | .number' <<< "$pr_json")"; then
-    log "unable to parse controller-leased PRs for ${OWNER}"
-    return 3
+  MODE="$(jq -r '.kind' <<< "$assignment")"
+  NUMBER="$(jq -r '.number' <<< "$assignment")"
+  target="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${NUMBER}")" || return 3
+  if ! jq -e --arg owner "$OWNER" '.state == "open" and ([.labels[].name] | index($owner) != null)' <<< "$target" >/dev/null; then
+    log 'assigned target ownership changed'; return 3
   fi
-  mapfile -t prs < <(printf '%s' "$pr_numbers")
-
-  if (( ${#prs[@]} > 1 )); then
-    log "controller invariant failed: ${OWNER} owns multiple open PRs (${prs[*]})"
-    return 2
-  fi
-
-  if ! issue_json="$(gh issue list --state open --limit 300 --label "$OWNER" --json number)"; then
-    log "unable to query controller-leased issues for ${OWNER}"
-    return 3
-  fi
-  if ! issue_numbers="$(jq -r '.[].number' <<< "$issue_json")"; then
-    log "unable to parse controller-leased issues for ${OWNER}"
-    return 3
-  fi
-  mapfile -t issues < <(printf '%s' "$issue_numbers")
-
-  if (( ${#prs[@]} == 1 )); then
-    pr="${prs[0]}"
-    if ! branch="$(gh pr view "$pr" --json headRefName --jq .headRefName)"; then
-      log "unable to resolve branch for controller-leased PR #${pr}"
-      return 3
+  if [[ "$MODE" == pr ]]; then
+    target="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${NUMBER}")" || return 3
+    if ! jq -e --arg head "$(jq -r '.head' <<< "$assignment")" '.head.sha == $head' <<< "$target" >/dev/null; then
+      log 'assigned PR head moved'; return 3
     fi
-    if [[ -z "$branch" ]]; then
-      log "controller-leased PR #${pr} returned an empty branch"
-      return 3
+    BRANCH="$(jq -r '.head.ref' <<< "$target")"
+    ASSIGNED_PR_STAGE="$(jq -r '.stage' <<< "$assignment")"
+    if ! jq -e --arg stage "$ASSIGNED_PR_STAGE" '[.labels[].name] | index($stage) != null' <<< "$target" >/dev/null; then
+      log 'assigned PR stage changed'; return 3
     fi
-    if ! linked_issue="$(linked_issue_from_pr "$pr")"; then
-      log "unable to resolve linked issue for controller-leased PR #${pr}"
-      return 3
-    fi
-    pr_stage="$(jq -r --argjson pr "$pr" '.[] | select(.number == $pr) | [.labels[].name | select(. == "factory:building" or . == "factory:review" or . == "factory:changes-requested" or . == "factory:conflict" or . == "factory:ci")] | first // empty' <<< "$pr_json")"
-    if [[ -z "$pr_stage" ]]; then
-      log "controller-leased PR #${pr} has no supported completion stage"
-      return 3
-    fi
-
-    for issue in "${issues[@]:-}"; do
-      [[ -n "$issue" ]] || continue
-      if [[ -z "$linked_issue" || "$issue" != "$linked_issue" ]]; then
-        log "controller invariant failed: ${OWNER} owns PR #${pr} plus unrelated issue #${issue}"
-        return 2
-      fi
-    done
-
-    MODE='pr'
-    NUMBER="$pr"
-    BRANCH="$branch"
-    ASSIGNED_PR_STAGE="$pr_stage"
-    read_trusted_completion_decision "$pr" "$WORKER"
-    return 0
-  fi
-
-  if (( ${#issues[@]} == 1 )); then
-    issue="${issues[0]}"
-    if ! canonical_pr_json="$(gh pr list --state open --limit 500 --json number,headRefName)"; then
-      log "unable to verify canonical PR identity for controller-leased issue #${issue}"
-      return 3
-    fi
-    if ! canonical_pr="$(jq -r --arg issue "$issue" '[.[] | select((.headRefName // "") | test("^factory/[0-9]+-" + $issue + "-")) | .number] | first // empty' <<< "$canonical_pr_json")"; then
-      log "unable to parse canonical PR identity for controller-leased issue #${issue}"
-      return 3
-    fi
-    if [[ -n "$canonical_pr" ]]; then
-      log "controller invariant failed: ${OWNER} owns orphaned issue lease #${issue} while canonical open PR #${canonical_pr} exists"
-      return 2
-    fi
-
-    MODE='issue'
-    NUMBER="$issue"
+    read_trusted_completion_decision "$NUMBER" "$WORKER"
+  else
     BRANCH="factory/${WORKER}-${NUMBER}-${BRANCH_SUFFIX}"
-    return 0
   fi
-
-  if (( ${#issues[@]} > 1 )); then
-    log "controller invariant failed: ${OWNER} owns multiple open issues (${issues[*]})"
-    return 2
-  fi
-
-  return 1
+  return 0
 }
 
 ensure_owner_label
 stage_trusted_guard
+stage_trusted_checkpoint_helper
 stage_trusted_kilo_helper
 stage_trusted_review_controller
 stage_trusted_worker_app_helper
-trap 'release_owned_targets session-end-handoff || true' EXIT
+
+# Issue snapshots are the normal work PR; repairs advance the assigned PR atomically.
+# A separate Git index avoids interfering with an agent editing files.
+CHECKPOINT_PID=''
+CHECKPOINT_LOG=''
+CHECKPOINT_REF_FILE=''
+start_work_checkpoint() {
+  [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]] || return 0
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  local checkpoint_issue
+  if [[ "$MODE" == issue ]]; then
+    checkpoint_issue="$NUMBER"
+  else
+    checkpoint_issue="$(linked_issue_from_pr "$NUMBER")" || checkpoint_issue=''
+    if [[ -z "$checkpoint_issue" ]]; then
+      log "checkpoint issue linkage unavailable for PR #${NUMBER}; preserving explicit unknown-issue identity"
+    fi
+  fi
+  CHECKPOINT_REF_FILE="$(mktemp "${RUNNER_TEMP:-/tmp}/factory-persisted-ref.XXXXXXXX")"
+  export FACTORY_CHECKPOINT_REF_FILE="$CHECKPOINT_REF_FILE"
+  CHECKPOINT_LOG="${RUNNER_TEMP:-/tmp}/factory-work-checkpoint-${GITHUB_RUN_ID}.log"
+  FACTORY_CHECKPOINT_ISSUE="$checkpoint_issue" FACTORY_CHECKPOINT_MODEL="$MODEL" \
+    FACTORY_CHECKPOINT_RUNTIME_MODEL="$RUNTIME_MODEL" \
+    bash "$TRUSTED_WORK_CHECKPOINT" "$MODE" "$NUMBER" "$WORKER" "$GITHUB_RUN_ID" >"$CHECKPOINT_LOG" 2>&1 &
+  CHECKPOINT_PID="$!"
+  log "automatic persisted work enabled for run $GITHUB_RUN_ID (every 45s)"
+}
+
+stop_work_checkpoint() {
+  [[ -n "$CHECKPOINT_PID" ]] || return 0
+  kill -USR1 "$CHECKPOINT_PID" 2>/dev/null || true
+  wait "$CHECKPOINT_PID" || log 'persisted work writer did not exit cleanly'
+  CHECKPOINT_PID=''
+  [[ ! -f "$CHECKPOINT_LOG" ]] || tail -n 8 "$CHECKPOINT_LOG" || true
+}
+
+discard_delivered_checkpoint() {
+  [[ -n "${GITHUB_RUN_ID:-}" ]] || return 0
+  stop_work_checkpoint
+  # Record exact-head validation; canonical open work branches are retained.
+  python3 "$TRUSTED_CHECKPOINT_HANDOFF" --repo "$GITHUB_REPOSITORY" \
+    --run-id "$GITHUB_RUN_ID" --delivered-pr "$1" --cleanup || \
+    log 'checkpoint cleanup deferred to independent reconciliation'
+}
+
+finish_persisted_work() {
+  stop_work_checkpoint
+  release_owned_targets session-end-handoff || true
+  # Release the saved PR as well as its source issue, after execution really ends.
+  [[ -z "${GITHUB_RUN_ID:-}" ]] || python3 "$TRUSTED_CHECKPOINT_HANDOFF" \
+    --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" --source-ended || true
+}
+trap 'finish_persisted_work' EXIT
 
 MODE=''
 NUMBER=''
@@ -486,6 +490,12 @@ elif (( fork_route != 0 && fork_route != 1 )); then
 fi
 if [[ "${FACTORY_FORK_STATIC_REVIEW:-0}" != 1 ]]; then
   checkout_target "$MODE" "$NUMBER" "$BRANCH"
+  if [[ "$MODE" == pr && "$(git rev-parse HEAD)" != "$(jq -r '.head' <<< "$FACTORY_ASSIGNMENT")" ]]; then
+    log 'assigned PR moved during checkout; refusing stale execution'
+    record_terminal_outcome control_plane_failure 'assigned PR head moved during checkout'
+    exit 2
+  fi
+  start_work_checkpoint
 fi
 
 available="$(remaining)"
@@ -493,7 +503,6 @@ available="$(remaining)"
 # lint/type, targeted tests) on top of the existing handoff reserve.
 FAST_CHECK_RESERVE_SECONDS="${FACTORY_FAST_CHECK_RESERVE_SECONDS:-240}"
 agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
-(( agent_timeout > 3000 )) && agent_timeout=3000
 if (( agent_timeout < 300 )); then
   log 'insufficient remaining budget for assigned work'
   record_terminal_outcome environment_failure 'insufficient remaining runner budget for assigned work'
@@ -525,16 +534,32 @@ while :; do
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 540 )) || break
 
-  sleep_for="$TRANSIENT_BACKOFF_SECONDS"
+  # Exponential retry delay, bounded by both the session and a ten-minute
+  # maximum. Never retry after dirty worktree changes or exhausted budget.
+  backoff_factor=$((1 << (agent_attempt - 1)))
+  sleep_for=$(( TRANSIENT_BACKOFF_SECONDS * backoff_factor ))
+  (( sleep_for > 600 )) && sleep_for=600
   max_sleep=$(( $(remaining) - 540 ))
   (( sleep_for > max_sleep )) && sleep_for="$max_sleep"
   (( sleep_for > 0 )) && sleep "$sleep_for"
   agent_attempt=$((agent_attempt + 1))
   available="$(remaining)"
   agent_timeout=$((available - 240 - FAST_CHECK_RESERVE_SECONDS))
-  (( agent_timeout > 3000 )) && agent_timeout=3000
   (( agent_timeout >= 300 )) || break
 done
+
+# Flush pending model edits before checks while retaining periodic protection
+# for the optional correction model run inside the persistence helpers. EXIT
+# performs the final synchronous snapshot on all other handoff/failure paths.
+[[ -z "$CHECKPOINT_PID" ]] || kill -USR2 "$CHECKPOINT_PID" 2>/dev/null || true
+
+# Flush synchronously and adopt the saved parent chain before overlap detection.
+# EXPECTED_HEAD stays the initial base so validation covers the entire attempt.
+stop_work_checkpoint
+if ! adopt_persisted_work; then
+  record_terminal_outcome control_plane_failure 'persisted ancestry moved; work retained'
+  exit 2
+fi
 
 if [[ "$MODE" == issue ]] && ! redirect_issue_to_overlapping_pr "$NUMBER"; then
   record_terminal_outcome control_plane_failure 'overlapping PR is owned, unreadable, or needs conflict recovery; no duplicate opened'
@@ -568,8 +593,8 @@ fi
 if [[ "$MODE" == 'issue' ]]; then
   if pr="$(persist_issue_pr "$NUMBER" "$BRANCH")"; then
     if ! record_pr_provenance "$pr" "$NUMBER"; then
-      log "PR #${pr} could not prove the issue assignment survived through persistence; closing it fail-closed"
-      gh pr close "$pr" --comment 'Closed because durable factory provenance could not be established before handoff.' >/dev/null 2>&1 || true
+      log "PR #${pr} provenance needs reconciliation; preserving the work PR"
+      release_target "$pr" factory:changes-requested provenance-incomplete pr || true
       record_terminal_outcome control_plane_failure "PR #${pr} could not prove durable issue assignment provenance"
       log "assignment complete; remaining budget $(remaining)s"
       exit 0
@@ -587,6 +612,9 @@ if [[ "$MODE" == 'issue' ]]; then
     # separate plain-prose handoff as its App (#3135); others post nothing.
     post_readable_handoff implementation "$pr" "$(git rev-parse HEAD)" "Opened from issue #${NUMBER}."
     record_terminal_outcome success "issue #${NUMBER} produced PR #${pr} and handed it to review"
+    discard_delivered_checkpoint "$pr"
+  elif [[ -n "${CHECKPOINT_REF_FILE:-}" && -s "$CHECKPOINT_REF_FILE" ]]; then
+    record_terminal_outcome work_failure "issue #${NUMBER} work is preserved; final validation/delivery failed"
   elif (( transient_failure == 1 )); then
     log "issue #${NUMBER} produced no changes because the model was interrupted; releasing the lease"
     release_target "$NUMBER" 'factory:building' 'transient-model-interruption' 'issue'
@@ -622,6 +650,7 @@ if persist_pr_changes "$NUMBER" "$BRANCH"; then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$pushed_stage" "$pushed_reason"
   post_readable_handoff repair "$NUMBER" "$(git rev-parse HEAD)" "Repairs were pushed and the lease was released for independent review."
   record_terminal_outcome success "PR #${NUMBER} repairs were persisted and handed to review"
+  discard_delivered_checkpoint "$NUMBER"
   log "assignment complete; remaining budget $(remaining)s"
   exit 0
 fi
@@ -637,6 +666,12 @@ if (( agent_status != 0 )); then
   release_pr_and_issue "$NUMBER" "$BRANCH" "$ASSIGNED_PR_STAGE" 'review-agent-failed'
   record_agent_failure_outcome "$agent_status"
   log "assignment complete; remaining budget $(remaining)s"
+  exit 0
+fi
+
+if [[ -n "$FACTORY_PUSH_BLOCKED_REASON" ]]; then
+  release_pr_and_issue "$NUMBER" "$BRANCH" factory:changes-requested failed-validation
+  record_terminal_outcome work_failure "PR #${NUMBER} failed trusted checks; work retained"
   exit 0
 fi
 

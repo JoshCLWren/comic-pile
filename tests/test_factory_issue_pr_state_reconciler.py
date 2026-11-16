@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -76,13 +77,24 @@ def test_hourly_sweep_skips_history_when_no_stale_stages() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     schedule = workflow.index("factory_issues=\"$(gh issue list")
     no_work_exit = workflow.index('if [[ -z "$factory_issues" ]]', schedule)
-    full_history = workflow.index('SWEEP_PULLS="$(gh api --paginate --slurp', schedule)
+    full_history = workflow.index('SWEEP_PULLS="$(gh api --paginate', schedule)
 
     assert "31 * * * *" in workflow
     assert "--json number,labels" in workflow[schedule:full_history]
     assert 'factory:(building|review|changes-requested|ci|ready)' in workflow[schedule:full_history]
     assert schedule < no_work_exit < full_history
     assert "exit 0" in workflow[no_work_exit:full_history]
+
+
+def test_pr_history_uses_supported_pagination_and_compacts_before_caching() -> None:
+    """gh rejects --slurp combined with --jq; project per page, then reassemble."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    script = workflow[workflow.index("Reconcile linked issue from trusted canonical PR history"):]
+    assert not re.search(r"--paginate\s+--slurp\s*\\\s*--jq", script)
+    projection = "--jq '[.[] | {number, head: {ref: .head.ref}, state, merged_at}]'"
+    assert script.count(projection) == 2
+    assert script.count(" | jq -cs '.'") == 2
+    assert "jq -r '.[][] | [.number, .head.ref, .state, .merged_at] | @tsv'" in script
 
 
 def test_automated_issue_sweep_defers_when_installation_quota_is_low() -> None:
@@ -317,10 +329,19 @@ def test_numbered_lease_release_requires_authoritative_worker_evidence() -> None
     policy = _policy()
     now = 1_800_000_000
     labels = ["factory", "factory:7", "factory:building"]
+    ttl = _load_module("factory_work_policy", SCRIPTS / "factory_work_policy.py").FIXED_LEASE_TTL_SECONDS
 
+    # Before expiry, no history reconciliation may steal a numbered lease.
     assert policy.lease_reconciliation_action(
         labels,
-        latest_activity_epoch=now - 901,
+        latest_activity_epoch=now - ttl + 1,
+        now_epoch=now,
+        active_fixed_workers=set(),
+        has_unresolved_active_runs=False,
+    ) == policy.LEASE_ACTION_HOLD_NUMBERED
+    assert policy.lease_reconciliation_action(
+        labels,
+        latest_activity_epoch=now - ttl - 1,
         now_epoch=now,
         active_fixed_workers=set(),
         has_unresolved_active_runs=False,

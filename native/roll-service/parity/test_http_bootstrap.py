@@ -13,6 +13,8 @@ from app.models import Event, Issue, ReadingSession, Thread, User
 from app.models.external_identity import ExternalIdentity, IssueExternalIdentityMapping, ThreadExternalSeriesMapping
 from app.models.tag import Tag, TagAssignment
 
+from route_harness import cargo_example_path
+
 SECRET = "synthetic-native-http-secret"
 
 
@@ -122,7 +124,7 @@ async def test_authenticated_roll_v2_http_returns_real_owned_session_and_mapped_
                "RUST_ROLL_TEST_TOKEN":token,
                "RUST_ROLL_POOL_SIZE":"2"}
         proc = await asyncio.create_subprocess_exec(
-            "native/roll-service/target/debug/examples/http_bootstrap",
+            str(cargo_example_path("http_bootstrap")),
             env=env,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE,
         )
         out, err = await asyncio.wait_for(proc.communicate(),25)

@@ -21,6 +21,7 @@ CANONICAL_OUTCOME_CLASSES = frozenset(
         "provider_throttle",
         "provider_quota",
         "model_unavailable",
+        "model_retired_410",
         "model_policy_violation",
         "environment_failure",
         "control_plane_failure",
@@ -73,6 +74,14 @@ TIMEOUT_RE = re.compile(r"timed? out|timeout|exit status 124|process completed w
 SESSION_TIMEOUT_RE = re.compile(
     r"exit status 124|process completed with exit code 124",
     re.I,
+)
+# Trust the actual work-session exit as the model proof. No separate prompt.
+WORK_SESSION_OK_RE = re.compile(
+    r"\[factory:(?P<worker>\d+)\](?:\[[^\]\n]+\])*\s+"
+    r"agent exit status 0 for (?P<kind>issue|pr) #(?P<number>\d+)\b", re.I,
+)
+NO_ASSIGNMENT_RE = re.compile(
+    r"\[factory:\d+\].*no control-plane assignment is leased to this worker", re.I,
 )
 AGENT_TIMEOUT_RE = re.compile(
     r"\[factory:\d+\](?:\[[^\]\n]+\])*\s+agent exit status 124 for (?:issue|pr) #\d+\b",
@@ -140,6 +149,37 @@ PRODUCTIVE_SIGNALS = (
 )
 
 
+
+def _delivered_pr(log: str, worker: str, target: dict[str, str]) -> str:
+    """Find an actual wrapper PR delivery followed by the lease handoff."""
+    number = target["number"]
+    if not worker or not number:
+        return ""
+    prefix = rf"\[factory:{re.escape(worker)}\](?:\[[^\]\n]+\])*\s+"
+    if target["kind"] == "issue":
+        pattern = prefix + r"opened/updated PR #(?P<pr>\d+) for issue #(?P<issue>\d+)"
+        for match in re.finditer(pattern, log):
+            if match["issue"] != number:
+                continue
+            tail = log[match.end():]
+            released_issue = re.search(
+                prefix + rf"released issue #{number} to factory:unowned\b", tail
+            )
+            released_pr = re.search(
+                prefix + rf"released pr #{match['pr']} to factory:unowned\b", tail
+            )
+            if released_issue and released_pr and released_issue.start() < released_pr.start():
+                return match["pr"]
+    elif target["kind"] == "pr":
+        pattern = prefix + r"pushed repairs to PR #(?P<pr>\d+); handing it to the merge controller"
+        for match in re.finditer(pattern, log):
+            if match["pr"] != number:
+                continue
+            tail = log[match.end():]
+            if re.search(prefix + rf"released pr #{number} to factory:unowned\b", tail):
+                return number
+    return ""
+
 @dataclass(frozen=True)
 class Result:
     """Structured classification of a fixed-model factory run."""
@@ -154,6 +194,8 @@ class Result:
     selected_kind: str = ""
     selected_number: str = ""
     persisted_work: bool = False
+    delivery_outcome: str = "none"
+    delivery_pr: str = ""
     outcome: str = "NOT YET PROVEN"
     outcome_class: str = "unknown_failure"
     detail: str = "factory job did not expose enough runtime evidence"
@@ -239,10 +281,19 @@ def classify(log: str) -> Result:
 
     values = lock.groupdict()
     configured = values["configured"].lower() == "true"
-    exact_proven = "FIXED_MODEL_OPENCODE_OK" in log
     target_matches = list(TARGET_RE.finditer(log))
     target = target_matches[-1].groupdict() if target_matches else {"kind": "", "number": ""}
+    work_session = WORK_SESSION_OK_RE.search(log)
+    exact_proven = (
+        "FIXED_MODEL_OPENCODE_OK" in log  # historical jobs
+        or bool(
+            work_session and work_session["worker"] == values["worker"]
+            and work_session["kind"] == target["kind"]
+            and work_session["number"] == target["number"]
+        )
+    )
     persisted = any(signal in log for signal in PRODUCTIVE_SIGNALS)
+    delivered_pr = _delivered_pr(log, values['worker'], target) if persisted else ''
 
     common = {
         "worker": values["worker"],
@@ -255,6 +306,8 @@ def classify(log: str) -> Result:
         "selected_kind": target["kind"],
         "selected_number": target["number"],
         "persisted_work": persisted,
+        "delivery_outcome": "persisted" if delivered_pr else "none",
+        "delivery_pr": delivered_pr,
     }
 
     if not configured:
@@ -264,6 +317,24 @@ def classify(log: str) -> Result:
             detail="lane was not configured, so the pinned model was never invoked",
         )
 
+    if NO_ASSIGNMENT_RE.search(log):
+        return Result(
+            **common,
+            outcome="HEALTHY / IDLE",
+            outcome_class="no_work",
+            detail="no assignment was leased; model inference was skipped",
+        )
+
+    # An actual assigned NVIDIA invocation returned HTTP 410. No extra probe.
+    if values["source"] == "nvidia" and re.search(
+        r"(?m)^(?:\d{4}-\d{2}-\d{2}T\S+Z\s+)?NVIDIA permanently retired model: "
+        + re.escape(values["model"]) + r"\s*$",
+        log,
+    ):
+        return Result(
+            **common, outcome="MODEL RETIRED", outcome_class="model_retired_410",
+            detail="trusted assigned NVIDIA worker received permanent HTTP 410",
+        )
     # TPM / request-too-large must win over backing-model "not available" noise
     # that OmniRoute emits after a 413 cascade for native intents.
     if QUOTA_RE.search(log) or (
@@ -289,7 +360,7 @@ def classify(log: str) -> Result:
             **common,
             outcome="AGENT DEADLINE",
             outcome_class="agent_timeout",
-            detail="the trusted worker's local agent deadline expired without persisted work",
+            detail="the trusted worker's agent deadline expired; delivery classified separately",
         )
 
     if RATE_LIMIT_RE.search(log):
@@ -451,6 +522,97 @@ class ClassifierTests(unittest.TestCase):
         "Factory 32 locked: source=omniroute-opencode model=oc/big-pickle "
         "runtime=omniroute/oc/big-pickle minute=:15 scheduler=slot-15 configured=true\n"
     )
+
+
+    def test_timed_out_agent_delivers_code_when_wrapper_releases_both_leases(self) -> None:
+        """Worker 82's Nov 14 code survived a local agent timeout."""
+        log = (
+            "Factory 82 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:55 scheduler=dispatcher configured=true\n"
+            "FIXED_MODEL_OPENCODE_OK\n"
+            "[factory:82] checked out issue #4839 on factory/82-4839-z-ai\n"
+            "[factory:82] agent exit status 124 for issue #4839\n"
+            "[factory:82] opened/updated PR #5129 for issue #4839\n"
+            "[factory:82] released issue #4839 to factory:unowned at factory:building (pr-opened-handoff)\n"
+            "[factory:82] released pr #5129 to factory:unowned at factory:review (pr-opened-handoff)\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "agent_timeout")
+        self.assertTrue(result.persisted_work)
+        self.assertEqual(result.delivery_outcome, "persisted")
+        self.assertEqual(result.delivery_pr, "5129")
+        incomplete = classify(log.replace(
+            "released pr #5129 to factory:unowned", "failed to release pr #5129"
+        ))
+        self.assertEqual(incomplete.outcome_class, "agent_timeout")
+        self.assertEqual(incomplete.delivery_outcome, "none")
+
+    def test_work_session_without_smoke_proves_model_and_delivery(self) -> None:
+        log = (
+            "Factory 82 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:55 scheduler=dispatcher configured=true\n"
+            "[factory:82] checked out issue #4839 on branch\n"
+            "[factory:82] agent exit status 0 for issue #4839\n"
+            "[factory:82] opened/updated PR #5129 for issue #4839\n"
+            "[factory:82] released issue #4839 to factory:unowned\n"
+            "[factory:82] released pr #5129 to factory:unowned\n"
+        )
+        result = classify(log)
+        self.assertTrue(result.exact_model_proven)
+        self.assertEqual(result.outcome_class, "success")
+        self.assertEqual(result.delivery_outcome, "persisted")
+
+    def test_no_assignment_is_idle_and_never_proves_model(self) -> None:
+        log = (
+            "Factory 46 locked: source=kilo-auto model=kilo-auto/free "
+            "runtime=kilo/kilo-auto/free minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:46] no control-plane assignment is leased to this worker; "
+            "exiting without repo-wide selection\n"
+        )
+        result = classify(log)
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.outcome_class, "no_work")
+
+    def test_real_nvidia_410_retires_without_probe(self) -> None:
+        log = (
+            "Factory 11 locked: source=nvidia model=stepfun-ai/step-3.7-flash "
+            "runtime=nvidia/stepfun-ai/step-3.7-flash minute=:15 "
+            "scheduler=dispatcher configured=true\n"
+            "[factory:11] checked out issue #4839 on factory/11-4839-nvidia\n"
+            "[factory:11] agent exit status 1 for issue #4839\n"
+            "HTTP 410 Gone\n"
+            "NVIDIA permanently retired model: stepfun-ai/step-3.7-flash\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "model_retired_410")
+        self.assertIn(result.outcome_class, CANONICAL_OUTCOME_CLASSES)
+        self.assertFalse(result.exact_model_proven)
+        self.assertEqual(result.delivery_outcome, "none")
+    def test_timeout_without_push_does_not_count_as_delivery(self) -> None:
+        log = (
+            "Factory 105 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:105] checked out pr #5123 on branch\n"
+            "[factory:105] agent exit status 124 for pr #5123\n"
+            "[factory:105] released pr #5123 to factory:unowned at factory:changes-requested\n"
+        )
+        result = classify(log)
+        self.assertEqual(result.outcome_class, "agent_timeout")
+        self.assertFalse(result.persisted_work)
+        self.assertEqual(result.delivery_outcome, "none")
+
+    def test_repair_delivery_requires_handoff_after_push(self) -> None:
+        log = (
+            "Factory 98 locked: source=z-ai model=glm-4.7-flash "
+            "runtime=z-ai/glm-4.7-flash minute=:15 scheduler=dispatcher configured=true\n"
+            "[factory:98] checked out pr #5122 on branch\n"
+            "[factory:98] pushed repairs to PR #5122; handing it to the merge controller as factory:review\n"
+        )
+        self.assertEqual(classify(log).delivery_outcome, "none")
+        complete = log + (
+            "[factory:98] released pr #5122 to factory:unowned at factory:review (repairs-pushed-handoff)\n"
+        )
+        self.assertEqual(classify(complete).delivery_pr, "5122")
 
     def assert_canonical(self, result: Result) -> None:
         """Assert one emitted class belongs to the durable factory contract."""

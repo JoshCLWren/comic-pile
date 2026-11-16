@@ -11,22 +11,18 @@ original=("$@")
 command_group="${1:-}"
 command_name="${2:-}"
 
-# Shared Neon-first discovery for trusted control-plane callers. GitHub stays
-# live for exact-head review, CI, labels and claim/merge authorization.
-FACTORY_READ_HELPER="${GITHUB_WORKSPACE:-.}/.github/scripts/factory_gh_read_through.py"
+# Run-local inventories are advisory scheduling memory. Generic REST reads,
+# exact targets, ownership, checks and merges always reach GitHub directly.
+FACTORY_DISCOVERY_HELPER="${GITHUB_WORKSPACE:-.}/.github/scripts/factory_discovery.py"
 
 factory_api() {
-  if [[ -n "${FACTORY_STATE_DSN_FILE:-}" && -f "$FACTORY_READ_HELPER" ]]; then
-    python3 "$FACTORY_READ_HELPER" api -- "$@"
-  else
-    "$REAL_GH" api "$@"
-  fi
+  "$REAL_GH" api "$@"
 }
 
-factory_projection() {
+factory_snapshot() {
   local repo="$1" kind="$2"
-  [[ -n "${FACTORY_STATE_DSN_FILE:-}" && "$repo" == "${GITHUB_REPOSITORY:-}" && -f "$FACTORY_READ_HELPER" ]] || return 1
-  python3 "$FACTORY_READ_HELPER" projected "$repo" "$kind" 2>/dev/null
+  [[ -n "${FACTORY_DISCOVERY_DIR:-}" && -f "$FACTORY_DISCOVERY_HELPER" ]] || return 1
+  python3 "$FACTORY_DISCOVERY_HELPER" "$repo" "$kind" 2>/dev/null
 }
 
 if [[ "$command_group" == api ]]; then
@@ -90,7 +86,7 @@ if [[ "$command_group" == issue && "$command_name" == list ]]; then
   fi
   snapshot=''
   if [[ "$state" == open ]] && ! [[ " ${original[*]} " == *"author"* ]]; then
-    snapshot="$(factory_projection "$repo" issue)" || snapshot=''
+    snapshot="$(factory_snapshot "$repo" issue)" || snapshot=''
   fi
   if [[ -n "$snapshot" ]]; then
     pages="$(jq -c '[.]' <<< "$snapshot")"
@@ -128,7 +124,7 @@ if [[ "$command_group" == pr && "$command_name" == list ]]; then
   fi
   snapshot=''
   if [[ "$state" == open ]] && ! [[ " ${original[*]} " == *"author"* ]]; then
-    snapshot="$(factory_projection "$repo" pr)" || snapshot=''
+    snapshot="$(factory_snapshot "$repo" pr)" || snapshot=''
   fi
   if [[ -n "$snapshot" ]]; then
     pages="$(jq -c '[.]' <<< "$snapshot")"

@@ -1704,6 +1704,7 @@ def test_assign_candidate_rejects_a_stale_head_before_writing_labels(
             "labels": [{"name": "factory"}, {"name": "factory:ci"}],
         },
     )
+    monkeypatch.setattr(controller, "candidate_is_live_executable", lambda _candidate: True)
     written: list[tuple[int, str, str | None]] = []
     monkeypatch.setattr(
         controller,
@@ -2020,7 +2021,9 @@ def test_reconcile_expires_inactive_fixed_lease_without_marker_but_not_active_ru
     """An inactive fixed owner is bounded by last update; live runs still win."""
     now = 2_000_000_000
     item = {
-        **_local_lease_item(4450, now - 3600, "factory:building"),
+        **_local_lease_item(
+            4450, now - controller.FIXED_LEASE_TTL_SECONDS - 1, "factory:building"
+        ),
         "labels": [
             {"name": "factory"},
             {"name": "factory:62"},

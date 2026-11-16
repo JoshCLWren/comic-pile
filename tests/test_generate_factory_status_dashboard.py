@@ -355,7 +355,9 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
     completion = SimpleNamespace(
         load_controller=lambda: work,
         owned_worker_ids=lambda _items: {"39"},
-        registry_comments=lambda: [],
+        durable_factory_state=lambda: (
+            {"attempts": {}, "heartbeats": {}, "health": {"models": [], "providers": []}}, {}
+        ),
         gh_json=lambda _args: [],
         load_policy=lambda: policy,
     )
@@ -397,6 +399,7 @@ def test_collect_snapshot_unpacks_demand_and_authoritative_capacity(
         ],
     }
     full = SimpleNamespace(
+        TELEMETRY_COMMENT_ID=5396686993,
         current_demand=lambda _controller: (demand, capacity),
         completion_worker_target=lambda _demand: 1,
     )

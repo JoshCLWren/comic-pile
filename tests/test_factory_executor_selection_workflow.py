@@ -15,21 +15,14 @@ def _dispatch_selector(workflow: str) -> str:
 
 
 def test_multi_provider_entry_is_restored_while_omniroute_stays_dark() -> None:
-    """Incident restore: nvidia/opencode/openrouter/kilo run; OmniRoute does not."""
+    """Native lanes remain executable; compatible providers use the registry."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
     selector = _dispatch_selector(workflow)
 
-    assert "nvidia)" in workflow
-    assert "opencode-free)" in workflow
-    assert "openrouter-free)" in workflow
+    assert "factory_provider_registry.py resolve" in workflow
+    assert "opencode-free|openrouter-free)" in workflow
     assert "factory_live_opencode.py" in selector
     assert "kilo-auto)" in workflow
-    assert "z-ai|ollama-cloud|mistral|orcarouter|requesty)" in workflow
-    assert "vercel-ai-gateway)" in workflow
-    assert (
-        "nvidia|kilo-auto|z-ai|ollama-cloud|vercel-ai-gateway|mistral|orcarouter|requesty)"
-        in workflow
-    )
     assert "omniroute-disabled-incident" in workflow
     assert "FACTORY_OMNIROUTE_ENABLED" in workflow
     assert "factory_provider_candidates.py" in selector
@@ -49,65 +42,45 @@ def test_omniroute_catalog_discovery_requires_explicit_enable() -> None:
     assert "vars.FACTORY_OMNIROUTE_ENABLED == 'on'" in configure
 
 
-def _nvidia_probe_step(workflow: str) -> str:
-    """Return the NVIDIA pre-smoke probe step body."""
-    return workflow.split("- name: Probe pinned NVIDIA model before OpenCode smoke", maxsplit=1)[
-        1
-    ].split("- name: Smoke exact pinned model through OpenCode", maxsplit=1)[0]
-
-
 def test_openai_compatible_factory_providers_inject_opencode_config() -> None:
-    """Z.AI and Ollama Cloud lanes write OmniRoute-shaped openai-compat config."""
+    """A single registry configures all compatible provider endpoints."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    registry = (ROOT / ".github" / "scripts" / "factory_provider_registry.py").read_text(encoding="utf-8")
 
     assert "Configure OpenAI-compatible factory provider" in workflow
-    assert "https://api.z.ai/api/paas/v4" in workflow
-    assert "https://ollama.com/v1" in workflow
-    assert "https://api.mistral.ai/v1" in workflow
-    assert "https://api.orcarouter.ai/v1" in workflow
-    assert "https://router.requesty.ai/v1" in workflow
-    assert "https://ai-gateway.vercel.sh/v1" in workflow
-    assert "Require Pixel Canary to remain zero-price" in workflow
-    assert "Prove Pixel Canary can use OpenCode tools" in workflow
-    assert "Z_AI_API_KEY: ${{ secrets.Z_AI_API_KEY }}" in workflow
-    assert "OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}" in workflow
-    assert "MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}" in workflow
-    assert 'package: "@opencode/ai/providers/openai-compatible"' in workflow
+    assert "factory_provider_registry.py config" in workflow
+    assert "modelID" in registry
+    assert "Require Vercel model to remain zero-price" in workflow
+    for key in ("Z_AI_API_KEY", "OLLAMA_API_KEY", "MISTRAL_API_KEY", "ORCAROUTER_API_KEY", "REQUESTY_API_KEY"):
+        assert f"{key}: ${{{{ secrets.{key} }}}}" in workflow
 
 
-def test_runtime_provider_probes_remain_authoritative() -> None:
-    """Pinned NVIDIA and catalog free slots keep real probe/smoke authority."""
+def test_new_free_api_sources_use_real_provider_models_and_credentials() -> None:
+    """New source identities and keys live in the registry, not shell cases."""
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    registry = (ROOT / ".github" / "scripts" / "factory_provider_registry.py").read_text(encoding="utf-8")
+    for source, secret in (
+        ("gemini-free", "GEMINI_API_KEY"),
+        ("groq-free", "GROQ_API_KEY"),
+        ("aion-free", "AION_API_KEY"),
+        ("cohere-eval", "COHERE_API_KEY"),
+        ("typhoon-free", "TYPHOON_API_KEY"),
+    ):
+        assert f'"{source}": ProviderSpec(' in registry
+        assert f'"{secret}"' in registry
+        assert f"{secret}: ${{{{ secrets.{secret} }}}}" in workflow
+    assert "Require Vercel model to remain zero-price" in workflow
 
-    assert "Probe pinned NVIDIA model before OpenCode smoke" in workflow
-    assert "Smoke exact pinned model through OpenCode" in workflow
-    assert "Smoke Kilo Auto Free through Kilo CLI" in workflow
-    assert "integrate.api.nvidia.com" in workflow
 
-
-def test_nvidia_probe_retries_http_000_and_curl_transport_timeouts() -> None:
-    """Empty curl responses must retry like 429, then soft-exit instead of hard-fail."""
-    probe = _nvidia_probe_step(WORKFLOW.read_text(encoding="utf-8"))
-
-    assert "--max-time 45" in probe
-    assert "--max-time 120" not in probe
-    assert "chat/completions || true" not in probe
-    assert "|| curl_exit=$?" in probe
-    assert "curl_exit" in probe
-    assert 'code="${code:-000}"' in probe
-    assert '"$code" == "000"' in probe
-    assert '"$curl_exit" =~ ^(6|7|28|35|52|56)$' in probe
-    assert "allowing worker to proceed with built-in retry handling" in probe
-    assert "factory-model-retired-410:v1" in probe
-    assert "model_retired_410" in probe
-    assert "provider_failure\\tNVIDIA probe HTTP" in probe
-    assert "model_unavailable\\tNVIDIA probe HTTP 404" in probe
-    assert "max_attempts=3" in probe
-    # Transport exhaustion must not sticky-retire or write 410.
-    assert probe.index('"$code" == "000"') < probe.index("allowing worker to proceed")
-    assert probe.index("allowing worker to proceed") < probe.index(
-        "provider_failure\\tNVIDIA probe HTTP"
-    )
+def test_model_requests_are_reserved_for_the_real_work_session() -> None:
+    """No redundant model inference is spent on probes or tool-canary prompts."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    prework = workflow.split("- name: Run continuous fixed-model factory session", 1)[0]
+    assert "Wait for exact model in OpenCode catalog" in prework
+    assert "Require Vercel model to remain zero-price" in prework
+    assert "opencode run" not in prework
+    assert "KILO_AUTO_FREE_OK" not in prework
+    assert "/chat/completions" not in prework
 
 
 def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
@@ -126,11 +99,11 @@ def test_selected_executor_metadata_reaches_worker_and_telemetry() -> None:
     assert f"FACTORY_SOURCE: {selected_source}" in workflow
     assert f"MODEL: {selected_model}" in workflow
     assert (
-        "FACTORY_MODEL: ${{ steps.smoke.outputs.model || steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}"
+        "FACTORY_MODEL: ${{ steps.model_preflight.outputs.model || steps.executor.outputs.model || steps.lane.outputs.model }}"
         in workflow
     )
     assert (
-        "FACTORY_RUNTIME_MODEL: ${{ steps.smoke.outputs.runtime_model || steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
+        "FACTORY_RUNTIME_MODEL: ${{ steps.model_preflight.outputs.runtime_model || steps.executor.outputs.runtime_model || steps.lane.outputs.runtime_model }}"
         in workflow
     )
     assert f"RUNTIME_MODEL: {selected_runtime}" in workflow
@@ -166,52 +139,8 @@ def test_live_selector_uses_trusted_neon_exclusions_without_registry_scan() -> N
     assert "/issues/1093/comments?per_page=100" not in live
     assert '--exclusions-file "$exclusions_file"' in live
     assert 'printf \'[]\\n\' > "$comments_file"' in live
-    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ inputs.model_exclusions }}' in workflow
+    assert 'FACTORY_MODEL_EXCLUSIONS: ${{ needs.validate_assignment.outputs.exclusions }}' in workflow
     assert 'jq -e \'type == "object" and all(.[]; type == "array")\'' in selector
-
-
-def test_exact_smoke_failure_reaches_outcome_file(tmp_path: Path) -> None:
-    """Execute the real smoke shell with an unavailable model and inspect its record."""
-    import os
-    import subprocess
-
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    step = workflow.split("- name: Smoke exact pinned model through OpenCode", 1)[1].split(
-        "- name: Prove pinned DeepSeek",
-        1,
-    )[0]
-    script = step.split("run: |\n", 1)[1]
-    script = "\n".join(line[10:] for line in script.splitlines())
-    script = script.replace(
-        ".github/scripts/factory_live_opencode.py",
-        str(ROOT / ".github/scripts/factory_live_opencode.py"),
-    )
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    for name, body in {
-        "git": "#!/bin/sh\nexit 0\n",
-        "opencode": '#!/bin/sh\necho "Error: Model unavailable: opencode/ll-alpha-free"\nexit 1\n',
-    }.items():
-        executable = bin_dir / name
-        executable.write_text(body)
-        executable.chmod(0o755)
-    result = subprocess.run(
-        ["bash", "-c", script],
-        env={
-            **os.environ,
-            "PATH": f"{bin_dir}:{os.environ['PATH']}",
-            "RUNNER_TEMP": str(tmp_path),
-            "RUNTIME_MODEL": "opencode/ll-alpha-free",
-            "DEEPSEEK_MODE": "normal",
-        },
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 1, result.stderr
-    assert (tmp_path / "factory-discovery-outcome").read_text() == (
-        "model_unavailable\tModel unavailable: opencode/ll-alpha-free\n"
-    )
 
 
 def test_unavailability_snapshot_cannot_be_overwritten_as_worker_record(tmp_path: Path) -> None:

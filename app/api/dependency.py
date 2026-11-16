@@ -12,61 +12,15 @@ from app.schemas.dependency import (
     BatchBlockingExplanationRequest,
     BatchBlockingExplanationResponse,
     BlockingExplanation,
-    DependencyCreate,
-    DependencyNoteUpdate,
     DependencyOrderConflict,
     DependencyOrderRequirement,
-    DependencyResponse,
-    IssueDependenciesResponse,
     ThreadConnectedResponse,
     ThreadDependencyOrderCheckResponse,
-    ThreadDependenciesResponse,
 )
 from app.services import dependency_service
 
 
 router = APIRouter(tags=["dependencies"])
-
-
-@router.get("/dependencies/blocked", response_model=list[int])
-async def get_all_blocked_thread_ids(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> list[int]:
-    """Return all currently blocked thread IDs for the current user."""
-    return await dependency_service.get_all_blocked_thread_ids(current_user.id, db)
-
-
-@router.get("/threads/{thread_id}/dependencies", response_model=ThreadDependenciesResponse)
-async def list_thread_dependencies(
-    thread_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> ThreadDependenciesResponse:
-    """List dependencies where a thread blocks others and where it is blocked."""
-    result = await dependency_service.get_thread_dependencies(thread_id, current_user.id, db)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Thread {thread_id} not found",
-        )
-    return result
-
-
-@router.get("/issues/{issue_id}/dependencies", response_model=IssueDependenciesResponse)
-async def list_issue_dependencies(
-    issue_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> IssueDependenciesResponse:
-    """List all incoming and outgoing dependency edges for a specific issue."""
-    result = await dependency_service.get_issue_dependencies(issue_id, current_user.id, db)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Issue {issue_id} not found",
-        )
-    return result
 
 
 @router.post("/threads/{thread_id}:getBlockingInfo", response_model=BlockingExplanation)
@@ -101,106 +55,6 @@ async def get_threads_blocking_info(
             detail="One or more threads not found",
         )
     return BatchBlockingExplanationResponse(threads=threads_result)
-
-
-@router.post(
-    "/dependencies/", response_model=DependencyResponse, status_code=status.HTTP_201_CREATED
-)
-async def create_dependency(
-    dependency_data: DependencyCreate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> DependencyResponse:
-    """Create a hard-block dependency between owned threads or owned issues."""
-    if dependency_data.source_type != dependency_data.target_type:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Mixed thread/issue dependencies are not supported",
-        )
-
-    if dependency_data.source_id == dependency_data.target_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot create dependency on self",
-        )
-
-    if dependency_data.source_type == "thread":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=(
-                "Thread-level dependencies are no longer supported. "
-                "Create an issue-level dependency instead: use the last issue "
-                "of the source thread and the first issue of the target thread."
-        ),
-    )
-
-    result, warning = await dependency_service.create_dependency(
-        dependency_data.source_id, dependency_data.target_id, current_user.id, db
-    )
-
-    if not result:
-        if warning == "Issue not found" or warning is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Issue not found",
-            )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=warning,
-        )
-
-    return result
-
-
-@router.get("/dependencies/{dependency_id}", response_model=DependencyResponse)
-async def get_dependency(
-    dependency_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> DependencyResponse:
-    """Fetch a single dependency owned by the current user."""
-    result = await dependency_service.get_dependency(dependency_id, current_user.id, db)
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Dependency {dependency_id} not found",
-        )
-    return result
-
-
-@router.patch("/dependencies/{dependency_id}", response_model=DependencyResponse)
-async def update_dependency_note(
-    dependency_id: int,
-    data: DependencyNoteUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> DependencyResponse:
-    """Update the note on a dependency owned by the current user."""
-    result = await dependency_service.update_dependency_note(
-        dependency_id, data.note, current_user.id, db
-    )
-    if not result:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Dependency {dependency_id} not found",
-        )
-    return result
-
-
-@router.delete("/dependencies/{dependency_id}")
-async def delete_dependency(
-    dependency_id: int,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
-    """Delete a dependency and refresh denormalized blocked flags."""
-    success = await dependency_service.delete_dependency(dependency_id, current_user.id, db)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Dependency {dependency_id} not found",
-        )
-    return {"message": "Dependency deleted"}
 
 
 @router.get(
@@ -296,19 +150,15 @@ def mount_subrouters() -> None:
     from app.api import cbl_catalog
     from app.api import cbl_sources
     from app.api import continuity_plan
-    from app.api import continuity_rule
     from app.api import custom_cbl
     from app.api import dependency_group
     from app.api import dependency_group_batch
-    from app.api import issue_dependency_batch
     from app.api import reading_order_projection
     from app.api import reading_plan_release_source
     from app.api import roll_recovery_switch
 
-    router.include_router(issue_dependency_batch.router)
     router.include_router(dependency_group.router)
     router.include_router(dependency_group_batch.router)
-    router.include_router(continuity_rule.router)
     router.include_router(continuity_plan.router)
     router.include_router(reading_order_projection.router)
     router.include_router(reading_plan_release_source.router)
@@ -320,6 +170,3 @@ def mount_subrouters() -> None:
     router.include_router(roll_recovery_switch.router, prefix="/roll")
 
     _subrouters_mounted = True
-
-
-

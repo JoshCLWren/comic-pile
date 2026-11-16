@@ -1,14 +1,14 @@
-"""Shared Neon snapshot cache for trusted GitHub Actions controller reads.
+"""Scoped factory state caching and historical cleanup.
 
-GitHub remains authoritative for claims, reviews, checks, and merges. This
-cache only replaces repeated discovery listings. It never grants ownership.
-The database is isolated in the factory_state database with a scoped role.
+GitHub remains authoritative for claims, reviews, checks, and merges.
+The database is isolated in factory_state with a scoped role.
 """
 from __future__ import annotations
 
 import asyncio
 import json
 import os
+import re
 import sys
 import time
 import uuid
@@ -16,6 +16,8 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+from factory_state_metrics import connect as measured_connect
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
@@ -37,9 +39,7 @@ def _dsn() -> str:
 
 
 async def _query(sql: str, *args: Any, one: bool = False) -> Any:
-    import asyncpg
-
-    conn = await asyncpg.connect(dsn=_dsn(), timeout=8, command_timeout=8)
+    conn = await measured_connect(dsn=_dsn(), timeout=8, command_timeout=8)
     try:
         if one:
             return await conn.fetchrow(sql, *args)
@@ -61,10 +61,8 @@ def _payload(value: Any) -> list[dict[str, Any]] | None:
 
 
 def _read(key: str) -> tuple[list[dict[str, Any]] | None, bool]:
-    row = _run(
-        "SELECT payload, expires_at FROM public.factory_state_kv WHERE cache_key=$1",
-        key, one=True,
-    )
+    query = "SELECT payload, expires_at FROM public.factory_state_kv WHERE cache_key=$1"
+    row = _run(query, key, one=True)
     if row is None:
         return None, False
     data = _payload(row["payload"])
@@ -94,23 +92,113 @@ def _claim(key: str, owner: str) -> bool:
 
 def _publish(key: str, owner: str, data: list[dict[str, Any]], ttl_seconds: int) -> None:
     # A lock that expired or changed owner may not publish an older snapshot.
+    # Updating an evidence cache does not need a second append-only event write.
     _run(
-        """
-        WITH refreshed AS (
-            UPDATE public.factory_state_kv
-               SET payload=$3::jsonb, fetched_at=now(),
-                   expires_at=now() + $4::int * interval '1 second',
-                   refresh_owner=NULL, refresh_until=NULL, updated_at=now()
-             WHERE cache_key=$1 AND refresh_owner=$2
-             RETURNING cache_key
-        )
-        INSERT INTO public.factory_state_events (source, event_type, detail)
-        SELECT 'github-actions', 'cache_refresh',
-               jsonb_build_object('key', cache_key, 'records', $5::int)
-          FROM refreshed
-        """,
-        key, owner, json.dumps(data), ttl_seconds, len(data),
+        """UPDATE public.factory_state_kv
+              SET payload=$3::jsonb, fetched_at=now(),
+                  expires_at=now() + $4::int * interval '1 second',
+                  refresh_owner=NULL, refresh_until=NULL, updated_at=now()
+            WHERE cache_key=$1 AND refresh_owner=$2""",
+        key, owner, json.dumps(data), ttl_seconds,
     )
+
+
+def _refresh_without_rewrite(key: str, owner: str, ttl_seconds: int, records: int) -> None:
+    """Extend freshness without retransmitting or rewriting unchanged TOAST."""
+    _run(
+        """UPDATE public.factory_state_kv
+              SET fetched_at=now(), expires_at=now() + $3::int * interval '1 second',
+                  refresh_owner=NULL, refresh_until=NULL, updated_at=now()
+            WHERE cache_key=$1 AND refresh_owner=$2""",
+        key, owner, ttl_seconds,
+    )
+
+
+def _prune_obsolete_discovery(repo: str, batch_size: int = 200) -> int:
+    """Remove retired discovery families only, with a bounded migration batch."""
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
+        raise ValueError('invalid cleanup scope or batch size')
+    row = _run(
+        """WITH retired AS (
+             SELECT cache_key FROM public.factory_state_kv
+             WHERE (left(cache_key, length($1))=$1 OR left(cache_key, length($2))=$2 OR cache_key=ANY($3::text[]))
+               AND (refresh_until IS NULL OR refresh_until<now())
+             LIMIT $4
+           ), removed AS (
+             DELETE FROM public.factory_state_kv AS cache USING retired
+             WHERE cache.cache_key=retired.cache_key RETURNING cache.cache_key
+           ) SELECT count(*) AS deleted FROM removed""",
+        f'factory-github-get-v1:{repo}:', f'factory-projection-v1:{repo}:',
+        [f'{repo}:open-issues', f'{repo}:open-prs'], batch_size, one=True,
+    )
+    return int(row['deleted'])
+
+
+def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
+    """Prune retired repository-owned event noise, never unscoped histories.
+
+    Older worker events may lack a repository identifier, so age alone cannot
+    authorize their deletion. New lifecycle events include verified repository
+    provenance and may expire after 30 days; transactional leases, provider
+    reservations, worker metrics, model cooldowns and retries remain intact.
+    """
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
+        raise ValueError('invalid cleanup scope or batch size')
+    github_prefix = f'factory-github-get-v1:{repo}:'
+    projection_prefix = f'factory-projection-v1:{repo}:'
+    retired_lists = [f'{repo}:open-issues', f'{repo}:open-prs']
+    row = _run(
+        """WITH retired AS (
+             SELECT id FROM public.factory_state_events
+              WHERE (event_type='cache_refresh'
+                     AND (left(detail->>'key', length($1))=$1
+                          OR left(detail->>'key', length($2))=$2
+                          OR detail->>'key'=ANY($3::text[])))
+                 OR (event_type='target_reconciled'
+                     AND left(detail->>'target', length($2))=$2)
+                 OR (created_at < now() - interval '30 days'
+                     AND (detail->>'repo'=$4 OR detail->>'repository'=$4)
+                     AND event_type IN ('cache_refresh',
+                                        'target_reconciled', 'target_changed',
+                                        'worker_assigned', 'worker_started',
+                                        'worker_heartbeat', 'worker_outcome_signal',
+                                        'worker_released', 'worker_failed',
+                                        'worker_completed', 'worker_idle'))
+              ORDER BY id LIMIT $5
+           ), removed AS (
+             DELETE FROM public.factory_state_events AS events USING retired
+              WHERE events.id=retired.id RETURNING events.id
+           ) SELECT count(*) AS deleted FROM removed""",
+        github_prefix, projection_prefix, retired_lists, repo, batch_size, one=True,
+    )
+    return int(row['deleted'])
+
+
+def _prune_retired_check_projection(repo: str, batch_size: int = 250) -> int:
+    """Retire advisory check observations after Actions became authoritative.
+
+    The production writer was removed in #5226. Retention is deliberately
+    repository-fenced and bounded; never touch exact-head retry coordination.
+    """
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
+        raise ValueError('invalid cleanup scope or batch size')
+    row = _run(
+        """WITH retired AS (
+             SELECT pr_number, head_sha, check_name
+               FROM public.factory_check_projection
+              WHERE repo=$1
+              ORDER BY pr_number, head_sha, check_name LIMIT $2
+           ), removed AS (
+             DELETE FROM public.factory_check_projection AS checks USING retired
+              WHERE checks.repo=$1
+                AND checks.pr_number=retired.pr_number
+                AND checks.head_sha=retired.head_sha
+                AND checks.check_name=retired.check_name
+              RETURNING checks.pr_number
+           ) SELECT count(*) AS deleted FROM removed""",
+        repo, batch_size, one=True,
+    )
+    return int(row['deleted'])
 
 
 def _release(key: str, owner: str) -> None:
@@ -208,8 +296,12 @@ def cached_json(
             pass
         raise
 
+    unchanged = previous is not None and result == previous
     try:
-        _publish(key, owner, result, ttl_seconds)
+        if unchanged:
+            _refresh_without_rewrite(key, owner, ttl_seconds, len(result))
+        else:
+            _publish(key, owner, result, ttl_seconds)
     except Exception as error:
         print(f"[factory-state] cache publication unavailable ({type(error).__name__})", file=sys.stderr)
         try:
@@ -217,42 +309,39 @@ def cached_json(
         except Exception:
             pass
     else:
-        print(f"[factory-state] refreshed {key}: {len(result)} records", file=sys.stderr)
+        label = "extended unchanged" if unchanged else "refreshed"
+        print(f"[factory-state] {label} {key}: {len(result)} records", file=sys.stderr)
     return result
 
 
-def incremental_comments(
-    previous: list[dict[str, Any]],
-    fetch_since: Callable[[str | None], list[dict[str, Any]]],
-) -> list[dict[str, Any]]:
-    """Fetch changed issue comments since the latest timestamp, deduped by ID.
+def main(argv: list[str]) -> int:
+    if argv != ["prune-obsolete"]:
+        print("usage: factory_state_cache.py prune-obsolete", file=sys.stderr)
+        return 2
+    if not os.environ.get("FACTORY_STATE_DSN_FILE"):
+        raise RuntimeError("cache cleanup requires trusted Neon credentials")
+    repo = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
+    retired_kv = 0
+    retired_events = 0
+    for _ in range(5):
+        count = _prune_obsolete_discovery(repo)
+        retired_kv += count
+        if count < 200:
+            break
+    for _ in range(5):
+        count = _prune_retired_events(repo)
+        retired_events += count
+        if count < 1000:
+            break
+    retired_checks = 0
+    for _ in range(5):
+        count = _prune_retired_check_projection(repo)
+        retired_checks += count
+        if count < 250:
+            break
+    print(f"[factory-state] pruned {retired_kv} discovery rows, {retired_events} obsolete events, and {retired_checks} retired check observations")
+    return 0
 
-    Initial fill is a full scan exactly once. Edits to older comments are
-    included by GitHub's updated_at filter. The minute overlap accounts for
-    second-precision timestamps and concurrent updates.
-    """
-    latest = None
-    for comment in previous:
-        stamp = comment.get("updated_at") or comment.get("created_at")
-        if not isinstance(stamp, str):
-            continue
-        try:
-            candidate = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
-        except ValueError:
-            continue
-        if latest is None or candidate > latest:
-            latest = candidate
-    since = None
-    if latest is not None:
-        from datetime import timedelta
-        since = (latest - timedelta(minutes=1)).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    changes = fetch_since(since)
-    if not isinstance(changes, list):
-        raise ValueError("GitHub returned a non-list comment page")
-    by_id = {comment["id"]: comment for comment in previous if isinstance(comment, dict) and "id" in comment}
-    for comment in changes:
-        if not isinstance(comment, dict) or "id" not in comment:
-            raise ValueError("GitHub returned a malformed issue comment")
-        by_id[comment["id"]] = comment
-    return sorted(by_id.values(), key=lambda comment: (comment.get("created_at") or "", comment["id"]))
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
@@ -11,7 +10,6 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 
@@ -439,35 +437,8 @@ def perform(
 
 
 def main() -> int:
-    """Run in the trusted hourly GitHub Action, not on a PR checkout."""
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--repo", required=True)
-    args = parser.parse_args()
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.repo):
-        raise ValueError("invalid repository name")
-    now = datetime.now(timezone.utc)
-    try:
-        snapshots = rest_pr_snapshots(args.repo, now)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError) as exc:
-        # The caller may allow noncritical review errors without blocking merges.
-        # Keep the failure visible in the run and step summary, never call it a skip.
-        result = f"Failed: REST PR snapshot unavailable ({type(exc).__name__})"
-        print(f"::error::{result}")
-        summary = os.environ.get("GITHUB_STEP_SUMMARY")
-        if summary:
-            with Path(summary).open("a", encoding="utf-8") as file:
-                file.write(f"### Hourly Jev → CodeRabbit\n\n{result}\n")
-        return 1
-    result = perform(
-        args.repo, snapshots, now,
-        os.environ.get("OPENROUTER_JEV_API_KEY", ""),
-        os.environ.get("PR_REBASE_TOKEN", ""),
-    )
-    print(result)
-    summary = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary:
-        with Path(summary).open("a", encoding="utf-8") as file:
-            file.write(f"### Hourly Jev → CodeRabbit\n\n{result}\n")
+    """Retired review integration: never create a CodeRabbit request."""
+    print("CodeRabbit is retired from the ComicPile factory; no review requested")
     return 0
 
 

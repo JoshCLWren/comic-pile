@@ -312,6 +312,174 @@
       "minute": "40",
       "scheduler": "dispatcher",
       "display_name": "Cloudflare Gemma 4 26B Free"
+    },
+    {
+      "worker": "121",
+      "source": "requesty",
+      "model": "novita/ling-3.1-flash",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Ling 3.1 Flash"
+    },
+    {
+      "worker": "122",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-ultra-550b-a55b",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron 3 Ultra"
+    },
+    {
+      "worker": "123",
+      "source": "requesty",
+      "model": "nvidia/muse-glimmer-30b",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Muse Glimmer 30B"
+    },
+    {
+      "worker": "124",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron Nano Omni"
+    },
+    {
+      "worker": "125",
+      "source": "requesty",
+      "model": "nvidia/nemotron-3-nano-30b-a3b",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Nemotron Nano 30B"
+    },
+    {
+      "worker": "126",
+      "source": "requesty",
+      "model": "mistral/leanstral-1-5",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "Requesty Leanstral 1.5"
+    },
+    {
+      "worker": "127",
+      "source": "openrouter-free",
+      "model": "particle-ai/particle-1:free",
+      "minute": "45",
+      "scheduler": "dispatcher",
+      "display_name": "OpenRouter Particle-1 Free"
+    },
+    {
+      "worker": "132",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/openai/gpt-oss-20b",
+      "minute": "10",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare GPT OSS 20B"
+    },
+    {
+      "worker": "133",
+      "source": "cloudflare-workers-ai",
+      "model": "@cf/qwen/qwen3.8-27b",
+      "minute": "15",
+      "scheduler": "dispatcher",
+      "display_name": "Cloudflare Qwen 3.8 27B"
+    },
+    {
+      "worker": "134",
+      "source": "gemini-free",
+      "model": "gemini-3.8-flash",
+      "minute": "20",
+      "scheduler": "dispatcher",
+      "display_name": "Google Gemini 3.8 Flash Free"
+    },
+    {
+      "worker": "135",
+      "source": "gemini-free",
+      "model": "gemini-3.1-flash-lite",
+      "minute": "25",
+      "scheduler": "dispatcher",
+      "display_name": "Google Gemini 3.1 Flash Lite Free"
+    },
+    {
+      "worker": "136",
+      "source": "groq-free",
+      "model": "openai/gpt-oss-120b",
+      "minute": "30",
+      "scheduler": "dispatcher",
+      "display_name": "Groq GPT OSS 120B Free"
+    },
+    {
+      "worker": "137",
+      "source": "groq-free",
+      "model": "openai/gpt-oss-20b",
+      "minute": "35",
+      "scheduler": "dispatcher",
+      "display_name": "Groq GPT OSS 20B Free"
+    },
+    {
+      "worker": "138",
+      "source": "groq-free",
+      "model": "qwen/qwen3.8-27b",
+      "minute": "40",
+      "scheduler": "dispatcher",
+      "display_name": "Groq Qwen 3.8 27B Free"
+    },
+    {
+      "worker": "139",
+      "source": "vercel-ai-gateway",
+      "model": "reflection/beam-free",
+      "minute": "45",
+      "scheduler": "dispatcher",
+      "display_name": "Vercel Reflection Beam Free"
+    },
+    {
+      "worker": "140",
+      "source": "vercel-ai-gateway",
+      "model": "nvidia/nemotron-3.5-lightning-free",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "Vercel Nemotron 3.5 Lightning Free"
+    },
+    {
+      "worker": "141",
+      "source": "vercel-ai-gateway",
+      "model": "stealth/glyph-cluster",
+      "minute": "55",
+      "scheduler": "dispatcher",
+      "display_name": "Vercel Glyph Cluster Free"
+    },
+    {
+      "worker": "142",
+      "source": "aion-free",
+      "model": "aion-labs/aion-3.5-mini",
+      "minute": "0",
+      "scheduler": "dispatcher",
+      "display_name": "Aion Labs 3.5 Mini Free Credits"
+    },
+    {
+      "worker": "143",
+      "source": "cohere-eval",
+      "model": "command-a-plus-05-2026",
+      "minute": "5",
+      "scheduler": "dispatcher",
+      "display_name": "Cohere Command A Plus Evaluation"
+    },
+    {
+      "worker": "144",
+      "source": "typhoon-free",
+      "model": "typhoon-v2.5-30b-a3b-instruct",
+      "minute": "50",
+      "scheduler": "dispatcher",
+      "display_name": "Typhoon 2.5 Instruct Free"
+    },
+    {
+      "worker": "145",
+      "source": "typhoon-free",
+      "model": "typhoon-v2.1-12b-instruct",
+      "minute": "55",
+      "scheduler": "dispatcher",
+      "display_name": "Typhoon 2.1 Instruct Free"
     }
   ],
   "expected_workers": [
@@ -353,7 +521,28 @@
     117,
     118,
     119,
-    120
+    120,
+    121,
+    122,
+    123,
+    124,
+    125,
+    126,
+    127,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145
   ],
   "retired_workers": [
     9,
@@ -410,7 +599,11 @@
     101,
     104,
     107,
-    110
+    110,
+    128,
+    129,
+    130,
+    131
   ],
   "retired_models": [
     "apodex/apodex-1.1-mini:free",
@@ -435,6 +628,7 @@
     "minimax/minimax-m3.1-flash:free",
     "minimax/minimax-m3:free",
     "minimaxai/minimax-m3",
+    "mistralai/mistral-large-4-1t-a52b",
     "moonshotai/kimi-k3",
     "muse-spark-1.2-contributor-free",
     "muse-spark-1.3-contributor-free",
@@ -445,6 +639,7 @@
     "nvidia/nemotron-3-super-120b-a12b",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-ultra-550b-a55b",
+    "nvidia/nemotron-3.5-bolt-e4b",
     "nvidia/nemotron-3.5-lightning-30b-a3b",
     "nvidia/nemotron-3.5-super-vl-120b-a12b",
     "nvidia/nvidia-nemotron-nano-9b-v2",

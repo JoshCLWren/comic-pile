@@ -96,6 +96,79 @@ def test_terminal_classification_is_idempotency_keyed_by_run(monkeypatch):
     assert records[0]["persisted_work"] is True
 
 
+def test_idle_is_not_a_successful_delivery_or_failed_worker(monkeypatch):
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "12347", {
+        "worker": "42", "outcome_class": "no_work",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_idle"
+    assert records[0]["delivery_outcome"] == "none"
+
+
+
+def test_timed_out_agent_with_verified_delivery_is_completed(monkeypatch):
+    """Worker 82: a real code handoff is not erased by its agent timeout."""
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "43639844249", {
+        "worker": "82", "outcome_class": "agent_timeout",
+        "persisted_work": True, "delivery_outcome": "persisted",
+        "delivery_pr": "5129", "selected_kind": "issue", "selected_number": "4839",
+    })
+    assert records[0]["event_type"] == "worker_completed"
+    assert records[0]["outcome_class"] == "agent_timeout"
+    assert records[0]["delivery_outcome"] == "persisted"
+    assert records[0]["delivery_pr"] == "5129"
+
+
+def test_timed_out_agent_without_delivery_stays_failed(monkeypatch):
+    """Worker 105: lease cleanup alone is not a successful code delivery."""
+    records = []
+    monkeypatch.setattr(ledger, "record_events", lambda _, events: records.extend(events) or len(events))
+    ledger.record_runtime_outcome("owner/repo", "43640000000", {
+        "worker": "105", "outcome_class": "agent_timeout",
+        "persisted_work": False, "delivery_outcome": "none",
+    })
+    assert records[0]["event_type"] == "worker_failed"
+    assert records[0]["delivery_outcome"] == "none"
+
+
+def test_full_session_budget_without_agent_fifty_minute_cap():
+    root = Path(__file__).resolve().parents[1]
+    workflow = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
+    assert int(workflow["env"]["FACTORY_BUDGET_SECONDS"]) == 6000
+    assert workflow["jobs"]["factory"]["timeout-minutes"] == 120
+    for name in (
+        "free-model-factory-worker.sh",
+        "free-model-factory-worker-primitives.sh",
+        "omniroute-factory-worker.sh",
+        "nvidia-factory-worker.sh",
+    ):
+        assert "agent_timeout > 3000" not in (root / ".github/scripts" / name).read_text()
+    main = (root / ".github/scripts/free-model-factory-worker.sh").read_text()
+    assert "available - 240 - FAST_CHECK_RESERVE_SECONDS" in main
+
+
+def test_trusted_collector_verifies_code_handoff_before_persistence():
+    root = Path(__file__).resolve().parents[1]
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    assert 'delivery_pr="$(jq -r' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
+    assert '"repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in entry
+    assert '.head.repo.full_name == $repo' in entry
+    assert "pull-requests: write" in entry
+    assert "factory_checkpoint_handoff.py" in entry
+    assert 'ATTEMPT_COMMENT_ID: ${{ needs.run.outputs.attempt_comment_id }}' in entry
+    assert 'Verified delivery: %s' in entry
+    assert 'existing_run > GITHUB_RUN_ID' in entry
+    observer = (root / ".github/workflows/fixed-model-runtime-observer.yml").read_text()
+    assert 'gh api "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"' in observer
+    assert "pull-requests: read" in observer
+    assert "Verified delivery: %s" in observer
+
+
 def test_only_trusted_collectors_and_observer_use_ledger():
     root = Path(__file__).resolve().parents[1]
     controller = (root / ".github/scripts/factory-work-controller.py").read_text()
@@ -113,7 +186,7 @@ def test_only_trusted_collectors_and_observer_use_ledger():
     assert "NEON_API_KEY" not in str(model_job)
     assert any(step.get("uses") == "./.github/actions/factory-state-cache"
                for step in trusted_cleanup["steps"])
-    assert "model_health_snapshot:" in entry
+    assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()
     assert "factory-state-cache" in entry.split("  persist_outcome:", 1)[1]
 
 
@@ -139,10 +212,11 @@ def test_completion_dispatch_persists_real_worker_outcomes() -> None:
     assert "factory_state_ledger.py runtime-outcome" in entry
     assert "gh workflow run factory-completion-drain.yml" in entry
     assert "persist_outcome:" not in drain
-    assert "source_run_id" not in drain
+    assert "source_run_id" in drain
+    assert "factory-state-cache" not in drain
     # Model execution is confined to the reusable runner, which has no Neon
     # secret. The separate post-run collector receives the restricted DSN.
-    assert "model_health_snapshot:" in entry
+    assert "validate_assignment:" in (root / ".github/workflows/free-model-factory-run.yml").read_text()
     reusable = yaml.safe_load((root / ".github/workflows/free-model-factory-run.yml").read_text())
     assert "factory-state-cache" not in str(reusable["jobs"]["factory"])
     assert "NEON_API_KEY" not in str(reusable["jobs"]["factory"])
@@ -183,9 +257,9 @@ def test_terminal_collector_can_download_ansi_colored_worker_logs() -> None:
     """The current gh CLI rejects raw job logs containing ANSI escape codes."""
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
-    assert 'gh api --allow-escape-sequences \\' in workflow
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-entry.log" --allow-escape-sequences' in workflow
     assert '"repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"' in workflow
-    assert '> "$RUNNER_TEMP/factory-entry.log"' in workflow
+    assert 'if gh api "$@" > "$file" 2> "$error_file"; then' in workflow
     assert "factory_state_ledger.py runtime-outcome" in workflow
     # The opt-out is only safe for redirected file output, never terminal output.
     assert "--allow-escape-sequences" not in (
@@ -363,3 +437,23 @@ def test_successful_dynamic_rotation_persists_failed_models_and_real_final_model
         log.replace("crouton-alpha-free has been deprecated", "other-free has been deprecated"),
     ).get("model_failures") is None
     assert ledger.refine_trusted_dynamic_models({**outcome, "source": "nvidia"}, log) == {**outcome, "source": "nvidia"}
+
+
+def test_trusted_terminal_collector_retries_scoped_reads_and_idempotent_writes():
+    """A temporary API or Neon outage must not lose a completed worker outcome."""
+    root = SCRIPTS.parent.parent
+    entry = (root / ".github/workflows/free-model-factory-entry.yml").read_text()
+    assert "retry_gh_api()" in entry
+    assert 'if gh api "$@" > "$file" 2> "$error_file"; then' in entry
+    assert 'for attempt in 1 2 3 4; do' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-run-jobs.json"' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-entry.log"' in entry
+    assert 'retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json"' in entry
+    assert "if python3 .github/scripts/factory_state_ledger.py runtime-outcome" in entry
+    assert 'Unable to persist Neon terminal outcome after 4 attempts' in entry
+    # Markdown backticks must be quoted so shell does not execute agent_timeout.
+    assert "printf 'Neon terminal classification: `%s`\\n'" in entry
+    assert 'echo "Neon terminal classification: `' not in entry
+    operations = (root / ".github/scripts/factory_state_operations.py").read_text()
+    assert "INSERT INTO public.factory_runtime_event_keys(repo,run_id)" in operations
+    assert "ON CONFLICT DO NOTHING RETURNING run_id" in operations

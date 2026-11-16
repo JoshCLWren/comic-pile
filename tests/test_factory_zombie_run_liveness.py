@@ -82,7 +82,7 @@ def test_old_zero_job_zombie_stops_counting_as_live_ambiguity(
     def fake_gh_json(args: list[str], **kwargs: object) -> object:
         joined = " ".join(args)
         if "status=queued" in joined:
-            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=3_600)]}]
+            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=controller.FIXED_LEASE_TTL_SECONDS + 1)]}]
         if "status=in_progress" in joined:
             return [{"workflow_runs": []}]
         if "issues/1093/comments" in joined:
@@ -110,7 +110,7 @@ def test_old_unresolved_run_fails_closed_when_job_evidence_is_unavailable(
     def fake_gh_json(args: list[str], **kwargs: object) -> object:
         joined = " ".join(args)
         if "status=queued" in joined:
-            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=3_600)]}]
+            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=controller.FIXED_LEASE_TTL_SECONDS + 1)]}]
         if "status=in_progress" in joined:
             return [{"workflow_runs": []}]
         if "issues/1093/comments" in joined:
@@ -138,7 +138,7 @@ def test_unresolved_run_fails_closed_when_identity_registry_is_unavailable(
     def fake_gh_json(args: list[str], **kwargs: object) -> object:
         joined = " ".join(args)
         if "status=queued" in joined:
-            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=3_600)]}]
+            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=controller.FIXED_LEASE_TTL_SECONDS + 1)]}]
         if "status=in_progress" in joined:
             return [{"workflow_runs": []}]
         if "issues/1093/comments" in joined:
@@ -188,7 +188,7 @@ def test_expired_zombie_allows_unrelated_stale_lease_reclamation(
     def fake_gh_json(args: list[str], **kwargs: object) -> object:
         joined = " ".join(args)
         if "status=queued" in joined:
-            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=3_600)]}]
+            return [{"workflow_runs": [unresolved_run(99, now=now, age_seconds=controller.FIXED_LEASE_TTL_SECONDS + 1)]}]
         if "status=in_progress" in joined:
             return [{"workflow_runs": []}]
         if "issues/1093/comments" in joined:

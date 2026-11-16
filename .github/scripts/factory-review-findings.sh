@@ -92,7 +92,6 @@ factory_format_review_findings() {
     def clip($n): (. // "") | tostring
       | if length > $n then .[0:$n] + "\n[... truncated by factory wrapper; read the full thread on GitHub ...]" else . end;
     def is_greptile: (. // "") | test($greptile);
-    def is_coderabbit: (. // "") == "coderabbitai[bot]";
     def trim: gsub("^\\s+|\\s+$"; "");
     def loc: "\(.path // "(no path)")"
       + (if .line then ":\(.line)" elif .originalLine then ":\(.originalLine) (original line)" else "" end)
@@ -119,12 +118,10 @@ factory_format_review_findings() {
     | ((($threads | last | .data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage?) == true)
        or any($open[]; comments_incomplete)) as $incomplete
     | [$open[] | select(.comments.nodes[0].author.login | is_greptile)] as $g
-    | [$open[] | select(.comments.nodes[0].author.login | is_greptile | not)] as $other
+    | [$open[] | select(.comments.nodes[0].author.login | is_greptile | not)
+          | select((.comments.nodes[0].author.login // "") as $login | ($login != "coderabbitai" and $login != "coderabbitai[bot]"))] as $other
     | ([$reviews[0][]? | select(.user.login | is_greptile) | select((.body // "" | trim) != "")]
        | sort_by(.submitted_at // "") | last) as $grev
-    | ([$reviews[0][]? | select(.user.login | is_coderabbit)
-         | select(.state == "COMMENTED") | select((.body // "" | trim) != "")]
-       | sort_by(.submitted_at // "") | last) as $crev
     | ($summary | trim) as $gsum
     | [$checks[0].check_runs[]? | select((.name // "") | test("pr.?agent"; "i"))] as $pra
     | [
@@ -153,13 +150,6 @@ factory_format_review_findings() {
         "### Greptile PR-body summary",
         (if $gsum == "" then "None." else ($gsum | clip($limit)) end),
         "",
-        "### CodeRabbit top-level review findings",
-        (if $crev == null then "None."
-         else "Review by \($crev.user.login) on commit \($crev.commit_id // "unknown")"
-           + (if ($crev.commit_id // "") == $head then " (current head; verify each finding)"
-              else " (OLDER head; inspect only if still relevant)" end)
-           + "\n\n" + ($crev.body | clip($limit)) end),
-        "",
         "## Other unresolved review threads",
         "Fix, or concretely rebut with evidence, every actionable thread below; reply before resolving.",
         "",
@@ -184,7 +174,7 @@ factory_format_review_findings() {
 # be the thread connection's pageInfo, not a nested comments pageInfo.
 FACTORY_REVIEW_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{id isResolved isOutdated path line originalLine comments(first:100){totalCount pageInfo{hasNextPage endCursor} nodes{databaseId author{__typename login} authorAssociation body url createdAt}}}}}}}'
 FACTORY_THREAD_COMMENTS_QUERY='query($id:ID!,$endCursor:String){node(id:$id){... on PullRequestReviewThread{comments(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{databaseId author{__typename login} authorAssociation body url createdAt}}}}}'
-FACTORY_UNRESOLVED_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{isResolved}}}}}'
+FACTORY_UNRESOLVED_THREADS_QUERY='query($owner:String!,$name:String!,$number:Int!,$endCursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$endCursor){pageInfo{hasNextPage endCursor} nodes{isResolved comments(first:1){nodes{author{login}}}}}}}}'
 
 # Print the number of unresolved review threads across every page. Fails
 # closed (non-zero, no output) when any page cannot be fetched or parsed, or
@@ -199,7 +189,11 @@ factory_count_unresolved_review_threads() {
     if length == 0 then error("no review-thread pages")
     elif any(.[]; (conn.nodes | type) != "array") then error("invalid review-thread page")
     elif (last | conn.pageInfo.hasNextPage) != false then error("review-thread pagination incomplete")
-    else [.[] | conn.nodes[] | select(.isResolved != true)] | length end
+    else [.[] | conn.nodes[]
+      | select(.isResolved != true)
+      | select((.comments.nodes[0].author.login // "") as $login
+        | ($login != "coderabbitai" and $login != "coderabbitai[bot]"))]
+      | length end
   ' <<< "$pages" 2>/dev/null || return 1
 }
 

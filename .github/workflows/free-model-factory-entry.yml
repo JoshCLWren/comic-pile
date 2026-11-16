@@ -4,6 +4,10 @@ run-name: Factory ${{ inputs.worker }} · fixed-model entry
 on:
   workflow_dispatch:
     inputs:
+      assignment:
+        description: Bounded dispatcher assignment with target, exact head and claim token
+        required: true
+        type: string
       worker:
         description: Active fixed-model Factory number from the roster
         required: true
@@ -17,53 +21,18 @@ permissions:
   checks: read
 
 jobs:
-  model_health_snapshot:
-    name: Read Neon model exclusions (trusted)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      exclusions: ${{ steps.export.outputs.exclusions }}
-      heartbeat_id: ${{ steps.export.outputs.heartbeat_id }}
-      attempt_id: ${{ steps.export.outputs.attempt_id }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: ./.github/actions/factory-state-cache
-        with:
-          neon-api-key: ${{ secrets.NEON_API_KEY }}
-          neon-project-id: ${{ vars.NEON_PROJECT_ID }}
-      - name: Export bounded model decision snapshot
-        id: export
-        shell: bash
-        env:
-          INPUT_WORKER: ${{ inputs.worker }}
-        run: |
-          set -Eeuo pipefail
-          [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || exit 1
-          snapshot="$(python3 .github/scripts/factory_state_operations.py export-model-exclusions --repo "$GITHUB_REPOSITORY" --worker "$INPUT_WORKER")"
-          jq -e 'type == "object"' <<< "$snapshot" >/dev/null
-          echo "exclusions=$snapshot" >> "$GITHUB_OUTPUT"
-          echo "heartbeat_id=$(jq -r '.__heartbeat_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-          echo "attempt_id=$(jq -r '.__attempt_id[0] // empty' <<< "$snapshot")" >> "$GITHUB_OUTPUT"
-
   run:
-    needs: model_health_snapshot
     uses: ./.github/workflows/free-model-factory-run.yml
     with:
       worker: ${{ inputs.worker }}
-      model_exclusions: ${{ needs.model_health_snapshot.outputs.exclusions }}
-      heartbeat_comment_id: ${{ needs.model_health_snapshot.outputs.heartbeat_id }}
-      attempt_comment_id: ${{ needs.model_health_snapshot.outputs.attempt_id }}
+      assignment: ${{ inputs.assignment }}
     secrets: inherit
 
   # The preceding job owns the entire worker lease and its release. A
   # completion wakeup is therefore a signal only, never an assignment.
   signal_completion:
-    name: Wake completion drain after worker exits
-    needs: run
+    name: Wake completion drain after trusted outcome persistence
+    needs: [run, persist_outcome]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
@@ -79,7 +48,7 @@ jobs:
           # reliably delivered. Explicit workflow_dispatch is supported and
           # the drain's concurrency group coalesces bursts of completions.
           gh workflow run factory-completion-drain.yml \
-            --repo "$GITHUB_REPOSITORY" --ref main
+            --repo "$GITHUB_REPOSITORY" --ref main -f source_run_id="$GITHUB_RUN_ID"
 
   # Persist the terminal outcome in this trusted, *separate* runner after the
   # model execution job exits. The capacity drain can remain blocked behind
@@ -91,8 +60,10 @@ jobs:
     if: ${{ always() }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       actions: read
+      pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -110,33 +81,146 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_WORKER: ${{ inputs.worker }}
+          ATTEMPT_COMMENT_ID: ${{ needs.run.outputs.attempt_comment_id }}
         run: |
           set -Eeuo pipefail
+          # Retry only transient GitHub responses. Every retry overwrites its
+          # destination, so truncated first attempts cannot corrupt JSON/logs.
+          retry_gh_api() {
+            local file="$1" error_file="$RUNNER_TEMP/factory-gh-api-error.txt" attempt
+            shift
+            for attempt in 1 2 3 4; do
+              if gh api "$@" > "$file" 2> "$error_file"; then
+                return 0
+              fi
+              if (( attempt == 4 )) || ! grep -Eiq 'HTTP (408|409|425|429|5[0-9][0-9])|rate.limit|timed? out|connection (reset|refused)|unexpected EOF' "$error_file"; then
+                cat "$error_file" >&2
+                return 1
+              fi
+              echo "::warning::Transient GitHub API failure; retrying attempt $((attempt + 1))/4" >&2
+              sleep "$((1 << attempt))"
+            done
+          }
           [[ "$INPUT_WORKER" =~ ^[1-9][0-9]*$ ]] || {
             echo "::error::Invalid trusted worker ID"
             exit 1
           }
           # This is the authoritative Entry run ID. The job can run while
           # the parent workflow's capacity-wakeup job is still executing.
-          jobs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100")"
-          job_id="$(jq -r '[.jobs[] | select(.name == "run / factory" and .status == "completed") | .id][0] // empty' <<< "$jobs")"
+          retry_gh_api "$RUNNER_TEMP/factory-run-jobs.json" \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100"
+          job_id="$(jq -r '[.jobs[] | select(.name == "run / factory" and .status == "completed") | .id][0] // empty' "$RUNNER_TEMP/factory-run-jobs.json")"
           [[ "$job_id" =~ ^[1-9][0-9]*$ ]] || {
             echo "::error::The reusable factory job has not completed"
             exit 1
           }
           # Write ANSI-colored logs to a local file, never to a terminal.
-          gh api --allow-escape-sequences \
-            "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs" \
-            > "$RUNNER_TEMP/factory-entry.log"
+          retry_gh_api "$RUNNER_TEMP/factory-entry.log" --allow-escape-sequences \
+            "repos/${GITHUB_REPOSITORY}/actions/jobs/${job_id}/logs"
           python3 .github/scripts/classify-fixed-model-run.py \
             --log "$RUNNER_TEMP/factory-entry.log" \
             > "$RUNNER_TEMP/worker-outcome.json"
+          # Code handoff is distinct from agent exit. Only potential successful
+          # deliveries get a targeted authoritative GitHub verification.
+          delivery_pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/worker-outcome.json")"
+          if [[ -n "$delivery_pr" ]]; then
+            [[ "$delivery_pr" =~ ^[1-9][0-9]*$ ]] || exit 1
+            retry_gh_api "$RUNNER_TEMP/factory-delivery-pr.json" \
+              "repos/$GITHUB_REPOSITORY/pulls/$delivery_pr"
+            jq -e --arg repo "$GITHUB_REPOSITORY" --argjson number "$delivery_pr" '
+              .number == $number and .head.repo.full_name == $repo and
+              (.state == "open" or .merged == true) and
+              (.head.sha | test("^[0-9a-f]{40}$"))
+            ' "$RUNNER_TEMP/factory-delivery-pr.json" >/dev/null || {
+              echo "::error::Unable to verify persisted PR #$delivery_pr in this repository"
+              exit 1
+            }
+          fi
+          # Authoritative remote-ref/PR enrichment distinguishes persisted work
+          # from validated PR delivery. Never convert a failing worker into success.
+          checkpoint_args=(--repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID"
+            --cleanup --outcome "$RUNNER_TEMP/worker-outcome.json")
+          if [[ -n "$delivery_pr" ]]; then
+            checkpoint_args+=(--delivered-pr "$delivery_pr")
+          fi
+          python3 .github/scripts/factory_checkpoint_handoff.py "${checkpoint_args[@]}" || {
+            echo "::warning::Work PR publication failed; independent checkpoint reconciliation will retry"
+          }
           # Worker identity comes from the trusted dispatch input, *not* from
           # any untrusted text in a model-generated log.
           jq --arg worker "$INPUT_WORKER" '.worker = $worker' \
             "$RUNNER_TEMP/worker-outcome.json" \
             > "$RUNNER_TEMP/worker-outcome-attested.json"
-          python3 .github/scripts/factory_state_ledger.py runtime-outcome \
-            --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
-            --file "$RUNNER_TEMP/worker-outcome-attested.json" \
-            --log "$RUNNER_TEMP/factory-entry.log"
+          # This write is idempotent by (repo, run_id) in Neon. A temporary
+          # connection failure must not silently drop the terminal outcome.
+          for attempt in 1 2 3 4; do
+            if python3 .github/scripts/factory_state_ledger.py runtime-outcome \
+              --repo "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+              --file "$RUNNER_TEMP/worker-outcome-attested.json" \
+              --log "$RUNNER_TEMP/factory-entry.log"; then
+              break
+            fi
+            if (( attempt == 4 )); then
+              echo "::error::Unable to persist Neon terminal outcome after 4 attempts"
+              exit 1
+            fi
+            echo "::warning::Neon terminal write failed; retrying attempt $((attempt + 1))/4" >&2
+            sleep "$((1 << attempt))"
+          done
+          # The trusted classifier, not the wrapper job's shell exit, owns
+          # the Entry run's final meaning. Persist first, then fail visibly
+          # when the coding attempt really failed. Idle is not delivery.
+          classification="$(jq -r '.outcome_class // "unknown_failure"' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          delivered="$(jq -r '.delivery_outcome // "none"' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          pr="$(jq -r '.delivery_pr // empty' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          saved="$(jq -r '.checkpoint_saved // false' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          recovery_pr="$(jq -r '.recovery_pr // empty' "$RUNNER_TEMP/worker-outcome-attested.json")"
+          if [[ "$delivered" == persisted ]]; then
+            verdict="code_delivered"
+            message="Verified PR #$pr was handed off; agent outcome: $classification"
+          elif [[ "$classification" == no_work ]]; then
+            verdict="idle"
+            message="No code delivered; worker had no useful work to persist"
+          elif [[ "$classification" == success ]]; then
+            verdict="work_completed"
+            message="Work completed without a verified PR handoff (for example review)"
+          else
+            verdict="failed"
+            if [[ "$saved" == true ]]; then
+              message="Code saved on the work PR; validation incomplete; worker failed: $classification (work PR: ${recovery_pr:-publication pending})"
+            else
+              message="No verified saved code or PR delivery; worker failed: $classification"
+            fi
+          fi
+          {
+            echo "### Factory outcome: $verdict"
+            echo
+            echo "$message"
+            echo
+            printf 'Neon terminal classification: `%s`\n' "$classification"
+            printf 'Checkpoint saved: `%s`; work PR: `%s`; checkpoint validated: `false`\n' "$saved" "${recovery_pr:-none}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Publish the same final verdict to the existing registry marker.
+          # Use Neon-discovered ID, never re-page all historical comments.
+          marker="<!-- factory-attempt-outcome:v1 worker=opencode-free-model-factory-${INPUT_WORKER} -->"
+          if [[ "${ATTEMPT_COMMENT_ID:-}" =~ ^[1-9][0-9]*$ ]]; then
+            existing="$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" --jq .body 2>/dev/null || true)"
+            if [[ "$existing" == *"$marker"* ]]; then
+              existing_run="$(sed -n 's/^Run: //p' <<< "$existing" | tail -1)"
+              existing_run="${existing_run##*/}"
+              if [[ "$existing_run" =~ ^[0-9]+$ ]] && (( existing_run > GITHUB_RUN_ID )); then
+                echo "[factory-outcome] preserved newer attempt marker from run $existing_run"
+              else
+                stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                body="$(printf '%s\nWorker: opencode-free-model-factory-%s\nOutcome: %s\nAgent outcome: %s\nAttempt outcome: %s\nVerified delivery: %s\nDelivered PR: %s\nUpdated: %s\nRun: %s' \
+                  "$marker" "$INPUT_WORKER" "$verdict" "$classification" "$classification" "$delivered" "${pr:-none}" "$stamp" "$GITHUB_RUN_ID")"
+                gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ATTEMPT_COMMENT_ID" \
+                  -f body="$body" >/dev/null || echo "::warning::Registry status update failed; Neon remains authoritative"
+              fi
+            fi
+          fi
+          echo "[factory-outcome] $verdict: $message"
+          if [[ "$verdict" == failed ]]; then
+            echo "::error::$message"
+            exit 1
+          fi
