@@ -58,8 +58,8 @@ def validate() -> None:
     assert 'python3 "$slots" offer' in dispatch
     assert "factory_dispatch_credential_filter.py filter" in dispatch
     assert 'assign --worker "$worker"' in dispatch
-    assert dispatch.index("factory_dispatch_credential_filter.py filter") < dispatch.index(
-        'assign --worker "$worker"'
+    assert dispatch.index("factory_dispatch_credential_filter.py filter") < dispatch.rindex(
+        'dispatch_assigned_worker "$worker"'
     )
     assert 'factory_worker_slots.py resolve' in runner
     assert "factory_runtime_model_select.py" in runner
