@@ -36,6 +36,11 @@
     return '<span class="f-status '+kind+'">'+e(v)+'</span>'; };
   const workers = Array.isArray(data.workers)?data.workers:[];
   const candidate = data.candidate_health||{providers:[],models:[]};
+  const retry = data.retry || {backoffs:[],reservations:[],pr_retries:[]};
+  const backoff = (kind, match) => (retry.backoffs||[]).find(b=>b.kind===kind&&match(b));
+  const cooldown = b => !b ? "Not reported" : b.suspended ? "Suspended after "+b.streak+" failures" :
+    (b.next_retry_at||b.until) ? "Retry "+date(b.next_retry_at||b.until)+" · streak "+b.streak : "No active delay";
+
   const models = (()=>{ const map=new Map();
     const add=(provider,model,fields)=>{ if(!provider||!model)return;
       const id=provider+"\0"+model;map.set(id,{...(map.get(id)||{}),provider,model,...fields}); };
@@ -82,8 +87,8 @@
         ready:"Verify merge gates",blocked:"Resolve documented blocker",building:"Check active lease before takeover"})[stage(x)]||"Inspect policy and next action";
     }
     if(type==="run")return inFlight(x)?"Observe in-progress run, do not duplicate":"Inspect outcome and handoff";
-    if(type==="worker")return x.activity==="working"?"Observe active lease":x.attempt_outcome?"Check retry eligibility":"Await heartbeat evidence";
-    if(type==="model")return x.until&&x.until*1000>Date.now()?"Respect durable cooldown":"Require real execution proof";
+    if(type==="worker"){const b=backoff("worker",v=>v.worker===String(x.worker));return b&&b.next_retry_at&&Date.parse(b.next_retry_at)>Date.now()?"Respect worker Fibonacci backoff":x.activity==="working"?"Observe active lease":x.attempt_outcome?"Check retry eligibility":"Await heartbeat evidence";}
+    if(type==="model"){const b=backoff("model",v=>v.source===x.provider&&v.model===x.model);return (b?.suspended||b?.next_retry_at&&Date.parse(b.next_retry_at)>Date.now()||x.until&&x.until*1000>Date.now())?"Respect durable cooldown":"Require real execution proof";}
     return "Check lease, dependencies, and priority";};
   const evidence=(type,x)=>type==="pr"?gh+"/pull/"+x.number:type==="issue"?gh+"/issues/"+x.number:
     type==="run"?gh+"/actions/runs/"+x.id:type==="worker"&&x.attempt_run?gh+"/actions/runs/"+x.attempt_run:gh+"/issues/1093";
@@ -132,13 +137,15 @@
   };
   const workerView=()=>'<div class="f-panel"><div class="f-head"><div><h2>Provider-derived worker slots</h2>'+
     '<p>No pinned model roster. Missing heartbeat does not mean crashed.</p></div>'+status(filtered("worker",workers).length+" matching")+'</div>'+
-    filters()+table(["Worker","Provider / model","Activity","Latest attempt","Work / lease","Evidence"],
+    filters()+table(["Worker","Provider / model","Activity","Latest attempt","Work / lease","Retry / evidence"],
       filtered("worker",workers).map(w=>row([
         inspect("worker",w.worker,"#"+w.worker)+'<div class="f-small">'+e(w.display_name)+'</div>',
         e(w.runtime_source||"Unobserved")+'<div class="f-small">'+e(w.runtime_model||"No executed model")+'</div>',
         status(w.activity||w.health),status(w.attempt_outcome||"No attempt"),
         (w.work||[]).length?(w.work||[]).map(i=>link(i.url,i.kind+" #"+i.number)).join(" · "):'<span class="f-muted">No observed lease</span>',
-        w.attempt_run?link(gh+"/actions/runs/"+w.attempt_run,"Run "+w.attempt_run):'<span class="f-muted">No run</span>'
+        (backoff("worker",b=>b.worker===String(w.worker))?e(cooldown(backoff("worker",b=>b.worker===String(w.worker))))+"<div class=\"f-small\">":"")+
+        (w.attempt_run?link(gh+"/actions/runs/"+w.attempt_run,"Run "+w.attempt_run):'<span class="f-muted">No run</span>')+
+        (backoff("worker",b=>b.worker===String(w.worker))?"</div>":"")
       ])),"No matching workers")+"</div>";
   const providerView=()=>{const grouped=providers.map(provider=>{const ws=workers.filter(w=>w.runtime_source===provider);
       const h=(candidate.providers||[]).find(p=>p.source===provider);
@@ -148,11 +155,11 @@
     return '<div class="f-panel"><div class="f-head"><div><h2>Integrated providers</h2><p>Discovered from trusted slot and execution evidence, not Site configuration.</p></div>'+
       status(ps.length+" providers")+'</div>'+filters()+table(["Provider","Observed models","Slots","Run evidence","Health","Retry after"],
       ps.map(p=>row([e(p.provider),e(p.models),e(p.slots),e(p.attempts),status(p.outcome),
-        p.until?e(date(p.until*1000)):"Not exported"])))+'</div>'+
+        (backoff("provider",b=>b.source===p.provider)?e(cooldown(backoff("provider",b=>b.source===p.provider))):p.until?e(date(p.until*1000)):"Not exported")])));+'</div>'+
       '<div class="f-panel"><h2>Observed models</h2><p>Published catalog membership alone does not prove an invocation worked.</p>'+
       table(["Provider","Model","Health","Last outcome","Cooldown / provenance"],ms.map(m=>row([
         e(m.provider),inspect("model",m.provider+"/"+m.model,m.model),status(m.health||"unverified"),
-        e(m.outcome||"Not observed"),(m.until?"Until "+e(date(m.until*1000))+" · ":"")+e(m.evidence||"trusted observation")
+        e(m.outcome||"Not observed"),(backoff("model",b=>b.source===m.provider&&b.model===m.model)?e(cooldown(backoff("model",b=>b.source===m.provider&&b.model===m.model)))+" · ":"")+(m.until?"Until "+e(date(m.until*1000))+" · ":"")+e(m.evidence||"trusted observation")
       ])),"No model evidence for this filter")+"</div>";
   };
   const prView=()=>'<div class="f-panel"><div class="f-head"><div><h2>Open pull requests</h2>'+
@@ -161,7 +168,7 @@
       const ci=ciFor(p.head?.sha);
       return row([inspect("pr",p.number,"#"+p.number+" "+p.title)+'<div class="f-small">'+e((p.head?.sha||"").slice(0,10))+'</div>',
         status(stage(p)),e(owner(p)||"Unowned"),ci.length?ci.map(r=>link(r.html_url,r.status)).join(" · "):"No in-flight run observed",
-        e(next("pr",p)),e(age(p.updated_at))]);}),"No matching PRs")+"</div>";
+        e(next("pr",p)) + ((retry.pr_retries||[]).find(x=>x.pr===p.number&&x.head===p.head?.sha)?.retry_after ? " · stage retry pending" : "") ,e(age(p.updated_at))]);}),"No matching PRs")+"</div>";
   const issueView=()=>'<div class="f-panel"><div class="f-head"><div><h2>Open issues</h2>'+
     '<p>Newest 100 GitHub issue records. Trusted total appears above; no false zero for unseen pages.</p></div>'+status(s.issues.length+" fetched")+'</div>'+
     filters()+table(["Issue","Stage","Owner","Labels","Updated"],filtered("issue",s.issues).map(i=>row([
