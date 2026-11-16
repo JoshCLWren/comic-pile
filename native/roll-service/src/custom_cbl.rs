@@ -738,30 +738,28 @@ async fn validate_projection(
     user: &AuthenticatedUser,
     projected: &std::collections::HashMap<i32, Vec<(String, String)>>,
 ) -> Result<(), ApiError> {
-    let inputs = option_inputs::load_inputs_in_transaction(tx, user.clone()).await?;
+    let mut inputs = option_inputs::load_inputs_in_transaction(tx, user.clone()).await?;
     let names = inputs
         .lists
         .iter()
         .map(|list| (list.list_id, list.name.clone()))
-        .collect();
+        .collect::<BTreeMap<_, _>>();
 
-    let decisions_by_list: std::collections::HashMap<i32, Vec<crate::reading_constraints::SeriesOverlapDecision>> =
-        projected
-            .iter()
-            .map(|(&list_id, decisions)| {
-                let vec: Vec<crate::reading_constraints::SeriesOverlapDecision> = decisions
-                    .iter()
-                    .map(|(c, w)| crate::reading_constraints::SeriesOverlapDecision {
-                        continuing_volume_id: c.clone(),
-                        waiting_volume_id: w.clone(),
-                    })
-                    .collect();
-                (list_id, vec)
-            })
-            .collect();
+    // Update overlap decisions in the loaded inputs
+    for list in &mut inputs.lists {
+        if let Some(decisions) = projected.get(&list.list_id) {
+            list.overlap_decisions = decisions
+                .iter()
+                .map(|(c, w)| option_inputs::OverlapDecision {
+                    continuing_volume_id: c.clone(),
+                    waiting_volume_id: w.clone(),
+                })
+                .collect();
+        }
+    }
 
-    ValidatedReadingInputs::new_with_overlap_decisions(inputs, &names, decisions_by_list)
-        .map_err(|error| cycle_conflict(error, &inputs.lists.iter().map(|l| (l.list_id, l.name.clone())).collect()))?;
+    ValidatedReadingInputs::new(inputs, &names)
+        .map_err(|error| cycle_conflict(error, &names))?;
     Ok(())
 }
 
@@ -977,10 +975,11 @@ pub async fn search_custom_cbl_issues(
          JOIN threads t ON t.id=i.thread_id
          WHERE t.user_id=$1"
     );
+    let pattern;
     let mut params_vec: Vec<&(dyn ToSql + Sync)> = vec![&user.id()];
     if !normalized.is_empty() {
         query.push_str(" AND (t.title ILIKE $2 OR i.issue_number ILIKE $2 OR (t.title || ' #' || i.issue_number) ILIKE $2)");
-        let pattern = format!("%{}%", normalized);
+        pattern = format!("%{}%", normalized);
         params_vec.push(&pattern);
     }
     query.push_str(" ORDER BY t.title ASC, i.position ASC, i.id ASC");
