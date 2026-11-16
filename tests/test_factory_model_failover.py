@@ -90,20 +90,20 @@ def test_excluded_models_never_appear_even_if_unattempted() -> None:
 def test_intermediate_model_outcomes_preserve_exact_failure_type() -> None:
     from factory_state_operations import validate_intermediate_model_failures
 
+    names = [f"generated/model-{i}" for i in range(3)]
     failures = [
-        {"model": "test/generated-a", "outcome": "provider_quota"},
-        {"model": "test/generated-b", "outcome": "provider_throttle"},
-        {"model": "test/generated-c", "outcome": "model_unavailable"},
+        {"source": "nvidia", "model": names[0], "outcome": "provider_quota", "scope": "account"},
+        {"source": "requesty", "model": names[1], "outcome": "provider_throttle", "scope": "model"},
+        {"source": "nvidia", "model": names[2], "outcome": "model_unavailable", "scope": "model"},
     ]
-    assert validate_intermediate_model_failures(failures, "openrouter-free") == [
-        ("test/generated-a", "provider_quota"),
-        ("test/generated-b", "provider_throttle"),
-        ("test/generated-c", "model_unavailable"),
+    assert validate_intermediate_model_failures(failures, "nvidia") == [
+        ("nvidia", names[0], "provider_quota", "account"),
+        ("nvidia", names[2], "model_unavailable", "model"),
+        ("requesty", names[1], "provider_throttle", "model"),
     ]
     with pytest.raises(ValueError):
         validate_intermediate_model_failures(
-            [{"model": "test/generated-a", "outcome": "control_plane_failure"}],
-            "openrouter-free",
+            [{"model": names[0], "outcome": "control_plane_failure"}], "nvidia",
         )
 
 
@@ -111,26 +111,92 @@ def test_trusted_failover_log_preserves_all_failed_models() -> None:
     from factory_state_ledger import refine_trusted_failover_models
 
     worker = "123456"
-    source = "openrouter-free"
-    failures = [
-        ("test/generated-a:free", "provider_quota"),
-        ("test/generated-b:free", "provider_throttle"),
+    pairs = [
+        ("nvidia", "generated/model-a", "provider_quota", "account"),
+        ("requesty", "generated/model-b", "provider_throttle", "model"),
     ]
     lines = [
         f"2026-11-16T19:00:0{i}Z [factory:{worker}][source:{source}]"
         f"[model:{model}] FACTORY_TRUSTED_FAILOVER: "
-        f"source={source} model={model} outcome={kind}"
-        for i, (model, kind) in enumerate(failures)
+        f"source={source} model={model} outcome={kind} scope={scope}"
+        for i, (source, model, kind, scope) in enumerate(pairs)
     ]
     result = refine_trusted_failover_models(
-        {"worker": worker, "source": source, "model": "test/generated-c:free"},
+        {"worker": worker, "source": "requesty", "model": "generated/model-c"},
         "\n".join(lines),
     )
     assert result["model_failures"] == [
-        {"model": model, "outcome": kind} for model, kind in failures
+        {"source": source, "model": model, "outcome": kind, "scope": scope}
+        for source, model, kind, scope in pairs
     ]
-    # A different provider cannot poison this source's candidate health.
-    wrong = lines[0].replace("[source:openrouter-free]", "[source:nvidia]")
+    wrong = lines[0].replace("[source:nvidia]", "[source:requesty]")
     assert "model_failures" not in refine_trusted_failover_models(
-        {"worker": worker, "source": source}, wrong,
+        {"worker": worker, "source": "nvidia"}, wrong,
     )
+
+
+def test_cross_provider_fallback_retains_exact_pair_identity() -> None:
+    from factory_model_failover import select_next_fleet
+
+    names = [f"generated/candidate-{i}" for i in range(6)]
+    catalogs = {
+        "nvidia": _catalog(*names[:2]),
+        "requesty": _catalog(*names[2:4]),
+        "pollinations": _catalog(*names[4:]),
+    }
+    attempted: set[tuple[str, str]] = set()
+    seen: list[tuple[str, str]] = []
+    for _ in range(len(names)):
+        selected = select_next_fleet(
+            "77", "nvidia", attempted, set(), {}, catalogs,
+            set(catalogs),
+        )
+        pair = (selected["source"], selected["model"])
+        assert pair not in attempted
+        attempted.add(pair)
+        seen.append(pair)
+    assert [source for source, _ in seen] == [
+        "nvidia", "nvidia", "pollinations", "pollinations",
+        "requesty", "requesty",
+    ]
+    with pytest.raises(ExhaustedCandidatesError):
+        select_next_fleet("77", "nvidia", attempted, set(), {}, catalogs, set(catalogs))
+
+
+def test_account_breaker_skips_all_models_and_rotates_to_other_provider() -> None:
+    from factory_model_failover import select_next_fleet
+
+    names = [f"generated/candidate-{i}" for i in range(4)]
+    catalogs = {"nvidia": _catalog(*names[:3]), "requesty": _catalog(names[-1])}
+    selected = select_next_fleet(
+        "77", "nvidia", {("nvidia", names[0])}, {"nvidia"},
+        {}, catalogs, set(catalogs),
+    )
+    assert (selected["source"], selected["model"]) == ("requesty", names[-1])
+
+
+def test_model_throttle_does_not_block_other_models_on_source() -> None:
+    from factory_model_failover import select_next_fleet
+
+    names = [f"generated/free-{i}:free" for i in range(4)]
+    catalogs = {"openrouter-free": _catalog("generated/paid", *names)}
+    attempted = {("openrouter-free", names[0])}
+    selected = select_next_fleet(
+        "77", "openrouter-free", attempted, set(),
+        {"openrouter-free": [names[1]]},
+        catalogs, set(catalogs),
+    )
+    assert selected["source"] == "openrouter-free"
+    assert selected["model"] in set(names[2:])
+    assert selected["model"] != "generated/paid"
+
+
+def test_fleet_cannot_choose_unadmitted_provider_even_with_catalog() -> None:
+    from factory_model_failover import select_next_fleet
+
+    catalog = _catalog("generated/candidate")
+    with pytest.raises(ExhaustedCandidatesError):
+        select_next_fleet(
+            "77", "nvidia", {("nvidia", "generated/candidate")},
+            set(), {}, {"nvidia": catalog, "requesty": catalog}, {"nvidia"},
+        )

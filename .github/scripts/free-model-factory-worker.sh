@@ -527,84 +527,74 @@ if (( agent_timeout < 300 )); then
   exit 1
 fi
 
-# Fail over only inside this provider and this lease. Each discovered model is
-# attempted at most once; persistent failures are recorded by the trusted shell,
-# never inferred from model-authored text or a successful process exit.
-attempted_models=()
-record_model_failover_failure() {
-  local failed_model="$1" classification="$2" stamp body
-  stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  body="$(printf '%s\nWorker: %s\nModel: %s\nSource: %s\nOutcome: failure\nAttempt outcome: %s\nUpdated: %s\nRun: %s' \
-    "<!-- factory-model-failover:v1 run=$GITHUB_RUN_ID -->" \
-    "$WORKER_ID" "$failed_model" "$SOURCE" "$classification" "$stamp" "$GITHUB_RUN_ID")"
-  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" \
-    -f body="$body" >/dev/null
-  log "FACTORY_TRUSTED_FAILOVER: source=$SOURCE model=$failed_model outcome=$classification"
+# Iterate eligible provider/model pairs within this lease.
+ORIGINAL_SOURCE="$SOURCE"
+attempted_pairs=()
+blocked_providers=()
+account_wide_failure() {
+  grep -Eqi 'insufficient balance or no resource package|please recharge|add usage credits or subscribe|api key budget limit exceeded|account (credits|balance) (depleted|exhausted)|billing_api_budget_exhausted|payment required|no resource package' \
+    "/tmp/opencode-factory-$WORKER.log"
 }
-
+record_model_failover_failure() {
+  local failed_source="$1" failed_model="$2" classification="$3" scope="$4" stamp body
+  stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  body="$(printf '%s\nWorker: %s\nModel: %s\nSource: %s\nOutcome: failure\nAttempt outcome: %s\nScope: %s\nUpdated: %s\nRun: %s' \
+    "<!-- factory-model-failover:v1 run=$GITHUB_RUN_ID -->" \
+    "$WORKER_ID" "$failed_model" "$failed_source" "$classification" "$scope" "$stamp" "$GITHUB_RUN_ID")"
+  gh api --method POST "repos/$GITHUB_REPOSITORY/issues/1093/comments" -f body="$body" >/dev/null
+  log "FACTORY_TRUSTED_FAILOVER: source=$failed_source model=$failed_model outcome=$classification scope=$scope"
+}
 select_next_eligible_model() {
-  local next_json next_model next_runtime state candidate_status
-  local -a select_args=(--source "$SOURCE" --worker "$WORKER" \
+  local next_json next_source next_model next_runtime candidate_status pair provider
+  local -a select_args=(--source "$ORIGINAL_SOURCE" --worker "$WORKER" \
     --rotation "$GITHUB_RUN_NUMBER" \
     --exclusions-file "$RUNNER_TEMP/factory-neon-model-exclusions.json" \
-    --catalog-cache "$RUNNER_TEMP/factory-failover-catalog.json")
-  local prior
-  for prior in "${attempted_models[@]}"; do
-    select_args+=(--attempted "$prior")
-  done
-  case "$SOURCE" in
-    opencode-free)
-      select_args+=(--catalog-file "$RUNNER_TEMP/factory-opencode-free-catalog") ;;
-    kilo-auto)
-      select_args+=(--catalog-file "$RUNNER_TEMP/factory-kilo-catalog") ;;
-  esac
+    --eligible-sources-file "$RUNNER_TEMP/factory-fleet-sources.json" \
+    --fleet-catalog-cache "$RUNNER_TEMP/factory-fleet-catalogs.json")
+  for pair in "${attempted_pairs[@]}"; do select_args+=(--attempted-pair "$pair"); done
+  for provider in "${blocked_providers[@]}"; do select_args+=(--blocked-provider "$provider"); done
   while :; do
     (( $(remaining) > 540 )) || return 1
-    if ! next_json="$(python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_model_failover.py" \
-      "${select_args[@]}")"; then
-      log "No further eligible models in $SOURCE; retaining the failed attempt's outcome"
+    if ! next_json="$(python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_model_failover.py" "${select_args[@]}")"; then
+      log "No further currently eligible fleet provider/model candidates"
       return 1
     fi
+    next_source="$(jq -er '.source' <<< "$next_json")" || return 1
     next_model="$(jq -er '.model' <<< "$next_json")" || return 1
     next_runtime="$(jq -er '.runtime_model' <<< "$next_json")" || return 1
-    attempted_models+=("$next_model")
-    select_args+=(--attempted "$next_model")
-    if [[ "$SOURCE" != opencode-free && "$SOURCE" != openrouter-free && \
-          "$SOURCE" != kilo-auto ]]; then
-      # OpenCode-compatible custom providers declare one exact model at a time.
-      # Merge the newly published model into the existing runtime configuration.
+    pair="$(jq -nc --arg source "$next_source" --arg model "$next_model" '[$source,$model]')"
+    attempted_pairs+=("$pair")
+    select_args+=(--attempted-pair "$pair")
+    if [[ "$next_source" != opencode-free && "$next_source" != openrouter-free && "$next_source" != kilo-auto ]]; then
       local config_file="$HOME/.config/opencode/opencode.json"
       local candidate_config="$RUNNER_TEMP/factory-failover-config.json"
-      if ! python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_provider_registry.py" \
-          config --source "$SOURCE" --model "$next_model" > "$candidate_config"; then
-        log "Cannot configure discovered $SOURCE/$next_model; stopping failover"
+      if ! python3 "$FACTORY_TRUSTED_FAILOVER_DIR/factory_provider_registry.py" config --source "$next_source" --model "$next_model" > "$candidate_config"; then
+        record_terminal_outcome control_plane_failure "canonical provider configuration failed during failover"
         return 1
       fi
       jq -s '.[0] * .[1]' "$config_file" "$candidate_config" > "$candidate_config.merged" || return 1
       mv "$candidate_config.merged" "$config_file"
       chmod 600 "$config_file"
     fi
-    if [[ "$SOURCE" != kilo-auto ]]; then
+    if [[ "$next_source" != kilo-auto ]]; then
       candidate_status=0
       bash "$FACTORY_TRUSTED_FAILOVER_DIR/wait-opencode-model.sh" "$next_runtime" || candidate_status=$?
       if (( candidate_status == 3 )); then
-        log "Discovered $next_runtime absent from executable OpenCode catalog, trying the next candidate"
-        record_model_failover_failure "$next_model" model_unavailable || return 1
+        record_model_failover_failure "$next_source" "$next_model" model_unavailable model || return 1
         continue
       fi
       if (( candidate_status != 0 )); then
-        record_terminal_outcome control_plane_failure "OpenCode catalog unreadable during model failover"
+        record_terminal_outcome control_plane_failure "executable catalog unreadable during failover"
         return 1
       fi
     fi
-    # The checkpoint process captures model provenance when started. Restart
-    # it before inference so saved code is attributed to the model that wrote it.
     stop_work_checkpoint
+    SOURCE="$next_source"
     MODEL="$next_model"
     RUNTIME_MODEL="$next_runtime"
     DISPLAY="$SOURCE · $MODEL"
     start_work_checkpoint
-    log "Failing model excluded; attempting $SOURCE/$MODEL on the existing lease"
+    log "FACTORY_FLEET_TRANSITION: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL target=$MODE/$NUMBER"
     return 0
   done
 }
@@ -614,6 +604,7 @@ agent_status=0
 transient_failure=0
 while :; do
   log "FACTORY_EXECUTION_CANDIDATE: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
+  : > "/tmp/opencode-factory-${WORKER}.log"
   set +e
   run_agent "$MODE" "$NUMBER" "$agent_timeout"
   agent_status=$?
@@ -635,9 +626,14 @@ while :; do
     case "$failure_class" in
       provider_quota|provider_throttle|provider_failure|model_unavailable|model_retired_410|model_policy_violation)
         if [[ -z "$(git status --porcelain)" ]] && (( $(remaining) > 540 )); then
-          attempted_models+=("$MODEL")
-          if ! record_model_failover_failure "$MODEL" "$failure_class"; then
-            record_terminal_outcome control_plane_failure "failed to record exact model failure before failover"
+          attempted_pairs+=("$(jq -nc --arg source "$SOURCE" --arg model "$MODEL" '[$source,$model]')")
+          failure_scope=model
+          if account_wide_failure; then
+            failure_scope=account
+            blocked_providers+=("$SOURCE")
+          fi
+          if ! record_model_failover_failure "$SOURCE" "$MODEL" "$failure_class" "$failure_scope"; then
+            record_terminal_outcome control_plane_failure "failed to persist exact attempt before failover"
             break
           fi
           if select_next_eligible_model; then
