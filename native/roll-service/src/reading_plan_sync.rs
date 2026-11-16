@@ -783,101 +783,95 @@ async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>
 }
 
 
-async fn extend_source_plan_with_issue(
+async fn extend_adopted_issue_to_following_plans(
     tx: &tokio_postgres::Transaction<'_>,
     user_id: i32,
-    plan_id: i32,
     thread_id: i32,
-    source_id: i32,
     external_identity_id: i32,
     issue_id: i32,
 ) -> Result<(), ApiError> {
-    // Minimal parity for release-sync extension: append to the source plan's
-    // unread tail when the issue is an adopted, non-excluded member of the
-    // confirmed source thread. Full sibling-plan and membership-rebuild parity
-    // remains pending.
-    let row = tx
-        .query_opt(
-            "SELECT cp.nodes_json \
-             FROM continuity_plans cp \
-             JOIN reading_plan_release_sources rps ON rps.plan_id = cp.id \
-             WHERE cp.id = $1 AND cp.user_id = $2 AND rps.id = $3 \
-               AND rps.thread_id = $4 AND rps.enabled = TRUE",
-            &[&plan_id, &user_id, &source_id, &thread_id],
+    // Extend enabled sibling plans following the same thread+volume for this user.
+    // This is a minimal parity step; full rebuild_plan_membership/source-placement
+    // parity remains pending.
+    let plan_rows = tx
+        .query(
+            "SELECT DISTINCT rps.plan_id \
+             FROM reading_plan_release_sources rps \
+             JOIN continuity_plans cp ON cp.id = rps.plan_id \
+             WHERE rps.thread_id = $1 AND rps.external_identity_id = $2 \
+               AND rps.enabled = TRUE AND cp.user_id = $3 \
+             ORDER BY rps.plan_id",
+            &[&thread_id, &external_identity_id, &user_id],
         )
         .await
         .map_err(db::query_error)?;
-    let Some(plan_row) = row else { return Ok(()); };
 
-    let confirmed = tx
-        .query_opt(
-            "SELECT 1 FROM thread_external_series_mappings \
-             WHERE thread_id = $1 AND external_identity_id = $2 AND status = 'confirmed' LIMIT 1",
-            &[&thread_id, &external_identity_id],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-    if !confirmed {
-        return Ok(());
-    }
+    for row in &plan_rows {
+        let plan_id: i32 = row.get(0);
+        // Lock plan row.
+        let plan = tx
+            .query_opt(
+                "SELECT nodes_json FROM continuity_plans WHERE id = $1 AND user_id = $2 FOR UPDATE",
+                &[&plan_id, &user_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let Some(plan_row) = plan else { continue; };
 
-    // Skip if already a member.
-    let exists = tx
-        .query_opt(
-            "SELECT 1 FROM reading_plan_issues WHERE plan_id = $1 AND issue_id = $2 LIMIT 1",
-            &[&plan_id, &issue_id],
-        )
-        .await
-        .map_err(db::query_error)?
-        .is_some();
-    if exists {
-        return Ok(());
-    }
-
-    let nodes_json: Value = plan_row.try_get::<_, Value>(0).unwrap_or(Value::Array(Vec::new()));
-    let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
-    let mut max_pos: i64 = -1;
-    let mut already_in_json = false;
-    for node in &nodes {
-        if let Some(pos) = node.get("position").and_then(Value::as_i64) {
-            if pos > max_pos { max_pos = pos; }
+        let exists = tx
+            .query_opt(
+                "SELECT 1 FROM reading_plan_issues WHERE plan_id = $1 AND issue_id = $2 LIMIT 1",
+                &[&plan_id, &issue_id],
+            )
+            .await
+            .map_err(db::query_error)?
+            .is_some();
+        if exists {
+            continue;
         }
-        if node.get("node_type").and_then(Value::as_str) == Some("issue")
-            && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
-        {
-            already_in_json = true;
+
+        let nodes_json: Value = plan_row.try_get::<_, Value>(0).unwrap_or(Value::Array(Vec::new()));
+        let mut nodes = nodes_json.as_array().cloned().unwrap_or_default();
+        let mut max_pos: i64 = -1;
+        let mut already_in_json = false;
+        for node in &nodes {
+            if let Some(pos) = node.get("position").and_then(Value::as_i64) {
+                if pos > max_pos { max_pos = pos; }
+            }
+            if node.get("node_type").and_then(Value::as_str) == Some("issue")
+                && node.get("ref_id").and_then(Value::as_i64) == Some(i64::from(issue_id))
+            {
+                already_in_json = true;
+            }
         }
-    }
-    if !already_in_json {
-        let new_node = serde_json::json!({
-            "id": format!("release-{issue_id}"),
-            "node_type": "issue",
-            "ref_id": issue_id,
-            "lane_id": "unread-tail",
-            "position": (max_pos + 1) as i32,
-            "label": Value::Null,
-            "is_checkpoint": false
-        });
-        nodes.push(new_node);
+        let new_pos = (max_pos + 1) as i32;
+        if !already_in_json {
+            nodes.push(serde_json::json!({
+                "id": format!("release-{issue_id}"),
+                "node_type": "issue",
+                "ref_id": issue_id,
+                "lane_id": "unread-tail",
+                "position": new_pos,
+                "label": Value::Null,
+                "is_checkpoint": false
+            }));
+            tx.execute(
+                "UPDATE continuity_plans SET nodes_json = $1::jsonb, updated_at = NOW() WHERE id = $2",
+                &[&Value::Array(nodes), &plan_id],
+            )
+            .await
+            .map_err(db::query_error)?;
+        }
         tx.execute(
-            "UPDATE continuity_plans SET nodes_json = $1::jsonb, updated_at = NOW() WHERE id = $2",
-            &[&Value::Array(nodes.clone()), &plan_id],
+            "INSERT INTO reading_plan_issues \
+             (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
+             VALUES ($1, $2, $3, 'unread-tail', $4, NULL, NULL, NULL, FALSE, NULL) \
+             ON CONFLICT (plan_id, issue_id) DO NOTHING",
+            &[&plan_id, &format!("release-{issue_id}"), &issue_id, &new_pos],
         )
         .await
         .map_err(db::query_error)?;
     }
-
-    // Insert minimal membership row; occurrence_id/display_position align with appended node.
-    tx.execute(
-        "INSERT INTO reading_plan_issues \
-         (plan_id, occurrence_id, issue_id, lane_id, display_position, label, reader_role, reader_optional, is_checkpoint, source_metadata_json) \
-         VALUES ($1, $2, $3, 'unread-tail', $4, NULL, NULL, NULL, FALSE, NULL) \
-         ON CONFLICT (plan_id, issue_id) DO NOTHING",
-        &[&plan_id, &format!("release-{issue_id}"), &issue_id, &((max_pos + 1) as i32)],
-    )
-    .await
-    .map_err(db::query_error)?;
 
     Ok(())
 }
@@ -1255,14 +1249,12 @@ pub async fn sync_released_issues_endpoint(
                 }
 
                 if !adopted_for_extension.is_empty() {
-                    // Best-effort minimal plan extension for this source's plan.
+                    // Best-effort plan extension for enabled sibling plans following this volume.
                     for issue_id in &adopted_for_extension {
-                        extend_source_plan_with_issue(
+                        extend_adopted_issue_to_following_plans(
                             &tx,
                             user.id(),
-                            source.plan_id,
                             source.thread_id,
-                            source.source_id,
                             source.external_identity_id,
                             *issue_id,
                         )
@@ -1272,6 +1264,7 @@ pub async fn sync_released_issues_endpoint(
 
                 if created_any || source_reused > 0 {
                     recalculate_thread_tracking(&tx, source.thread_id, user.id(), created_any).await?;
+                    crate::issue_service::refresh_blocked_threads(&tx, user.id()).await?;
                 }
 
                 if source_issue_failures == 0 {
