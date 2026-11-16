@@ -716,7 +716,12 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let schema = format!("ingress_queue_{}_{}", std::process::id(), nanos);
+        // Parallel test threads can read the same clock tick on coarse-granularity
+        // CI runners, so a call-unique counter also keys the schema name and
+        // two concurrent fixtures can never collide on pg_namespace.
+        static SCHEMA_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let seq = SCHEMA_SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let schema = format!("ingress_queue_{}_{}_{}", std::process::id(), nanos, seq);
         admin
             .batch_execute(&format!(
                 "CREATE SCHEMA {schema};
