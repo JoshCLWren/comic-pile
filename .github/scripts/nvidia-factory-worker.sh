@@ -388,7 +388,6 @@ stage_trusted_review_controller() {
     cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
     cp .github/scripts/factory_review_policy.py "$trusted_dir/factory_review_policy.py"
     # Pin model identity to trusted main, never to the adopted PR checkout.
-    cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
     cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
     cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
     cp .github/scripts/factory_work_policy.py "$trusted_dir/factory_work_policy.py"

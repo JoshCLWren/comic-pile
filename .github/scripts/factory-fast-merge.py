@@ -109,16 +109,17 @@ def factory_candidate(
         or changed != len(files)
     ):
         return False, "Changed file listing is incomplete"
-    # A roster edit is one atomic, validated unit. The generator must never
-    # fast-merge a standalone lock/snapshot that describes different workers.
-    changed_paths = {file.get("filename") for file in files if isinstance(file, dict)}
-    roster_files = {
+    # Never permit a recreated source-controlled model inventory.
+    retired_inventory = {
         ".github/free-model-factories.tsv",
         ".github/factory-expected-workers.json",
         ".github/factory-roster-snapshot.json",
     }
-    if changed_paths & roster_files and not roster_files <= changed_paths:
-        return False, "Factory roster manifest, lock and snapshot must change together"
+    if any(
+        item.get("filename") in retired_inventory and item.get("status") != "removed"
+        for item in files
+    ):
+        return False, "Source-controlled factory model inventories are forbidden"
     for file in files:
         if not isinstance(file, dict):
             return False, "Malformed changed-file entry"

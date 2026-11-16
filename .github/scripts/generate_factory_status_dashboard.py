@@ -19,7 +19,6 @@ REPO = os.environ.get("GITHUB_REPOSITORY", "JoshCLWren/comic-pile")
 REPO_URL = f"https://github.com/{REPO}"
 OUTPUT = Path(os.environ.get("FACTORY_DASHBOARD_OUTPUT", "site/index.html"))
 SCRIPTS = Path(__file__).resolve().parent
-MANIFEST = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
 OWNER_RE = re.compile(r"^factory:(?P<worker>\d+)$")
 WORKER_RE = re.compile(r"^opencode-free-model-factory-(?P<worker>\d+)$")
 ATTEMPT_MARKER = "<!-- factory-attempt-outcome:v1 "
@@ -111,7 +110,12 @@ def latest_completion_funnel(comments: Iterable[Mapping[str, Any]]) -> dict[str,
     return {}
 
 
-def load_manifest_rows(path: Path) -> list[dict[str, str]]:
+def load_manifest_rows(path: Path | None = None) -> list[dict[str, str]]:
+    if path is None:
+        from factory_worker_slots import slots
+
+        return [slot.as_record() | {"model": ""} for slot in slots()]
+
     rows: list[dict[str, str]] = []
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
@@ -404,7 +408,13 @@ def collect_opencode_free_roster() -> dict[str, Any]:
 
 def load_expected_roster() -> dict[str, object]:
     """Read the active-worker authority rather than infer liveness from old comments."""
-    return json.loads((SCRIPTS.parent / "factory-expected-workers.json").read_text())
+    from factory_worker_slots import slots
+
+    return {
+        "expected_workers": [int(slot.worker) for slot in slots()],
+        "retired_workers": [],
+        "paused_workers": [],
+    }
 
 
 def collect_snapshot() -> dict[str, Any]:
@@ -425,7 +435,7 @@ def collect_snapshot() -> dict[str, Any]:
     active_workers = {str(worker) for worker in roster["expected_workers"]} - {
         str(worker) for worker in [*roster.get("retired_workers", []), *roster.get("paused_workers", [])]
     }
-    manifest_rows = [row for row in load_manifest_rows(MANIFEST) if row["worker"] in active_workers]
+    manifest_rows = [row for row in load_manifest_rows() if row["worker"] in active_workers]
     workers = [row["worker"] for row in manifest_rows]
     owned = completion.owned_worker_ids([*issues, *prs])
     slot_health = capacity.get("slot_health_counts") or {}
@@ -473,7 +483,7 @@ def collect_snapshot() -> dict[str, Any]:
     try:
         delivery_rows = delivery.collect_delivery_funnel(
             lambda endpoint: completion.gh_json(['api', f'repos/{REPO}/{endpoint}']),
-            load_manifest_rows(MANIFEST), now=datetime.now(timezone.utc),
+            load_manifest_rows(), now=datetime.now(timezone.utc),
             cache_path=Path(os.environ.get('FACTORY_FUNNEL_CACHE', 'site/funnel-cache.json')),
         )
         delivery_error = ''

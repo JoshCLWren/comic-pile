@@ -367,7 +367,6 @@ stage_trusted_review_controller() {
     cp .github/scripts/factory_post_merge_closure.py "$trusted_dir/factory_post_merge_closure.py"
     cp scripts/factory_eligibility.py "$trusted_dir/factory_eligibility.py"
     # Bind model provenance to a trusted main checkout snapshot, not PR data.
-    cp .github/scripts/factory_roster.py "$trusted_dir/factory_roster.py"
     cp .github/scripts/factory_worker_slots.py "$trusted_dir/factory_worker_slots.py"
     cp .github/scripts/factory_provider_registry.py "$trusted_dir/factory_provider_registry.py"
     chmod +x "$trusted_dir/factory-review-controller.py"
