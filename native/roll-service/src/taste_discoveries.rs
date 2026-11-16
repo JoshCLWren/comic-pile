@@ -916,7 +916,9 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(out_of_range.status(), StatusCode::UNPROCESSABLE_ENTITY);
-        let body = to_bytes(out_of_range.into_body(), usize::MAX).await.unwrap();
+        let body = to_bytes(out_of_range.into_body(), usize::MAX)
+            .await
+            .unwrap();
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(payload, json!({"detail": "Validation failed"}));
     }
