@@ -25,6 +25,21 @@ class CandidateUnavailableError(RuntimeError):
     """No published model can currently be selected for an invocation."""
 
 
+def catalog_url(source: str, spec: Any, env: Mapping[str, str]) -> str:
+    """Resolve the provider's published catalog endpoint, never a model ID."""
+    endpoint = spec.endpoint
+    if spec.additional_credentials:
+        endpoint = endpoint.replace("{account_id}", env["CLOUDFLARE_ACCOUNT_ID"])
+    if source == "cloudflare-workers-ai":
+        # Cloudflare publishes Workers AI models at models/search, not at
+        # its OpenAI-compatible inference /ai/v1/models path.
+        return (
+            endpoint.removesuffix("/ai/v1")
+            + "/ai/models/search?format=openrouter&per_page=100"
+        )
+    return endpoint.rstrip("/") + "/models"
+
+
 def provider_catalog(
     source: str, env: Mapping[str, str], *, timeout: float = 20.0,
 ) -> dict[str, Any]:
@@ -34,10 +49,7 @@ def provider_catalog(
     missing = missing_credentials(spec, env)
     if missing:
         raise CandidateUnavailableError(f"missing provider credentials for {source}")
-    endpoint = spec.endpoint
-    if spec.additional_credentials:
-        endpoint = endpoint.replace("{account_id}", env["CLOUDFLARE_ACCOUNT_ID"])
-    url = endpoint.rstrip("/") + "/models"
+    url = catalog_url(source, spec, env)
     request = urllib.request.Request(
         url,
         headers={

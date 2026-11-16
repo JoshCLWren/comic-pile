@@ -45,3 +45,22 @@ def test_all_cooling_candidates_are_deferred() -> None:
 def test_malformed_catalog_does_not_invent_a_model() -> None:
     with pytest.raises(SELECTOR.CandidateUnavailableError):
         SELECTOR.select("groq-free", "1234", {"data": {}})
+
+
+def test_cloudflare_discovery_uses_official_model_search_not_inference_endpoint() -> None:
+    spec = REGISTRY.PROVIDERS["cloudflare-workers-ai"]
+    url = SELECTOR.catalog_url(
+        "cloudflare-workers-ai", spec,
+        {"CLOUDFLARE_ACCOUNT_ID": "synthetic-account"},
+    )
+    assert url == (
+        "https://api.cloudflare.com/client/v4/accounts/synthetic-account"
+        "/ai/models/search?format=openrouter&per_page=100"
+    )
+
+
+def test_gemini_catalog_url_matches_official_openai_compat_endpoint() -> None:
+    spec = REGISTRY.PROVIDERS["gemini-free"]
+    assert SELECTOR.catalog_url("gemini-free", spec, {}).endswith(
+        "/v1beta/openai/models"
+    )
