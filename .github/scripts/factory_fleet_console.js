@@ -95,6 +95,7 @@
   const detail=(type,id)=>{const items=type==="worker"?workers:type==="model"?models:type==="pr"?s.prs:type==="issue"?s.issues:s.runs;
     const x=items.find(a=>String(type==="worker"?a.worker:type==="model"?a.provider+"/"+a.model:type==="pr"||type==="issue"?a.number:a.id)===String(id));
     if(!x)return;const url=evidence(type,x);
+    const extra = type==="worker" ? {backoff:backoff("worker",b=>b.worker===String(x.worker)),reservation:(retry.reservations||[]).filter(v=>v.worker===String(x.worker))} : type==="model" ? {backoff:backoff("model",b=>b.source===x.provider&&b.model===x.model)} : type==="pr" ? {retry:(retry.pr_retries||[]).filter(v=>v.pr===x.number)} : {};
     const drawer=document.createElement("div");drawer.className="f-drawer";
     drawer.innerHTML='<aside><div class="f-head"><span class="f-eyebrow">Evidence / '+e(type)+'</span><button class="f-button" data-close>Close ✕</button></div>'+
       '<h2>'+e(x.title||x.display_name||x.model||x.name||id)+'</h2>'+
@@ -103,7 +104,7 @@
       '<div class="f-fact"><span class="f-muted">Next action</span><span>'+e(next(type,x))+'</span></div>'+
       '<div class="f-note" style="margin-top:14px">Read-only evidence. This Site cannot authorize merges, assign workers, or change leases. Check live GitHub state before acting.</div>'+
       '<div class="f-buttons">'+link(url,"Open source")+' <button class="f-button" data-copy>Copy action</button>'+
-      '<button class="f-button" data-record>Record action locally</button></div><h3>Source record</h3><pre>'+e(JSON.stringify(x,null,2))+'</pre></aside>';
+      '<button class="f-button" data-record>Record action locally</button></div><h3>Source record</h3><pre>'+e(JSON.stringify({record:x,operational:extra},null,2))+'</pre></aside>';
     drawer.addEventListener("click",ev=>{if(ev.target===drawer||ev.target.closest("[data-close]"))drawer.remove();
       if(ev.target.closest("[data-copy]"))navigator.clipboard?.writeText("ComicPile: "+next(type,x)+"\n"+url);
       if(ev.target.closest("[data-record]")){const note=prompt("Next action, saved only in this browser:",next(type,x));
@@ -142,7 +143,8 @@
         inspect("worker",w.worker,"#"+w.worker)+'<div class="f-small">'+e(w.display_name)+'</div>',
         e(w.runtime_source||"Unobserved")+'<div class="f-small">'+e(w.runtime_model||"No executed model")+'</div>',
         status(w.activity||w.health),status(w.attempt_outcome||"No attempt"),
-        (w.work||[]).length?(w.work||[]).map(i=>link(i.url,i.kind+" #"+i.number)).join(" · "):'<span class="f-muted">No observed lease</span>',
+        ((w.work||[]).length?(w.work||[]).map(i=>link(i.url,i.kind+" #"+i.number)).join(" · "):'<span class="f-muted">No GitHub owner</span>')+
+        ((retry.reservations||[]).some(v=>v.worker===String(w.worker))?'<div class="f-small">Capacity reserved until '+e(date((retry.reservations||[]).find(v=>v.worker===String(w.worker)).expires_at))+'</div>':""),
         (backoff("worker",b=>b.worker===String(w.worker))?e(cooldown(backoff("worker",b=>b.worker===String(w.worker))))+"<div class=\"f-small\">":"")+
         (w.attempt_run?link(gh+"/actions/runs/"+w.attempt_run,"Run "+w.attempt_run):'<span class="f-muted">No run</span>')+
         (backoff("worker",b=>b.worker===String(w.worker))?"</div>":"")
