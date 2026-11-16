@@ -1482,7 +1482,7 @@ pub async fn apply_custom_cbl(
         .map_err(db::query_error)?
         .ok_or_else(|| ApiError::NotFound("Reading List not found".to_string()))?;
     let list_name: String = list_row.get(1);
-    let list_mode: String = list_row.get(2);
+    let _list_mode: String = list_row.get(2);
 
     // Load the continuity plan
     let plan_row = tx
@@ -1575,10 +1575,10 @@ pub async fn apply_custom_cbl(
             let ref_id = node.get("ref_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
             if source_issue_set.contains(&ref_id) {
                 // Remove this source path
-                if let Some(paths) = node.get("source_paths").and_then(|v| v.as_array_mut()) {
+                if let Some(paths) = node.get_mut("source_paths").and_then(|v| v.as_array_mut()) {
                     paths.retain(|p| p.as_str() != Some(&source_path));
                 }
-                if let Some(placements) = node.get("source_cbl_placements").and_then(|v| v.as_array_mut()) {
+                if let Some(placements) = node.get_mut("source_cbl_placements").and_then(|v| v.as_array_mut()) {
                     placements.retain(|p| p.get("source_path").and_then(|v| v.as_str()) != Some(&source_path));
                 }
                 if let Some(explanation) = node.get("source_explanation").and_then(|v| v.as_str()) {
@@ -1746,7 +1746,7 @@ pub async fn apply_custom_cbl(
         }
     }
 
-    ValidatedReadingInputs::new(inputs, &list_names)
+    ValidatedReadingInputs::new(inputs.clone(), &list_names)
         .map_err(|error| cycle_conflict(error, &inputs))?;
 
     // Update plan
