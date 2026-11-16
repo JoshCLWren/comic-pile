@@ -270,4 +270,6 @@
       else s.errors.push(String(r.reason?.message||r.reason));});
     s.loaded=results.some(r=>r.status==="fulfilled");render();};
   render();refresh();
+  // Refresh the trusted Pages snapshot every five minutes, avoiding API-rate-limit churn.
+  setInterval(() => { if (document.visibilityState === "visible") location.reload(); }, 300000);
 })();
