@@ -17,9 +17,16 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
+use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
+use http_body_util::{BodyExt, Empty};
+use hyper::{Request, Uri};
+use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
+use tokio::net::TcpStream;
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SyncRequest {
@@ -175,6 +182,36 @@ fn parse_as_of(value: &str) -> Result<DateTime<Utc>, ApiError> {
     Err(ApiError::Unprocessable(
         "as_of must be a valid datetime".to_string(),
     ))
+}
+
+fn parse_store_date(value: Option<&Value>) -> Option<DateTime<Utc>> {
+    let value = value?;
+    if value.is_null() {
+        return None;
+    }
+    let text = value.as_str()?.trim();
+    if text.is_empty() {
+        return None;
+    }
+    let normalized = if text.ends_with(['Z', 'z']) {
+        format!("{}+00:00", &text[..text.len() - 1])
+    } else {
+        text.to_string()
+    };
+    if let Ok(dt) = DateTime::parse_from_rfc3339(&normalized) {
+        return Some(dt.with_timezone(&Utc));
+    }
+    if normalized.len() == 10
+        && normalized.chars().nth(4) == Some('-')
+        && normalized.chars().nth(7) == Some('-')
+    {
+        if let Ok(date) = chrono::NaiveDate::parse_from_str(&normalized, "%Y-%m-%d") {
+            return date
+                .and_hms_opt(0, 0, 0)
+                .map(|naive| DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc));
+        }
+    }
+    None
 }
 
 pub async fn sync_released_issues_endpoint(
