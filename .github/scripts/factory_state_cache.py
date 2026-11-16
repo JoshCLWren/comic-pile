@@ -181,7 +181,7 @@ def _prune_retired_check_projection(repo: str, batch_size: int = 250) -> int:
     The production writer was removed in #5226. Retention is deliberately
     repository-fenced and bounded; never touch exact-head retry coordination.
     """
-    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\\w.-]+/[\\w.-]+', repo):
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\w.-]+/[\w.-]+', repo):
         raise ValueError('invalid cleanup scope or batch size')
     row = _run(
         """WITH retired AS (
