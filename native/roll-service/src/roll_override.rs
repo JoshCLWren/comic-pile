@@ -210,17 +210,17 @@ async fn fetch_thread_for_update(
         .await
         .map_err(db::query_error)?;
     row.map(|row| -> Result<OverrideThread, ApiError> {
-            Ok(OverrideThread {
-                id: row.try_get(0).map_err(db::query_error)?,
-                title: row.try_get(1).map_err(db::query_error)?,
-                format: row.try_get(2).map_err(db::query_error)?,
-                total_issues: row.try_get(3).map_err(db::query_error)?,
-                reading_progress: row.try_get(4).map_err(db::query_error)?,
-                status: row.try_get(5).map_err(db::query_error)?,
-                is_blocked: row.try_get(6).map_err(db::query_error)?,
-            })
+        Ok(OverrideThread {
+            id: row.try_get(0).map_err(db::query_error)?,
+            title: row.try_get(1).map_err(db::query_error)?,
+            format: row.try_get(2).map_err(db::query_error)?,
+            total_issues: row.try_get(3).map_err(db::query_error)?,
+            reading_progress: row.try_get(4).map_err(db::query_error)?,
+            status: row.try_get(5).map_err(db::query_error)?,
+            is_blocked: row.try_get(6).map_err(db::query_error)?,
         })
-        .transpose()
+    })
+    .transpose()
 }
 
 /// Read the session row the Python handler locks for the manual pick.
@@ -281,13 +281,13 @@ async fn fetch_latest_session_event(
         .await
         .map_err(db::query_error)?;
     row.map(|row| -> Result<LatestEvent, ApiError> {
-            Ok(LatestEvent {
-                event_type: row.try_get(0).map_err(db::query_error)?,
-                selection_method: row.try_get(1).map_err(db::query_error)?,
-                selected_thread_id: row.try_get(2).map_err(db::query_error)?,
-            })
+        Ok(LatestEvent {
+            event_type: row.try_get(0).map_err(db::query_error)?,
+            selection_method: row.try_get(1).map_err(db::query_error)?,
+            selected_thread_id: row.try_get(2).map_err(db::query_error)?,
         })
-        .transpose()
+    })
+    .transpose()
 }
 
 /// Text-first cast helper: `context` binds as text, so `$n::text::json` keeps
@@ -304,7 +304,7 @@ const OVERRIDE_EVENT_INSERT: &str = "INSERT INTO events
 /// pointer in one transaction. Extracted so the real write path can be
 /// exercised against disposable PostgreSQL.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn persist_override(
+pub(crate) async fn persist_override_roll(
     tx: &tokio_postgres::Transaction<'_>,
     user: AuthenticatedUser,
     session_id: i32,
@@ -558,7 +558,7 @@ pub async fn override_roll(
         .transpose()?
         .unwrap_or((None, None));
 
-    persist_override(
+    persist_override_roll(
         &tx,
         user,
         active.session.id,
@@ -804,7 +804,7 @@ mod tests {
         };
 
         let tx = client.transaction().await.unwrap();
-        let event_id = persist_override(
+        let event_id = persist_override_roll(
             &tx,
             user,
             1,
@@ -906,7 +906,7 @@ mod tests {
             is_blocked: false,
         };
         let tx = client.transaction().await.unwrap();
-        let event_id = persist_override(
+        let event_id = persist_override_roll(
             &tx,
             user,
             1,

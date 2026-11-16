@@ -129,16 +129,16 @@ async fn fetch_target(
         .await
         .map_err(db::query_error)?;
     row.map(|row| -> Result<TargetRow, ApiError> {
-            Ok(TargetRow {
-                issue_id: row.try_get(0).map_err(db::query_error)?,
-                issue_number: row.try_get(1).map_err(db::query_error)?,
-                issue_status: row.try_get(2).map_err(db::query_error)?,
-                thread_id: row.try_get(3).map_err(db::query_error)?,
-                thread_title: row.try_get(4).map_err(db::query_error)?,
-                thread_status: row.try_get(5).map_err(db::query_error)?,
-            })
+        Ok(TargetRow {
+            issue_id: row.try_get(0).map_err(db::query_error)?,
+            issue_number: row.try_get(1).map_err(db::query_error)?,
+            issue_status: row.try_get(2).map_err(db::query_error)?,
+            thread_id: row.try_get(3).map_err(db::query_error)?,
+            thread_title: row.try_get(4).map_err(db::query_error)?,
+            thread_status: row.try_get(5).map_err(db::query_error)?,
         })
-        .transpose()
+    })
+    .transpose()
 }
 
 /// Read the pending pointer under the session lock.
@@ -622,9 +622,11 @@ mod tests {
         let tx = client.transaction().await.unwrap();
         // The write fails closed: the session is owner-scoped and the event
         // ownership trigger rejects a foreign writer, so nothing is persisted.
-        assert!(persist_switch_prerequisite(&tx, intruder, 1, &target(), 6, &[], false)
-            .await
-            .is_err());
+        assert!(
+            persist_switch_prerequisite(&tx, intruder, 1, &target(), 6, &[], false)
+                .await
+                .is_err()
+        );
         tx.commit().await.unwrap();
         // The owner's session and the audit trail are untouched.
         let pending = client
