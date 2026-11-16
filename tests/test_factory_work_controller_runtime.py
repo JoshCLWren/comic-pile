@@ -1130,7 +1130,8 @@ def test_shared_provider_quota_uses_trusted_neon_projection(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch, worker: str,
 ) -> None:
     """Source-level quota is enforced for every pin without comments."""
-    import factory_state_operations as operations
+    import importlib
+    operations = importlib.import_module("factory_state_operations")
     monkeypatch.setattr(operations, "enabled", lambda: True)
     monkeypatch.setattr(operations, "filter_workers",
                         lambda _repo, _workers: ([], ["provider z-ai cooling"]))
@@ -1143,7 +1144,8 @@ def test_shared_provider_quota_uses_trusted_neon_projection(
 def test_provider_health_database_outage_fails_closed(
     controller: types.ModuleType, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import factory_state_operations as operations
+    import importlib
+    operations = importlib.import_module("factory_state_operations")
     monkeypatch.setattr(operations, "enabled", lambda: False)
     assert "deferred" in controller.runtime_quota_block_reason("97")
     assert controller.runtime_quota_block_reason("20") is None
