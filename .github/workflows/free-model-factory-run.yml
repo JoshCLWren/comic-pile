@@ -400,12 +400,11 @@ jobs:
               exit 0
               ;;
             vercel-ai-gateway)
-              # Published pricing is authoritative; TSV model is only a
-              # legacy display hint. Do not make a chargeable inference probe.
+              # Published model IDs are candidates. Execution proves actual availability.
               if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
                   --source "$SOURCE" --worker "$WORKER" \
                   --exclusions-file "$exclusions_file")"; then
-                printf 'control_plane_failure\tVercel zero-price catalog unavailable or has no eligible models\n' > "$discovery_outcome"
+                printf 'control_plane_failure\tVercel catalog unavailable or empty\n' > "$discovery_outcome"
                 exit 1
               fi
               model="$(jq -er '.model' <<< "$selection")"
@@ -415,7 +414,7 @@ jobs:
                 echo "runtime_model=vercel/$model"
                 echo "display=Vercel Free · $model"
                 echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                echo "reason=selected-from-published-zero-price-catalog"
+                echo "reason=selected-from-published-catalog"
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -463,13 +462,12 @@ jobs:
               exit 0
               ;;
             openrouter-free)
-              # Resolve from OpenRouter's current :free catalog and verified
-              # zero prompt/completion pricing, never a magic TSV model ID.
+              # Resolve OpenRouter candidates from its current catalog, regardless of pricing.
               # The same policy holds regardless of OmniRoute's state.
               if ! selection="$(python3 .github/scripts/factory_published_model_catalog.py \
                   --source "$SOURCE" --worker "$WORKER" \
                   --exclusions-file "$exclusions_file")"; then
-                printf 'control_plane_failure\tOpenRouter published free catalog unavailable or empty\n' > "$discovery_outcome"
+                printf 'control_plane_failure\tOpenRouter catalog unavailable or empty\n' > "$discovery_outcome"
                 exit 1
               fi
               model="$(jq -er '.model' <<< "$selection")"
@@ -479,7 +477,7 @@ jobs:
                 echo "runtime_model=openrouter/$model"
                 echo "display=OpenRouter Free · $model"
                 echo "branch_suffix=$LANE_BRANCH_SUFFIX"
-                echo "reason=selected-from-published-zero-price-catalog"
+                echo "reason=selected-from-published-catalog"
               } >> "$GITHUB_OUTPUT"
               exit 0
               ;;
@@ -753,30 +751,6 @@ jobs:
           jq -s '.[0] * .[1]' "$HOME/.config/opencode/opencode.json" "$temp_config" > "$temp_config.merged"
           mv "$temp_config.merged" "$HOME/.config/opencode/opencode.json"
           chmod 600 "$HOME/.config/opencode/opencode.json"
-
-      - name: Require Vercel model to remain zero-price
-        if: steps.lane.outputs.configured == 'true' && (steps.executor.outputs.source || steps.lane.outputs.source) == 'vercel-ai-gateway'
-        shell: bash
-        env:
-          MODEL: ${{ steps.executor.outputs.model || steps.lane.outputs.model }}
-        run: |
-          set -Eeuo pipefail
-          catalog="$RUNNER_TEMP/vercel-ai-gateway-models.json"
-          curl --silent --show-error --fail-with-body \
-            --connect-timeout 5 --max-time 30 \
-            https://ai-gateway.vercel.sh/v1/models > "$catalog"
-          if ! jq -e --arg model "$MODEL" '
-            [.data[] | select(
-              .id == $model and
-              ((.pricing.input // "1") | tonumber) == 0 and
-              ((.pricing.output // "1") | tonumber) == 0
-            )] | length == 1
-          ' "$catalog" >/dev/null; then
-            echo "Vercel model is missing or no longer zero-price; refusing free-fleet execution: ${MODEL}" >&2
-            printf 'model_unavailable\tVercel AI Gateway model is missing or no longer zero-price: %s\n' "$MODEL" > "$RUNNER_TEMP/factory-discovery-outcome"
-            exit 1
-          fi
-          echo "Verified zero-price Vercel AI Gateway model: ${MODEL}"
 
       - name: Wait for exact model in OpenCode catalog
         id: model_preflight
