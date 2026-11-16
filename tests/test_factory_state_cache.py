@@ -270,17 +270,23 @@ def test_event_pruning_retains_recent_worker_lifecycle_and_coordination(monkeypa
     sql, args, one = executions[0]
     assert one is True
     assert args == (
-        ["factory-github-get-v1:JoshCLWren/comic-pile:%",
-         "factory-projection-v1:JoshCLWren/comic-pile:%",
-         "JoshCLWren/comic-pile:%"],
-        "factory-projection-v1:JoshCLWren/comic-pile:%", 500,
+        "factory-github-get-v1:JoshCLWren/comic-pile:",
+        "factory-projection-v1:JoshCLWren/comic-pile:",
+        ["JoshCLWren/comic-pile:open-issues", "JoshCLWren/comic-pile:open-prs"],
+        "JoshCLWren/comic-pile", 500,
     )
     assert "event_type='cache_refresh'" in sql
     assert "event_type='target_reconciled'" in sql
     assert "created_at < now() - interval '30 days'" in sql
+    assert "detail->>'repo'=$4 OR detail->>'repository'=$4" in sql
+    assert "event_type IN ('cache_refresh'," in sql
+    assert "worker_assigned" not in sql
+    assert "worker_completed" not in sql
     assert "DELETE FROM public.factory_state_events" in sql
     assert "factory_state_kv" not in sql
     assert "factory_provider_reservation" not in sql
+    # No LIKE wildcards that could turn underscores in repository names into patterns.
+    assert "LIKE" not in sql
     with pytest.raises(ValueError, match="batch"):
         cache._prune_retired_events("JoshCLWren/comic-pile", 1001)
     with pytest.raises(ValueError, match="scope"):
@@ -295,12 +301,14 @@ def test_prune_is_bounded_to_retired_discovery_without_coordination(monkeypatch)
     monkeypatch.setattr(cache, "_run", fake_run)
     assert cache._prune_obsolete_discovery("JoshCLWren/comic-pile", 200) == 4
     query, args, one = executed[0]
-    assert args == ("factory-github-get-v1:JoshCLWren/comic-pile:%",
-                    "factory-projection-v1:JoshCLWren/comic-pile:%",
+    assert args == ("factory-github-get-v1:JoshCLWren/comic-pile:",
+                    "factory-projection-v1:JoshCLWren/comic-pile:",
                     ["JoshCLWren/comic-pile:open-issues", "JoshCLWren/comic-pile:open-prs"], 200)
     assert one is True
     assert "DELETE FROM public.factory_state_kv" in query
-    assert "cache_key LIKE $1 OR cache_key LIKE $2" in query
+    assert "left(cache_key, length($1))=$1" in query
+    assert "left(cache_key, length($2))=$2" in query
+    assert "LIKE" not in query
     assert "LIMIT $4" in query
     assert "refresh_until IS NULL OR" in query
     with pytest.raises(ValueError, match="batch"):
