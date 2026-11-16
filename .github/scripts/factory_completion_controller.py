@@ -138,6 +138,7 @@ def _catalog_worker_health(
     candidates: Iterable[Mapping[str, str]],
     *,
     now_epoch: int,
+    evidence_override: Mapping[tuple[str, str], Any] | None = None,
 ) -> dict[str, tuple[str, int]]:
     """Project shared catalog candidate health onto capability worker slots."""
     scripts = Path(__file__).resolve().parent
@@ -182,6 +183,7 @@ def _catalog_worker_health(
         discovered,
         comments,
         now_epoch=now_epoch,
+        evidence_override=evidence_override,
     )
     priority = {
         "native_route": 0,
@@ -529,30 +531,19 @@ def durable_factory_state(*, now_epoch: int | None = None) -> tuple[dict[str, An
     manifest = Path(__file__).resolve().parents[1] / "free-model-factories.tsv"
     candidates = load_manifest_candidates(manifest)
     evidence = durable_attempt_evidence(view["health"], now_epoch=now_epoch)
-    discovered = [
-        {"provider": row["provider"], "model": row["model"],
-         "runtime_model": ("omniroute/" + row["model"] if row["provider"] == "omniroute-free"
-                           else row["model"]), "discovered_by": "configured_policy"}
-        for row in candidates
-    ]
-    ranked = rank_candidates(discovered, [], now_epoch=now_epoch, evidence_override=evidence)
-    states = {
-        "native_route": ("success", now_epoch),
-        "healthy": ("success", now_epoch),
-        "degraded": ("unknown_failure", now_epoch - FAILURE_COOLDOWN_SECONDS - 1),
-        "cooling": ("unknown_failure", now_epoch),
-        "unavailable": ("model_unavailable", now_epoch),
-    }
-    for candidate, ranked_item in zip(candidates, ranked):
-        state = states.get(ranked_item.health_state)
-        worker = candidate["worker"]
+    # Project provider-level catalog evidence to all capability slots exactly
+    # as the historical registry path did. A model failure on one dynamic
+    # catalog choice must not disable other healthy models in that provider.
+    provider_health = _catalog_worker_health(
+        [], candidates, now_epoch=now_epoch, evidence_override=evidence,
+    )
+    for worker, state in provider_health.items():
         prior = health.get(worker)
-        # A fresh trusted runtime failure must not be erased by an older
-        # model-success projection before its cooldown has actually elapsed.
+        # A recent classified worker failure remains authoritative until
+        # its cooldown elapses, even if other provider candidates are healthy.
         if prior and now_epoch < prior[1] + cooldown_seconds(prior[0]):
             continue
-        if state is not None:
-            health[worker] = state
+        health[worker] = state
     return view, health
 
 
