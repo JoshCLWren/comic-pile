@@ -52,10 +52,10 @@ pub struct RollPrerequisiteSwitchResponse {
     pub changed: bool,
 }
 
-/// The two 409 shapes the Python handler emits, both as a structured detail.
+/// The 409 shapes the Python handler emits, both as a structured FastAPI detail.
 enum SwitchError {
     Api(ApiError),
-    Stale(Option<BootstrapRollRecovery>),
+    Conflict(Value),
 }
 
 impl From<ApiError> for SwitchError {
@@ -68,24 +68,33 @@ impl IntoResponse for SwitchError {
     fn into_response(self) -> Response {
         match self {
             Self::Api(error) => error.into_response(),
-            Self::Stale(recovery) => {
-                let mut detail = json!({
-                    "code": "stale_roll_recovery",
-                    "message": "The blocked-roll guidance changed. Refresh and choose a current prerequisite.",
-                });
-                if let Some(recovery) = recovery {
-                    if let Ok(value) = serde_json::to_value(&recovery) {
-                        detail["roll_recovery"] = value;
-                    }
-                }
+            Self::Conflict(detail) => {
                 (StatusCode::CONFLICT, Json(json!({ "detail": detail }))).into_response()
             }
         }
     }
 }
 
+/// Build the conflict detail that tells the client to refresh the guidance.
 fn stale(recovery: Option<BootstrapRollRecovery>) -> SwitchError {
-    SwitchError::Stale(recovery)
+    let mut detail = json!({
+        "code": "stale_roll_recovery",
+        "message": "The blocked-roll guidance changed. Refresh and choose a current prerequisite.",
+    });
+    if let Some(recovery) = recovery {
+        if let Ok(value) = serde_json::to_value(&recovery) {
+            detail["roll_recovery"] = value;
+        }
+    }
+    SwitchError::Conflict(detail)
+}
+
+/// Build the no-pending-roll conflict detail.
+fn no_pending_roll() -> SwitchError {
+    SwitchError::Conflict(json!({
+        "code": "no_pending_roll",
+        "message": "There is no pending roll to recover.",
+    }))
 }
 
 /// Whether the request targets the one supported continuity-node type.
@@ -156,24 +165,6 @@ async fn fetch_pending(
     ))
 }
 
-/// Read the original pending thread's title, if it still exists for this reader.
-async fn fetch_thread_title(
-    tx: &tokio_postgres::Transaction<'_>,
-    thread_id: i32,
-    user_id: i32,
-) -> Result<Option<String>, ApiError> {
-    let row = tx
-        .query_opt(
-            "SELECT title FROM threads WHERE id = $1 AND user_id = $2",
-            &[&thread_id, &user_id],
-        )
-        .await
-        .map_err(db::query_error)?;
-    Ok(row
-        .map(|row| row.try_get::<_, String>(0).map_err(db::query_error))
-        .transpose()?)
-}
-
 /// Read the reader's current logical die for the event record.
 async fn current_die(
     tx: &tokio_postgres::Transaction<'_>,
@@ -237,14 +228,7 @@ async fn switch(
         Some(thread_id) => thread_id,
         None => {
             tx.rollback().await.map_err(db::query_error)?;
-            return Err(SwitchError::Api(ApiError::with_status(
-                StatusCode::CONFLICT,
-                json!({
-                    "code": "no_pending_roll",
-                    "message": "There is no pending roll to recover.",
-                })
-                .to_string(),
-            )));
+            return Err(no_pending_roll());
         }
     };
 
@@ -259,8 +243,6 @@ async fn switch(
             ))));
         }
     };
-
-    let original_title = fetch_thread_title(&tx, original_thread_id, user.id()).await?;
 
     // A selected prerequisite must still be the unread frontier of an eligible,
     // active series owned by this reader.
@@ -284,11 +266,7 @@ async fn switch(
 
     // Already pointing at the selected prerequisite: success without another
     // event, matching the Python idempotency for a repeated request.
-    if snoozed
-        .as_ref()
-        .is_some_and(|_| original_thread_id == target.thread_id)
-        || original_thread_id == target.thread_id
-    {
+    if original_thread_id == target.thread_id {
         tx.rollback().await.map_err(db::query_error)?;
         return Ok(RollPrerequisiteSwitchResponse {
             original_thread_id,
@@ -330,23 +308,15 @@ async fn switch(
 
     // Clear only the durable session snooze for the newly selected series; the
     // original blocked roll and its audit trail stay intact.
-    if snoozed
-        .as_ref()
-        .is_some_and(|ids| ids.contains(&target.thread_id))
-    {
+    let mut snoozed_ids = snoozed.clone().unwrap_or_default();
+    if snoozed_ids.contains(&target.thread_id) {
+        snoozed_ids.retain(|thread_id| *thread_id != target.thread_id);
         tx.execute(
-            "UPDATE sessions
-             SET snoozed_thread_ids = (
-                     SELECT jsonb_agg(value) FROM jsonb_array_elements_text($1::jsonb) AS value
-                     WHERE value <> $2::text
-                 )
-             WHERE id = $3 AND user_id = $4",
+            "UPDATE sessions SET snoozed_thread_ids = $1::text::json
+             WHERE id = $2 AND user_id = $3",
             &[
-                &snoozed
-                    .as_ref()
-                    .map(|ids| serde_json::to_string(ids).unwrap_or_else(|_| "[]".into()))
-                    .unwrap_or_else(|| "[]".into()),
-                &target.thread_id.to_string(),
+                &serde_json::to_string(&snoozed_ids)
+                    .map_err(|_| ApiError::Internal("Invalid snooze state".to_string()))?,
                 &active.session.id,
                 &user.id(),
             ],
@@ -394,7 +364,6 @@ async fn switch(
         )));
     }
 
-    let _ = original_title;
     tx.commit().await.map_err(db::query_error)?;
     pending.release();
 
