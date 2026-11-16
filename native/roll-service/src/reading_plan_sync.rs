@@ -17,10 +17,20 @@
 
 use crate::{auth::AuthenticatedUser, db, ApiError, AppState};
 use axum::{extract::State, Json};
+use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
+use http_body_util::{BodyExt, Empty};
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+const COMICVINE_HOST: &str = "comicvine.gamespot.com";
+const PROVIDER_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_BODY: usize = 2_000_000;
 
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SyncRequest {
@@ -233,6 +243,110 @@ fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
     })
 }
 
+#[allow(dead_code)]
+async fn comicvine_get(
+    path_and_query: &str,
+) -> Result<Value, String> {
+    let connect = async {
+        let tcp = tokio::net::TcpStream::connect((COMICVINE_HOST, 443))
+            .await
+            .map_err(|e| e.to_string())?;
+        let tls = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
+        let tls = tokio_native_tls::TlsConnector::from(tls)
+            .connect(COMICVINE_HOST, tcp)
+            .await
+            .map_err(|e| e.to_string())?;
+        let (mut sender, connection) = http1::handshake(TokioIo::new(tls))
+            .await
+            .map_err(|e| e.to_string())?;
+        tokio::spawn(async move {
+            let _ = connection.await;
+        });
+        let request = hyper::Request::builder()
+            .method("GET")
+            .uri(path_and_query)
+            .header("host", COMICVINE_HOST)
+            .header("accept", "application/json")
+            .header("user-agent", "ComicPile/1.0")
+            .body(Empty::<Bytes>::new())
+            .map_err(|e| e.to_string())?;
+        let mut response = sender.send_request(request).await.map_err(|e| e.to_string())?;
+        if !response.status().is_success() {
+            return Err(format!("HTTP {}", response.status()));
+        }
+        let mut body = Vec::new();
+        while let Some(frame) = response.frame().await {
+            let frame = frame.map_err(|e| e.to_string())?;
+            if let Some(data) = frame.data_ref() {
+                body.extend_from_slice(data);
+                if body.len() > MAX_BODY {
+                    return Err("response too large".to_string());
+                }
+            }
+        }
+        serde_json::from_slice::<Value>(&body).map_err(|e| e.to_string())
+    };
+    tokio::time::timeout(PROVIDER_TIMEOUT, connect)
+        .await
+        .map_err(|_| "provider timeout".to_string())?
+}
+
+#[allow(dead_code)]
+async fn fetch_volume_issues(api_key: &str, volume_id: i32) -> Result<Vec<Value>, String> {
+    if api_key.is_empty() || !api_key.bytes().all(|c| c.is_ascii_alphanumeric()) {
+        return Err("COMICVINE_API_KEY is required".to_string());
+    }
+    let mut rows = Vec::new();
+    let mut offset = 0_usize;
+    let mut expected_total: Option<usize> = None;
+    loop {
+        let path = format!(
+            "/api/issues/?api_key={api_key}&format=json&filter=volume:{volume_id}&limit=100&offset={offset}"
+        );
+        let payload = comicvine_get(&path).await?;
+        let status_code = payload.get("status_code").and_then(Value::as_i64).unwrap_or(1);
+        if status_code != 1 {
+            return Err(format!(
+                "ComicVine API error: {:?}",
+                payload.get("error")
+            ));
+        }
+        let results = payload
+            .get("results")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "ComicVine /issues response did not contain a results list".to_string())?;
+        if expected_total.is_none() {
+            expected_total = payload
+                .get("number_of_total_results")
+                .and_then(Value::as_u64)
+                .and_then(|n| usize::try_from(n).ok());
+        }
+        for row in results {
+            if let Some(vol) = row.get("volume").and_then(Value::as_object) {
+                if let Some(id) = vol.get("id").and_then(Value::as_i64) {
+                    if id != i64::from(volume_id) {
+                        return Err(
+                            "ComicVine /issues ignored the requested volume filter; refusing mixed data"
+                                .to_string(),
+                        );
+                    }
+                }
+            }
+            if row.is_object() {
+                rows.push(row.clone());
+            }
+        }
+        if results.len() < 100 || expected_total.is_some_and(|n| offset + results.len() >= n) {
+            break;
+        }
+        offset += results.len();
+        if offset >= 10_000 {
+            break;
+        }
+    }
+    Ok(rows)
+}
+
 pub async fn sync_released_issues_endpoint(
     State(state): State<Arc<AppState>>,
     user: AuthenticatedUser,
@@ -299,53 +413,134 @@ pub async fn sync_released_issues_endpoint(
 
     // Match Python: missing API key fails all enabled sources with the
     // client-construction error message.
-    let api_key = std::env::var("COMICVINE_API_KEY")
+    let api_key = match std::env::var("COMICVINE_API_KEY")
         .ok()
         .map(|v| v.trim().to_string())
-        .filter(|v| !v.is_empty());
-    if api_key.is_none() {
-        let error = "COMICVINE_API_KEY is required".to_string();
-        let mut failures = Vec::with_capacity(enabled_rows.len());
-        for source in &enabled_rows {
-            let volume_id = parse_volume_id(&source.provider_volume_id, source.source_id)
-                .unwrap_or(-1);
-            failures.push(SourceSyncFailure {
+        .filter(|v| !v.is_empty())
+    {
+        Some(key) => key,
+        None => {
+            let error = "COMICVINE_API_KEY is required".to_string();
+            let mut failures = Vec::with_capacity(enabled_rows.len());
+            for source in &enabled_rows {
+                let volume_id = parse_volume_id(&source.provider_volume_id, source.source_id)
+                    .unwrap_or(-1);
+                failures.push(SourceSyncFailure {
+                    source_id: source.source_id,
+                    plan_id: source.plan_id,
+                    thread_id: source.thread_id,
+                    volume_id,
+                    error: error.clone(),
+                });
+            }
+            let report = SyncReport {
+                total_sources,
+                enabled_sources,
+                checked_sources: 0,
+                successful_sources: 0,
+                failed_sources: enabled_sources,
+                issues_checked: 0,
+                created_issues: 0,
+                reused_issues: 0,
+                future_skips: 0,
+                unknown_date_skips: 0,
+                conflicts: 0,
+                issue_failures: 0,
+                excluded_sources: 0,
+                excluded_issues: 0,
+                skipped_sources: 0,
+                failures,
+            };
+            return Ok(Json(SyncResponse {
+                success: false,
+                message: report_message(&report),
+                result: report,
+            }));
+        }
+    };
+
+    let mut report = SyncReport {
+        total_sources,
+        enabled_sources,
+        checked_sources: 0,
+        successful_sources: 0,
+        failed_sources: 0,
+        issues_checked: 0,
+        created_issues: 0,
+        reused_issues: 0,
+        future_skips: 0,
+        unknown_date_skips: 0,
+        conflicts: 0,
+        issue_failures: 0,
+        excluded_sources: 0,
+        excluded_issues: 0,
+        skipped_sources: 0,
+        failures: Vec::new(),
+    };
+
+    // Group by provider volume; isolate corrupt volume IDs as per-source failures.
+    let mut volume_groups: HashMap<i32, Vec<EnabledSourceRow>> = HashMap::new();
+    for source in enabled_rows {
+        match parse_volume_id(&source.provider_volume_id, source.source_id) {
+            Ok(volume_id) => volume_groups.entry(volume_id).or_default().push(source),
+            Err(error) => {
+                report.failed_sources += 1;
+                report.failures.push(SourceSyncFailure {
+                    source_id: source.source_id,
+                    plan_id: source.plan_id,
+                    thread_id: source.thread_id,
+                    volume_id: -1,
+                    error,
+                });
+            }
+        }
+    }
+
+    for (volume_id, sources) in volume_groups {
+        let roster = match fetch_volume_issues(&api_key, volume_id).await {
+            Ok(roster) => roster,
+            Err(error) => {
+                let message = format!("Volume sync failed: {error}");
+                for source in &sources {
+                    report.failed_sources += 1;
+                    report.failures.push(SourceSyncFailure {
+                        source_id: source.source_id,
+                        plan_id: source.plan_id,
+                        thread_id: source.thread_id,
+                        volume_id,
+                        error: message.clone(),
+                    });
+                }
+                continue;
+            }
+        };
+
+        report.checked_sources += sources.len() as i64;
+        // Full per-source/per-issue adoption parity (exclusions, confirmed
+        // mapping checks, identity upsert/link, natural-order insert,
+        // tracking recalculation, plan extension, mark_synced) is still
+        // pending. Fail closed for now rather than reporting false success.
+        for source in &sources {
+            report.failed_sources += 1;
+            report.failures.push(SourceSyncFailure {
                 source_id: source.source_id,
                 plan_id: source.plan_id,
                 thread_id: source.thread_id,
                 volume_id,
-                error: error.clone(),
+                error: format!(
+                    "Source sync not yet fully implemented in native handler ({} roster rows fetched)",
+                    roster.len()
+                ),
             });
         }
-        let report = SyncReport {
-            total_sources,
-            enabled_sources,
-            checked_sources: 0,
-            successful_sources: 0,
-            failed_sources: enabled_sources,
-            issues_checked: 0,
-            created_issues: 0,
-            reused_issues: 0,
-            future_skips: 0,
-            unknown_date_skips: 0,
-            conflicts: 0,
-            issue_failures: 0,
-            excluded_sources: 0,
-            excluded_issues: 0,
-            skipped_sources: 0,
-            failures,
-        };
-        return Ok(Json(SyncResponse {
-            success: false,
-            message: report_message(&report),
-            result: report,
-        }));
+        let _ = (as_of, &roster);
     }
 
-    let _ = as_of;
-    Err(ApiError::ServiceUnavailable(
-        "reading-plan-sync POST native implementation in progress".to_string(),
-    ))
+    Ok(Json(SyncResponse {
+        success: report.failed_sources == 0 && report.issue_failures == 0,
+        message: report_message(&report),
+        result: report,
+    }))
 }
 
 #[utoipa::path(
