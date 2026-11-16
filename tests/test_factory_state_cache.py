@@ -316,7 +316,10 @@ def test_retired_check_projection_cleanup_is_scoped_and_bounded(monkeypatch):
         calls.append((sql, args, one))
         return {"deleted": 250}
     monkeypatch.setattr(cache, "_run", fake_run)
+    # Exercise the actual validator. The previous raw-regex double escape
+    # rejected every normal owner/repository and broke the live status job.
     assert cache._prune_retired_check_projection("JoshCLWren/comic-pile") == 250
+    assert cache._prune_retired_check_projection("other-owner/repo_name") == 250
     sql, args, one = calls[0]
     assert args == ("JoshCLWren/comic-pile", 250)
     assert one is True
