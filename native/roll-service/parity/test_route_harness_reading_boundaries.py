@@ -18,7 +18,6 @@ import asyncio
 import json
 import os
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -30,15 +29,13 @@ from app.models import Issue, Thread, User
 from route_harness import (
     RouteMeasurement,
     assert_declared_budget,
+    cargo_example_path,
     measure_route,
     run_rust_example,
 )
 
 SECRET = "synthetic-route-harness-secret"
-BINARY = str(
-    Path(os.environ.get("CARGO_TARGET_DIR", "native/roll-service/target"))
-    / "debug/examples/http_reading_boundaries"
-)
+BINARY = str(cargo_example_path("http_reading_boundaries"))
 ROUTE = "POST /api/v2/reading-boundaries"
 LARGE_BATCH = 200
 

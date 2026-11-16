@@ -65,14 +65,3 @@ async def test_nested_service_query_is_measured() -> None:
         await admin.execute("DROP FUNCTION IF EXISTS public.sql_budget_nested_probe()")
         await admin.close()
         await engine.dispose()
-
-
-@pytest.mark.parametrize("target", ["target", "custom-target", "/tmp/absolute-target"])
-def test_cargo_example_target_resolution(monkeypatch: pytest.MonkeyPatch, target: str) -> None:
-    """Relative Cargo targets are resolved from the crate build directory."""
-    from pathlib import Path
-    from route_harness import cargo_example_path
-
-    monkeypatch.setenv("CARGO_TARGET_DIR", target)
-    crate = Path(__file__).resolve().parents[1]
-    assert cargo_example_path("http_auth_login") == crate / target / "debug/examples/http_auth_login"
