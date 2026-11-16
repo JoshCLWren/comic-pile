@@ -743,6 +743,10 @@ pub fn router(state: Arc<AppState>) -> Router {
                 .delete(continuity_rules::delete),
         )
         .route(
+            "/api/v1/taste/discoveries",
+            get(taste_discoveries::list_taste_discoveries),
+        )
+        .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
             post(taste_discoveries::dismiss_taste_discovery),
         )

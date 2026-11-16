@@ -434,6 +434,7 @@ fn app() -> Router {
         .route("/api/v1/creators", get(native_dispatch))
         .route("/api/v1/creators/", get(native_dispatch))
         .route("/api/v1/creators/summaries", get(native_dispatch))
+        .route("/api/v1/taste/discoveries", get(native_dispatch))
         .route(
             "/api/v1/taste/discoveries/{signal_id}/dismiss",
             post(native_dispatch),
@@ -555,6 +556,31 @@ mod tests {
                 "numeric issue ids must not fail Path extraction for {uri}: {text}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn v1_taste_discovery_list_ingress_preserves_same_path_and_requires_auth() {
+        let mut router = app();
+        let response = router
+            .call(
+                Request::builder()
+                    .method("GET")
+                    .uri("/api/v1/taste/discoveries")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("router response");
+        assert!(
+            response.status() == StatusCode::UNAUTHORIZED
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE,
+            "taste discovery list must require auth and reach Rust, got {}",
+            response.status()
+        );
+        assert_eq!(
+            response.headers().get("x-comicpile-api-runtime").unwrap(),
+            "rust"
+        );
     }
 
     #[tokio::test]
