@@ -401,6 +401,100 @@ fn issue_number_from_row(row: &Value) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
+async fn create_issues_in_natural_order(
+    connection: &deadpool_postgres::Client,
+    thread_id: i32,
+    new_issue_numbers: &[String],
+) -> Result<Vec<(i32, String, i32)>, ApiError> {
+    // Returns (issue_id, issue_number, position) for created issues.
+    if new_issue_numbers.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let rows = connection
+        .query(
+            "SELECT id, issue_number, position FROM issues WHERE thread_id = $1 \
+             ORDER BY position, id FOR UPDATE",
+            &[&thread_id],
+        )
+        .await
+        .map_err(db::query_error)?;
+    let existing: Vec<(i32, String, i32)> = rows
+        .iter()
+        .map(|r| (r.get(0), r.get::<_, String>(1), r.get(2)))
+        .collect();
+    let existing_numbers: Vec<String> = existing.iter().map(|(_, n, _)| n.clone()).collect();
+
+    let natural = natural_issue_order(&existing_numbers, new_issue_numbers);
+    if let Some(order) = natural {
+        let target_positions: HashMap<String, i32> = order
+            .iter()
+            .enumerate()
+            .map(|(idx, n)| (n.clone(), (idx + 1) as i32))
+            .collect();
+
+        let mut updates: Vec<(i32, i32)> = Vec::new();
+        for (id, number, position) in &existing {
+            if let Some(&target) = target_positions.get(number) {
+                if target != *position {
+                    updates.push((*id, target));
+                }
+            }
+        }
+        if !updates.is_empty() {
+            connection
+                .execute("SET CONSTRAINTS uq_issue_thread_position DEFERRED", &[])
+                .await
+                .map_err(db::query_error)?;
+            for (id, pos) in &updates {
+                connection
+                    .execute(
+                        "UPDATE issues SET position = $1 WHERE id = $2",
+                        &[pos, id],
+                    )
+                    .await
+                    .map_err(db::query_error)?;
+            }
+        }
+
+        let mut created = Vec::new();
+        for number in new_issue_numbers {
+            if let Some(&pos) = target_positions.get(number) {
+                let row = connection
+                    .query_one(
+                        "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
+                         VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
+                        &[&thread_id, number, &pos],
+                    )
+                    .await
+                    .map_err(db::query_error)?;
+                let id: i32 = row.get(0);
+                created.push((id, number.clone(), pos));
+            }
+        }
+        created.sort_by_key(|(_, _, pos)| *pos);
+        return Ok(created);
+    }
+
+    // Ambiguous placement: append after current last position.
+    let max_pos = existing.iter().map(|(_, _, p)| *p).max().unwrap_or(0);
+    let mut created = Vec::new();
+    for (idx, number) in new_issue_numbers.iter().enumerate() {
+        let pos = max_pos + (idx as i32) + 1;
+        let row = connection
+            .query_one(
+                "INSERT INTO issues (thread_id, issue_number, position, status, read_at) \
+                 VALUES ($1, $2, $3, 'unread', NULL) RETURNING id",
+                &[&thread_id, number, &pos],
+            )
+            .await
+            .map_err(db::query_error)?;
+        let id: i32 = row.get(0);
+        created.push((id, number.clone(), pos));
+    }
+    Ok(created)
+}
+
 fn parse_volume_id(raw: &str, source_id: i32) -> Result<i32, String> {
     let trimmed = raw.trim();
     let numeric = if trimmed.chars().all(|c| c.is_ascii_digit()) {
