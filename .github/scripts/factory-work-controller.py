@@ -749,14 +749,19 @@ def latest_lease_activity_epoch(number: int) -> int | None:
     return latest
 
 
-def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
-    """Read retry history, sharing only a refreshed snapshot within a dispatch pass."""
+def recent_factory_comments(
+    now_epoch: int, *, target_pr: int | None = None,
+) -> list[dict[str, Any]]:
+    """Read retry history; a targeted PR only needs its own comments."""
+    if target_pr is not None and target_pr <= 0:
+        raise ValueError("target_pr must be a positive PR number")
     def fetch_pages(since_epoch: int) -> tuple[list[dict[str, object]], int]:
         # Round *down* to share the same Neon GET key across near-simultaneous
         # dispatchers. The extra comments are a safe superset; retry-window
         # filtering still uses the original now_epoch.
         since = datetime.fromtimestamp(since_epoch - since_epoch % 60, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
-        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/issues/comments?since={since}&per_page=100'])
+        path = f'issues/{target_pr}/comments' if target_pr is not None else 'issues/comments'
+        pages = gh_json(['api', '--paginate', '--slurp', f'repos/{REPO}/{path}?since={since}&per_page=100'])
         if (
             not isinstance(pages, list) or not pages
             or not all(isinstance(page, list) for page in pages)
@@ -768,14 +773,21 @@ def recent_factory_comments(now_epoch: int) -> list[dict[str, Any]]:
     cache = os.environ.get('FACTORY_ATTEMPT_HISTORY_CACHE', '')
     return read_comment_history(
         now_epoch=now_epoch, reset_seconds=FACTORY_NO_DIFF_RETRY_RESET_SECONDS,
-        scope=REPO, cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
+        scope=f'{REPO}:pr:{target_pr}' if target_pr is not None else REPO,
+        cache_path=Path(cache) if cache else None, fetch_pages=fetch_pages,
     )
 
 
-def load_no_diff_attempt_records(now_epoch: int | None=None) -> list[NoDiffAttempt]:
-    """Load durable no-diff attempts still inside the rolling retry window."""
+def load_no_diff_attempt_records(
+    now_epoch: int | None = None, *, target_pr: int | None = None,
+) -> list[NoDiffAttempt]:
+    """Load durable retry history; isolate a targeted PR's own records."""
     now_epoch = int(time.time()) if now_epoch is None else now_epoch
-    return parse_no_diff_attempts_from_comments(recent_factory_comments(now_epoch), now_epoch=now_epoch)
+    comments = recent_factory_comments(now_epoch, target_pr=target_pr)
+    attempts = parse_no_diff_attempts_from_comments(comments, now_epoch=now_epoch)
+    if target_pr is not None:
+        return [attempt for attempt in attempts if attempt.kind == 'pr' and attempt.number == target_pr]
+    return attempts
 
 
 def load_no_diff_attempts(now_epoch: int | None=None) -> dict[int, int]:
@@ -1376,7 +1388,13 @@ def assign(worker: str, kinds: tuple[str, ...] | None = None,
     issues = list_issues()
     prs = list_prs()
     try:
-        attempt_records: list[NoDiffAttempt] | None = load_no_diff_attempt_records()
+        # Targeted PR wakeups require only that PR's retry evidence.
+        # A full roster pass still needs the whole issue/PR retry window.
+        attempt_records: list[NoDiffAttempt] | None = (
+            load_no_diff_attempt_records(target_pr=target[1])
+            if target is not None and target[0] == 'pr'
+            else load_no_diff_attempt_records()
+        )
     except RuntimeError as exc:
         attempt_records = None
         print(f'[factory-controller] no-diff retry history unavailable; holding fresh issue intake: {exc}', file=sys.stderr)
