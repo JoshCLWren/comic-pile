@@ -604,7 +604,7 @@ mod tests {
     async fn persist_switch_prerequisite_rejects_a_foreign_session() {
         let _admin = crate::test_support::required_test_admin_url();
         let (mut client, _db) = seeded(
-            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1');
+            r#"INSERT INTO users (id, username) VALUES (1, 'reader-1'), (2, 'reader-2');
                  INSERT INTO threads
                      (id, user_id, title, format, issues_remaining, status, queue_position)
                  VALUES (20, 1, 'Second', 'Comic', 1, 'active', 1);
@@ -616,6 +616,8 @@ mod tests {
                  VALUES (1, 1, NOW(), 6);"#,
         )
         .await;
+        // An authenticated second reader exists, but the session belongs to the
+        // first: the owner-scoped session update matches no row.
         let intruder = AuthenticatedUser::for_test(2);
         let tx = client.transaction().await.unwrap();
         let error = persist_switch_prerequisite(&tx, intruder, 1, &target(), 6, &[], false)
