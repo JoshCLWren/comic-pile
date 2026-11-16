@@ -170,6 +170,33 @@ def _prune_retired_events(repo: str, batch_size: int = 1000) -> int:
     return int(row['deleted'])
 
 
+def _prune_retired_check_projection(repo: str, batch_size: int = 250) -> int:
+    """Retire advisory check observations after Actions became authoritative.
+
+    The production writer was removed in #5226. Retention is deliberately
+    repository-fenced and bounded; never touch exact-head retry coordination.
+    """
+    if not 1 <= batch_size <= 1000 or not re.fullmatch(r'[\\w.-]+/[\\w.-]+', repo):
+        raise ValueError('invalid cleanup scope or batch size')
+    row = _run(
+        """WITH retired AS (
+             SELECT pr_number, head_sha, check_name
+               FROM public.factory_check_projection
+              WHERE repo=$1
+              ORDER BY pr_number, head_sha, check_name LIMIT $2
+           ), removed AS (
+             DELETE FROM public.factory_check_projection AS checks USING retired
+              WHERE checks.repo=$1
+                AND checks.pr_number=retired.pr_number
+                AND checks.head_sha=retired.head_sha
+                AND checks.check_name=retired.check_name
+              RETURNING checks.pr_number
+           ) SELECT count(*) AS deleted FROM removed""",
+        repo, batch_size, one=True,
+    )
+    return int(row['deleted'])
+
+
 def _release(key: str, owner: str) -> None:
     _run(
         """
@@ -411,7 +438,13 @@ def main(argv: list[str]) -> int:
         retired_events += count
         if count < 1000:
             break
-    print(f"[factory-state] pruned {retired_kv} discovery rows and {retired_events} obsolete events")
+    retired_checks = 0
+    for _ in range(5):
+        count = _prune_retired_check_projection(repo)
+        retired_checks += count
+        if count < 250:
+            break
+    print(f"[factory-state] pruned {retired_kv} discovery rows, {retired_events} obsolete events, and {retired_checks} retired check observations")
     return 0
 
 

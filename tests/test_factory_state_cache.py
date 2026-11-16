@@ -293,6 +293,29 @@ def test_event_pruning_retains_recent_worker_lifecycle_and_coordination(monkeypa
         cache._prune_retired_events("other-repo", 100)
 
 
+def test_retired_check_projection_cleanup_is_scoped_and_bounded(monkeypatch):
+    calls = []
+    def fake_run(sql, *args, one=False):
+        calls.append((sql, args, one))
+        return {"deleted": 250}
+    monkeypatch.setattr(cache, "_run", fake_run)
+    assert cache._prune_retired_check_projection("JoshCLWren/comic-pile") == 250
+    sql, args, one = calls[0]
+    assert args == ("JoshCLWren/comic-pile", 250)
+    assert one is True
+    assert "WHERE repo=$1" in sql
+    assert "checks.repo=$1" in sql
+    assert "LIMIT $2" in sql
+    assert "DELETE FROM public.factory_check_projection" in sql
+    for protected in ("factory_pr_stage_retry", "factory_provider_reservation",
+                      "factory_state_events", "factory_state_kv"):
+        assert protected not in sql
+    with pytest.raises(ValueError, match="batch"):
+        cache._prune_retired_check_projection("JoshCLWren/comic-pile", 1001)
+    with pytest.raises(ValueError, match="scope"):
+        cache._prune_retired_check_projection("another-repo", 250)
+
+
 def test_prune_is_bounded_to_retired_discovery_without_coordination(monkeypatch):
     executed = []
     def fake_run(statement, *args, one=False):
@@ -327,9 +350,15 @@ def test_prune_cli_cleans_in_batches_with_upper_limit(monkeypatch, tmp_path):
         event_calls.append(True)
         return 1000 if len(event_calls) < 3 else 7
     monkeypatch.setattr(cache, "_prune_retired_events", prune_events)
+    projection_calls = []
+    def prune_checks(_repo):
+        projection_calls.append(True)
+        return 250 if len(projection_calls) < 4 else 7
+    monkeypatch.setattr(cache, "_prune_retired_check_projection", prune_checks)
     assert cache.main(["prune-obsolete"]) == 0
     assert len(calls) == 3
     assert len(event_calls) == 3
+    assert len(projection_calls) == 4
 
 
 def test_regular_status_job_prunes_only_in_trusted_controller():
