@@ -248,7 +248,9 @@ def main() -> None:
     assert 'python3 .github/scripts/factory_provider_registry.py config' in runner
     assert 'configure_adapter=$configure_adapter' in runner
     assert Path('.github/scripts/factory_provider_registry.py').exists()
-    assert 'Require Vercel model to remain zero-price' in runner
+    # Price must never be a hard gate for catalog-discovered models.
+    assert 'Require Vercel model to remain zero-price' not in runner
+    assert 'selected-from-published-catalog' in runner
     assert 'omniroute-disabled-incident' in runner
     assert 'FACTORY_OMNIROUTE_ENABLED' in runner
     # INCIDENT: catalog free-code lanes keep lane pins while OmniRoute is dark.
