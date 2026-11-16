@@ -610,6 +610,7 @@ agent_attempt=1
 agent_status=0
 transient_failure=0
 while :; do
+  log "FACTORY_EXECUTION_CANDIDATE: source=$SOURCE model=$MODEL runtime=$RUNTIME_MODEL"
   set +e
   run_agent "$MODE" "$NUMBER" "$agent_timeout"
   agent_status=$?
@@ -617,6 +618,8 @@ while :; do
   log "agent exit status ${agent_status} for ${MODE} #${NUMBER}"
 
   if (( agent_status == 0 )); then
+    # Earlier failed candidates must never poison the terminal outcome.
+    rm -f "$TERMINAL_OUTCOME_FILE"
     transient_failure=0
     break
   fi
@@ -652,7 +655,7 @@ while :; do
   fi
 
   transient_failure=1
-  log 'transient provider/runtime interruption on the pinned model; refusing to switch models'
+  log 'Non-attributable transient interruption; bounded retry of this model only'
   [[ -z "$(git status --porcelain)" ]] || break
   (( agent_attempt < MAX_AGENT_ATTEMPTS )) || break
   (( $(remaining) > 540 )) || break
