@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from factory_provider_candidates import discover
+from factory_provider_candidates import ADAPTERS, discover
 from factory_provider_registry import PROVIDERS, missing_credentials
 
 
@@ -94,7 +94,7 @@ def select(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--source", required=True, choices=sorted(PROVIDERS))
+    parser.add_argument("--source", required=True, choices=sorted(ADAPTERS))
     parser.add_argument("--worker", required=True)
     parser.add_argument("--exclusions-file", type=Path)
     parser.add_argument("--catalog-json", type=Path, help="synthetic offline test catalog")
