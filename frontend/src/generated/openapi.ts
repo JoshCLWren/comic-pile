@@ -1851,27 +1851,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Browse Cbl Source Catalog
-         * @description Browse one catalog folder or search all CBLs by name and source path.
-         *
-         *     With a blank ``q`` the response describes the immediate contents of
-         *     ``folder``. With a non-blank ``q`` the search spans the entire shared
-         *     catalog, regardless of ``folder``, and ``scope`` is ``"search"``. ``total``
-         *     is the truthful number of matches, so callers can page past 100 results.
-         *
-         *     Args:
-         *         current_user: The authenticated user (injected by dependency).
-         *         db: The async database session (injected by dependency).
-         *         folder: The catalog folder path to browse. Empty string for root.
-         *         q: Optional search query for CBL name and source path.
-         *         page: Page number (1-indexed).
-         *         page_size: Number of results per page (1-100).
-         *
-         *     Returns:
-         *         CBLCatalogBrowseResponse: The browse response containing entries and pagination info.
-         */
-        get: operations["browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get"];
+        /** `GET /api/v1/issue-identity/cbl-sources/browse` */
+        get: operations["browse_cbl_source_catalog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1965,23 +1946,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * List Cbl Source Folders
-         * @description List immediate subfolders of one shared CBL catalog folder.
-         *
-         *     The root folder is addressed with an empty ``folder`` value. A request for a
-         *     folder with no active CBLs or subfolders returns a stable 404 envelope; a
-         *     malformed path returns 400.
-         *
-         *     Args:
-         *         current_user: The authenticated user (injected by dependency).
-         *         db: The async database session (injected by dependency).
-         *         folder: The catalog folder path to list. Empty string for root.
-         *
-         *     Returns:
-         *         CBLFolderListingResponse: The folder listing containing subfolders.
-         */
-        get: operations["list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get"];
+        /** `GET /api/v1/issue-identity/cbl-sources/folders` */
+        get: operations["list_cbl_source_folders"];
         put?: never;
         post?: never;
         delete?: never;
@@ -9965,6 +9931,73 @@ export interface components {
             mode: components["schemas"]["BoundaryListMode"];
             name: string;
         };
+        NativeCBLBreadcrumb: {
+            name: string;
+            path: string;
+        };
+        NativeCBLCatalogBrowseResponse: {
+            breadcrumbs: components["schemas"]["NativeCBLBreadcrumb"][];
+            folder: string;
+            folders: components["schemas"]["NativeCBLSourceFolder"][];
+            has_next: boolean;
+            has_previous: boolean;
+            items: components["schemas"]["NativeCBLCatalogListItem"][];
+            /** Format: int64 */
+            page: number;
+            /** Format: int64 */
+            page_size: number;
+            query?: string | null;
+            scope: string;
+            /** Format: int64 */
+            total: number;
+            /** Format: int64 */
+            total_pages: number;
+        };
+        NativeCBLCatalogListItem: {
+            content_hash: string;
+            /** Format: int32 */
+            declared_issue_count?: number | null;
+            /** Format: int32 */
+            id: number;
+            name: string;
+            revision_sha: string;
+            source_path: string;
+            source_repository: string;
+        };
+        /** @description Global dependency-acquisition outage shape. */
+        NativeCBLDatabaseUnavailableDetail: {
+            code: string;
+            message: string;
+            status: string;
+        };
+        NativeCBLDatabaseUnavailableResponse: {
+            error: components["schemas"]["NativeCBLDatabaseUnavailableDetail"];
+        };
+        /** @description Error detail for catalog-originated failures (400/404/503). */
+        NativeCBLErrorDetail: {
+            code: string;
+            message: string;
+        };
+        NativeCBLErrorResponse: {
+            detail: components["schemas"]["NativeCBLErrorDetail"];
+        };
+        NativeCBLFolderListingResponse: {
+            breadcrumbs: components["schemas"]["NativeCBLBreadcrumb"][];
+            /** Format: int32 */
+            direct_list_count: number;
+            folder: string;
+            folders: components["schemas"]["NativeCBLSourceFolder"][];
+            /** Format: int32 */
+            total_list_count: number;
+        };
+        NativeCBLSourceFolder: {
+            /** Format: int32 */
+            direct_list_count: number;
+            name: string;
+            path: string;
+            /** Format: int32 */
+            total_list_count: number;
+        };
         /** @description Compact confirmed ComicVine mapping health for one queue row. */
         NativeComicVineMappingHealth: {
             /** Format: int32 */
@@ -13321,6 +13354,17 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** @description FastAPI/Pydantic validation error item shape (422). */
+        ValidationErrorItem: {
+            ctx?: unknown;
+            input: unknown;
+            loc: string[];
+            msg: string;
+            type: string;
+        };
+        ValidationErrorResponse: {
+            detail: components["schemas"]["ValidationErrorItem"][];
+        };
     };
     responses: never;
     parameters: never;
@@ -16242,63 +16286,58 @@ export interface operations {
             };
         };
     };
-    browse_cbl_source_catalog_api_v1_issue_identity_cbl_sources_browse_get: {
+    browse_cbl_source_catalog: {
         parameters: {
-            query?: {
-                folder?: string;
-                q?: string | null;
-                page?: number;
-                page_size?: number;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                folder: string | null;
+                q: string | null;
+                page: string | null;
+                page_size: string | null;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLCatalogBrowseResponse"];
+                    "application/json": components["schemas"]["NativeCBLCatalogBrowseResponse"];
                 };
             };
-            /** @description Invalid folder path or search query. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
-            /** @description Folder not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
-            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
-            /** @description Catalog query or database connection temporarily unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"] | components["schemas"]["CBLDatabaseUnavailableResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
         };
@@ -16372,60 +16411,55 @@ export interface operations {
             };
         };
     };
-    list_cbl_source_folders_api_v1_issue_identity_cbl_sources_folders_get: {
+    list_cbl_source_folders: {
         parameters: {
-            query?: {
-                folder?: string;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                folder: string | null;
+            };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLFolderListingResponse"];
+                    "application/json": components["schemas"]["NativeCBLFolderListingResponse"];
                 };
             };
-            /** @description Invalid folder path. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
-            /** @description Folder not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
-            /** @description Validation Error */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationErrorResponse"];
                 };
             };
-            /** @description Catalog query or database connection temporarily unavailable. */
             503: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CBLErrorResponse"] | components["schemas"]["CBLDatabaseUnavailableResponse"];
+                    "application/json": components["schemas"]["NativeCBLErrorResponse"];
                 };
             };
         };
