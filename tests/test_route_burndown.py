@@ -549,6 +549,39 @@ def test_dependency_fragment_covers_native_and_python_metadata() -> None:
     )
 
 
+def test_bug_reports_fragment_routes_both_twins_to_native_rust() -> None:
+    """The bug-reports family owns both POST twins as native after #4852.
+
+    The same-path Rust cutover (#4899, issue #4852) plus the Python handler
+    retirement (#5162) exclude both operations from the Python inventory
+    surface while keeping their exact method/path on native ingress.
+    """
+    fragment = _fragment_named("bug-reports")
+    operations = {
+        (operation["method"], operation["path"]): operation
+        for operation in fragment.operations
+    }
+    assert set(operations) == {
+        ("POST", "/api/bug-reports/"),
+        ("POST", "/api/v1/bug-reports/"),
+    }
+    for operation in operations.values():
+        assert operation["dest"] == "/api/native_roll.rs"
+        assert operation["exclude_from_inventory"] is True
+        assert operation["owning_issue"] == 4852
+    inventory = load_json(INVENTORY_PATH)
+    full_surface = inventory["full_surface"]
+    assert isinstance(full_surface, dict)
+    for bucket in ("v1_operations", "unversioned_operations"):
+        raw_operations = full_surface[bucket]
+        assert isinstance(raw_operations, list)
+        assert not any(
+            "bug-reports" in str(item.get("path", ""))
+            for item in raw_operations
+            if isinstance(item, dict)
+        )
+
+
 def test_release_fragment_covers_every_browser_called_release_route() -> None:
     """The releases family owns all five browser-called operations."""
     release_fragment = _fragment_named("releases")
