@@ -401,3 +401,47 @@ def test_read_only_migration_sweep_does_not_probe_label_or_change_ownership(monk
     monkeypatch.setattr(module, "ensure_wait_label", lambda: pytest.fail("no park: no label probe"))
     monkeypatch.setattr(module, "replace_labels", lambda *_: pytest.fail("no lane work: no labels"))
     assert module.reconcile() == {"holder": None, "parked": [], "released": None, "waiting": []}
+
+
+
+def test_migration_lane_classifies_actual_api_quota_not_permissions(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    module = load_lane()
+
+    def failure(message: str):
+        def run(*args: object, **kwargs: object) -> object:
+            return module.subprocess.CompletedProcess(
+                ["gh", "api"], 1, "", message,
+            )
+        return run
+
+    monkeypatch.setattr(
+        module.subprocess, "run",
+        failure("gh: API rate limit exceeded for installation"),
+    )
+    with pytest.raises(module.GitHubQuotaDeferred):
+        module.run_gh(["api", "repos/example/repo/pulls?state=open"])
+
+    monkeypatch.setattr(
+        module.subprocess, "run",
+        failure("gh: HTTP 403: Resource not accessible by integration"),
+    )
+    with pytest.raises(RuntimeError, match="Resource not accessible"):
+        module.run_gh(["api", "repos/example/repo/pulls?state=open"])
+
+
+def test_migration_lane_quota_failure_preserves_pending_migrations(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    module = load_lane()
+    writes: list[int] = []
+
+    def unavailable() -> list[object]:
+        raise module.GitHubQuotaDeferred("GitHub installation API quota exhausted")
+
+    monkeypatch.setattr(module, "current_migration_prs", unavailable)
+    monkeypatch.setattr(module, "replace_labels", lambda *_: writes.append(1))
+    with pytest.raises(module.GitHubQuotaDeferred):
+        module.reconcile()
+    assert writes == []

@@ -48,6 +48,10 @@ class LaneConflictError(RuntimeError):
     """Raised when more than one migration finalizer still has an active lease."""
 
 
+class GitHubQuotaDeferred(RuntimeError):
+    """GitHub rate-limited an authoritative lane read/write; retry later."""
+
+
 @dataclass(frozen=True)
 class MigrationPr:
     number: int
@@ -151,7 +155,12 @@ def run_gh(args: list[str], *, input_json: object | None = None, check: bool = T
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError(f"{' '.join(command)} timed out") from exc
     if check and proc.returncode:
-        raise RuntimeError(f"{' '.join(command)} failed ({proc.returncode}): {proc.stderr.strip()}")
+        detail = proc.stderr.strip()
+        if any(marker in detail.lower() for marker in (
+            "rate limit exceeded", "secondary rate limit", "abuse detection"
+        )):
+            raise GitHubQuotaDeferred("GitHub installation API quota exhausted")
+        raise RuntimeError(f"{' '.join(command)} failed ({proc.returncode}): {detail}")
     return proc.stdout
 
 
@@ -398,6 +407,11 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
+    except GitHubQuotaDeferred:
+        # Keep migration PR owners and stages untouched until GitHub API reset.
+        # Regular dispatcher/recovery schedules provide the next attempt.
+        print(json.dumps({"status": "deferred", "reason": "github_api_rate_limit"}, sort_keys=True))
+        raise SystemExit(0) from None
     except LaneConflictError as exc:
         print(f"migration finalization lane conflict: {exc}", file=sys.stderr)
         raise SystemExit(2) from exc
