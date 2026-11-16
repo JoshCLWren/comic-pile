@@ -1059,7 +1059,7 @@ cmd_ci_check() {
                             # Re-check CI after merge
                             local _rechecked_failures
                             _rechecked_failures=$(gh pr checks "$pr_number" 2>/dev/null \
-                                | grep -v -iE "pass|skip|pending|neutral|CodeRabbit" \
+                                | grep -v -iE "pass|skip|pending|neutral" \
                                 | grep -v "^$" || true)
                             if [[ -z "$_rechecked_failures" ]]; then
                                 log_ok "#$issue — CI green after main merge → done"
@@ -1664,7 +1664,7 @@ print('\n'.join(str(n) for n in ready))
             # Re-verify checks haven't changed
             local failing_live
             failing_live=$(gh pr checks "$pr_number" 2>/dev/null \
-                | grep -v -iE "pass|skip|neutral|CodeRabbit" \
+                | grep -v -iE "pass|skip|neutral" \
                 | grep -iv "pending" \
                 | grep -v "^$" || true)
             local pending_live
