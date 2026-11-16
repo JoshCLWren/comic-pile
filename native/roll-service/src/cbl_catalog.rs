@@ -18,13 +18,13 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_postgres::Row;
-use utoipa::ToSchema;
+use utoipa::{IntoParams, OpenApi, ToSchema};
 
 /// Python `MAX_FOLDER_LENGTH`, measured in characters.
 const MAX_FOLDER_LENGTH: usize = 1000;
 /// Python `MAX_SEARCH_LENGTH`, measured in characters.
 const MAX_SEARCH_LENGTH: usize = 200;
-const MAX_PAGE_SIZE: i32 = 100;
+const MAX_PAGE_SIZE: i64 = 100;
 const ROOT_BREADCRUMB_NAME: &str = "All CBLs";
 const MIRROR_NAME: &str = "CBL-ReadingLists";
 const MIRROR_PATH_MARKER: &str = "/CBL-ReadingLists";
@@ -75,38 +75,76 @@ pub struct CBLCatalogBrowseResponse {
     pub breadcrumbs: Vec<CBLBreadcrumb>,
     pub folders: Vec<CBLSourceFolder>,
     pub items: Vec<CBLCatalogListItem>,
-    pub page: i32,
-    pub page_size: i32,
+    pub page: i64,
+    pub page_size: i64,
     pub total: i64,
-    /// Python returns an unbounded `int`; keep `i64` so a large `total` cannot wrap.
     pub total_pages: i64,
     pub has_next: bool,
     pub has_previous: bool,
 }
 
-#[derive(Debug, Deserialize, ToSchema, Default)]
+/// Error detail for catalog-originated failures (400/404/503).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CBLErrorDetail {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CBLErrorResponse {
+    pub detail: CBLErrorDetail,
+}
+
+/// Global dependency-acquisition outage shape.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CBLDatabaseUnavailableDetail {
+    pub code: String,
+    pub message: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CBLDatabaseUnavailableResponse {
+    pub error: CBLDatabaseUnavailableDetail,
+}
+
+/// FastAPI/Pydantic validation error item shape (422).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ValidationErrorItem {
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub loc: Vec<String>,
+    pub msg: String,
+    pub input: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ctx: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ValidationErrorResponse {
+    pub detail: Vec<ValidationErrorItem>,
+}
+
+/// Query params for folder listing. Parsed as raw strings so malformed values can be
+/// rejected with the Python/FastAPI 422 contract at the handler boundary.
+#[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct CBLFolderListQuery {
     #[serde(default)]
     pub folder: Option<String>,
 }
 
-#[derive(Debug, Deserialize, ToSchema, Default)]
+/// Query params for catalog browse. `page`/`page_size` are raw strings to preserve
+/// Python's accepted integer range (including values like 2^63) and to translate
+/// malformed/bound failures into FastAPI-compatible 422 responses.
+#[derive(Debug, Deserialize, IntoParams, Default)]
 pub struct CBLCatalogBrowseQuery {
     #[serde(default)]
     pub folder: Option<String>,
     pub q: Option<String>,
-    #[serde(default = "default_page")]
-    pub page: i32,
-    #[serde(default = "default_page_size")]
-    pub page_size: i32,
-}
-
-fn default_page() -> i32 {
-    1
-}
-
-fn default_page_size() -> i32 {
-    50
+    #[serde(default)]
+    pub page: Option<String>,
+    #[serde(default)]
+    pub page_size: Option<String>,
 }
 
 #[derive(Debug)]
@@ -114,6 +152,7 @@ enum CatalogError {
     InvalidFolder(String),
     FolderNotFound(String),
     Validation(String),
+    ValidationItems(Vec<ValidationErrorItem>),
     Unavailable,
     Database(ApiError),
 }
@@ -158,6 +197,11 @@ impl IntoResponse for CatalogError {
                 Json(serde_json::json!({"detail": message})),
             )
                 .into_response(),
+            CatalogError::ValidationItems(items) => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ValidationErrorResponse { detail: items }),
+            )
+                .into_response(),
             CatalogError::Unavailable => catalog_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 CATALOG_UNAVAILABLE_CODE,
@@ -166,6 +210,71 @@ impl IntoResponse for CatalogError {
             CatalogError::Database(error) => error.into_response(),
         }
     }
+}
+
+fn validation_int_parsing(field: &str, input: &str) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "int_parsing".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: "Input should be a valid integer, unable to parse string as an integer".to_string(),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: None,
+    }
+}
+
+fn validation_greater_than_equal(field: &str, input: &str, ge: i64) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "greater_than_equal".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: format!("Input should be greater than or equal to {ge}"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"ge": ge})),
+    }
+}
+
+fn validation_less_than_equal(field: &str, input: &str, le: i64) -> ValidationErrorItem {
+    ValidationErrorItem {
+        error_type: "less_than_equal".to_string(),
+        loc: vec!["query".to_string(), field.to_string()],
+        msg: format!("Input should be less than or equal to {le}"),
+        input: serde_json::Value::String(input.to_string()),
+        ctx: Some(serde_json::json!({"le": le})),
+    }
+}
+
+fn parse_page(raw: Option<&str>) -> Result<i128, CatalogError> {
+    let Some(value) = raw else {
+        return Ok(1);
+    };
+    let parsed = value
+        .parse::<i128>()
+        .map_err(|_| CatalogError::ValidationItems(vec![validation_int_parsing("page", value)]))?;
+    if parsed < 1 {
+        return Err(CatalogError::ValidationItems(vec![
+            validation_greater_than_equal("page", value, 1),
+        ]));
+    }
+    Ok(parsed)
+}
+
+fn parse_page_size(raw: Option<&str>) -> Result<i64, CatalogError> {
+    let Some(value) = raw else {
+        return Ok(50);
+    };
+    let parsed = value.parse::<i64>().map_err(|_| {
+        CatalogError::ValidationItems(vec![validation_int_parsing("page_size", value)])
+    })?;
+    if parsed < 1 {
+        return Err(CatalogError::ValidationItems(vec![
+            validation_greater_than_equal("page_size", value, 1),
+        ]));
+    }
+    if parsed > MAX_PAGE_SIZE {
+        return Err(CatalogError::ValidationItems(vec![
+            validation_less_than_equal("page_size", value, MAX_PAGE_SIZE),
+        ]));
+    }
+    Ok(parsed)
 }
 
 /// Return True when the stored value looks like a local filesystem location.
@@ -198,9 +307,7 @@ fn normalize_folder(raw: Option<&str>) -> Result<String, CatalogError> {
     let Some(folder) = raw else {
         return Ok(String::new());
     };
-    if !folder.trim().is_empty() {
-        // keep original content for validation/return
-    } else {
+    if folder.trim().is_empty() {
         return Ok(String::new());
     }
 
@@ -291,7 +398,6 @@ async fn read_folder(
         folder.matches('/').count() as i32 + 2
     };
 
-    // Immediate child folders with direct/total active-list counts.
     let folder_rows = conn
         .query(
             "SELECT
@@ -328,7 +434,6 @@ async fn read_folder(
         });
     }
 
-    // Direct active lists in this folder (no further segment below).
     let direct_row = conn
         .query_one(
             "SELECT COUNT(*)::int
@@ -361,16 +466,67 @@ fn map_item(row: &Row) -> CBLCatalogListItem {
     }
 }
 
+fn page_offset(page: i128, page_size: i64) -> Option<i64> {
+    let offset = (page - 1).checked_mul(i128::from(page_size))?;
+    if offset > i128::from(i64::MAX) {
+        None
+    } else {
+        Some(offset as i64)
+    }
+}
+
+async fn folder_total(
+    conn: &deadpool_postgres::Object,
+    folder: &str,
+    query_text: Option<&str>,
+) -> Result<i64, tokio_postgres::Error> {
+    if let Some(term) = query_text {
+        let pattern = format!("%{}%", escape_like(term));
+        let count_row = conn
+            .query_one(
+                "SELECT COUNT(*)::bigint
+             FROM cbl_source_lists l
+             WHERE l.active IS TRUE
+               AND (l.name ILIKE $1 ESCAPE '\\' OR l.source_path ILIKE $1 ESCAPE '\\')",
+                &[&pattern],
+            )
+            .await?;
+        Ok(count_row.get(0))
+    } else {
+        let (folder_like, prefix_len): (Option<String>, i32) = if folder.is_empty() {
+            (None, 0)
+        } else {
+            (
+                Some(format!("{}/%", escape_like(folder))),
+                folder_prefix_len(folder),
+            )
+        };
+        let count_row = conn
+            .query_one(
+                "SELECT COUNT(*)::bigint
+             FROM cbl_source_lists l
+             WHERE l.active IS TRUE
+               AND ($1::text IS NULL OR l.source_path LIKE $1 ESCAPE '\\')
+               AND strpos(substr(l.source_path, $2::int + 1), '/') = 0",
+                &[&folder_like, &prefix_len],
+            )
+            .await?;
+        Ok(count_row.get(0))
+    }
+}
+
 async fn browse_items(
     conn: &deadpool_postgres::Object,
     folder: &str,
     query_text: Option<&str>,
-    page: i32,
-    page_size: i32,
+    page: i128,
+    page_size: i64,
 ) -> Result<(Vec<CBLCatalogListItem>, i64), tokio_postgres::Error> {
-    // Python's `int` arithmetic never overflows; widen before multiplying.
-    let offset = i64::from(page - 1) * i64::from(page_size);
-    let limit = i64::from(page_size);
+    let Some(offset) = page_offset(page, page_size) else {
+        // Extreme page: offset would overflow PostgreSQL bigint range.
+        let total = folder_total(conn, folder, query_text).await?;
+        return Ok((Vec::new(), total));
+    };
 
     if let Some(term) = query_text {
         let pattern = format!("%{}%", escape_like(term));
@@ -397,7 +553,7 @@ async fn browse_items(
                AND (l.name ILIKE $1 ESCAPE '\\' OR l.source_path ILIKE $1 ESCAPE '\\')
              ORDER BY l.name ASC, l.source_path ASC, l.id ASC
              LIMIT $2::bigint OFFSET $3::bigint",
-                &[&pattern, &limit, &offset],
+                &[&pattern, &page_size, &offset],
             )
             .await?;
         Ok((rows.iter().map(map_item).collect(), total))
@@ -435,7 +591,7 @@ async fn browse_items(
                AND strpos(substr(l.source_path, $2::int + 1), '/') = 0
              ORDER BY l.name ASC, l.source_path ASC, l.id ASC
              LIMIT $3::bigint OFFSET $4::bigint",
-                &[&folder_like, &prefix_len, &limit, &offset],
+                &[&folder_like, &prefix_len, &page_size, &offset],
             )
             .await?;
         Ok((rows.iter().map(map_item).collect(), total))
@@ -446,7 +602,6 @@ fn normalize_query(raw: Option<&str>) -> Result<Option<String>, CatalogError> {
     let Some(query) = raw else {
         return Ok(None);
     };
-    // Python `Query(max_length=200)` rejects this before the handler with a 422.
     if query.chars().count() > MAX_SEARCH_LENGTH {
         return Err(CatalogError::Validation(format!(
             "q must be at most {MAX_SEARCH_LENGTH} characters"
@@ -461,6 +616,19 @@ fn normalize_query(raw: Option<&str>) -> Result<Option<String>, CatalogError> {
 }
 
 /// `GET /api/v1/issue-identity/cbl-sources/folders`
+#[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl-sources/folders",
+    params(CBLFolderListQuery),
+    responses(
+        (status = 200, body = CBLFolderListingResponse),
+        (status = 400, body = CBLErrorResponse),
+        (status = 404, body = CBLErrorResponse),
+        (status = 422, body = ValidationErrorResponse),
+        (status = 503, body = CBLErrorResponse),
+    ),
+    tag = "issue-identity",
+)]
 pub async fn list_cbl_source_folders(
     _user: AuthenticatedUser,
     State(state): State<Arc<AppState>>,
@@ -492,6 +660,19 @@ pub async fn list_cbl_source_folders(
 }
 
 /// `GET /api/v1/issue-identity/cbl-sources/browse`
+#[utoipa::path(
+    get,
+    path = "/api/v1/issue-identity/cbl-sources/browse",
+    params(CBLCatalogBrowseQuery),
+    responses(
+        (status = 200, body = CBLCatalogBrowseResponse),
+        (status = 400, body = CBLErrorResponse),
+        (status = 404, body = CBLErrorResponse),
+        (status = 422, body = ValidationErrorResponse),
+        (status = 503, body = CBLErrorResponse),
+    ),
+    tag = "issue-identity",
+)]
 pub async fn browse_cbl_source_catalog(
     _user: AuthenticatedUser,
     State(state): State<Arc<AppState>>,
@@ -501,21 +682,12 @@ pub async fn browse_cbl_source_catalog(
         state: Arc<AppState>,
         params: CBLCatalogBrowseQuery,
     ) -> Result<Json<CBLCatalogBrowseResponse>, CatalogError> {
-        let conn = db::checkout(&state).await?;
         let folder = normalize_folder(params.folder.as_deref())?;
         let query_text = normalize_query(params.q.as_deref())?;
+        let page = parse_page(params.page.as_deref())?;
+        let page_size = parse_page_size(params.page_size.as_deref())?;
 
-        // Python `Query(ge=1)` / `Query(ge=1, le=100)` reject before the handler with 422.
-        if params.page < 1 {
-            return Err(CatalogError::Validation(
-                "page must be greater than or equal to 1".to_string(),
-            ));
-        }
-        if !(1..=MAX_PAGE_SIZE).contains(&params.page_size) {
-            return Err(CatalogError::Validation(format!(
-                "page_size must be between 1 and {MAX_PAGE_SIZE}"
-            )));
-        }
+        let conn = db::checkout(&state).await?;
 
         let (response_folder, response_breadcrumbs, folders, scope) = if query_text.is_some() {
             (
@@ -537,20 +709,14 @@ pub async fn browse_cbl_source_catalog(
             )
         };
 
-        let (items, total) = browse_items(
-            &conn,
-            &folder,
-            query_text.as_deref(),
-            params.page,
-            params.page_size,
-        )
-        .await?;
-        let page_size_i64 = i64::from(params.page_size);
+        let (items, total) =
+            browse_items(&conn, &folder, query_text.as_deref(), page, page_size).await?;
         let total_pages = if total == 0 {
             0
         } else {
-            (total + page_size_i64 - 1) / page_size_i64
+            (total + page_size - 1) / page_size
         };
+        let page_i64 = i64::try_from(page).unwrap_or(i64::MAX);
 
         Ok(Json(CBLCatalogBrowseResponse {
             scope,
@@ -559,12 +725,12 @@ pub async fn browse_cbl_source_catalog(
             breadcrumbs: response_breadcrumbs,
             folders,
             items,
-            page: params.page,
-            page_size: params.page_size,
+            page: page_i64,
+            page_size,
             total,
             total_pages,
-            has_next: i64::from(params.page) < total_pages,
-            has_previous: params.page > 1,
+            has_next: page < i128::from(total_pages),
+            has_previous: page > 1,
         }))
     }
 
@@ -573,3 +739,22 @@ pub async fn browse_cbl_source_catalog(
         Err(error) => error.into_response(),
     }
 }
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(list_cbl_source_folders, browse_cbl_source_catalog),
+    components(schemas(
+        CBLCatalogListItem,
+        CBLSourceFolder,
+        CBLBreadcrumb,
+        CBLFolderListingResponse,
+        CBLCatalogBrowseResponse,
+        CBLErrorDetail,
+        CBLErrorResponse,
+        CBLDatabaseUnavailableDetail,
+        CBLDatabaseUnavailableResponse,
+        ValidationErrorItem,
+        ValidationErrorResponse,
+    ))
+)]
+pub struct CblCatalogApi;
