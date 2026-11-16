@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Select another *discovered* model for the same leased factory provider.
+"""Select canonical provider/model pairs across one leased factory assignment.
 
-This is called by the trusted worker after a real inference failure. Attempted
-models are excluded for the rest of that lease, regardless of their cooldown.
-No roster, guessed model ID, or cross-provider fallback is involved.
+Runtime and published provider catalogs supply all identifiers. Failure history,
+credential availability and trusted provider capacity narrow eligibility without
+a static roster or a parallel dispatcher. Switching candidates never changes
+the target's ownership or exact-head expectations.
 """
 from __future__ import annotations
 
