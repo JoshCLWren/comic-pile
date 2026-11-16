@@ -60,7 +60,7 @@ PR A must verify the same-path routing, generated contract, focused caller trans
 
 - Live v2 operations: 41 (41 native-rust + 0 python-fastapi).
 - Native ingress: `/api/native_roll.rs`, `/api/native_issue.rs` (via `vercel.json`).
-- Full Python-handler surface: 146 operations (v1 126 + unversioned 20); v1 active 116 live Python / 1 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
+- Full Python-handler surface: 146 operations (v1 126 + unversioned 20); v1 active 117 live Python / 1 migrated (shadowed by Rust); unversioned active 17 live Python / 0 migrated (shadowed by Rust); remaining declared methods use explicit Python exceptions.
 - Catch-all: `/api(?:/.*)? -> /api/native_roll.rs` (Rust JSON 404).
 - Full-surface inventory (v2 + v1 + unversioned + catch-all) and per-operation callers: see `docs/api/v2-route-inventory.json` `full_surface` (authoritative).
 - Full caller lists and ingress destinations: see `docs/api/v2-route-inventory.json` (authoritative).
@@ -199,6 +199,12 @@ Comic Pile is a dice-driven comic reading tracker built with:
 - **Backend**: Python 3.14, FastAPI, SQLAlchemy, PostgreSQL
 - **Frontend**: React 19, Vite, Tailwind CSS
 - **Package managers**: `uv` (Python), `pnpm` (frontend)
+
+## Database query efficiency (owner rule, November 15, 2026)
+
+Write efficient PostgreSQL queries by construction. No SQL inside loops over rows, issues, threads, or users; prevent N+1 fetches and per-item round trips. Prefer set-based joins/CTEs, bounded batch requests, indexed filters, predictable pagination, and one coherent transaction where required. Do not materialize whole libraries or introduce screen-level request waterfalls. Preserve ownership checks, authorization, idempotency, locking, and correct snapshot semantics rather than chasing an arbitrary number of statements. If a real slow query or performance regression is demonstrated, profile the actual workload and fix it with a focused test.
+
+**The blanket per-route SQL-budget program is canceled by the owner.** Never require numeric statement ceilings, a `sql_budget` entry, `pg_stat_statements` proof for every endpoint, small/large fixture quotas, or SQL-budget coverage tickets as a prerequisite for a Rust migration. Do not revive, split, or recreate #4737, #4988, or #5146–#5151 without explicit owner direction. Existing focused regressions for known query failures remain valuable; do not strip legitimate performance safeguards outside this discontinued program.
 
 ## CRITICAL: Async PostgreSQL Only in Application Code
 
