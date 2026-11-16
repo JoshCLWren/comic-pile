@@ -1092,10 +1092,11 @@ pub async fn get_continuity_plan_membership(
         Vec::new()
     };
 
+    let issue_count = issue_ids.len() as i32;
     Ok(Json(ReadingPlanMembershipResponse {
         plan_id,
         issue_ids,
-        issue_count: issue_ids.len() as i32,
+        issue_count,
         thread_ids,
     }))
 }
@@ -1126,10 +1127,10 @@ pub struct ReadingPlanDependencyLinkRequest {
     path = "/api/v1/continuity-plans/{plan_id}/dependencies/{dependency_id}",
     tag = "continuity-plans",
     operation_id = "continuity_plans_link_dependency",
-    params((
+    params(
         ("plan_id" = i32, Path, description = "Continuity plan identifier"),
         ("dependency_id" = i32, Path, description = "Dependency identifier")
-    )),
+    ),
     request_body = ReadingPlanDependencyLinkRequest,
     responses(
         (status = 201, description = "Linked dependency", body = ReadingPlanDependencyLink),
@@ -1242,8 +1243,8 @@ pub async fn link_plan_dependency_edge(
     tag = "continuity-plans",
     operation_id = "continuity_plans_unlink_dependency",
     params((
-        ("plan_id"=i32, Path, description = "Continuity plan identifier"),
-        ("dependency_id"=i32, Path, description = "Dependency identifier")
+        ("plan_id" = i32, Path, description = "Continuity plan identifier"),
+        ("dependency_id" = i32, Path, description = "Dependency identifier")
     )),
     responses(
         (status = 204, description = "Dependency unlinked"),
@@ -1474,10 +1475,10 @@ pub async fn confirm_plan_projection(
             "added".to_string()
         };
 
-        let position = pos + 1;
+        let position: i32 = pos + 1;
         tx.execute(
             "INSERT INTO reading_order_items (reading_order_id, thread_id, position, issue_number) VALUES ($1, $2, $3, NULL)",
-            &[&payload.reading_order_id, thread_id, &position],
+            &[&payload.reading_order_id, &thread_id, &position],
         )
         .await
         .map_err(db::query_error)?;
