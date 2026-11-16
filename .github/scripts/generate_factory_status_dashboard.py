@@ -438,11 +438,12 @@ def collect_snapshot() -> dict[str, Any]:
     opened_day = github_search_total(completion, f"is:pr created:>={day}")
     merged_day = github_search_total(completion, f"is:pr is:merged merged:>={day}")
 
-    comments = completion.registry_comments()
-    policy = completion.load_policy()
-    trusted = [comment for comment in comments if policy.comment_is_trusted(comment)]
-    attempts, heartbeats = latest_worker_records(trusted)
-    heartbeat_report = heartbeat_monitor.heartbeat_health(trusted, roster, now=datetime.now(timezone.utc))
+    view, _health = completion.durable_factory_state()
+    attempts = view["attempts"]
+    heartbeats = view["heartbeats"]
+    heartbeat_report = heartbeat_monitor.heartbeat_health_from_view(
+        view, roster, now=datetime.now(timezone.utc),
+    )
     credits = merge_credit(recently_merged_prs(completion))
     worker_rows = build_worker_rows(
         manifest_rows,

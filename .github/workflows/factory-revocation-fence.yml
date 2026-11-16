@@ -34,6 +34,13 @@ jobs:
         run: |
           set -Eeuo pipefail
 
+          # Noncanonical maintenance branches are not worker claims. Even a
+          # GitHub API outage must not revoke their normal PRs.
+          if [[ ! "$HEAD_REF" =~ ^factory/[0-9]+-[0-9]+- ]]; then
+            echo "Noncanonical maintenance branch: no worker provenance required."
+            exit 0
+          fi
+
           comments="$RUNNER_TEMP/factory-pr-comments.json"
           decision="$RUNNER_TEMP/factory-fence-decision.json"
           api_read_succeeded=false
